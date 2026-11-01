@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · 어둡게",
   "settings.theme.default": "Irori(기본값)",
   "settings.theme.light_variant": "{name} · 밝게",
+  "settings.theme.omarchy": "Omarchy(기본값)",
   "settings.tool_version.latest": "최신",
   "settings.tools.dx.help": "지금 이 게임의 프리픽스에 설치하거나 제거합니다. Proton에는 자체 버전이 포함되어 있습니다.",
   "settings.tools.dx.installed": "{tool}을(를) 설치했습니다",

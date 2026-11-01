@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · scuro",
   "settings.theme.default": "Irori (predefinito)",
   "settings.theme.light_variant": "{name} · chiaro",
+  "settings.theme.omarchy": "Omarchy (predefinito)",
   "settings.tool_version.latest": "Più recente",
   "settings.tools.dx.help": "Installalo o rimuovilo ora nel prefisso di questo gioco. Proton include il proprio.",
   "settings.tools.dx.installed": "{tool} installato",

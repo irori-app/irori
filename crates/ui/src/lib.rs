@@ -13,6 +13,7 @@ pub mod lutris_summary;
 pub mod models;
 pub mod motion;
 pub mod nav;
+mod omarchy;
 pub mod save_conflict;
 pub mod state;
 pub mod style;
@@ -43,6 +44,7 @@ pub fn init(backend: Backend, cx: &mut App) {
     i18n::set_language(&backend.settings.app().ui_language);
     state::AppState::install(backend, cx);
     theme::install(cx);
+    theme::follow_omarchy(cx);
     art::install(cx);
     nav::install(cx);
     models::install(cx);

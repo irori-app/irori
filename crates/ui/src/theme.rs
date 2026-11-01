@@ -5,13 +5,19 @@
 //! theme; the other colour mode uses its sibling in the same family (Latte ↔
 //! Mocha), or Irori's own theme when the family has none, so following the
 //! system never drops the user back to an unrelated look.
+//!
+//! On Omarchy the default theme is the desktop's own (see [`crate::omarchy`]),
+//! and Irori follows it as the user switches. A theme the user picked wins.
 
 use std::rc::Rc;
+use std::time::Duration;
 
+use futures::StreamExt as _;
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, px};
 use irori_core::settings::{ThemePreference, UiPrefs};
 
+use crate::omarchy;
 use crate::style::{TEXT_CONTRAST, contrast, legible_towards};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
@@ -26,6 +32,10 @@ const BUNDLED: &[&str] = &[
     include_str!("../../../assets/themes/solarized.json"),
     include_str!("../../../assets/themes/ayu.json"),
 ];
+
+/// How long Omarchy's theme folder has to stay still before Irori reads it: a
+/// switch replaces it in several steps.
+const OMARCHY_SETTLE: Duration = Duration::from_millis(200);
 
 /// Irori's typeface (Manrope, SIL Open Font License), used by every theme.
 pub const FONT_FAMILY: &str = "Manrope";
@@ -44,6 +54,15 @@ struct Families(Vec<Vec<(SharedString, bool)>>);
 
 impl Global for Families {}
 
+/// The desktop's theme, while Irori runs on Omarchy. It lives here rather than
+/// in the theme registry because the registry never replaces a theme it has.
+struct Omarchy {
+    theme: Rc<ThemeConfig>,
+    revision: u64,
+}
+
+impl Global for Omarchy {}
+
 /// What [`apply`] last applied, so a call that changes nothing costs nothing
 /// and one that only resizes the interface skips re-theming.
 #[derive(Clone, PartialEq)]
@@ -52,6 +71,8 @@ struct Applied {
     dark: SharedString,
     is_dark: bool,
     font_size: u32,
+    /// Omarchy's theme keeps its name when its colours change.
+    omarchy: u64,
 }
 
 impl Global for Applied {}
@@ -103,6 +124,59 @@ pub(crate) fn install(cx: &mut App) {
         families.0.push(family_members(json));
     }
     cx.set_global(families);
+}
+
+/// Use the desktop's theme as the default if this is Omarchy, and keep up with
+/// it. The first read is on the UI thread, before any window exists to wait
+/// for it, so the first frame already has the right colours.
+pub(crate) fn follow_omarchy(cx: &mut App) {
+    let mut shown = omarchy::read();
+    if let Some(theme) = shown.as_deref().and_then(omarchy::theme) {
+        set_omarchy(theme, cx);
+    }
+    let Some((watcher, mut changes)) = omarchy::watch() else {
+        return;
+    };
+    cx.spawn(async move |cx| {
+        let _watcher = watcher;
+        while changes.next().await.is_some() {
+            cx.background_executor().timer(OMARCHY_SETTLE).await;
+            while changes.try_recv().is_ok() {}
+            let text = cx
+                .background_executor()
+                .spawn(async { omarchy::read() })
+                .await;
+            // Between two steps of a switch there may be no theme at all; the
+            // next step wakes this up again.
+            if text.is_none() || text == shown {
+                continue;
+            }
+            let Some(theme) = text.as_deref().and_then(omarchy::theme) else {
+                tracing::warn!("Omarchy's theme has no usable colours");
+                continue;
+            };
+            shown = text;
+            cx.update(|cx| {
+                set_omarchy(theme, cx);
+                let prefs = crate::backend(cx).settings.app().ui.clone();
+                apply(&prefs, None, cx);
+            });
+        }
+    })
+    .detach();
+}
+
+fn set_omarchy(theme: ThemeConfig, cx: &mut App) {
+    let revision = cx.try_global::<Omarchy>().map_or(0, |o| o.revision) + 1;
+    cx.set_global(Omarchy {
+        theme: Rc::new(theme),
+        revision,
+    });
+}
+
+/// Whether the default theme is Omarchy's rather than Irori's own.
+pub fn follows_omarchy(cx: &App) -> bool {
+    cx.has_global::<Omarchy>()
 }
 
 /// Names and modes of the themes in one bundled file.
@@ -165,9 +239,11 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
             .get(&SharedString::from(name.to_string()))
             .cloned()
     };
-    let chosen = (!prefs.theme_name.is_empty())
-        .then(|| find(&prefs.theme_name))
-        .flatten();
+    let chosen = if prefs.theme_name.is_empty() {
+        cx.try_global::<Omarchy>().map(|o| o.theme.clone())
+    } else {
+        find(&prefs.theme_name)
+    };
     let for_mode = |dark: bool| {
         let fallback = if dark { DEFAULT_DARK } else { DEFAULT_LIGHT };
         match &chosen {
@@ -189,6 +265,11 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
     let is_dark = match prefs.theme {
         ThemePreference::Dark => true,
         ThemePreference::Light => false,
+        // On Omarchy the theme is what decides, and it can be set more
+        // quickly than the portal reports the change.
+        ThemePreference::System if prefs.theme_name.is_empty() && follows_omarchy(cx) => {
+            cx.global::<Omarchy>().theme.mode.is_dark()
+        }
         ThemePreference::System => {
             let appearance = window
                 .as_deref()
@@ -208,6 +289,7 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         dark: name(&dark),
         is_dark,
         font_size: font_size.to_bits(),
+        omarchy: cx.try_global::<Omarchy>().map_or(0, |o| o.revision),
     };
     let previous = cx.try_global::<Applied>().cloned();
     if previous.as_ref() == Some(&next) {
@@ -454,6 +536,119 @@ mod tests {
             DEFAULT_LIGHT
         );
         assert_eq!(shown(cx, ThemePreference::Dark, ""), DEFAULT_DARK);
+    }
+
+    fn use_omarchy(palette: &str, cx: &mut TestAppContext) {
+        cx.update(|cx| set_omarchy(omarchy::theme(palette).unwrap(), cx));
+    }
+
+    #[gpui_kit::test]
+    fn omarchy_is_the_default_and_decides_the_mode(cx: &mut TestAppContext) {
+        setup(cx);
+        use_omarchy(omarchy::tests::LIGHT, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "Omarchy");
+            assert!(!cx.theme().mode.is_dark());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn a_new_omarchy_theme_shows_at_once(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::System, "");
+        use_omarchy(omarchy::tests::DARK, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        let before = cx.read(|cx| cx.theme().background);
+
+        let recoloured = omarchy::tests::DARK.replace("#1a1b26", "#201010");
+        use_omarchy(&recoloured, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert_ne!(cx.theme().background, before));
+
+        use_omarchy(omarchy::tests::LIGHT, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert!(!cx.theme().mode.is_dark()));
+    }
+
+    struct Probe(Rc<std::cell::Cell<Option<gpui_kit::Hsla>>>);
+
+    impl gpui_kit::Render for Probe {
+        fn render(
+            &mut self,
+            _: &mut Window,
+            cx: &mut gpui_kit::Context<Self>,
+        ) -> impl gpui_kit::IntoElement {
+            self.0.set(Some(cx.theme().background));
+            gpui_kit::div()
+        }
+    }
+
+    #[gpui_kit::test]
+    fn an_open_window_redraws_when_omarchy_changes(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::System, "");
+        use_omarchy(omarchy::tests::DARK, cx);
+        cx.update(|cx| apply(&p, None, cx));
+
+        let drawn = Rc::new(std::cell::Cell::new(None));
+        let probe = drawn.clone();
+        let (_view, cx) = cx.add_window_view(|_, _| Probe(probe));
+        cx.run_until_parked();
+        assert_eq!(drawn.get(), cx.read(|cx| Some(cx.theme().background)));
+
+        use_omarchy_in_window(omarchy::tests::LIGHT, cx);
+        cx.update(|_, cx| apply(&p, None, cx));
+        cx.run_until_parked();
+        let light = omarchy::theme(omarchy::tests::LIGHT).unwrap();
+        let wanted =
+            gpui_kit::component::try_parse_color(light.colors.background.as_ref().unwrap());
+        assert_eq!(drawn.get(), wanted.ok());
+    }
+
+    fn use_omarchy_in_window(palette: &str, cx: &mut gpui_kit::VisualTestContext) {
+        cx.update(|_, cx| set_omarchy(omarchy::theme(palette).unwrap(), cx));
+    }
+
+    #[gpui_kit::test]
+    fn a_theme_the_user_picked_beats_omarchy(cx: &mut TestAppContext) {
+        setup(cx);
+        use_omarchy(omarchy::tests::LIGHT, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, "Tokyo Storm"), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm"));
+    }
+
+    #[gpui_kit::test]
+    fn a_forced_mode_omarchy_is_not_in_gets_irori(cx: &mut TestAppContext) {
+        setup(cx);
+        use_omarchy(omarchy::tests::LIGHT, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), DEFAULT_DARK));
+    }
+
+    #[gpui_kit::test]
+    fn omarchy_is_not_offered_as_a_theme(cx: &mut TestAppContext) {
+        setup(cx);
+        use_omarchy(omarchy::tests::DARK, cx);
+        let names = cx.read(theme_names);
+        assert!(names.iter().all(|(name, _)| name != "Omarchy"), "{names:?}");
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_rows_read_on_omarchy(cx: &mut TestAppContext) {
+        use crate::style::{SidebarPalette, TEXT_CONTRAST, contrast};
+
+        setup(cx);
+        for palette in [omarchy::tests::DARK, omarchy::tests::LIGHT] {
+            use_omarchy(palette, cx);
+            cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+            cx.read(|cx| {
+                let theme = cx.theme();
+                let p = SidebarPalette::new(cx);
+                assert!(contrast(p.text, theme.sidebar) >= TEXT_CONTRAST - 0.01);
+                assert!(contrast(p.selected_text, theme.sidebar_accent) >= TEXT_CONTRAST - 0.01);
+            });
+        }
     }
 
     #[gpui_kit::test]

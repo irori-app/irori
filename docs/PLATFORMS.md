@@ -301,6 +301,19 @@ worth showing, which also spares the compositor the blur. Views take their
 surface colours from `irori_ui::glass` (`chrome`, `page`, `solid_pages`) rather
 than adding alpha themselves.
 
+## Omarchy
+
+On [Omarchy](https://omarchy.org), the default theme is the desktop's. Irori reads
+`~/.local/state/omarchy/current/theme/colors.toml` (`~/.config/omarchy/current/theme`
+on older versions), derives its surfaces from that palette, and follows
+`omarchy-theme-set` while it runs, so third-party themes work without Irori knowing
+them. Text and icons are held to Irori's contrast minimums, which terminal palettes
+don't always meet.
+
+Settings → Appearance → Theme shows this as “Omarchy (default)”. Picking any other
+theme stops following Omarchy, and “Follow system” takes its light or dark mode from
+the Omarchy theme. Forcing the mode the Omarchy theme isn't in shows Irori's own theme.
+
 ## Verification and remaining machine tests
 
 The regression suite checks the host/build matrix, unsupported runtime families,

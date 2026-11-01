@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · 深色",
   "settings.theme.default": "Irori（預設）",
   "settings.theme.light_variant": "{name} · 淺色",
+  "settings.theme.omarchy": "Omarchy（預設）",
   "settings.tool_version.latest": "最新",
   "settings.tools.dx.help": "立即在此遊戲的 Prefix 中安裝或移除。Proton 已內建。",
   "settings.tools.dx.installed": "已安裝 {tool}",

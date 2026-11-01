@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · dark",
   "settings.theme.default": "Irori (default)",
   "settings.theme.light_variant": "{name} · light",
+  "settings.theme.omarchy": "Omarchy (default)",
   "settings.tool_version.latest": "Latest",
   "settings.tools.dx.help": "Install or remove it in this game's prefix now. Proton ships its own.",
   "settings.tools.dx.installed": "{tool} installed",

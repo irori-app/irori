@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · mörkt",
   "settings.theme.default": "Irori (standard)",
   "settings.theme.light_variant": "{name} · ljust",
+  "settings.theme.omarchy": "Omarchy (standard)",
   "settings.tool_version.latest": "Senaste",
   "settings.tools.dx.help": "Installera eller ta bort det i spelets prefix nu. Proton har ett eget.",
   "settings.tools.dx.installed": "{tool} har installerats",

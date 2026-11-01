@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · koyu",
   "settings.theme.default": "Irori (varsayılan)",
   "settings.theme.light_variant": "{name} · açık",
+  "settings.theme.omarchy": "Omarchy (varsayılan)",
   "settings.tool_version.latest": "En yeni",
   "settings.tools.dx.help": "Bunu şimdi bu oyunun prefix'ine kurun veya oradan kaldırın. Proton kendi sürümünü içerir.",
   "settings.tools.dx.installed": "{tool} kuruldu",

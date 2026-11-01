@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · întunecat",
   "settings.theme.default": "Irori (implicit)",
   "settings.theme.light_variant": "{name} · luminos",
+  "settings.theme.omarchy": "Omarchy (implicit)",
   "settings.tool_version.latest": "Cea mai nouă",
   "settings.tools.dx.help": "Instalează-l sau elimină-l acum din prefixul acestui joc. Proton îl include pe al său.",
   "settings.tools.dx.installed": "{tool} a fost instalat",

@@ -22,7 +22,7 @@ once_cell.workspace = true
 url.workspace = true
 sha1.workspace = true
 hex.workspace = true
-notify = "8"
+notify.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
