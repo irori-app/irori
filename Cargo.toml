@@ -63,6 +63,7 @@ parking_lot = "0.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 dirs = "6"
+notify = "8"
 url = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
 smallvec = "1"

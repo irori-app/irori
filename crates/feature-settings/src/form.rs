@@ -1042,8 +1042,11 @@ impl SettingsForm {
 
     /// Use the theme called `name`. A theme for the other colour mode than
     /// the one showing switches the mode too, so picking it always shows it.
+    /// Going back to Omarchy's theme lets go of the mode, which it decides.
     fn pick_theme(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(dark) = irori_ui::theme::is_dark_theme(name, cx)
+        if name.is_empty() && irori_ui::theme::follows_omarchy(cx) {
+            self.write("iroriUi.theme", Value::from("system"), window, cx);
+        } else if let Some(dark) = irori_ui::theme::is_dark_theme(name, cx)
             && dark != cx.theme().mode.is_dark()
         {
             let mode = if dark { "dark" } else { "light" };
@@ -1796,9 +1799,14 @@ fn choice_items(options: &[ChoiceOption]) -> Vec<ChoiceItem> {
         .collect()
 }
 
-/// The built-in theme followed by every theme of the theme registry.
+/// The default theme followed by every theme of the theme registry.
 fn theme_items(cx: &App) -> Vec<ChoiceItem> {
-    let mut items = vec![ChoiceItem::new("", t("settings.theme.default"))];
+    let default = if irori_ui::theme::follows_omarchy(cx) {
+        "settings.theme.omarchy"
+    } else {
+        "settings.theme.default"
+    };
+    let mut items = vec![ChoiceItem::new("", t(default))];
     for (name, dark) in irori_ui::theme::theme_names(cx) {
         let key = if dark {
             "settings.theme.dark_variant"

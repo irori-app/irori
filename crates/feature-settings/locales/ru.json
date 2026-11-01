@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · тёмная",
   "settings.theme.default": "Irori (по умолчанию)",
   "settings.theme.light_variant": "{name} · светлая",
+  "settings.theme.omarchy": "Omarchy (по умолчанию)",
   "settings.tool_version.latest": "Последняя",
   "settings.tools.dx.help": "Установить или удалить его в префиксе этой игры прямо сейчас. В Proton есть свой.",
   "settings.tools.dx.installed": "{tool} установлен",

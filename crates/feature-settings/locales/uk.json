@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · темна",
   "settings.theme.default": "Irori (типова)",
   "settings.theme.light_variant": "{name} · світла",
+  "settings.theme.omarchy": "Omarchy (типова)",
   "settings.tool_version.latest": "Найновіша",
   "settings.tools.dx.help": "Встановити або видалити його в префіксі цієї гри просто зараз. Proton має власний.",
   "settings.tools.dx.installed": "{tool} встановлено",

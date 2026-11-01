@@ -26,6 +26,8 @@ sha2.workspace = true
 hex.workspace = true
 open.workspace = true
 libc = "0.2"
+notify.workspace = true
+toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }
 
 [dev-dependencies]
 # gpui-kit/test-support pulls the GPUI Fast crates, which conflict with gpui-pre in the

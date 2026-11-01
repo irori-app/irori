@@ -477,6 +477,9 @@ cx.spawn_in(window, async move |this, cx| {
 
 - Themes live in `assets/themes`; Irori Night and Irori Day are the defaults. Apply
   them with `theme::apply`.
+- On Omarchy the default theme is the desktop's own: `omarchy.rs` derives it from
+  Omarchy's `colors.toml` and follows theme switches. It stays out of the theme
+  registry, which never replaces a theme it already has.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,

@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · tmavý",
   "settings.theme.default": "Irori (výchozí)",
   "settings.theme.light_variant": "{name} · světlý",
+  "settings.theme.omarchy": "Omarchy (výchozí)",
   "settings.tool_version.latest": "Nejnovější",
   "settings.tools.dx.help": "Ihned nainstalovat nebo odebrat v prefixu této hry. Proton má vlastní.",
   "settings.tools.dx.installed": "Nainstalováno: {tool}",

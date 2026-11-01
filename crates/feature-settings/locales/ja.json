@@ -516,6 +516,7 @@
   "settings.theme.dark_variant": "{name} · ダーク",
   "settings.theme.default": "Irori（既定）",
   "settings.theme.light_variant": "{name} · ライト",
+  "settings.theme.omarchy": "Omarchy（既定）",
   "settings.tool_version.latest": "最新",
   "settings.tools.dx.help": "このゲームのプレフィックスに今すぐインストール、または削除します。Protonには独自のものが同梱されています。",
   "settings.tools.dx.installed": "{tool}をインストールしました",
