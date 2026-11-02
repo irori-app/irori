@@ -229,11 +229,11 @@ fn palette(configs: &[Config]) -> Option<Palette> {
 
     let background = view_or_window("BackgroundNormal")?;
     let foreground = view_or_window("ForegroundNormal")?;
-    // What the user picked in System Settings, which the scheme's own colours
-    // only carry once Plasma has rewritten them.
+    // Not the selection first: Plasma darkens or lightens it from the accent to
+    // keep selected text readable, so it can be far from what the user picked.
     let accent = color("General", "AccentColor")
-        .or_else(|| color("Colors:Selection", "BackgroundNormal"))
-        .or_else(|| color(VIEW, "DecorationFocus"))?;
+        .or_else(|| color(VIEW, "DecorationFocus"))
+        .or_else(|| color("Colors:Selection", "BackgroundNormal"))?;
     let tint = |amount: f32| mix(background, foreground, amount);
     let status = |key: &str, fallback: u32| view_or_window(key).unwrap_or(rgb(fallback));
     let panel = color(WINDOW, "BackgroundNormal").unwrap_or_else(|| tint(0.04));
@@ -410,9 +410,24 @@ Name=Breeze Light
     }
 
     #[test]
-    fn the_focus_colour_stands_in_for_a_missing_selection() {
-        let text = DARK.replace("[Colors:Selection]", "[Colors:Elsewhere]");
-        assert_eq!(generated(&[&text])["primary.background"], "#3daee9");
+    fn the_accent_is_the_focus_colour_not_the_darkened_selection() {
+        let text = DARK
+            .replace(
+                "[Colors:Selection]\nBackgroundNormal=61,174,233",
+                "[Colors:Selection]\nBackgroundNormal=184,6,78",
+            )
+            .replace("DecorationFocus=61,174,233", "DecorationFocus=255,0,102");
+        assert_eq!(generated(&[&text])["primary.background"], "#ff0066");
+    }
+
+    #[test]
+    fn the_selection_stands_in_for_a_missing_focus_colour() {
+        let text = DARK.replace("DecorationFocus=61,174,233", "DecorationFocus=none");
+        let text = text.replace(
+            "[Colors:Selection]\nBackgroundNormal=61,174,233",
+            "[Colors:Selection]\nBackgroundNormal=1,2,3",
+        );
+        assert_eq!(generated(&[&text])["primary.background"], "#010203");
     }
 
     #[test]

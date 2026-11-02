@@ -350,18 +350,21 @@ Irori looks up each colour on its own, the first place holding it winning:
    `XDG_CONFIG_DIRS`. Plasma writes the whole scheme here when one is applied.
 2. The scheme `[General] ColorScheme` names, as `color-schemes/<name>.colors` in the
    user's data folder and then `XDG_DATA_DIRS`. A desktop that never changed its scheme
-   has only this. With no name at all, that is `BreezeLight`.
+   has only this. No name means `BreezeLight`: KConfig drops a value that equals its
+   default, so applying that scheme removes the line.
 
 Pages use `[Colors:View]`, and the sidebar, title bar and cards `[Colors:Window]`, as
 KDE's own apps do. Popovers use `[Colors:Button]`. The accent is `[General] AccentColor`
-when the user picked one, else `[Colors:Selection]`. Status colours are the view's
+when there is one, else the view's `DecorationFocus`, which holds the colour the user
+picked: Plasma changes `[Colors:Selection]` from it to keep selected text readable, so
+that is only the last resort. Status colours are the view's
 `ForegroundNegative`, `ForegroundPositive` and `ForegroundNeutral`. Whether the theme
 is dark goes by the view's background, as schemes don't say. Corners are Irori's own,
 near Breeze's: schemes hold no radius.
 
-Irori watches `kdeglobals` and follows every change while it runs, including the accent
-colour and Plasma switching light and dark by the time of day. Translucency is
-unaffected: it depends on the compositor, as in the table above.
+Irori watches `kdeglobals` and follows every change while it runs: another scheme, an
+accent colour or another Global Theme, whose scheme name is only in `kdedefaults`.
+Translucency is unaffected: it depends on the compositor, as in the table above.
 
 Settings → Appearance → Theme shows this as “KDE Plasma (default)”. Picking any other
 theme stops following Plasma, and “Follow system” takes its mode from the scheme.
