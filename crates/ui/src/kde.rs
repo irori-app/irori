@@ -1,10 +1,11 @@
 //! KDE Plasma's colour scheme, turned into an Irori theme.
 //!
 //! Plasma colours every app from one colour scheme at a time, so Irori reads it
-//! too rather than bundling Breeze lookalikes. Applying a scheme copies it into
-//! `kdeglobals`, but a desktop whose scheme was never changed may only name it
-//! there, or not even that, which is why a colour is looked for in `kdeglobals`
-//! and then in the scheme's own file. Nothing happens outside a Plasma session:
+//! too rather than bundling Breeze lookalikes. Plasma copies the scheme into
+//! `kdeglobals` when it first starts and whenever one is applied, but that copy
+//! can lack colours or be gone while the file only names a scheme, or not even
+//! that, which is why a colour is looked for in `kdeglobals` and then in the
+//! scheme's own file. Nothing happens outside a Plasma session:
 //! any KDE app leaves a `kdeglobals` behind on whatever desktop it ran, so the
 //! session decides, not the files.
 
