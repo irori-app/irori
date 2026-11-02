@@ -481,7 +481,8 @@ cx.spawn_in(window, async move |this, cx| {
   Omarchy's `colors.toml`, `cosmic.rs` reads COSMIC's theme files, both fill in a
   `desktop_theme::Palette`, and Irori follows the desktop's theme switches. These
   themes stay out of the theme registry, which never replaces a theme it already has.
-  COSMIC's `frosted_windows` also decides Automatic translucency (`glass::resolve`).
+  COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
+  (`glass::resolve`, `Glass::Desktop`).
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,

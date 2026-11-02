@@ -23,15 +23,22 @@ pub enum Desktop {
     Cosmic,
 }
 
+/// What a desktop with its own setting says about see-through windows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Frost {
+    pub(crate) on: bool,
+    /// How opaque the desktop's own windows are, out of 255.
+    pub(crate) opacity: Option<u8>,
+}
+
 /// The themes a desktop offers right now.
 pub(crate) struct DesktopThemes {
     pub(crate) light: Option<ThemeConfig>,
     pub(crate) dark: Option<ThemeConfig>,
     /// The mode the desktop is in.
     pub(crate) is_dark: bool,
-    /// Whether the desktop's windows are see-through, on a desktop that has
-    /// its own say in that.
-    pub(crate) frosted: Option<bool>,
+    /// See-through windows, on a desktop that has its own say in them.
+    pub(crate) frost: Option<Frost>,
 }
 
 impl DesktopThemes {
@@ -47,7 +54,7 @@ impl DesktopThemes {
             light,
             dark,
             is_dark,
-            frosted: None,
+            frost: None,
         }
     }
 }

@@ -20,7 +20,7 @@ use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, 
 use irori_core::settings::{ThemePreference, UiPrefs};
 
 pub use crate::desktop_theme::Desktop;
-use crate::desktop_theme::DesktopThemes;
+use crate::desktop_theme::{DesktopThemes, Frost};
 use crate::style::{TEXT_CONTRAST, contrast, legible_towards};
 use crate::{cosmic, omarchy};
 
@@ -66,7 +66,7 @@ struct DesktopTheme {
     light: Option<Rc<ThemeConfig>>,
     dark: Option<Rc<ThemeConfig>>,
     is_dark: bool,
-    frosted: Option<bool>,
+    frost: Option<Frost>,
     revision: u64,
 }
 
@@ -211,14 +211,14 @@ fn set_desktop(desktop: Desktop, themes: DesktopThemes, cx: &mut App) {
         light: themes.light.map(Rc::new),
         dark: themes.dark.map(Rc::new),
         is_dark: themes.is_dark,
-        frosted: themes.frosted,
+        frost: themes.frost,
         revision,
     });
 }
 
-/// Whether the desktop wants see-through windows, on one that has a setting.
-pub(crate) fn desktop_frosted(cx: &App) -> Option<bool> {
-    cx.try_global::<DesktopTheme>()?.frosted
+/// What the desktop wants of see-through windows, on one that has a setting.
+pub(crate) fn desktop_frost(cx: &App) -> Option<Frost> {
+    cx.try_global::<DesktopTheme>()?.frost
 }
 
 /// The desktop whose theme is the default one, if Irori follows one here.
@@ -790,6 +790,8 @@ mod tests {
                 Glass::Strong { blurred: true },
                 Glass::Subtle { blurred: false },
                 Glass::Strong { blurred: false },
+                Glass::Desktop { opacity: 0x60 },
+                Glass::Desktop { opacity: 0xe6 },
             ] {
                 cx.update(|cx| cx.set_global(glass));
                 cx.read(|cx| {
