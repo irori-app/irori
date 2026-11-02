@@ -347,15 +347,19 @@ why the session decides rather than the files.
 Irori looks up each colour on its own, the first place holding it winning:
 
 1. `kdeglobals` in the user's config folder, then in its `kdedefaults` folder, then in
-   `XDG_CONFIG_DIRS`. Plasma writes the whole scheme here when one is applied.
+   `XDG_CONFIG_DIRS`. Plasma 6.8 writes the whole scheme here at first login and when
+   one is applied.
 2. The scheme `[General] ColorScheme` names, as `color-schemes/<name>.colors` in the
-   user's data folder and then `XDG_DATA_DIRS`. A desktop that never changed its scheme
-   has only this. No name means `BreezeLight`: KConfig drops a value that equals its
-   default, so applying that scheme removes the line.
+   user's data folder and then `XDG_DATA_DIRS`. No name means `BreezeLight`: KConfig
+   drops a value that equals its default, so that line is often absent. After a Global
+   Theme change the name is only in `kdedefaults`.
+
+Checked in a real Plasma 6.8 session on Wayland, with System Settings' Colors page:
+schemes, custom accents, the wallpaper's accent and a return to the scheme's own.
 
 Pages use `[Colors:View]`, and the sidebar, title bar and cards `[Colors:Window]`, as
 KDE's own apps do. Popovers use `[Colors:Button]`. The accent is `[General] AccentColor`
-when there is one, else the view's `DecorationFocus`, which holds the colour the user
+when there is one, else the view's `DecorationFocus`. Both hold the colour the user
 picked: Plasma changes `[Colors:Selection]` from it to keep selected text readable, so
 that is only the last resort. Status colours are the view's
 `ForegroundNegative`, `ForegroundPositive` and `ForegroundNeutral`. Whether the theme
@@ -372,9 +376,10 @@ Forcing the mode the scheme isn't in shows Irori's own theme. If no background, 
 accent colour can be found, Irori's own theme stays.
 
 The Flatpak has a config folder of its own, so it reads `~/.config/kdeglobals` and
-`~/.local/share/color-schemes` through its access to the home folder. It can't see the
-host's `/usr/share/color-schemes`, so a desktop that only names a system scheme gets
-Irori's own theme there, until a scheme is applied once in System Settings.
+`~/.local/share/color-schemes` through its access to the home folder. That is enough,
+as `kdeglobals` holds the colours from first login on. It can't see the host's
+`/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
+Irori's own theme there.
 
 ## Verification and remaining machine tests
 
