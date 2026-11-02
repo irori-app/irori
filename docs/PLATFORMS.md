@@ -337,6 +337,50 @@ stops following COSMIC, and “Follow system” takes its mode from COSMIC. Unli
 forcing the other mode shows COSMIC's theme for that mode. If the files can't be read,
 as with a schema Irori doesn't know yet, Irori's own theme stays.
 
+## KDE Plasma
+
+In a Plasma session (`XDG_CURRENT_DESKTOP` names `KDE`, whichever distribution this is,
+so also a Steam Deck's desktop mode, but not its Game Mode), the default theme is the
+desktop's colour scheme. `kdeglobals` also exists wherever a KDE app has run, which is
+why the session decides rather than the files.
+
+Irori looks up each colour on its own, the first place holding it winning:
+
+1. `kdeglobals` in the user's config folder, then in its `kdedefaults` folder, then in
+   `XDG_CONFIG_DIRS`. Plasma 6.8 writes the whole scheme here at first login and when
+   one is applied.
+2. The scheme `[General] ColorScheme` names, as `color-schemes/<name>.colors` in the
+   user's data folder and then `XDG_DATA_DIRS`. No name means `BreezeLight`: KConfig
+   drops a value that equals its default, so that line is often absent. After a Global
+   Theme change the name is only in `kdedefaults`.
+
+Checked in a real Plasma 6.8 session on Wayland, with System Settings' Colors page:
+schemes, custom accents, the wallpaper's accent and a return to the scheme's own.
+
+Pages use `[Colors:View]`, and the sidebar, title bar and cards `[Colors:Window]`, as
+KDE's own apps do. Popovers use `[Colors:Button]`. The accent is `[General] AccentColor`
+when there is one, else the view's `DecorationFocus`. Both hold the colour the user
+picked: Plasma changes `[Colors:Selection]` from it to keep selected text readable, so
+that is only the last resort. Status colours are the view's
+`ForegroundNegative`, `ForegroundPositive` and `ForegroundNeutral`. Whether the theme
+is dark goes by the view's background, as schemes don't say. Corners are Irori's own,
+near Breeze's: schemes hold no radius.
+
+Irori watches `kdeglobals` and follows every change while it runs: another scheme, an
+accent colour or another Global Theme, whose scheme name is only in `kdedefaults`.
+Translucency is unaffected: it depends on the compositor, as in the table above.
+
+Settings → Appearance → Theme shows this as “KDE Plasma (default)”. Picking any other
+theme stops following Plasma, and “Follow system” takes its mode from the scheme.
+Forcing the mode the scheme isn't in shows Irori's own theme. If no background, text or
+accent colour can be found, Irori's own theme stays.
+
+The Flatpak has a config folder of its own, so it reads `~/.config/kdeglobals` and
+`~/.local/share/color-schemes` through its access to the home folder. That is enough,
+as `kdeglobals` holds the colours from first login on. It can't see the host's
+`/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
+Irori's own theme there.
+
 ## Desktop accent colour
 
 On a Linux desktop whose whole theme Irori doesn't follow, the default theme stays
@@ -347,7 +391,7 @@ are read. Support comes from the desktop's portal backend:
 | Desktop | Backend | `accent-color` |
 | --- | --- | --- |
 | GNOME 47+ | `xdg-desktop-portal-gnome` 47 | Yes. GNOME 46 has no accent setting |
-| KDE Plasma | `xdg-desktop-portal-kde` 5.27.8+ | Yes: the selection colour |
+| KDE Plasma | `xdg-desktop-portal-kde` 5.27.8+ | Yes, though Irori follows its whole theme instead |
 | COSMIC | `xdg-desktop-portal-cosmic` | Yes, though Irori follows its whole theme instead |
 | Cinnamon, MATE, Xfce | `xdg-desktop-portal-xapp` 1.1.1+ | Yes |
 | Anything falling back to `xdg-desktop-portal-gtk` | | No |

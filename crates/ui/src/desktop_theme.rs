@@ -1,10 +1,11 @@
 //! Turning a desktop's colours into an Irori theme.
 //!
-//! Desktops that colour everything from one place (see [`crate::omarchy`] and
-//! [`crate::cosmic`]) don't describe the many surfaces Irori paints. Each fills
-//! in a [`Palette`], and the rest is derived here, so both read the same way
-//! and text stays legible whatever the desktop's colours are. Desktops that
-//! only have an accent colour tint one of Irori's themes with [`accented`].
+//! Desktops that colour everything from one place (see [`crate::omarchy`],
+//! [`crate::cosmic`] and [`crate::kde`]) don't describe the many surfaces Irori
+//! paints. Each fills in a [`Palette`], and the rest is derived here, so they
+//! all read the same way and text stays legible whatever the desktop's colours
+//! are. Desktops that only have an accent colour tint one of Irori's themes
+//! with [`accented`].
 
 use gpui_kit::component::{ThemeConfig, try_parse_color};
 use gpui_kit::{Hsla, Rgba, SharedString, rgb};
@@ -22,6 +23,7 @@ const ICON: f32 = ICON_CONTRAST + 0.1;
 pub enum Desktop {
     Omarchy,
     Cosmic,
+    Kde,
 }
 
 /// What a desktop with its own setting says about see-through windows.
