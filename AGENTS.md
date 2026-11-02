@@ -483,6 +483,10 @@ cx.spawn_in(window, async move |this, cx| {
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
   (`glass::resolve`, `Glass::Desktop`).
+- On other Linux desktops the default theme is Irori's own in the desktop's accent colour,
+  where the settings portal has one (`desktop_accent.rs`, `desktop_theme::accented`). This
+  replaces only Irori's accent colours, held legible on its surfaces. A followed desktop's
+  theme and any theme the user picked win; `docs/PLATFORMS.md` lists who offers an accent.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,
