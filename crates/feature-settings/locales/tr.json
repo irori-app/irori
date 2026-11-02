@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "bilinmeyen oturum",
   "settings.tag.experimental": "Deneysel",
   "settings.tag.restart_required": "Yeniden başlatma gerekir",
+  "settings.theme.cosmic": "COSMIC (varsayılan)",
   "settings.theme.dark_variant": "{name} · koyu",
   "settings.theme.default": "Irori (varsayılan)",
   "settings.theme.light_variant": "{name} · açık",

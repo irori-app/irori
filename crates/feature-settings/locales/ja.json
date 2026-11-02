@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "不明なセッション",
   "settings.tag.experimental": "実験的",
   "settings.tag.restart_required": "再起動が必要",
+  "settings.theme.cosmic": "COSMIC（既定）",
   "settings.theme.dark_variant": "{name} · ダーク",
   "settings.theme.default": "Irori（既定）",
   "settings.theme.light_variant": "{name} · ライト",

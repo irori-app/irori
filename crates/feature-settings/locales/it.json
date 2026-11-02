@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "sessione sconosciuta",
   "settings.tag.experimental": "Sperimentale",
   "settings.tag.restart_required": "Riavvio necessario",
+  "settings.theme.cosmic": "COSMIC (predefinito)",
   "settings.theme.dark_variant": "{name} · scuro",
   "settings.theme.default": "Irori (predefinito)",
   "settings.theme.light_variant": "{name} · chiaro",

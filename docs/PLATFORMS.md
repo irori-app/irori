@@ -277,7 +277,7 @@ pixels off and `irori_ui::glass` needs to stop.
 | GNOME before 51 | No. Blur my Shell can blur applications by window class |
 | Hyprland | Yes |
 | niri 26.04+ | Yes |
-| COSMIC with Frosted Glass | Yes |
+| COSMIC 1.3+ | Yes |
 | Sway | No |
 | SwayFX | No request: set `blur enable`, which is off by default |
 | X11 without KWin | No. picom and the like can add their own by window class |
@@ -313,6 +313,27 @@ don't always meet.
 Settings → Appearance → Theme shows this as “Omarchy (default)”. Picking any other
 theme stops following Omarchy, and “Follow system” takes its light or dark mode from
 the Omarchy theme. Forcing the mode the Omarchy theme isn't in shows Irori's own theme.
+
+## COSMIC
+
+In a COSMIC session (`XDG_CURRENT_DESKTOP` names it, whichever distribution this is),
+the default theme is the desktop's. Irori reads the `com.system76.CosmicTheme.Dark`
+and `.Light` files, one per field, from `~/.config/cosmic`, falling back field by field
+to the system's defaults in `XDG_DATA_DIRS`, and only from the newest `vN` folder, as
+the schema moves with COSMIC. `com.system76.CosmicTheme.Mode` says which is showing.
+Irori uses COSMIC's surfaces, accent, status colours and corner radius, and follows
+changes while it runs. Its files can stay behind on a machine that no longer runs
+COSMIC, which is why the session decides rather than the files.
+
+COSMIC's compositor offers blur whatever the user chose, so translucency set to
+Automatic follows Settings → Desktop → Appearance → Frosted glass → Windows
+(`frosted_windows`) instead, on and off while Irori runs. Subtle and Strong stay
+the user's own choice. Frost thickness and opacity are not followed.
+
+Settings → Appearance → Theme shows this as “COSMIC (default)”. Picking any other theme
+stops following COSMIC, and “Follow system” takes its mode from COSMIC. Unlike Omarchy,
+forcing the other mode shows COSMIC's theme for that mode. If the files can't be read,
+as with a schema Irori doesn't know yet, Irori's own theme stays.
 
 ## Verification and remaining machine tests
 

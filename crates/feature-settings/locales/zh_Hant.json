@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "未知工作階段",
   "settings.tag.experimental": "實驗性",
   "settings.tag.restart_required": "需要重新啟動",
+  "settings.theme.cosmic": "COSMIC（預設）",
   "settings.theme.dark_variant": "{name} · 深色",
   "settings.theme.default": "Irori（預設）",
   "settings.theme.light_variant": "{name} · 淺色",

@@ -5,6 +5,8 @@
 
 pub mod art;
 pub mod components;
+mod cosmic;
+mod desktop_theme;
 mod engine_problem;
 pub mod glass;
 pub mod hooks;
@@ -44,7 +46,7 @@ pub fn init(backend: Backend, cx: &mut App) {
     i18n::set_language(&backend.settings.app().ui_language);
     state::AppState::install(backend, cx);
     theme::install(cx);
-    theme::follow_omarchy(cx);
+    theme::follow_desktop(cx);
     art::install(cx);
     nav::install(cx);
     models::install(cx);
