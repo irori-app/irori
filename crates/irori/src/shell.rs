@@ -703,7 +703,7 @@ pub fn initial_glass(route: &Route, cx: &App) -> Glass {
     if matches!(route, Route::BigPicture) {
         Glass::Opaque
     } else {
-        glass::resolve(models(cx).settings.read(cx).app.ui.translucency)
+        glass::resolve(models(cx).settings.read(cx).app.ui.translucency, cx)
     }
 }
 

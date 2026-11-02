@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "neznámá relace",
   "settings.tag.experimental": "Experimentální",
   "settings.tag.restart_required": "Vyžaduje restart",
+  "settings.theme.cosmic": "COSMIC (výchozí)",
   "settings.theme.dark_variant": "{name} · tmavý",
   "settings.theme.default": "Irori (výchozí)",
   "settings.theme.light_variant": "{name} · světlý",

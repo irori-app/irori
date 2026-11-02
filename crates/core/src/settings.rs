@@ -650,8 +650,8 @@ pub enum Translucency {
 #[serde(default, rename_all = "camelCase")]
 pub struct UiPrefs {
     pub theme: ThemePreference,
-    /// Theme name from the bundled/user theme registry ("" = default: Omarchy's
-    /// theme on Omarchy, Irori's own elsewhere).
+    /// Theme name from the bundled/user theme registry ("" = default: the
+    /// desktop's theme on COSMIC and Omarchy, Irori's own elsewhere).
     pub theme_name: String,
     pub translucency: Translucency,
     /// Base font size in px; drives the rem scale (application zoom).

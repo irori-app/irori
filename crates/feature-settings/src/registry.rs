@@ -1211,7 +1211,14 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.theme",
         Custom(CustomKind::ThemeName),
     )
-    .keywords(&["colors", "palette", "catppuccin", "gruvbox", "omarchy"]),
+    .keywords(&[
+        "colors",
+        "palette",
+        "catppuccin",
+        "gruvbox",
+        "omarchy",
+        "cosmic",
+    ]),
     app(
         "iroriUi.translucency",
         "settings.field.ui_translucency.label",
