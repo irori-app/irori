@@ -651,7 +651,8 @@ pub enum Translucency {
 pub struct UiPrefs {
     pub theme: ThemePreference,
     /// Theme name from the bundled/user theme registry ("" = default: the
-    /// desktop's theme on COSMIC and Omarchy, Irori's own elsewhere).
+    /// desktop's theme on COSMIC and Omarchy, Irori's own elsewhere, in the
+    /// desktop's accent colour where it has one).
     pub theme_name: String,
     pub translucency: Translucency,
     /// Base font size in px; drives the rem scale (application zoom).

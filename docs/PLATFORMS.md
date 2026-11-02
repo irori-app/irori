@@ -381,6 +381,40 @@ as `kdeglobals` holds the colours from first login on. It can't see the host's
 `/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
 Irori's own theme there.
 
+## Desktop accent colour
+
+On a Linux desktop whose whole theme Irori doesn't follow, the default theme stays
+Irori's own, in the desktop's accent colour. Irori asks the XDG settings portal for
+`accent-color` in `org.freedesktop.appearance`, a single source, so no desktop's files
+are read. Support comes from the desktop's portal backend:
+
+| Desktop | Backend | `accent-color` |
+| --- | --- | --- |
+| GNOME 47+ | `xdg-desktop-portal-gnome` 47 | Yes. GNOME 46 has no accent setting |
+| KDE Plasma | `xdg-desktop-portal-kde` 5.27.8+ | Yes, though Irori follows its whole theme instead |
+| COSMIC | `xdg-desktop-portal-cosmic` | Yes, though Irori follows its whole theme instead |
+| Cinnamon, MATE, Xfce | `xdg-desktop-portal-xapp` 1.1.1+ | Yes |
+| Anything falling back to `xdg-desktop-portal-gtk` | | No |
+| Hyprland, Sway and other wlroots compositors | `-hyprland`, `-wlr` | No: these have no settings portal, and rely on the fallback above |
+
+Without an answer Irori's own orange stays, and a missing portal costs nothing. The
+specification has values out of range mean “unset”, and they count as no accent.
+
+A desktop's theme, where Irori follows one, already has its accent, so the portal isn't
+asked then. If such a theme can't be read, as with a COSMIC schema Irori doesn't know
+yet, the portal's accent still applies. Settings → Appearance → Theme keeps calling this
+“Irori (default)”. Picking any theme, Irori Night and Irori Day included, shows it as it is.
+
+Only what Irori paints in its own accent changes: buttons, links, focus rings, the caret,
+selections, progress and the hover tint. A desktop's accent is made for its own surfaces
+and can be anything (a Plasma selection colour may be near black), so Irori holds it to
+3:1 on its surfaces where it fills or marks things and 4.5:1 where it writes, and an
+accent that already reads stays exactly as the desktop has it.
+
+Irori listens for the portal's `SettingChanged` signal, so changes show while it runs and
+nothing polls. The first window waits up to 100 ms for the answer, so a portal that is
+still starting can't hold Irori up; its answer then applies once it comes.
+
 ## Verification and remaining machine tests
 
 The regression suite checks the host/build matrix, unsupported runtime families,

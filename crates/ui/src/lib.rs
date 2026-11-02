@@ -6,6 +6,7 @@
 pub mod art;
 pub mod components;
 mod cosmic;
+mod desktop_accent;
 mod desktop_theme;
 mod engine_problem;
 pub mod glass;

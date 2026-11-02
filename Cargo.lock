@@ -4996,6 +4996,7 @@ name = "irori-ui"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "ashpd",
  "dirs 6.0.0",
  "futures",
  "gpui-kit",
