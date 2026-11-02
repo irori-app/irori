@@ -516,6 +516,7 @@
   "settings.theme.cosmic": "COSMIC (varsayılan)",
   "settings.theme.dark_variant": "{name} · koyu",
   "settings.theme.default": "Irori (varsayılan)",
+  "settings.theme.kde": "KDE Plasma (varsayılan)",
   "settings.theme.light_variant": "{name} · açık",
   "settings.theme.omarchy": "Omarchy (varsayılan)",
   "settings.tool_version.latest": "En yeni",

@@ -337,6 +337,42 @@ stops following COSMIC, and “Follow system” takes its mode from COSMIC. Unli
 forcing the other mode shows COSMIC's theme for that mode. If the files can't be read,
 as with a schema Irori doesn't know yet, Irori's own theme stays.
 
+## KDE Plasma
+
+In a Plasma session (`XDG_CURRENT_DESKTOP` names `KDE`, whichever distribution this is,
+so also a Steam Deck's desktop mode, but not its Game Mode), the default theme is the
+desktop's colour scheme. `kdeglobals` also exists wherever a KDE app has run, which is
+why the session decides rather than the files.
+
+Irori looks up each colour on its own, the first place holding it winning:
+
+1. `kdeglobals` in the user's config folder, then in its `kdedefaults` folder, then in
+   `XDG_CONFIG_DIRS`. Plasma writes the whole scheme here when one is applied.
+2. The scheme `[General] ColorScheme` names, as `color-schemes/<name>.colors` in the
+   user's data folder and then `XDG_DATA_DIRS`. A desktop that never changed its scheme
+   has only this. With no name at all, that is `BreezeLight`.
+
+Pages use `[Colors:View]`, and the sidebar, title bar and cards `[Colors:Window]`, as
+KDE's own apps do. Popovers use `[Colors:Button]`. The accent is `[General] AccentColor`
+when the user picked one, else `[Colors:Selection]`. Status colours are the view's
+`ForegroundNegative`, `ForegroundPositive` and `ForegroundNeutral`. Whether the theme
+is dark goes by the view's background, as schemes don't say. Corners are Irori's own,
+near Breeze's: schemes hold no radius.
+
+Irori watches `kdeglobals` and follows every change while it runs, including the accent
+colour and Plasma switching light and dark by the time of day. Translucency is
+unaffected: it depends on the compositor, as in the table above.
+
+Settings → Appearance → Theme shows this as “KDE Plasma (default)”. Picking any other
+theme stops following Plasma, and “Follow system” takes its mode from the scheme.
+Forcing the mode the scheme isn't in shows Irori's own theme. If no background, text or
+accent colour can be found, Irori's own theme stays.
+
+The Flatpak has a config folder of its own, so it reads `~/.config/kdeglobals` and
+`~/.local/share/color-schemes` through its access to the home folder. It can't see the
+host's `/usr/share/color-schemes`, so a desktop that only names a system scheme gets
+Irori's own theme there, until a scheme is applied once in System Settings.
+
 ## Verification and remaining machine tests
 
 The regression suite checks the host/build matrix, unsupported runtime families,

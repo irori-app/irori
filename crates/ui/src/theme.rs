@@ -6,9 +6,9 @@
 //! Mocha), or Irori's own theme when the family has none, so following the
 //! system never drops the user back to an unrelated look.
 //!
-//! On COSMIC and Omarchy the default theme is the desktop's own (see
-//! [`crate::cosmic`] and [`crate::omarchy`]), and Irori follows it as the user
-//! switches. A theme the user picked wins.
+//! On COSMIC, KDE Plasma and Omarchy the default theme is the desktop's own (see
+//! [`crate::cosmic`], [`crate::kde`] and [`crate::omarchy`]), and Irori follows
+//! it as the user switches. A theme the user picked wins.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -22,7 +22,7 @@ use irori_core::settings::{ThemePreference, UiPrefs};
 pub use crate::desktop_theme::Desktop;
 use crate::desktop_theme::{DesktopThemes, Frost};
 use crate::style::{TEXT_CONTRAST, contrast, legible_towards};
-use crate::{cosmic, omarchy};
+use crate::{cosmic, kde, omarchy};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
 pub const DEFAULT_LIGHT: &str = "Irori Day";
@@ -136,8 +136,8 @@ pub(crate) fn install(cx: &mut App) {
 }
 
 /// Use the desktop's theme as the default on a desktop Irori follows, and keep
-/// up with it. COSMIC goes first because it is the session running now, while
-/// Omarchy's files stay on disk whatever session is.
+/// up with it. COSMIC and Plasma go first because they are the session running
+/// now, while Omarchy's files stay on disk whatever session is.
 pub(crate) fn follow_desktop(cx: &mut App) {
     if cosmic::running() {
         follow(
@@ -147,6 +147,8 @@ pub(crate) fn follow_desktop(cx: &mut App) {
             cosmic::watch(),
             cx,
         );
+    } else if kde::running() {
+        follow(Desktop::Kde, kde::read, kde::themes, kde::watch(), cx);
     } else {
         follow(
             Desktop::Omarchy,
@@ -742,6 +744,73 @@ mod tests {
         use_cosmic(true, cx);
         cx.update(|cx| apply(&prefs(ThemePreference::Dark, "Tokyo Storm"), None, cx));
         cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm"));
+    }
+
+    fn use_kde(globals: &str, cx: &mut TestAppContext) {
+        let themes = kde::themes(&kde::tests::files(globals)).unwrap();
+        cx.update(|cx| set_desktop(Desktop::Kde, themes, cx));
+    }
+
+    #[gpui_kit::test]
+    fn kde_is_the_default_and_decides_the_mode(cx: &mut TestAppContext) {
+        setup(cx);
+        use_kde(kde::tests::LIGHT, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "KDE Plasma");
+            assert!(!cx.theme().mode.is_dark());
+            assert_eq!(followed_desktop(cx), Some(Desktop::Kde));
+        });
+
+        use_kde(kde::tests::DARK, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| assert!(cx.theme().mode.is_dark()));
+    }
+
+    #[gpui_kit::test]
+    fn a_new_kde_scheme_of_the_same_mode_shows_at_once(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::System, "");
+        use_kde(kde::tests::DARK, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        let before = cx.read(|cx| cx.theme().background);
+
+        use_kde(&kde::tests::DARK.replace("20,22,24", "40,20,20"), cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert_ne!(cx.theme().background, before));
+    }
+
+    #[gpui_kit::test]
+    fn a_forced_mode_kde_is_not_in_gets_irori(cx: &mut TestAppContext) {
+        setup(cx);
+        use_kde(kde::tests::LIGHT, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), DEFAULT_DARK));
+    }
+
+    #[gpui_kit::test]
+    fn a_theme_the_user_picked_beats_kde(cx: &mut TestAppContext) {
+        setup(cx);
+        use_kde(kde::tests::DARK, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, "Tokyo Storm"), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm"));
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_rows_read_on_kde(cx: &mut TestAppContext) {
+        use crate::style::{SidebarPalette, TEXT_CONTRAST, contrast};
+
+        setup(cx);
+        for scheme in [kde::tests::DARK, kde::tests::LIGHT] {
+            use_kde(scheme, cx);
+            cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+            cx.read(|cx| {
+                let theme = cx.theme();
+                let p = SidebarPalette::new(cx);
+                assert!(contrast(p.text, theme.sidebar) >= TEXT_CONTRAST - 0.01);
+                assert!(contrast(p.selected_text, theme.sidebar_accent) >= TEXT_CONTRAST - 0.01);
+            });
+        }
     }
 
     #[gpui_kit::test]
