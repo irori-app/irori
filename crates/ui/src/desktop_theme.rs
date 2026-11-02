@@ -4,10 +4,11 @@
 //! [`crate::cosmic`] and [`crate::kde`]) don't describe the many surfaces Irori
 //! paints. Each fills in a [`Palette`], and the rest is derived here, so they
 //! all read the same way and text stays legible whatever the desktop's colours
-//! are.
+//! are. Desktops that only have an accent colour tint one of Irori's themes
+//! with [`accented`].
 
-use gpui_kit::component::ThemeConfig;
-use gpui_kit::{Hsla, Rgba, rgb};
+use gpui_kit::component::{ThemeConfig, try_parse_color};
+use gpui_kit::{Hsla, Rgba, SharedString, rgb};
 use serde_json::json;
 
 use crate::style::{ICON_CONTRAST, TEXT_CONTRAST, contrast, legible_towards};
@@ -229,6 +230,68 @@ impl Palette {
             .inspect_err(|e| tracing::warn!("building a theme from {}'s: {e}", self.name))
             .ok()
     }
+}
+
+/// `base`, in the desktop's accent colour. Only what Irori paints in its own
+/// accent changes, so the theme stays recognisably Irori's.
+///
+/// A desktop's accent is made for its own surfaces, and can be anything: a
+/// Plasma user's selection colour may be near black. So it is held against
+/// these surfaces, as a colour that fills or marks things and as one that
+/// writes on them. A colour that already reads stays exactly as it is.
+pub(crate) fn accented(base: &ThemeConfig, accent: Rgba) -> Option<ThemeConfig> {
+    let parse = |color: &Option<SharedString>| try_parse_color(color.as_ref()?).ok();
+    let colors = &base.colors;
+    let surfaces = [
+        parse(&colors.background)?,
+        parse(&colors.sidebar)?,
+        parse(&colors.secondary)?,
+        parse(&colors.popover)?,
+    ];
+    let background = surfaces[0].to_rgb();
+    let dark = base.mode.is_dark();
+    let towards = if dark {
+        gpui_kit::white()
+    } else {
+        gpui_kit::black()
+    };
+    let hold = |color: Rgba, on: &[Hsla], min| legible_towards(color.into(), on, min, towards);
+    let fill = hold(accent, &surfaces, ICON).to_rgb();
+    let writing = hold(accent, &surfaces, TEXT).to_rgb();
+    let foreground = parse(&colors.foreground)?.to_rgb();
+    let tint = mix(background, fill, 0.15);
+
+    // The text on a button stays on it as the pointer comes and goes.
+    let on_fill = on(fill);
+    let away = if on_fill == rgb(0x000000) {
+        gpui_kit::white()
+    } else {
+        gpui_kit::black()
+    };
+    let state = |color: Rgba| legible_towards(color.into(), &[on_fill.into()], TEXT, away).to_rgb();
+
+    let mut theme = base.clone();
+    let colors = &mut theme.colors;
+    let set = |color: Rgba| Some(SharedString::from(hex(color)));
+    let translucent = |amount: u8| Some(SharedString::from(alpha(fill, amount)));
+    colors.ring = set(fill);
+    colors.caret = set(fill);
+    colors.link = set(writing);
+    colors.link_hover = set(hold(mix(accent, foreground, 0.25), &surfaces, TEXT).to_rgb());
+    colors.link_active = set(writing);
+    colors.accent = set(tint);
+    colors.accent_foreground = set(hold(accent, &[tint.into()], TEXT).to_rgb());
+    colors.primary = set(fill);
+    colors.primary_foreground = set(on_fill);
+    colors.primary_hover = set(state(mix(fill, rgb(0xffffff), 0.1)));
+    colors.primary_active = set(state(mix(fill, rgb(0x000000), 0.1)));
+    colors.list_active = translucent(if dark { 0x22 } else { 0x18 });
+    colors.list_active_border = set(fill);
+    colors.sidebar_primary = set(fill);
+    colors.sidebar_primary_foreground = set(on_fill);
+    colors.progress_bar = set(fill);
+    colors.selection = translucent(if dark { 0x40 } else { 0x33 });
+    Some(theme)
 }
 
 pub(crate) fn mix(from: Rgba, to: Rgba, amount: f32) -> Rgba {
