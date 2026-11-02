@@ -516,6 +516,7 @@
   "settings.theme.cosmic": "COSMIC (standard)",
   "settings.theme.dark_variant": "{name} · mörkt",
   "settings.theme.default": "Irori (standard)",
+  "settings.theme.kde": "KDE Plasma (standard)",
   "settings.theme.light_variant": "{name} · ljust",
   "settings.theme.omarchy": "Omarchy (standard)",
   "settings.tool_version.latest": "Senaste",

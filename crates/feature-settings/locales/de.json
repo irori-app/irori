@@ -516,6 +516,7 @@
   "settings.theme.cosmic": "COSMIC (Standard)",
   "settings.theme.dark_variant": "{name} · dunkel",
   "settings.theme.default": "Irori (Standard)",
+  "settings.theme.kde": "KDE Plasma (Standard)",
   "settings.theme.light_variant": "{name} · hell",
   "settings.theme.omarchy": "Omarchy (Standard)",
   "settings.tool_version.latest": "Neueste",

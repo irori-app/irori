@@ -516,6 +516,7 @@
   "settings.theme.cosmic": "COSMIC (implicit)",
   "settings.theme.dark_variant": "{name} · întunecat",
   "settings.theme.default": "Irori (implicit)",
+  "settings.theme.kde": "KDE Plasma (implicit)",
   "settings.theme.light_variant": "{name} · luminos",
   "settings.theme.omarchy": "Omarchy (implicit)",
   "settings.tool_version.latest": "Cea mai nouă",

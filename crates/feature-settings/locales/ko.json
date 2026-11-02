@@ -516,6 +516,7 @@
   "settings.theme.cosmic": "COSMIC(기본값)",
   "settings.theme.dark_variant": "{name} · 어둡게",
   "settings.theme.default": "Irori(기본값)",
+  "settings.theme.kde": "KDE Plasma(기본값)",
   "settings.theme.light_variant": "{name} · 밝게",
   "settings.theme.omarchy": "Omarchy(기본값)",
   "settings.tool_version.latest": "최신",
