@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "sesiune necunoscută",
   "settings.tag.experimental": "Experimental",
   "settings.tag.restart_required": "Necesită repornire",
+  "settings.theme.cosmic": "COSMIC (implicit)",
   "settings.theme.dark_variant": "{name} · întunecat",
   "settings.theme.default": "Irori (implicit)",
   "settings.theme.light_variant": "{name} · luminos",

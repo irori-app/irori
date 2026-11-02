@@ -145,13 +145,21 @@ fn detect_backdrop() -> Option<Backdrop> {
 }
 
 /// The glass a preference asks for on this machine.
-pub fn resolve(pref: Translucency) -> Glass {
+pub fn resolve(pref: Translucency, cx: &App) -> Glass {
+    resolve_for(pref, crate::theme::desktop_frosted(cx))
+}
+
+/// [`resolve`], with what the desktop's own setting says, if it has one.
+/// Automatic does as the desktop does; the levels are the user asking Irori.
+fn resolve_for(pref: Translucency, desktop_frosted: Option<bool>) -> Glass {
     let Some(backdrop) = *BACKDROP else {
         return Glass::Opaque;
     };
     let blurred = backdrop.blurs;
     match pref {
-        Translucency::Auto if backdrop.automatic => Glass::Subtle { blurred },
+        Translucency::Auto if backdrop.automatic && desktop_frosted != Some(false) => {
+            Glass::Subtle { blurred }
+        }
         Translucency::Auto | Translucency::Off => Glass::Opaque,
         Translucency::Subtle => Glass::Subtle { blurred },
         Translucency::Strong => Glass::Strong { blurred },
@@ -323,7 +331,7 @@ mod tests {
 
     #[test]
     fn off_is_always_opaque() {
-        assert_eq!(resolve(Translucency::Off), Glass::Opaque);
+        assert_eq!(resolve_for(Translucency::Off, Some(true)), Glass::Opaque);
         assert_eq!(
             window_background(Glass::Opaque),
             WindowBackgroundAppearance::Opaque
@@ -335,11 +343,11 @@ mod tests {
         let blurred = BACKDROP.is_some_and(|b| b.blurs);
         let expected = |g| if BACKDROP.is_some() { g } else { Glass::Opaque };
         assert_eq!(
-            resolve(Translucency::Subtle),
+            resolve_for(Translucency::Subtle, Some(false)),
             expected(Glass::Subtle { blurred })
         );
         assert_eq!(
-            resolve(Translucency::Strong),
+            resolve_for(Translucency::Strong, Some(false)),
             expected(Glass::Strong { blurred })
         );
     }
@@ -350,7 +358,13 @@ mod tests {
             Some(b) if b.automatic => Glass::Subtle { blurred: b.blurs },
             _ => Glass::Opaque,
         };
-        assert_eq!(resolve(Translucency::Auto), want);
+        assert_eq!(resolve_for(Translucency::Auto, None), want);
+        assert_eq!(resolve_for(Translucency::Auto, Some(true)), want);
+    }
+
+    #[test]
+    fn auto_stays_opaque_when_the_desktop_turned_frosting_off() {
+        assert_eq!(resolve_for(Translucency::Auto, Some(false)), Glass::Opaque);
     }
 
     #[test]
