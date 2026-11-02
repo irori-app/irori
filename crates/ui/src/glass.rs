@@ -20,6 +20,8 @@ use gpui_kit::{App, Global, Hsla, Styled as _, Window, WindowBackgroundAppearanc
 use irori_core::settings::Translucency;
 use once_cell::sync::Lazy;
 
+use crate::desktop_theme::Frost;
+
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod linux;
 
@@ -32,6 +34,9 @@ pub enum Glass {
     Subtle { blurred: bool },
     /// Clearer chrome, and pages let a little through as well.
     Strong { blurred: bool },
+    /// Like `Subtle`, with chrome as opaque as the desktop's own windows, out
+    /// of 255, on a desktop that has a setting for that.
+    Desktop { opacity: u8 },
 }
 
 impl Global for Glass {}
@@ -46,6 +51,7 @@ impl Glass {
     fn chrome_alpha(self, dark: bool) -> f32 {
         match (self, dark) {
             (Glass::Opaque, _) => 1.0,
+            (Glass::Desktop { opacity }, _) => f32::from(opacity) / 255.0,
             (Glass::Subtle { blurred: true }, true) => 0.66,
             (Glass::Subtle { blurred: true }, false) => 0.74,
             // White text still reads at 4.5:1 over a white window behind.
@@ -146,20 +152,25 @@ fn detect_backdrop() -> Option<Backdrop> {
 
 /// The glass a preference asks for on this machine.
 pub fn resolve(pref: Translucency, cx: &App) -> Glass {
-    resolve_for(pref, crate::theme::desktop_frosted(cx))
+    resolve_for(pref, crate::theme::desktop_frost(cx))
 }
 
 /// [`resolve`], with what the desktop's own setting says, if it has one.
 /// Automatic does as the desktop does; the levels are the user asking Irori.
-fn resolve_for(pref: Translucency, desktop_frosted: Option<bool>) -> Glass {
+fn resolve_for(pref: Translucency, frost: Option<Frost>) -> Glass {
     let Some(backdrop) = *BACKDROP else {
         return Glass::Opaque;
     };
     let blurred = backdrop.blurs;
     match pref {
-        Translucency::Auto if backdrop.automatic && desktop_frosted != Some(false) => {
-            Glass::Subtle { blurred }
-        }
+        Translucency::Auto if backdrop.automatic => match frost {
+            Some(Frost { on: false, .. }) => Glass::Opaque,
+            Some(Frost {
+                opacity: Some(opacity),
+                ..
+            }) => Glass::Desktop { opacity },
+            _ => Glass::Subtle { blurred },
+        },
         Translucency::Auto | Translucency::Off => Glass::Opaque,
         Translucency::Subtle => Glass::Subtle { blurred },
         Translucency::Strong => Glass::Strong { blurred },
@@ -329,9 +340,18 @@ pub fn refit(_window: &Window, _cx: &mut App) {}
 mod tests {
     use super::*;
 
+    const FROSTED: Option<Frost> = Some(Frost {
+        on: true,
+        opacity: Some(0xc2),
+    });
+    const UNFROSTED: Option<Frost> = Some(Frost {
+        on: false,
+        opacity: Some(0xc2),
+    });
+
     #[test]
     fn off_is_always_opaque() {
-        assert_eq!(resolve_for(Translucency::Off, Some(true)), Glass::Opaque);
+        assert_eq!(resolve_for(Translucency::Off, FROSTED), Glass::Opaque);
         assert_eq!(
             window_background(Glass::Opaque),
             WindowBackgroundAppearance::Opaque
@@ -343,11 +363,11 @@ mod tests {
         let blurred = BACKDROP.is_some_and(|b| b.blurs);
         let expected = |g| if BACKDROP.is_some() { g } else { Glass::Opaque };
         assert_eq!(
-            resolve_for(Translucency::Subtle, Some(false)),
+            resolve_for(Translucency::Subtle, FROSTED),
             expected(Glass::Subtle { blurred })
         );
         assert_eq!(
-            resolve_for(Translucency::Strong, Some(false)),
+            resolve_for(Translucency::Strong, UNFROSTED),
             expected(Glass::Strong { blurred })
         );
     }
@@ -359,12 +379,34 @@ mod tests {
             _ => Glass::Opaque,
         };
         assert_eq!(resolve_for(Translucency::Auto, None), want);
-        assert_eq!(resolve_for(Translucency::Auto, Some(true)), want);
+        let no_opacity = Some(Frost {
+            on: true,
+            opacity: None,
+        });
+        assert_eq!(resolve_for(Translucency::Auto, no_opacity), want);
+    }
+
+    #[test]
+    fn auto_takes_the_desktops_opacity() {
+        let want = match *BACKDROP {
+            Some(b) if b.automatic => Glass::Desktop { opacity: 0xc2 },
+            _ => Glass::Opaque,
+        };
+        assert_eq!(resolve_for(Translucency::Auto, FROSTED), want);
+    }
+
+    #[test]
+    fn the_desktops_opacity_is_the_chromes_in_either_mode() {
+        let glass = Glass::Desktop { opacity: 0x99 };
+        assert_eq!(glass.chrome_alpha(true), 0.6);
+        assert_eq!(glass.chrome_alpha(false), 0.6);
+        assert_eq!(glass.page_alpha(true), 1.0);
+        assert!(glass.is_translucent());
     }
 
     #[test]
     fn auto_stays_opaque_when_the_desktop_turned_frosting_off() {
-        assert_eq!(resolve_for(Translucency::Auto, Some(false)), Glass::Opaque);
+        assert_eq!(resolve_for(Translucency::Auto, UNFROSTED), Glass::Opaque);
     }
 
     #[test]

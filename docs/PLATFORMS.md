@@ -327,8 +327,10 @@ COSMIC, which is why the session decides rather than the files.
 
 COSMIC's compositor offers blur whatever the user chose, so translucency set to
 Automatic follows Settings → Desktop → Appearance → Frosted glass → Windows
-(`frosted_windows`) instead, on and off while Irori runs. Subtle and Strong stay
-the user's own choice. Frost thickness and opacity are not followed.
+(`frosted_windows`) instead, on and off while Irori runs. The title bar and sidebar
+then take the opacity of COSMIC's own windows, from `transparent_background`, which
+both Frost thickness and Glass opacity move, as far as Irori's text stays readable.
+The blur itself is the compositor's. Subtle and Strong stay the user's own choice.
 
 Settings → Appearance → Theme shows this as “COSMIC (default)”. Picking any other theme
 stops following COSMIC, and “Follow system” takes its mode from COSMIC. Unlike Omarchy,

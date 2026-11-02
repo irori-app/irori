@@ -15,7 +15,7 @@ use gpui_kit::{Rgba, rgb};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher as _};
 use serde::Deserialize;
 
-use crate::desktop_theme::{DesktopThemes, Palette, mix};
+use crate::desktop_theme::{DesktopThemes, Frost, Palette, mix};
 
 const DARK_ID: &str = "com.system76.CosmicTheme.Dark";
 const LIGHT_ID: &str = "com.system76.CosmicTheme.Light";
@@ -36,6 +36,7 @@ const FIELDS: &[&str] = &[
     "primary",
     "secondary",
     "success",
+    "transparent_background",
     "warning",
 ];
 
@@ -317,6 +318,16 @@ fn palette(files: &ThemeFiles, dark: bool) -> Option<Palette> {
     })
 }
 
+/// COSMIC's frosted glass for windows. The see-through background holds both
+/// of its sliders: blur strength and opacity each move this alpha, and the
+/// compositor applies the blur itself.
+fn frost(files: &ThemeFiles) -> Option<Frost> {
+    let on = ron::from_str(files.get("frosted_windows")?).ok()?;
+    let opacity = parse::<Component>(files, "transparent_background")
+        .map(|window| (window.base.rgba().a * 255.0).round() as u8);
+    Some(Frost { on, opacity })
+}
+
 /// The Irori themes for COSMIC's files.
 pub(crate) fn themes(files: &Files) -> Option<DesktopThemes> {
     let theme = |files: &ThemeFiles, dark| palette(files, dark)?.theme();
@@ -328,15 +339,12 @@ pub(crate) fn themes(files: &Files) -> Option<DesktopThemes> {
         .and_then(|text| ron::from_str(text).ok())
         // COSMIC starts dark until told otherwise.
         .unwrap_or(true);
-    let current = if is_dark { &files.dark } else { &files.light };
-    let frosted = current
-        .get("frosted_windows")
-        .and_then(|text| ron::from_str(text).ok());
+    let frost = frost(if is_dark { &files.dark } else { &files.light });
     (light.is_some() || dark.is_some()).then_some(DesktopThemes {
         light,
         dark,
         is_dark,
-        frosted,
+        frost,
     })
 }
 
@@ -498,12 +506,43 @@ pub(crate) mod tests {
     #[test]
     fn frosted_glass_is_read_from_the_theme_showing() {
         let mut found = files(true);
-        assert_eq!(themes(&found).unwrap().frosted, None);
+        assert_eq!(themes(&found).unwrap().frost, None);
         found.dark.insert("frosted_windows", "true".to_string());
+        found
+            .dark
+            .insert("transparent_background", component("#1B1B1BC2"));
         found.light.insert("frosted_windows", "false".to_string());
-        assert_eq!(themes(&found).unwrap().frosted, Some(true));
+        found
+            .light
+            .insert("transparent_background", component("#D7D7D799"));
+        assert_eq!(
+            themes(&found).unwrap().frost,
+            Some(Frost {
+                on: true,
+                opacity: Some(0xc2)
+            })
+        );
         found.is_dark = Some("false".to_string());
-        assert_eq!(themes(&found).unwrap().frosted, Some(false));
+        assert_eq!(
+            themes(&found).unwrap().frost,
+            Some(Frost {
+                on: false,
+                opacity: Some(0x99)
+            })
+        );
+    }
+
+    #[test]
+    fn frosted_glass_without_an_opacity_still_counts() {
+        let mut found = files(true);
+        found.dark.insert("frosted_windows", "true".to_string());
+        assert_eq!(
+            themes(&found).unwrap().frost,
+            Some(Frost {
+                on: true,
+                opacity: None
+            })
+        );
     }
 
     #[test]
