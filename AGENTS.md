@@ -477,8 +477,9 @@ cx.spawn_in(window, async move |this, cx| {
 
 - Themes live in `assets/themes`; Irori Night and Irori Day are the defaults. Apply
   them with `theme::apply`.
-- On Omarchy and COSMIC the default theme is the desktop's own: `omarchy.rs` reads
-  Omarchy's `colors.toml`, `cosmic.rs` reads COSMIC's theme files, both fill in a
+- On Omarchy, COSMIC and KDE Plasma the default theme is the desktop's own: `omarchy.rs`
+  reads Omarchy's `colors.toml`, `cosmic.rs` reads COSMIC's theme files, `kde.rs` reads
+  `kdeglobals` and the active colour scheme, each fills in a
   `desktop_theme::Palette`, and Irori follows the desktop's theme switches. These
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency

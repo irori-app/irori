@@ -1805,6 +1805,7 @@ fn theme_items(cx: &App) -> Vec<ChoiceItem> {
     let default = match irori_ui::theme::followed_desktop(cx) {
         Some(Desktop::Omarchy) => "settings.theme.omarchy",
         Some(Desktop::Cosmic) => "settings.theme.cosmic",
+        Some(Desktop::Kde) => "settings.theme.kde",
         None => "settings.theme.default",
     };
     let mut items = vec![ChoiceItem::new("", t(default))];

@@ -11,6 +11,7 @@ mod engine_problem;
 pub mod glass;
 pub mod hooks;
 pub mod i18n;
+mod kde;
 pub mod lutris_summary;
 pub mod models;
 pub mod motion;
