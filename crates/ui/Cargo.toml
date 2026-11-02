@@ -39,6 +39,10 @@ tempfile = "3"
 [target.'cfg(target_os = "windows")'.dependencies]
 sysinfo.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# The desktop portal's accent colour, with the features GPUI already builds ashpd with.
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
+
 [target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
 raw-window-handle = "0.6"
 wayland-backend = { version = "0.3.15", features = ["client_system"] }
