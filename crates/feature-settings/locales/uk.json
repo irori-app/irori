@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "невідомий сеанс",
   "settings.tag.experimental": "Експериментально",
   "settings.tag.restart_required": "Потрібен перезапуск",
+  "settings.theme.cosmic": "COSMIC (типова)",
   "settings.theme.dark_variant": "{name} · темна",
   "settings.theme.default": "Irori (типова)",
   "settings.theme.light_variant": "{name} · світла",

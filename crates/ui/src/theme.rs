@@ -6,19 +6,23 @@
 //! Mocha), or Irori's own theme when the family has none, so following the
 //! system never drops the user back to an unrelated look.
 //!
-//! On Omarchy the default theme is the desktop's own (see [`crate::omarchy`]),
-//! and Irori follows it as the user switches. A theme the user picked wins.
+//! On COSMIC and Omarchy the default theme is the desktop's own (see
+//! [`crate::cosmic`] and [`crate::omarchy`]), and Irori follows it as the user
+//! switches. A theme the user picked wins.
 
 use std::rc::Rc;
 use std::time::Duration;
 
 use futures::StreamExt as _;
+use futures::channel::mpsc;
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, px};
 use irori_core::settings::{ThemePreference, UiPrefs};
 
-use crate::omarchy;
+pub use crate::desktop_theme::Desktop;
+use crate::desktop_theme::{DesktopThemes, Frost};
 use crate::style::{TEXT_CONTRAST, contrast, legible_towards};
+use crate::{cosmic, omarchy};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
 pub const DEFAULT_LIGHT: &str = "Irori Day";
@@ -33,9 +37,9 @@ const BUNDLED: &[&str] = &[
     include_str!("../../../assets/themes/ayu.json"),
 ];
 
-/// How long Omarchy's theme folder has to stay still before Irori reads it: a
-/// switch replaces it in several steps.
-const OMARCHY_SETTLE: Duration = Duration::from_millis(200);
+/// How long a desktop's theme files have to stay still before Irori reads
+/// them: a switch writes them in several steps.
+const DESKTOP_SETTLE: Duration = Duration::from_millis(200);
 
 /// Irori's typeface (Manrope, SIL Open Font License), used by every theme.
 pub const FONT_FAMILY: &str = "Manrope";
@@ -54,14 +58,19 @@ struct Families(Vec<Vec<(SharedString, bool)>>);
 
 impl Global for Families {}
 
-/// The desktop's theme, while Irori runs on Omarchy. It lives here rather than
-/// in the theme registry because the registry never replaces a theme it has.
-struct Omarchy {
-    theme: Rc<ThemeConfig>,
+/// The desktop's theme, while Irori runs on a desktop it follows. It lives here
+/// rather than in the theme registry because the registry never replaces a
+/// theme it has.
+struct DesktopTheme {
+    desktop: Desktop,
+    light: Option<Rc<ThemeConfig>>,
+    dark: Option<Rc<ThemeConfig>>,
+    is_dark: bool,
+    frost: Option<Frost>,
     revision: u64,
 }
 
-impl Global for Omarchy {}
+impl Global for DesktopTheme {}
 
 /// What [`apply`] last applied, so a call that changes nothing costs nothing
 /// and one that only resizes the interface skips re-theming.
@@ -71,8 +80,8 @@ struct Applied {
     dark: SharedString,
     is_dark: bool,
     font_size: u32,
-    /// Omarchy's theme keeps its name when its colours change.
-    omarchy: u64,
+    /// The desktop's theme keeps its name when its colours change.
+    desktop: u64,
 }
 
 impl Global for Applied {}
@@ -126,57 +135,95 @@ pub(crate) fn install(cx: &mut App) {
     cx.set_global(families);
 }
 
-/// Use the desktop's theme as the default if this is Omarchy, and keep up with
-/// it. The first read is on the UI thread, before any window exists to wait
-/// for it, so the first frame already has the right colours.
-pub(crate) fn follow_omarchy(cx: &mut App) {
-    let mut shown = omarchy::read();
-    if let Some(theme) = shown.as_deref().and_then(omarchy::theme) {
-        set_omarchy(theme, cx);
+/// Use the desktop's theme as the default on a desktop Irori follows, and keep
+/// up with it. COSMIC goes first because it is the session running now, while
+/// Omarchy's files stay on disk whatever session is.
+pub(crate) fn follow_desktop(cx: &mut App) {
+    if cosmic::running() {
+        follow(
+            Desktop::Cosmic,
+            cosmic::read,
+            cosmic::themes,
+            cosmic::watch(),
+            cx,
+        );
+    } else {
+        follow(
+            Desktop::Omarchy,
+            omarchy::read,
+            |text: &String| omarchy::themes(text),
+            omarchy::watch(),
+            cx,
+        );
     }
-    let Some((watcher, mut changes)) = omarchy::watch() else {
+}
+
+/// The first read is on the UI thread, before any window exists to wait for
+/// it, so the first frame already has the right colours.
+fn follow<T: PartialEq + Send + 'static>(
+    desktop: Desktop,
+    read: fn() -> Option<T>,
+    themes: impl Fn(&T) -> Option<DesktopThemes> + 'static,
+    watch: Option<(notify::RecommendedWatcher, mpsc::UnboundedReceiver<()>)>,
+    cx: &mut App,
+) {
+    let mut shown = read();
+    if let Some(found) = shown.as_ref().and_then(&themes) {
+        set_desktop(desktop, found, cx);
+    }
+    let Some((watcher, mut changes)) = watch else {
         return;
     };
     cx.spawn(async move |cx| {
         let _watcher = watcher;
         while changes.next().await.is_some() {
-            cx.background_executor().timer(OMARCHY_SETTLE).await;
+            cx.background_executor().timer(DESKTOP_SETTLE).await;
             while changes.try_recv().is_ok() {}
-            let text = cx
-                .background_executor()
-                .spawn(async { omarchy::read() })
-                .await;
+            let files = cx.background_executor().spawn(async move { read() }).await;
             // Between two steps of a switch there may be no theme at all; the
             // next step wakes this up again.
-            if text.is_none() || text == shown {
+            if files.is_none() || files == shown {
                 continue;
             }
-            let Some(theme) = text.as_deref().and_then(omarchy::theme) else {
-                tracing::warn!("Omarchy's theme has no usable colours");
+            let Some(found) = files.as_ref().and_then(&themes) else {
+                tracing::warn!("the desktop's theme has no usable colours");
                 continue;
             };
-            shown = text;
+            shown = files;
             cx.update(|cx| {
-                set_omarchy(theme, cx);
+                set_desktop(desktop, found, cx);
                 let prefs = crate::backend(cx).settings.app().ui.clone();
                 apply(&prefs, None, cx);
+                // The shell works out the window's translucency when settings
+                // change, and the desktop's say in that may have changed.
+                let settings = crate::models(cx).settings.clone();
+                settings.update(cx, |_, cx| cx.notify());
             });
         }
     })
     .detach();
 }
 
-fn set_omarchy(theme: ThemeConfig, cx: &mut App) {
-    let revision = cx.try_global::<Omarchy>().map_or(0, |o| o.revision) + 1;
-    cx.set_global(Omarchy {
-        theme: Rc::new(theme),
+fn set_desktop(desktop: Desktop, themes: DesktopThemes, cx: &mut App) {
+    let revision = cx.try_global::<DesktopTheme>().map_or(0, |d| d.revision) + 1;
+    cx.set_global(DesktopTheme {
+        desktop,
+        light: themes.light.map(Rc::new),
+        dark: themes.dark.map(Rc::new),
+        is_dark: themes.is_dark,
+        frost: themes.frost,
         revision,
     });
 }
 
-/// Whether the default theme is Omarchy's rather than Irori's own.
-pub fn follows_omarchy(cx: &App) -> bool {
-    cx.has_global::<Omarchy>()
+/// What the desktop wants of see-through windows, on one that has a setting.
+pub(crate) fn desktop_frost(cx: &App) -> Option<Frost> {
+    cx.try_global::<DesktopTheme>()?.frost
+}
+
+/// The desktop whose theme is the default one, if Irori follows one here.
+pub fn followed_desktop(cx: &App) -> Option<Desktop> {
+    cx.try_global::<DesktopTheme>().map(|d| d.desktop)
 }
 
 /// Names and modes of the themes in one bundled file.
@@ -239,13 +286,16 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
             .get(&SharedString::from(name.to_string()))
             .cloned()
     };
-    let chosen = if prefs.theme_name.is_empty() {
-        cx.try_global::<Omarchy>().map(|o| o.theme.clone())
-    } else {
-        find(&prefs.theme_name)
-    };
+    let desktop = cx
+        .try_global::<DesktopTheme>()
+        .filter(|_| prefs.theme_name.is_empty());
+    let chosen = find(&prefs.theme_name);
     let for_mode = |dark: bool| {
         let fallback = if dark { DEFAULT_DARK } else { DEFAULT_LIGHT };
+        if let Some(desktop) = desktop {
+            let theme = if dark { &desktop.dark } else { &desktop.light };
+            return theme.clone().or_else(|| find(fallback));
+        }
         match &chosen {
             Some(t) if t.mode.is_dark() == dark => Some(t.clone()),
             Some(t) => sibling(&t.name, dark, cx)
@@ -265,10 +315,12 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
     let is_dark = match prefs.theme {
         ThemePreference::Dark => true,
         ThemePreference::Light => false,
-        // On Omarchy the theme is what decides, and it can be set more
-        // quickly than the portal reports the change.
-        ThemePreference::System if prefs.theme_name.is_empty() && follows_omarchy(cx) => {
-            cx.global::<Omarchy>().theme.mode.is_dark()
+        // The desktop's theme is what decides, and it can be set more quickly
+        // than the portal reports the change.
+        ThemePreference::System
+            if prefs.theme_name.is_empty() && cx.has_global::<DesktopTheme>() =>
+        {
+            cx.global::<DesktopTheme>().is_dark
         }
         ThemePreference::System => {
             let appearance = window
@@ -289,7 +341,7 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         dark: name(&dark),
         is_dark,
         font_size: font_size.to_bits(),
-        omarchy: cx.try_global::<Omarchy>().map_or(0, |o| o.revision),
+        desktop: cx.try_global::<DesktopTheme>().map_or(0, |d| d.revision),
     };
     let previous = cx.try_global::<Applied>().cloned();
     if previous.as_ref() == Some(&next) {
@@ -539,7 +591,12 @@ mod tests {
     }
 
     fn use_omarchy(palette: &str, cx: &mut TestAppContext) {
-        cx.update(|cx| set_omarchy(omarchy::theme(palette).unwrap(), cx));
+        cx.update(|cx| set_omarchy(palette, cx));
+    }
+
+    fn set_omarchy(palette: &str, cx: &mut App) {
+        let themes = DesktopThemes::single(omarchy::tests::theme(palette).unwrap());
+        set_desktop(Desktop::Omarchy, themes, cx);
     }
 
     #[gpui_kit::test]
@@ -600,14 +657,14 @@ mod tests {
         use_omarchy_in_window(omarchy::tests::LIGHT, cx);
         cx.update(|_, cx| apply(&p, None, cx));
         cx.run_until_parked();
-        let light = omarchy::theme(omarchy::tests::LIGHT).unwrap();
+        let light = omarchy::tests::theme(omarchy::tests::LIGHT).unwrap();
         let wanted =
             gpui_kit::component::try_parse_color(light.colors.background.as_ref().unwrap());
         assert_eq!(drawn.get(), wanted.ok());
     }
 
     fn use_omarchy_in_window(palette: &str, cx: &mut gpui_kit::VisualTestContext) {
-        cx.update(|_, cx| set_omarchy(omarchy::theme(palette).unwrap(), cx));
+        cx.update(|_, cx| set_omarchy(palette, cx));
     }
 
     #[gpui_kit::test]
@@ -649,6 +706,42 @@ mod tests {
                 assert!(contrast(p.selected_text, theme.sidebar_accent) >= TEXT_CONTRAST - 0.01);
             });
         }
+    }
+
+    fn use_cosmic(is_dark: bool, cx: &mut TestAppContext) {
+        let themes = cosmic::themes(&cosmic::tests::files(is_dark)).unwrap();
+        cx.update(|cx| set_desktop(Desktop::Cosmic, themes, cx));
+    }
+
+    #[gpui_kit::test]
+    fn cosmic_is_the_default_and_decides_the_mode(cx: &mut TestAppContext) {
+        setup(cx);
+        use_cosmic(false, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "COSMIC Light");
+            assert_eq!(followed_desktop(cx), Some(Desktop::Cosmic));
+        });
+
+        use_cosmic(true, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "COSMIC Dark"));
+    }
+
+    #[gpui_kit::test]
+    fn a_forced_mode_uses_cosmics_theme_for_it(cx: &mut TestAppContext) {
+        setup(cx);
+        use_cosmic(true, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Light, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "COSMIC Light"));
+    }
+
+    #[gpui_kit::test]
+    fn a_theme_the_user_picked_beats_cosmic(cx: &mut TestAppContext) {
+        setup(cx);
+        use_cosmic(true, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, "Tokyo Storm"), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm"));
     }
 
     #[gpui_kit::test]
@@ -697,6 +790,8 @@ mod tests {
                 Glass::Strong { blurred: true },
                 Glass::Subtle { blurred: false },
                 Glass::Strong { blurred: false },
+                Glass::Desktop { opacity: 0x60 },
+                Glass::Desktop { opacity: 0xe6 },
             ] {
                 cx.update(|cx| cx.set_global(glass));
                 cx.read(|cx| {

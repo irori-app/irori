@@ -26,6 +26,7 @@ use gpui_kit::{
 use irori_core::settings::{AppSettings, GameSettings, WineInstallation};
 use irori_core::{GameId, InstallPlatform, Paths};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::theme::Desktop;
 use irori_ui::{Route, backend, models};
 use serde_json::Value;
 
@@ -1042,9 +1043,9 @@ impl SettingsForm {
 
     /// Use the theme called `name`. A theme for the other colour mode than
     /// the one showing switches the mode too, so picking it always shows it.
-    /// Going back to Omarchy's theme lets go of the mode, which it decides.
+    /// Going back to the desktop's theme lets go of the mode, which it decides.
     fn pick_theme(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if name.is_empty() && irori_ui::theme::follows_omarchy(cx) {
+        if name.is_empty() && irori_ui::theme::followed_desktop(cx).is_some() {
             self.write("iroriUi.theme", Value::from("system"), window, cx);
         } else if let Some(dark) = irori_ui::theme::is_dark_theme(name, cx)
             && dark != cx.theme().mode.is_dark()
@@ -1801,10 +1802,10 @@ fn choice_items(options: &[ChoiceOption]) -> Vec<ChoiceItem> {
 
 /// The default theme followed by every theme of the theme registry.
 fn theme_items(cx: &App) -> Vec<ChoiceItem> {
-    let default = if irori_ui::theme::follows_omarchy(cx) {
-        "settings.theme.omarchy"
-    } else {
-        "settings.theme.default"
+    let default = match irori_ui::theme::followed_desktop(cx) {
+        Some(Desktop::Omarchy) => "settings.theme.omarchy",
+        Some(Desktop::Cosmic) => "settings.theme.cosmic",
+        None => "settings.theme.default",
     };
     let mut items = vec![ChoiceItem::new("", t(default))];
     for (name, dark) in irori_ui::theme::theme_names(cx) {

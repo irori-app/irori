@@ -513,6 +513,7 @@
   "settings.sysinfo.unknown_session": "未知会话",
   "settings.tag.experimental": "实验性",
   "settings.tag.restart_required": "需要重启",
+  "settings.theme.cosmic": "COSMIC（默认）",
   "settings.theme.dark_variant": "{name} · 深色",
   "settings.theme.default": "Irori（默认）",
   "settings.theme.light_variant": "{name} · 浅色",
