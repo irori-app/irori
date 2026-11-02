@@ -8,7 +8,9 @@
 //!
 //! On COSMIC and Omarchy the default theme is the desktop's own (see
 //! [`crate::cosmic`] and [`crate::omarchy`]), and Irori follows it as the user
-//! switches. A theme the user picked wins.
+//! switches. Elsewhere on Linux the default is Irori's own in the desktop's
+//! accent colour, where the desktop has one (see [`crate::desktop_accent`]).
+//! A theme the user picked wins.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -18,11 +20,12 @@ use futures::channel::mpsc;
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, px};
 use irori_core::settings::{ThemePreference, UiPrefs};
+use tokio::runtime::Runtime;
 
 pub use crate::desktop_theme::Desktop;
-use crate::desktop_theme::{DesktopThemes, Frost};
+use crate::desktop_theme::{DesktopThemes, Frost, accented};
 use crate::style::{TEXT_CONTRAST, contrast, legible_towards};
-use crate::{cosmic, omarchy};
+use crate::{cosmic, desktop_accent, omarchy};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
 pub const DEFAULT_LIGHT: &str = "Irori Day";
@@ -40,6 +43,11 @@ const BUNDLED: &[&str] = &[
 /// How long a desktop's theme files have to stay still before Irori reads
 /// them: a switch writes them in several steps.
 const DESKTOP_SETTLE: Duration = Duration::from_millis(200);
+
+/// The longest the first window waits for the desktop's accent colour. A running
+/// portal answers in well under this, and a slow one mustn't hold Irori back:
+/// its answer then arrives while Irori runs, like any change.
+const ACCENT_WAIT: Duration = Duration::from_millis(100);
 
 /// Irori's typeface (Manrope, SIL Open Font License), used by every theme.
 pub const FONT_FAMILY: &str = "Manrope";
@@ -72,6 +80,18 @@ struct DesktopTheme {
 
 impl Global for DesktopTheme {}
 
+/// Irori's own themes in the desktop's accent colour. Like [`DesktopTheme`] they
+/// stay out of the registry, and they keep their names: to the user they are
+/// the default theme, and "Irori Night" in the list is the untinted one.
+struct DesktopAccent {
+    color: Option<Rgba>,
+    light: Option<Rc<ThemeConfig>>,
+    dark: Option<Rc<ThemeConfig>>,
+    revision: u64,
+}
+
+impl Global for DesktopAccent {}
+
 /// What [`apply`] last applied, so a call that changes nothing costs nothing
 /// and one that only resizes the interface skips re-theming.
 #[derive(Clone, PartialEq)]
@@ -82,6 +102,9 @@ struct Applied {
     font_size: u32,
     /// The desktop's theme keeps its name when its colours change.
     desktop: u64,
+    /// So does Irori's own when the accent changes, and tinted or not. Zero
+    /// while the accent isn't showing, so a picked theme ignores its changes.
+    accent: u64,
 }
 
 impl Global for Applied {}
@@ -156,6 +179,69 @@ pub(crate) fn follow_desktop(cx: &mut App) {
             cx,
         );
     }
+    // A desktop Irori follows has its accent in its theme already.
+    if !cx.has_global::<DesktopTheme>() {
+        follow_accent(cx);
+    }
+}
+
+/// Tint the default theme with the desktop's accent colour, and keep up with it.
+/// The wait is on the UI thread for the reason [`follow`]'s first read is, and
+/// it is bounded because the portal, unlike a file, may take its time to start.
+fn follow_accent(cx: &mut App) {
+    let backend = crate::backend(cx);
+    let Some(mut changes) = desktop_accent::watch(&backend) else {
+        return;
+    };
+    if let Some(accent) = first_accent(&mut changes, backend.runtime()) {
+        set_accent(accent, cx);
+    }
+    cx.spawn(async move |cx| {
+        while let Some(mut accent) = changes.next().await {
+            // A colour picker can send a change per step of a drag.
+            cx.background_executor().timer(DESKTOP_SETTLE).await;
+            while let Ok(newer) = changes.try_recv() {
+                accent = newer;
+            }
+            cx.update(|cx| {
+                if set_accent(accent, cx) {
+                    let prefs = crate::backend(cx).settings.app().ui.clone();
+                    apply(&prefs, None, cx);
+                }
+            });
+        }
+    })
+    .detach();
+}
+
+/// The accent, if it comes within [`ACCENT_WAIT`]. Whatever is later stays in
+/// `changes`. The timer needs the runtime, so it has to start inside it.
+fn first_accent(changes: &mut desktop_accent::Changes, runtime: &Runtime) -> Option<Option<Rgba>> {
+    runtime
+        .block_on(async { tokio::time::timeout(ACCENT_WAIT, changes.next()).await })
+        .ok()
+        .flatten()
+}
+
+/// Tint Irori's themes with `color`, or stop. False if it was the accent already.
+fn set_accent(color: Option<Rgba>, cx: &mut App) -> bool {
+    let current = cx.try_global::<DesktopAccent>();
+    if current.and_then(|a| a.color) == color {
+        return false;
+    }
+    let revision = current.map_or(0, |a| a.revision) + 1;
+    let tinted = |name: &str| {
+        let base = registered(name, cx)?;
+        accented(&base, color?).map(Rc::new)
+    };
+    let (light, dark) = (tinted(DEFAULT_LIGHT), tinted(DEFAULT_DARK));
+    cx.set_global(DesktopAccent {
+        color,
+        light,
+        dark,
+        revision,
+    });
+    true
 }
 
 /// The first read is on the UI thread, before any window exists to wait for
@@ -277,17 +363,22 @@ pub fn is_dark_theme(name: &str, cx: &App) -> Option<bool> {
         .map(|t| t.mode.is_dark())
 }
 
+/// The theme called `name`.
+fn registered(name: &str, cx: &App) -> Option<Rc<ThemeConfig>> {
+    ThemeRegistry::global(cx)
+        .themes()
+        .get(&SharedString::from(name.to_string()))
+        .cloned()
+}
+
 /// The light and dark themes `prefs` call for.
 fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeConfig>>) {
-    let registry = ThemeRegistry::global(cx);
-    let find = |name: &str| {
-        registry
-            .themes()
-            .get(&SharedString::from(name.to_string()))
-            .cloned()
-    };
+    let find = |name: &str| registered(name, cx);
     let desktop = cx
         .try_global::<DesktopTheme>()
+        .filter(|_| prefs.theme_name.is_empty());
+    let accent = cx
+        .try_global::<DesktopAccent>()
         .filter(|_| prefs.theme_name.is_empty());
     let chosen = find(&prefs.theme_name);
     let for_mode = |dark: bool| {
@@ -301,7 +392,9 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
             Some(t) => sibling(&t.name, dark, cx)
                 .and_then(|n| find(&n))
                 .or_else(|| find(fallback)),
-            None => find(fallback),
+            None => accent
+                .and_then(|a| if dark { &a.dark } else { &a.light }.clone())
+                .or_else(|| find(fallback)),
         }
     };
     (for_mode(false), for_mode(true))
@@ -342,6 +435,10 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         is_dark,
         font_size: font_size.to_bits(),
         desktop: cx.try_global::<DesktopTheme>().map_or(0, |d| d.revision),
+        accent: cx
+            .try_global::<DesktopAccent>()
+            .filter(|_| prefs.theme_name.is_empty())
+            .map_or(0, |a| a.revision),
     };
     let previous = cx.try_global::<Applied>().cloned();
     if previous.as_ref() == Some(&next) {
@@ -705,6 +802,291 @@ mod tests {
                 assert!(contrast(p.text, theme.sidebar) >= TEXT_CONTRAST - 0.01);
                 assert!(contrast(p.selected_text, theme.sidebar_accent) >= TEXT_CONTRAST - 0.01);
             });
+        }
+    }
+
+    /// GNOME's accent colours, as libadwaita gives them to the portal.
+    const GNOME_ACCENTS: [u32; 9] = [
+        0x3584e4, 0x2190a4, 0x3a944a, 0xc88800, 0xed5b00, 0xe62d42, 0xd56199, 0x9141ac, 0x6f8396,
+    ];
+
+    /// A Plasma selection colour or a COSMIC custom accent can be any of these,
+    /// and some land right on Irori's surfaces.
+    const HARD_ACCENTS: [u32; 9] = [
+        0x000000, 0xffffff, 0x808080, 0x777777, 0x100e0d, 0xfaf7f3, 0xffff00, 0x0000ff, 0x1c1916,
+    ];
+
+    fn accents() -> impl Iterator<Item = Rgba> {
+        GNOME_ACCENTS
+            .into_iter()
+            .chain(HARD_ACCENTS)
+            .map(gpui_kit::rgb)
+    }
+
+    fn use_accent(accent: u32, cx: &mut TestAppContext) -> bool {
+        cx.update(|cx| set_accent(Some(gpui_kit::rgb(accent)), cx))
+    }
+
+    fn runtime() -> Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn the_first_accent_is_waited_for_on_the_ui_thread() {
+        let (tx, mut changes) = mpsc::unbounded();
+        let blue = Some(gpui_kit::rgb(0x3584e4));
+        tx.unbounded_send(blue).unwrap();
+        assert_eq!(first_accent(&mut changes, &runtime()), Some(blue));
+    }
+
+    #[test]
+    fn a_slow_portal_only_delays_its_answer() {
+        let (tx, mut changes) = mpsc::unbounded();
+        assert_eq!(first_accent(&mut changes, &runtime()), None);
+
+        let blue = Some(gpui_kit::rgb(0x3584e4));
+        tx.unbounded_send(blue).unwrap();
+        assert_eq!(changes.try_recv(), Ok(blue));
+    }
+
+    #[test]
+    fn no_portal_ends_the_wait_at_once() {
+        let (tx, mut changes) = mpsc::unbounded::<Option<Rgba>>();
+        drop(tx);
+        let started = std::time::Instant::now();
+        assert_eq!(first_accent(&mut changes, &runtime()), None);
+        assert!(started.elapsed() < ACCENT_WAIT);
+    }
+
+    #[gpui_kit::test]
+    fn the_default_theme_takes_the_desktops_accent(cx: &mut TestAppContext) {
+        setup(cx);
+        use_accent(0x3584e4, cx);
+        for (mode, name) in [
+            (ThemePreference::Dark, DEFAULT_DARK),
+            (ThemePreference::Light, DEFAULT_LIGHT),
+        ] {
+            cx.update(|cx| apply(&prefs(mode, ""), None, cx));
+            cx.read(|cx| {
+                let theme = cx.theme();
+                assert_eq!(theme.primary, gpui_kit::rgb(0x3584e4).into(), "{name}");
+                assert_eq!(theme.ring, theme.primary, "{name}");
+                assert_eq!(theme.theme_name().as_ref(), name);
+                assert_eq!(theme.background, file_color(name, "background"));
+                assert_eq!(theme.sidebar, file_color(name, "sidebar.background"));
+                assert_eq!(followed_desktop(cx), None);
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn no_accent_leaves_irori_as_it_is(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::Dark, "");
+        cx.update(|cx| apply(&p, None, cx));
+        let own = cx.read(|cx| cx.theme().primary);
+        assert_eq!(own, file_color(DEFAULT_DARK, "primary.background"));
+
+        assert!(!cx.update(|cx| set_accent(None, cx)), "nothing to change");
+
+        use_accent(0x3584e4, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert_ne!(cx.theme().primary, own));
+
+        assert!(cx.update(|cx| set_accent(None, cx)));
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().primary, own));
+    }
+
+    #[gpui_kit::test]
+    fn the_same_accent_again_changes_nothing(cx: &mut TestAppContext) {
+        setup(cx);
+        assert!(use_accent(0x3584e4, cx));
+        assert!(!use_accent(0x3584e4, cx));
+        assert!(use_accent(0xe62d42, cx));
+    }
+
+    #[gpui_kit::test]
+    fn an_open_window_redraws_when_the_accent_changes(cx: &mut TestAppContext) {
+        struct PrimaryProbe(Rc<std::cell::Cell<Option<gpui_kit::Hsla>>>);
+
+        impl gpui_kit::Render for PrimaryProbe {
+            fn render(
+                &mut self,
+                _: &mut Window,
+                cx: &mut gpui_kit::Context<Self>,
+            ) -> impl gpui_kit::IntoElement {
+                self.0.set(Some(cx.theme().primary));
+                gpui_kit::div()
+            }
+        }
+
+        setup(cx);
+        let p = prefs(ThemePreference::Dark, "");
+        use_accent(0x3584e4, cx);
+        cx.update(|cx| apply(&p, None, cx));
+
+        let drawn = Rc::new(std::cell::Cell::new(None));
+        let probe = drawn.clone();
+        let (_view, cx) = cx.add_window_view(|_, _| PrimaryProbe(probe));
+        cx.run_until_parked();
+        assert_eq!(drawn.get(), Some(gpui_kit::rgb(0x3584e4).into()));
+
+        cx.update(|_, cx| {
+            set_accent(Some(gpui_kit::rgb(0xe62d42)), cx);
+            apply(&p, None, cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(drawn.get(), Some(gpui_kit::rgb(0xe62d42).into()));
+    }
+
+    #[gpui_kit::test]
+    fn a_theme_the_user_picked_beats_the_accent(cx: &mut TestAppContext) {
+        setup(cx);
+        use_accent(0x3584e4, cx);
+        // Picking Irori's own by name is how to get its orange back.
+        for name in [DEFAULT_DARK, "Tokyo Storm"] {
+            cx.update(|cx| apply(&prefs(ThemePreference::Dark, name), None, cx));
+            cx.read(|cx| {
+                assert_eq!(cx.theme().theme_name().as_ref(), name);
+                assert_eq!(cx.theme().primary, file_color(name, "primary.background"));
+            });
+        }
+    }
+
+    #[gpui_kit::test]
+    fn picking_the_default_again_brings_the_accent_back(cx: &mut TestAppContext) {
+        setup(cx);
+        use_accent(0x3584e4, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, DEFAULT_DARK), None, cx));
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().primary, gpui_kit::rgb(0x3584e4).into()));
+    }
+
+    #[gpui_kit::test]
+    fn a_followed_desktops_theme_beats_the_accent(cx: &mut TestAppContext) {
+        setup(cx);
+        use_accent(0x3584e4, cx);
+        use_omarchy(omarchy::tests::DARK, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Omarchy"));
+    }
+
+    #[gpui_kit::test]
+    fn the_accent_keeps_the_system_mode(cx: &mut TestAppContext) {
+        setup(cx);
+        let without = cx.update(|cx| {
+            apply(&prefs(ThemePreference::System, ""), None, cx);
+            cx.theme().mode
+        });
+        use_accent(0x3584e4, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().mode, without));
+    }
+
+    #[gpui_kit::test]
+    fn an_accent_that_reads_stays_exactly_as_the_desktop_has_it(cx: &mut TestAppContext) {
+        setup(cx);
+        for accent in GNOME_ACCENTS {
+            use_accent(accent, cx);
+            cx.update(|cx| apply(&prefs(ThemePreference::Dark, ""), None, cx));
+            let wanted = gpui_kit::rgb(accent).into();
+            let surfaces = cx.read(|cx| {
+                let t = cx.theme();
+                [t.background, t.sidebar, t.secondary, t.popover]
+            });
+            if surfaces.iter().all(|s| contrast(wanted, *s) >= 3.1) {
+                cx.read(|cx| assert_eq!(cx.theme().primary, wanted, "{accent:06x}"));
+            }
+        }
+    }
+
+    #[gpui_kit::test]
+    fn every_accent_reads_on_every_surface(cx: &mut TestAppContext) {
+        use crate::style::ICON_CONTRAST;
+
+        setup(cx);
+        for accent in accents() {
+            for mode in [ThemePreference::Dark, ThemePreference::Light] {
+                cx.update(|cx| {
+                    set_accent(Some(accent), cx);
+                    apply(&prefs(mode, ""), None, cx);
+                    let t = cx.theme();
+                    let label = format!("{accent:?} {:?}", t.mode);
+                    let check = |what: &str, fg, on: &[gpui_kit::Hsla], min: f32| {
+                        for bg in on {
+                            let ratio = contrast(fg, *bg);
+                            assert!(ratio >= min - 0.01, "{label} {what}: {ratio:.2}");
+                        }
+                    };
+                    let surfaces = [t.background, t.sidebar, t.secondary, t.popover];
+                    check("filled button", t.primary, &surfaces, ICON_CONTRAST);
+                    check("focus ring", t.ring, &surfaces, ICON_CONTRAST);
+                    check("caret", t.caret, &surfaces, ICON_CONTRAST);
+                    check("progress", t.progress_bar, &surfaces, ICON_CONTRAST);
+                    check("link", t.link, &surfaces, TEXT_CONTRAST);
+                    check("link hover", t.link_hover, &surfaces, TEXT_CONTRAST);
+                    check("link active", t.link_active, &surfaces, TEXT_CONTRAST);
+                    let fills = [t.primary, t.primary_hover, t.primary_active];
+                    check("button text", t.primary_foreground, &fills, TEXT_CONTRAST);
+                    check(
+                        "sidebar badge",
+                        t.sidebar_primary_foreground,
+                        &[t.sidebar_primary],
+                        TEXT_CONTRAST,
+                    );
+                    check(
+                        "hover text",
+                        t.accent_foreground,
+                        &[t.accent],
+                        TEXT_CONTRAST,
+                    );
+                    check(
+                        "page text on hover",
+                        t.foreground,
+                        &[t.accent],
+                        TEXT_CONTRAST,
+                    );
+                });
+            }
+        }
+    }
+
+    #[gpui_kit::test]
+    fn sidebar_rows_read_with_every_accent_and_glass(cx: &mut TestAppContext) {
+        use crate::glass::{Glass, chrome_surfaces};
+        use crate::style::{ICON_CONTRAST, SidebarPalette};
+
+        setup(cx);
+        for accent in accents() {
+            for mode in [ThemePreference::Dark, ThemePreference::Light] {
+                cx.update(|cx| {
+                    set_accent(Some(accent), cx);
+                    apply(&prefs(mode, ""), None, cx);
+                });
+                for glass in [
+                    Glass::Opaque,
+                    Glass::Subtle { blurred: true },
+                    Glass::Strong { blurred: false },
+                ] {
+                    cx.update(|cx| cx.set_global(glass));
+                    cx.read(|cx| {
+                        let theme = cx.theme();
+                        let p = SidebarPalette::new(cx);
+                        let lit = chrome_surfaces(&[theme.sidebar, theme.sidebar_accent], cx);
+                        for bg in lit {
+                            let ratio = contrast(p.selected_icon, bg);
+                            assert!(
+                                ratio >= ICON_CONTRAST - 0.01,
+                                "{accent:?} {glass:?}: {ratio:.2}"
+                            );
+                        }
+                    });
+                }
+            }
         }
     }
 
