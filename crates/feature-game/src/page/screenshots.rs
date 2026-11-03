@@ -23,7 +23,7 @@ const THUMB_WIDTH: u32 = 640;
 /// Largest pixel width screenshots are decoded at in the viewer.
 const FULL_WIDTH: u32 = 1920;
 /// Narrowest a strip tile gets before the strip shows one fewer, in rem.
-const MIN_TILE_REM: f32 = 12.;
+const MIN_TILE_REM: f32 = 8.5;
 /// Gap between strip tiles (`gap_3`), in rem.
 const GAP_REM: f32 = 0.75;
 /// Most tiles the strip shows, so screenshots stay large on wide windows.
@@ -65,10 +65,10 @@ impl GamePage {
         if shots.is_empty() {
             return None;
         }
-        // The body is inset by `px_8` on both sides.
+        // The strip shares the page with the cover and details columns.
         let fit = self
             .page_rem(window)
-            .map_or(4, |page| strip_tiles(page - 4.));
+            .map_or(4, |page| strip_tiles(super::info::main_column_rem(page)));
         let (shown, more) = strip_layout(shots.len(), fit);
         let theme = cx.theme();
         let (scrim, on_scrim) = (theme.background.opacity(0.72), theme.foreground);
@@ -133,7 +133,17 @@ impl GamePage {
                     t("game.info.tab_screenshots"),
                     self.ink.text,
                 ))
-                .child(h_flex().w_full().gap_3().children(tiles))
+                .child(
+                    h_flex()
+                        .w_full()
+                        .gap_3()
+                        .p_3()
+                        .rounded(cx.theme().radius_lg)
+                        .bg(self.ink.panel)
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .children(tiles),
+                )
                 .into_any_element(),
         )
     }
@@ -340,9 +350,9 @@ mod tests {
     #[test]
     fn tiles_fill_the_width() {
         assert_eq!(strip_tiles(0.), 1);
-        assert_eq!(strip_tiles(12.), 1);
-        assert_eq!(strip_tiles(24.75), 2);
-        assert_eq!(strip_tiles(52.), 4);
+        assert_eq!(strip_tiles(8.5), 1);
+        assert_eq!(strip_tiles(18.5), 2);
+        assert_eq!(strip_tiles(37.), 4);
         assert_eq!(strip_tiles(500.), MAX_TILES);
     }
 

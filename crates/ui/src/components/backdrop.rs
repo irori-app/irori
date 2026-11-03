@@ -25,11 +25,11 @@ use crate::style::{TEXT_CONTRAST, contrast, legible};
 /// The most the art shows at the top of the page, in dark and light themes.
 /// Light themes take less: dark art over a light page reads as dirt sooner
 /// than light art over a dark one reads as glare.
-const MAX_WEIGHT: [f32; 2] = [0.5, 0.36];
+const MAX_WEIGHT: [f32; 2] = [0.62, 0.42];
 /// Step between the weights tried, from the most down to none.
 const WEIGHT_STEP: f32 = 0.02;
 /// How much of the top weight remains at the bottom of the page.
-const BOTTOM_SHARE: f32 = 0.4;
+const BOTTOM_SHARE: f32 = 0.6;
 /// Opacity of [`BackdropInk::panel`]: enough body for dense text, little
 /// enough that the art still shows through.
 const PANEL_ALPHA: f32 = 0.7;

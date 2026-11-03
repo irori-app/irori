@@ -100,6 +100,24 @@ mod link_tests {
 /// Width of the details column, in rem.
 const SIDE_COLUMN_REM: f32 = 24.;
 
+/// About how wide the main column is on a page `page_rem` wide, in rem: the
+/// page less its insets, the other columns and the gaps between them.
+pub(super) fn main_column_rem(page_rem: f32) -> f32 {
+    let layout = Layout::for_page(page_rem);
+    let side = if layout == Layout::Three {
+        SIDE_COLUMN_REM + 2.
+    } else {
+        0.
+    };
+    let cover = if layout == Layout::Stacked {
+        0.
+    } else {
+        layout.cover_rem() + 2.
+    };
+    // `px_8` on both sides, and the strip card's own padding.
+    page_rem - 4. - 1.5 - cover - side
+}
+
 /// How the body's columns are arranged for the page's width.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Layout {
