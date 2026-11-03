@@ -70,15 +70,31 @@ screen. Content is in the HTML from the start, so nothing depends on a script to
 `public/screenshots/` holds the app's screens, as WebP at 1440 and 2880 pixels wide,
 dark and (`light-` prefix) light. They come from a release build running on a demo
 library of made-up games with covers drawn for the purpose, so no store artwork or
-personal data appears. Never replace them with captures of a real library or real
-folder paths. `library.png` is the screenshot Linux software centres show
+personal data appears in the app's screenshots. Never replace them with captures of a real
+library or real folder paths. `library.png` is the screenshot Linux software centres show
 (`packaging/linux/*.metainfo.xml`).
 
-The cover wall's covers are drawn from `src/data/covers.ts`. To show real art instead, give a
-cover a `src` under `public/` (and `titleInArt: true` when the title is in the picture). The
-tour's numbered points are percentages of the screenshot in `src/data/hotspots.ts`; change
-`screen` and move the points to use another screenshot, and keep their texts (`hotspots` in
-the dictionary) in the same order.
+The cover walls (the home page's hero, and the bands on `/features/` and `/download/`) show
+real game covers, to illustrate the games Irori runs; the footer credits their publishers.
+The list is `src/data/game-covers.json` (title, Steam app id, file name). To change it, edit
+the list and run:
+
+```bash
+pnpm covers              # fetch covers that are missing, and their accent colours
+pnpm covers --force      # fetch them all again
+```
+
+`scripts/fetch-covers.mjs` downloads each cover once from Steam's public library art, cuts it
+to 2:3 and stores AVIF and WebP at 300 and 600 pixels wide in `public/covers/games/`, which
+is committed. The site serves these files itself and never loads anything from Steam. The
+script fails, naming the game, when an app id has no image. Keep the list to games Irori can
+run, and to cover art only.
+
+If any listed cover is missing its files, the walls fall back to the demo library's drawn
+covers (`src/data/covers.ts`, drawn by `src/pages/covers/[slug].svg.ts`), which the stats card
+also uses. The tour's numbered points are percentages of the screenshot in
+`src/data/hotspots.ts`; change `screen` and move the points to use another screenshot, and keep
+their texts (`hotspots` in the dictionary) in the same order.
 
 Fonts are self-hosted from Fontsource (Latin subsets only): Zen Maru Gothic for
 headings, Zen Kaku Gothic New for text and M PLUS 1 Code for commands and figures.

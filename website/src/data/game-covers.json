@@ -2,161 +2,193 @@
   {
     "title": "Cyberpunk 2077",
     "appid": 1091500,
-    "file": "cyberpunk-2077"
+    "file": "cyberpunk-2077",
+    "accent": "#fdf901"
   },
   {
     "title": "The Witcher 3: Wild Hunt",
     "appid": 292030,
-    "file": "the-witcher-3-wild-hunt"
+    "file": "the-witcher-3-wild-hunt",
+    "accent": "#693d3c"
   },
   {
     "title": "Baldur's Gate 3",
     "appid": 1086940,
-    "file": "baldur-s-gate-3"
+    "file": "baldur-s-gate-3",
+    "accent": "#3689b6"
   },
   {
     "title": "Elden Ring",
     "appid": 1245620,
-    "file": "elden-ring"
+    "file": "elden-ring",
+    "accent": "#ae8651"
   },
   {
     "title": "Hades II",
     "appid": 1145350,
-    "file": "hades-ii"
+    "file": "hades-ii",
+    "accent": "#4b4640"
   },
   {
     "title": "Red Dead Redemption 2",
     "appid": 1174180,
-    "file": "red-dead-redemption-2"
+    "file": "red-dead-redemption-2",
+    "accent": "#ee7706"
   },
   {
     "title": "Death Stranding Director's Cut",
     "appid": 1850570,
-    "file": "death-stranding-director-s-cut"
+    "file": "death-stranding-director-s-cut",
+    "accent": "#eecd73"
   },
   {
     "title": "Control",
     "appid": 870780,
-    "file": "control"
+    "file": "control",
+    "accent": "#87201d"
   },
   {
     "title": "Hollow Knight",
     "appid": 367520,
-    "file": "hollow-knight"
+    "file": "hollow-knight",
+    "accent": "#2c3b3c"
   },
   {
     "title": "Stardew Valley",
     "appid": 413150,
-    "file": "stardew-valley"
+    "file": "stardew-valley",
+    "accent": "#949a70"
   },
   {
     "title": "Disco Elysium",
     "appid": 632470,
-    "file": "disco-elysium"
+    "file": "disco-elysium",
+    "accent": "#b67b55"
   },
   {
     "title": "Celeste",
     "appid": 504230,
-    "file": "celeste"
+    "file": "celeste",
+    "accent": "#8b6b6e"
   },
   {
     "title": "Balatro",
     "appid": 2379780,
-    "file": "balatro"
+    "file": "balatro",
+    "accent": "#4c6694"
   },
   {
     "title": "Hogwarts Legacy",
     "appid": 990080,
-    "file": "hogwarts-legacy"
+    "file": "hogwarts-legacy",
+    "accent": "#979d94"
   },
   {
     "title": "Hades",
     "appid": 1145360,
-    "file": "hades"
+    "file": "hades",
+    "accent": "#aa4d2e"
   },
   {
     "title": "Outer Wilds",
     "appid": 753640,
-    "file": "outer-wilds"
+    "file": "outer-wilds",
+    "accent": "#62553b"
   },
   {
     "title": "Portal 2",
     "appid": 620,
-    "file": "portal-2"
+    "file": "portal-2",
+    "accent": "#4f95aa"
   },
   {
     "title": "Half-Life 2",
     "appid": 220,
-    "file": "half-life-2"
+    "file": "half-life-2",
+    "accent": "#6d4b31"
   },
   {
     "title": "Terraria",
     "appid": 105600,
-    "file": "terraria"
+    "file": "terraria",
+    "accent": "#68aea6"
   },
   {
     "title": "Cuphead",
     "appid": 268910,
-    "file": "cuphead"
+    "file": "cuphead",
+    "accent": "#ffd011"
   },
   {
     "title": "Dead Cells",
     "appid": 588650,
-    "file": "dead-cells"
+    "file": "dead-cells",
+    "accent": "#ae566a"
   },
   {
     "title": "Slay the Spire",
     "appid": 646570,
-    "file": "slay-the-spire"
+    "file": "slay-the-spire",
+    "accent": "#e77e41"
   },
   {
     "title": "Divinity: Original Sin 2",
     "appid": 435150,
-    "file": "divinity-original-sin-2"
+    "file": "divinity-original-sin-2",
+    "accent": "#7f808e"
   },
   {
     "title": "God of War",
     "appid": 1593500,
-    "file": "god-of-war"
+    "file": "god-of-war",
+    "accent": "#2a6fae"
   },
   {
     "title": "Sea of Stars",
     "appid": 1244090,
-    "file": "sea-of-stars"
+    "file": "sea-of-stars",
+    "accent": "#5bddf2"
   },
   {
     "title": "Tunic",
     "appid": 553420,
-    "file": "tunic"
+    "file": "tunic",
+    "accent": "#caad49"
   },
   {
     "title": "Cult of the Lamb",
     "appid": 1313140,
-    "file": "cult-of-the-lamb"
+    "file": "cult-of-the-lamb",
+    "accent": "#c76d81"
   },
   {
     "title": "Return of the Obra Dinn",
     "appid": 653530,
-    "file": "return-of-the-obra-dinn"
+    "file": "return-of-the-obra-dinn",
+    "accent": "#3b3c23"
   },
   {
-    "title": "Doom (1993)",
+    "title": "Doom + Doom II",
     "appid": 2280,
-    "file": "doom-1993"
+    "file": "doom",
+    "accent": "#cf5e24"
   },
   {
     "title": "Sonic Mania",
     "appid": 584400,
-    "file": "sonic-mania"
+    "file": "sonic-mania",
+    "accent": "#fdda00"
   },
   {
     "title": "Shovel Knight: Treasure Trove",
     "appid": 250760,
-    "file": "shovel-knight-treasure-trove"
+    "file": "shovel-knight-treasure-trove",
+    "accent": "#c47523"
   },
   {
     "title": "Mega Man Legacy Collection",
     "appid": 363440,
-    "file": "mega-man-legacy-collection"
+    "file": "mega-man-legacy-collection",
+    "accent": "#925c4b"
   }
 ]
