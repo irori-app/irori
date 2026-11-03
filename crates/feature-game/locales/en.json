@@ -39,6 +39,8 @@
   "game.common.version": "Version",
   "game.compat.anticheat": "Anticheat",
   "game.compat.anticheat_reference": "Anticheat reference (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blocks {mode} under Wine and Proton. The story mode works.",
+  "game.compat.anticheat_online_only_unnamed": "Anti-cheat blocks {mode} under Wine and Proton. The story mode works.",
   "game.compat.anticheat_removed": "Anticheat removed",
   "game.compat.anticheat_status.broken": "Broken",
   "game.compat.anticheat_status.denied": "Denied",

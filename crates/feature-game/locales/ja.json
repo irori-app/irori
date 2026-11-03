@@ -39,6 +39,8 @@
   "game.common.version": "バージョン",
   "game.compat.anticheat": "アンチチート",
   "game.compat.anticheat_reference": "アンチチートの情報源（AreWeAntiCheatYet）",
+  "game.compat.anticheat_online_only": "{anticheat} により、Wine と Proton では {mode} がブロックされます。ストーリーモードは動作します。",
+  "game.compat.anticheat_online_only_unnamed": "アンチチートにより、Wine と Proton では {mode} がブロックされます。ストーリーモードは動作します。",
   "game.compat.anticheat_removed": "アンチチートは削除済み",
   "game.compat.anticheat_status.broken": "動作しない",
   "game.compat.anticheat_status.denied": "拒否",

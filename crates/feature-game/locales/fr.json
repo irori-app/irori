@@ -39,6 +39,8 @@
   "game.common.version": "Version",
   "game.compat.anticheat": "Anti-triche",
   "game.compat.anticheat_reference": "Référence anti-triche (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} bloque {mode} sous Wine et Proton. Le mode histoire fonctionne.",
+  "game.compat.anticheat_online_only_unnamed": "L’anti-triche bloque {mode} sous Wine et Proton. Le mode histoire fonctionne.",
   "game.compat.anticheat_removed": "Anti-triche retiré",
   "game.compat.anticheat_status.broken": "Défaillant",
   "game.compat.anticheat_status.denied": "Refusé",

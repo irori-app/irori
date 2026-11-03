@@ -39,6 +39,8 @@
   "game.common.version": "Version",
   "game.compat.anticheat": "Antifusk",
   "game.compat.anticheat_reference": "Antifuskkälla (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blockerar {mode} i Wine och Proton. Storyläget fungerar.",
+  "game.compat.anticheat_online_only_unnamed": "Antifusket blockerar {mode} i Wine och Proton. Storyläget fungerar.",
   "game.compat.anticheat_removed": "Antifusk borttaget",
   "game.compat.anticheat_status.broken": "Fungerar inte",
   "game.compat.anticheat_status.denied": "Nekat",

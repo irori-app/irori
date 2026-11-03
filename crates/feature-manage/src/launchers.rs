@@ -1,8 +1,10 @@
 //! "Other launchers" on the Stores page: Battle.net, the EA app, Ubisoft
 //! Connect and the Rockstar Games Launcher. One switch shows their games in
 //! the library; a card per launcher sets it up in a prefix of its own with
-//! the vendor's installer (natively on Windows), opens it so the user signs
-//! in and installs games there, and scans it for games.
+//! the vendor's installer (natively on Windows) or adopts a prefix the user
+//! already has, opens it so the user signs in and installs games there,
+//! scans it for games, closes it, and removes it from Irori (its prefix and
+//! games stay on disk).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -11,22 +13,23 @@ use std::time::Duration;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::alert::Alert;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::select::{Select, SelectItem, SelectState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, ElementId, Entity, Global, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Task, Window,
-    div, rems,
+    IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _,
+    Subscription, Task, Window, div, rems,
 };
-use irori_core::{InstallProgress, OpContext, WineInstallation};
-use irori_launchers::{LauncherKind as Launcher, LauncherStatus, LaunchersStore};
+use irori_core::{InstallProgress, OpContext, Runner, WineInstallation};
+use irori_launchers::{LauncherKind as Launcher, LauncherSignIn, LauncherStatus, LaunchersStore};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -59,6 +62,15 @@ impl SelectItem for WineChoice {
     fn value(&self) -> &SharedString {
         &self.value
     }
+}
+
+/// What a card's buttons ask of the store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Open,
+    Scan,
+    Close,
+    Forget,
 }
 
 #[derive(Default, Clone)]
@@ -217,24 +229,117 @@ impl LaunchersSection {
         }));
     }
 
-    fn act(&mut self, launcher: Launcher, open: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn act(
+        &mut self,
+        launcher: Launcher,
+        action: Action,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(store) = launchers_store(cx) else {
             return;
         };
         let task = irori_ui::run(cx, async move {
-            if open {
-                store.open(launcher).await
-            } else {
-                irori_core::Store::refresh(store.as_ref(), false).await
+            match action {
+                Action::Open => store.open(launcher).await,
+                Action::Scan => irori_core::Store::refresh(store.as_ref(), false).await,
+                Action::Close => store.close(launcher).await,
+                Action::Forget => store.forget(launcher).await,
             }
         });
+        let name = launcher.display_name();
+        let failed = move || match action {
+            Action::Open | Action::Scan => {
+                t_args("manage.launchers.open_failed", &[("launcher", name)])
+            }
+            Action::Close => t_args("manage.launchers.close_failed", &[("launcher", name)]),
+            Action::Forget => t_args("manage.launchers.remove_failed", &[("launcher", name)]),
+        };
         cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Err(e) = result {
+                    notify_error(failed(), &e, window, cx);
+                }
+                this.refresh_statuses(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Close the launcher, first asking when one of its games is running,
+    /// since that game stops too.
+    fn close(&mut self, launcher: Launcher, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let prefix = format!("{}:", launcher.id());
+        let playing = b
+            .running_games()
+            .into_iter()
+            .filter(|id| id.runner == Runner::Launchers && id.app_name.starts_with(&prefix))
+            .find_map(|id| b.game(&id))
+            .map(|g| g.title.clone());
+        let Some(title) = playing else {
+            self.act(launcher, Action::Close, window, cx);
+            return;
+        };
+        let view = cx.entity().downgrade();
+        let name = launcher.display_name();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let view = view.clone();
+            alert
+                .confirm()
+                .title(t_args(
+                    "manage.launchers.close_confirm.title",
+                    &[("launcher", name)],
+                ))
+                .description(t_args(
+                    "manage.launchers.close_confirm.description",
+                    &[("title", &title)],
+                ))
+                .ok_text(t("manage.launchers.close"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let _ =
+                        view.update(cx, |this, cx| this.act(launcher, Action::Close, window, cx));
+                    true
+                })
+        });
+    }
+
+    /// Ask for a prefix that already has the launcher, and use it with the
+    /// chosen Wine build.
+    fn adopt(&mut self, launcher: Launcher, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(store) = launchers_store(cx) else {
+            return;
+        };
+        let wine = self.chosen_wine(cx);
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(t_args(
+                "manage.launchers.adopt_prompt",
+                &[("launcher", launcher.display_name())],
+            )),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = paths.await else {
+                return;
+            };
+            let Some(prefix) = paths.into_iter().next() else {
+                return;
+            };
+            let Ok(task) = this.update(cx, |_, cx| {
+                irori_ui::run(cx, async move { store.adopt(launcher, prefix, wine).await })
+            }) else {
+                return;
+            };
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Err(e) = result {
                     notify_error(
                         t_args(
-                            "manage.launchers.open_failed",
+                            "manage.launchers.adopt_failed",
                             &[("launcher", launcher.display_name())],
                         ),
                         &e,
@@ -281,6 +386,39 @@ impl LaunchersSection {
                 .child(t("manage.launchers.state.not_set_up"))
                 .into_any_element(),
         };
+        let account: Option<AnyElement> = match (status.installed, status.sign_in) {
+            (true, LauncherSignIn::SignedIn) => Some(
+                div()
+                    .debug_selector(move || format!("launcher-{}-signed-in", launcher.id()))
+                    .child(
+                        Tag::success()
+                            .xsmall()
+                            .child(t("manage.launchers.state.signed_in")),
+                    )
+                    .into_any_element(),
+            ),
+            (true, LauncherSignIn::SignedOut) => Some(
+                div()
+                    .debug_selector(move || format!("launcher-{}-signed-out", launcher.id()))
+                    .child(
+                        Tag::warning()
+                            .xsmall()
+                            .child(t("manage.launchers.state.signed_out")),
+                    )
+                    .into_any_element(),
+            ),
+            _ => None,
+        };
+        let remove = (!cfg!(windows) && status.setup.is_some()).then(|| {
+            Button::new("launcher-remove")
+                .debug_selector(move || format!("launcher-{}-remove", launcher.id()))
+                .ghost()
+                .small()
+                .label(t("manage.launchers.remove"))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.act(launcher, Action::Forget, window, cx)
+                }))
+        });
         let actions: AnyElement = if let Some(live) = &live {
             let progress = live.progress.unwrap_or_default();
             v_flex()
@@ -305,7 +443,10 @@ impl LaunchersSection {
                 .into_any_element()
         } else if status.installed {
             h_flex()
+                .flex_wrap()
+                .justify_end()
                 .gap_2()
+                .children(remove)
                 .child(
                     Button::new("launcher-scan")
                         .ghost()
@@ -313,8 +454,21 @@ impl LaunchersSection {
                         .icon(IconName::RefreshCw)
                         .label(t("manage.launchers.scan"))
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.act(launcher, false, window, cx)
+                            this.act(launcher, Action::Scan, window, cx)
                         })),
+                )
+                .child(
+                    Button::new("launcher-close")
+                        .debug_selector(move || format!("launcher-{}-close", launcher.id()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Power)
+                        .label(t("manage.launchers.close"))
+                        .on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                this.close(launcher, window, cx)
+                            }),
+                        ),
                 )
                 .child(
                     Button::new("launcher-open")
@@ -322,18 +476,42 @@ impl LaunchersSection {
                         .icon(IconName::ExternalLink)
                         .label(t_args("manage.launchers.open", &[("launcher", name)]))
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.act(launcher, true, window, cx)
+                            this.act(launcher, Action::Open, window, cx)
                         })),
                 )
                 .into_any_element()
         } else {
-            Button::new("launcher-setup")
-                .primary()
-                .small()
-                .icon(IconName::Download)
-                .label(t_args("manage.launchers.set_up", &[("launcher", name)]))
-                .disabled(!cfg!(windows) && self.wines.is_empty())
-                .on_click(cx.listener(move |this, _, window, cx| this.set_up(launcher, window, cx)))
+            let no_wine = !cfg!(windows) && self.wines.is_empty();
+            h_flex()
+                .flex_wrap()
+                .justify_end()
+                .gap_2()
+                .children(remove)
+                .when(!cfg!(windows), |d| {
+                    d.child(
+                        Button::new("launcher-adopt")
+                            .ghost()
+                            .small()
+                            .icon(IconName::FolderOpen)
+                            .label(t("manage.launchers.adopt"))
+                            .disabled(no_wine)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.adopt(launcher, window, cx)
+                            })),
+                    )
+                })
+                .child(
+                    Button::new("launcher-setup")
+                        .debug_selector(move || format!("launcher-{}-set-up", launcher.id()))
+                        .primary()
+                        .small()
+                        .icon(IconName::Download)
+                        .label(t_args("manage.launchers.set_up", &[("launcher", name)]))
+                        .disabled(no_wine)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.set_up(launcher, window, cx)
+                        })),
+                )
                 .into_any_element()
         };
         card(cx)
@@ -353,6 +531,7 @@ impl LaunchersSection {
                             .truncate()
                             .child(name),
                     )
+                    .children(account)
                     .child(state),
             )
             .child(div().text_xs().text_color(muted).child(match launcher {

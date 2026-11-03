@@ -143,6 +143,7 @@ pub(crate) fn assemble(
     if let Some(a) = ac {
         let mut report = AnticheatReport::new(status(a.status));
         report.anticheats = a.anticheats.clone();
+        report.online_only = a.online_only.clone();
         report.notes = a
             .notes
             .iter()

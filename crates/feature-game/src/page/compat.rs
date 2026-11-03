@@ -150,6 +150,9 @@ impl GamePage {
                     .child(format!("{} · {names}", ac.status.label())),
                 cx,
             ));
+            if let Some(note) = ac.online_only_note() {
+                rows.push(div().text_xs().child(note).into_any_element());
+            }
             for (ix, note) in ac.notes.iter().enumerate().take(3) {
                 rows.push(
                     div()
