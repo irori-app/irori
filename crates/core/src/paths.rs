@@ -131,6 +131,11 @@ impl Paths {
         self.cache.join("images")
     }
 
+    /// Where the user's screenshots are, by folder (rebuilt when missing).
+    pub fn screenshot_index_file(&self) -> PathBuf {
+        self.cache.join("screenshots.json")
+    }
+
     pub fn tools_dir(&self) -> PathBuf {
         self.data.join("tools")
     }
