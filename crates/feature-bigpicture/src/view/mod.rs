@@ -47,8 +47,9 @@ use crate::gamepad::{self, GamepadInput};
 use crate::grid::{FocusGrid, GridMove};
 use crate::layout::{GridStep, HomeLayout, Metrics, grid_step};
 use crate::model::{
-    Chip, GameAction, GameState, LibraryFilter, PageRow, Row, StatusFilter, build_rows, cycle,
-    disabled_reason, install_platforms, library_games, main_action, page_rows, show_options,
+    Chip, GameAction, GameState, LibraryFilter, PageRow, Row, StatusFilter, build_rows,
+    cover_action, cycle, disabled_reason, install_platforms, library_games, main_action, page_rows,
+    show_options,
 };
 
 /// Focus must rest this long before the backdrop art follows it, so fast
@@ -184,6 +185,8 @@ pub struct BigPictureView {
     library: LibraryTab,
     /// Wheel travel not yet turned into a focus move.
     wheel: f32,
+    /// The cover under the mouse (its element id), which shows its button.
+    hovered_cover: Option<SharedString>,
     pending: HashSet<GameId>,
     image_cache: Entity<LruImageCache>,
     /// The game whose art is behind everything, the one it replaced (fading
@@ -298,6 +301,7 @@ impl BigPictureView {
                 searching: false,
             },
             wheel: 0.0,
+            hovered_cover: None,
             pending: HashSet::new(),
             image_cache: LruImageCache::new(IMAGE_CACHE, cx),
             hero: None,
@@ -675,20 +679,20 @@ impl BigPictureView {
         self.after_focus_change(cx);
     }
 
-    /// Alt on a cover: the game's main command without opening its page
-    /// (play, or install with defaults). Anything else opens the page.
+    /// Alt on a cover: the focused game's main command without opening its
+    /// page (see [`Self::cover_command`]).
     fn quick_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(game) = self.tab_game().cloned() else {
-            return;
-        };
-        let state = Self::game_state(&game, cx);
-        let main = main_action(state);
-        if matches!(main, GameAction::Play | GameAction::Install)
-            && disabled_reason(main, state).is_none()
-        {
-            self.run_game_action(main, game, None, window, cx);
-        } else {
-            self.open_page(game.id(), cx);
+        if let Some(game) = self.tab_game().cloned() {
+            self.cover_command(game, window, cx);
+        }
+    }
+
+    /// Play, or install with defaults, as [`cover_action`] allows; anything
+    /// else opens the page.
+    fn cover_command(&mut self, game: Arc<GameInfo>, window: &mut Window, cx: &mut Context<Self>) {
+        match cover_action(Self::game_state(&game, cx)) {
+            Some(action) => self.run_game_action(action, game, None, window, cx),
+            None => self.open_page(game.id(), cx),
         }
     }
 

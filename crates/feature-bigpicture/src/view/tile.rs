@@ -1,10 +1,15 @@
 //! A game's cover as Big Picture shows it on shelves and in the grid. The
 //! focused cover grows, lifts and glows on a spring; uninstalled games are
 //! dimmed; running operations show their progress across the bottom.
+//!
+//! With the mouse, a click focuses a cover and a click on the focused one
+//! opens its page; the cover under the pointer offers Play or Install across
+//! its bottom (the same command as Alt).
 
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -13,14 +18,15 @@ use gpui_kit::{
     IntoElement, ObjectFit, ParentElement as _, Role, SharedString, SpringAnimation,
     StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div, point, px, rems,
 };
-use irori_core::{GameInfo, StatusKind};
+use irori_core::{GameId, GameInfo, StatusKind};
 use irori_ui::components::{ArtImage, art_image, art_loading, missing_art_fill, physical_width};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
-use irori_ui::motion::HOVER_SPRING;
+use irori_ui::motion::{HOVER_SPRING, fade_in};
 
-use super::{BigPictureView, Colors};
+use super::{BigPictureView, Colors, LibraryFocus, Tab};
 use crate::layout::{TILE_GAP, TILE_RATIO};
+use crate::model::{CoverClick, cover_action, cover_click};
 use crate::text::status_with_percent;
 
 /// How far the focused cover rises, in rem.
@@ -36,6 +42,92 @@ pub(super) struct Cover {
     /// Scale when focused.
     pub scale: f32,
     pub focused: bool,
+    /// Where it sits, so a click can focus it.
+    pub slot: CoverSlot,
+}
+
+/// Where a cover sits: a shelf on Home, or the Library grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CoverSlot {
+    Shelf { row: usize, col: usize },
+    Grid(usize),
+}
+
+impl BigPictureView {
+    /// Whether the cover at `slot` has the focus now.
+    fn is_cover_focused(&self, slot: CoverSlot) -> bool {
+        if self.page.is_some() || self.overlay.is_some() {
+            return false;
+        }
+        match slot {
+            CoverSlot::Shelf { row, col } => {
+                self.tab == Tab::Home && self.grid.focused(&self.lens()) == Some((row, col))
+            }
+            CoverSlot::Grid(ix) => {
+                self.tab == Tab::Library
+                    && self.library.focus == LibraryFocus::Grid
+                    && self.library.ix == ix
+            }
+        }
+    }
+
+    /// Move the focus to the cover at `slot`, as the controller would.
+    fn focus_cover(&mut self, slot: CoverSlot, cx: &mut Context<Self>) {
+        match slot {
+            CoverSlot::Shelf { row, col } => {
+                let lens = self.lens();
+                self.grid.set(row, col, &lens);
+            }
+            CoverSlot::Grid(ix) => {
+                if ix >= self.library.games.len() {
+                    return;
+                }
+                self.library.ix = ix;
+                self.library.focus = LibraryFocus::Grid;
+            }
+        }
+        self.after_focus_change(cx);
+    }
+
+    /// A click on a cover: see [`cover_click`].
+    pub(super) fn click_cover(
+        &mut self,
+        slot: CoverSlot,
+        click_count: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let click = cover_click(self.is_cover_focused(slot), click_count);
+        self.focus_cover(slot, cx);
+        if click == CoverClick::Open
+            && let Some(id) = self.tab_game().map(|g| g.id())
+        {
+            self.open_page(id, cx);
+        }
+    }
+
+    /// Focus the cover at `slot` and return its game when it is still `id`,
+    /// the game drawn there: a button acts on the game it was drawn on, never
+    /// on one focused earlier or moved into its place since.
+    pub(super) fn select_cover_game(
+        &mut self,
+        slot: CoverSlot,
+        id: &GameId,
+        cx: &mut Context<Self>,
+    ) -> Option<Arc<GameInfo>> {
+        self.focus_cover(slot, cx);
+        self.tab_game().filter(|g| g.id() == *id).cloned()
+    }
+
+    fn set_hovered_cover(&mut self, id: SharedString, hovered: bool, cx: &mut Context<Self>) {
+        if hovered {
+            self.hovered_cover = Some(id);
+        } else if self.hovered_cover.as_ref() == Some(&id) {
+            self.hovered_cover = None;
+        } else {
+            return;
+        }
+        cx.notify();
+    }
 }
 
 impl BigPictureView {
@@ -45,7 +137,6 @@ impl BigPictureView {
         &self,
         cover: Cover,
         c: Colors,
-        on_click: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -55,6 +146,7 @@ impl BigPictureView {
             width,
             scale,
             focused,
+            slot,
         } = cover;
         let state = Self::game_state(&game, cx);
         let status = models(cx).statuses.read(cx).get(&game.id()).cloned();
@@ -79,6 +171,10 @@ impl BigPictureView {
                 let pct = s.progress.and_then(|p| p.percent);
                 (status_with_percent(s.kind, pct), pct)
             });
+        // The button under the pointer; a running operation's progress
+        // takes its place.
+        let action = cover_action(state)
+            .filter(|_| progress.is_none() && self.hovered_cover.as_ref() == Some(&id));
         let label = if state.installed {
             SharedString::from(game.title.clone())
         } else {
@@ -90,6 +186,7 @@ impl BigPictureView {
 
         let tile = div()
             .id(id.clone())
+            .group(id.clone())
             .role(Role::Button)
             .aria_label(label)
             .aria_selected(focused)
@@ -163,8 +260,46 @@ impl BigPictureView {
                         )),
                 )
             })
-            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                on_click(this, window, cx);
+            .when_some(action, |d, action| {
+                let game_id = game.id();
+                let button = Button::new(SharedString::from(format!("{id}-action")))
+                    .primary()
+                    .w_full()
+                    .icon(action.icon())
+                    .label(action.label())
+                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        // The cover under the button must not take this
+                        // click too.
+                        cx.stop_propagation();
+                        if let Some(game) = this.select_cover_game(slot, &game_id, cx) {
+                            this.cover_command(game, window, cx);
+                        }
+                        this.focus.focus(window, cx);
+                    }));
+                // Drawn (and clickable) only while the pointer is really over
+                // the cover: the hover callback doesn't fire for a cover that
+                // scrolled away or was hidden by the page while hovered.
+                d.child(
+                    div()
+                        .absolute()
+                        .bottom_0()
+                        .left_0()
+                        .right_0()
+                        .p_2()
+                        .invisible()
+                        .group_hover(id.clone(), |s| s.visible())
+                        .child(fade_in(
+                            SharedString::from(format!("{id}-action-in")),
+                            button,
+                        )),
+                )
+            })
+            .on_hover(cx.listener({
+                let id = id.clone();
+                move |this, hovered: &bool, _, cx| this.set_hovered_cover(id.clone(), *hovered, cx)
+            }))
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                this.click_cover(slot, event.click_count(), cx);
                 this.focus.focus(window, cx);
             }));
 
