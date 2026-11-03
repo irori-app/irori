@@ -7,8 +7,9 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gpui_kit::StatefulInteractiveElement as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _, DropdownButton};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::select::Select;
 use gpui_kit::component::tag::Tag;
@@ -19,14 +20,15 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, BoxShadow, Context, Div, Hsla, InteractiveElement as _, IntoElement,
-    ObjectFit, ParentElement, SharedString, Styled, StyledImage as _, canvas, div, point, px, rems,
+    ObjectFit, ParentElement, Pixels, Role, SharedString, Styled, StyledImage as _, canvas, div,
+    point, px, rems,
 };
 use irori_core::{GameInfo, StatusKind};
 use irori_services::LaunchParams;
 use irori_services::userdata::MAX_RATING;
 use irori_ui::components::{GameCover, ProgressSummary, art_img};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::style::{ICON_CONTRAST, art_tint, legible};
+use irori_ui::style::{ICON_CONTRAST, KeyboardFocusable as _, art_tint, legible};
 use irori_ui::{backend, models};
 
 use super::GamePage;
@@ -38,6 +40,9 @@ use crate::{manage, ops, saves};
 const STICKY_DROP_PX: f32 = 24.0;
 /// Genres shown in the header's line under the title.
 const HEADER_GENRES: usize = 3;
+
+/// Radius that turns a button into a pill.
+const PILL: Pixels = px(999.);
 
 /// "Rate 3 stars", for a star button and the rating menu.
 pub(super) fn rate_label(stars: u8) -> SharedString {
@@ -64,10 +69,12 @@ impl GamePage {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let ink = self.ink;
+        // Store logos are drawn for dark backgrounds (often white lettering);
+        // light themes show the title as text instead.
         let logo = game
             .art_logo
             .clone()
-            .filter(|l| !l.is_empty())
+            .filter(|l| !l.is_empty() && cx.theme().mode.is_dark())
             .and_then(|url| art_img(&url, 720, true, cx));
         let heading = match logo {
             Some(logo) => div()
@@ -362,8 +369,8 @@ impl GamePage {
             .is_some_and(|s| s.supports_cloud_saves());
         let cloud = saves::CloudSupport::of(game, store_supports);
         h_flex()
-            .gap_1()
-            .justify_center()
+            .gap_2()
+            .flex_wrap()
             .child(irori_ui::play_status::button(
                 "game-play-status",
                 &self.id,
@@ -371,7 +378,8 @@ impl GamePage {
             ))
             .child(
                 Button::new("game-favourite")
-                    .ghost()
+                    .outline()
+                    .rounded(PILL)
                     .icon(if fav {
                         IconName::StarFill
                     } else {
@@ -394,7 +402,8 @@ impl GamePage {
             .when(self.id.runner.manages_installs(), |row| {
                 row.child(
                     Button::new("game-settings")
-                        .ghost()
+                        .outline()
+                        .rounded(PILL)
                         .icon(IconName::Settings2)
                         .accessibility_label(t("game.hero.settings"))
                         .tooltip(t("game.hero.settings"))
@@ -407,7 +416,8 @@ impl GamePage {
                     .unwrap_or_else(|| t("game.hero.cloud_saves").to_string());
                 row.child(
                     Button::new("game-cloud-saves")
-                        .ghost()
+                        .outline()
+                        .rounded(PILL)
                         .icon(IconName::Cloud)
                         .accessibility_label(t("game.hero.cloud_saves"))
                         .tooltip(tooltip)
@@ -419,7 +429,8 @@ impl GamePage {
             })
             .child(
                 Button::new("game-more")
-                    .ghost()
+                    .outline()
+                    .rounded(PILL)
                     .icon(IconName::Ellipsis)
                     .accessibility_label(t("game.hero.more_actions"))
                     .tooltip(t("game.hero.more_actions"))
@@ -760,16 +771,44 @@ impl GamePage {
         }
     }
 
+    /// Play as a pill in the theme's text colour, the inverse of the page, so
+    /// the main action stands out over any art in light themes and dark.
+    /// gpui-kit's own buttons only take translucent custom fills.
+    fn render_play_pill(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (fill, ink) = (theme.foreground, theme.background);
+        let label = t("game.action.play");
+        div()
+            .id("primary-action")
+            .role(Role::Button)
+            .aria_label(label.clone())
+            .keyboard_focusable(cx)
+            .flex_1()
+            .min_w_0()
+            .h(rems(2.75))
+            .px_5()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .rounded(PILL)
+            .bg(fill)
+            .text_color(ink)
+            .font_semibold()
+            .shadow_md()
+            .cursor_pointer()
+            .hover(|s| s.bg(fill.opacity(0.88)))
+            .active(|s| s.bg(fill.opacity(0.76)))
+            .child(Icon::new(IconName::Play).text_color(ink))
+            .child(div().min_w_0().truncate().child(label))
+            .on_click(cx.listener(|this, _, window, cx| this.run_primary(window, cx)))
+            .into_any_element()
+    }
+
     /// Play as a split button: launch options (when the store offers
     /// several) and one-off variants (verbose logs, no update check).
     fn render_play_button(&self, cx: &mut Context<Self>) -> AnyElement {
-        let play = Button::new("primary-action")
-            .primary()
-            .large()
-            .flex_1()
-            .icon(IconName::Play)
-            .label(t("game.action.play"))
-            .on_click(cx.listener(|this, _, window, cx| this.run_primary(window, cx)));
+        let play = self.render_play_pill(cx);
         let page = cx.entity();
         let options = if self.launch_options.len() > 1 {
             self.launch_options.clone()
@@ -777,17 +816,18 @@ impl GamePage {
             Vec::new()
         };
         if options.is_empty() && !self.id.runner.manages_installs() {
-            return play.into_any_element();
+            return play;
         }
         let current = self.selected_option.clone();
         let emulated = self.id.runner == irori_core::Runner::Emulation;
         let id = self.id.clone();
-        DropdownButton::new("play-split")
-            .primary()
+        let more = Button::new("play-with")
+            .outline()
+            .rounded(PILL)
             .large()
-            .w_full()
-            .button(play)
-            .menu_accessibility_label(t("game.hero.play_with"))
+            .icon(IconName::ChevronDown)
+            .accessibility_label(t("game.hero.play_with"))
+            .tooltip(t("game.hero.play_with"))
             .dropdown_menu(move |mut menu, _, _| {
                 menu = menu.label(t("game.hero.play_with"));
                 for option in &options {
@@ -831,7 +871,12 @@ impl GamePage {
                     ));
                 }
                 menu
-            })
+            });
+        h_flex()
+            .w_full()
+            .gap_2()
+            .child(play)
+            .child(more)
             .into_any_element()
     }
 

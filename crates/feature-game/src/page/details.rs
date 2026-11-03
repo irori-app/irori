@@ -7,6 +7,7 @@ use std::sync::Arc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::progress::Progress;
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -53,6 +54,41 @@ fn text(value: impl Into<SharedString>) -> AnyElement {
     div().truncate().child(value.into()).into_any_element()
 }
 
+/// Chips shown before the rest collapse into a "+N" chip.
+const MAX_CHIPS: usize = 3;
+
+/// `values` as chips, the ones past [`MAX_CHIPS`] counted in a last "+N".
+fn chips(values: Vec<String>) -> AnyElement {
+    let (shown, more) = chip_split(values.len(), MAX_CHIPS);
+    h_flex()
+        .gap_1()
+        .flex_wrap()
+        .children(
+            values
+                .into_iter()
+                .take(shown)
+                .map(|v| Tag::secondary().xsmall().child(v)),
+        )
+        .when_some(more, |r, n| {
+            r.child(
+                Tag::secondary()
+                    .xsmall()
+                    .child(t_args("game.details.more", &[("count", &n.to_string())])),
+            )
+        })
+        .into_any_element()
+}
+
+/// How many of `count` chips to show when at most `max` fit, and how many the
+/// "+N" chip stands for. A lone extra shows itself rather than "+1".
+fn chip_split(count: usize, max: usize) -> (usize, Option<usize>) {
+    if count <= max + 1 {
+        (count, None)
+    } else {
+        (max, Some(count - max))
+    }
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -95,6 +131,7 @@ impl GamePage {
                     .child(super::section_title(t("game.info.details"), self.ink.text)),
             )
             .children(group(credits, cx))
+            .children(group(self.tag_rows(game, muted), cx))
             .children(group(play, cx))
             .children(group(install, cx))
             .children(group(compat, cx))
@@ -105,17 +142,53 @@ impl GamePage {
     fn credit_rows(&self, game: &GameInfo, muted: Hsla) -> Vec<AnyElement> {
         let mut rows = Vec::new();
         if let Some(d) = game.developer.as_ref().filter(|d| !d.is_empty()) {
-            rows.push(row(t("game.details.developer"), text(d.clone()), muted));
+            rows.push(row(
+                t("game.details.developer"),
+                chips(vec![d.clone()]),
+                muted,
+            ));
         }
         if let Some(p) = game
             .publisher
             .as_ref()
             .filter(|p| !p.is_empty() && game.developer.as_ref() != Some(p))
         {
-            rows.push(row(t("game.details.publisher"), text(p.clone()), muted));
+            rows.push(row(
+                t("game.details.publisher"),
+                chips(vec![p.clone()]),
+                muted,
+            ));
         }
         if let Some(date) = self.release_date(game) {
             rows.push(row(t("game.details.released"), text(date), muted));
+        }
+        rows
+    }
+
+    /// Genres, the platforms the game is offered for, and a ROM's region and
+    /// revision, as chips.
+    fn tag_rows(&self, game: &GameInfo, muted: Hsla) -> Vec<AnyElement> {
+        let mut rows = Vec::new();
+        let genres = self
+            .extra
+            .ready()
+            .map(|e| e.genres.clone())
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| game.genres.clone());
+        if !genres.is_empty() {
+            rows.push(row(t("game.details.genres"), chips(genres), muted));
+        }
+        if self.id.runner != irori_core::Runner::Emulation {
+            let platforms: Vec<String> = crate::install::installable_platforms(game)
+                .iter()
+                .map(|p| platform_label(*p).to_string())
+                .collect();
+            if !platforms.is_empty() {
+                rows.push(row(t("game.info.platforms"), chips(platforms), muted));
+            }
+        }
+        if !game.tags.is_empty() {
+            rows.push(row(t("game.details.tags"), chips(game.tags.clone()), muted));
         }
         rows
     }
@@ -280,16 +353,8 @@ impl GamePage {
                     ));
                 }
             }
-            _ => {
-                let platforms = crate::install::installable_platforms(game)
-                    .iter()
-                    .map(|p| platform_label(*p).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if !platforms.is_empty() {
-                    rows.push(row(t("game.info.platforms"), text(platforms), muted));
-                }
-            }
+            // The platforms on offer are among the game's tags.
+            _ => {}
         }
         if !managed {
             rows.push(row(
@@ -455,4 +520,16 @@ fn hltb_bar(h: &HowLongToBeat, played_hours: f32, muted: Hsla, cx: &App) -> AnyE
         })
         .children(link)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chip_split;
+
+    #[test]
+    fn chips_past_the_limit_collapse() {
+        assert_eq!(chip_split(2, 3), (2, None));
+        assert_eq!(chip_split(4, 3), (4, None));
+        assert_eq!(chip_split(12, 3), (3, Some(9)));
+    }
 }
