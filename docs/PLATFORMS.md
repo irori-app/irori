@@ -122,6 +122,7 @@ signature changes. A build signed with a Developer ID asks once.
 | Runtimes/data | XDG data / `irori` | `~/Library/Application Support/irori` | LocalAppData / `irori` |
 | Cache | XDG cache / `irori` | `~/Library/Caches/irori` | LocalAppData / `irori` (dirs cache location) |
 | Steam default | `~/.steam/steam` | `~/Library/Application Support/Steam` | ProgramFiles(x86) / `Steam` |
+| Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
 isolated testing. A configured Steam path takes precedence when it exists; otherwise,
@@ -196,6 +197,15 @@ shortcuts use `.desktop`, Finder app bundles, or Windows shell links respectivel
 Windows cancellation uses `taskkill /T /F`; games that deliberately escape their
 launcher process tree still require game-specific testing. External EA/Ubisoft
 launchers may reuse an existing process, which limits playtime tracking.
+
+### Screenshots
+
+The stats page's Album reads screenshots from Steam's
+`userdata/<account>/760/remote/<appid>/screenshots` folders (the app id names the
+game) and from the screenshot folders in the table above, where a file counts for
+the play session it was taken in. Irori never moves, renames or removes them.
+gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
+Steam saves them instead.
 
 ### New versions of Irori
 
