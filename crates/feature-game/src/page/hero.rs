@@ -499,6 +499,11 @@ impl GamePage {
                         .on_click(move |_, _, cx| ops::open_settings(&settings_id, "general", cx)),
                 )
             })
+            .child(irori_ui::play_status::button(
+                "game-play-status",
+                &self.id,
+                cx,
+            ))
             .child(
                 Button::new("game-favourite")
                     .ghost()

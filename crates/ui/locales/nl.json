@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori heeft nog geen emulator voor dit systeem.",
   "ui.lutris.reason.steam_not_found": "Het staat niet in je Steam-bibliotheek op deze computer.",
   "ui.lutris.reason.store_not_supported": "Irori heeft geen winkel voor ‘{store}’.",
-  "ui.lutris.reason.failed": "Kan niet worden toegevoegd: {error}"
+  "ui.lutris.reason.failed": "Kan niet worden toegevoegd: {error}",
+  "ui.play_status.title": "Speelstatus",
+  "ui.play_status.set": "Status instellen",
+  "ui.play_status.clear": "Status wissen",
+  "ui.play_status.not_played": "Niet gespeeld",
+  "ui.play_status.plan_to_play": "Gepland",
+  "ui.play_status.playing": "Bezig",
+  "ui.play_status.on_hold": "Gepauzeerd",
+  "ui.play_status.beaten": "Uitgespeeld",
+  "ui.play_status.abandoned": "Gestopt",
+  "ui.play_status.played": "Gespeeld"
 }

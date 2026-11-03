@@ -376,10 +376,15 @@ commands without a window.
   `run_automatic_updates`, which keeps to `iroriAutoUpdateFrom`/`Until` and, where the
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
-- **User data:** favourites, hidden games, categories, recents, playtime and art
-  overrides live in `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy
-  on write. Store playtime merges by keeping the larger total and counts games only,
-  never their DLC.
+- **User data:** favourites, hidden games, categories, recents, playtime, play
+  statuses, yearly backlog goals and art overrides live in `state/library.json` behind
+  `RwLock<Arc<UserData>>`, updated copy on write. Store playtime merges by keeping the
+  larger total and counts games only, never their DLC.
+- **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
+  plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
+  sets one automatically. `UserData::effective_status` adds `Played` for games with
+  playtime and no status; filters and stats group by it. Screens show and set it
+  through `irori_ui::play_status` (names, colours, icons, menu, button).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.

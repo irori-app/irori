@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori nu are încă un emulator pentru sistemul lui.",
   "ui.lutris.reason.steam_not_found": "Nu este în biblioteca ta Steam de pe acest computer.",
   "ui.lutris.reason.store_not_supported": "Irori nu are niciun magazin pentru „{store}”.",
-  "ui.lutris.reason.failed": "Nu a putut fi adăugat: {error}"
+  "ui.lutris.reason.failed": "Nu a putut fi adăugat: {error}",
+  "ui.play_status.title": "Stare de joc",
+  "ui.play_status.set": "Setează starea",
+  "ui.play_status.clear": "Șterge starea",
+  "ui.play_status.not_played": "Nejucat",
+  "ui.play_status.plan_to_play": "De jucat",
+  "ui.play_status.playing": "În curs",
+  "ui.play_status.on_hold": "În pauză",
+  "ui.play_status.beaten": "Terminat",
+  "ui.play_status.abandoned": "Abandonat",
+  "ui.play_status.played": "Jucat"
 }
