@@ -489,10 +489,17 @@ cx.spawn_in(window, async move |this, cx| {
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
   (`glass::resolve`, `Glass::Desktop`).
-- On other Linux desktops the default theme is Irori's own in the desktop's accent colour,
-  where the settings portal has one (`desktop_accent.rs`, `desktop_theme::accented`). This
-  replaces only Irori's accent colours, held legible on its surfaces. A followed desktop's
-  theme and any theme the user picked win; `docs/PLATFORMS.md` lists who offers an accent.
+- Elsewhere the default theme is Irori's own in the system's accent colour: the settings
+  portal's on other Linux desktops, `controlAccentColor` and the highlight colour on macOS,
+  `UISettings` and its shades on Windows (`desktop_accent.rs` and its `macos.rs` and
+  `windows.rs`, `desktop_theme::system_accented`). Every source signals its changes; nothing
+  polls. This replaces only Irori's accent colours, held legible on its surfaces. A followed
+  desktop's theme, any theme the user picked and the `iroriUi.systemAccent` switch win;
+  `docs/PLATFORMS.md` lists who offers an accent.
+- What the system asks for accessibility applies to every theme, a picked one too: macOS
+  "Increase contrast" and Windows high contrast strengthen borders, Windows high contrast
+  replaces the theme with its own colours (`desktop_theme::high_contrast`), and "Reduce
+  transparency" or "Transparency effects" off keep Automatic translucency opaque.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,

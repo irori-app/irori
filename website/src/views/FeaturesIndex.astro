@@ -1,0 +1,53 @@
+---
+import FeatureCard from '../components/FeatureCard.astro'
+import GallerySection from '../components/GallerySection.vue'
+import PageHeader from '../components/PageHeader.astro'
+import Base from '../layouts/Base.astro'
+import { SCREENS, type ScreenId } from '../data/site'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+import { entries, slugOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const features = await entries('features', locale)
+const screens = (Object.keys(SCREENS) as ScreenId[]).map((id) => ({ id, light: SCREENS[id].light, ...t.screens[id] }))
+const crumbs = [{ name: t.nav.features, path: '/features/' }]
+const list = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: features.map((f, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: f.data.title,
+    url: new URL(localePath(locale, `/features/${slugOf(f.id)}/`), Astro.site).href,
+  })),
+}
+---
+
+<Base locale={locale} title={t.features.title} description={t.features.description} path="/features/" crumbs={crumbs} schema={[list]}>
+  <PageHeader locale={locale} crumbs={crumbs} title={t.features.h1} lede={t.features.lede} wall />
+  <section class="gutter mx-auto max-w-7xl">
+    <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((f, i) => (
+          <li>
+            <FeatureCard
+              href={localePath(locale, `/features/${slugOf(f.id)}/`)}
+              tag={f.data.tag}
+              title={f.data.title}
+              summary={f.data.summary}
+              iconName={f.data.icon}
+              delay={i % 3}
+            />
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+  <div class="gutter mx-auto mt-28 max-w-7xl">
+    <GallerySection client:visible screens={screens} labels={t.features.gallery} />
+  </div>
+</Base>

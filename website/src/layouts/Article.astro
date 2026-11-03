@@ -1,0 +1,179 @@
+---
+/**
+ * A long-form page from `src/content/`: breadcrumbs, title, date and reading
+ * time, the Markdown body with a table of contents beside it, related pages and
+ * a closing call to download.
+ */
+import { render, type CollectionEntry } from 'astro:content'
+import Base, { type Crumb } from './Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import DownloadCta from '../components/DownloadCta.astro'
+import { REPO } from '../data/site'
+import { dictionary, format, localePath, type Locale } from '../i18n/config'
+import { slugOf, type Section } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+  section: Section
+  entry: CollectionEntry<Section>
+  /** Pages this one links to at its end, already resolved. */
+  related: { title: string; summary: string; path: string; tag?: string }[]
+  crumbs: Crumb[]
+  schema?: object[]
+  /** The other pages of the section, listed beside the text (docs). */
+  siblings?: { title: string; path: string }[]
+  siblingsLabel?: string
+}
+
+const { locale, section, entry, related, crumbs, schema = [], siblings = [], siblingsLabel = '' } = Astro.props
+const t = dictionary(locale)
+const { Content, headings } = await render(entry)
+const toc = headings.filter((h) => h.depth === 2)
+const words = (entry.body ?? '').split(/\s+/).filter(Boolean).length
+const minutes = Math.max(1, Math.round(words / 220))
+const updated = entry.data.updated
+const dateText = updated.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+const path = `/${section}/${slugOf(entry.id)}/`
+const source = `${REPO}/blob/main/website/src/content/${section}/${entry.id}.md`
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': section === 'guides' ? 'HowTo' : 'TechArticle',
+  ...(section === 'guides' ? { name: entry.data.title } : { headline: entry.data.title }),
+  description: entry.data.description,
+  dateModified: updated.toISOString(),
+  inLanguage: locale,
+  author: { '@type': 'Organization', name: 'Irori', url: 'https://irori.app' },
+}
+---
+
+<Base
+  locale={locale}
+  title={entry.data.seoTitle}
+  description={entry.data.description}
+  path={path}
+  crumbs={crumbs}
+  type="article"
+  schema={[articleSchema, ...schema]}
+>
+  <div class="article-glow" aria-hidden="true"></div>
+  <article class="gutter relative mx-auto max-w-7xl pt-28 sm:pt-32">
+    <header class="rise flex max-w-3xl flex-col gap-5">
+      <Breadcrumbs locale={locale} crumbs={crumbs} />
+      <slot name="tag" />
+      <h1 class="font-display text-[clamp(2.2rem,5vw,3.6rem)] font-bold leading-[1.04] text-paper">{entry.data.title}</h1>
+      <p class="text-lg text-smoke">{entry.data.description}</p>
+      <p class="flex flex-wrap gap-x-4 gap-y-1 font-mono text-sm text-smoke">
+        <time datetime={updated.toISOString()}>{format(t.article.updated, { date: dateText })}</time>
+        <span aria-hidden="true">·</span>
+        <span>{format(t.article.minutes, { count: minutes })}</span>
+      </p>
+    </header>
+
+    <slot name="hero" />
+
+    <div class="mt-14 grid gap-12 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div class="prose rise min-w-0" style="--rise-delay:120ms">
+        <Content />
+        <p class="!mt-12 font-mono text-sm"><a href={source}>{t.article.edit}</a></p>
+      </div>
+      {
+        (toc.length > 1 || siblings.length > 0) && (
+          <aside class="hidden lg:block">
+            <div class="sticky top-28 flex max-h-[calc(100vh-8rem)] flex-col gap-8 overflow-y-auto">
+              {siblings.length > 0 && (
+                <nav aria-label={siblingsLabel} class="flex flex-col gap-2 border-l border-grain pl-5">
+                  <p class="tag">{siblingsLabel}</p>
+                  {siblings.map((page) => (
+                    <a
+                      href={localePath(locale, page.path)}
+                      aria-current={page.path === path ? 'page' : undefined}
+                      class="text-[0.93rem] leading-snug text-smoke transition-colors hover:text-paper aria-[current=page]:font-bold aria-[current=page]:text-flame-text"
+                    >
+                      {page.title}
+                    </a>
+                  ))}
+                </nav>
+              )}
+              {toc.length > 1 && (
+                <nav aria-label={t.article.onThisPage} class="flex flex-col gap-2 border-l border-grain pl-5" data-toc>
+                  <p class="tag">{t.article.onThisPage}</p>
+                  {toc.map((h) => (
+                    <a href={`#${h.slug}`} class="toc-link text-[0.93rem] leading-snug text-smoke transition-colors hover:text-paper">
+                      {h.text}
+                    </a>
+                  ))}
+                </nav>
+              )}
+            </div>
+          </aside>
+        )
+      }
+    </div>
+
+    <slot name="after" />
+
+    {
+      related.length > 0 && (
+        <section class="mt-20" aria-labelledby="related-title">
+          <h2 id="related-title" class="section-title !text-2xl">{t.article.related}</h2>
+          <ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {related.map((page, index) => (
+              <li data-reveal style={`--reveal-delay:${index}`}>
+                <a href={localePath(locale, page.path)} class="card group flex h-full flex-col gap-2 rounded-2xl border border-grain bg-soot/60 p-5 transition-colors hover:border-wood" data-glow>
+                  {page.tag && <span class="tag">{page.tag}</span>}
+                  <span class="font-display text-lg font-bold text-paper">{page.title}</span>
+                  <span class="text-[0.95rem] leading-snug text-smoke">{page.summary}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <section class="cta mt-20 flex flex-col items-start gap-5 overflow-hidden rounded-[1.75rem] border border-grain p-8 sm:p-12" data-reveal>
+      <h2 class="section-title">{t.article.ready}</h2>
+      <p class="max-w-xl text-smoke">{t.article.readyBody}</p>
+      <DownloadCta locale={locale} />
+    </section>
+  </article>
+</Base>
+
+<style>
+  .article-glow {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 34rem;
+    background:
+      radial-gradient(60% 70% at 85% 0%, var(--glow), transparent 70%),
+      radial-gradient(40% 50% at 10% 10%, color-mix(in oklab, var(--tatami) 10%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+  .cta {
+    background:
+      radial-gradient(80% 120% at 100% 100%, var(--glow), transparent 60%),
+      var(--soot);
+  }
+  .toc-link[aria-current='true'] {
+    color: var(--paper);
+    font-weight: 700;
+  }
+</style>
+
+<script>
+  // Marks the table of contents entry for the section being read.
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc] a')]
+  const sections = links.map((a) => document.getElementById(decodeURIComponent(a.hash.slice(1)))).filter(Boolean) as HTMLElement[]
+  if (sections.length) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          links.forEach((a) => a.setAttribute('aria-current', String(a.hash.slice(1) === entry.target.id)))
+        }
+      },
+      { rootMargin: '-20% 0px -70% 0px' },
+    )
+    sections.forEach((s) => observer.observe(s))
+  }
+</script>

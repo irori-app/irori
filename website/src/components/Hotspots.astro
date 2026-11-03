@@ -1,0 +1,218 @@
+---
+/**
+ * A screenshot with numbered points and a list that explains them. Choosing a
+ * point or a line lights that part of the screen; until the visitor chooses,
+ * the tour moves on by itself while it is in view (never with reduced motion).
+ */
+import HearthFrame from './HearthFrame.astro'
+import Screen from './Screen.astro'
+import { TOUR } from '../data/hotspots'
+import { dictionary, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const spots = TOUR.points.map((point, index) => ({ ...point, ...t.hotspots[index]! }))
+---
+
+<div class="tour grid items-start gap-8 lg:grid-cols-[minmax(0,8fr)_minmax(0,4fr)] lg:gap-10" data-tour style={`--hx:${spots[0]!.x}%;--hy:${spots[0]!.y}%`}>
+  <HearthFrame class="min-w-0" data-reveal="scale">
+    <div class="relative">
+      <Screen locale={locale} id={TOUR.screen} sizes="(min-width: 1024px) 62vw, 100vw" />
+      <div class="tour-light pointer-events-none absolute inset-0" aria-hidden="true"></div>
+      {
+        spots.map((spot, index) => (
+          <button
+            type="button"
+            class="tour-spot"
+            style={`left:${spot.x}%;top:${spot.y}%`}
+            data-spot={index}
+            aria-pressed={index === 0 ? 'true' : 'false'}
+            aria-label={`${index + 1}. ${spot.title}`}
+          >
+            <span aria-hidden="true">{index + 1}</span>
+          </button>
+        ))
+      }
+    </div>
+  </HearthFrame>
+  <ol class="flex min-w-0 flex-col gap-1.5" data-reveal>
+    {
+      spots.map((spot, index) => (
+        <li>
+          <button type="button" class="tour-item group" data-item={index} aria-pressed={index === 0 ? 'true' : 'false'}>
+            <span class="tour-num" aria-hidden="true">{index + 1}</span>
+            <span class="flex min-w-0 flex-col">
+              <span class="font-display text-[1.05rem] font-bold leading-snug text-paper">{spot.title}</span>
+              <span class="tour-body text-[0.95rem] leading-relaxed text-smoke"><span>{spot.body}</span></span>
+            </span>
+          </button>
+        </li>
+      ))
+    }
+  </ol>
+</div>
+
+<style>
+  @property --hx {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 50%;
+  }
+  @property --hy {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 50%;
+  }
+  .tour {
+    transition: --hx 700ms var(--ease-out), --hy 700ms var(--ease-out);
+  }
+  .tour-light {
+    background: radial-gradient(circle at var(--hx) var(--hy), transparent 0, transparent 7%, rgb(10 6 4 / 0.42) 17%);
+    opacity: 0;
+    transition: opacity 400ms;
+  }
+  .tour:hover .tour-light,
+  .tour[data-touched] .tour-light,
+  .tour[data-auto] .tour-light {
+    opacity: 1;
+  }
+  .tour-spot {
+    position: absolute;
+    translate: -50% -50%;
+    display: grid;
+    place-items: center;
+    width: clamp(1.6rem, 2.6vw, 2.1rem);
+    height: clamp(1.6rem, 2.6vw, 2.1rem);
+    border-radius: 999px;
+    font-family: var(--font-code);
+    font-size: clamp(0.72rem, 1vw, 0.88rem);
+    font-weight: 500;
+    background: var(--flame);
+    color: var(--flame-ink);
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 6px 18px -4px rgb(0 0 0 / 0.6);
+    transition: scale 250ms var(--ease-out);
+  }
+  .tour-spot::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    border: 2px solid var(--flame);
+    animation: spot-pulse 2.4s var(--ease-out) infinite;
+    pointer-events: none;
+  }
+  .tour-spot:hover,
+  .tour-spot[aria-pressed='true'] {
+    scale: 1.18;
+  }
+  .tour-spot[aria-pressed='false']::after {
+    animation-play-state: paused;
+    opacity: 0;
+  }
+  @keyframes spot-pulse {
+    from { transform: scale(1); opacity: 0.9; }
+    to { transform: scale(2.1); opacity: 0; }
+  }
+  .tour-item {
+    display: flex;
+    width: 100%;
+    gap: 0.9rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 1rem;
+    text-align: left;
+    border: 1px solid transparent;
+    transition: background-color 200ms, border-color 200ms;
+  }
+  .tour-item:hover {
+    background: var(--soot);
+  }
+  .tour-item[aria-pressed='true'] {
+    background: var(--soot);
+    border-color: var(--grain);
+  }
+  .tour-num {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-top: 0.1rem;
+    border-radius: 999px;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    border: 1px solid var(--grain);
+    color: var(--smoke);
+    transition: background-color 200ms, color 200ms;
+  }
+  .tour-item[aria-pressed='true'] .tour-num {
+    background: var(--flame);
+    border-color: var(--flame);
+    color: var(--flame-ink);
+  }
+  /* Only the chosen line shows its text on wide screens; phones show them all. */
+  @media (min-width: 1024px) {
+    .tour-body {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 400ms var(--ease-out), opacity 300ms, margin 400ms;
+    }
+    .tour-body > span {
+      min-height: 0;
+      overflow: hidden;
+    }
+    .tour-item[aria-pressed='true'] .tour-body {
+      grid-template-rows: 1fr;
+      opacity: 1;
+      margin-top: 0.2rem;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-tour]').forEach((tour) => {
+    const spots = [...tour.querySelectorAll<HTMLButtonElement>('[data-spot]')]
+    const items = [...tour.querySelectorAll<HTMLButtonElement>('[data-item]')]
+    let current = 0
+    let timer: number | undefined
+
+    const select = (index: number) => {
+      current = index
+      const spot = spots[index]!
+      tour.style.setProperty('--hx', spot.style.left)
+      tour.style.setProperty('--hy', spot.style.top)
+      spots.forEach((s, i) => s.setAttribute('aria-pressed', String(i === index)))
+      items.forEach((s, i) => s.setAttribute('aria-pressed', String(i === index)))
+    }
+    const stop = () => {
+      window.clearInterval(timer)
+      timer = undefined
+      delete tour.dataset.auto
+    }
+    const choose = (index: number) => {
+      stop()
+      tour.dataset.touched = ''
+      select(index)
+    }
+    spots.forEach((spot, i) => spot.addEventListener('click', () => choose(i)))
+    items.forEach((item, i) => {
+      item.addEventListener('click', () => choose(i))
+      item.addEventListener('mouseenter', () => 'touched' in tour.dataset && select(i))
+    })
+
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    new IntersectionObserver(
+      ([entry]) => {
+        if ('touched' in tour.dataset) return
+        if (entry?.isIntersecting && timer === undefined) {
+          tour.dataset.auto = ''
+          timer = window.setInterval(() => select((current + 1) % spots.length), 4500)
+        } else if (!entry?.isIntersecting) stop()
+      },
+      { threshold: 0.5 },
+    ).observe(tour)
+  })
+</script>
