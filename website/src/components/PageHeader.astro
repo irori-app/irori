@@ -38,6 +38,12 @@ const { locale, crumbs, title, lede, wall = false } = Astro.props
     position: absolute;
     inset: 0;
   }
+  /* On a phone the title needs the whole width; the wall stays on the home page there. */
+  @media (max-width: 639px) {
+    .header-wall {
+      display: none;
+    }
+  }
   .header-shade {
     position: absolute;
     inset: 0;
