@@ -28,6 +28,8 @@ discord-rich-presence = "1.1"
 once_cell.workspace = true
 fuzzy-matcher.workspace = true
 fs4.workspace = true
+dirs.workspace = true
+plist.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

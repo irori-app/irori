@@ -1,0 +1,54 @@
+---
+/** The index of guides or docs: one card per page, in their order. */
+import { ArrowUpRight } from '@lucide/vue'
+import PageHeader from '../components/PageHeader.astro'
+import Base from '../layouts/Base.astro'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+import { entries, slugOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+  section: 'guides' | 'docs'
+}
+const { locale, section } = Astro.props
+const t = dictionary(locale)
+const copy = t[section]
+const list = await entries(section, locale)
+const crumbs = [{ name: t.nav[section], path: `/${section}/` }]
+const names: Record<string, string> = { linux: t.os.linux, macos: t.os.macos, windows: t.os.windows, steamdeck: 'Steam Deck' }
+const itemList = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: list.map((entry, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: entry.data.title,
+    url: new URL(localePath(locale, `/${section}/${slugOf(entry.id)}/`), Astro.site).href,
+  })),
+}
+---
+
+<Base locale={locale} title={copy.title} description={copy.description} path={`/${section}/`} crumbs={crumbs} schema={[itemList]}>
+  <PageHeader locale={locale} crumbs={crumbs} title={copy.h1} lede={copy.lede} />
+  <section class="gutter mx-auto max-w-7xl">
+    <ol class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        list.map((entry, i) => (
+          <li data-reveal style={`--reveal-delay:${i % 3}`}>
+            <a href={localePath(locale, `/${section}/${slugOf(entry.id)}/`)} class="group flex h-full flex-col gap-3 rounded-2xl border border-grain bg-soot/60 p-6 transition-[border-color,transform] duration-300 hover:-translate-y-1 hover:border-wood" data-glow>
+              <span class="font-mono text-sm text-flame-text">{String(i + 1).padStart(2, '0')}</span>
+              <span class="font-display text-xl font-bold leading-tight text-paper">{entry.data.title}</span>
+              <span class="text-[0.97rem] leading-relaxed text-smoke">{entry.data.summary}</span>
+              {'platforms' in entry.data && (
+                <span class="flex flex-wrap gap-1.5">
+                  {(entry.data.platforms as string[]).map((p) => <span class="rounded-full border border-grain px-2 py-0.5 font-mono text-xs text-smoke">{names[p]}</span>)}
+                </span>
+              )}
+              <ArrowUpRight class="mt-auto size-4 text-smoke transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-flame-text" aria-hidden="true" />
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+</Base>

@@ -1005,6 +1005,13 @@ impl InstallSheet {
                     );
             }
             out.push(col.into_any_element());
+        } else if let Some(note) = self
+            .compat
+            .as_ref()
+            .and_then(|c| c.anticheat.as_ref())
+            .and_then(|r| r.online_only_note())
+        {
+            out.push(Alert::info("anticheat-online-only", note).into_any_element());
         }
         out
     }

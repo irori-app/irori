@@ -10,8 +10,10 @@
 //!    bounds how many decoded images stay in GPU/CPU memory.
 //!
 //! Backdrop art also gets an [`Ambient`]: a small pre-blurred copy (a GPU blur
-//! of a full-size image every frame would cost far more) and the colour the
-//! art is mostly made of, which tints the page around it.
+//! of a full-size image every frame would cost far more), the colour the art
+//! is mostly made of, which tints the page around it, and the darkest and
+//! lightest tones of the blurred copy, which let text over it be held legible
+//! ([`crate::components::ArtBackdrop`]).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -71,6 +73,10 @@ pub struct Ambient {
     /// sRGB colour the art is mostly made of: its most common vivid hue, or
     /// its average for art without one.
     pub rgb: [u8; 3],
+    /// The darkest and the lightest pixel of the blurred copy (sRGB), the
+    /// extremes anything drawn over the backdrop can meet.
+    pub darkest: [u8; 3],
+    pub lightest: [u8; 3],
 }
 
 pub struct ArtStore {
@@ -384,6 +390,7 @@ fn write_ambient(source: &Path, image: &Path, rgb_path: &Path) -> Result<Ambient
         .to_rgb8();
     let rgb = dominant_color(&image::imageops::thumbnail(&small, 64, 64));
     let blurred = image::imageops::fast_blur(&small, AMBIENT_BLUR);
+    let (darkest, lightest) = tonal_range(&blurred);
     if let Some(dir) = image.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -393,21 +400,43 @@ fn write_ambient(source: &Path, image: &Path, rgb_path: &Path) -> Result<Ambient
         image::codecs::jpeg::JpegEncoder::new_with_quality(file, 80).encode_image(&blurred)?;
     }
     std::fs::rename(&tmp, image)?;
-    std::fs::write(rgb_path, hex::encode(rgb))?;
+    std::fs::write(rgb_path, hex::encode([rgb, darkest, lightest].concat()))?;
     Ok(Ambient {
         backdrop: image.into(),
         rgb,
+        darkest,
+        lightest,
     })
 }
 
+/// Reads what [`write_ambient`] wrote. Files from before the tonal range was
+/// recorded hold only the colour; they read as missing, so they are made again.
 fn read_ambient(image: &Path, rgb: &Path) -> Option<Ambient> {
     if !image.is_file() {
         return None;
     }
     let bytes = hex::decode(std::fs::read_to_string(rgb).ok()?.trim()).ok()?;
+    let [r, g, b, dr, dg, db, lr, lg, lb]: [u8; 9] = bytes.try_into().ok()?;
     Some(Ambient {
         backdrop: image.into(),
-        rgb: bytes.try_into().ok()?,
+        rgb: [r, g, b],
+        darkest: [dr, dg, db],
+        lightest: [lr, lg, lb],
+    })
+}
+
+/// The pixels of least and greatest luminance.
+fn tonal_range(img: &image::RgbImage) -> ([u8; 3], [u8; 3]) {
+    let luma = |p: &[u8; 3]| 2126 * p[0] as u32 + 7152 * p[1] as u32 + 722 * p[2] as u32;
+    let mut pixels = img.pixels().map(|p| p.0);
+    let Some(first) = pixels.next() else {
+        return ([0; 3], [255; 3]);
+    };
+    pixels.fold((first, first), |(dark, light), p| {
+        (
+            if luma(&p) < luma(&dark) { p } else { dark },
+            if luma(&p) > luma(&light) { p } else { light },
+        )
     })
 }
 
@@ -599,9 +628,38 @@ mod tests {
         let (image, rgb) = (dir.join("a.jpg"), dir.join("a.rgb"));
         let made = write_ambient(&src, &image, &rgb).unwrap();
         assert_eq!(made.rgb, [200, 60, 30]);
+        // JPEG may shift a flat colour by a step or two.
+        for tone in [made.darkest, made.lightest] {
+            assert!(
+                tone.iter()
+                    .zip([200, 60, 30])
+                    .all(|(a, b)| a.abs_diff(b) < 8)
+            );
+        }
         assert_eq!(image::open(&image).unwrap().width(), AMBIENT_WIDTH);
         assert_eq!(read_ambient(&image, &rgb), Some(made));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ambient_written_before_the_tonal_range_is_made_again() {
+        let dir = std::env::temp_dir().join(format!("irori-ambient-old-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (image, rgb) = (dir.join("a.jpg"), dir.join("a.rgb"));
+        std::fs::write(&image, b"jpeg").unwrap();
+        std::fs::write(&rgb, "c83c1e").unwrap();
+        assert_eq!(read_ambient(&image, &rgb), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn tonal_range_finds_the_extremes() {
+        let img = image::RgbImage::from_fn(4, 4, |x, y| match (x, y) {
+            (0, 0) => image::Rgb([250, 250, 240]),
+            (3, 3) => image::Rgb([5, 10, 0]),
+            _ => image::Rgb([90, 120, 60]),
+        });
+        assert_eq!(tonal_range(&img), ([5, 10, 0], [250, 250, 240]));
     }
 
     #[test]

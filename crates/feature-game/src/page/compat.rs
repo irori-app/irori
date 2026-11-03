@@ -41,7 +41,7 @@ fn link(id: &'static str, url: &str, label: impl Into<SharedString>) -> AnyEleme
     }
 }
 
-fn hours(h: Option<f32>) -> String {
+pub(super) fn hours(h: Option<f32>) -> String {
     match h {
         Some(h) if h > 0.0 => {
             t_args("game.compat.hours", &[("hours", &format!("{h:.0}"))]).to_string()
@@ -150,6 +150,9 @@ impl GamePage {
                     .child(format!("{} · {names}", ac.status.label())),
                 cx,
             ));
+            if let Some(note) = ac.online_only_note() {
+                rows.push(div().text_xs().child(note).into_any_element());
+            }
             for (ix, note) in ac.notes.iter().enumerate().take(3) {
                 rows.push(
                     div()

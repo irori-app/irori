@@ -376,10 +376,23 @@ commands without a window.
   `run_automatic_updates`, which keeps to `iroriAutoUpdateFrom`/`Until` and, where the
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
-- **User data:** favourites, hidden games, categories, recents, playtime and art
-  overrides live in `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy
-  on write. Store playtime merges by keeping the larger total and counts games only,
-  never their DLC.
+- **User data:** favourites, hidden games, categories, recents, playtime, play
+  statuses, yearly backlog goals and art overrides live in `state/library.json` behind
+  `RwLock<Arc<UserData>>`, updated copy on write. Store playtime merges by keeping the
+  larger total and counts games only, never their DLC.
+- **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
+  plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
+  sets one automatically. `UserData::effective_status` adds `Played` for games with
+  playtime and no status; filters and stats group by it. Screens show and set it
+  through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
+  screenshots, only read, never moved or removed. A Steam app's folder
+  (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other
+  file (the desktop's screenshot folders, Steam shortcuts' folders) belongs to the
+  session in `sessions.jsonl` it was taken in, by the time in its name or else its
+  modified time. Folder listings are cached in `<cache>/screenshots.json` by the
+  folder's modified time; matching is redone each build. The stats page's Album tab
+  and its insight card show them.
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
@@ -484,10 +497,17 @@ cx.spawn_in(window, async move |this, cx| {
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
   (`glass::resolve`, `Glass::Desktop`).
-- On other Linux desktops the default theme is Irori's own in the desktop's accent colour,
-  where the settings portal has one (`desktop_accent.rs`, `desktop_theme::accented`). This
-  replaces only Irori's accent colours, held legible on its surfaces. A followed desktop's
-  theme and any theme the user picked win; `docs/PLATFORMS.md` lists who offers an accent.
+- Elsewhere the default theme is Irori's own in the system's accent colour: the settings
+  portal's on other Linux desktops, `controlAccentColor` and the highlight colour on macOS,
+  `UISettings` and its shades on Windows (`desktop_accent.rs` and its `macos.rs` and
+  `windows.rs`, `desktop_theme::system_accented`). Every source signals its changes; nothing
+  polls. This replaces only Irori's accent colours, held legible on its surfaces. A followed
+  desktop's theme, any theme the user picked and the `iroriUi.systemAccent` switch win;
+  `docs/PLATFORMS.md` lists who offers an accent.
+- What the system asks for accessibility applies to every theme, a picked one too: macOS
+  "Increase contrast" and Windows high contrast strengthen borders, Windows high contrast
+  replaces the theme with its own colours (`desktop_theme::high_contrast`), and "Reduce
+  transparency" or "Transparency effects" off keep Automatic translucency opaque.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,
@@ -577,6 +597,17 @@ it on every platform, and CI's Windows install test runs it.
   handle them.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it.
+- Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
+  game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
+  controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
+  action list and details), `overlay` (quick menu, uninstall question), `tile`
+  (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  `layout.rs` (sizes from the window size in rem, scrolling); test it there.
+- Shelves, the grid and the page's list scroll by springing one offset toward the
+  focus and build only the items near the view, so nothing animates once the focus
+  rests. `layout::HomeLayout` is the seam for other Home layouts.
+- The Library's search field sits outside the `BigPicture` key context
+  (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
 
 ### 4.8 Engines (emulators)
 
@@ -694,7 +725,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - Irori never handles Battle.net, EA app, Ubisoft Connect or Rockstar accounts. The
   Stores page sets a launcher up once: a prefix of its own (`<prefixes>/<launcher
   name>`) with the Wine build the user picks, and the vendor's official installer
-  (natively on Windows). The user signs in and installs games inside the launcher.
+  (natively on Windows), or "Use an existing install" adopts a prefix that already has
+  it. "Close" stops everything in the launcher's prefix (on Windows, the processes
+  started from its folder); "Remove from Irori" forgets it and leaves the prefix and
+  games on disk. The user signs in and installs games inside the launcher. A Proton
+  prefix keeps `drive_c` in `pfx/`; read the launcher's files there.
 - Games are read from the launcher's local data (`irori-launchers-data`) and listed as
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
@@ -703,6 +738,22 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   while such a game runs, services look every 3 s for processes running from its
   install folder; the session ends when they are gone, or when the launcher exits
   without starting the game. Nothing polls when no launcher game runs.
+- **Rockstar** (`irori_launchers_data::rockstar`): `TITLES` names every Rockstar PC
+  title with its Steam app id (art comes from Steam's CDN) and whether store copies
+  need the launcher. The launcher keeps no readable list of owned titles (its
+  settings and profiles are encrypted; its log lists the whole catalogue), so only
+  installed titles are listed. Signed-in state comes from `launcher.log` and the
+  profile folders in Documents; the account name in that log is never kept.
+- **Store copies that need a launcher.** An Epic Rockstar title (GTA V, RDR2, the
+  Definitive Editions…) launched under Wine without the Rockstar Games Launcher in its
+  prefix fails with `irori_core::LauncherMissing`; the UI
+  (`irori_ui::launcher_problem`) offers to run the vendor's installer in that prefix
+  (`Backend::install_launcher_for`) and then plays. Steam installs the launcher for
+  its own copies.
+- **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
+  anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
+  `online_only`, the install gate lets them through and the game page says which mode
+  is blocked.
 
 ### 4.10 Steam
 

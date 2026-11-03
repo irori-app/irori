@@ -122,13 +122,29 @@ signature changes. A build signed with a Developer ID asks once.
 | Runtimes/data | XDG data / `irori` | `~/Library/Application Support/irori` | LocalAppData / `irori` |
 | Cache | XDG cache / `irori` | `~/Library/Caches/irori` | LocalAppData / `irori` (dirs cache location) |
 | Steam default | `~/.steam/steam` | `~/Library/Application Support/Steam` | ProgramFiles(x86) / `Steam` |
+| Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
-isolated testing. A configured Steam path takes precedence when it exists; otherwise,
-on Linux, Irori uses the first of `~/.steam/steam`, `~/.local/share/Steam`,
-`~/.steam/debian-installation`, Flatpak Steam (`~/.var/app/com.valvesoftware.Steam`,
-`.steam/steam`, `.local/share/Steam` or `data/Steam`) and Snap Steam
-(`~/snap/steam/common/.local/share/Steam`) that has a library.
+isolated testing. A configured Steam path takes precedence when it holds a Steam
+library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
+`~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
+(`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
+`data/Steam`) and Snap Steam (`~/snap/steam/common/.local/share/Steam`), in that order.
+The first that lists its libraries (`steamapps/libraryfolders.vdf`) wins, else the
+first with a library, so the empty `steamapps` a removed native Steam leaves behind
+doesn't hide a Flatpak Steam. Adding games to Steam looks for `userdata` the same way.
+
+The Wine manager installs the Wine and Proton builds it downloads into `<data>/tools/wine`
+and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder set in
+`iroriCompatToolsPath`; "Install Proton downloads into Steam" still sends Proton to Steam's
+`compatibilitytools.d`. Builds stay where they were installed when the folder changes,
+and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
+on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
+
+On Linux, games start with room for 10 GiB of shader cache (`iroriShaderCacheSize`, per
+game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE` for
+NVIDIA and `MESA_SHADER_CACHE_MAX_SIZE` for Mesa. A value already set in Irori's own
+environment or in the game's variables wins.
 
 The Steam library scans that Steam folder and every library in its
 `steamapps/libraryfolders.vdf` for `appmanifest_*.acf` files, skipping Proton, the
@@ -196,6 +212,15 @@ shortcuts use `.desktop`, Finder app bundles, or Windows shell links respectivel
 Windows cancellation uses `taskkill /T /F`; games that deliberately escape their
 launcher process tree still require game-specific testing. External EA/Ubisoft
 launchers may reuse an existing process, which limits playtime tracking.
+
+### Screenshots
+
+The stats page's Album reads screenshots from Steam's
+`userdata/<account>/760/remote/<appid>/screenshots` folders (the app id names the
+game) and from the screenshot folders in the table above, where a file counts for
+the play session it was taken in. Irori never moves, renames or removes them.
+gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
+Steam saves them instead.
 
 ### New versions of Irori
 
@@ -284,6 +309,12 @@ pixels off and `irori_ui::glass` needs to stop.
 
 Irori has been run on KDE Plasma 6.7 (Wayland, and X11 windows under its
 Xwayland). The other rows come from each project's own documentation and source.
+
+Automatic also does as the system asks: it stays opaque while macOS's Accessibility →
+Display → “Reduce transparency” is on, while Windows' Personalization → Colors →
+“Transparency effects” is off (`EnableTransparency`, read as `UISettings`'
+`AdvancedEffectsEnabled`), and in Windows high contrast. Both signal their changes, so the
+window follows at once. Subtle and Strong are the user asking Irori, and stay.
 
 Where nothing blurs, Automatic stays opaque. Subtle and Strong still work
 because a compositor's own rule may add blur (match the app id or window class
@@ -381,7 +412,13 @@ as `kdeglobals` holds the colours from first login on. It can't see the host's
 `/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
 Irori's own theme there.
 
-## Desktop accent colour
+## System accent colour
+
+Wherever Irori doesn't follow a desktop's whole theme, macOS and Windows included, the
+default theme stays Irori's own, in the system's accent colour. Settings → Appearance →
+“Use the system accent color” (`iroriUi.systemAccent`, on by default) turns this off.
+
+### Linux
 
 On a Linux desktop whose whole theme Irori doesn't follow, the default theme stays
 Irori's own, in the desktop's accent colour. Irori asks the XDG settings portal for
@@ -414,6 +451,48 @@ accent that already reads stays exactly as the desktop has it.
 Irori listens for the portal's `SettingChanged` signal, so changes show while it runs and
 nothing polls. The first window waits up to 100 ms for the answer, so a portal that is
 still starting can't hold Irori up; its answer then applies once it comes.
+
+### macOS
+
+Irori reads `NSColor.controlAccentColor` and the highlight colour,
+`selectedTextBackgroundColor`, from System Settings → Appearance. Both are dynamic, so
+each is resolved once in a light and once in a dark appearance (the high-contrast
+appearances while “Increase contrast” is on), and Irori's light and dark themes each get
+their own. Multicolour gives the system blue, as it does to Apple's apps, and Graphite
+grey. The highlight colour becomes the selection colour where Irori's text reads on it;
+selections are painted under the text, as in AppKit.
+
+AppKit posts `NSSystemColorsDidChangeNotification` when either colour changes and
+`NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification` when a display option does.
+Irori observes both on the main thread, so nothing runs between changes.
+
+### Windows
+
+Irori reads the accent from `UISettings.GetColorValue(Accent)` together with Windows' own
+shades of it, `AccentLight1–3` for dark themes and `AccentDark1–3` for light ones, and uses
+the first of them that reads as text on Irori's surfaces: Windows makes its shades for
+this, so the result looks like Windows' own apps (light blue buttons on dark, deep blue on
+light). If none reads, the closest is held legible like any accent.
+
+`UISettings.ColorValuesChanged`, `UISettings.AdvancedEffectsEnabledChanged` and
+`AccessibilitySettings.HighContrastChanged` signal changes on a thread of Windows' own, so
+nothing of Irori's waits between them. “Show accent color on title bars” isn't followed:
+Irori draws its own title bar in the theme's chrome colour.
+
+### Accessibility
+
+What the system asks for accessibility applies to every theme, including one the user
+picked, since it is about being able to see Irori at all:
+
+| Setting | Effect |
+| --- | --- |
+| macOS “Increase contrast” | Borders and dividers held to 3:1 on every surface; accents resolved in the high-contrast appearance |
+| macOS “Reduce transparency” | Automatic translucency stays opaque |
+| Windows high contrast (any contrast theme) | The theme is made of the system's colours (`Window`, `WindowText`, `Highlight`, `HighlightText`, `Hotlight`, `GrayText`, `ButtonFace`, `ButtonText`), with borders in the text colour; the mode follows the contrast theme |
+| Windows “Transparency effects” off | Automatic translucency stays opaque |
+
+Status colours in a high-contrast theme are Windows' console colours, held legible on the
+contrast theme's window colour like any status colour.
 
 ## Verification and remaining machine tests
 

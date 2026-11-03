@@ -357,6 +357,16 @@ impl LibraryView {
                     ),
                 )
             });
+        let status_ids = ids.clone();
+        let status_button = Button::new("bulk-play-status")
+            .small()
+            .outline()
+            .icon(IconName::Flag)
+            .label(irori_ui::play_status::title())
+            .disabled(nothing)
+            .dropdown_menu(move |menu, _, cx| {
+                irori_ui::play_status::menu_many(menu, status_ids.clone(), cx)
+            });
         let favourite = {
             let ids = ids.clone();
             Button::new("bulk-favourite")
@@ -416,6 +426,7 @@ impl LibraryView {
                                 .child(uninstall)
                                 .child(steam)
                                 .child(categories_button)
+                                .child(status_button)
                                 .child(favourite)
                                 .child(hide)
                         })

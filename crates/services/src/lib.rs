@@ -21,6 +21,8 @@ mod hooks;
 mod inhibit;
 mod library;
 mod network;
+pub mod play_status;
+pub mod screenshots;
 pub mod scripts;
 pub mod sessions;
 pub mod settings;
@@ -48,6 +50,8 @@ pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
+pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
 pub use settings::SettingsService;
@@ -285,6 +289,11 @@ impl Backend {
                         tokio::time::sleep(Duration::from_millis(30)).await;
                         while rx.try_recv().is_ok() {}
                         b.rebuild_library();
+                    }
+                    Ok(Event::WineVersionsChanged) => {
+                        let b = b.clone();
+                        b.clone()
+                            .spawn(async move { b.forget_present_wine_updates().await });
                     }
                     Ok(Event::SettingsChanged) => {
                         let app = b.settings.app();

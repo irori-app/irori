@@ -436,12 +436,14 @@ impl FieldSpec {
                     | "iroriXessUpgrade"
                     | "downloadProtonToSteam"
                     | "showValveProton"
+                    | "iroriShaderCacheSize"
             )
         {
             return false;
         }
         host != HostPlatform::Windows
             || (self.section != FieldSection::Wine
+                && self.path != "iroriCompatToolsPath"
                 && !matches!(self.path, "showFps" | "enableDXVKFpsLimit" | "DXVKFpsCap"))
     }
 
@@ -1220,6 +1222,15 @@ pub static FIELDS: &[FieldSpec] = &[
         "cosmic",
     ]),
     app(
+        "iroriUi.systemAccent",
+        "settings.field.ui_system_accent.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_system_accent.help")
+    .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
+    app(
         "iroriUi.translucency",
         "settings.field.ui_translucency.label",
         Appearance,
@@ -1357,6 +1368,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_valve_proton.help")
     .keywords(&["proton", "valve", "steam"]),
+    app(
+        "iroriCompatToolsPath",
+        "settings.field.compat_tools_path.label",
+        Advanced,
+        "settings.group.wine",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.compat_tools_path.help")
+    .keywords(&["proton", "wine", "download", "folder", "path", "ge-proton"]),
     app(
         "downloadProtonToSteam",
         "settings.field.download_proton_to_steam.label",
@@ -1714,6 +1734,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.nvidia_prime.help")
     .keywords(&["prime", "optimus", "dgpu", "nvidia", "hybrid"]),
+    game(
+        "iroriShaderCacheSize",
+        "settings.field.shader_cache_size.label",
+        Performance,
+        "settings.group.system",
+        Text(TextKind::Number { min: 0, max: 1024 }),
+    )
+    .help("settings.field.shader_cache_size.help")
+    .keywords(&["shader", "cache", "stutter", "nvidia", "mesa", "gl"]),
     game(
         "enableDXVKFpsLimit",
         "settings.field.enable_dxvk_fps_limit.label",
