@@ -290,6 +290,8 @@
   "game.logs.empty": "Încă nu există jurnal. Va fi scris data viitoare când pornește jocul.",
   "game.logs.errors_only": "Erori și avertismente",
   "game.logs.follow": "Urmărește",
+  "game.logs.filter": "Filtrează rândurile",
+  "game.logs.hide_matching": "Ascunde rândurile care se potrivesc",
   "game.logs.link_copied": "Link copiat",
   "game.logs.open": "Deschide",
   "game.logs.open_in_editor": "Deschide în editor",

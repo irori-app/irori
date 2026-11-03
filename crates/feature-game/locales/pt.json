@@ -290,6 +290,8 @@
   "game.logs.empty": "Ainda não há registo. Será escrito da próxima vez que o jogo iniciar.",
   "game.logs.errors_only": "Erros e avisos",
   "game.logs.follow": "Acompanhar",
+  "game.logs.filter": "Filtrar linhas",
+  "game.logs.hide_matching": "Ocultar as linhas correspondentes",
   "game.logs.link_copied": "Ligação copiada",
   "game.logs.open": "Abrir",
   "game.logs.open_in_editor": "Abrir no editor",

@@ -290,6 +290,8 @@
   "game.logs.empty": "Журнала пока нет. Он будет записан при следующем запуске игры.",
   "game.logs.errors_only": "Ошибки и предупреждения",
   "game.logs.follow": "Следить",
+  "game.logs.filter": "Фильтр строк",
+  "game.logs.hide_matching": "Скрыть совпадающие строки",
   "game.logs.link_copied": "Ссылка скопирована",
   "game.logs.open": "Открыть",
   "game.logs.open_in_editor": "Открыть в редакторе",

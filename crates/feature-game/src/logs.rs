@@ -1,6 +1,6 @@
 //! Game log viewer: a virtualized tail of the last session's log with
-//! refresh, follow, copy, "open in editor" and upload (with the list of
-//! recent uploads).
+//! refresh, follow, a text filter (keeping or hiding the matching lines),
+//! copy, "open in editor" and upload (with the list of recent uploads).
 
 use std::collections::HashSet;
 use std::ops::Range;
@@ -12,15 +12,17 @@ use std::time::Duration;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, VirtualListScrollHandle,
-    WindowExt as _, h_flex, v_flex, v_virtual_list,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _,
+    VirtualListScrollHandle, WindowExt as _, h_flex, v_flex, v_virtual_list,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, ClipboardItem, Context, InteractiveElement as _, IntoElement,
-    ParentElement, Pixels, Render, SharedString, Size, Styled, Task, Window, div, px, rems, size,
+    App, AppContext as _, ClipboardItem, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement, Pixels, Render, SharedString, Size, Styled, Subscription, Task, Window, div, px,
+    rems, size,
 };
 use irori_core::GameId;
 use irori_extras::logs::{self as log_uploads, UploadedLog};
@@ -84,6 +86,27 @@ pub fn parse_tail(text: &str, started_mid_file: bool, max: usize) -> LogTail {
             .collect(),
         truncated,
     }
+}
+
+/// Indices of the lines to show: warnings and errors only when
+/// `errors_only`, then those containing `query` (ignoring case), or with
+/// `hide_matching` those that don't. An empty query keeps every line.
+pub fn visible_lines(
+    lines: &[(LineLevel, SharedString)],
+    errors_only: bool,
+    query: &str,
+    hide_matching: bool,
+) -> Vec<usize> {
+    let query = query.trim().to_lowercase();
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(_, (level, _))| !errors_only || *level != LineLevel::Info)
+        .filter(|(_, (_, text))| {
+            query.is_empty() || text.to_lowercase().contains(&query) != hide_matching
+        })
+        .map(|(ix, _)| ix)
+        .collect()
 }
 
 /// "Uploaded 5 minutes ago" for an upload at `uploaded_at` (unix seconds).
@@ -150,6 +173,9 @@ pub struct LogViewer {
     deleting: HashSet<String>,
     tail: Load<Option<Arc<LogTail>>>,
     errors_only: bool,
+    query: Entity<InputState>,
+    /// Hide the lines matching the query instead of keeping only them.
+    hide_matching: bool,
     follow: bool,
     /// Indices into `tail.lines` currently shown.
     visible: Rc<Vec<usize>>,
@@ -157,6 +183,7 @@ pub struct LogViewer {
     sized_for: (usize, Pixels),
     scroll: VirtualListScrollHandle,
     _refresh: Task<()>,
+    _subscriptions: Vec<Subscription>,
 }
 
 /// Open the log of a game's last session in a sheet.
@@ -196,6 +223,13 @@ impl LogViewer {
                 cx.background_executor().timer(REFRESH_EVERY).await;
             }
         });
+        let query = cx.new(|cx| InputState::new(window, cx).placeholder(t("game.logs.filter")));
+        let filter = cx.subscribe(&query, |this: &mut Self, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                this.rebuild_visible(cx);
+                cx.notify();
+            }
+        });
         Self {
             path,
             upload_name: None,
@@ -204,12 +238,15 @@ impl LogViewer {
             deleting: HashSet::new(),
             tail: Load::Loading,
             errors_only: false,
+            query,
+            hide_matching: false,
             follow: true,
             visible: Rc::new(Vec::new()),
             sizes: Rc::new(Vec::new()),
             sized_for: (usize::MAX, px(0.)),
             scroll: VirtualListScrollHandle::new(),
             _refresh: refresh,
+            _subscriptions: vec![filter],
         }
     }
 
@@ -404,7 +441,7 @@ impl LogViewer {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.tail = Load::from_result(result.map(|t| t.map(Arc::new)));
-                this.rebuild_visible();
+                this.rebuild_visible(cx);
                 if this.follow {
                     this.scroll.scroll_to_bottom();
                 }
@@ -414,21 +451,20 @@ impl LogViewer {
         .detach();
     }
 
-    fn rebuild_visible(&mut self) {
+    fn rebuild_visible(&mut self, cx: &App) {
         let lines = self
             .tail
             .ready()
             .and_then(|t| t.as_ref())
             .map(|t| t.lines.as_slice())
             .unwrap_or_default();
-        self.visible = Rc::new(
-            lines
-                .iter()
-                .enumerate()
-                .filter(|(_, (lvl, _))| !self.errors_only || *lvl != LineLevel::Info)
-                .map(|(ix, _)| ix)
-                .collect(),
-        );
+        let query = self.query.read(cx).value();
+        self.visible = Rc::new(visible_lines(
+            lines,
+            self.errors_only,
+            &query,
+            self.hide_matching,
+        ));
         self.sized_for = (usize::MAX, px(0.));
     }
 
@@ -599,7 +635,32 @@ impl Render for LogViewer {
                                 .label(t("game.logs.show_folder"))
                                 .on_click(move |_, window, cx| open_path(dir.clone(), window, cx)),
                         )
-                    })
+                    }),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .flex_wrap()
+                    .items_center()
+                    .child(
+                        Input::new(&self.query)
+                            .id("log-filter")
+                            .aria_label(t("game.logs.filter"))
+                            .prefix(Icon::new(IconName::Search).small())
+                            .cleanable(true)
+                            .small()
+                            .w_64(),
+                    )
+                    .child(
+                        Checkbox::new("log-hide-matching")
+                            .label(t("game.logs.hide_matching"))
+                            .checked(self.hide_matching)
+                            .on_change(cx.listener(|this, v: &bool, _, cx| {
+                                this.hide_matching = *v;
+                                this.rebuild_visible(cx);
+                                cx.notify();
+                            })),
+                    )
                     .child(div().flex_1())
                     .child(
                         Checkbox::new("log-errors-only")
@@ -607,7 +668,7 @@ impl Render for LogViewer {
                             .checked(self.errors_only)
                             .on_change(cx.listener(|this, v: &bool, _, cx| {
                                 this.errors_only = *v;
-                                this.rebuild_visible();
+                                this.rebuild_visible(cx);
                                 cx.notify();
                             })),
                     )
@@ -668,6 +729,25 @@ mod tests {
         assert_eq!(LineLevel::of("err:module:load failed"), LineLevel::Error);
         assert_eq!(LineLevel::of("WARN something"), LineLevel::Warning);
         assert_eq!(LineLevel::of("Started"), LineLevel::Info);
+    }
+
+    #[test]
+    fn filters_lines_by_text() {
+        let lines = parse_tail(
+            "Descriptor heap\nerr: descriptor lost\nStarted\nwarn: slow",
+            false,
+            10,
+        )
+        .lines;
+        assert_eq!(visible_lines(&lines, false, "", false), vec![0, 1, 2, 3]);
+        assert_eq!(
+            visible_lines(&lines, false, "DESCRIPTOR", false),
+            vec![0, 1]
+        );
+        assert_eq!(visible_lines(&lines, false, "descriptor", true), vec![2, 3]);
+        assert_eq!(visible_lines(&lines, true, "descriptor", false), vec![1]);
+        assert_eq!(visible_lines(&lines, true, "descriptor", true), vec![3]);
+        assert_eq!(visible_lines(&lines, false, "  ", true), vec![0, 1, 2, 3]);
     }
 
     #[test]

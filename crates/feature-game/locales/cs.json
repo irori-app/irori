@@ -290,6 +290,8 @@
   "game.logs.empty": "Zatím žádný protokol. Zapíše se při příštím spuštění hry.",
   "game.logs.errors_only": "Chyby a varování",
   "game.logs.follow": "Sledovat",
+  "game.logs.filter": "Filtrovat řádky",
+  "game.logs.hide_matching": "Skrýt odpovídající řádky",
   "game.logs.link_copied": "Odkaz zkopírován",
   "game.logs.open": "Otevřít",
   "game.logs.open_in_editor": "Otevřít v editoru",

@@ -290,6 +290,8 @@
   "game.logs.empty": "Nog geen logboek. Het wordt aangemaakt wanneer de game de volgende keer start.",
   "game.logs.errors_only": "Fouten en waarschuwingen",
   "game.logs.follow": "Volgen",
+  "game.logs.filter": "Regels filteren",
+  "game.logs.hide_matching": "Overeenkomende regels verbergen",
   "game.logs.link_copied": "Link gekopieerd",
   "game.logs.open": "Openen",
   "game.logs.open_in_editor": "Openen in editor",
