@@ -53,6 +53,12 @@ impl EpicStore {
         if let (Some(wine), true) = (&request.environment.wine, needs_wine) {
             self.first_launch_setup(&game, &installed, request, Some(wine), ctx)
                 .await;
+            if !installed.third_party
+                && let Some(missing) =
+                    crate::rockstar::launcher_missing(&game, &installed.executable, wine)
+            {
+                return Err(missing.into());
+            }
             wrapper_exe = self.install_fake_exe(wine, &env).await;
             if wine.uses_umu
                 && env.get("GAMEID").is_none_or(|g| g == "umu-0")

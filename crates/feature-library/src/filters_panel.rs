@@ -5,8 +5,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
+    h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -15,8 +15,9 @@ use gpui_kit::{
     Styled as _, Subscription, Task, WeakEntity, Window, div,
 };
 use irori_core::InstallPlatform;
+use irori_services::EffectiveStatus;
 use irori_ui::i18n::{t, t_args};
-use irori_ui::models;
+use irori_ui::{models, play_status};
 
 use crate::filter::{self, CategoryFilter, HiddenMode, InstallFilter, ReleaseWindow, ViewFilter};
 
@@ -237,6 +238,39 @@ impl FiltersPanel {
     }
 }
 
+impl FiltersPanel {
+    /// One chip per play status; several may be picked.
+    fn render_statuses(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(section(t("library.filters.section.play_status")))
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .children(EffectiveStatus::ALL.into_iter().map(|status| {
+                        Button::new(SharedString::from(format!("play-status-{status:?}")))
+                            .xsmall()
+                            .outline()
+                            .icon(Icon::new(play_status::icon(status)))
+                            .label(play_status::label(status))
+                            .selected(f.statuses.contains(&status))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.set(
+                                    move |f| {
+                                        if !f.statuses.remove(&status) {
+                                            f.statuses.insert(status);
+                                        }
+                                    },
+                                    cx,
+                                )
+                            }))
+                    })),
+            )
+            .into_any_element()
+    }
+}
+
 impl Render for FiltersPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let f = self.model.read(cx).filter().clone();
@@ -385,6 +419,7 @@ impl Render for FiltersPanel {
                             })),
                     ),
             )
+            .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))
             .child(
                 v_flex()

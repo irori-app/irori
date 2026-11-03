@@ -62,6 +62,36 @@ pub fn steam_dir() -> PathBuf {
     }
 }
 
+/// Where Steam keeps its files on Linux under `home`, most common first:
+/// native, Flatpak (old and new layouts) and Snap.
+pub fn linux_steam_dirs(home: &Path) -> Vec<PathBuf> {
+    let flatpak = home.join(".var/app/com.valvesoftware.Steam");
+    vec![
+        home.join(".steam/steam"),
+        home.join(".local/share/Steam"),
+        home.join(".steam/debian-installation"),
+        flatpak.join(".steam/steam"),
+        flatpak.join(".local/share/Steam"),
+        flatpak.join("data/Steam"),
+        home.join("snap/steam/common/.local/share/Steam"),
+    ]
+}
+
+/// The Linux Steam under `home` whose files have `marker` (`steamapps`,
+/// `userdata`). One that lists its libraries wins over one that doesn't:
+/// a native Steam that was removed for the Flatpak often leaves an empty
+/// `~/.steam/steam/steamapps` behind.
+pub fn find_linux_steam(home: &Path, marker: &str) -> Option<PathBuf> {
+    let dirs: Vec<PathBuf> = linux_steam_dirs(home)
+        .into_iter()
+        .filter(|d| d.join(marker).is_dir())
+        .collect();
+    dirs.iter()
+        .find(|d| d.join("steamapps/libraryfolders.vdf").is_file())
+        .or_else(|| dirs.first())
+        .cloned()
+}
+
 /// Whether Irori runs inside Steam's controller interface: the Steam Deck's
 /// Game Mode (a gamescope session) or Steam Big Picture, which marks the
 /// programs it starts with `SteamGamepadUI=1`.

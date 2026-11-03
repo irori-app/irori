@@ -12,6 +12,7 @@ irori-core.workspace = true
 irori-epic-api.workspace = true
 irori-secrets.workspace = true
 irori-depot.workspace = true
+irori-launchers-data.workspace = true
 time.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true

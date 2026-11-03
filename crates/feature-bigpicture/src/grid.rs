@@ -31,6 +31,11 @@ impl FocusGrid {
         (len > 0).then(|| (self.row, self.col(self.row).min(len - 1)))
     }
 
+    /// The column `row` remembers (its focus when it last had it).
+    pub fn column(&self, row: usize) -> usize {
+        self.col(row)
+    }
+
     fn col(&self, row: usize) -> usize {
         self.cols.get(row).copied().unwrap_or(0)
     }

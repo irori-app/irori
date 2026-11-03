@@ -3,17 +3,21 @@
 //! [`ViewFilter`] is what the toolbar and the Filters popover edit. It maps onto
 //! [`irori_services::LibraryFilter`] for the heavy lifting and adds what the
 //! service filter cannot express (several categories at once, an
-//! "Uncategorized" choice, hiding games whose files are missing). The result
+//! "Uncategorized" choice, play statuses, hiding games whose files are
+//! missing). The result
 //! is cached by library revision, user-data identity, update-set identity,
 //! availability identity and filter, so rendering never refilters an
-//! unchanged library.
+//! unchanged library. Grouping by play status reorders that result into
+//! sections ([`StatusGroup`]) in the same pass.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use irori_core::{GameId, GameInfo, InstallPlatform, Paths, Runner, ShownStores, json_store};
-use irori_services::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData};
+use irori_services::{
+    EffectiveStatus, LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData,
+};
 use irori_ui::i18n::{t, t_args};
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +67,63 @@ impl ReleaseWindow {
         })
         .to_string()
     }
+}
+
+/// How the shown games are split into sections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Grouping {
+    /// One list in the chosen order.
+    #[default]
+    None,
+    /// A section per play status, in [`GROUP_ORDER`]; the chosen order holds
+    /// within each.
+    Status,
+}
+
+/// Order of the play-status sections: what to pick up next first (games
+/// being played, paused, planned), then the rest of the backlog, finished
+/// and dropped games last. Stats charts use their own order
+/// ([`EffectiveStatus::ALL`]).
+pub const GROUP_ORDER: [EffectiveStatus; 7] = [
+    EffectiveStatus::Playing,
+    EffectiveStatus::OnHold,
+    EffectiveStatus::PlanToPlay,
+    EffectiveStatus::Played,
+    EffectiveStatus::NotPlayed,
+    EffectiveStatus::Beaten,
+    EffectiveStatus::Abandoned,
+];
+
+/// One section of a grouped list: the games at `range` of the shown list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusGroup {
+    pub status: EffectiveStatus,
+    pub range: std::ops::Range<usize>,
+}
+
+/// Reorder `games` into play-status sections (stable, so the chosen order
+/// holds within each) and return the non-empty sections.
+pub fn group_by_status(games: &mut [Arc<GameInfo>], user: &UserData) -> Vec<StatusGroup> {
+    let rank = |status: EffectiveStatus| {
+        GROUP_ORDER
+            .iter()
+            .position(|s| *s == status)
+            .unwrap_or(GROUP_ORDER.len())
+    };
+    games.sort_by_cached_key(|g| rank(user.effective_status(&g.id().key())));
+    let mut groups: Vec<StatusGroup> = Vec::new();
+    for (ix, game) in games.iter().enumerate() {
+        let status = user.effective_status(&game.id().key());
+        match groups.last_mut() {
+            Some(group) if group.status == status => group.range.end = ix + 1,
+            _ => groups.push(StatusGroup {
+                status,
+                range: ix..ix + 1,
+            }),
+        }
+    }
+    groups
 }
 
 /// How hidden games are treated.
@@ -159,8 +220,14 @@ pub struct ViewFilter {
     /// Emulated games of these systems only (systems catalog ids); empty
     /// shows every game.
     pub systems: BTreeSet<String>,
+    /// Games in any of these play statuses (as stats count them: a game
+    /// without one is played or not played); empty shows every game.
+    pub statuses: BTreeSet<EffectiveStatus>,
     pub sort: LibrarySort,
     pub descending: bool,
+    /// Sections the list is split into. Like sorting, it orders rather than
+    /// narrows, so filter resets keep it.
+    pub group: Grouping,
 }
 
 impl ViewFilter {
@@ -179,6 +246,7 @@ impl ViewFilter {
             !self.categories.is_empty(),
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
+            !self.statuses.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -194,6 +262,7 @@ impl ViewFilter {
             account: self.account.take(),
             sort: self.sort,
             descending: self.descending,
+            group: self.group,
             ..Default::default()
         };
     }
@@ -272,6 +341,14 @@ impl ViewFilter {
                 .systems
                 .iter()
                 .map(|id| irori_engines::systems::get(id).map_or(id.as_str(), |s| s.short.as_str()))
+                .collect();
+            out.push(names.join(&t("library.filter.list_separator")));
+        }
+        if !self.statuses.is_empty() {
+            let names: Vec<String> = self
+                .statuses
+                .iter()
+                .map(|s| irori_ui::play_status::label(*s).to_string())
                 .collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
@@ -439,6 +516,13 @@ pub fn apply(
                 .is_some_and(|s| filter.systems.contains(s))
         });
     }
+    if !filter.statuses.is_empty() {
+        games.retain(|g| {
+            filter
+                .statuses
+                .contains(&user.effective_status(&g.id().key()))
+        });
+    }
     if filter.hide_unavailable && !missing.is_empty() {
         games.retain(|g| !missing.contains(&g.id()));
     }
@@ -459,12 +543,14 @@ struct CacheKey {
     filter: ViewFilter,
 }
 
-/// The filtered, sorted game list for one set of inputs, with an index from
-/// game identity to position (keyboard focus is kept by identity).
+/// The filtered, sorted game list for one set of inputs, with its
+/// play-status sections when grouped and an index from game identity to
+/// position (keyboard focus is kept by identity).
 #[derive(Default)]
 pub struct FilteredGames {
     key: Option<CacheKey>,
     games: Arc<[Arc<GameInfo>]>,
+    groups: Arc<[StatusGroup]>,
     positions: HashMap<GameId, usize>,
     recomputes: usize,
 }
@@ -491,14 +577,24 @@ impl FilteredGames {
             filter: filter.clone(),
         };
         if self.key.as_ref() != Some(&key) {
-            let games: Arc<[Arc<GameInfo>]> =
-                apply(filter, stores, library, user, updates, missing).into();
+            let mut games = apply(filter, stores, library, user, updates, missing);
+            self.groups = match filter.group {
+                Grouping::None => Arc::from(Vec::new()),
+                Grouping::Status => group_by_status(&mut games, user).into(),
+            };
+            let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
             self.games = games;
             self.key = Some(key);
             self.recomputes += 1;
         }
         self.games.clone()
+    }
+
+    /// Play-status sections of the last computed list; empty when it is not
+    /// grouped.
+    pub fn groups(&self) -> Arc<[StatusGroup]> {
+        self.groups.clone()
     }
 
     /// Position of a game in the last computed list.
@@ -579,6 +675,46 @@ pub(crate) mod tests {
         assert_eq!(f.hidden, HiddenMode::Hide);
         f.clear_all();
         assert!(!f.is_narrowed());
+    }
+
+    #[test]
+    fn filters_by_play_status_counting_untouched_games_as_not_played() {
+        use irori_services::PlayStatus;
+        let library = sample();
+        let mut user = UserData::default();
+        user.play_status.insert(
+            "legendary:b".into(),
+            irori_services::PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "2026-10-01T10:00:00Z".into(),
+            },
+        );
+        user.playtime.insert(
+            "gog:1".into(),
+            irori_core::game::PlaytimeRecord {
+                total_minutes: 90,
+                ..Default::default()
+            },
+        );
+        let shown = |statuses: &[EffectiveStatus]| {
+            let f = ViewFilter {
+                statuses: statuses.iter().copied().collect(),
+                ..Default::default()
+            };
+            assert_eq!(f.active_count(), usize::from(!statuses.is_empty()));
+            let games = apply(&f, &[], &library, &user, &HashSet::new(), &HashSet::new());
+            titles(&games)
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shown(&[EffectiveStatus::Beaten]), ["Hades"]);
+        assert_eq!(shown(&[EffectiveStatus::Played]), ["The Witcher 3"]);
+        assert_eq!(
+            shown(&[EffectiveStatus::NotPlayed, EffectiveStatus::Beaten]),
+            ["Alan Wake", "Hades", "Itch game"]
+        );
+        assert_eq!(shown(&[]).len(), 4);
     }
 
     #[test]
@@ -820,6 +956,114 @@ pub(crate) mod tests {
         assert_eq!(cache.recomputes(), 4);
         assert_eq!(c.len(), 3);
         assert_eq!(cache.position(&GameId::new(Runner::Legendary, "a")), None);
+    }
+
+    #[test]
+    fn groups_by_play_status_keeping_the_order_within_each() {
+        use irori_services::{PlayStatus, PlayStatusRecord};
+        let lib = snapshot(vec![
+            game(Runner::Gog, "1", "Alan Wake", true),
+            game(Runner::Gog, "2", "Celeste", true),
+            game(Runner::Gog, "3", "Hades", true),
+            game(Runner::Gog, "4", "Inside", false),
+            game(Runner::Gog, "5", "Outer Wilds", true),
+            game(Runner::Gog, "6", "Tunic", true),
+        ]);
+        let mut user = UserData::default();
+        let mut set = |app: &str, status| {
+            user.play_status.insert(
+                format!("gog:{app}"),
+                PlayStatusRecord {
+                    status,
+                    since: "2026-10-01T10:00:00Z".into(),
+                },
+            );
+        };
+        set("6", PlayStatus::Playing);
+        set("2", PlayStatus::Playing);
+        set("3", PlayStatus::Beaten);
+        set("5", PlayStatus::PlanToPlay);
+        user.playtime.insert(
+            "gog:4".into(),
+            irori_core::game::PlaytimeRecord {
+                total_minutes: 30,
+                ..Default::default()
+            },
+        );
+        let user = Arc::new(user);
+        let none = Arc::new(HashSet::new());
+        let mut cache = FilteredGames::default();
+        let mut f = ViewFilter {
+            group: Grouping::Status,
+            ..Default::default()
+        };
+
+        let games = cache.get(&f, &[], &lib, &user, &none, &none);
+        // Playing, then Plan to play, Played and Not played, finished last;
+        // titles stay A–Z inside each section and empty sections are left out.
+        assert_eq!(
+            titles(&games),
+            [
+                "Celeste",
+                "Tunic",
+                "Outer Wilds",
+                "Inside",
+                "Alan Wake",
+                "Hades"
+            ]
+        );
+        let sections: Vec<_> = cache
+            .groups()
+            .iter()
+            .map(|g| (g.status, g.range.clone()))
+            .collect();
+        assert_eq!(
+            sections,
+            [
+                (EffectiveStatus::Playing, 0..2),
+                (EffectiveStatus::PlanToPlay, 2..3),
+                (EffectiveStatus::Played, 3..4),
+                (EffectiveStatus::NotPlayed, 4..5),
+                (EffectiveStatus::Beaten, 5..6),
+            ]
+        );
+        // Focus follows the grouped order.
+        assert_eq!(cache.position(&GameId::new(Runner::Gog, "6")), Some(1));
+        assert_eq!(cache.position(&GameId::new(Runner::Gog, "3")), Some(5));
+
+        // Grouping is derived with the list: drawing again changes nothing.
+        cache.get(&f, &[], &lib, &user, &none, &none);
+        assert_eq!(cache.recomputes(), 1);
+
+        // Reversing reverses inside each section, not the sections.
+        f.descending = true;
+        let games = cache.get(&f, &[], &lib, &user, &none, &none);
+        assert_eq!(
+            titles(&games),
+            [
+                "Tunic",
+                "Celeste",
+                "Outer Wilds",
+                "Inside",
+                "Alan Wake",
+                "Hades"
+            ]
+        );
+
+        // Filters narrow the sections; resetting them keeps the grouping.
+        f.install = InstallFilter::Installed;
+        f.reset_filters();
+        assert_eq!(f.group, Grouping::Status);
+        assert_eq!(f.active_count(), 0);
+        f.statuses = [EffectiveStatus::Beaten].into();
+        cache.get(&f, &[], &lib, &user, &none, &none);
+        assert_eq!(cache.groups().len(), 1);
+
+        // Ungrouped lists have no sections.
+        f.group = Grouping::None;
+        f.statuses.clear();
+        cache.get(&f, &[], &lib, &user, &none, &none);
+        assert!(cache.groups().is_empty());
     }
 
     #[test]

@@ -11,6 +11,23 @@ pub fn tools_dir() -> PathBuf {
     Paths::get().tools_dir()
 }
 
+/// The folder the user chose for downloaded Wine and Proton builds, if any.
+fn compat_tools_root(app: &AppSettings) -> Option<PathBuf> {
+    let configured = app.compat_tools_path.trim();
+    (!configured.is_empty()).then(|| irori_core::paths::expand_home(configured))
+}
+
+/// Where the Wine manager installs the Wine builds it downloads.
+pub fn wine_downloads_dir(app: &AppSettings) -> PathBuf {
+    compat_tools_root(app).map_or_else(|| Paths::get().wine_dir(), |root| root.join("wine"))
+}
+
+/// Where the Wine manager installs the Proton builds it downloads, unless
+/// they go into Steam.
+pub fn proton_downloads_dir(app: &AppSettings) -> PathBuf {
+    compat_tools_root(app).map_or_else(|| Paths::get().proton_dir(), |root| root.join("proton"))
+}
+
 /// `<data>/tools/runtimes`: umu, EAC and BattlEye runtimes.
 pub fn runtimes_dir() -> PathBuf {
     tools_dir().join("runtimes")
@@ -88,40 +105,24 @@ pub fn crossover_bottles_dir(app: &AppSettings) -> PathBuf {
 }
 
 /// The Steam installation: the configured path (quotes removed, `~`
-/// expanded) when it exists, else on Linux the first native, Flatpak or Snap
-/// Steam with a library, else the platform's default.
+/// expanded) when it holds a Steam library, else on Linux the native,
+/// Flatpak or Snap Steam with one, else the platform's default.
+///
+/// The setting starts out as the platform's default folder, so a folder that
+/// merely exists there must not hide a Flatpak Steam.
 pub fn steam_path(app: &AppSettings) -> PathBuf {
     let configured = app.default_steam_path.replace('\'', "");
     if !configured.trim().is_empty() {
         let p = irori_core::paths::expand_home(configured.trim());
-        if p.exists() {
+        if p.join("steamapps").is_dir() {
             return p;
         }
     }
     if !cfg!(target_os = "linux") {
         return irori_core::platform::steam_dir();
     }
-    // Every place a Linux Steam installs to: native, Flatpak (old and new
-    // layouts) and Snap. The first with a library wins.
-    let home = home();
-    linux_steam_dirs(&home)
-        .into_iter()
-        .find(|p| p.join("steamapps").is_dir())
+    irori_core::platform::find_linux_steam(&home(), "steamapps")
         .unwrap_or_else(irori_core::platform::steam_dir)
-}
-
-/// Where Steam keeps its files on Linux, most common first.
-fn linux_steam_dirs(home: &std::path::Path) -> Vec<PathBuf> {
-    let flatpak = home.join(".var/app/com.valvesoftware.Steam");
-    vec![
-        home.join(".steam/steam"),
-        home.join(".local/share/Steam"),
-        home.join(".steam/debian-installation"),
-        flatpak.join(".steam/steam"),
-        flatpak.join(".local/share/Steam"),
-        flatpak.join("data/Steam"),
-        home.join("snap/steam/common/.local/share/Steam"),
-    ]
 }
 
 /// Value for `STEAM_COMPAT_CLIENT_INSTALL_PATH`.
@@ -148,16 +149,26 @@ pub fn canonical(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn finds_steam_installed_as_a_snap() {
         let home = tempfile::tempdir().unwrap();
         let snap = home.path().join("snap/steam/common/.local/share/Steam");
         std::fs::create_dir_all(snap.join("steamapps")).unwrap();
-        let found = linux_steam_dirs(home.path())
-            .into_iter()
-            .find(|p| p.join("steamapps").is_dir());
+        let found = irori_core::platform::find_linux_steam(home.path(), "steamapps");
         assert_eq!(found, Some(snap));
+    }
+
+    #[test]
+    fn a_flatpak_steam_wins_over_an_empty_native_folder() {
+        let home = tempfile::tempdir().unwrap();
+        let native = home.path().join(".steam/steam");
+        std::fs::create_dir_all(native.join("steamapps")).unwrap();
+        let flatpak = home
+            .path()
+            .join(".var/app/com.valvesoftware.Steam/.local/share/Steam");
+        std::fs::create_dir_all(flatpak.join("steamapps")).unwrap();
+        std::fs::write(flatpak.join("steamapps/libraryfolders.vdf"), "").unwrap();
+        let found = irori_core::platform::find_linux_steam(home.path(), "steamapps");
+        assert_eq!(found, Some(flatpak));
     }
 }

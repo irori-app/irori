@@ -140,6 +140,42 @@ impl Launcher {
             Launcher::Rockstar => rockstar::scan_drive(drive, registry),
         }
     }
+
+    /// Whether someone is signed in to the launcher, from the Documents
+    /// folders of the users who may run it. Only the Rockstar Games Launcher
+    /// leaves a readable trace; the others are [`SignIn::Unknown`].
+    pub fn sign_in(self, documents: &[PathBuf]) -> SignIn {
+        match self {
+            Launcher::Rockstar => rockstar::sign_in(documents),
+            Launcher::BattleNet | Launcher::EaApp | Launcher::Ubisoft => SignIn::Unknown,
+        }
+    }
+}
+
+/// Whether someone is signed in to a launcher, as far as its local data tells.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum SignIn {
+    SignedIn,
+    SignedOut,
+    /// The launcher never ran, or keeps nothing Irori can read.
+    #[default]
+    Unknown,
+}
+
+/// The Documents folders of the users on `drive` (`drive_c` of a Wine
+/// prefix): Wine names the folder `Documents`, older builds `My Documents`.
+pub fn user_documents(drive: &Path) -> Vec<PathBuf> {
+    let Ok(users) = fs::read_dir(drive.join("users")) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = users
+        .flatten()
+        .filter(|u| !u.file_name().eq_ignore_ascii_case("Public"))
+        .flat_map(|u| ["Documents", "My Documents"].map(|d| u.path().join(d)))
+        .filter(|d| d.is_dir())
+        .collect();
+    found.sort();
+    found
 }
 
 /// How Irori starts a launcher's game: always through the launcher itself.

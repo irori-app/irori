@@ -1,5 +1,6 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
-//! random one, and run window commands, all from the keyboard.
+//! random one, set the play status of the game whose page is open, group the
+//! library by play status, and run window commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -10,6 +11,7 @@ use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _};
 use gpui_kit::{App, AppContext as _, Entity, ParentElement as _, Styled as _, Window, px};
 use irori_core::{GameId, GameInfo};
+use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, models};
 
@@ -23,6 +25,10 @@ enum PaletteTarget {
     Random,
     SetUpEmulation,
     LutrisScript,
+    /// Set (or with `None` clear) a game's play status.
+    PlayStatus(GameId, Option<PlayStatus>),
+    /// Group the library by play status (`true`) or stop, and show it.
+    GroupByStatus(bool),
 }
 
 /// Retained palette state, owned by the shell.
@@ -41,13 +47,54 @@ impl Palette {
         }
     }
 
-    fn items(games: &[Arc<GameInfo>], targets: &mut Vec<PaletteTarget>) -> Vec<CommandItem> {
-        let mut items = Vec::with_capacity(games.len() * 2 + 8);
+    /// Rows for `games`. `open` is the game whose page is shown, with its
+    /// play status: its status commands come first. `grouped` is whether the
+    /// library groups by play status, while a library view exists.
+    fn items(
+        games: &[Arc<GameInfo>],
+        open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
+        grouped: Option<bool>,
+        targets: &mut Vec<PaletteTarget>,
+    ) -> Vec<CommandItem> {
+        let mut items = Vec::with_capacity(games.len() * 2 + 16);
         let mut push =
             |item: CommandItem, target: PaletteTarget, targets: &mut Vec<PaletteTarget>| {
                 items.push(item);
                 targets.push(target);
             };
+        if let Some((game, current)) = open {
+            let keywords = [irori_ui::play_status::title()];
+            for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
+                let label = t_args(
+                    "shell.palette.play_status",
+                    &[
+                        ("title", &game.title),
+                        ("status", &irori_ui::play_status::label(status)),
+                    ],
+                );
+                push(
+                    CommandItem::new()
+                        .label(label)
+                        .keywords(keywords.clone())
+                        .icon(irori_ui::play_status::icon(status)),
+                    PaletteTarget::PlayStatus(game.id(), Some(status)),
+                    targets,
+                );
+            }
+            if current.is_some() {
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.clear_play_status",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords(keywords)
+                        .icon(IconName::X),
+                    PaletteTarget::PlayStatus(game.id(), None),
+                    targets,
+                );
+            }
+        }
         for (label, icon, route) in [
             ("shell.nav.library", IconName::LibraryBig, Route::Library),
             ("shell.nav.downloads", IconName::Download, Route::Downloads),
@@ -104,6 +151,21 @@ impl Palette {
             PaletteTarget::LutrisScript,
             targets,
         );
+        if let Some(grouped) = grouped {
+            let label = if grouped {
+                "shell.palette.ungroup_by_status"
+            } else {
+                "shell.palette.group_by_status"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([irori_ui::play_status::title()])
+                    .icon(IconName::Rows3),
+                PaletteTarget::GroupByStatus(!grouped),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.refresh"))
@@ -149,9 +211,20 @@ impl Palette {
             return;
         }
         self.open.set(true);
-        let games = models(cx).library.read(cx).snapshot.games.clone();
+        let (games, open) = {
+            let library = models(cx).library.read(cx);
+            let open = match irori_ui::nav::navigator(cx).read(cx).current() {
+                Route::Game(id) => library
+                    .snapshot
+                    .get(id)
+                    .map(|g| (g.clone(), library.user.play_status(&id.key()))),
+                _ => None,
+            };
+            (library.snapshot.games.clone(), open)
+        };
         let mut targets = Vec::new();
-        let items = Rc::new(Self::items(&games, &mut targets));
+        let grouped = irori_library::groups_by_status(cx);
+        let items = Rc::new(Self::items(&games, open, grouped, &mut targets));
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -206,5 +279,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
+        PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
+        PaletteTarget::GroupByStatus(on) => {
+            irori_library::set_groups_by_status(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
     }
 }
