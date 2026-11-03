@@ -96,7 +96,6 @@ export const en = {
       ticks: ['Free and open source, MIT', 'No account needed', 'No ads, no telemetry', '19 languages'],
       pause: 'Pause motion',
       play: 'Play motion',
-      wall: 'Covers of the demo library’s made-up games',
     },
     stores: {
       tag: 'Gathers',
