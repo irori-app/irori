@@ -1,0 +1,33 @@
+[package]
+name = "irori-mods"
+description = "Per-game mod manager: mod storage, load order, safe deployment (overlay or recorded links), conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+irori-core.workspace = true
+irori-depot.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+url.workspace = true
+uuid.workspace = true
+which.workspace = true
+zip.workspace = true
+sevenz-rust2 = { version = "0.24", default-features = false, features = ["util"] }
+# FOMOD installers describe their choices in `ModuleConfig.xml`.
+roxmltree = "0.21"
+
+[dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }
+tempfile = "3"
