@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "O Irori ainda não tem um emulador para o sistema dele.",
   "ui.lutris.reason.steam_not_found": "Ele não está na sua biblioteca da Steam neste computador.",
   "ui.lutris.reason.store_not_supported": "O Irori não tem uma loja para “{store}”.",
-  "ui.lutris.reason.failed": "Não foi possível adicioná-lo: {error}"
+  "ui.lutris.reason.failed": "Não foi possível adicioná-lo: {error}",
+  "ui.play_status.title": "Status de jogo",
+  "ui.play_status.set": "Definir status",
+  "ui.play_status.clear": "Remover status",
+  "ui.play_status.not_played": "Não jogado",
+  "ui.play_status.plan_to_play": "Quero jogar",
+  "ui.play_status.playing": "Jogando",
+  "ui.play_status.on_hold": "Em pausa",
+  "ui.play_status.beaten": "Zerado",
+  "ui.play_status.abandoned": "Abandonado",
+  "ui.play_status.played": "Jogado"
 }

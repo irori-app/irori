@@ -1128,6 +1128,14 @@ fn game_menu(
                     cx,
                     move |sub, _, cx| categories_menu(sub, &view, &id, cx),
                 );
+                let status_id = game.id();
+                menu = menu.submenu_with_icon(
+                    Some(Icon::new(IconName::Flag)),
+                    irori_ui::play_status::title(),
+                    window,
+                    cx,
+                    move |sub, _, cx| irori_ui::play_status::menu(sub, &status_id, cx),
+                );
             }
         }
     }
