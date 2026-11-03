@@ -1,6 +1,8 @@
 //! Localized text that is computed rather than looked up: status labels,
-//! store names, play time, percentages and the clock.
+//! store names, play time, percentages, dates, the clock, and store
+//! descriptions as plain text.
 
+use chrono::NaiveDate;
 use gpui_kit::SharedString;
 use irori_core::{Runner, StatusKind};
 use irori_ui::i18n::{t, t_args};
@@ -65,6 +67,69 @@ pub fn playtime(minutes: u64) -> SharedString {
     }
 }
 
+/// When something happened, by calendar day: "Today", "Yesterday", "3 days
+/// ago" within the week, else the date (ISO 8601, which reads the same in
+/// every language).
+pub fn relative_day(then: NaiveDate, today: NaiveDate) -> SharedString {
+    match (today - then).num_days() {
+        ..=0 => t("bigpicture.when.today"),
+        1 => t("bigpicture.when.yesterday"),
+        days @ 2..=6 => t_args(
+            "bigpicture.when.days_ago",
+            &[("count", days.to_string().as_str())],
+        ),
+        _ => then.format("%Y-%m-%d").to_string().into(),
+    }
+}
+
+/// [`relative_day`] for an RFC 3339 timestamp, in local time.
+pub fn last_played(rfc3339: &str) -> Option<SharedString> {
+    let then = chrono::DateTime::parse_from_rfc3339(rfc3339).ok()?;
+    let local = then.with_timezone(&chrono::Local).date_naive();
+    Some(relative_day(local, chrono::Local::now().date_naive()))
+}
+
+/// The game's short description as plain text, else its full one.
+pub fn description(game: &irori_core::GameInfo) -> Option<String> {
+    let extra = game.extra.as_ref();
+    [
+        extra.and_then(|e| e.short_description.as_deref()),
+        game.description.as_deref(),
+        extra.and_then(|e| e.description.as_deref()),
+    ]
+    .into_iter()
+    .flatten()
+    .map(plain_text)
+    .find(|t| !t.is_empty())
+}
+
+/// A store description as plain text: tags dropped (block tags become
+/// spaces), common entities decoded and whitespace collapsed.
+pub fn plain_text(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for ch in html.chars() {
+        match ch {
+            '<' => {
+                in_tag = true;
+                out.push(' ');
+            }
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    let decoded = out
+        .replace("&nbsp;", " ")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&");
+    decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// How a language usually writes the time of day, following the CLDR short
 /// time format of each interface language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,6 +192,33 @@ pub fn clock(hour: u32, minute: u32) -> SharedString {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn days_read_relative_within_a_week() {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 3).unwrap();
+        let day = |d: u32| NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
+        crate::register_catalogs();
+        assert_eq!(relative_day(today, today), t("bigpicture.when.today"));
+        assert_eq!(
+            relative_day(NaiveDate::from_ymd_opt(2026, 11, 2).unwrap(), today),
+            t("bigpicture.when.yesterday")
+        );
+        assert_eq!(
+            relative_day(day(30), today),
+            t_args("bigpicture.when.days_ago", &[("count", "4")])
+        );
+        assert_eq!(relative_day(day(1), today).as_str(), "2026-10-01");
+        assert!(last_played("not a date").is_none());
+    }
+
+    #[test]
+    fn descriptions_become_plain_text() {
+        assert_eq!(
+            plain_text("<p>Fight &amp; explore.</p><br/>Tom&#39;s  <b>quest</b>\n"),
+            "Fight & explore. Tom's quest"
+        );
+        assert_eq!(plain_text("Plain"), "Plain");
+    }
 
     #[test]
     fn clock_follows_the_language() {
