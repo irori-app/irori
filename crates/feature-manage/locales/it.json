@@ -464,6 +464,7 @@
   "manage.launchers.open": "Apri {launcher}",
   "manage.launchers.scan": "Cerca giochi",
   "manage.launchers.downloading": "Download del programma di installazione…",
+  "manage.launchers.creating_prefix": "Creazione del prefisso Wine…",
   "manage.launchers.installing": "Segui il programma di installazione di {launcher}…",
   "manage.launchers.setup_failed": "Impossibile configurare {launcher}",
   "manage.launchers.open_failed": "Impossibile aprire {launcher}",

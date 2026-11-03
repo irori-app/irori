@@ -1,0 +1,36 @@
+---
+/**
+ * An app screenshot that follows the page's theme: both versions are in the
+ * page, the hidden one is never fetched because it is lazy and not displayed.
+ */
+import { SCREENS, type ScreenId } from '../data/site'
+import { dictionary, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  id: ScreenId
+  sizes?: string
+  eager?: boolean
+  class?: string
+}
+const { locale, id, sizes = '(min-width: 1280px) 60vw, 100vw', eager = false, class: className } = Astro.props
+const t = dictionary(locale).screens[id]
+const alt = `Irori: ${t.title}. ${t.caption}`
+const variants = SCREENS[id].light ? [id, `light-${id}`] : [id]
+---
+
+{
+  variants.map((stem, index) => (
+    <img
+      src={`/screenshots/${stem}.webp`}
+      srcset={`/screenshots/${stem}.webp 1440w, /screenshots/${stem}@2x.webp 2880w`}
+      sizes={sizes}
+      alt={alt}
+      width="1440"
+      height="901"
+      loading={eager && index === 0 ? 'eager' : 'lazy'}
+      decoding="async"
+      class:list={['block h-auto w-full max-w-full', variants.length > 1 && (index === 0 ? 'hidden dark:block' : 'block dark:hidden'), className]}
+    />
+  ))
+}
