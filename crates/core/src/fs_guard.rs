@@ -89,11 +89,15 @@ pub fn check_deletable(dir: &Path, home: Option<&Path>, protected: &[PathBuf]) -
 }
 
 /// Folders that must survive any deletion: Irori's own directories and the
-/// configured library and prefix roots.
+/// configured library, prefix and Wine build roots.
 pub fn protected_dirs(app: &AppSettings) -> Vec<PathBuf> {
     let p = Paths::get();
     let mut dirs = vec![p.config.clone(), p.data.clone(), p.cache.clone()];
-    for s in [&app.default_install_path, &app.default_wine_prefix_dir] {
+    for s in [
+        &app.default_install_path,
+        &app.default_wine_prefix_dir,
+        &app.compat_tools_path,
+    ] {
         if !s.is_empty() {
             dirs.push(expand_home(s));
         }

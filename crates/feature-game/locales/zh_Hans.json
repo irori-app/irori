@@ -308,6 +308,8 @@
   "game.logs.empty": "还没有日志。下次启动游戏时会写入。",
   "game.logs.errors_only": "错误和警告",
   "game.logs.follow": "自动滚动",
+  "game.logs.filter": "筛选行",
+  "game.logs.hide_matching": "隐藏匹配的行",
   "game.logs.link_copied": "已复制链接",
   "game.logs.open": "打开",
   "game.logs.open_in_editor": "在编辑器中打开",

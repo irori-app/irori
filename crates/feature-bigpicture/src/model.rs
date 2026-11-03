@@ -501,6 +501,38 @@ pub fn disabled_reason(action: GameAction, state: GameState) -> Option<SharedStr
     }
 }
 
+// ---- covers -------------------------------------------------------------
+
+/// What a click on a cover does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverClick {
+    /// Move the focus there, as the controller would; the backdrop follows.
+    Focus,
+    /// Open the game's page.
+    Open,
+}
+
+/// A click focuses a cover, as in the main library; a click on the cover
+/// already focused, or the second click of a double click, opens its page.
+/// `focused` is read when the click lands, not when the cover was drawn.
+pub fn cover_click(focused: bool, click_count: usize) -> CoverClick {
+    if focused || click_count >= 2 {
+        CoverClick::Open
+    } else {
+        CoverClick::Focus
+    }
+}
+
+/// The command a cover runs without opening the game's page (its button
+/// under the mouse, and Alt): Play or Install when it can run now. Anything
+/// else (Stop, a download, a busy game) is left to the page.
+pub fn cover_action(state: GameState) -> Option<GameAction> {
+    let main = main_action(state);
+    (matches!(main, GameAction::Play | GameAction::Install)
+        && disabled_reason(main, state).is_none())
+    .then_some(main)
+}
+
 /// Platforms the game installs for, in the order the platform row cycles.
 pub fn install_platforms(game: &GameInfo) -> Vec<InstallPlatform> {
     game.platforms
@@ -848,6 +880,50 @@ mod tests {
         assert!(disabled_reason(GameAction::Play, verifying).is_some());
         assert!(disabled_reason(GameAction::Stop, verifying).is_none());
         assert!(disabled_reason(GameAction::Install, GameState::default()).is_some());
+    }
+
+    #[test]
+    fn a_click_focuses_a_cover_and_a_second_opens_it() {
+        assert_eq!(cover_click(false, 1), CoverClick::Focus);
+        assert_eq!(cover_click(true, 1), CoverClick::Open);
+        // A double click opens even when the first click's redraw hasn't
+        // happened yet.
+        assert_eq!(cover_click(false, 2), CoverClick::Open);
+        assert_eq!(cover_click(true, 3), CoverClick::Open);
+    }
+
+    #[test]
+    fn covers_offer_play_or_install_only_when_they_can_run() {
+        let installed = GameState {
+            installed: true,
+            installable: true,
+            ..Default::default()
+        };
+        assert_eq!(cover_action(installed), Some(GameAction::Play));
+        let not_installed = GameState {
+            installable: true,
+            ..Default::default()
+        };
+        assert_eq!(cover_action(not_installed), Some(GameAction::Install));
+
+        let playing = GameState {
+            playing: true,
+            busy: Some(StatusKind::Playing),
+            ..installed
+        };
+        assert_eq!(cover_action(playing), None, "Stop stays on the page");
+        let verifying = GameState {
+            busy: Some(StatusKind::Repairing),
+            ..installed
+        };
+        assert_eq!(cover_action(verifying), None);
+        let downloading = GameState {
+            in_queue: true,
+            busy: Some(StatusKind::Installing),
+            ..not_installed
+        };
+        assert_eq!(cover_action(downloading), None);
+        assert_eq!(cover_action(GameState::default()), None, "not installable");
     }
 
     #[test]

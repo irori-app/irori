@@ -1,9 +1,11 @@
-//! The frame around every screen: the top bar (tabs between the shoulder
-//! buttons, downloads, controller and clock) and the bottom bar of button
-//! hints, drawn as the buttons of the controller in hand (Xbox, PlayStation,
-//! Nintendo) or as keys when there is none.
+//! The frame around every screen: the top bar (Back on a game's page, tabs
+//! between the shoulder buttons, downloads, controller, clock and the button
+//! that leaves Big Picture) and the bottom bar of button hints, drawn as the
+//! buttons of the controller in hand (Xbox, PlayStation, Nintendo) or as keys
+//! when there is none.
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -132,7 +134,27 @@ impl BigPictureView {
             .px(rems(metrics.gutter))
             .gap_5()
             .items_center()
-            .child(BrandMark::new(rems(1.75)))
+            .map(|d| {
+                if self.page.is_some() {
+                    // The mouse's way off a page; Back and Esc do the same.
+                    d.child(
+                        Button::new("bp-page-back")
+                            .ghost()
+                            .large()
+                            .flex_shrink_0()
+                            .icon(IconName::ArrowLeft)
+                            .label(t("bigpicture.hint.back"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.overlay = None;
+                                this.page = None;
+                                this.after_focus_change(cx);
+                                this.focus.focus(window, cx);
+                            })),
+                    )
+                } else {
+                    d.child(BrandMark::new(rems(1.75)))
+                }
+            })
             .child(
                 h_flex()
                     .id("bp-tabs")
@@ -206,7 +228,20 @@ impl BigPictureView {
                             .text_xl()
                             .font_semibold()
                             .child(clock)
-                    }),
+                    })
+                    .child(
+                        Button::new("bp-exit")
+                            .ghost()
+                            .large()
+                            .flex_shrink_0()
+                            .icon(IconName::X)
+                            .tooltip(t("bigpicture.exit"))
+                            .accessibility_label(t("bigpicture.exit"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.overlay = None;
+                                crate::exit_big_picture(cx);
+                            })),
+                    ),
             )
     }
 

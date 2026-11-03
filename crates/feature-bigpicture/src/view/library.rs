@@ -15,7 +15,7 @@ use gpui_kit::{
 use irori_ui::i18n::{t, t_args};
 
 use super::home::SCROLL_SPRING;
-use super::tile::Cover;
+use super::tile::{Cover, CoverSlot};
 use super::{BigPictureView, Colors, LibraryFocus};
 use crate::layout::{CHIPS, GRID_FOCUS_SCALE, GRID_HEADER, Metrics, strip_range, strip_start};
 use crate::model::Chip;
@@ -143,20 +143,9 @@ impl BigPictureView {
                     width: m.grid_tile,
                     scale: GRID_FOCUS_SCALE,
                     focused: in_grid && i == ix && self.overlay.is_none(),
+                    slot: CoverSlot::Grid(i),
                 };
-                tiles.push(self.render_cover(
-                    cover,
-                    c,
-                    move |this, _, cx| {
-                        this.library.ix = i;
-                        this.library.focus = LibraryFocus::Grid;
-                        if let Some(id) = this.tab_game().map(|g| g.id()) {
-                            this.open_page(id, cx);
-                        }
-                    },
-                    window,
-                    cx,
-                ));
+                tiles.push(self.render_cover(cover, c, window, cx));
             }
             grid_rows.push(h_flex().h(rems(row_h)).items_center().children(tiles));
         }

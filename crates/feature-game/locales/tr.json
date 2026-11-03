@@ -308,6 +308,8 @@
   "game.logs.empty": "Henüz günlük yok. Oyun bir sonraki başlatılışında yazılır.",
   "game.logs.errors_only": "Hatalar ve uyarılar",
   "game.logs.follow": "Takip et",
+  "game.logs.filter": "Satırları filtrele",
+  "game.logs.hide_matching": "Eşleşen satırları gizle",
   "game.logs.link_copied": "Bağlantı kopyalandı",
   "game.logs.open": "Aç",
   "game.logs.open_in_editor": "Düzenleyicide aç",

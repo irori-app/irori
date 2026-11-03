@@ -77,6 +77,12 @@ pub struct ScanRoots {
     pub custom: Vec<String>,
 }
 
+/// `dirs` without repeats (the chosen folder may be the default one).
+fn dedup(mut dirs: Vec<PathBuf>) -> Vec<PathBuf> {
+    dirs.dedup();
+    dirs
+}
+
 impl ScanRoots {
     /// The real locations on this system for `app`'s settings.
     pub fn for_settings(app: &AppSettings) -> Self {
@@ -84,8 +90,16 @@ impl ScanRoots {
         let steam = locations::steam_path(app);
         let heroic = locations::heroic_tools_dir();
         Self {
-            irori_wine: vec![Paths::get().wine_dir()],
-            irori_proton: vec![Paths::get().proton_dir()],
+            // Builds stay where they were installed when the folder for
+            // downloads changes, so both places are read.
+            irori_wine: dedup(vec![
+                Paths::get().wine_dir(),
+                locations::wine_downloads_dir(app),
+            ]),
+            irori_proton: dedup(vec![
+                Paths::get().proton_dir(),
+                locations::proton_downloads_dir(app),
+            ]),
             heroic_wine: heroic.iter().map(|d| d.join("wine")).collect(),
             heroic_proton: heroic.iter().map(|d| d.join("proton")).collect(),
             steam_libraries: crate::vdf::steam_libraries(&steam),

@@ -1,6 +1,7 @@
 //! Big Picture driven end to end in a test window over an in-memory store:
 //! keyboard and gamepad actions through Home, the Library tab's chips and
-//! search, a game's page, the quick menu and the uninstall question.
+//! search, a game's page, the quick menu and the uninstall question, and
+//! mouse clicks on covers.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use irori_core::{
 use irori_services::Backend;
 use irori_ui::models;
 
+use super::tile::CoverSlot;
 use super::{BigPictureView, LibraryFocus, Overlay, Tab};
 use crate::gamepad;
 use crate::model::{GameAction, PageRow, RowKind, Sort, StatusFilter};
@@ -336,4 +338,76 @@ fn page_rows_and_quick_actions(cx: &mut TestAppContext) {
     cx.dispatch_action(handle, gamepad::Menu);
     cx.dispatch_action(handle, gamepad::Guide);
     cx.read(|cx| assert!(!view.read(cx).is_overlay_open()));
+}
+
+#[gpui_kit::test]
+fn clicks_focus_covers_then_open_them_and_buttons_act_on_their_own_game(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx);
+    let click = |slot: CoverSlot, count: usize, cx: &mut TestAppContext| {
+        view.update(cx, |v, cx| v.click_cover(slot, count, cx));
+    };
+    let page =
+        |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).page.as_ref().map(|p| p.id.clone()));
+    // Tests share a data folder, so another may have added a Favourites
+    // shelf: find the covers on the Installed one.
+    let shelf = |title: &str, cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let rows = &view.read(cx).rows;
+            let row = rows
+                .iter()
+                .position(|r| r.kind == RowKind::Installed)
+                .expect("Installed shelf");
+            let col = rows[row]
+                .games
+                .iter()
+                .position(|g| g.title == title)
+                .expect("game on the shelf");
+            CoverSlot::Shelf { row, col }
+        })
+    };
+    let charlie = GameId::new(Runner::Legendary, "c");
+
+    // One click focuses Charlie (the backdrop follows the focus) and a
+    // second opens its page.
+    let shelf_charlie = shelf("Charlie", cx);
+    click(shelf_charlie, 1, cx);
+    assert_eq!(focused_title(&view, cx), "Charlie");
+    assert_eq!(page(cx), None, "the first click only selects");
+    click(shelf_charlie, 1, cx);
+    assert_eq!(page(cx), Some(charlie));
+    cx.dispatch_action(handle, gamepad::Back);
+    assert_eq!(page(cx), None);
+
+    // A double click on another cover opens it at once.
+    let shelf_alpha = shelf("Alpha", cx);
+    click(shelf_alpha, 2, cx);
+    assert_eq!(page(cx), Some(GameId::new(Runner::Gog, "a")));
+    cx.dispatch_action(handle, gamepad::Back);
+
+    // Library (Alpha, Bravo, Charlie; Alpha focused): after clicking Charlie
+    // then Bravo, Bravo's button acts on Bravo, and a button drawn for a game
+    // no longer in its place acts on nothing.
+    cx.dispatch_action(handle, gamepad::NextPage);
+    assert_eq!(focused_title(&view, cx), "Alpha");
+    click(CoverSlot::Grid(2), 1, cx);
+    assert_eq!(focused_title(&view, cx), "Charlie");
+    click(CoverSlot::Grid(1), 1, cx);
+    assert_eq!(focused_title(&view, cx), "Bravo");
+    assert_eq!(page(cx), None);
+    let bravo = GameId::new(Runner::Gog, "b");
+    let target = view.update(cx, |v, cx| {
+        v.select_cover_game(CoverSlot::Grid(1), &bravo, cx)
+    });
+    assert_eq!(target.map(|g| g.id()), Some(bravo.clone()));
+    let alpha = GameId::new(Runner::Gog, "a");
+    let stale = view.update(cx, |v, cx| {
+        v.select_cover_game(CoverSlot::Grid(1), &alpha, cx)
+    });
+    assert!(stale.is_none());
+    // The button also selects its cover, so Alt and the hints follow it.
+    let target = view.update(cx, |v, cx| {
+        v.select_cover_game(CoverSlot::Grid(0), &alpha, cx)
+    });
+    assert_eq!(target.map(|g| g.id()), Some(alpha));
+    assert_eq!(focused_title(&view, cx), "Alpha");
 }

@@ -308,6 +308,8 @@
   "game.logs.empty": "ログはまだありません。次にゲームを起動したときに書き込まれます。",
   "game.logs.errors_only": "エラーと警告",
   "game.logs.follow": "自動スクロール",
+  "game.logs.filter": "行を絞り込む",
+  "game.logs.hide_matching": "一致する行を隠す",
   "game.logs.link_copied": "リンクをコピーしました",
   "game.logs.open": "開く",
   "game.logs.open_in_editor": "エディターで開く",
