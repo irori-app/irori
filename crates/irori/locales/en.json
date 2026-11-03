@@ -71,6 +71,8 @@
   "shell.palette.lutris_script_keywords": "Lutris script installer lutris.net community",
   "shell.palette.play_status": "{title}: set play status to {status}",
   "shell.palette.clear_play_status": "{title}: clear play status",
+  "shell.palette.group_by_status": "Group the library by play status",
+  "shell.palette.ungroup_by_status": "Stop grouping the library by play status",
   "shell.app_update.available": "Irori {version} is available",
   "shell.app_update.available_message": "You have {current}.",
   "shell.app_update.available_command": "You have {current}. To update, run {command}",

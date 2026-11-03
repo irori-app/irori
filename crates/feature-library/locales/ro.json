@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filtre",
   "library.toolbar.filters_active": "Filtre · {count}",
   "library.toolbar.grid": "Grilă",
+  "library.toolbar.group_by_status": "Grupează după starea de joc",
   "library.toolbar.list": "Listă",
   "library.toolbar.reverse": "Inversează ordinea",
   "library.toolbar.select": "Selectează",

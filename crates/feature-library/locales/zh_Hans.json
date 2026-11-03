@@ -431,6 +431,7 @@
   "library.toolbar.filters": "筛选",
   "library.toolbar.filters_active": "筛选 · {count}",
   "library.toolbar.grid": "网格",
+  "library.toolbar.group_by_status": "按游玩状态分组",
   "library.toolbar.list": "列表",
   "library.toolbar.reverse": "倒序",
   "library.toolbar.select": "选择",

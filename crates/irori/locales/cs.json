@@ -71,6 +71,8 @@
   "shell.palette.lutris_script_keywords": "Lutris skript instalátor lutris.net komunita",
   "shell.palette.play_status": "{title}: nastavit stav hraní na {status}",
   "shell.palette.clear_play_status": "{title}: zrušit stav hraní",
+  "shell.palette.group_by_status": "Seskupit knihovnu podle stavu hraní",
+  "shell.palette.ungroup_by_status": "Zrušit seskupení knihovny podle stavu hraní",
   "shell.app_update.available": "Je k dispozici Irori {version}",
   "shell.app_update.available_message": "Máte verzi {current}.",
   "shell.app_update.available_command": "Máte verzi {current}. Aktualizujete příkazem {command}",
