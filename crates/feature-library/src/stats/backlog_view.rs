@@ -52,7 +52,11 @@ impl StatsView {
             .find_map(|m| library.get(&m.id).cloned());
         let headline = self.render_backlog_headline(&b, cx);
         let goal = self.render_goal(&b, cx);
-        let hero = self.render_hero(latest.as_ref(), headline, Some(goal), window, cx);
+        let art = latest
+            .as_ref()
+            .and_then(|g| g.hero_art())
+            .map(str::to_owned);
+        let hero = self.render_hero(art, headline, Some(goal), window, cx);
         v_flex()
             .gap_6()
             .child(hero)

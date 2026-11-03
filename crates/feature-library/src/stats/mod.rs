@@ -1,4 +1,4 @@
-//! The stats page, in two tabs over the art of the period's game:
+//! The stats page, in three tabs over the art of the period's game:
 //!
 //! - **Overview**: play time in a week, month, year or all time, against the
 //!   period before; days played, streak and sessions; a chart stacked by
@@ -6,13 +6,16 @@
 //!   picked up again, new games); the most played games as covers.
 //! - **Backlog**: the games beaten and abandoned in a year on a timeline, the
 //!   yearly goal and its pace, and the library grouped by play status.
+//! - **Album**: the screenshots the user took in the period, by game.
 //!
 //! Below both, the storage section shows the installed games by drive.
 //!
-//! The session history is read off the UI thread when a session ends; the
-//! numbers are derived from it when the history, the library or the chosen
-//! period changes, never while drawing.
+//! The session history and the screenshots are read off the UI thread when a
+//! session ends; the numbers are derived from them when they, the library or
+//! the chosen period change, never while drawing.
 
+pub(crate) mod album;
+mod album_view;
 pub(crate) mod backlog;
 mod backlog_view;
 mod hero;
@@ -24,23 +27,27 @@ pub(crate) mod storage;
 mod storage_view;
 mod text;
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use chrono::{Datelike as _, Local, NaiveDate};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::v_flex;
+use gpui_kit::component::{VirtualListScrollHandle, v_flex};
 use gpui_kit::{
-    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    Styled as _, Subscription, Window, div,
+    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
+    Render, Size, Styled as _, Subscription, Window, div, px,
 };
-use irori_services::UserData;
+use irori_core::GameId;
+use irori_services::{ScreenshotIndex, UserData};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::EmptyState;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
 
+use album::{Album, Shot};
+use album_view::{AlbumItem, GridLayout};
 use backlog::Backlog;
 use model::History;
 use overview::Overview;
@@ -52,6 +59,7 @@ use storage::{DriveUsage, InstalledGame};
 pub(crate) enum Tab {
     Overview,
     Backlog,
+    Album,
 }
 
 pub struct StatsView {
@@ -66,6 +74,20 @@ pub struct StatsView {
     history: Option<Arc<History>>,
     overview: Option<Overview>,
     backlog: Option<Backlog>,
+    /// The user's screenshots; `None` until first read.
+    screenshots: Option<Arc<ScreenshotIndex>>,
+    album: Option<Album>,
+    /// The game the album shows alone.
+    album_game: Option<GameId>,
+    /// The screenshots the album's grid shows.
+    album_shown: Arc<Vec<Shot>>,
+    /// What the album's list holds, and each entry's size.
+    album_items: Rc<Vec<AlbumItem>>,
+    album_sizes: Rc<Vec<Size<Pixels>>>,
+    album_layout: GridLayout,
+    /// The album's width, measured while drawing.
+    album_width: Pixels,
+    album_scroll: VirtualListScrollHandle,
     /// Installed games by drive; `None` until first read.
     storage: Option<Vec<DriveUsage>>,
     /// Library revision and user data the numbers were derived from.
@@ -103,6 +125,15 @@ impl StatsView {
             history: None,
             overview: None,
             backlog: None,
+            screenshots: None,
+            album: None,
+            album_game: None,
+            album_shown: Arc::default(),
+            album_items: Rc::default(),
+            album_sizes: Rc::default(),
+            album_layout: GridLayout::for_width(0.),
+            album_width: px(0.),
+            album_scroll: VirtualListScrollHandle::new(),
             storage: None,
             seen: None,
             images: LruImageCache::new(48, cx),
@@ -129,9 +160,29 @@ impl StatsView {
         self.year.unwrap_or_else(|| Self::today().year())
     }
 
-    /// Read the history (off the UI thread), then derive the numbers.
+    /// Read the history and the screenshots (off the UI thread), then derive
+    /// the numbers.
     fn reload(&mut self, cx: &mut Context<Self>) {
         let b = backend(cx);
+        let shots = irori_ui::state::run_infallible(cx, {
+            let b = b.clone();
+            async move {
+                let task = b.spawn_blocking({
+                    let b = b.clone();
+                    move || b.screenshots()
+                });
+                task.await.ok().map(Arc::new)
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(Some(index)) = shots.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.screenshots = Some(index);
+                    this.derive(cx);
+                });
+            }
+        })
+        .detach();
         let task = irori_ui::state::run_infallible(cx, async move {
             Arc::new(History::new(b.sessions(), model::local_day))
         });
@@ -172,6 +223,16 @@ impl StatsView {
             self.year(),
             today,
         ));
+        if let Some(index) = &self.screenshots {
+            self.album = Some(album::compute(
+                index,
+                self.period(),
+                |id| snapshot.get(id).is_some(),
+                album::local_day,
+                today,
+            ));
+            self.refresh_album_shown();
+        }
         cx.notify();
     }
 
@@ -190,7 +251,7 @@ impl StatsView {
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let today = Self::today();
         match self.tab {
-            Tab::Overview => {
+            Tab::Overview | Tab::Album => {
                 let period = self.period();
                 let to = if by < 0 {
                     period.previous()
@@ -210,12 +271,20 @@ impl StatsView {
     }
 
     /// Whether ‹ and › lead anywhere: back while the history (or a status
-    /// date) reaches further, forward up to today.
+    /// date, or a screenshot) reaches further, forward up to today.
     fn can_step(&self, cx: &Context<Self>) -> (bool, bool) {
         let today = Self::today();
-        let first = self.history.as_ref().and_then(|h| h.first_day());
+        let mut first = self.history.as_ref().and_then(|h| h.first_day());
+        if self.tab == Tab::Album {
+            let oldest = self
+                .screenshots
+                .as_ref()
+                .and_then(|i| i.shots.last())
+                .and_then(|s| album::local_day(s.taken));
+            first = first.into_iter().chain(oldest).min();
+        }
         match self.tab {
-            Tab::Overview => {
+            Tab::Overview | Tab::Album => {
                 let period = self.period();
                 let back = period
                     .previous()
@@ -280,17 +349,32 @@ impl StatsView {
         .detach();
     }
 
-    /// Whether there is nothing to show at all: no play, no statuses.
+    /// Whether there is nothing to show at all: no play, no statuses, no
+    /// screenshots.
     fn is_blank(&self, cx: &Context<Self>) -> bool {
         let user = &models(cx).library.read(cx).user;
         self.history.as_ref().is_some_and(|h| h.sessions.is_empty())
             && user.playtime.values().all(|r| r.total_minutes == 0)
             && user.play_status.is_empty()
+            && self.screenshots.as_ref().is_none_or(|s| s.shots.is_empty())
     }
 }
 
 impl Render for StatsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // An album with screenshots is a list of its own that scrolls the
+        // whole page; the storage section belongs to the other tabs.
+        let album_page = self.tab == Tab::Album
+            && self.history.is_some()
+            && self.album.as_ref().is_some_and(|a| !a.shots.is_empty())
+            && !self.is_blank(cx);
+        if album_page {
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .image_cache(self.images.clone())
+                .child(self.render_album_page(window, cx));
+        }
         let body: AnyElement = if self.history.is_none() {
             div()
                 .flex()
@@ -311,6 +395,7 @@ impl Render for StatsView {
             match self.tab {
                 Tab::Overview => self.render_overview(window, cx),
                 Tab::Backlog => self.render_backlog(window, cx),
+                Tab::Album => self.render_album(window, cx),
             }
         };
         let storage = self

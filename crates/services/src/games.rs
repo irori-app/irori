@@ -77,6 +77,18 @@ impl Backend {
         crate::sessions::read_all()
     }
 
+    /// Screenshots the user took while playing, newest first. Reads the
+    /// session history and lists the screenshot folders; call off the UI
+    /// thread.
+    pub fn screenshots(&self) -> crate::screenshots::ScreenshotIndex {
+        let folders = crate::screenshots::folders(&self.settings.app());
+        crate::screenshots::build(
+            &folders,
+            &self.sessions(),
+            &Paths::get().screenshot_index_file(),
+        )
+    }
+
     /// Refuse to touch the files of a game another launcher manages (Steam),
     /// before anything moves or is deleted.
     fn ensure_managed(id: &GameId) -> Result<()> {
