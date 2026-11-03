@@ -589,6 +589,17 @@ it on every platform, and CI's Windows install test runs it.
   handle them.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it.
+- Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
+  game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
+  controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
+  action list and details), `overlay` (quick menu, uninstall question), `tile`
+  (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  `layout.rs` (sizes from the window size in rem, scrolling); test it there.
+- Shelves, the grid and the page's list scroll by springing one offset toward the
+  focus and build only the items near the view, so nothing animates once the focus
+  rests. `layout::HomeLayout` is the seam for other Home layouts.
+- The Library's search field sits outside the `BigPicture` key context
+  (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
 
 ### 4.8 Engines (emulators)
 
