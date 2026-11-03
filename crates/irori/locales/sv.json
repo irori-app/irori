@@ -71,6 +71,8 @@
   "shell.palette.lutris_script_keywords": "Lutris skript installation lutris.net community",
   "shell.palette.play_status": "{title}: sätt spelstatus till {status}",
   "shell.palette.clear_play_status": "{title}: rensa spelstatus",
+  "shell.palette.group_by_status": "Gruppera biblioteket efter spelstatus",
+  "shell.palette.ungroup_by_status": "Sluta gruppera biblioteket efter spelstatus",
   "shell.app_update.available": "Irori {version} finns tillgänglig",
   "shell.app_update.available_message": "Du har version {current}.",
   "shell.app_update.available_command": "Du har version {current}. Kör {command} för att uppdatera",

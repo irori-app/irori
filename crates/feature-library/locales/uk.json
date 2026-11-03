@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Фільтри",
   "library.toolbar.filters_active": "Фільтри · {count}",
   "library.toolbar.grid": "Сітка",
+  "library.toolbar.group_by_status": "Групувати за статусом проходження",
   "library.toolbar.list": "Список",
   "library.toolbar.reverse": "Зворотний порядок",
   "library.toolbar.select": "Вибрати",

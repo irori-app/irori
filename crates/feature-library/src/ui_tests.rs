@@ -372,6 +372,115 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn grouping_by_play_status(cx: &mut TestAppContext) {
+    use irori_services::{EffectiveStatus, PlayStatus};
+    let backend = start(cx);
+    let game = |app: &str| GameId::new(Runner::Gog, app);
+    for (app, status) in [
+        ("3", PlayStatus::Playing),
+        ("4", PlayStatus::Playing),
+        ("2", PlayStatus::Beaten),
+    ] {
+        backend.userdata.set_play_status(&game(app), Some(status));
+    }
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while cx.read(|cx| models(cx).library.read(cx).user.play_status.len()) < 3 {
+        assert!(Instant::now() < deadline, "play statuses never arrived");
+        std::thread::sleep(Duration::from_millis(10));
+        cx.run_until_parked();
+    }
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    let titles = |cx: &mut TestAppContext| -> Vec<String> {
+        cx.read(|cx| {
+            view.read(cx)
+                .visible_games()
+                .iter()
+                .map(|g| g.title.clone())
+                .collect()
+        })
+    };
+    draw(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+
+    // Ctrl+G groups: playing games first, untouched ones, then beaten.
+    cx.simulate_keystrokes(window, "ctrl-g");
+    draw(cx);
+    assert_eq!(cx.read(crate::groups_by_status), Some(true));
+    assert_eq!(
+        titles(cx),
+        ["Hades", "Inside", "Alan Wake", "Outer Wilds", "Celeste"]
+    );
+    let sections = cx.read(|cx| view.read(cx).status_groups());
+    assert_eq!(
+        sections,
+        [
+            EffectiveStatus::Playing,
+            EffectiveStatus::NotPlayed,
+            EffectiveStatus::Beaten
+        ]
+    );
+
+    // Down moves section to section, keeping the column where it can.
+    let focused = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).focused_game().cloned());
+    cx.simulate_keystrokes(window, "down down");
+    assert_eq!(focused(cx), Some(game("1")));
+    cx.simulate_keystrokes(window, "right down");
+    assert_eq!(focused(cx), Some(game("2")));
+    cx.simulate_keystrokes(window, "up");
+    assert_eq!(focused(cx), Some(game("1")));
+
+    // A status change moves the game to a section of its own.
+    backend
+        .userdata
+        .set_play_status(&game("1"), Some(PlayStatus::OnHold));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while cx.read(|cx| view.read(cx).status_groups()).len() != 4 {
+        assert!(Instant::now() < deadline, "regrouping never happened");
+        std::thread::sleep(Duration::from_millis(10));
+        draw(cx);
+    }
+    assert_eq!(
+        cx.read(|cx| view.read(cx).status_groups())[1],
+        EffectiveStatus::OnHold
+    );
+
+    // Ctrl+G again returns to one A–Z list.
+    cx.simulate_keystrokes(window, "ctrl-g");
+    draw(cx);
+    assert_eq!(
+        titles(cx),
+        ["Alan Wake", "Celeste", "Hades", "Inside", "Outer Wilds"]
+    );
+    assert!(cx.read(|cx| view.read(cx).status_groups()).is_empty());
+}
+
+#[gpui_kit::test]
 fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     let backend = start(cx);
     let settings = backend.settings.clone();
