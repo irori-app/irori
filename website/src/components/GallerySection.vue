@@ -9,7 +9,7 @@ import { useTheme } from '@/composables/useTheme'
 
 const props = defineProps<{
   screens: Screen[]
-  labels: { tag: string; title: string; body: string; dark: string; light: string; open: string; previous: string; next: string }
+  labels: { tag: string; title: string; body: string; dark: string; light: string; previous: string; next: string }
 }>()
 
 const { isDark } = useTheme()
@@ -53,7 +53,6 @@ function onKey(event: KeyboardEvent) {
         <button
           type="button"
           class="group flex w-full flex-col gap-3 text-left"
-          :aria-label="labels.open.replace('{title}', screen.title)"
           @click="open = index"
         >
           <span class="block overflow-hidden rounded-xl border border-grain bg-soot transition-[transform,box-shadow] duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_24px_50px_-28px_var(--glow)]">
