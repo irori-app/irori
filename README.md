@@ -46,6 +46,10 @@ and kept in a bounded GPU cache.
   hidden games, "Continue playing", grid and list views — virtualized for large libraries.
   Hide the stores you don't use, see installed games by drive, or let Irori pick a
   random game (Ctrl+Shift+G).
+- Play status for every game (plan to play, playing, on hold, beaten, abandoned) and
+  a stats page over your games' art: play time by week, month, year or all time against
+  the period before, a day-by-day chart per game, streaks, comebacks and new games, and a
+  backlog with a yearly goal, its pace and a timeline of what you beat.
 - One-click play from anywhere: library tiles, the game page, the Ctrl+K command palette,
   the tray menu, desktop/Steam shortcuts and `irori://launch/<runner>/<app>` links
   (Heroic's `heroic://` links work too).

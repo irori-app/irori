@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori har ännu ingen emulator för dess system.",
   "ui.lutris.reason.steam_not_found": "Det finns inte i ditt Steam-bibliotek på den här datorn.",
   "ui.lutris.reason.store_not_supported": "Irori har ingen butik för ”{store}”.",
-  "ui.lutris.reason.failed": "Det gick inte att lägga till: {error}"
+  "ui.lutris.reason.failed": "Det gick inte att lägga till: {error}",
+  "ui.play_status.title": "Spelstatus",
+  "ui.play_status.set": "Ange status",
+  "ui.play_status.clear": "Rensa status",
+  "ui.play_status.not_played": "Ej spelad",
+  "ui.play_status.plan_to_play": "Planerad",
+  "ui.play_status.playing": "Spelar",
+  "ui.play_status.on_hold": "Pausad",
+  "ui.play_status.beaten": "Avklarad",
+  "ui.play_status.abandoned": "Övergiven",
+  "ui.play_status.played": "Spelad"
 }
