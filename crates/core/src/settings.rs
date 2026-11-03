@@ -665,9 +665,11 @@ pub enum Translucency {
 pub struct UiPrefs {
     pub theme: ThemePreference,
     /// Theme name from the bundled/user theme registry ("" = default: the
-    /// desktop's theme on COSMIC and Omarchy, Irori's own elsewhere, in the
-    /// desktop's accent colour where it has one).
+    /// desktop's theme on COSMIC, KDE Plasma and Omarchy, Irori's own
+    /// elsewhere, in the system's accent colour where it has one).
     pub theme_name: String,
+    /// Tint the default theme with the system's accent colour (`systemAccent`).
+    pub system_accent: bool,
     pub translucency: Translucency,
     /// Base font size in px; drives the rem scale (application zoom).
     pub font_size: f32,
@@ -771,6 +773,7 @@ impl Default for UiPrefs {
         Self {
             theme: ThemePreference::System,
             theme_name: String::new(),
+            system_accent: true,
             translucency: Translucency::Auto,
             font_size: 16.0,
             library_layout: LibraryLayout::Grid,

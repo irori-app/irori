@@ -46,6 +46,10 @@ and kept in a bounded GPU cache.
   hidden games, "Continue playing", grid and list views — virtualized for large libraries.
   Hide the stores you don't use, see installed games by drive, or let Irori pick a
   random game (Ctrl+Shift+G).
+- Play status for every game (plan to play, playing, on hold, beaten, abandoned) and
+  a stats page over your games' art: play time by week, month, year or all time against
+  the period before, a day-by-day chart per game, streaks, comebacks and new games, and a
+  backlog with a yearly goal, its pace and a timeline of what you beat.
 - One-click play from anywhere: library tiles, the game page, the Ctrl+K command palette,
   the tray menu, desktop/Steam shortcuts and `irori://launch/<runner>/<app>` links
   (Heroic's `heroic://` links work too).
@@ -85,6 +89,11 @@ and kept in a bounded GPU cache.
 - Several accounts per store (Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io) in
   one library; each installed game launches with the account it was installed with.
 - One-click import of your Heroic accounts, installs, settings, favourites and categories.
+- Looks at home on every desktop: follows the COSMIC, KDE Plasma and Omarchy themes, and
+  elsewhere tints its own in the system's accent colour (GNOME and other Linux desktops,
+  macOS with its highlight colour, Windows with its accent shades), live as you change it.
+  Honours Increase contrast, Reduce transparency and Windows high contrast. Translucent
+  chrome over macOS vibrancy, Windows 11 Mica or the Linux compositor's blur.
 - Translated into 19 languages, switchable live; searchable settings.
 - Tray menu with recent games, desktop and Steam shortcuts, Discord Rich Presence,
   EOS overlay, GOG REDmod and private branches, winetricks browser, log upload.

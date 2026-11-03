@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Сократить переходы и избегать движения.",
   "settings.field.ui_reduce_motion.label": "Уменьшить движение",
   "settings.field.ui_show_store_badges.label": "Показывать значки магазинов",
+  "settings.field.ui_system_accent.help": "Окрашивает собственную тему Irori в цвет акцента из настроек системы и следует за его изменениями. Тема, выбранная из списка, сохраняет свои цвета.",
+  "settings.field.ui_system_accent.label": "Использовать цвет акцента системы",
   "settings.field.ui_theme.label": "Цветовой режим",
   "settings.field.ui_theme_name.label": "Тема",
   "settings.field.ui_tile_size.help": "Ширина обложек игр в сетке библиотеки.",

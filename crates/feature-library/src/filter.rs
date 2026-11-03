@@ -3,7 +3,8 @@
 //! [`ViewFilter`] is what the toolbar and the Filters popover edit. It maps onto
 //! [`irori_services::LibraryFilter`] for the heavy lifting and adds what the
 //! service filter cannot express (several categories at once, an
-//! "Uncategorized" choice, hiding games whose files are missing). The result
+//! "Uncategorized" choice, play statuses, hiding games whose files are
+//! missing). The result
 //! is cached by library revision, user-data identity, update-set identity,
 //! availability identity and filter, so rendering never refilters an
 //! unchanged library.
@@ -13,7 +14,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use irori_core::{GameId, GameInfo, InstallPlatform, Paths, Runner, ShownStores, json_store};
-use irori_services::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData};
+use irori_services::{
+    EffectiveStatus, LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData,
+};
 use irori_ui::i18n::{t, t_args};
 use serde::{Deserialize, Serialize};
 
@@ -159,6 +162,9 @@ pub struct ViewFilter {
     /// Emulated games of these systems only (systems catalog ids); empty
     /// shows every game.
     pub systems: BTreeSet<String>,
+    /// Games in any of these play statuses (as stats count them: a game
+    /// without one is played or not played); empty shows every game.
+    pub statuses: BTreeSet<EffectiveStatus>,
     pub sort: LibrarySort,
     pub descending: bool,
 }
@@ -179,6 +185,7 @@ impl ViewFilter {
             !self.categories.is_empty(),
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
+            !self.statuses.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -272,6 +279,14 @@ impl ViewFilter {
                 .systems
                 .iter()
                 .map(|id| irori_engines::systems::get(id).map_or(id.as_str(), |s| s.short.as_str()))
+                .collect();
+            out.push(names.join(&t("library.filter.list_separator")));
+        }
+        if !self.statuses.is_empty() {
+            let names: Vec<String> = self
+                .statuses
+                .iter()
+                .map(|s| irori_ui::play_status::label(*s).to_string())
                 .collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
@@ -439,6 +454,13 @@ pub fn apply(
                 .is_some_and(|s| filter.systems.contains(s))
         });
     }
+    if !filter.statuses.is_empty() {
+        games.retain(|g| {
+            filter
+                .statuses
+                .contains(&user.effective_status(&g.id().key()))
+        });
+    }
     if filter.hide_unavailable && !missing.is_empty() {
         games.retain(|g| !missing.contains(&g.id()));
     }
@@ -579,6 +601,46 @@ pub(crate) mod tests {
         assert_eq!(f.hidden, HiddenMode::Hide);
         f.clear_all();
         assert!(!f.is_narrowed());
+    }
+
+    #[test]
+    fn filters_by_play_status_counting_untouched_games_as_not_played() {
+        use irori_services::PlayStatus;
+        let library = sample();
+        let mut user = UserData::default();
+        user.play_status.insert(
+            "legendary:b".into(),
+            irori_services::PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "2026-10-01T10:00:00Z".into(),
+            },
+        );
+        user.playtime.insert(
+            "gog:1".into(),
+            irori_core::game::PlaytimeRecord {
+                total_minutes: 90,
+                ..Default::default()
+            },
+        );
+        let shown = |statuses: &[EffectiveStatus]| {
+            let f = ViewFilter {
+                statuses: statuses.iter().copied().collect(),
+                ..Default::default()
+            };
+            assert_eq!(f.active_count(), usize::from(!statuses.is_empty()));
+            let games = apply(&f, &[], &library, &user, &HashSet::new(), &HashSet::new());
+            titles(&games)
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shown(&[EffectiveStatus::Beaten]), ["Hades"]);
+        assert_eq!(shown(&[EffectiveStatus::Played]), ["The Witcher 3"]);
+        assert_eq!(
+            shown(&[EffectiveStatus::NotPlayed, EffectiveStatus::Beaten]),
+            ["Alan Wake", "Hades", "Itch game"]
+        );
+        assert_eq!(shown(&[]).len(), 4);
     }
 
     #[test]

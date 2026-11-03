@@ -2,8 +2,8 @@
 //! the game list.
 //!
 //! A backup holds up to four parts: the app settings, per-game settings,
-//! library data (favourites, hidden games, categories, custom titles and
-//! art) and playtime with the session history. Store sign-ins are never
+//! library data (favourites, hidden games, categories, play statuses,
+//! backlog goals, custom titles and art) and playtime with the session history. Store sign-ins are never
 //! included. Restoring replaces settings, but merges library data and
 //! playtime into what is already there, so an older backup never erases
 //! newer progress.
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Backend;
+use crate::play_status::PlayStatusRecord;
 use crate::sessions::{self, Session};
 
 /// Marks a file as an Irori backup.
@@ -47,7 +48,8 @@ impl BackupParts {
     }
 }
 
-/// Favourites, hidden games, categories and custom titles and art.
+/// Favourites, hidden games, categories, play statuses, backlog goals and
+/// custom titles and art.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibraryBackup {
@@ -55,6 +57,8 @@ pub struct LibraryBackup {
     pub hidden: BTreeSet<String>,
     pub categories: BTreeMap<String, BTreeSet<String>>,
     pub overrides: BTreeMap<String, GameOverrides>,
+    pub play_status: BTreeMap<String, PlayStatusRecord>,
+    pub backlog_goals: BTreeMap<i32, u32>,
 }
 
 /// Playtime totals and the session history.
@@ -176,6 +180,8 @@ impl Backend {
                 hidden: user.hidden.clone(),
                 categories: user.categories.clone(),
                 overrides: user.overrides.clone(),
+                play_status: user.play_status.clone(),
+                backlog_goals: user.backlog_goals.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
@@ -331,7 +337,9 @@ impl Backend {
 
 /// Add a backup's library data: favourites, hidden games and category
 /// members are added to what is there; custom titles and art from the
-/// backup replace the current ones of the same game.
+/// backup replace the current ones of the same game. A play status is taken
+/// when it was set later than the current one, and a goal only for a year
+/// without one.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
     d.hidden.extend(lib.hidden.iter().cloned());
@@ -345,6 +353,28 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
         if !o.is_empty() {
             d.overrides.insert(key.clone(), o.clone());
         }
+    }
+    for (key, record) in &lib.play_status {
+        let newer = d
+            .play_status
+            .get(key)
+            .is_none_or(|current| later(&record.since, &current.since));
+        if newer {
+            d.play_status.insert(key.clone(), record.clone());
+        }
+    }
+    for (year, goal) in &lib.backlog_goals {
+        d.backlog_goals.entry(*year).or_insert(*goal);
+    }
+}
+
+/// Whether RFC 3339 time `a` is after `b`; unreadable times are never later.
+fn later(a: &str, b: &str) -> bool {
+    let parse = |t: &str| chrono::DateTime::parse_from_rfc3339(t).ok();
+    match (parse(a), parse(b)) {
+        (Some(a), Some(b)) => a > b,
+        (Some(_), None) => true,
+        _ => false,
     }
 }
 
@@ -467,6 +497,49 @@ mod tests {
         assert_eq!(d.favourites.len(), 2);
         assert_eq!(d.categories["RPG"].len(), 2);
         assert_eq!(d.overrides["gog:1"].title.as_deref(), Some("Mine"));
+    }
+
+    #[test]
+    fn play_statuses_merge_by_date_and_goals_never_replace_current_ones() {
+        use crate::play_status::PlayStatus;
+        let record = |status, since: &str| PlayStatusRecord {
+            status,
+            since: since.into(),
+        };
+        let mut d = crate::UserData::default();
+        d.play_status.insert(
+            "gog:1".into(),
+            record(PlayStatus::Beaten, "2026-10-01T10:00:00Z"),
+        );
+        d.play_status.insert(
+            "gog:2".into(),
+            record(PlayStatus::Playing, "2026-01-01T10:00:00Z"),
+        );
+        d.backlog_goals.insert(2026, 12);
+        let lib = LibraryBackup {
+            play_status: [
+                (
+                    "gog:1".to_string(),
+                    record(PlayStatus::Playing, "2026-09-01T10:00:00+02:00"),
+                ),
+                (
+                    "gog:2".to_string(),
+                    record(PlayStatus::Abandoned, "2026-03-01T10:00:00Z"),
+                ),
+                (
+                    "gog:3".to_string(),
+                    record(PlayStatus::PlanToPlay, "2025-03-01T10:00:00Z"),
+                ),
+            ]
+            .into(),
+            backlog_goals: [(2026, 4), (2025, 6)].into(),
+            ..Default::default()
+        };
+        merge_library(&mut d, &lib);
+        assert_eq!(d.play_status["gog:1"].status, PlayStatus::Beaten);
+        assert_eq!(d.play_status["gog:2"].status, PlayStatus::Abandoned);
+        assert_eq!(d.play_status["gog:3"].status, PlayStatus::PlanToPlay);
+        assert_eq!(d.backlog_goals, [(2025, 6), (2026, 12)].into());
     }
 
     #[test]

@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Verkort overgangen en vermijd beweging.",
   "settings.field.ui_reduce_motion.label": "Beweging beperken",
   "settings.field.ui_show_store_badges.label": "Storebadges tonen",
+  "settings.field.ui_system_accent.help": "Kleurt het eigen thema van Irori in de accentkleur uit de systeeminstellingen en volgt die wanneer ze verandert. Een uit de lijst gekozen thema behoudt zijn eigen kleuren.",
+  "settings.field.ui_system_accent.label": "Accentkleur van het systeem gebruiken",
   "settings.field.ui_theme.label": "Kleurmodus",
   "settings.field.ui_theme_name.label": "Thema",
   "settings.field.ui_tile_size.help": "Breedte van gamecovers in het bibliotheekraster.",

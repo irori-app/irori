@@ -1,0 +1,378 @@
+---
+/**
+ * A wall of covers in perspective: columns drifting up and down at their own
+ * speeds, the far ones slower, with warm light rising from below and a slow
+ * spotlight passing over now and then. It leans towards the pointer, covers lift
+ * and glow in their own colour under it, and it stops when it leaves the screen,
+ * when the tab is hidden, for visitors who ask for reduced motion, and from its
+ * own pause button, whose choice is remembered.
+ *
+ * Every animation moves `transform` only. The covers come from `src/data/covers.ts`;
+ * each column is in the page once, and the script appends a second copy so the loop
+ * is seamless. Without the script the wall simply stands still.
+ *
+ * `size="band"` is the short strip at the top of section pages.
+ */
+import { Pause, Play } from '@lucide/vue'
+import { wallItems, type WallItem } from '../lib/wall'
+import { dictionary, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  size?: 'hero' | 'band'
+}
+const { locale, size = 'hero' } = Astro.props
+const t = dictionary(locale).home.hero
+
+const hero = size === 'hero'
+const COLUMNS = hero ? 8 : 9
+const PER_COLUMN = hero ? 6 : 4
+/** Seconds per loop. Odd columns sit further back, so they move slower. */
+const SPEEDS = [70, 96, 84, 110, 92, 104, 76, 118, 88]
+const items = wallItems()
+const columns = Array.from({ length: COLUMNS }, (_, c) =>
+  Array.from({ length: PER_COLUMN }, (_, k) => items[(c * 5 + k * 7 + (hero ? 0 : 3)) % items.length]!),
+)
+const faces = { display: 'font-display font-bold uppercase', serif: 'font-serif font-semibold uppercase tracking-wide', plain: 'font-sans font-bold' }
+const visibility = (c: number) =>
+  hero ? [c >= 4 && c < 6 && 'hidden sm:block', c >= 6 && 'hidden lg:block'] : [c >= 5 && c < 7 && 'hidden sm:block', c >= 7 && 'hidden lg:block']
+const key = (item: WallItem) => (item.kind === 'store' ? `store-${item.name}` : item.slug)
+---
+
+<div class:list={['cover-wall', `is-${size}`]} data-wall data-state="paused" aria-hidden="true">
+  <div class="wall-stage">
+    <div class="wall-tilt" data-wall-tilt>
+      {
+        columns.map((column, c) => (
+          <div class:list={['wall-column', c % 2 && 'is-far', ...visibility(c)]}>
+            <div class="wall-track" style={`--d:${SPEEDS[c]}s;--dir:${c % 2 ? 'reverse' : 'normal'}`}>
+              {column.map((item) =>
+                item.kind === 'store' ? (
+                  <figure class="wall-cover wall-store" data-key={key(item)}>
+                    <span class="font-mono text-[0.6em] uppercase tracking-[0.2em] text-ember">Irori ×</span>
+                    <span class="font-display font-bold leading-tight">{item.name}</span>
+                  </figure>
+                ) : (
+                  <figure class="wall-cover" style={`--cover-glow:${item.accent}`} data-key={key(item)}>
+                    <picture>
+                      {item.avifset && <source type="image/avif" srcset={item.avifset} sizes={hero ? '(min-width: 1024px) 11vw, 24vw' : '(min-width: 1024px) 7vw, 18vw'} />}
+                    <img
+                      src={item.src}
+                      srcset={item.srcset}
+                      sizes={hero ? '(min-width: 1024px) 11vw, 24vw' : '(min-width: 1024px) 7vw, 18vw'}
+                      alt=""
+                      width="600"
+                      height="900"
+                      loading={hero ? 'eager' : 'lazy'}
+                      fetchpriority="low"
+                      decoding="async"
+                    />
+                    </picture>
+                    {!item.titleInArt && <figcaption class:list={['wall-title', faces[item.face ?? 'display']]}>{item.title}</figcaption>}
+                  </figure>
+                ),
+              )}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+  <div class="wall-spot"></div>
+  <div class="wall-ember"></div>
+</div>
+<button type="button" class="wall-toggle" data-wall-toggle hidden aria-pressed="false" data-pause={t.pause} data-play={t.play}>
+  <Pause class="size-4 icon-pause" aria-hidden="true" />
+  <Play class="size-4 icon-play hidden" aria-hidden="true" />
+  <span data-wall-label>{t.pause}</span>
+</button>
+
+<style>
+  .cover-wall {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    contain: strict;
+    --gap: clamp(0.6rem, 1.2vw, 1.1rem);
+    --px: 0px;
+    --py: 0px;
+  }
+  .is-band {
+    --gap: clamp(0.45rem, 0.8vw, 0.75rem);
+  }
+  .wall-stage {
+    position: absolute;
+    inset: 0;
+    perspective: 1600px;
+    perspective-origin: 70% 40%;
+  }
+  .wall-tilt {
+    position: absolute;
+    inset: -34% -14% -34% 16%;
+    display: flex;
+    gap: var(--gap);
+    transform-style: preserve-3d;
+    transform: translate3d(var(--px), var(--py), 0) rotateX(22deg) rotateY(-14deg) rotateZ(-10deg);
+    /* In 3D the planes themselves would catch the pointer; only covers should. */
+    pointer-events: none;
+    transition: transform 1600ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .is-band .wall-tilt {
+    inset: -70% -8% -70% 34%;
+    transform: translate3d(var(--px), var(--py), 0) rotateX(26deg) rotateY(-12deg) rotateZ(-12deg);
+  }
+  @media (max-width: 1023px) {
+    .wall-tilt {
+      inset: -40% -25% -40% -10%;
+    }
+    .is-band .wall-tilt {
+      inset: -80% -30% -80% 10%;
+    }
+  }
+  .wall-column {
+    flex: 1 1 0;
+    min-width: 0;
+    transform-style: preserve-3d;
+  }
+  /* Every other column sits further back: smaller, slower, a little darker. */
+  .wall-column.is-far {
+    transform: translateZ(-90px);
+    filter: brightness(0.82);
+  }
+  .wall-track {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    animation: wall-drift var(--d) linear infinite;
+    animation-direction: var(--dir);
+    will-change: transform;
+    transform-style: preserve-3d;
+  }
+  [data-state='paused'] .wall-track,
+  [data-state='paused'] .wall-spot::before,
+  [data-state='paused'] .wall-ember {
+    animation-play-state: paused;
+  }
+  @keyframes wall-drift {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(0, calc(-50% - var(--gap) / 2), 0); }
+  }
+  /* Reduced motion stops the wall; pressing Play is the visitor's own choice. */
+  @media (prefers-reduced-motion: reduce) {
+    .cover-wall[data-state='playing'][data-chosen] .wall-track {
+      animation-duration: var(--d) !important;
+      animation-iteration-count: infinite !important;
+    }
+  }
+
+  .wall-cover {
+    position: relative;
+    margin: 0;
+    aspect-ratio: 2 / 3;
+    border-radius: clamp(0.5rem, 0.9vw, 0.9rem);
+    overflow: hidden;
+    background: var(--hearth);
+    box-shadow: 0 18px 40px -22px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.06) inset;
+    transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 500ms;
+    pointer-events: auto;
+  }
+  .wall-cover img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Under the pointer a cover comes forward and glows in its own colour. */
+  @media (hover: hover) and (pointer: fine) {
+    .wall-cover:hover {
+      transform: translateZ(70px) scale(1.06);
+      box-shadow:
+        0 0 0 1px rgb(255 255 255 / 0.18) inset,
+        0 30px 70px -18px color-mix(in oklab, var(--cover-glow, var(--flame)) 75%, transparent),
+        0 0 46px -6px color-mix(in oklab, var(--cover-glow, var(--flame)) 55%, transparent);
+    }
+  }
+  .wall-title {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 0 9% 9%;
+    color: #fff;
+    font-size: clamp(0.62rem, 1.05vw, 1.05rem);
+    line-height: 1.05;
+    text-shadow: 0 1px 8px rgb(0 0 0 / 0.35);
+  }
+  .is-band .wall-title {
+    font-size: clamp(0.5rem, 0.7vw, 0.75rem);
+  }
+  /* A store, set like a cover: the stores are as much a part of the room as the games. */
+  .wall-store {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.35em;
+    padding: 9%;
+    color: #f2e9dc;
+    font-size: clamp(0.8rem, 1.4vw, 1.4rem);
+    background:
+      radial-gradient(120% 70% at 50% 110%, rgb(255 107 44 / 0.55), transparent 60%),
+      linear-gradient(180deg, #241c17, #120d0b);
+    --cover-glow: #ff6b2c;
+  }
+  .is-band .wall-store {
+    font-size: clamp(0.6rem, 0.9vw, 0.9rem);
+  }
+
+  /* A slow band of firelight crosses the wall, then rests out of sight. */
+  .wall-spot {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .wall-spot::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    bottom: -50%;
+    left: 0;
+    width: 45%;
+    background: linear-gradient(100deg, transparent 0%, rgb(255 170 90 / 0.16) 45%, rgb(255 214 160 / 0.22) 50%, rgb(255 170 90 / 0.16) 55%, transparent 100%);
+    transform: translate3d(-120%, 0, 0) rotate(8deg);
+    animation: wall-sweep 22s cubic-bezier(0.45, 0, 0.25, 1) 3s infinite;
+  }
+  @keyframes wall-sweep {
+    0% { transform: translate3d(-120%, 0, 0) rotate(8deg); }
+    35%, 100% { transform: translate3d(330%, 0, 0) rotate(8deg); }
+  }
+  /* Ember light from below, breathing slowly. */
+  .wall-ember {
+    position: absolute;
+    left: 10%;
+    right: -10%;
+    bottom: -35%;
+    height: 70%;
+    pointer-events: none;
+    background: radial-gradient(closest-side, rgb(255 107 44 / 0.32), rgb(255 107 44 / 0.1) 55%, transparent);
+    transform-origin: 50% 100%;
+    animation: wall-breathe 7s ease-in-out infinite alternate;
+  }
+  :global(html:not(.dark)) .wall-ember {
+    background: radial-gradient(closest-side, rgb(255 107 44 / 0.22), rgb(255 107 44 / 0.06) 55%, transparent);
+  }
+  @keyframes wall-breathe {
+    from { transform: scale(1, 0.92); }
+    to { transform: scale(1.06, 1.08); }
+  }
+
+  .wall-toggle {
+    position: absolute;
+    z-index: 3;
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    bottom: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    height: 2.25rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: var(--paper);
+    border: 1px solid var(--grain);
+    background: color-mix(in oklab, var(--ash) 75%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: background-color 160ms, border-color 160ms;
+  }
+  .wall-toggle[hidden] {
+    display: none;
+  }
+  .wall-toggle:hover {
+    background: var(--soot);
+    border-color: var(--wood);
+  }
+</style>
+
+<script>
+  const KEY = 'irori-wall'
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)')
+  const finePointer = matchMedia('(hover: hover) and (pointer: fine)')
+
+  /** One choice for every wall on the site: pausing one pauses them all, on later pages too. */
+  let wanted = !reduced.matches
+  let chosen = false
+  try {
+    const saved = localStorage.getItem(KEY)
+    if (saved) {
+      wanted = saved === 'playing'
+      chosen = true
+    }
+  } catch {
+    // Without storage the walls follow the motion preference.
+  }
+
+  const walls = [...document.querySelectorAll<HTMLElement>('[data-wall]')].map((wall) => {
+    const button = wall.nextElementSibling as HTMLButtonElement
+    wall.querySelectorAll('.wall-track').forEach((track) => {
+      for (const cover of [...track.children]) track.append(cover.cloneNode(true))
+    })
+    if (chosen) wall.dataset.chosen = ''
+    button.hidden = false
+    return { wall, button, onScreen: true }
+  })
+
+  const render = () => {
+    for (const w of walls) {
+      w.wall.dataset.state = wanted && w.onScreen && !document.hidden ? 'playing' : 'paused'
+      w.button.setAttribute('aria-pressed', String(!wanted))
+      w.button.querySelector('[data-wall-label]')!.textContent = (wanted ? w.button.dataset.pause : w.button.dataset.play) ?? ''
+      w.button.querySelector('.icon-pause')?.classList.toggle('hidden', !wanted)
+      w.button.querySelector('.icon-play')?.classList.toggle('hidden', wanted)
+    }
+  }
+
+  for (const w of walls) {
+    w.button.addEventListener('click', () => {
+      wanted = !wanted
+      walls.forEach(({ wall }) => (wall.dataset.chosen = ''))
+      try {
+        localStorage.setItem(KEY, wanted ? 'playing' : 'paused')
+      } catch {
+        // The choice holds for this visit.
+      }
+      render()
+    })
+    new IntersectionObserver(([entry]) => {
+      w.onScreen = entry?.isIntersecting ?? true
+      render()
+    }).observe(w.wall)
+  }
+  document.addEventListener('visibilitychange', render)
+  render()
+
+  // The wall leans a little towards a mouse or trackpad pointer; touch and reduced
+  // motion keep it still. One update per frame at most, and the tilt's own
+  // transition smooths the movement.
+  if (finePointer.matches && !reduced.matches && walls.length) {
+    let frame = 0
+    let x = 0
+    let y = 0
+    window.addEventListener(
+      'pointermove',
+      (event) => {
+        x = event.clientX / innerWidth - 0.5
+        y = event.clientY / innerHeight - 0.5
+        frame ||= requestAnimationFrame(() => {
+          frame = 0
+          for (const { wall, onScreen } of walls) {
+            if (!onScreen || wall.dataset.state !== 'playing') continue
+            wall.style.setProperty('--px', `${(-x * 28).toFixed(1)}px`)
+            wall.style.setProperty('--py', `${(-y * 18).toFixed(1)}px`)
+          }
+        })
+      },
+      { passive: true },
+    )
+  }
+</script>

@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Scurtează tranzițiile și evită mișcarea.",
   "settings.field.ui_reduce_motion.label": "Reduce mișcarea",
   "settings.field.ui_show_store_badges.label": "Afișează insignele magazinelor",
+  "settings.field.ui_system_accent.help": "Colorează tema proprie Irori cu culoarea de accent din setările sistemului și o urmează când se schimbă. O temă aleasă din listă își păstrează propriile culori.",
+  "settings.field.ui_system_accent.label": "Folosește culoarea de accent a sistemului",
   "settings.field.ui_theme.label": "Mod de culoare",
   "settings.field.ui_theme_name.label": "Temă",
   "settings.field.ui_tile_size.help": "Lățimea coperților jocurilor în grila bibliotecii.",
