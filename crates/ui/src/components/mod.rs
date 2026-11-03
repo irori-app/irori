@@ -1,5 +1,6 @@
 //! Domain-aware components shared by feature crates.
 
+mod backdrop;
 mod brand;
 mod cover;
 mod empty;
@@ -7,6 +8,7 @@ mod page;
 mod status;
 mod store_badge;
 
+pub use backdrop::{ArtBackdrop, BackdropInk};
 pub use brand::BrandMark;
 pub use cover::{
     ArtImage, GameCover, art_arrival, art_image, art_img, art_is_fresh, art_loading, art_missing,

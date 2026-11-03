@@ -16,6 +16,7 @@ irori-services.workspace = true
 irori-engines.workspace = true
 irori-ui.workspace = true
 irori-runtime.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 irori-extras.workspace = true
 irori-epic.workspace = true
 irori-gog.workspace = true
