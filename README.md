@@ -5,98 +5,295 @@
   </picture>
 </p>
 
-<p align="center"><b>Every game you own, around one fire.</b><br><a href="https://irori.app">irori.app</a></p>
+<p align="center"><b>Every game you own, around one fire.</b></p>
 
-<p align="center"><img alt="Irori's library, shown with demo games" src="website/public/screenshots/library.png" width="800"></p>
+<p align="center">
+  <a href="https://github.com/irori-app/irori/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/irori-app/irori?color=ff6b2c&label=release"></a>
+  <a href="https://github.com/irori-app/irori/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/irori-app/irori/total?color=ff6b2c&label=downloads"></a>
+  <a href="https://github.com/irori-app/irori/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/irori-app/irori?color=ff6b2c"></a>
+  <img alt="Linux, macOS and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-ff6b2c">
+  <img alt="19 languages" src="https://img.shields.io/badge/languages-19-ff6b2c">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff6b2c"></a>
+</p>
+
+<p align="center">
+  <a href="https://irori.app"><b>Website</b></a> ·
+  <a href="#install"><b>Install</b></a> ·
+  <a href="https://github.com/irori-app/irori/releases/latest"><b>Latest release</b></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-library.webp">
+    <img alt="Irori's library, shown with demo games" src="website/public/screenshots/library.webp" width="100%">
+  </picture>
+</p>
 
 An *irori* (囲炉裏) is the sunken hearth of a traditional Japanese house, the place
-everyone gathers. Irori is a fast, native game launcher for Linux, macOS and Windows
-that gathers your **Epic Games**, **GOG**, **Amazon Games**, **ZOOM Platform** and
-**itch.io** libraries, your **Steam** games, your emulated games and anything
-you add yourself into one calm library. Windows games run natively on Windows, through
-Wine, Proton or umu on Linux, and through Wine, CrossOver or Game Porting Toolkit on
-macOS.
+everyone gathers. Irori is a fast, native game launcher for **Linux, macOS and
+Windows** that gathers your **Epic Games**, **GOG**, **Amazon Games**, **ZOOM
+Platform** and **itch.io** libraries, your **Steam** games, your emulated games and
+anything you add yourself into one calm library. Windows games run natively on
+Windows, through Wine, Proton or umu on Linux, and through Wine, CrossOver or Game
+Porting Toolkit on macOS.
+
+It is one native Rust process drawn on your graphics card, with no browser inside and
+no store tools to download: the Epic, GOG and Amazon protocols are built in.
 
 ## Install
 
-Every release is on the [releases page](https://github.com/irori-app/irori/releases),
-and [irori.app](https://irori.app/#download) has the commands for each system.
-
 | Platform | Packages |
-| --- | --- |
-| Linux | apt, dnf and pacman repositories at `packages.irori.app`, a Flatpak bundle, tarball |
-| macOS | Signed and notarized `.dmg`, Homebrew cask (`irori-app/tap/irori`) |
-| Windows | Installer, Scoop bucket (`irori-app/scoop-bucket`) |
+| :--- | :--- |
+| 🐧 **Linux** | apt, dnf and pacman repositories at `packages.irori.app`, a Flatpak bundle (also for Steam Deck), tarball |
+| 🍎 **macOS** | Signed and notarized `.dmg` for Apple silicon and Intel, Homebrew cask |
+| 🪟 **Windows** | Installer for your user (no administrator rights), Scoop bucket |
 
-Windows builds aren't signed yet, so SmartScreen may warn the first time you run the
-installer. Flathub, winget and the AUR are planned. To build Irori yourself, see
-[Building](#building).
+Every file is on the [latest release](https://github.com/irori-app/irori/releases/latest),
+and [irori.app](https://irori.app/#download) has the same commands.
 
-## About
+<details>
+<summary><b>Debian, Ubuntu, Mint, Pop!_OS</b></summary>
 
-Irori is written in Rust with [GPUI](https://www.gpui.rs) and
-[GPUI Kit](https://gpui-kit.com). It is a new application, built from scratch to
-match the feature set of Heroic Games Launcher without Electron: one native process,
-GPU-rendered UI, a small Tokio runtime for I/O, and art that is thumbnailed once to disk
-and kept in a bounded GPU cache.
+```bash
+sudo apt install -y curl
+curl -fsSL https://packages.irori.app/irori.gpg | sudo tee /usr/share/keyrings/irori.gpg > /dev/null
+curl -fsSL https://packages.irori.app/irori.list | sudo tee /etc/apt/sources.list.d/irori.list
+sudo apt update && sudo apt install irori
+```
 
-## Highlights
+</details>
 
-- One library across stores: fuzzy search, filters, sorting, categories, favourites,
-  hidden games, "Continue playing", grid and list views — virtualized for large libraries.
-  Hide the stores you don't use, see installed games by drive, or let Irori pick a
-  random game (Ctrl+Shift+G).
-- One-click play from anywhere: library tiles, the game page, the Ctrl+K command palette,
-  the tray menu, desktop/Steam shortcuts and `irori://launch/<runner>/<app>` links
+<details>
+<summary><b>Fedora, openSUSE</b></summary>
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/irori.repo https://packages.irori.app/irori.repo
+sudo dnf install irori
+```
+
+</details>
+
+<details>
+<summary><b>Arch, Manjaro, EndeavourOS, CachyOS</b></summary>
+
+```bash
+curl -fsSLo /tmp/irori.asc https://packages.irori.app/irori.asc
+sudo pacman-key --add /tmp/irori.asc && sudo pacman-key --lsign-key 6DD7B72703FE3BD5C719F4CE6FE681AB798DF656
+printf '\n[irori]\nServer = https://packages.irori.app/arch/$arch\n' | sudo tee -a /etc/pacman.conf
+sudo pacman -Syu irori
+```
+
+</details>
+
+<details>
+<summary><b>Flatpak and Steam Deck</b></summary>
+
+Download `Irori-…-linux.flatpak` from the [latest release](https://github.com/irori-app/irori/releases/latest),
+then (on Steam Deck, in Desktop Mode):
+
+```bash
+flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --user ./Irori-*-linux.flatpak
+```
+
+Irori isn't on Flathub yet, so install each new version the same way.
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+```bash
+brew install --cask irori-app/tap/irori
+```
+
+Or download the `.dmg` for Apple silicon or Intel from the
+[latest release](https://github.com/irori-app/irori/releases/latest) and drag Irori to
+Applications.
+
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+Download `Irori-…-windows-setup.exe` from the
+[latest release](https://github.com/irori-app/irori/releases/latest). It installs for
+your user and never asks for administrator rights. Or with Scoop:
+
+```powershell
+scoop bucket add irori https://github.com/irori-app/scoop-bucket
+scoop install irori
+```
+
+Windows builds aren't signed yet, so SmartScreen may warn the first time: choose
+**More info**, then **Run anyway**.
+
+</details>
+
+Flathub, winget and the AUR are planned. To build Irori yourself, see [Building](#building).
+
+---
+
+## Every store, one library
+
+- **Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io:** log in and install,
+  update, repair, move or import games from one download queue, with several accounts
+  per store. Each installed game launches with the account it was installed with.
+- **Steam:** your installed games come in from Steam's own files with no login, with
+  Steam's art. Log in (QR code, or password with Steam Guard) to add every game you own
+  and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
+  open Steam's own dialogs.
+- **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
+  or a sortable list, virtualized for libraries of any size. "Continue playing", installed
+  games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
+- **Add any game** yourself, with its own description, developer, release date, genres
+  and art from SteamGridDB.
+- **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
+  favourites, categories and playtime.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="website/public/screenshots/library-list.webp" width="100%" alt="The library as a list with store, size, playtime and status columns"><br><sub><b>List view</b></sub></td>
+    <td width="50%" align="center"><img src="website/public/screenshots/accounts.webp" width="100%" alt="Accounts page with several accounts per store"><br><sub><b>Several accounts per store</b></sub></td>
+  </tr>
+</table>
+
+## One click to play
+
+- **Play from anywhere:** library tiles, the game page, the <kbd>Ctrl</kbd> <kbd>K</kbd>
+  command palette, the tray menu, desktop and Steam shortcuts, and `irori://` links
   (Heroic's `heroic://` links work too).
-- Download queue with pause/resume, reordering, speed and ETA, history and "Update all".
-- One Updates page for games, Wine and Proton builds, DXVK, VKD3D-Proton, umu and the
-  anticheat runtimes, emulators, RetroArch cores and Irori itself: check now, update
-  everything, skip a version, stop updating a game, or go back to the Wine build an update
+- **Per-game settings** inherit your defaults and show exactly what you overrode.
+- **Cloud saves** for Epic and GOG, GOG achievements and playtime, the EOS overlay,
+  ProtonDB, Steam Deck, anticheat and HowLongToBeat info on every game.
+- **"Add to Steam"** for any game, installed or not; Steam starts Irori, which offers to
+  install a game that isn't installed yet.
+- **Discord Rich Presence**, sleep held off while you play, and the game's log, which
+  can open by itself when the game starts.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-game.webp">
+        <img src="website/public/screenshots/game.webp" width="100%" alt="Game page with playtime, last session and the Play button">
+      </picture><br><sub><b>Game page</b></sub>
+    </td>
+    <td width="50%" align="center"><img src="website/public/screenshots/game-kiln.webp" width="100%" alt="Another game page, with its own art"><br><sub><b>Every game keeps its own settings, art and logs</b></sub></td>
+  </tr>
+</table>
+
+## Downloads and updates
+
+- **One queue** with pause and resume, reordering, speed and time left, history and
+  "Update all". Downloads pause when you go offline and resume when you're back, even
+  after a restart.
+- **One Updates page** for games, Wine and Proton builds, DXVK, VKD3D-Proton, umu, the
+  anticheat runtimes, emulators, RetroArch cores and Irori itself: update everything,
+  skip a version, stop updating a game, or go back to the Wine build an update
   replaced. Automatic updates can keep to set hours and stay off metered connections.
-- Per-game settings that inherit your global defaults and show what you overrode.
-- Added games keep their own description, developer, release date and genres.
-- Run any game in gamescope with one switch, upscaling optional. Pick the DXVK and
-  VKD3D-Proton versions for Wine builds, and turn on descriptor heap and Proton's DLSS,
-  FSR and XeSS upgrades without looking up variables. The game's log can open by itself
-  when it starts.
-- Wine/Proton manager (GE-Proton, Proton-CachyOS, Wine-GE, Kron4ek) and discovery of
-  system, Steam, Lutris and Bottles builds; DXVK, VKD3D-Proton, DXVK-NVAPI, gamescope,
-  MangoHud, GameMode, umu and the Steam runtime.
-- Cloud saves (Epic, GOG), GOG achievements and playtime, EOS overlay, ProtonDB, Steam
-  Deck, anticheat and HowLongToBeat info.
-- Big Picture mode and full controller navigation (Xbox, PlayStation incl. DualSense,
-  Switch Pro, Steam Deck), with hotplug and battery display. It opens by itself in the
-  Steam Deck's Game Mode, reads each press once alongside Steam Input, and scales up to
-  200 % for TVs.
-- "Add to Steam" for any game, installed or not, filed under an "Irori" collection;
-  Steam starts Irori, which offers to install a game that isn't installed yet.
-- itch.io, opt-in: log in with an API key, then install, update and play the games you
-  own there. Irori downloads the best upload for your system (resumable), unpacks zip and
-  tar archives and finds the program to start.
-- Your installed Steam games in the same library, read from Steam's own files with no
-  login, with Steam's own art. Log in to Steam (QR code or password with Steam Guard)
-  to add every game you own and your Steam Family's games. Play hands games to Steam
-  with your launch options and follows them until they end, so playtime counts;
-  Install, Verify files and Uninstall open Steam's own dialogs. On Linux, Protontricks
-  opens on a Steam game's Proton prefix from its menu.
-- Several accounts per store (Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io) in
-  one library; each installed game launches with the account it was installed with.
-- One-click import of your Heroic accounts, installs, settings, favourites and categories.
-- Translated into 19 languages, switchable live; searchable settings.
-- Tray menu with recent games, desktop and Steam shortcuts, Discord Rich Presence,
-  EOS overlay, GOG REDmod and private branches, winetricks browser, log upload.
-- Downloads pause automatically when you go offline and resume when you're back.
 
-## Performance
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-downloads.webp">
+        <img src="website/public/screenshots/downloads.webp" width="100%" alt="Download queue with progress, speed and time left">
+      </picture><br><sub><b>Downloads</b></sub>
+    </td>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-wine.webp">
+        <img src="website/public/screenshots/wine.webp" width="100%" alt="Wine manager with Game Porting Toolkit, Wine and Proton builds">
+      </picture><br><sub><b>Wine manager</b></sub>
+    </td>
+  </tr>
+</table>
 
-Measured on Irori 0.2.0 on Linux with an empty profile and the window open: about
-88 MiB of memory in one process, zero CPU while idle, a 76 MB binary. Heroic 2.22.4 on
-the same PC used about 478 MiB across seven processes. A large library hasn't been
-measured yet; see [how these numbers were measured](docs/BENCHMARKS.md).
+## Wine, Proton and Game Porting Toolkit
 
-Cover art is decoded once into on-disk thumbnails and held in an LRU GPU cache; every
-long list is virtualized.
+- **Wine manager** for GE-Proton, Proton-CachyOS, Wine-GE and Kron4ek on Linux, and
+  Wine, CrossOver and Game Porting Toolkit on macOS, plus the system, Steam, Lutris and
+  Bottles builds already on your computer.
+- **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the
+  DXVK and VKD3D-Proton versions per Wine build, and turn on descriptor heap and
+  Proton's DLSS, FSR and XeSS upgrades without looking up variables.
+- **Third-party launchers on Linux:** Battle.net, the EA app, Ubisoft Connect and
+  Rockstar each get a prefix of their own, and their games join your library.
+- **Lutris install scripts**, run with your consent for every download, write and
+  command, confined to the game's folder.
+- Winetricks browser, Protontricks for Steam games, the Steam runtime and umu.
+
+## Emulators
+
+- **RetroArch, DuckStation, PCSX2, Dolphin, PPSSPP, melonDS, mGBA, Azahar, ScummVM,
+  DOSBox Staging** and more, installed from each project's own servers, side by side by
+  version.
+- **ROM folders** scanned and watched, with each game's system, region and revision
+  from its file name, a generated cover, and the BIOS files each system needs checked
+  before you play.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-emulators.webp">
+        <img src="website/public/screenshots/emulators.webp" width="100%" alt="Emulators page with installed emulators and RetroArch cores">
+      </picture><br><sub><b>Emulators</b></sub>
+    </td>
+    <td width="50%" align="center"><img src="website/public/screenshots/game-emulated.webp" width="100%" alt="An emulated game's page with its system, region and revision"><br><sub><b>Emulated games</b></sub></td>
+  </tr>
+</table>
+
+## Big Picture and your play time
+
+- **Big Picture** for the couch: full controller navigation (Xbox, PlayStation including
+  DualSense, Switch Pro, Steam Deck), hotplug and battery display, and scaling up to
+  200 % for TVs. It opens by itself in the Steam Deck's Game Mode and reads each press
+  once alongside Steam Input.
+- **Stats:** hours per week, streaks, your most played games and what your games take
+  on disk.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="website/public/screenshots/bigpicture.webp" width="100%" alt="Big Picture with Continue playing and Installed shelves"><br><sub><b>Big Picture</b></sub></td>
+    <td width="50%" align="center">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-stats.webp">
+        <img src="website/public/screenshots/stats.webp" width="100%" alt="Stats with this week's playtime, streaks and most played games">
+      </picture><br><sub><b>Stats</b></sub>
+    </td>
+  </tr>
+</table>
+
+## Make it yours
+
+- **19 languages**, switchable live: English, Czech, German, Spanish, French, Italian,
+  Dutch, Polish, Portuguese (Portugal and Brazil), Romanian, Swedish, Turkish, Russian,
+  Ukrainian, Japanese, Korean and Chinese (Simplified and Traditional).
+- **Themes**, light and dark, with translucent windows where your system draws them. On
+  KDE Plasma, COSMIC and Omarchy Irori follows your desktop's theme, and elsewhere its
+  accent colour.
+- **Searchable settings**, a tray menu with your recent games, and a log you can upload
+  in one click.
+
+<p align="center"><img src="website/public/screenshots/settings-appearance.webp" width="80%" alt="Searchable settings on the Appearance section"></p>
+
+## Light on your PC
+
+One native process drawn on the GPU, with no bundled browser and no store tools to
+download.
+
+| | Irori 0.2.0 |
+| :--- | :--- |
+| Memory with the window open | **~88 MiB** in one process |
+| CPU while idle | **0 %** |
+| Program size | **76 MB** |
+
+Measured on Linux with an empty profile; Heroic 2.22.4 on the same PC used about
+478 MiB across seven processes. A large library hasn't been measured yet; see
+[how these numbers were measured](docs/BENCHMARKS.md). Cover art is decoded once into
+on-disk thumbnails and held in an LRU GPU cache, and every long list is virtualized.
 
 ## Building
 
