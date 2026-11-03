@@ -163,13 +163,15 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Play from anywhere:** library tiles, the game page, the <kbd>Ctrl</kbd> <kbd>K</kbd>
   command palette, the tray menu, desktop and Steam shortcuts, and `irori://` links
   (Heroic's `heroic://` links work too).
+- **Game pages over the game's own art**, with a play timeline of your sessions day by
+  day, a 1–5 star rating, screenshots and a details table.
 - **Per-game settings** inherit your defaults and show exactly what you overrode.
 - **Cloud saves** for Epic and GOG, GOG achievements and playtime, the EOS overlay,
   ProtonDB, Steam Deck, anticheat and HowLongToBeat info on every game.
 - **"Add to Steam"** for any game, installed or not; Steam starts Irori, which offers to
   install a game that isn't installed yet.
 - **Discord Rich Presence**, sleep held off while you play, and the game's log, which
-  can open by itself when the game starts.
+  can open by itself when the game starts and keeps or hides the lines you filter for.
 
 <table>
   <tr>
@@ -218,8 +220,12 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the
   DXVK and VKD3D-Proton versions per Wine build, and turn on descriptor heap and
   Proton's DLSS, FSR and XeSS upgrades without looking up variables.
+- **Your folders, your shader cache:** choose where downloaded Wine and Proton builds
+  go, and games get 10 GB of shader cache on NVIDIA and Mesa, so big games don't
+  compile their shaders again at every start.
 - **Third-party launchers on Linux:** Battle.net, the EA app, Ubisoft Connect and
-  Rockstar each get a prefix of their own, and their games join your library.
+  Rockstar each get a prefix of their own (or bring the prefix you already have), and
+  their games join your library.
 - **Lutris install scripts**, run with your consent for every download, write and
   command, confined to the game's folder.
 - Winetricks browser, Protontricks for Steam games, the Steam runtime and umu.
@@ -247,12 +253,21 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 
 ## Big Picture and your play time
 
-- **Big Picture** for the couch: full controller navigation (Xbox, PlayStation including
-  DualSense, Switch Pro, Steam Deck), hotplug and battery display, and scaling up to
-  200 % for TVs. It opens by itself in the Steam Deck's Game Mode and reads each press
-  once alongside Steam Input.
-- **Stats:** hours per week, streaks, your most played games and what your games take
-  on disk.
+- **Big Picture** for the couch: Home's shelves and a filterable Library grid glide over
+  the focused game's art, each game has a page of actions, and the button hints match
+  the controller in hand (Xbox, PlayStation including DualSense, Switch Pro, Steam
+  Deck), with hotplug, battery display and scaling up to 200 % for TVs. A mouse works
+  too. It opens by itself in the Steam Deck's Game Mode and reads each press once
+  alongside Steam Input.
+- **Play status** for every game (plan to play, playing, on hold, beaten, abandoned),
+  with the library grouped by it and play time under each cover (<kbd>Ctrl</kbd>
+  <kbd>G</kbd>).
+- **Stats** over your games' art: play time by week, month, year or all time against
+  the period before, a day-by-day chart per game, streaks, comebacks and new games, and
+  a backlog with a yearly goal, its pace and a timeline of what you beat.
+- **An album of your screenshots** per game and period: the ones Steam keeps, and the
+  ones your desktop saves (Spectacle, GNOME, Game Bar, macOS) while a game you started
+  from Irori runs. Irori only reads them.
 
 <table>
   <tr>
@@ -271,9 +286,11 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **19 languages**, switchable live: English, Czech, German, Spanish, French, Italian,
   Dutch, Polish, Portuguese (Portugal and Brazil), Romanian, Swedish, Turkish, Russian,
   Ukrainian, Japanese, Korean and Chinese (Simplified and Traditional).
-- **Themes**, light and dark, with translucent windows where your system draws them. On
-  KDE Plasma, COSMIC and Omarchy Irori follows your desktop's theme, and elsewhere its
-  accent colour.
+- **Themes**, light and dark, with translucent windows over macOS vibrancy, Windows 11
+  Mica or the Linux compositor's blur. On KDE Plasma, COSMIC and Omarchy Irori follows
+  your desktop's theme; elsewhere it takes the system's accent colour (GNOME and other
+  Linux desktops, macOS, Windows), live as you change it, and honours Increase contrast,
+  Reduce transparency and Windows high contrast.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload
   in one click.
 
