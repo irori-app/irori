@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filter",
   "library.toolbar.filters_active": "Filter · {count}",
   "library.toolbar.grid": "Raster",
+  "library.toolbar.group_by_status": "Nach Spielstatus gruppieren",
   "library.toolbar.list": "Liste",
   "library.toolbar.reverse": "Reihenfolge umkehren",
   "library.toolbar.select": "Auswählen",

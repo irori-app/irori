@@ -46,7 +46,7 @@ pub use dialogs::categories::open_categories_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
-pub use filter::{CategoryFilter, HiddenMode, InstallFilter, ViewFilter};
+pub use filter::{CategoryFilter, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use i18n::CATALOGS;
 pub use random::open_random_game;
 pub use stats::StatsView;
@@ -87,6 +87,8 @@ gpui_kit::actions!(
         SelectAllGames,
         /// Leave selection mode.
         EndSelection,
+        /// Turn grouping the library by play status on or off.
+        ToggleStatusGroups,
     ]
 );
 
@@ -109,6 +111,7 @@ pub fn init(cx: &mut App) {
     let grid = Some(GRID_CONTEXT);
     cx.bind_keys([
         KeyBinding::new("ctrl-f", FocusSearch, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("ctrl-g", ToggleStatusGroups, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("/", FocusSearch, grid),
         KeyBinding::new("left", SelectLeft, grid),
         KeyBinding::new("right", SelectRight, grid),
@@ -151,6 +154,22 @@ pub fn install_emulation_store(store: Arc<irori_emulation::EmulationStore>, cx: 
 
 pub(crate) fn emulation_store(cx: &App) -> Option<Arc<irori_emulation::EmulationStore>> {
     cx.try_global::<EmulationHandle>().map(|h| h.0.clone())
+}
+
+/// Whether the library groups its games by play status; `None` until a
+/// library view exists.
+pub fn groups_by_status(cx: &App) -> Option<bool> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group == Grouping::Status)
+}
+
+/// Group the library by play status, or stop. Does nothing until a library
+/// view exists.
+pub fn set_groups_by_status(on: bool, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        let group = if on { Grouping::Status } else { Grouping::None };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
 }
 
 /// Show an error notification in `window`.

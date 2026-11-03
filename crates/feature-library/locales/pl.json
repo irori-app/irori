@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filtry",
   "library.toolbar.filters_active": "Filtry · {count}",
   "library.toolbar.grid": "Siatka",
+  "library.toolbar.group_by_status": "Grupuj według statusu gry",
   "library.toolbar.list": "Lista",
   "library.toolbar.reverse": "Odwróć kolejność",
   "library.toolbar.select": "Zaznacz",

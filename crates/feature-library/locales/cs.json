@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filtry",
   "library.toolbar.filters_active": "Filtry · {count}",
   "library.toolbar.grid": "Mřížka",
+  "library.toolbar.group_by_status": "Seskupit podle stavu hraní",
   "library.toolbar.list": "Seznam",
   "library.toolbar.reverse": "Obrátit pořadí",
   "library.toolbar.select": "Vybrat",

@@ -1,6 +1,8 @@
 //! Geometry of the cover grid and keyboard movement within it. Pure
 //! functions over logical pixels and rem sizes so they can be unit-tested.
 
+use std::ops::Range;
+
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
 /// Room under the cover for the title and status lines, in rem.
@@ -118,10 +120,19 @@ pub enum Move {
     PageDown(usize),
 }
 
-/// Index focused after a movement. With nothing focused yet, any movement
-/// focuses the first game. Up/Down keep the column; moving down from a partial
-/// last row lands on the last game.
-pub fn move_focus(current: Option<usize>, len: usize, columns: usize, step: Move) -> Option<usize> {
+/// Index focused after a movement in a list split into `sections`
+/// (consecutive ranges, each starting on a new row; `[0..len]` for one
+/// list). With nothing focused yet, any movement focuses the first game.
+/// Up/Down keep the column, cross into the next or previous section, and land
+/// on a row's last game when it is shorter; Left/Right run through the
+/// sections as one list.
+pub fn move_in_sections(
+    current: Option<usize>,
+    sections: &[Range<usize>],
+    columns: usize,
+    step: Move,
+) -> Option<usize> {
+    let len = sections.last()?.end;
     if len == 0 {
         return None;
     }
@@ -133,21 +144,49 @@ pub fn move_focus(current: Option<usize>, len: usize, columns: usize, step: Move
     Some(match step {
         Move::Left => ix.saturating_sub(1),
         Move::Right => (ix + 1).min(last),
-        Move::Up => ix.checked_sub(columns).unwrap_or(ix),
-        Move::Down => {
-            if ix + columns <= last {
-                ix + columns
-            } else if row_count(len, columns) > ix / columns + 1 {
-                last
-            } else {
-                ix
-            }
-        }
+        Move::Up => row_step(ix, sections, columns, false),
+        Move::Down => row_step(ix, sections, columns, true),
         Move::First => 0,
         Move::Last => last,
-        Move::PageUp(rows) => ix.saturating_sub(columns * rows.max(1)),
-        Move::PageDown(rows) => (ix + columns * rows.max(1)).min(last),
+        Move::PageUp(rows) => {
+            (0..rows.max(1)).fold(ix, |ix, _| row_step(ix, sections, columns, false))
+        }
+        Move::PageDown(rows) => {
+            (0..rows.max(1)).fold(ix, |ix, _| row_step(ix, sections, columns, true))
+        }
     })
+}
+
+/// The game one row below (or above) `ix` in the same column, clamped to a
+/// shorter row; `ix` itself at the end of the list.
+fn row_step(ix: usize, sections: &[Range<usize>], columns: usize, down: bool) -> usize {
+    let Some(s) = sections.iter().position(|r| r.contains(&ix)) else {
+        return ix;
+    };
+    let section = &sections[s];
+    let row_start = |range: &Range<usize>, row: usize| range.start + row * columns;
+    let row = (ix - section.start) / columns;
+    let column = (ix - section.start) % columns;
+    let target =
+        |range: &Range<usize>, row: usize| (row_start(range, row) + column).min(range.end - 1);
+    if down {
+        if row + 1 < row_count(section.len(), columns) {
+            target(section, row + 1)
+        } else {
+            sections[s + 1..]
+                .iter()
+                .find(|r| !r.is_empty())
+                .map_or(ix, |next| target(next, 0))
+        }
+    } else if row > 0 {
+        target(section, row - 1)
+    } else {
+        sections[..s]
+            .iter()
+            .rev()
+            .find(|r| !r.is_empty())
+            .map_or(ix, |prev| target(prev, row_count(prev.len(), columns) - 1))
+    }
 }
 
 #[cfg(test)]
@@ -203,7 +242,8 @@ mod tests {
         //  0 1 2 3
         //  4 5 6 7
         //  8 9
-        let mv = |c, s| move_focus(c, 10, 4, s);
+        let whole = 0..10;
+        let mv = |c, s| move_in_sections(c, std::slice::from_ref(&whole), 4, s);
         assert_eq!(mv(None, Move::Down), Some(0));
         assert_eq!(mv(None, Move::Last), Some(9));
         assert_eq!(mv(Some(0), Move::Left), Some(0));
@@ -218,9 +258,51 @@ mod tests {
         assert_eq!(mv(Some(6), Move::First), Some(0));
         assert_eq!(mv(Some(6), Move::PageDown(5)), Some(9));
         assert_eq!(mv(Some(6), Move::PageUp(1)), Some(2));
-        assert_eq!(move_focus(Some(3), 0, 4, Move::Down), None);
+        let empty = 0..0;
+        assert_eq!(
+            move_in_sections(Some(3), std::slice::from_ref(&empty), 4, Move::Down),
+            None
+        );
         // A stale index beyond the list is clamped first.
         assert_eq!(mv(Some(42), Move::Left), Some(8));
+    }
+
+    #[test]
+    fn keyboard_movement_across_sections() {
+        // Three sections in 3 columns:
+        //  0 1 2      (Playing)
+        //  3
+        //  4 5        (Plan to play)
+        //  6 7 8      (Not played)
+        //  9 10 11
+        let sections = [0..4, 4..6, 6..12];
+        let mv = |c, s| move_in_sections(Some(c), &sections, 3, s);
+        // Down keeps the column, landing on a shorter row's last game.
+        assert_eq!(mv(1, Move::Down), Some(3));
+        assert_eq!(mv(2, Move::Down), Some(3));
+        // From a section's last row into the next section's first row.
+        assert_eq!(mv(3, Move::Down), Some(4));
+        assert_eq!(mv(2, Move::Up), Some(2));
+        assert_eq!(mv(5, Move::Down), Some(7));
+        assert_eq!(mv(11, Move::Down), Some(11));
+        // Up into the previous section's last row, clamped to its length.
+        assert_eq!(mv(8, Move::Up), Some(5));
+        assert_eq!(mv(5, Move::Up), Some(3));
+        assert_eq!(mv(4, Move::Up), Some(3));
+        assert_eq!(mv(10, Move::Up), Some(7));
+        // Left and Right run through the sections.
+        assert_eq!(mv(3, Move::Right), Some(4));
+        assert_eq!(mv(6, Move::Left), Some(5));
+        // Pages count rows across sections.
+        assert_eq!(mv(0, Move::PageDown(3)), Some(6));
+        assert_eq!(mv(9, Move::PageUp(2)), Some(4));
+        assert_eq!(mv(9, Move::PageUp(10)), Some(0));
+        assert_eq!(mv(4, Move::Last), Some(11));
+        assert_eq!(move_in_sections(None, &sections, 3, Move::Down), Some(0));
+        assert_eq!(move_in_sections(Some(1), &[], 3, Move::Down), None);
+        // One column (the list layout) is a plain list.
+        assert_eq!(move_in_sections(Some(3), &sections, 1, Move::Down), Some(4));
+        assert_eq!(move_in_sections(Some(4), &sections, 1, Move::Up), Some(3));
     }
 
     #[test]

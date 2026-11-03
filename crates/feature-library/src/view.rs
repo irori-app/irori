@@ -34,7 +34,7 @@ use irori_core::settings::LibraryLayout;
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
-use irori_services::{LibrarySort, StoreFilter};
+use irori_services::{EffectiveStatus, LibrarySort, StoreFilter};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
     ArtImage, EmptyState, GameCover, PageHeader, SectionTitle, StoreBadge, art_image, art_img,
@@ -43,12 +43,12 @@ use irori_ui::components::{
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
 use irori_ui::style::{KeyboardFocusable as _, art_tint};
-use irori_ui::{Route, backend, models, navigate};
+use irori_ui::{Route, backend, models, navigate, play_status};
 
 use crate::availability::{self, Availability};
 use crate::commands::{self, GameCommand, GameState};
 use crate::dialogs;
-use crate::filter::{self, FilteredGames, HiddenMode, ViewFilter};
+use crate::filter::{self, FilteredGames, Grouping, HiddenMode, StatusGroup, ViewFilter};
 use crate::filters_panel::{FilterModel, FiltersPanel, set_active_filters};
 use crate::grid::{self, GridMetrics, Move};
 use crate::launch::{self, LaunchChoice};
@@ -56,7 +56,7 @@ use crate::top::{TopCache, TopKind};
 use crate::{
     ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
     OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft, SelectPageDown,
-    SelectPageUp, SelectRight, SelectUp,
+    SelectPageUp, SelectRight, SelectUp, ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -79,8 +79,14 @@ const SHORTCUT_TTL: Duration = Duration::from_secs(30);
 enum Item {
     Top,
     Heading,
+    /// The heading of `Frame::groups[ix]`.
+    GroupHeading(usize),
     ListHeader,
-    GridRow(usize),
+    /// The games at `start..end` of the shown list.
+    GridRow {
+        start: usize,
+        end: usize,
+    },
     ListRow(usize),
 }
 
@@ -88,6 +94,7 @@ enum Item {
 struct FrameKey {
     count: usize,
     top: Option<(TopKind, usize)>,
+    groups: Vec<(EffectiveStatus, usize)>,
     layout: LibraryLayout,
     metrics: GridMetrics,
     rem: Pixels,
@@ -98,6 +105,8 @@ struct FrameKey {
 /// change (the game list itself is cached in [`FilteredGames`]).
 struct Frame {
     games: Arc<[Arc<GameInfo>]>,
+    /// Play-status sections of `games`; empty when the list is not grouped.
+    groups: Arc<[StatusGroup]>,
     top: Option<(TopKind, Arc<[Arc<GameInfo>]>)>,
     stores: Vec<Runner>,
     /// Title of the main section under the top row.
@@ -114,6 +123,7 @@ impl Default for Frame {
     fn default() -> Self {
         Self {
             games: Arc::from(Vec::new()),
+            groups: Arc::from(Vec::new()),
             top: None,
             stores: Vec::new(),
             heading: SharedString::default(),
@@ -147,6 +157,9 @@ pub struct LibraryView {
     /// Capacity last given to `images`.
     image_capacity: usize,
     frame: Frame,
+    /// Grouping of the last frame: a change reorders every game, so the list
+    /// starts again from the top.
+    grouping: Grouping,
     focused: Option<GameId>,
     hovered: Option<GameId>,
     menu_open: Option<GameId>,
@@ -256,6 +269,7 @@ impl LibraryView {
             viewport: Size::default(),
             image_capacity: IMAGE_CACHE_CAPACITY,
             frame: Frame::default(),
+            grouping: Grouping::None,
             focused: None,
             hovered: None,
             menu_open: None,
@@ -283,6 +297,12 @@ impl LibraryView {
     /// Games currently shown, in display order.
     pub fn visible_games(&self) -> Arc<[Arc<GameInfo>]> {
         self.frame.games.clone()
+    }
+
+    /// Play statuses of the shown sections, in order; empty when not grouped.
+    #[cfg(test)]
+    pub(crate) fn status_groups(&self) -> Vec<EffectiveStatus> {
+        self.frame.groups.iter().map(|g| g.status).collect()
     }
 
     /// The game with keyboard focus in the grid or list.
@@ -345,6 +365,13 @@ impl LibraryView {
         let games = self
             .games
             .get(&filter, &stores, &snapshot, &user, &updates, &missing);
+        let groups = self.games.groups();
+        if filter.group != self.grouping {
+            if self.frame.key.is_some() {
+                self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+            }
+            self.grouping = filter.group;
+        }
         let top = if filter.query.trim().is_empty() && filter.hidden != HiddenMode::Only {
             self.top.get(
                 app.library_top_section,
@@ -374,6 +401,7 @@ impl LibraryView {
         let key = FrameKey {
             count: games.len(),
             top: top.as_ref().map(|(k, g)| (*k, g.len())),
+            groups: groups.iter().map(|g| (g.status, g.range.len())).collect(),
             layout: self.layout,
             metrics,
             rem,
@@ -383,14 +411,28 @@ impl LibraryView {
             let mut items = Vec::new();
             if top.is_some() {
                 items.push(Item::Top);
-                items.push(Item::Heading);
+                // Grouped lists head each section instead.
+                if groups.is_empty() {
+                    items.push(Item::Heading);
+                }
             }
-            match self.layout {
-                LibraryLayout::Grid => items
-                    .extend((0..grid::row_count(games.len(), metrics.columns)).map(Item::GridRow)),
-                LibraryLayout::List => {
-                    items.push(Item::ListHeader);
-                    items.extend((0..games.len()).map(Item::ListRow));
+            if self.layout == LibraryLayout::List {
+                items.push(Item::ListHeader);
+            }
+            for (ix, range) in section_ranges(&groups, games.len()).into_iter().enumerate() {
+                if !groups.is_empty() {
+                    items.push(Item::GroupHeading(ix));
+                }
+                match self.layout {
+                    LibraryLayout::Grid => {
+                        items.extend(range.clone().step_by(metrics.columns.max(1)).map(|start| {
+                            Item::GridRow {
+                                start,
+                                end: (start + metrics.columns).min(range.end),
+                            }
+                        }))
+                    }
+                    LibraryLayout::List => items.extend(range.map(Item::ListRow)),
                 }
             }
             let top_kind = top.as_ref().map(|(k, _)| *k);
@@ -406,6 +448,7 @@ impl LibraryView {
         // ever touch games on screen.
         self.selection.keep_shown(&games);
         self.frame.games = games;
+        self.frame.groups = groups;
         self.frame.top = top;
         self.frame.stores = stores;
         self.frame.heading = if !filter.categories.is_empty() {
@@ -450,12 +493,16 @@ impl LibraryView {
 
     /// Virtual-list index of the row holding the game at `game_ix`.
     fn item_of_game(&self, game_ix: usize) -> Option<usize> {
-        let row = game_ix / self.columns();
         self.frame.items.iter().position(|item| match item {
-            Item::GridRow(r) => *r == row,
+            Item::GridRow { start, end } => (*start..*end).contains(&game_ix),
             Item::ListRow(i) => *i == game_ix,
             _ => false,
         })
+    }
+
+    /// Ranges of the shown list that start a new row.
+    fn sections(&self) -> Vec<Range<usize>> {
+        section_ranges(&self.frame.groups, self.frame.games.len())
     }
 
     // ---- state and commands ---------------------------------------------
@@ -896,11 +943,17 @@ impl LibraryView {
             Move::PageDown(_) => Move::PageDown(page_rows),
             other => other,
         };
-        if let Some(ix) = grid::move_focus(current, games.len(), self.columns(), step) {
+        if let Some(ix) = grid::move_in_sections(current, &self.sections(), self.columns(), step) {
             let id = games[ix].id();
             self.check_shortcut(&id, cx);
             self.focused = Some(id);
             if let Some(item) = self.item_of_game(ix) {
+                // Going up onto a section's first row shows its heading too.
+                let upward = matches!(step, Move::Up | Move::PageUp(_) | Move::First);
+                let item = match item.checked_sub(1).map(|i| self.frame.items[i]) {
+                    Some(Item::GroupHeading(_)) if upward => item - 1,
+                    _ => item,
+                };
                 self.scroll.scroll_to_item(item, ScrollStrategy::Nearest);
             }
             cx.notify();
@@ -981,6 +1034,19 @@ impl LibraryView {
             .update(cx, |m, cx| m.update(ViewFilter::clear_all, cx));
     }
 
+    /// Turn grouping by play status on or off.
+    fn toggle_status_groups(&mut self, cx: &mut Context<Self>) {
+        self.update_filter(
+            |f| {
+                f.group = match f.group {
+                    Grouping::None => Grouping::Status,
+                    Grouping::Status => Grouping::None,
+                }
+            },
+            cx,
+        );
+    }
+
     fn set_layout(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
         if self.layout == layout {
             return;
@@ -1004,6 +1070,17 @@ impl LibraryView {
     }
 }
 
+/// The play-status sections of a list of `len` games, or the whole list when
+/// it is not grouped.
+fn section_ranges(groups: &[StatusGroup], len: usize) -> Vec<Range<usize>> {
+    if groups.is_empty() {
+        let whole = 0..len;
+        vec![whole]
+    } else {
+        groups.iter().map(|g| g.range.clone()).collect()
+    }
+}
+
 fn slider_value(v: &SliderValue) -> f32 {
     v.start().clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM)
 }
@@ -1020,9 +1097,9 @@ fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
             };
             grid::HEADING_REM + grid::ROW_INSET_REM + art + caption + grid::GAP_REM
         }
-        Item::Heading => grid::HEADING_REM,
+        Item::Heading | Item::GroupHeading(_) => grid::HEADING_REM,
         Item::ListHeader => 2.25,
-        Item::GridRow(_) => metrics.row_rem,
+        Item::GridRow { .. } => metrics.row_rem,
         Item::ListRow(_) => grid::LIST_ROW_REM,
     }
 }
@@ -1281,6 +1358,7 @@ impl LibraryView {
         let searching = !filter.query.trim().is_empty();
         let panel = self.filters_panel.clone();
         let layout = self.layout;
+        let grouped = filter.group == Grouping::Status;
 
         let store_switcher = (stores.len() > 1).then(|| {
             let options: Vec<Option<Runner>> = std::iter::once(None)
@@ -1475,6 +1553,15 @@ impl LibraryView {
                     .icon(IconName::Dices)
                     .tooltip(t("library.random.tooltip"))
                     .on_click(|_, window, cx| crate::random::open_random_game(window, cx)),
+            )
+            .child(
+                Button::new("library-group")
+                    .small()
+                    .outline()
+                    .icon(IconName::Rows3)
+                    .selected(grouped)
+                    .tooltip(t("library.toolbar.group_by_status"))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_status_groups(cx))),
             )
             .child(
                 Button::new("library-select")
@@ -1721,23 +1808,67 @@ impl LibraryView {
                     .pb_2()
                     .child(SectionTitle::new(self.frame.heading.clone()))
                     .into_any_element(),
+                Item::GroupHeading(ix) => self.render_group_heading(ix, cx),
                 Item::ListHeader => self.render_list_header(cx),
-                Item::GridRow(row) => self.render_grid_row(row, window, cx),
+                Item::GridRow { start, end } => self.render_grid_row(start..end, window, cx),
                 Item::ListRow(ix) => self.render_list_row(ix, window, cx),
             })
             .collect()
     }
 
+    /// A play-status section's heading: its colour, name and game count.
+    fn render_group_heading(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let Some(group) = self.frame.groups.get(ix) else {
+            return div().into_any_element();
+        };
+        let theme = cx.theme();
+        h_flex()
+            .h(rems(grid::HEADING_REM))
+            .px(rems(grid::EDGE_REM))
+            .pb_2()
+            .items_end()
+            .child(
+                h_flex()
+                    .min_w_0()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_none()
+                            .size_2()
+                            .rounded_full()
+                            .bg(play_status::color(group.status, cx)),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .font_semibold()
+                            .child(play_status::label(group.status)),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .px_1p5()
+                            .rounded_md()
+                            .bg(theme.secondary)
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(group.range.len().to_string()),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_grid_row(
         &mut self,
-        row: usize,
+        range: Range<usize>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let metrics = self.frame.metrics;
-        let start = row * metrics.columns;
-        let end = (start + metrics.columns).min(self.frame.games.len());
-        let games: Vec<_> = self.frame.games[start..end].to_vec();
+        let end = range.end.min(self.frame.games.len());
+        let games: Vec<_> = self.frame.games[range.start.min(end)..end].to_vec();
         h_flex()
             .items_start()
             .h(rems(metrics.row_rem))
@@ -1956,6 +2087,15 @@ impl LibraryView {
         let hover_id = id.clone();
         let click_id = id.clone();
         let caption_text = caption(game, &state, status.as_ref());
+        // Sections by play status read as a backlog: each cover says how long
+        // it has been played.
+        let played = (!self.frame.groups.is_empty())
+            .then(|| {
+                let lib = models(cx).library.read(cx);
+                lib.user.playtime.get(&key).map(|r| r.total_minutes)
+            })
+            .flatten()
+            .and_then(crate::format::playtime);
         v_flex()
             .id(ElementId::Name(format!("tile:{key}").into()))
             .w(width)
@@ -1983,13 +2123,21 @@ impl LibraryView {
                             .when(dim, |el| el.text_color(muted))
                             .child(game.title.clone()),
                     )
-                    .when(!caption_text.is_empty(), |el| {
+                    .when(!caption_text.is_empty() || played.is_some(), |el| {
                         el.child(
-                            div()
+                            h_flex()
+                                .min_w_0()
+                                .gap_1()
                                 .text_xs()
                                 .text_color(muted)
-                                .truncate()
-                                .child(caption_text),
+                                .when_some(played, |el, played| {
+                                    el.child(Icon::new(IconName::Clock).xsmall().flex_none())
+                                        .child(div().flex_none().child(played))
+                                        .when(!caption_text.is_empty(), |el| {
+                                            el.child(div().flex_none().child("·"))
+                                        })
+                                })
+                                .child(div().min_w_0().truncate().child(caption_text)),
                         )
                     }),
             )
@@ -2564,6 +2712,9 @@ impl Render for LibraryView {
             .track_focus(&self.focus_handle)
             .on_action(
                 cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ToggleStatusGroups, _, cx| this.toggle_status_groups(cx)),
             )
             .size_full()
             .min_h_0()

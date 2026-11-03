@@ -431,6 +431,7 @@
   "library.toolbar.filters": "필터",
   "library.toolbar.filters_active": "필터 · {count}",
   "library.toolbar.grid": "격자",
+  "library.toolbar.group_by_status": "플레이 상태별로 묶기",
   "library.toolbar.list": "목록",
   "library.toolbar.reverse": "역순",
   "library.toolbar.select": "선택",

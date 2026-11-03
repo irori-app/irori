@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filters",
   "library.toolbar.filters_active": "Filters · {count}",
   "library.toolbar.grid": "Raster",
+  "library.toolbar.group_by_status": "Groeperen op speelstatus",
   "library.toolbar.list": "Lijst",
   "library.toolbar.reverse": "Volgorde omkeren",
   "library.toolbar.select": "Selecteren",
