@@ -286,6 +286,11 @@ impl Backend {
                         while rx.try_recv().is_ok() {}
                         b.rebuild_library();
                     }
+                    Ok(Event::WineVersionsChanged) => {
+                        let b = b.clone();
+                        b.clone()
+                            .spawn(async move { b.forget_present_wine_updates().await });
+                    }
                     Ok(Event::SettingsChanged) => {
                         let app = b.settings.app();
                         let now = switches(&app);
