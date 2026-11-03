@@ -1,14 +1,15 @@
-//! Page header: the cover with the primary action, tools and rating under
-//! it; beside it the title, a date · platform · genres line, the summary and
-//! the play stats. The sticky bar keeps the primary action in reach after
-//! scrolling.
+//! The page's header (back link, title or logo, and a date · platform ·
+//! genres line) and its cover column: the cover with the primary action
+//! under it at its width, the game's tools, the user's rating and a card of
+//! quick facts. The sticky bar keeps the primary action in reach once it
+//! scrolls away.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _, DropdownButton};
 use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem};
-use gpui_kit::component::progress::Progress;
 use gpui_kit::component::select::Select;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
@@ -18,7 +19,7 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, BoxShadow, Context, Div, Hsla, InteractiveElement as _, IntoElement,
-    ObjectFit, ParentElement, SharedString, Styled, StyledImage as _, Window, div, point, px, rems,
+    ObjectFit, ParentElement, SharedString, Styled, StyledImage as _, canvas, div, point, px, rems,
 };
 use irori_core::{GameInfo, StatusKind};
 use irori_services::LaunchParams;
@@ -29,19 +30,12 @@ use irori_ui::style::{ICON_CONTRAST, art_tint, legible};
 use irori_ui::{backend, models};
 
 use super::GamePage;
+use crate::hooks::{AnticheatStatus, SteamDeckStatus};
 use crate::state::PrimaryAction;
 use crate::{manage, ops, saves};
 
 /// How far the sticky bar slides down as it appears, in pixels.
 const STICKY_DROP_PX: f32 = 24.0;
-/// Width of the cover column.
-const COVER_WIDTH: f32 = 15.;
-/// Cover width on narrow pages, where the summary needs the room.
-const COMPACT_COVER_WIDTH: f32 = 10.;
-/// Pages narrower than this (in rem) get the compact cover.
-const COMPACT_PAGE_REM: f32 = 52.;
-/// Pages narrower than this (in rem) stack the cover above the title.
-const STACKED_PAGE_REM: f32 = 36.;
 /// Genres shown in the header's line under the title.
 const HEADER_GENRES: usize = 3;
 
@@ -62,24 +56,52 @@ impl GamePage {
         irori_ui::art::ambient(&url, cx).map(|a| art_tint(a.rgb, cx))
     }
 
-    /// The page header: back link, then the cover column beside the title,
-    /// details line, summary and stats.
+    /// The page header: back link, store, title or logo, the details line and
+    /// region tags.
     pub(super) fn render_header(
         &mut self,
         game: &Arc<GameInfo>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let page_rem = self.page_rem(window).unwrap_or(f32::MAX);
-        let stacked = page_rem < STACKED_PAGE_REM;
-        let cover_width = if page_rem < COMPACT_PAGE_REM {
-            COMPACT_COVER_WIDTH
-        } else {
-            COVER_WIDTH
+        let ink = self.ink;
+        let logo = game
+            .art_logo
+            .clone()
+            .filter(|l| !l.is_empty())
+            .and_then(|url| art_img(&url, 720, true, cx));
+        let heading = match logo {
+            Some(logo) => div()
+                .h(rems(6.))
+                .max_w_full()
+                .overflow_hidden()
+                .child(
+                    logo.image_cache(&self.image_cache)
+                        .h(rems(6.))
+                        .max_w(rems(28.))
+                        .object_fit(ObjectFit::Contain),
+                )
+                .into_any_element(),
+            None => div()
+                .text_size(rems(2.75))
+                .line_height(rems(3.1))
+                .font_extrabold()
+                .text_color(ink.text)
+                .line_clamp(2)
+                .child(game.title.clone())
+                .into_any_element(),
         };
-        let cover = self.render_cover_column(game, cover_width, cx);
-        let info = self.render_info(game, cx);
-        let status = self.render_status_line(game, cx);
+        let meta = self.render_meta_line(game);
+        let tags = (!game.tags.is_empty()).then(|| {
+            h_flex()
+                .gap_2()
+                .flex_wrap()
+                .children(game.tags.iter().map(|g| Tag::secondary().child(g.clone())))
+        });
+        let store = game
+            .system
+            .as_deref()
+            .and_then(irori_engines::systems::get)
+            .map_or(game.runner().store_name(), |s| s.name.as_str());
         let menu_id = self.id.clone();
         let shortcuts = self.shortcuts_exist;
         let store_url = self.store_url(game);
@@ -90,21 +112,12 @@ impl GamePage {
             .px_8()
             .pt_4()
             .pb_6()
-            .gap_6()
-            .child(h_flex().child(back_button(cx)))
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .when_else(
-                        stacked,
-                        |d| d.flex_col().gap_6(),
-                        |d| d.flex_row().items_start().gap_8(),
-                    )
-                    .child(cover)
-                    .child(info),
-            )
-            .children(status)
+            .gap_3()
+            .child(h_flex().pb_2().child(back_button(cx)))
+            .child(super::caption(store, ink.muted))
+            .child(heading)
+            .children(meta.map(|m| div().text_color(ink.muted).line_clamp(2).child(m)))
+            .children(tags)
             .context_menu(move |menu, window, cx| {
                 let menu = super::menu::build_menu(
                     menu,
@@ -120,9 +133,9 @@ impl GamePage {
             .into_any_element()
     }
 
-    /// The portrait cover, the primary action under it at its width, then
-    /// the game's tools and the user's rating.
-    fn render_cover_column(
+    /// The portrait cover, the primary action under it at its width, progress
+    /// or hints, the game's tools, the user's rating and the facts card.
+    pub(super) fn render_cover_column(
         &mut self,
         game: &Arc<GameInfo>,
         width: f32,
@@ -146,13 +159,27 @@ impl GamePage {
                 }])
             })
             .child(primary);
+        // Where the primary action ends, in the page's scrolled content: the
+        // sticky bar shows once it has scrolled out of view.
+        let measure = Rc::clone(&self.header_height);
+        let scroll = self.scroll.clone();
+        let marker = canvas(
+            move |bounds, _, _| {
+                measure.set(bounds.bottom() - scroll.bounds().top() - scroll.offset().y);
+            },
+            |_, _, _, _| {},
+        )
+        .w_full()
+        .h(px(0.));
+        let status = self.render_status_line(game, cx);
         let tools = self.render_tools(game, cx);
         let rating = self.render_rating(cx);
-        // The column is as wide as the cover, or wider when a long action
-        // label needs it; everything in it stretches to that width.
+        let facts = self.render_facts(game, cx);
+        // Everything in the column takes the cover's width; long action
+        // labels end in an ellipsis.
         v_flex()
             .flex_shrink_0()
-            .min_w(rems(width))
+            .w(rems(width))
             .gap_3()
             .child(
                 div()
@@ -163,71 +190,11 @@ impl GamePage {
                     .child(GameCover::new(game.clone()).width(rems(width))),
             )
             .child(primary)
+            .child(marker)
+            .children(status)
             .child(tools)
             .child(rating)
-            .into_any_element()
-    }
-
-    /// Store, title, the details line, region tags, the summary and stats.
-    fn render_info(&mut self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
-        let ink = self.ink;
-        let logo = game
-            .art_logo
-            .clone()
-            .filter(|l| !l.is_empty())
-            .and_then(|url| art_img(&url, 720, true, cx));
-        let heading = match logo {
-            Some(logo) => div()
-                .h(rems(7.))
-                .max_w_full()
-                .overflow_hidden()
-                .child(
-                    logo.image_cache(&self.image_cache)
-                        .h(rems(7.))
-                        .max_w(rems(28.))
-                        .object_fit(ObjectFit::Contain),
-                )
-                .into_any_element(),
-            None => div()
-                .text_size(rems(3.))
-                .line_height(rems(3.4))
-                .font_extrabold()
-                .text_color(ink.text)
-                .line_clamp(2)
-                .child(game.title.clone())
-                .into_any_element(),
-        };
-        let meta = self.render_meta_line(game);
-        let tags = (!game.tags.is_empty()).then(|| {
-            h_flex()
-                .gap_2()
-                .flex_wrap()
-                .children(game.tags.iter().map(|g| Tag::secondary().child(g.clone())))
-        });
-        let summary = self.render_summary(game, cx);
-        let stats = self.render_stats(cx);
-        let store = game
-            .system
-            .as_deref()
-            .and_then(irori_engines::systems::get)
-            .map_or(game.runner().store_name(), |s| s.name.as_str());
-        v_flex()
-            .flex_1()
-            .min_w_0()
-            .gap_3()
-            .pt_2()
-            .child(
-                div()
-                    .text_xs()
-                    .font_bold()
-                    .text_color(ink.muted)
-                    .child(SharedString::from(store.to_uppercase())),
-            )
-            .child(heading)
-            .children(meta.map(|m| div().text_color(ink.muted).line_clamp(2).child(m)))
-            .children(tags)
-            .children(summary)
-            .child(stats)
+            .children(facts)
             .into_any_element()
     }
 
@@ -261,110 +228,127 @@ impl GamePage {
         (!parts.is_empty()).then(|| parts.join(" · "))
     }
 
-    /// The store's short description, with a link to the full text.
-    fn render_summary(&self, game: &GameInfo, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let extra = self.extra.ready();
-        let short = extra.and_then(|e| e.short_description.clone());
-        let full = extra
-            .and_then(|e| e.description.clone())
-            .or_else(|| game.description.clone());
-        // GOG's short "lead" is often a promotion (pre-order offers), not a summary.
-        let text = if game.runner() == irori_core::Runner::Gog {
-            full.or(short)
-        } else {
-            short.or(full)
-        }
-        .map(|t| super::info::plain_text(&t))
-        .filter(|t| !t.is_empty())?;
-        Some(
-            v_flex()
-                .max_w(rems(48.))
-                .gap_1()
+    /// Score, store and how the game runs on Linux and the Steam Deck, as a
+    /// small card under the rating; nothing when none of it is known.
+    fn render_facts(&self, game: &GameInfo, cx: &Context<Self>) -> Option<AnyElement> {
+        let ink = self.ink;
+        let theme = cx.theme();
+        let row = |label: SharedString, value: AnyElement| {
+            h_flex()
+                .w_full()
                 .items_start()
+                .gap_3()
+                .py_1p5()
+                .text_sm()
                 .child(
                     div()
-                        .text_color(self.ink.text)
-                        .opacity(0.92)
-                        .line_clamp(3)
-                        .child(text),
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(ink.panel_muted)
+                        .child(label),
                 )
                 .child(
-                    Button::new("read-more")
-                        .link()
-                        .small()
-                        .label(t("game.header.read_more"))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.tab = super::InfoTab::About;
-                            cx.notify();
-                        })),
+                    div()
+                        .flex_shrink_0()
+                        .max_w(gpui_kit::relative(0.6))
+                        .child(value),
                 )
+                .into_any_element()
+        };
+        let mut rows = Vec::new();
+        let compat = self.compat.ready();
+        let score = compat
+            .and_then(|c| c.scores.first())
+            .map(|s| (s.source.clone(), s.score))
+            .or_else(|| game.rating.map(|r| ("GOG".to_string(), r)));
+        if let Some((source, score)) = score {
+            let tag = match score {
+                75.. => Tag::success(),
+                50..75 => Tag::warning(),
+                _ => Tag::danger(),
+            };
+            rows.push(row(
+                t("game.facts.score"),
+                h_flex()
+                    .gap_2()
+                    .child(div().text_xs().text_color(ink.panel_muted).child(source))
+                    .child(tag.xsmall().child(score.to_string()))
+                    .into_any_element(),
+            ));
+        }
+        let store = match self.id.runner {
+            irori_core::Runner::Sideload => t("game.details.added_by_you"),
+            runner => runner.store_name().into(),
+        };
+        rows.push(row(
+            t("game.details.store"),
+            div().truncate().child(store).into_any_element(),
+        ));
+        if let Some(c) = compat {
+            let mut linux: Vec<AnyElement> = Vec::new();
+            if let Some(tier) = &c.protondb_tier {
+                let color = match tier.as_str() {
+                    "platinum" | "gold" | "native" => theme.success,
+                    "silver" | "bronze" => theme.warning,
+                    "borked" => theme.danger,
+                    _ => theme.muted_foreground,
+                };
+                linux.push(
+                    h_flex()
+                        .gap_1()
+                        .child(div().size(px(7.)).rounded_full().bg(color))
+                        .child(super::compat::tier_label(tier))
+                        .into_any_element(),
+                );
+            }
+            if !linux.is_empty() {
+                rows.push(row(
+                    t("game.facts.on_linux"),
+                    v_flex()
+                        .items_end()
+                        .gap_0p5()
+                        .children(linux)
+                        .into_any_element(),
+                ));
+            }
+            if let Some(ac) = &c.anticheat {
+                let color = match ac.status {
+                    AnticheatStatus::Supported | AnticheatStatus::Running => theme.success,
+                    AnticheatStatus::Broken | AnticheatStatus::Denied => theme.danger,
+                    _ => theme.warning,
+                };
+                let color = legible(color, &[ink.panel], irori_ui::style::TEXT_CONTRAST, cx);
+                rows.push(row(
+                    t("game.compat.anticheat"),
+                    div()
+                        .text_color(color)
+                        .child(ac.status.label())
+                        .into_any_element(),
+                ));
+            }
+            if let Some(deck) = c.steam_deck.filter(|d| *d != SteamDeckStatus::Unknown) {
+                rows.push(row(
+                    "Steam Deck".into(),
+                    div().child(deck.label()).into_any_element(),
+                ));
+            }
+        }
+        Some(
+            v_flex()
+                .w_full()
+                .px_4()
+                .py_1()
+                .rounded(theme.radius_lg)
+                .bg(ink.panel)
+                .border_1()
+                .border_color(theme.border)
+                .children(rows)
                 .into_any_element(),
         )
     }
 
-    /// Play time, last played and achievement progress, under captions.
-    fn render_stats(&self, cx: &Context<Self>) -> AnyElement {
-        let ink = self.ink;
-        let stat = |label: SharedString, value: AnyElement| {
-            v_flex()
-                .gap_0p5()
-                .min_w_0()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_bold()
-                        .text_color(ink.muted)
-                        .child(SharedString::from(label.to_uppercase())),
-                )
-                .child(
-                    div()
-                        .text_lg()
-                        .font_semibold()
-                        .text_color(ink.text)
-                        .truncate()
-                        .child(value),
-                )
-        };
-        let record = models(cx)
-            .library
-            .read(cx)
-            .user
-            .playtime
-            .get(&self.id.key())
-            .cloned();
-        let minutes = record.as_ref().map(|r| r.total_minutes).unwrap_or(0);
-        let last = record.and_then(|r| r.last_played);
-        let now = irori_core::util::unix_now() as i64;
-        let mut row = h_flex().pt_2().gap_x_8().gap_y_3().flex_wrap().child(stat(
-            t("game.info.playtime"),
-            crate::i18n::playtime_label(minutes, last.is_some()).into_any_element(),
-        ));
-        if let Some(last) = last {
-            row = row.child(stat(
-                t("game.info.last_played"),
-                crate::load::format_day(&last, now).into_any_element(),
-            ));
-        }
-        if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
-            let unlocked = list.iter().filter(|a| a.unlocked_at.is_some()).count();
-            let percent = crate::state::completion_percent(unlocked, list.len());
-            row = row.child(stat(
-                t("game.header.achievements"),
-                h_flex()
-                    .gap_2()
-                    .child(format!("{unlocked} / {}", list.len()))
-                    .child(
-                        div()
-                            .w(rems(6.))
-                            .child(Progress::new("achievement-progress").value(percent as f32)),
-                    )
-                    .into_any_element(),
-            ));
-        }
-        row.into_any_element()
-    }
-
-    /// Cloud saves, settings, favourite and more actions, as icon buttons.
+    /// Favourite, settings, cloud saves and more actions, as icon buttons.
     fn render_tools(&self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
         let fav = models(cx).library.read(cx).is_favourite(&self.id);
         let settings_id = self.id.clone();

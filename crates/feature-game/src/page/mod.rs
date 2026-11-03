@@ -1,8 +1,9 @@
 //! The game page (`Route::Game`), over the game's art blurred across the
-//! whole page: a header with the cover, primary action and rating beside the
-//! title and play stats; a strip of screenshots; then tabs beside a side
-//! column with the details table and the play history. A slim bar keeps the
-//! primary action in reach once the header scrolls away.
+//! whole page: the title and a details line, then three columns: the cover
+//! with the primary action, tools, rating and quick facts; the screenshots,
+//! tabs and play history; and the details table. Narrower pages fold the
+//! details under the play history, then stack everything. A slim bar keeps
+//! the primary action in reach once it scrolls away.
 
 mod achievements;
 mod compat;
@@ -75,6 +76,16 @@ pub(crate) fn caption(text: impl Into<SharedString>, color: Hsla) -> Div {
         .child(SharedString::from(text.to_uppercase()))
 }
 
+/// The heading of a section of the page ("Screenshots", "Details"), in
+/// `color`: the backdrop's or a panel's text ink.
+pub(crate) fn section_title(text: impl Into<SharedString>, color: Hsla) -> Div {
+    div()
+        .text_lg()
+        .font_semibold()
+        .text_color(color)
+        .child(text.into())
+}
+
 /// Section of the info area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InfoTab {
@@ -114,7 +125,8 @@ pub struct GamePage {
     was_installed: bool,
     was_playing: bool,
     scroll: ScrollHandle,
-    /// Height of the header, measured each frame, past which the sticky bar shows.
+    /// Where the primary action ends in the scrolled content, measured each
+    /// frame; past it the sticky bar shows.
     header_height: Rc<Cell<Pixels>>,
     /// Width of the page, measured each frame; layouts that adapt to the
     /// window (header, screenshot grid) read it.
@@ -634,12 +646,11 @@ impl Render for GamePage {
         let art = game.hero_art().map(str::to_owned);
         self.ink = BackdropInk::of(art.as_deref(), cx);
         let backdrop = ArtBackdrop::new(art).image_cache(&self.image_cache);
-        let header = self.render_header(&game, window, cx);
+        let header = self.render_header(&game, cx);
         let body = self.render_body(&game, window, cx);
         self.sticky = self.sticky_wanted();
         let sticky = self.sticky.then(|| self.render_sticky_bar(&game, cx));
         let viewer = self.render_viewer(window, cx);
-        let measure = self.header_height.clone();
         let page_width = self.page_width.clone();
         base.relative()
             .child(backdrop)
@@ -665,7 +676,6 @@ impl Render for GamePage {
                                 div().relative().w_full().child(header).child(
                                     canvas(
                                         move |bounds, window, _| {
-                                            measure.set(bounds.size.height);
                                             // Layouts read the width while rendering, so
                                             // render again once it changed.
                                             if page_width.replace(bounds.size.width)

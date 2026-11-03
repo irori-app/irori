@@ -129,9 +129,9 @@ impl GamePage {
             v_flex()
                 .w_full()
                 .gap_3()
-                .child(super::caption(
+                .child(super::section_title(
                     t("game.info.tab_screenshots"),
-                    self.ink.muted,
+                    self.ink.text,
                 ))
                 .child(h_flex().w_full().gap_3().children(tiles))
                 .into_any_element(),
