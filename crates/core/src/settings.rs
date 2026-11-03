@@ -222,6 +222,13 @@ pub struct GameSettings {
     /// Turn on VKD3D-Proton's descriptor heap. Irori-only.
     #[serde(rename = "iroriDescriptorHeap")]
     pub descriptor_heap: bool,
+    /// Room for the GPU drivers' shader caches, in GiB: NVIDIA's
+    /// (`__GL_SHADER_DISK_CACHE_SIZE`) and Mesa's
+    /// (`MESA_SHADER_CACHE_MAX_SIZE`). Their own limits are small enough that
+    /// large games compile their shaders again at every start. 0 leaves the
+    /// drivers' limits. Linux only; Irori-only.
+    #[serde(rename = "iroriShaderCacheSize")]
+    pub shader_cache_size: u32,
     /// `PROTON_DLSS_UPGRADE`. Irori-only.
     #[serde(rename = "iroriDlssUpgrade")]
     pub dlss_upgrade: bool,
@@ -310,6 +317,7 @@ impl Default for GameSettings {
             dxvk_version: String::new(),
             vkd3d_version: String::new(),
             descriptor_heap: false,
+            shader_cache_size: DEFAULT_SHADER_CACHE_GIB,
             dlss_upgrade: false,
             dlss_indicator: false,
             fsr4_upgrade: false,
@@ -506,6 +514,11 @@ pub struct AppSettings {
         alias = "emberCrossoverBottlesPath"
     )]
     pub crossover_bottles_path: String,
+    /// Where the Wine manager installs the Wine and Proton builds it
+    /// downloads, in `wine` and `proton` folders inside ("" = Irori's tools
+    /// folder). Builds already installed stay where they are. Irori-only.
+    #[serde(rename = "iroriCompatToolsPath")]
+    pub compat_tools_path: String,
     /// The default emulator of each system (`psx` → `duckstation`); systems
     /// not listed use the first installed recommended emulator.
     #[serde(rename = "iroriSystemEngines", alias = "emberSystemEngines")]
@@ -556,6 +569,7 @@ impl Default for AppSettings {
         Self {
             extras_path: extras.to_string_lossy().into_owned(),
             crossover_bottles_path: String::new(),
+            compat_tools_path: String::new(),
             system_engines: BTreeMap::new(),
             rom_folders: Vec::new(),
             bios_folder: String::new(),
@@ -738,6 +752,9 @@ impl ShownStores {
         )
     }
 }
+
+/// Shader cache room games get unless the user changes it, in GiB.
+pub const DEFAULT_SHADER_CACHE_GIB: u32 = 10;
 
 /// Sizes offered for Big Picture's interface, in percent.
 pub const BIG_PICTURE_SCALES: [u32; 5] = [100, 125, 150, 175, 200];

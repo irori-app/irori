@@ -290,6 +290,8 @@
   "game.logs.empty": "Brak dziennika. Zostanie zapisany przy następnym uruchomieniu gry.",
   "game.logs.errors_only": "Błędy i ostrzeżenia",
   "game.logs.follow": "Śledź",
+  "game.logs.filter": "Filtruj wiersze",
+  "game.logs.hide_matching": "Ukryj pasujące wiersze",
   "game.logs.link_copied": "Skopiowano link",
   "game.logs.open": "Otwórz",
   "game.logs.open_in_editor": "Otwórz w edytorze",

@@ -290,6 +290,8 @@
   "game.logs.empty": "No log yet. It is written the next time the game starts.",
   "game.logs.errors_only": "Errors and warnings",
   "game.logs.follow": "Follow",
+  "game.logs.filter": "Filter lines",
+  "game.logs.hide_matching": "Hide matching lines",
   "game.logs.link_copied": "Link copied",
   "game.logs.open": "Open",
   "game.logs.open_in_editor": "Open in editor",

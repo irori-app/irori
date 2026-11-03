@@ -124,11 +124,26 @@ signature changes. A build signed with a Developer ID asks once.
 | Steam default | `~/.steam/steam` | `~/Library/Application Support/Steam` | ProgramFiles(x86) / `Steam` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
-isolated testing. A configured Steam path takes precedence when it exists; otherwise,
-on Linux, Irori uses the first of `~/.steam/steam`, `~/.local/share/Steam`,
-`~/.steam/debian-installation`, Flatpak Steam (`~/.var/app/com.valvesoftware.Steam`,
-`.steam/steam`, `.local/share/Steam` or `data/Steam`) and Snap Steam
-(`~/snap/steam/common/.local/share/Steam`) that has a library.
+isolated testing. A configured Steam path takes precedence when it holds a Steam
+library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
+`~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
+(`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
+`data/Steam`) and Snap Steam (`~/snap/steam/common/.local/share/Steam`), in that order.
+The first that lists its libraries (`steamapps/libraryfolders.vdf`) wins, else the
+first with a library, so the empty `steamapps` a removed native Steam leaves behind
+doesn't hide a Flatpak Steam. Adding games to Steam looks for `userdata` the same way.
+
+The Wine manager installs the Wine and Proton builds it downloads into `<data>/tools/wine`
+and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder set in
+`iroriCompatToolsPath`; "Install Proton downloads into Steam" still sends Proton to Steam's
+`compatibilitytools.d`. Builds stay where they were installed when the folder changes,
+and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
+on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
+
+On Linux, games start with room for 10 GiB of shader cache (`iroriShaderCacheSize`, per
+game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE` for
+NVIDIA and `MESA_SHADER_CACHE_MAX_SIZE` for Mesa. A value already set in Irori's own
+environment or in the game's variables wins.
 
 The Steam library scans that Steam folder and every library in its
 `steamapps/libraryfolders.vdf` for `appmanifest_*.acf` files, skipping Proton, the

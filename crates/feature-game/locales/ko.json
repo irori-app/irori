@@ -290,6 +290,8 @@
   "game.logs.empty": "아직 로그가 없습니다. 다음에 게임을 실행할 때 기록됩니다.",
   "game.logs.errors_only": "오류 및 경고",
   "game.logs.follow": "따라가기",
+  "game.logs.filter": "줄 필터",
+  "game.logs.hide_matching": "일치하는 줄 숨기기",
   "game.logs.link_copied": "링크를 복사했습니다",
   "game.logs.open": "열기",
   "game.logs.open_in_editor": "편집기에서 열기",

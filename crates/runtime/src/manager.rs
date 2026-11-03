@@ -581,7 +581,7 @@ pub fn install_base(release: &Release, app: &AppSettings) -> PathBuf {
         return Paths::get().tools_dir().join("game-porting-toolkit");
     }
     if release.kind.contains("Wine") {
-        return Paths::get().wine_dir();
+        return locations::wine_downloads_dir(app);
     }
     if app.download_proton_to_steam {
         let steam = locations::steam_path(app);
@@ -593,7 +593,7 @@ pub fn install_base(release: &Release, app: &AppSettings) -> PathBuf {
             steam.display()
         );
     }
-    Paths::get().proton_dir()
+    locations::proton_downloads_dir(app)
 }
 
 fn file_name_of(url: &str) -> String {
@@ -941,6 +941,27 @@ pub async fn download_default_wine(app: &AppSettings, ctx: &OpContext) -> Result
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn downloads_go_to_the_chosen_folder() {
+        let app = AppSettings {
+            compat_tools_path: "/mnt/games/compat".into(),
+            ..Default::default()
+        };
+        let release = |kind: &str| Release {
+            kind: kind.into(),
+            version: "build".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            install_base(&release("Wine-GE"), &app),
+            Path::new("/mnt/games/compat/wine")
+        );
+        assert_eq!(
+            install_base(&release("GE-Proton"), &app),
+            Path::new("/mnt/games/compat/proton")
+        );
+    }
+
     #[tokio::test]
     async fn the_previous_build_takes_the_place_of_the_current_one() {
         let dir = tempfile::tempdir().unwrap();

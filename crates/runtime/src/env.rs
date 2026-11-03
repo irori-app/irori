@@ -173,6 +173,18 @@ pub fn generic_env_for(
     {
         env.insert("PROTONPATH".into(), runtime.into());
     }
+    if platform == irori_core::HostPlatform::Linux && settings.shader_cache_size > 0 {
+        // Before the user's variables, so theirs (and the host's) win.
+        let gib = u64::from(settings.shader_cache_size);
+        for (key, value) in [
+            ("__GL_SHADER_DISK_CACHE_SIZE", (gib << 30).to_string()),
+            ("MESA_SHADER_CACHE_MAX_SIZE", format!("{gib}G")),
+        ] {
+            if !host.contains(key) {
+                env.insert(key.into(), value);
+            }
+        }
+    }
     for var in &settings.environment_options {
         let key = var.key.trim();
         if key.is_empty() {
@@ -636,7 +648,9 @@ mod tests {
         assert_eq!(env["PROTONPATH"], "umu-sniper");
         assert_eq!(env["FOO"], "bar baz");
         assert_eq!(env["LD_PRELOAD"], "");
-        assert_eq!(env.len(), 7);
+        assert_eq!(env["__GL_SHADER_DISK_CACHE_SIZE"], "10737418240");
+        assert_eq!(env["MESA_SHADER_CACHE_MAX_SIZE"], "10G");
+        assert_eq!(env.len(), 9);
 
         let host = HostEnv::from_pairs([("LD_PRELOAD", "/lib/x.so")]);
         assert!(
@@ -652,6 +666,38 @@ mod tests {
             &HostEnv::default(),
         );
         assert_eq!(env["LD_PRELOAD"], "/my.so");
+    }
+
+    #[test]
+    fn shader_caches_get_room_unless_set_elsewhere() {
+        use irori_core::HostPlatform::{Linux, Mac};
+        let mut gs = GameSettings {
+            shader_cache_size: 4,
+            ..Default::default()
+        };
+        let none = HostEnv::default();
+        let env = generic_env_for(Linux, &gs, None, None, &none);
+        assert_eq!(env["__GL_SHADER_DISK_CACHE_SIZE"], "4294967296");
+        assert_eq!(env["MESA_SHADER_CACHE_MAX_SIZE"], "4G");
+        assert!(
+            !generic_env_for(Mac, &gs, None, None, &none)
+                .contains_key("__GL_SHADER_DISK_CACHE_SIZE")
+        );
+
+        let host = HostEnv::from_pairs([("MESA_SHADER_CACHE_MAX_SIZE", "50G")]);
+        let env = generic_env_for(Linux, &gs, None, None, &host);
+        assert!(!env.contains_key("MESA_SHADER_CACHE_MAX_SIZE"));
+        assert!(env.contains_key("__GL_SHADER_DISK_CACHE_SIZE"));
+
+        gs.environment_options = vec![user("__GL_SHADER_DISK_CACHE_SIZE", "1")];
+        let env = generic_env_for(Linux, &gs, None, None, &none);
+        assert_eq!(env["__GL_SHADER_DISK_CACHE_SIZE"], "1");
+
+        gs.shader_cache_size = 0;
+        gs.environment_options.clear();
+        let env = generic_env_for(Linux, &gs, None, None, &none);
+        assert!(!env.contains_key("__GL_SHADER_DISK_CACHE_SIZE"));
+        assert!(!env.contains_key("MESA_SHADER_CACHE_MAX_SIZE"));
     }
 
     #[test]
