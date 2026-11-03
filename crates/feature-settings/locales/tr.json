@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Geçişleri kısalt ve hareketten kaçın.",
   "settings.field.ui_reduce_motion.label": "Hareketi azalt",
   "settings.field.ui_show_store_badges.label": "Mağaza rozetlerini göster",
+  "settings.field.ui_system_accent.help": "Irori'nin kendi temasını sistem ayarlarındaki vurgu rengiyle renklendirir ve değiştikçe onu izler. Listeden seçilen bir tema kendi renklerini korur.",
+  "settings.field.ui_system_accent.label": "Sistemin vurgu rengini kullan",
   "settings.field.ui_theme.label": "Renk modu",
   "settings.field.ui_theme_name.label": "Tema",
   "settings.field.ui_tile_size.help": "Kitaplık ızgarasındaki oyun kapaklarının genişliği.",

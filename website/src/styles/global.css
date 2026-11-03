@@ -1,0 +1,448 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Layout: the room around the hearth. Content sits in a lattice of hairline
+ * "wood" rules, like shoji frames; screenshots sit inside the hearth's thick
+ * square frame, warmed by the fire's glow. Flame colour is kept for the one
+ * action that matters in each region.
+ */
+:root {
+  /* Washi paper by day. */
+  --ash: #f6f4ee;
+  --soot: #ece8de;
+  --hearth: #e3ddcf;
+  --wood: #b9a68c;
+  --grain: #d8cfbf;
+  --paper: #1c1714;
+  --smoke: #5f554b;
+  --tatami: #5c6638;
+  /* The brand's flame fills buttons in both themes; text in flame uses --flame-text. */
+  --flame: #ff6b2c;
+  --flame-ink: #1a0d06;
+  --flame-text: #b8400f;
+  --ember: #f59a38;
+  --glow: rgb(255 107 44 / 0.18);
+  --night: #0e0b09;
+
+  --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --font-code: "M PLUS 1 Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* shadcn-vue's names for the same palette. */
+  --background: var(--ash);
+  --foreground: var(--paper);
+  --card: var(--soot);
+  --card-foreground: var(--paper);
+  --popover: var(--soot);
+  --popover-foreground: var(--paper);
+  --primary: var(--flame);
+  --primary-foreground: var(--flame-ink);
+  --secondary: var(--hearth);
+  --secondary-foreground: var(--paper);
+  --muted: var(--soot);
+  --muted-foreground: var(--smoke);
+  --accent: var(--hearth);
+  --accent-foreground: var(--paper);
+  --destructive: #c4321f;
+  --border: var(--grain);
+  --input: var(--grain);
+  --ring: var(--ember);
+  --radius: 0.75rem;
+}
+
+/* Sumi ink by night: the hearth's own colours. */
+.dark {
+  --ash: #15110e;
+  --soot: #1e1915;
+  --hearth: #2a231d;
+  --wood: #6e5d4b;
+  --grain: #342b24;
+  --paper: #f2e9dc;
+  --smoke: #b2a493;
+  --tatami: #a9b47c;
+  --flame-text: #ff6b2c;
+  --ember: #ffb24f;
+  --glow: rgb(255 107 44 / 0.24);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+  --color-ash: var(--ash);
+  --color-soot: var(--soot);
+  --color-hearth: var(--hearth);
+  --color-wood: var(--wood);
+  --color-grain: var(--grain);
+  --color-paper: var(--paper);
+  --color-smoke: var(--smoke);
+  --color-tatami: var(--tatami);
+  --color-flame: var(--flame);
+  --color-flame-ink: var(--flame-ink);
+  --color-flame-text: var(--flame-text);
+  --color-ember: var(--ember);
+  --color-night: var(--night);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    overflow-x: clip;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: var(--flame);
+    color: var(--flame-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ember);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  /* A small uppercase label set in the code face, like a stamped tag. */
+  .tag {
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--tatami);
+  }
+  .gutter {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  @media (min-width: 640px) {
+    .gutter {
+      padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    }
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+    font-weight: 700;
+    line-height: 1.08;
+    color: var(--paper);
+  }
+  .lattice {
+    gap: 1px;
+    background: var(--grain);
+    border: 1px solid var(--grain);
+    border-radius: 0.9rem;
+    overflow: hidden;
+  }
+  .link {
+    color: var(--paper);
+    text-decoration: underline;
+    text-decoration-color: var(--wood);
+    text-underline-offset: 4px;
+    transition: text-decoration-color 160ms;
+  }
+  .link:hover {
+    text-decoration-color: var(--flame);
+  }
+  kbd {
+    font-family: var(--font-code);
+    font-size: 0.8em;
+    padding: 0.1em 0.45em;
+    border: 1px solid var(--grain);
+    border-bottom-width: 2px;
+    border-radius: 0.35rem;
+    background: var(--soot);
+    white-space: nowrap;
+  }
+
+  /* Buttons as links, for pages that ship no Vue. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;
+    padding: 0 1.5rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 1rem;
+    white-space: nowrap;
+    transition: transform 160ms var(--ease-out), background-color 160ms, box-shadow 200ms;
+  }
+  .btn:active {
+    transform: translateY(1px) scale(0.98);
+  }
+  .btn-primary {
+    background: var(--flame);
+    color: var(--flame-ink);
+    box-shadow: 0 10px 30px -12px rgb(255 107 44 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+  .btn-primary:hover {
+    background: color-mix(in oklab, var(--flame) 88%, white);
+    box-shadow: 0 14px 38px -12px rgb(255 107 44 / 0.85), inset 0 1px 0 rgb(255 255 255 / 0.3);
+  }
+  .btn-ghost {
+    color: var(--paper);
+    border: 1px solid var(--grain);
+    background: color-mix(in oklab, var(--ash) 60%, transparent);
+  }
+  .btn-ghost:hover {
+    background: var(--soot);
+    border-color: var(--wood);
+  }
+  .btn-sm {
+    height: 2.25rem;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Cards light up where the pointer is (`motion.ts` sets --x and --y). */
+[data-glow] {
+  position: relative;
+  isolation: isolate;
+}
+[data-glow]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(18rem circle at var(--x, -20rem) var(--y, -20rem), var(--glow), transparent 70%);
+  opacity: 0;
+  transition: opacity 300ms;
+  pointer-events: none;
+}
+[data-glow]:hover::before {
+  opacity: 1;
+}
+
+/*
+ * Reveal on scroll. Only pages whose script runs hide anything, so content is
+ * never lost without JavaScript, and reduced motion skips it entirely.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .js [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 700ms var(--ease-out), transform 800ms var(--ease-out);
+    transition-delay: calc(var(--reveal-delay, 0) * 70ms);
+  }
+  .js [data-reveal="fade"] {
+    transform: none;
+  }
+  .js [data-reveal="scale"] {
+    transform: translateY(32px) scale(0.96);
+  }
+  .js [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Above the fold: plays once on load, with no script to wait for. */
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 700ms var(--ease-out) both;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The theme switch: a circle of the new theme grows from the button. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: theme-reveal 620ms var(--ease-out);
+}
+@keyframes theme-reveal {
+  from { clip-path: circle(0 at var(--theme-x, 50%) var(--theme-y, 0%)); }
+  to { clip-path: circle(var(--theme-r, 150vmax) at var(--theme-x, 50%) var(--theme-y, 0%)); }
+}
+/* Without view transitions, colours ease over instead of snapping. */
+.theme-fading,
+.theme-fading * {
+  transition: background-color 400ms ease, color 400ms ease, border-color 400ms ease, fill 400ms ease !important;
+}
+
+/* Long-form pages: docs, guides, features and comparisons. */
+.prose {
+  color: var(--smoke);
+  max-width: 44rem;
+}
+.prose > * + * {
+  margin-top: 1.1rem;
+}
+.prose h2 {
+  margin-top: 3rem;
+  font-size: clamp(1.5rem, 2.6vw, 1.95rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--paper);
+  scroll-margin-top: 6rem;
+}
+.prose h3 {
+  margin-top: 2rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--paper);
+  scroll-margin-top: 6rem;
+}
+.prose h2 + *, .prose h3 + * {
+  margin-top: 0.75rem;
+}
+.prose a {
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-color: var(--flame);
+  text-underline-offset: 4px;
+}
+.prose a:hover {
+  color: var(--flame-text);
+}
+.prose strong {
+  color: var(--paper);
+}
+.prose ul, .prose ol {
+  padding-left: 1.3rem;
+}
+.prose ul { list-style: none; }
+.prose ul > li {
+  position: relative;
+}
+.prose ul > li::before {
+  content: "";
+  position: absolute;
+  left: -1.05rem;
+  top: 0.72em;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--flame);
+}
+.prose ol { list-style: decimal; }
+.prose ol > li::marker {
+  font-family: var(--font-code);
+  color: var(--flame-text);
+}
+.prose li + li {
+  margin-top: 0.45rem;
+}
+.prose code {
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  padding: 0.08em 0.4em;
+  border-radius: 0.35rem;
+  background: var(--soot);
+  border: 1px solid var(--grain);
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+.prose pre {
+  overflow-x: auto;
+  padding: 1rem 1.15rem;
+  border-radius: 0.8rem;
+  background: var(--night);
+  color: #f2e9dc;
+  border: 1px solid var(--grain);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.prose pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  overflow-wrap: normal;
+}
+.prose blockquote {
+  border-left: 3px solid var(--flame);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--paper);
+}
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.prose th, .prose td {
+  text-align: left;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--grain);
+  vertical-align: top;
+}
+.prose th {
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tatami);
+  white-space: nowrap;
+}
+.prose td:first-child {
+  color: var(--paper);
+}
+.prose hr {
+  border-color: var(--grain);
+  margin: 2.5rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

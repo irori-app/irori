@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori non ha ancora un emulatore per il suo sistema.",
   "ui.lutris.reason.steam_not_found": "Non è nella tua libreria di Steam su questo computer.",
   "ui.lutris.reason.store_not_supported": "Irori non ha un negozio per «{store}».",
-  "ui.lutris.reason.failed": "Impossibile aggiungerlo: {error}"
+  "ui.lutris.reason.failed": "Impossibile aggiungerlo: {error}",
+  "ui.play_status.title": "Stato di gioco",
+  "ui.play_status.set": "Imposta stato",
+  "ui.play_status.clear": "Rimuovi stato",
+  "ui.play_status.not_played": "Non giocato",
+  "ui.play_status.plan_to_play": "Da giocare",
+  "ui.play_status.playing": "In corso",
+  "ui.play_status.on_hold": "In pausa",
+  "ui.play_status.beaten": "Completato",
+  "ui.play_status.abandoned": "Abbandonato",
+  "ui.play_status.played": "Giocato"
 }

@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "トランジションを短くし、動きを抑えます。",
   "settings.field.ui_reduce_motion.label": "動きを減らす",
   "settings.field.ui_show_store_badges.label": "ストアバッジを表示",
+  "settings.field.ui_system_accent.help": "Irori 独自のテーマをシステム設定のアクセントカラーで彩り、変更にも追従します。一覧から選んだテーマは独自の色のままです。",
+  "settings.field.ui_system_accent.label": "システムのアクセントカラーを使用",
   "settings.field.ui_theme.label": "カラーモード",
   "settings.field.ui_theme_name.label": "テーマ",
   "settings.field.ui_tile_size.help": "ライブラリのグリッドに表示されるゲームカバーの幅です。",

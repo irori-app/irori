@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Accorcia le transizioni ed evita i movimenti.",
   "settings.field.ui_reduce_motion.label": "Riduci movimento",
   "settings.field.ui_show_store_badges.label": "Mostra i badge degli store",
+  "settings.field.ui_system_accent.help": "Tinge il tema di Irori con il colore d'accento delle impostazioni di sistema e lo segue quando cambia. Un tema scelto dall'elenco mantiene i propri colori.",
+  "settings.field.ui_system_accent.label": "Usa il colore d'accento del sistema",
   "settings.field.ui_theme.label": "Modalità colore",
   "settings.field.ui_theme_name.label": "Tema",
   "settings.field.ui_tile_size.help": "Larghezza delle copertine nella griglia della libreria.",

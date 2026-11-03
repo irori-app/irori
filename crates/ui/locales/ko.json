@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori에는 아직 이 시스템용 에뮬레이터가 없습니다.",
   "ui.lutris.reason.steam_not_found": "이 컴퓨터의 Steam 라이브러리에 없습니다.",
   "ui.lutris.reason.store_not_supported": "Irori에는 ‘{store}’용 스토어가 없습니다.",
-  "ui.lutris.reason.failed": "추가할 수 없습니다: {error}"
+  "ui.lutris.reason.failed": "추가할 수 없습니다: {error}",
+  "ui.play_status.title": "플레이 상태",
+  "ui.play_status.set": "상태 설정",
+  "ui.play_status.clear": "상태 지우기",
+  "ui.play_status.not_played": "플레이 안 함",
+  "ui.play_status.plan_to_play": "플레이 예정",
+  "ui.play_status.playing": "플레이 중",
+  "ui.play_status.on_hold": "보류",
+  "ui.play_status.beaten": "클리어",
+  "ui.play_status.abandoned": "중단함",
+  "ui.play_status.played": "플레이함"
 }

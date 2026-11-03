@@ -464,6 +464,7 @@
   "manage.launchers.open": "{launcher} 열기",
   "manage.launchers.scan": "게임 찾기",
   "manage.launchers.downloading": "설치 프로그램 다운로드 중…",
+  "manage.launchers.creating_prefix": "Wine 접두사 생성 중…",
   "manage.launchers.installing": "{launcher} 설치 프로그램의 안내를 따르세요…",
   "manage.launchers.setup_failed": "{launcher}을(를) 설정할 수 없습니다",
   "manage.launchers.open_failed": "{launcher}을(를) 열 수 없습니다",

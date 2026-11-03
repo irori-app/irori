@@ -298,6 +298,8 @@
   "settings.field.ui_reduce_motion.help": "Skracaj przejścia i unikaj ruchu.",
   "settings.field.ui_reduce_motion.label": "Ogranicz ruch",
   "settings.field.ui_show_store_badges.label": "Pokazuj oznaczenia sklepów",
+  "settings.field.ui_system_accent.help": "Barwi własny motyw Irori kolorem akcentu z ustawień systemu i podąża za jego zmianami. Motyw wybrany z listy zachowuje własne kolory.",
+  "settings.field.ui_system_accent.label": "Używaj koloru akcentu systemu",
   "settings.field.ui_theme.label": "Tryb kolorów",
   "settings.field.ui_theme_name.label": "Motyw",
   "settings.field.ui_tile_size.help": "Szerokość okładek gier w siatce biblioteki.",
