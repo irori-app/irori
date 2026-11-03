@@ -16,7 +16,7 @@ use irori_epic::EpicStore;
 use irori_extras::anticheat::{self, AntiCheatInfo, AntiCheatStatus, InstallGate};
 use irori_gog::GogStore;
 use irori_services::MultiAccountStore;
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 
 /// Steam Deck verification category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +92,8 @@ pub struct AnticheatReport {
     pub notes: Vec<String>,
     /// Latest reference link for the status.
     pub reference: Option<String>,
+    /// The only mode the anticheat blocks ("GTA Online"); the story works.
+    pub online_only: Option<String>,
 }
 
 impl AnticheatReport {
@@ -101,7 +103,25 @@ impl AnticheatReport {
             anticheats: Vec::new(),
             notes: Vec::new(),
             reference: None,
+            online_only: None,
         }
+    }
+
+    /// "GTA Online is blocked by BattlEye under Wine; the story works", for a
+    /// game whose anticheat guards only its online mode. Nothing on Windows,
+    /// where both work.
+    pub fn online_only_note(&self) -> Option<SharedString> {
+        let mode = self.online_only.as_deref().filter(|_| !cfg!(windows))?;
+        Some(match self.anticheats.first() {
+            Some(product) => t_args(
+                "game.compat.anticheat_online_only",
+                &[("mode", mode), ("anticheat", product)],
+            ),
+            None => t_args(
+                "game.compat.anticheat_online_only_unnamed",
+                &[("mode", mode)],
+            ),
+        })
     }
 }
 
@@ -111,6 +131,7 @@ pub(crate) fn install_gate(report: Option<&AnticheatReport>, app: &AppSettings) 
     let info = report.map(|r| AntiCheatInfo {
         status: r.status.extras(),
         anticheats: r.anticheats.clone(),
+        online_only: r.online_only.clone(),
         ..Default::default()
     });
     anticheat::blocks_install(info.as_ref(), app)

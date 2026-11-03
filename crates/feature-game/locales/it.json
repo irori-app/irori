@@ -39,6 +39,8 @@
   "game.common.version": "Versione",
   "game.compat.anticheat": "Anticheat",
   "game.compat.anticheat_reference": "Riferimento anticheat (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blocca {mode} con Wine e Proton. La modalità storia funziona.",
+  "game.compat.anticheat_online_only_unnamed": "L’anticheat blocca {mode} con Wine e Proton. La modalità storia funziona.",
   "game.compat.anticheat_removed": "Anticheat rimosso",
   "game.compat.anticheat_status.broken": "Non funzionante",
   "game.compat.anticheat_status.denied": "Negato",

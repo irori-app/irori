@@ -694,7 +694,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - Irori never handles Battle.net, EA app, Ubisoft Connect or Rockstar accounts. The
   Stores page sets a launcher up once: a prefix of its own (`<prefixes>/<launcher
   name>`) with the Wine build the user picks, and the vendor's official installer
-  (natively on Windows). The user signs in and installs games inside the launcher.
+  (natively on Windows), or "Use an existing install" adopts a prefix that already has
+  it. "Close" stops everything in the launcher's prefix (on Windows, the processes
+  started from its folder); "Remove from Irori" forgets it and leaves the prefix and
+  games on disk. The user signs in and installs games inside the launcher. A Proton
+  prefix keeps `drive_c` in `pfx/`; read the launcher's files there.
 - Games are read from the launcher's local data (`irori-launchers-data`) and listed as
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
@@ -703,6 +707,22 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   while such a game runs, services look every 3 s for processes running from its
   install folder; the session ends when they are gone, or when the launcher exits
   without starting the game. Nothing polls when no launcher game runs.
+- **Rockstar** (`irori_launchers_data::rockstar`): `TITLES` names every Rockstar PC
+  title with its Steam app id (art comes from Steam's CDN) and whether store copies
+  need the launcher. The launcher keeps no readable list of owned titles (its
+  settings and profiles are encrypted; its log lists the whole catalogue), so only
+  installed titles are listed. Signed-in state comes from `launcher.log` and the
+  profile folders in Documents; the account name in that log is never kept.
+- **Store copies that need a launcher.** An Epic Rockstar title (GTA V, RDR2, the
+  Definitive Editions…) launched under Wine without the Rockstar Games Launcher in its
+  prefix fails with `irori_core::LauncherMissing`; the UI
+  (`irori_ui::launcher_problem`) offers to run the vendor's installer in that prefix
+  (`Backend::install_launcher_for`) and then plays. Steam installs the launcher for
+  its own copies.
+- **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
+  anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
+  `online_only`, the install gate lets them through and the game page says which mode
+  is blocked.
 
 ### 4.10 Steam
 

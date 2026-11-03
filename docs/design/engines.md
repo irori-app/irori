@@ -441,14 +441,25 @@ Behind `iroriThirdPartyLaunchers` (off by default), like ZOOM.
 - A card per launcher (Battle.net, EA app, Ubisoft Connect, Rockstar Games Launcher):
   "Set up" creates a dedicated prefix with a known-good Wine build and the launcher's
   known fixes, downloads the official installer from the vendor and runs it, with
-  progress. On Windows the card only detects the installed launcher.
+  progress. On Windows the card only detects the installed launcher. "Use an existing
+  install" adopts a prefix that already has the launcher, "Close" stops everything in
+  its prefix, and "Remove from Irori" forgets it, keeping the prefix and games.
 - Installed games are read from the launcher's own local data (Battle.net `product.db`,
   Ubisoft's `configurations` cache and registry, EA's `__Installer/installerdata.xml`)
   and listed under `Runner::Launchers` with `third_party_managed_app`. They launch through
   the launcher's URI or flags; the session follows the game's process, not the
   launcher's.
 - Anti-cheat status (`crates/extras/src/anticheat.rs`) is shown before setup and on each
-  game.
+  game. Where the anticheat guards only an online mode (GTA Online's BattlEye), the game
+  page says so and installs aren't blocked: the story works.
+- Rockstar: every known title carries its Steam app id for art. The launcher's card
+  shows whether someone is signed in (from `launcher.log` and the profile folders).
+  Owned but uninstalled titles aren't listed: the launcher keeps no readable record of
+  them, and Irori never asks Rockstar's services.
+- Rockstar titles bought on Epic need the Rockstar Games Launcher in their own prefix.
+  Heroic launches them like any Epic game and leaves installing the launcher to the
+  game itself. Irori checks at every launch under Wine, also after Epic's prerequisite
+  step ran, and offers to run the official installer in that prefix, then plays.
 
 ## 10. Humble Bundle: not shipped
 

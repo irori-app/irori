@@ -39,6 +39,8 @@
   "game.common.version": "Versão",
   "game.compat.anticheat": "Anti-batota",
   "game.compat.anticheat_reference": "Referência anti-batota (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "O {anticheat} bloqueia o {mode} no Wine e no Proton. O modo história funciona.",
+  "game.compat.anticheat_online_only_unnamed": "O anti-batota bloqueia o {mode} no Wine e no Proton. O modo história funciona.",
   "game.compat.anticheat_removed": "Anti-batota removido",
   "game.compat.anticheat_status.broken": "Não funciona",
   "game.compat.anticheat_status.denied": "Recusado",

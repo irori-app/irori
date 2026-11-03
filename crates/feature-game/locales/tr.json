@@ -39,6 +39,8 @@
   "game.common.version": "Sürüm",
   "game.compat.anticheat": "Hile önleyici",
   "game.compat.anticheat_reference": "Hile önleyici kaynağı (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat}, Wine ve Proton altında {mode} modunu engelliyor. Hikâye modu çalışıyor.",
+  "game.compat.anticheat_online_only_unnamed": "Hile önleyici, Wine ve Proton altında {mode} modunu engelliyor. Hikâye modu çalışıyor.",
   "game.compat.anticheat_removed": "Hile önleyici kaldırıldı",
   "game.compat.anticheat_status.broken": "Çalışmıyor",
   "game.compat.anticheat_status.denied": "Reddedildi",

@@ -13,6 +13,7 @@ pub mod glass;
 pub mod hooks;
 pub mod i18n;
 mod kde;
+mod launcher_problem;
 pub mod lutris_summary;
 pub mod models;
 pub mod motion;

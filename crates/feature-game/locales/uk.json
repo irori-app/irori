@@ -39,6 +39,8 @@
   "game.common.version": "Версія",
   "game.compat.anticheat": "Античит",
   "game.compat.anticheat_reference": "Джерело щодо античиту (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} блокує {mode} у Wine і Proton. Сюжетний режим працює.",
+  "game.compat.anticheat_online_only_unnamed": "Античит блокує {mode} у Wine і Proton. Сюжетний режим працює.",
   "game.compat.anticheat_removed": "Античит видалено",
   "game.compat.anticheat_status.broken": "Не працює",
   "game.compat.anticheat_status.denied": "Заборонено",

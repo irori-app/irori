@@ -39,6 +39,8 @@
   "game.common.version": "버전",
   "game.compat.anticheat": "안티치트",
   "game.compat.anticheat_reference": "안티치트 출처 (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "Wine과 Proton에서는 {anticheat}이(가) {mode}을(를) 차단합니다. 스토리 모드는 작동합니다.",
+  "game.compat.anticheat_online_only_unnamed": "Wine과 Proton에서는 안티치트가 {mode}을(를) 차단합니다. 스토리 모드는 작동합니다.",
   "game.compat.anticheat_removed": "안티치트 제거됨",
   "game.compat.anticheat_status.broken": "작동 안 함",
   "game.compat.anticheat_status.denied": "거부됨",
