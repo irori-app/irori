@@ -123,7 +123,8 @@ pub(crate) fn preferred_language(
         .or_else(|| languages.first().cloned())
 }
 
-/// Date part of an RFC 3339 timestamp, relative when recent ("Today").
+/// Date part of an RFC 3339 timestamp, relative when recent ("Today"), else
+/// in the interface language ("Jul 14", "Jan 2, 2020" in another year).
 pub(crate) fn format_day(rfc3339: &str, now_unix: i64) -> String {
     let Some(ts) = irori_core::util::parse_rfc3339(rfc3339) else {
         return rfc3339.chars().take(10).collect();
@@ -134,8 +135,67 @@ pub(crate) fn format_day(rfc3339: &str, now_unix: i64) -> String {
         0 => t("game.date.today").to_string(),
         1 => t("game.date.yesterday").to_string(),
         d if d < 7 => t_args("game.date.days_ago", &[("count", &d.to_string())]).to_string(),
-        _ => rfc3339.chars().take(10).collect(),
+        _ => match (
+            parse_date(rfc3339),
+            chrono::DateTime::from_timestamp(now_unix, 0),
+        ) {
+            (Some(date), Some(now)) => {
+                use chrono::Datelike as _;
+                calendar_date(date, date.year() != now.year())
+            }
+            _ => rfc3339.chars().take(10).collect(),
+        },
     }
+}
+
+/// The calendar date of a store's release date: "2022-02-25", RFC 3339 or
+/// "2022-02-25T00:00:00.000Z", or Steam's English "16 Nov, 2009" and
+/// "Nov 16, 2009".
+pub(crate) fn parse_date(text: &str) -> Option<chrono::NaiveDate> {
+    let text = text.trim();
+    if let Some(d) = text
+        .get(..10)
+        .and_then(|t| chrono::NaiveDate::parse_from_str(t, "%Y-%m-%d").ok())
+    {
+        return Some(d);
+    }
+    ["%d %b, %Y", "%b %d, %Y", "%d %B, %Y", "%B %d, %Y"]
+        .iter()
+        .find_map(|f| chrono::NaiveDate::parse_from_str(text, f).ok())
+}
+
+/// A date in the interface language: "Oct 11", or "Oct 11, 2024" with the year.
+pub(crate) fn calendar_date(date: chrono::NaiveDate, with_year: bool) -> String {
+    use chrono::Datelike as _;
+    const MONTHS: [&str; 12] = [
+        "game.month.1",
+        "game.month.2",
+        "game.month.3",
+        "game.month.4",
+        "game.month.5",
+        "game.month.6",
+        "game.month.7",
+        "game.month.8",
+        "game.month.9",
+        "game.month.10",
+        "game.month.11",
+        "game.month.12",
+    ];
+    let month = t(MONTHS[date.month0() as usize]);
+    let day = date.day().to_string();
+    if with_year {
+        t_args(
+            "game.date.day_year",
+            &[
+                ("month", &month),
+                ("day", &day),
+                ("year", &date.year().to_string()),
+            ],
+        )
+    } else {
+        t_args("game.date.day", &[("month", &month), ("day", &day)])
+    }
+    .to_string()
 }
 
 /// Whether store text is HTML rather than Markdown.
@@ -152,6 +212,21 @@ pub(crate) fn looks_like_html(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn release_dates_in_store_formats() {
+        let date = chrono::NaiveDate::from_ymd_opt(2009, 11, 16);
+        for text in [
+            "2009-11-16",
+            "2009-11-16T00:00:00.000Z",
+            "16 Nov, 2009",
+            "Nov 16, 2009",
+            "16 November, 2009",
+        ] {
+            assert_eq!(parse_date(text), date, "{text}");
+        }
+        assert_eq!(parse_date("Coming soon"), None);
+    }
 
     #[test]
     fn language_names() {
@@ -192,7 +267,7 @@ mod tests {
         assert_eq!(format_day(&iso(now - 60), now), "Today");
         assert_eq!(format_day(&iso(now - 86_400 - 5), now), "Yesterday");
         assert_eq!(format_day(&iso(now - 3 * 86_400), now), "3 days ago");
-        assert_eq!(format_day("2020-01-02T00:00:00Z", now), "2020-01-02");
+        assert_eq!(format_day("2020-01-02T00:00:00Z", now), "Jan 2, 2020");
     }
 
     #[test]

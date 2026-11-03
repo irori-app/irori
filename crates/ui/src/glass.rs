@@ -279,7 +279,7 @@ pub fn chrome_surfaces(layers: &[Hsla], cx: &App) -> [Hsla; 2] {
 }
 
 /// `top` composited over the opaque `under`.
-fn over(top: Hsla, under: Hsla) -> Hsla {
+pub(crate) fn over(top: Hsla, under: Hsla) -> Hsla {
     let (t, u) = (top.to_rgb(), under.to_rgb());
     let a = top.a;
     gpui_kit::Rgba {

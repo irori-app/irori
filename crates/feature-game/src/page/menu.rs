@@ -4,7 +4,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use gpui_kit::{App, WeakEntity, Window};
+use gpui_kit::{App, Context, WeakEntity, Window};
 use irori_core::{ClientAction, GameId, GameInfo, InstallPlatform, Runner};
 use irori_services::LaunchParams;
 use irori_ui::i18n::{t, t_args};
@@ -376,4 +376,38 @@ pub(super) fn build_menu(
         );
     }
     menu
+}
+
+/// "Your rating" with the star counts and "Clear rating", for the page's own
+/// menus (the rating's stars sit on the page too).
+pub(super) fn rating_submenu(
+    menu: PopupMenu,
+    id: &GameId,
+    window: &mut Window,
+    cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+    let current = models(cx).library.read(cx).rating(id);
+    let id = id.clone();
+    menu.separator().submenu_with_icon(
+        Some(IconName::Star.into()),
+        t("game.rating.label"),
+        window,
+        cx,
+        move |mut menu, _, _| {
+            for stars in 1..=irori_services::userdata::MAX_RATING {
+                let i = id.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(super::hero::rate_label(stars))
+                        .checked(current == Some(stars))
+                        .on_click(move |_, _, cx| ops::set_rating(&i, Some(stars), cx)),
+                );
+            }
+            let i = id.clone();
+            menu.separator().item(
+                PopupMenuItem::new(t("game.rating.clear"))
+                    .disabled(current.is_none())
+                    .on_click(move |_, _, cx| ops::set_rating(&i, None, cx)),
+            )
+        },
+    )
 }
