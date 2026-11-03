@@ -244,7 +244,18 @@ impl LaunchersStore {
         } else {
             let app = (self.settings)();
             let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
-            let wc = wine_context(setup);
+            let umu = if irori_runtime::runtimes::is_umu_supported(&settings, false) {
+                match irori_runtime::runtimes::ensure_umu(ctx).await {
+                    Ok(path) => Some(path),
+                    Err(e) => {
+                        tracing::warn!("{e:#}; running Proton directly");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let wc = wine_context(setup, umu);
             irori_runtime::prefix::verify_prefix(&app, &settings, &wc, ctx).await?;
             let mut cmd =
                 irori_runtime::prefix::WineCommand::new([installer.display().to_string()]);
@@ -336,7 +347,9 @@ impl LaunchersStore {
             setup.with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
         let app = (self.settings)();
         let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
-        let wc = wine_context(setup);
+        let umu = irori_runtime::runtimes::is_umu_supported(&settings, true)
+            .then(irori_runtime::runtimes::umu_path);
+        let wc = wine_context(setup, umu);
         let mut argv = vec![program.display().to_string()];
         argv.extend(args);
         let mut cmd = irori_runtime::prefix::WineCommand::new(argv);
@@ -381,13 +394,18 @@ fn game_settings(defaults: &GameSettings, wine: &WineInstallation, prefix: &Path
     }
 }
 
-/// The Wine layer a launcher's prefix runs with.
-fn wine_context(setup: &Setup) -> irori_runtime::WineContext {
+/// The Wine layer a launcher's prefix runs with. Proton goes through `umu`
+/// when there is one, as games do: run directly, outside the Steam Linux
+/// Runtime, its 32-bit parts need the system's 32-bit loader, which a
+/// Flatpak without its i386 extension doesn't have, and the installer can't
+/// start. A prefix Proton made directly keeps working, since umu uses its
+/// `pfx` folder.
+fn wine_context(setup: &Setup, umu: Option<PathBuf>) -> irori_runtime::WineContext {
     irori_runtime::WineContext::new(
         setup.wine.clone(),
         setup.prefix.clone(),
-        false,
-        irori_runtime::runtimes::umu_path(),
+        umu.is_some(),
+        umu.unwrap_or_default(),
     )
 }
 
@@ -697,6 +715,31 @@ mod tests {
             .await
             .is_err()
         );
+    }
+
+    #[test]
+    fn proton_runs_through_umu_when_there_is_one() {
+        let setup = Setup {
+            prefix: PathBuf::from("/prefixes/Battle.net"),
+            wine: WineInstallation {
+                bin: "/proton/GE-Proton10-25/proton".into(),
+                name: "GE-Proton10-25".into(),
+                kind: WineKind::Proton,
+                ..Default::default()
+            },
+            set_up_at: String::new(),
+        };
+        let wc = wine_context(&setup, Some(PathBuf::from("/umu/umu-run")));
+        assert!(wc.uses_umu);
+        assert_eq!(wc.runner_bin(), Path::new("/umu/umu-run"));
+        let direct = wine_context(&setup, None);
+        assert!(!direct.uses_umu);
+        assert_eq!(
+            direct.runner_bin(),
+            Path::new("/proton/GE-Proton10-25/proton")
+        );
+        // Both find the launcher where Proton keeps the Windows files.
+        assert_eq!(windows_root(&setup), Path::new("/prefixes/Battle.net/pfx"));
     }
 
     #[tokio::test]
