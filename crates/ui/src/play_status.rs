@@ -3,10 +3,13 @@
 //! a status writes the library file, so it runs off the UI thread.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _};
-use gpui_kit::{AnyElement, App, ElementId, Hsla, IntoElement as _, SharedString};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex};
+use gpui_kit::{
+    AnyElement, App, ElementId, Hsla, IntoElement as _, ParentElement as _, SharedString,
+    Styled as _, div, px,
+};
 use irori_core::GameId;
 use irori_services::{EffectiveStatus, PlayStatus};
 
@@ -118,20 +121,31 @@ pub fn menu_many(menu: PopupMenu, ids: Vec<GameId>, cx: &App) -> PopupMenu {
     menu
 }
 
-/// A button naming the game's status that opens [`menu`]. Without a status
-/// it reads "Set status".
+/// An outline pill naming the game's status after a dot in its colour,
+/// opening [`menu`]. Without a status it reads "Set status". Long names
+/// are cut short to fit the row it sits in.
 pub fn button(element_id: impl Into<ElementId>, id: &GameId, cx: &App) -> AnyElement {
     let current = of(id, cx);
     let id = id.clone();
     let text = current.map_or_else(|| t("ui.play_status.set"), label);
+    let dot = current.map_or_else(|| cx.theme().muted_foreground, |s| color(s, cx));
     Button::new(element_id)
-        .ghost()
+        .outline()
         .small()
-        .icon(Icon::new(current.map_or(IconName::Flag, icon)))
-        .label(text.clone())
+        .rounded(px(999.))
+        .min_w_0()
+        .max_w_full()
         .tooltip(t("ui.play_status.title"))
-        .accessibility_label(text)
+        .accessibility_label(text.clone())
         .dropdown_caret(true)
+        .child(
+            h_flex()
+                .min_w_0()
+                .gap_1p5()
+                .items_center()
+                .child(div().size_2().flex_shrink_0().rounded_full().bg(dot))
+                .child(div().min_w_0().truncate().child(text)),
+        )
         .dropdown_menu(move |m, _, cx| menu(m, &id, cx))
         .into_any_element()
 }
