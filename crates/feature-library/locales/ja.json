@@ -431,6 +431,7 @@
   "library.toolbar.filters": "フィルター",
   "library.toolbar.filters_active": "フィルター · {count}",
   "library.toolbar.grid": "グリッド",
+  "library.toolbar.group_by_status": "プレイ状況でグループ化",
   "library.toolbar.list": "リスト",
   "library.toolbar.reverse": "逆順",
   "library.toolbar.select": "選択",

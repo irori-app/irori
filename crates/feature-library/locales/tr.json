@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Filtreler",
   "library.toolbar.filters_active": "Filtreler · {count}",
   "library.toolbar.grid": "Izgara",
+  "library.toolbar.group_by_status": "Oynama durumuna göre grupla",
   "library.toolbar.list": "Liste",
   "library.toolbar.reverse": "Sırayı ters çevir",
   "library.toolbar.select": "Seç",

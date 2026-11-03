@@ -431,6 +431,7 @@
   "library.toolbar.filters": "Фильтры",
   "library.toolbar.filters_active": "Фильтры · {count}",
   "library.toolbar.grid": "Сетка",
+  "library.toolbar.group_by_status": "Группировать по статусу прохождения",
   "library.toolbar.list": "Список",
   "library.toolbar.reverse": "Обратный порядок",
   "library.toolbar.select": "Выбрать",

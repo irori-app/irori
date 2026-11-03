@@ -71,6 +71,8 @@
   "shell.palette.lutris_script_keywords": "Lutris 脚本 安装程序 lutris.net 社区",
   "shell.palette.play_status": "{title}：将游玩状态设为“{status}”",
   "shell.palette.clear_play_status": "{title}：清除游玩状态",
+  "shell.palette.group_by_status": "按游玩状态为游戏库分组",
+  "shell.palette.ungroup_by_status": "取消按游玩状态为游戏库分组",
   "shell.app_update.available": "Irori {version} 现已推出",
   "shell.app_update.available_message": "当前版本为 {current}。",
   "shell.app_update.available_command": "当前版本为 {current}。要更新，请运行 {command}",

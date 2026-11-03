@@ -71,6 +71,8 @@
   "shell.palette.lutris_script_keywords": "Lutris script installation lutris.net communauté",
   "shell.palette.play_status": "{title} : définir le statut de jeu sur {status}",
   "shell.palette.clear_play_status": "{title} : retirer le statut de jeu",
+  "shell.palette.group_by_status": "Grouper la bibliothèque par statut de jeu",
+  "shell.palette.ungroup_by_status": "Ne plus grouper la bibliothèque par statut de jeu",
   "shell.app_update.available": "Irori {version} est disponible",
   "shell.app_update.available_message": "Vous avez la version {current}.",
   "shell.app_update.available_command": "Vous avez la version {current}. Pour mettre à jour, lancez {command}",
