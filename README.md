@@ -50,6 +50,9 @@ and kept in a bounded GPU cache.
   library grouped by it with play time under each cover (Ctrl+G), and a stats page over your games' art: play time by week, month, year or all time against
   the period before, a day-by-day chart per game, streaks, comebacks and new games, and a
   backlog with a yearly goal, its pace and a timeline of what you beat.
+- An album of your own screenshots per game and period: the ones Steam keeps, and the
+  ones your desktop saves (Spectacle, GNOME, Game Bar, macOS) while a game you started
+  from Irori runs. Irori only reads them; your files stay where they are.
 - One-click play from anywhere: library tiles, the game page, the Ctrl+K command palette,
   the tray menu, desktop/Steam shortcuts and `irori://launch/<runner>/<app>` links
   (Heroic's `heroic://` links work too).

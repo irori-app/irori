@@ -50,7 +50,8 @@ impl StatsView {
             self.render_art_credit(game, why, cx)
         });
         let headline = self.render_overview_headline(cx);
-        let hero = self.render_hero(top.as_ref(), headline, credit, window, cx);
+        let art = top.as_ref().and_then(|g| g.hero_art()).map(str::to_owned);
+        let hero = self.render_hero(art, headline, credit, window, cx);
         v_flex()
             .gap_6()
             .child(hero)
@@ -164,6 +165,37 @@ impl StatsView {
                 body,
                 game(first),
                 Some(Target::Game((*first).clone())),
+                cx,
+            ));
+        }
+
+        let album = self
+            .album
+            .as_ref()
+            .filter(|a| a.period == o.period && !a.shots.is_empty());
+        if let Some((album, (top, _))) = album.and_then(|a| Some((a, a.top()?))) {
+            let count = album.shots.len().to_string();
+            let body = match (album.shots.len(), album.games.len()) {
+                (1, _) => t_args(
+                    "library.stats.insight.screenshots.one",
+                    &[("title", &title(top))],
+                ),
+                (_, 1) => t_args(
+                    "library.stats.insight.screenshots.one_game",
+                    &[("count", &count), ("title", &title(top))],
+                ),
+                _ => t_args(
+                    "library.stats.insight.screenshots.other",
+                    &[("count", &count), ("title", &title(top))],
+                ),
+            };
+            cards.push(insight(
+                "stats-insight-screenshots",
+                IconName::Camera,
+                t("library.stats.insight.screenshots.title"),
+                body,
+                game(top),
+                Some(Target::Album),
                 cx,
             ));
         }
@@ -367,6 +399,7 @@ impl StatsView {
 enum Target {
     Game(GameId),
     Backlog,
+    Album,
 }
 
 /// A card with an icon, a caption, one line of text and the cover of the
@@ -431,6 +464,7 @@ fn insight(
             d.on_click(cx.listener(move |this, _, _, cx| match &target {
                 Target::Game(id) => navigate(Route::Game(id.clone()), cx),
                 Target::Backlog => this.set_tab(Tab::Backlog, cx),
+                Target::Album => this.set_tab(Tab::Album, cx),
             }))
         })
         .into_any_element()

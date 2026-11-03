@@ -385,6 +385,14 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
+  screenshots, only read, never moved or removed. A Steam app's folder
+  (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other
+  file (the desktop's screenshot folders, Steam shortcuts' folders) belongs to the
+  session in `sessions.jsonl` it was taken in, by the time in its name or else its
+  modified time. Folder listings are cached in `<cache>/screenshots.json` by the
+  folder's modified time; matching is redone each build. The stats page's Album tab
+  and its insight card show them.
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.

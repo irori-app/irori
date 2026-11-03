@@ -29,17 +29,17 @@ use super::{StatsView, Tab};
 pub(super) const HERO_REM: f32 = 21.;
 
 impl StatsView {
-    /// The art frame: `game`'s art behind the controls, `headline` at the
-    /// bottom left and `aside` at the bottom right.
+    /// The art frame: `art` (a game's art or a screenshot) behind the
+    /// controls, `headline` at the bottom left and `aside` at the bottom right.
     pub(super) fn render_hero(
         &self,
-        game: Option<&Arc<GameInfo>>,
+        art: Option<String>,
         headline: AnyElement,
         aside: Option<AnyElement>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let url = game.and_then(|g| g.hero_art()).map(str::to_owned);
+        let url = art;
         let ambient = url
             .as_deref()
             .and_then(|url| irori_ui::art::ambient(url, cx));
@@ -140,6 +140,7 @@ impl StatsView {
                     t("library.stats.tab.overview"),
                 ),
                 (Tab::Backlog, IconName::Flag, t("library.stats.tab.backlog")),
+                (Tab::Album, IconName::Images, t("library.stats.tab.album")),
             ]
             .into_iter()
             .map(|(tab, icon, label)| (Some(icon), label, tab == self.tab, tab))
@@ -147,7 +148,7 @@ impl StatsView {
             cx,
             |this, tab, cx| this.set_tab(tab, cx),
         );
-        let spans = (self.tab == Tab::Overview).then(|| {
+        let spans = (self.tab != Tab::Backlog).then(|| {
             pills(
                 "stats-span",
                 Span::ALL
@@ -159,7 +160,7 @@ impl StatsView {
             )
         });
         let label = match self.tab {
-            Tab::Overview => text::period(&self.period()),
+            Tab::Overview | Tab::Album => text::period(&self.period()),
             Tab::Backlog => self.year().to_string().into(),
         };
         let stepper = (self.tab == Tab::Backlog || self.span != Span::All).then(|| {
