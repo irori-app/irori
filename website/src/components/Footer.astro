@@ -1,0 +1,72 @@
+---
+import BrandLockup from './BrandLockup.vue'
+import { REPO } from '../data/site'
+import { usesGameCovers } from '../lib/wall'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const p = (path: string) => localePath(locale, path)
+const columns = [
+  {
+    title: t.footer.product,
+    links: [
+      { href: p('/features/'), label: t.nav.features },
+      { href: p('/download/'), label: t.nav.download },
+      { href: p('/compare/'), label: t.nav.compare },
+      { href: p('/changelog/'), label: t.nav.changelog },
+    ],
+  },
+  {
+    title: t.footer.learn,
+    links: [
+      { href: p('/guides/'), label: t.nav.guides },
+      { href: p('/docs/'), label: t.nav.docs },
+      { href: p('/docs/faq/'), label: t.footer.faq },
+    ],
+  },
+  {
+    title: t.footer.project,
+    links: [
+      { href: REPO, label: t.footer.source },
+      { href: `${REPO}/releases`, label: t.footer.releases },
+      { href: `${REPO}/issues`, label: t.footer.issues },
+      { href: `${REPO}/blob/main/LICENSE`, label: t.footer.licence },
+      { href: p('/code-signing/'), label: t.footer.signing },
+    ],
+  },
+]
+---
+
+<footer class="relative mt-24 border-t border-grain bg-soot/50">
+  <div class="gutter mx-auto grid max-w-7xl gap-12 py-16 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div class="flex min-w-0 flex-col gap-5">
+      <a href={p('/')} class="self-start text-paper" aria-label={t.nav.home}><BrandLockup id="footer" /></a>
+      <p class="max-w-sm text-smoke">{t.site.tagline}</p>
+      <p class="font-mono text-sm text-smoke" lang="ja">囲炉裏 <span lang="en">· i·ro·ri</span></p>
+    </div>
+    <div class="grid min-w-0 grid-cols-2 gap-8 sm:grid-cols-3">
+      {
+        columns.map((column) => (
+          <nav aria-label={column.title} class="flex min-w-0 flex-col gap-3">
+            <p class="tag">{column.title}</p>
+            {column.links.map((link) => (
+              <a href={link.href} class="text-[0.95rem] text-smoke transition-colors hover:text-paper">
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        ))
+      }
+    </div>
+  </div>
+  <div class="gutter mx-auto max-w-7xl border-t border-grain py-8">
+    <p class="max-w-3xl text-sm leading-relaxed text-smoke">
+      {t.footer.disclaimer}
+      {usesGameCovers() ? `${t.footer.artwork} ${t.footer.demoGames}` : t.footer.demoGames}
+    </p>
+  </div>
+</footer>

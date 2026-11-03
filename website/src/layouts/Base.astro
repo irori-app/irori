@@ -1,0 +1,125 @@
+---
+/**
+ * Every page's frame: the head with its search and sharing tags, the sticky
+ * navigation, the footer and the small scripts that run motion.
+ */
+import '@fontsource/zen-maru-gothic/latin-500.css'
+import '@fontsource/zen-maru-gothic/latin-700.css'
+import '@fontsource/zen-kaku-gothic-new/latin-400.css'
+import '@fontsource/zen-kaku-gothic-new/latin-500.css'
+import '@fontsource/zen-kaku-gothic-new/latin-700.css'
+import '@fontsource/m-plus-1-code/latin-400.css'
+import '@fontsource/m-plus-1-code/latin-500.css'
+import '../styles/global.css'
+import displayFont from '@fontsource/zen-maru-gothic/files/zen-maru-gothic-latin-700-normal.woff2?url'
+import bodyFont from '@fontsource/zen-kaku-gothic-new/files/zen-kaku-gothic-new-latin-400-normal.woff2?url'
+
+import Footer from '../components/Footer.astro'
+import Nav from '../components/Nav.astro'
+import { dictionary, LANG_TAGS, LOCALES, localePath, type Locale } from '../i18n/config'
+import { keyOf } from '../lib/pages'
+
+export interface Crumb {
+  name: string
+  path: string
+}
+
+interface Props {
+  locale: Locale
+  /** The `<title>`; " | Irori" is added unless it already names Irori. */
+  title: string
+  description: string
+  /** The page's path in English, with its trailing slash: `/features/library/`. */
+  path: string
+  crumbs?: Crumb[]
+  /** More JSON-LD objects for this page. */
+  schema?: object[]
+  type?: 'website' | 'article'
+  noindex?: boolean
+}
+
+const { locale, title, description, path, crumbs = [], schema = [], type = 'website', noindex = false } = Astro.props
+const t = dictionary(locale)
+const site = Astro.site!
+const fullTitle = /\bIrori\b/.test(title) ? title : `${title} | Irori`
+const canonical = new URL(localePath(locale, path), site).href
+const ogImage = new URL(`/og/${locale === 'en' ? '' : `${locale}/`}${keyOf(path)}.png`, site).href
+
+const breadcrumbSchema = crumbs.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [{ name: t.breadcrumbs.home, path: '/' }, ...crumbs].map((crumb, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: crumb.name,
+        item: new URL(localePath(locale, crumb.path), site).href,
+      })),
+    }
+  : null
+const jsonLd = [breadcrumbSchema, ...schema].filter(Boolean)
+---
+
+<!doctype html>
+<html lang={LANG_TAGS[locale].html} class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
+    {LOCALES.map((l) => <link rel="alternate" hreflang={LANG_TAGS[l].html} href={new URL(localePath(l, path), site).href} />)}
+    <link rel="alternate" hreflang="x-default" href={new URL(path, site).href} />
+    <meta name="theme-color" content="#15110e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f4ee" media="(prefers-color-scheme: light)" />
+    <meta property="og:site_name" content="Irori" />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content={LANG_TAGS[locale].og} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={bodyFont} as="font" type="font/woff2" crossorigin />
+    <script is:inline>
+      // Before the first paint: the theme, so the page never flashes, and a flag
+      // that lets scripted motion hide what it will reveal.
+      ;(function () {
+        var root = document.documentElement
+        root.classList.add('js')
+        var dark
+        try {
+          var choice = localStorage.getItem('irori-theme')
+          dark = choice ? choice === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        } catch (e) {
+          dark = matchMedia('(prefers-color-scheme: dark)').matches
+        }
+        root.classList.toggle('dark', dark)
+      })()
+    </script>
+    {jsonLd.map((item) => <script type="application/ld+json" set:html={JSON.stringify(item)} />)}
+  </head>
+  <body>
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-flame focus:px-4 focus:py-2 focus:text-flame-ink">
+      {t.site.skip}
+    </a>
+    <Nav locale={locale} path={path} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer locale={locale} />
+    <script>
+      import { startMotion } from '../lib/motion'
+      startMotion()
+    </script>
+  </body>
+</html>
