@@ -228,6 +228,14 @@ fn previous_builds() -> Vec<PreviousBuild> {
 }
 
 /// A release date as the page shows it (`2026-10-30T12:00:00Z` → `2026-10-30`).
+/// Whether `update` offers a Wine or Proton build already on this computer:
+/// installed from the Wine manager, or by another tool (ProtonUp-Qt, Steam)
+/// into a folder Irori reads. Builds updated in place keep their name, so
+/// they are left to the check.
+fn already_present(update: &ComponentUpdate, present: &HashSet<String>) -> bool {
+    update.kind == ComponentKind::Wine && !update.in_place && present.contains(&update.latest)
+}
+
 fn date_part(value: &str) -> String {
     value.chars().take(10).collect()
 }
@@ -266,7 +274,11 @@ impl Backend {
             return;
         }
         self.set_components(|r| r.checking = true);
-        let (found, errors) = self.find_component_updates().await;
+        let (mut found, errors) = self.find_component_updates().await;
+        if found.iter().any(|u| u.kind == ComponentKind::Wine) {
+            let present = self.present_builds().await;
+            found.retain(|u| !already_present(u, &present));
+        }
         let now = util::unix_now();
         let saved = {
             let mut saved = self.components.saved.lock();
@@ -297,6 +309,38 @@ impl Backend {
             r.checked_at = Some(now);
             r.check_errors = errors;
         });
+    }
+
+    /// Names of the Wine and Proton builds found on this computer.
+    async fn present_builds(&self) -> HashSet<String> {
+        discovery::discover(&self.settings.app())
+            .await
+            .into_iter()
+            .map(|w| w.installation.name)
+            .collect()
+    }
+
+    /// Drop the Wine and Proton updates whose build is now on this computer,
+    /// so a build installed by hand clears its update at once rather than at
+    /// the next daily check.
+    pub(crate) async fn forget_present_wine_updates(&self) {
+        let offered = self
+            .component_updates()
+            .updates
+            .iter()
+            .any(|u| u.kind == ComponentKind::Wine && !u.in_place);
+        if !offered {
+            return;
+        }
+        let present = self.present_builds().await;
+        if self
+            .component_updates()
+            .updates
+            .iter()
+            .any(|u| already_present(u, &present))
+        {
+            self.set_components(|r| r.updates.retain(|u| !already_present(u, &present)));
+        }
     }
 
     async fn save_components(&self, saved: serde_json::Value) {
@@ -829,5 +873,40 @@ mod tests {
         };
         let ids: Vec<_> = report.pending().map(|u| u.id.as_str()).collect();
         assert_eq!(ids, ["a"]);
+    }
+
+    #[test]
+    fn a_build_installed_by_hand_clears_its_update() {
+        let update = |kind, latest: &str, in_place| ComponentUpdate {
+            id: "wine:GE-Proton".into(),
+            kind,
+            name: "GE-Proton".into(),
+            installed: "GE-Proton10-20".into(),
+            latest: latest.into(),
+            skip_key: latest.into(),
+            skipped: false,
+            external: false,
+            in_place,
+            notes_url: None,
+            target: Target::Tool(DxTool::Dxvk),
+        };
+        let present: HashSet<String> = ["GE-Proton10-25".to_string()].into();
+        assert!(already_present(
+            &update(ComponentKind::Wine, "GE-Proton10-25", false),
+            &present
+        ));
+        assert!(!already_present(
+            &update(ComponentKind::Wine, "GE-Proton10-26", false),
+            &present
+        ));
+        // An in-place build keeps its name whether or not it is updated.
+        assert!(!already_present(
+            &update(ComponentKind::Wine, "GE-Proton10-25", true),
+            &present
+        ));
+        assert!(!already_present(
+            &update(ComponentKind::Translation, "GE-Proton10-25", false),
+            &present
+        ));
     }
 }

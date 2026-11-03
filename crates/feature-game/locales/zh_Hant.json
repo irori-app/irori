@@ -308,6 +308,8 @@
   "game.logs.empty": "尚無記錄。下次啟動遊戲時會寫入。",
   "game.logs.errors_only": "錯誤和警告",
   "game.logs.follow": "自動捲動",
+  "game.logs.filter": "篩選行",
+  "game.logs.hide_matching": "隱藏符合的行",
   "game.logs.link_copied": "已複製連結",
   "game.logs.open": "開啟",
   "game.logs.open_in_editor": "在編輯器中開啟",

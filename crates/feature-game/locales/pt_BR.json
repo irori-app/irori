@@ -308,6 +308,8 @@
   "game.logs.empty": "Ainda não há log. Ele será gravado na próxima vez que o jogo iniciar.",
   "game.logs.errors_only": "Erros e avisos",
   "game.logs.follow": "Acompanhar",
+  "game.logs.filter": "Filtrar linhas",
+  "game.logs.hide_matching": "Ocultar linhas correspondentes",
   "game.logs.link_copied": "Link copiado",
   "game.logs.open": "Abrir",
   "game.logs.open_in_editor": "Abrir no editor",

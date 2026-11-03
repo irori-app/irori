@@ -308,6 +308,8 @@
   "game.logs.empty": "Pas encore de journal. Il sera écrit au prochain lancement du jeu.",
   "game.logs.errors_only": "Erreurs et avertissements",
   "game.logs.follow": "Suivre",
+  "game.logs.filter": "Filtrer les lignes",
+  "game.logs.hide_matching": "Masquer les lignes correspondantes",
   "game.logs.link_copied": "Lien copié",
   "game.logs.open": "Ouvrir",
   "game.logs.open_in_editor": "Ouvrir dans l’éditeur",

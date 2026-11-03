@@ -1,5 +1,5 @@
-//! Log viewer: tail of a log file with search, level filter, follow mode,
-//! copy and reveal.
+//! Log viewer: tail of a log file with search (keeping or hiding the
+//! matching lines), level filter, follow mode, copy and reveal.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 use anyhow::Context as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
@@ -90,14 +91,21 @@ pub fn decode_tail(bytes: &[u8], from_start: bool) -> String {
 }
 
 /// Indices of the lines admitted by a level filter and a case-insensitive
-/// query.
-pub fn filter_lines(lines: &[(LineLevel, String)], query: &str, level: LevelFilter) -> Vec<usize> {
+/// query: the lines containing it, or with `hide_matching` the ones that
+/// don't.
+pub fn filter_lines(
+    lines: &[(LineLevel, String)],
+    query: &str,
+    level: LevelFilter,
+    hide_matching: bool,
+) -> Vec<usize> {
     let q = query.trim().to_lowercase();
     lines
         .iter()
         .enumerate()
         .filter(|(_, (lvl, text))| {
-            level.admits(*lvl) && (q.is_empty() || text.to_lowercase().contains(&q))
+            level.admits(*lvl)
+                && (q.is_empty() || text.to_lowercase().contains(&q) != hide_matching)
         })
         .map(|(i, _)| i)
         .collect()
@@ -130,6 +138,8 @@ pub struct LogViewer {
     state: LoadState,
     truncated: bool,
     query: Entity<InputState>,
+    /// Hide the lines matching the query instead of keeping only them.
+    hide_matching: bool,
     level: LevelFilter,
     follow: bool,
     copied: bool,
@@ -166,6 +176,7 @@ impl LogViewer {
             state: LoadState::Idle,
             truncated: false,
             query,
+            hide_matching: false,
             level: LevelFilter::All,
             follow: true,
             copied: false,
@@ -264,7 +275,12 @@ impl LogViewer {
 
     fn refilter(&mut self, cx: &mut Context<Self>) {
         let query = self.query.read(cx).value();
-        self.visible = Arc::new(filter_lines(&self.lines, &query, self.level));
+        self.visible = Arc::new(filter_lines(
+            &self.lines,
+            &query,
+            self.level,
+            self.hide_matching,
+        ));
         cx.notify();
     }
 
@@ -487,6 +503,15 @@ impl LogViewer {
                     .prefix(Icon::new(IconName::Search).small())
                     .cleanable(true)
                     .w_64(),
+            )
+            .child(
+                Checkbox::new("log-hide-matching")
+                    .label(t("settings.logs.hide_matching"))
+                    .checked(self.hide_matching)
+                    .on_change(cx.listener(|this, v: &bool, _, cx| {
+                        this.hide_matching = *v;
+                        this.refilter(cx);
+                    })),
             )
             .child(
                 ButtonGroup::new("log-level")
@@ -735,9 +760,23 @@ mod tests {
             .iter()
             .map(|l| (classify(l), l.to_string()))
             .collect();
-        assert_eq!(filter_lines(&lines, "", LevelFilter::All), vec![0, 1, 2, 3]);
-        assert_eq!(filter_lines(&lines, "", LevelFilter::Warnings), vec![1, 2]);
-        assert_eq!(filter_lines(&lines, "", LevelFilter::Errors), vec![2]);
-        assert_eq!(filter_lines(&lines, "boom", LevelFilter::All), vec![3]);
+        let all = LevelFilter::All;
+        assert_eq!(filter_lines(&lines, "", all, false), vec![0, 1, 2, 3]);
+        assert_eq!(
+            filter_lines(&lines, "", LevelFilter::Warnings, false),
+            vec![1, 2]
+        );
+        assert_eq!(
+            filter_lines(&lines, "", LevelFilter::Errors, false),
+            vec![2]
+        );
+        assert_eq!(filter_lines(&lines, "boom", all, false), vec![3]);
+        // Hiding the matches keeps the rest, and an empty query hides nothing.
+        assert_eq!(filter_lines(&lines, "boom", all, true), vec![0, 1, 2]);
+        assert_eq!(filter_lines(&lines, " ", all, true), vec![0, 1, 2, 3]);
+        assert_eq!(
+            filter_lines(&lines, "b", LevelFilter::Warnings, true),
+            vec![2]
+        );
     }
 }

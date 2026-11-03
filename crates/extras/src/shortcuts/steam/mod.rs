@@ -55,8 +55,9 @@ pub struct SteamReport {
     pub errors: Vec<String>,
 }
 
-/// Steam installation directory: the configured path when it exists, else
-/// Flatpak Steam, else `~/.steam/steam`, else `~/.local/share/Steam`.
+/// Steam installation directory: the configured path when it has Steam
+/// users, else on Linux the native, Flatpak or Snap Steam with them, else
+/// `~/.steam/steam`.
 pub fn steam_path(app: &AppSettings) -> PathBuf {
     let configured = app.default_steam_path.replace('\'', "");
     let configured = configured.trim();
@@ -70,15 +71,7 @@ pub fn steam_path(app: &AppSettings) -> PathBuf {
         return irori_core::platform::steam_dir();
     }
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-    let candidates = [
-        home.join(".var/app/com.valvesoftware.Steam/.steam/steam"),
-        home.join(".steam/steam"),
-        home.join(".local/share/Steam"),
-    ];
-    candidates
-        .iter()
-        .find(|p| p.join("userdata").is_dir())
-        .cloned()
+    irori_core::platform::find_linux_steam(&home, "userdata")
         .unwrap_or_else(|| home.join(".steam/steam"))
 }
 

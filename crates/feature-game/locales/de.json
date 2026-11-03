@@ -308,6 +308,8 @@
   "game.logs.empty": "Noch kein Protokoll. Es wird beim nächsten Start des Spiels geschrieben.",
   "game.logs.errors_only": "Fehler und Warnungen",
   "game.logs.follow": "Mitverfolgen",
+  "game.logs.filter": "Zeilen filtern",
+  "game.logs.hide_matching": "Passende Zeilen ausblenden",
   "game.logs.link_copied": "Link kopiert",
   "game.logs.open": "Öffnen",
   "game.logs.open_in_editor": "Im Editor öffnen",

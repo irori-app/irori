@@ -308,6 +308,8 @@
   "game.logs.empty": "Ingen logg ännu. Den skrivs nästa gång spelet startar.",
   "game.logs.errors_only": "Fel och varningar",
   "game.logs.follow": "Följ",
+  "game.logs.filter": "Filtrera rader",
+  "game.logs.hide_matching": "Dölj matchande rader",
   "game.logs.link_copied": "Länken kopierades",
   "game.logs.open": "Öppna",
   "game.logs.open_in_editor": "Öppna i redigerare",
