@@ -48,8 +48,8 @@ impl BackupParts {
     }
 }
 
-/// Favourites, hidden games, categories, play statuses, backlog goals and
-/// custom titles and art.
+/// Favourites, hidden games, categories, play statuses, backlog goals,
+/// custom titles and art, and ratings.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibraryBackup {
@@ -59,6 +59,7 @@ pub struct LibraryBackup {
     pub overrides: BTreeMap<String, GameOverrides>,
     pub play_status: BTreeMap<String, PlayStatusRecord>,
     pub backlog_goals: BTreeMap<i32, u32>,
+    pub ratings: BTreeMap<String, u8>,
 }
 
 /// Playtime totals and the session history.
@@ -182,6 +183,7 @@ impl Backend {
                 overrides: user.overrides.clone(),
                 play_status: user.play_status.clone(),
                 backlog_goals: user.backlog_goals.clone(),
+                ratings: user.ratings.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
@@ -336,10 +338,10 @@ impl Backend {
 }
 
 /// Add a backup's library data: favourites, hidden games and category
-/// members are added to what is there; custom titles and art from the
-/// backup replace the current ones of the same game. A play status is taken
-/// when it was set later than the current one, and a goal only for a year
-/// without one.
+/// members are added to what is there; custom titles, art and ratings from
+/// the backup replace the current ones of the same game. A play status is
+/// taken when it was set later than the current one, and a goal only for a
+/// year without one.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
     d.hidden.extend(lib.hidden.iter().cloned());
@@ -365,6 +367,12 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     }
     for (year, goal) in &lib.backlog_goals {
         d.backlog_goals.entry(*year).or_insert(*goal);
+    }
+    for (key, stars) in &lib.ratings {
+        if *stars > 0 {
+            d.ratings
+                .insert(key.clone(), (*stars).min(crate::userdata::MAX_RATING));
+        }
     }
 }
 
@@ -491,12 +499,15 @@ mod tests {
                 },
             )]
             .into(),
+            ratings: [("gog:1".to_string(), 4), ("gog:2".to_string(), 9)].into(),
             ..Default::default()
         };
         merge_library(&mut d, &lib);
         assert_eq!(d.favourites.len(), 2);
         assert_eq!(d.categories["RPG"].len(), 2);
         assert_eq!(d.overrides["gog:1"].title.as_deref(), Some("Mine"));
+        assert_eq!(d.ratings["gog:1"], 4);
+        assert_eq!(d.ratings["gog:2"], crate::userdata::MAX_RATING);
     }
 
     #[test]

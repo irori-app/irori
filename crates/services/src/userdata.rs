@@ -36,7 +36,14 @@ pub struct UserData {
     pub play_status: BTreeMap<String, PlayStatusRecord>,
     /// How many games the user means to beat, by calendar year.
     pub backlog_goals: BTreeMap<i32, u32>,
+    /// The user's own rating of each game, from 1 to 5 stars. Unrated games
+    /// have no entry.
+    #[serde(default)]
+    pub ratings: BTreeMap<String, u8>,
 }
+
+/// Most stars a game can be rated.
+pub const MAX_RATING: u8 = 5;
 
 impl UserData {
     /// The status the user set for a game, if any.
@@ -127,6 +134,17 @@ fn grown_totals(
         .map(|(app, minutes)| (GameId::new(runner, app.as_str()).key(), *minutes))
         .filter(|(key, minutes)| *minutes > data.playtime.get(key).map_or(0, |r| r.total_minutes))
         .collect()
+}
+
+fn rate(d: &mut UserData, key: String, stars: Option<u8>) {
+    match stars.filter(|s| *s > 0) {
+        Some(s) => {
+            d.ratings.insert(key, s.min(MAX_RATING));
+        }
+        None => {
+            d.ratings.remove(&key);
+        }
+    }
 }
 
 /// What [`UserDataService::sync_library`] changes, worked out from the
@@ -270,6 +288,12 @@ impl UserDataService {
                 }
             }
         });
+    }
+
+    /// Rate a game from 1 to [`MAX_RATING`] stars, or clear its rating with
+    /// `None` (or 0). Larger values count as the most stars.
+    pub fn set_rating(&self, id: &GameId, stars: Option<u8>) {
+        self.update(Some(id), |d| rate(d, id.key(), stars));
     }
 
     pub fn set_hidden(&self, id: &GameId, on: bool) {
@@ -459,6 +483,19 @@ mod tests {
             store_hidden,
             ..Default::default()
         })
+    }
+
+    #[test]
+    fn ratings_are_clamped_cleared_and_optional_on_disk() {
+        let mut data: UserData = serde_json::from_str(r#"{"favourites":["gog:1"]}"#).unwrap();
+        assert!(data.ratings.is_empty());
+        rate(&mut data, "gog:1".into(), Some(4));
+        rate(&mut data, "gog:2".into(), Some(12));
+        assert_eq!(data.ratings["gog:1"], 4);
+        assert_eq!(data.ratings["gog:2"], MAX_RATING);
+        rate(&mut data, "gog:1".into(), Some(0));
+        rate(&mut data, "gog:2".into(), None);
+        assert!(data.ratings.is_empty());
     }
 
     #[test]

@@ -41,7 +41,7 @@ fn link(id: &'static str, url: &str, label: impl Into<SharedString>) -> AnyEleme
     }
 }
 
-fn hours(h: Option<f32>) -> String {
+pub(super) fn hours(h: Option<f32>) -> String {
     match h {
         Some(h) if h > 0.0 => {
             t_args("game.compat.hours", &[("hours", &format!("{h:.0}"))]).to_string()

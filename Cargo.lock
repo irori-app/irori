@@ -4565,6 +4565,7 @@ name = "irori-game"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "fs4",
  "futures",
  "gpui-kit",
