@@ -1,0 +1,31 @@
+---
+/** The trail above an article's title. Its JSON-LD twin is written by `Base.astro`. */
+import { ChevronRight } from '@lucide/vue'
+import type { Crumb } from '../layouts/Base.astro'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  crumbs: Crumb[]
+}
+const { locale, crumbs } = Astro.props
+const t = dictionary(locale)
+const trail = [{ name: t.breadcrumbs.home, path: '/' }, ...crumbs]
+---
+
+<nav aria-label={t.breadcrumbs.label}>
+  <ol class="flex flex-wrap items-center gap-1 font-mono text-sm text-smoke">
+    {
+      trail.map((crumb, index) => (
+        <li class="flex min-w-0 items-center gap-1">
+          {index > 0 && <ChevronRight class="size-3.5 shrink-0 text-wood" aria-hidden="true" />}
+          {index === trail.length - 1 ? (
+            <span aria-current="page" class="truncate text-paper">{crumb.name}</span>
+          ) : (
+            <a href={localePath(locale, crumb.path)} class="rounded hover:text-paper">{crumb.name}</a>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</nav>

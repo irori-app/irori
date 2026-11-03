@@ -1,0 +1,96 @@
+---
+/** The launcher comparison as a real table, Irori's column lit. Scrolls sideways on phones. */
+import { Check, Minus, X } from '@lucide/vue'
+import { RIVALS, ROWS, type Cell } from '../data/compare'
+import { dictionary, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  /** Only the rows marked for the home page. */
+  short?: boolean
+  caption: string
+}
+const { locale, short = false, caption } = Astro.props
+const t = dictionary(locale).compare
+const rows = short ? ROWS.filter((row) => row.home) : ROWS
+const verdict = (cell: Cell) => (cell.v === 'yes' ? t.yes : cell.v === 'no' ? t.no : cell.v === 'partial' ? t.partial : '')
+---
+
+<div class="compare-wrap overflow-x-auto rounded-2xl border border-grain" tabindex="0" role="region" aria-label={caption}>
+  <table class="compare w-full min-w-[40rem] border-collapse text-left">
+    <caption class="sr-only">{caption}</caption>
+    <thead>
+      <tr>
+        <th scope="col" class="w-[24%]">{t.feature}</th>
+        {RIVALS.map((r) => <th scope="col" class:list={[r.id === 'irori' && 'is-irori']}>{r.name}</th>)}
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row) => (
+          <tr>
+            <th scope="row">{row.feature}</th>
+            {RIVALS.map((r) => {
+              const cell = row.cells[r.id]
+              return (
+                <td class:list={[r.id === 'irori' && 'is-irori']}>
+                  <span class="flex items-start gap-2">
+                    {cell.v === 'yes' && <Check class="mt-0.5 size-4 shrink-0 text-tatami" aria-hidden="true" />}
+                    {cell.v === 'no' && <X class="mt-0.5 size-4 shrink-0 text-smoke" aria-hidden="true" />}
+                    {cell.v === 'partial' && <Minus class="mt-0.5 size-4 shrink-0 text-ember" aria-hidden="true" />}
+                    <span class="flex min-w-0 flex-col">
+                      {cell.v !== 'info' && <span class:list={['font-medium', cell.v === 'no' ? 'text-smoke' : 'text-paper']}>{verdict(cell)}</span>}
+                      {cell.note && <span class:list={['text-sm leading-snug', cell.v === 'info' ? 'text-paper' : 'text-smoke']}>{cell.note}</span>}
+                    </span>
+                  </span>
+                </td>
+              )
+            })}
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .compare th,
+  .compare td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--grain);
+    vertical-align: top;
+  }
+  .compare tbody tr:last-child > * {
+    border-bottom: none;
+  }
+  .compare thead th {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--paper);
+    background: var(--soot);
+  }
+  .compare tbody th {
+    font-weight: 500;
+    color: var(--paper);
+    font-size: 0.97rem;
+  }
+  /* The feature names stay put while the launchers scroll by on narrow screens. */
+  .compare tbody th,
+  .compare thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--ash);
+  }
+  .compare thead th:first-child {
+    background: var(--soot);
+  }
+  .compare .is-irori {
+    background: color-mix(in oklab, var(--flame) 8%, transparent);
+  }
+  .compare thead .is-irori {
+    color: var(--flame-text);
+    box-shadow: inset 0 3px 0 var(--flame);
+  }
+</style>

@@ -1,0 +1,25 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import Article from '../layouts/Article.astro'
+import { dictionary, type Locale } from '../i18n/config'
+import { relatedOf, slugOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+  entry: CollectionEntry<'guides'>
+}
+const { locale, entry } = Astro.props
+const t = dictionary(locale)
+const names = { linux: t.os.linux, macos: t.os.macos, windows: t.os.windows, steamdeck: 'Steam Deck' }
+const related = await relatedOf('guides', entry.data.related, locale)
+const crumbs = [
+  { name: t.nav.guides, path: '/guides/' },
+  { name: entry.data.title, path: `/guides/${slugOf(entry.id)}/` },
+]
+---
+
+<Article locale={locale} section="guides" entry={entry} related={related} crumbs={crumbs}>
+  <p slot="tag" class="flex flex-wrap gap-2">
+    {entry.data.platforms.map((platform) => <span class="rounded-full border border-grain px-2.5 py-0.5 font-mono text-xs text-smoke">{names[platform]}</span>)}
+  </p>
+</Article>

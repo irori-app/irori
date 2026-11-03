@@ -1220,6 +1220,15 @@ pub static FIELDS: &[FieldSpec] = &[
         "cosmic",
     ]),
     app(
+        "iroriUi.systemAccent",
+        "settings.field.ui_system_accent.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_system_accent.help")
+    .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
+    app(
         "iroriUi.translucency",
         "settings.field.ui_translucency.label",
         Appearance,

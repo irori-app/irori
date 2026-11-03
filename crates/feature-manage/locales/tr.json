@@ -464,6 +464,7 @@
   "manage.launchers.open": "{launcher} uygulamasını aç",
   "manage.launchers.scan": "Oyunları ara",
   "manage.launchers.downloading": "Yükleyici indiriliyor…",
+  "manage.launchers.creating_prefix": "Wine öneki oluşturuluyor…",
   "manage.launchers.installing": "{launcher} yükleyicisindeki adımları izle…",
   "manage.launchers.setup_failed": "{launcher} kurulamadı",
   "manage.launchers.open_failed": "{launcher} açılamadı",
