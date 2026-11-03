@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useTheme } from '@/composables/useTheme'
-import type { Screen } from '@/data/content'
+
+export interface Screen {
+  id: string
+  title: string
+  caption: string
+  light: boolean
+}
 
 const props = defineProps<{
   screen: Screen

@@ -1,0 +1,60 @@
+---
+import { ArrowUpRight } from '@lucide/vue'
+import InstallTabs from '../components/InstallTabs.vue'
+import PageHeader from '../components/PageHeader.astro'
+import Base from '../layouts/Base.astro'
+import { REPO, SITE } from '../data/site'
+import { dictionary, format, localePath, type Locale } from '../i18n/config'
+import { getLatestRelease } from '../lib/github'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const d = t.download
+const latest = await getLatestRelease()
+const crumbs = [{ name: t.nav.download, path: '/download/' }]
+const released = latest?.date ? new Date(latest.date).toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : null
+const software = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Irori',
+  url: SITE,
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Linux, macOS, Windows',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  downloadUrl: `${REPO}/releases/latest`,
+  ...(latest ? { softwareVersion: latest.version } : {}),
+}
+---
+
+<Base locale={locale} title={d.title} description={d.description} path="/download/" crumbs={crumbs} schema={[software]}>
+  <PageHeader locale={locale} crumbs={crumbs} title={d.h1} lede={d.lede} wall>
+    {
+      latest && (
+        <p class="rise font-mono text-sm text-smoke" style="--rise-delay:160ms">
+          {format(d.version, { version: latest.version, date: released ?? '' })} ·{' '}
+          <a class="link" href={latest.url}>{d.allFiles}</a>
+        </p>
+      )
+    }
+  </PageHeader>
+  <section class="gutter mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
+    <InstallTabs client:load t={d} os={t.os} level="h2" />
+    <aside class="flex min-w-0 flex-col gap-8">
+      <div class="flex flex-col gap-3 rounded-2xl border border-grain bg-soot/60 p-6">
+        <h2 class="font-display text-lg font-bold text-paper">{d.signing}</h2>
+        <p class="text-[0.95rem] text-smoke">{d.signingBody}</p>
+        <a href={localePath(locale, '/code-signing/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{t.footer.signing} <ArrowUpRight class="size-4" aria-hidden="true" /></a>
+      </div>
+      <div class="flex flex-col gap-3 rounded-2xl border border-grain bg-soot/60 p-6">
+        <h2 class="font-display text-lg font-bold text-paper">{d.build}</h2>
+        <p class="text-[0.95rem] text-smoke">{d.buildBody}</p>
+        <code class="rounded-lg border border-grain bg-ash px-3 py-2 font-mono text-sm text-paper">cargo run --release -p irori</code>
+        <a href={`${REPO}#building`} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{t.footer.source} <ArrowUpRight class="size-4" aria-hidden="true" /></a>
+      </div>
+      <p class="text-[0.95rem] text-smoke">{d.planned}</p>
+    </aside>
+  </section>
+</Base>

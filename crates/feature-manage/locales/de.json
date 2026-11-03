@@ -464,6 +464,7 @@
   "manage.launchers.open": "{launcher} öffnen",
   "manage.launchers.scan": "Nach Spielen suchen",
   "manage.launchers.downloading": "Installer wird heruntergeladen…",
+  "manage.launchers.creating_prefix": "Wine-Präfix wird erstellt…",
   "manage.launchers.installing": "Folge dem Installer von {launcher}…",
   "manage.launchers.setup_failed": "{launcher} konnte nicht eingerichtet werden",
   "manage.launchers.open_failed": "{launcher} konnte nicht geöffnet werden",

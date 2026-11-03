@@ -2,7 +2,7 @@
 import { Check, Copy } from '@lucide/vue'
 import { ref } from 'vue'
 
-const props = defineProps<{ command: string }>()
+const props = defineProps<{ command: string; copyLabel?: string; copiedLabel?: string }>()
 const copied = ref(false)
 const code = ref<HTMLElement>()
 
@@ -25,11 +25,11 @@ async function copy() {
 <template>
   <div class="flex min-w-0 items-start gap-2 rounded-lg border border-grain bg-ash py-2 pl-3 pr-2">
     <span aria-hidden="true" class="select-none pt-px font-mono text-sm text-tatami">$</span>
-    <code ref="code" class="min-w-0 flex-1 overflow-x-auto whitespace-pre pt-px font-mono text-sm text-paper">{{ command }}</code>
+    <code ref="code" class="min-w-0 flex-1 whitespace-pre-wrap pt-px font-mono text-sm text-paper [overflow-wrap:anywhere] sm:overflow-x-auto sm:whitespace-pre sm:[overflow-wrap:normal] [scrollbar-width:thin]">{{ command }}</code>
     <button
       type="button"
       class="grid size-7 shrink-0 place-items-center rounded-md text-smoke transition-colors hover:bg-soot hover:text-paper"
-      :aria-label="copied ? 'Copied' : 'Copy command'"
+      :aria-label="copied ? (copiedLabel ?? 'Copied') : (copyLabel ?? 'Copy command')"
       @click="copy"
     >
       <Check v-if="copied" class="size-4 text-tatami" />

@@ -464,6 +464,7 @@
   "manage.launchers.open": "Otevřít {launcher}",
   "manage.launchers.scan": "Vyhledat hry",
   "manage.launchers.downloading": "Stahování instalátoru…",
+  "manage.launchers.creating_prefix": "Vytváření prefixu Wine…",
   "manage.launchers.installing": "Postupujte podle instalátoru {launcher}…",
   "manage.launchers.setup_failed": "{launcher} se nepodařilo nastavit",
   "manage.launchers.open_failed": "{launcher} se nepodařilo otevřít",
