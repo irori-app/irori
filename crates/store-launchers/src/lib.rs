@@ -18,6 +18,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
@@ -26,7 +27,7 @@ use irori_core::{
     Event, EventBus, ExtraInfo, GameInfo, GameSettings, InstallInfo, InstallInfoQuery,
     InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan, LaunchRequest, LoginFlow,
     OpContext, Outcome, Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest, UserInfo,
-    WineInstallation, json_store, util,
+    WineInstallation, WineKind, json_store, util,
 };
 use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
 use parking_lot::RwLock;
@@ -40,6 +41,8 @@ const MANAGED_BY_LAUNCHER: &str =
 
 /// Steam's fixed art addresses, used for the Rockstar titles Irori knows.
 const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+/// How often a running installer is checked for the launcher's program.
+const INSTALL_POLL: Duration = Duration::from_secs(2);
 
 /// A launcher Irori set up.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +91,8 @@ pub struct LaunchersStore {
     settings: SettingsFn,
     state_file: PathBuf,
     downloads: PathBuf,
+    /// Installers' output.
+    logs: PathBuf,
     state: RwLock<State>,
     /// One setup or scan at a time.
     busy: tokio::sync::Mutex<()>,
@@ -96,11 +101,12 @@ pub struct LaunchersStore {
 impl LaunchersStore {
     pub fn new(bus: EventBus, settings: SettingsFn) -> Arc<Self> {
         let paths = Paths::get();
-        Self::with_dirs(
+        Self::build(
             bus,
             settings,
             paths.store_config_dir(Runner::Launchers),
             paths.store_cache_dir(Runner::Launchers),
+            paths.logs_dir(),
         )
     }
 
@@ -111,11 +117,23 @@ impl LaunchersStore {
         config_dir: PathBuf,
         cache_dir: PathBuf,
     ) -> Arc<Self> {
+        let logs = cache_dir.join("logs");
+        Self::build(bus, settings, config_dir, cache_dir, logs)
+    }
+
+    fn build(
+        bus: EventBus,
+        settings: SettingsFn,
+        config_dir: PathBuf,
+        cache_dir: PathBuf,
+        logs: PathBuf,
+    ) -> Arc<Self> {
         Arc::new(Self {
             bus,
             settings,
             state_file: config_dir.join("launchers.json"),
             downloads: cache_dir.join("installers"),
+            logs,
             state: RwLock::new(State::default()),
             busy: tokio::sync::Mutex::new(()),
         })
@@ -167,8 +185,8 @@ impl LaunchersStore {
     }
 
     /// Download the launcher's official installer and run it: inside a new
-    /// prefix with `wine` on Linux and macOS, natively on Windows. Waits for
-    /// the installer to finish, then lists the launcher's games.
+    /// prefix with `wine` on Linux and macOS, natively on Windows. Waits until
+    /// the launcher is installed, then lists the launcher's games.
     pub async fn set_up(
         &self,
         launcher: Launcher,
@@ -176,6 +194,12 @@ impl LaunchersStore {
         ctx: &OpContext,
     ) -> Result<()> {
         let _one = self.busy.lock().await;
+        let wine = if cfg!(windows) {
+            WineInstallation::default()
+        } else {
+            wine.filter(WineInstallation::is_set)
+                .context("Choose a Wine build for the launcher")?
+        };
         (ctx.step)("Downloading");
         let installer = self.downloads.join(format!("{}-setup.exe", launcher.id()));
         irori_runtime::download::download(
@@ -191,53 +215,113 @@ impl LaunchersStore {
                 launcher.display_name()
             )
         })?;
-        (ctx.step)("Installing");
-        let setup = if cfg!(windows) {
-            let result = process::run(
-                &CommandSpec::new(&installer),
-                process::RunOptions::default().cancel(ctx.cancel.clone()),
-            )
-            .await?;
-            if result.aborted {
-                bail!("The installer was stopped");
-            }
-            Setup {
-                prefix: PathBuf::new(),
-                wine: WineInstallation::default(),
-                set_up_at: util::now_rfc3339(),
-            }
-        } else {
-            let wine = wine
-                .filter(WineInstallation::is_set)
-                .context("Choose a Wine build for the launcher")?;
-            let prefix = self.default_prefix(launcher);
-            let app = (self.settings)();
-            let settings = game_settings(&app.game, &wine, &prefix);
-            let wc = irori_runtime::WineContext::new(
-                wine.clone(),
-                prefix.clone(),
-                false,
-                irori_runtime::runtimes::umu_path(),
-            );
-            let mut cmd =
-                irori_runtime::prefix::WineCommand::new([installer.display().to_string()]);
-            cmd.wait = true;
-            cmd.initialize_prefix = true;
-            irori_runtime::prefix::run_wine(&app, &settings, &wc, cmd, ctx)
-                .await
-                .with_context(|| format!("The {} installer failed", launcher.display_name()))?;
-            Setup {
-                prefix,
-                wine,
-                set_up_at: util::now_rfc3339(),
-            }
+        let setup = Setup {
+            prefix: if cfg!(windows) {
+                PathBuf::new()
+            } else {
+                self.default_prefix(launcher)
+            },
+            wine,
+            set_up_at: util::now_rfc3339(),
         };
+        self.run_installer(launcher, &setup, &installer, ctx)
+            .await
+            .with_context(|| format!("The {} installer failed", launcher.display_name()))?;
         self.state.write().setups.insert(launcher, setup);
         self.save().await?;
         let _ = tokio::fs::remove_file(&installer).await;
         drop(_one);
         self.rescan().await;
         Ok(())
+    }
+
+    /// Run `installer` until the launcher's program exists. The installers
+    /// start the launcher when they finish, and the launcher (and its update
+    /// agent) keep running with the installer's process tree and the prefix,
+    /// so neither ever ends on its own: waiting for them stalls the setup
+    /// until the user quits the launcher.
+    async fn run_installer(
+        &self,
+        launcher: Launcher,
+        setup: &Setup,
+        installer: &Path,
+        ctx: &OpContext,
+    ) -> Result<()> {
+        let program = launcher_program(launcher, Some(setup)).context("no launcher program")?;
+        let log = self.logs.join(format!("{}-setup.log", launcher.id()));
+        let _ = tokio::fs::remove_file(&log).await;
+        let spec = if cfg!(windows) {
+            CommandSpec::new(installer)
+        } else {
+            let app = (self.settings)();
+            let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
+            let umu = if irori_runtime::runtimes::is_umu_supported(&settings, false) {
+                match irori_runtime::runtimes::ensure_umu(ctx).await {
+                    Ok(path) => Some(path),
+                    Err(e) => {
+                        tracing::warn!("{e:#}; running Proton directly");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let wc = wine_context(setup, umu);
+            irori_runtime::prefix::verify_prefix(&app, &settings, &wc, ctx).await?;
+            let mut cmd =
+                irori_runtime::prefix::WineCommand::new([installer.display().to_string()]);
+            cmd.skip_prefix_check = true;
+            irori_runtime::prefix::wine_spec(
+                &app,
+                &settings,
+                &wc,
+                &cmd,
+                &irori_runtime::env::HostEnv::current(),
+            )
+        };
+        if program.exists() {
+            return Ok(());
+        }
+        (ctx.step)("Installing");
+        let mut child = process::spawn(&spec, Some(&log))?;
+        let mut tick = tokio::time::interval(INSTALL_POLL);
+        let mut exited = false;
+        let settled = async {
+            if !cfg!(windows) {
+                // A setup program may hand over to a process of its own and
+                // exit; the prefix tells when everything it started is done.
+                let _ = irori_runtime::prefix::wait(&setup.wine, &setup.prefix).await;
+            }
+        };
+        tokio::pin!(settled);
+        loop {
+            tokio::select! {
+                _ = tick.tick() => {
+                    if program.exists() {
+                        tracing::info!("{} installed in {}", launcher.display_name(), setup.prefix.display());
+                        return Ok(());
+                    }
+                }
+                _ = child.wait(), if !exited => exited = true,
+                _ = &mut settled, if exited => {
+                    if program.exists() {
+                        return Ok(());
+                    }
+                    bail!(
+                        "The installer closed before {} was installed. Its output is in {}",
+                        launcher.display_name(),
+                        log.display()
+                    );
+                }
+                _ = ctx.cancel.cancelled() => {
+                    process::terminate(&mut child).await;
+                    if !cfg!(windows) {
+                        let _ = irori_runtime::prefix::kill(&setup.wine, &setup.prefix).await;
+                    }
+                    bail!("The installer was stopped");
+                }
+            }
+        }
     }
 
     /// Start the launcher itself (to sign in or install games there).
@@ -329,12 +413,9 @@ impl LaunchersStore {
             setup.with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
         let app = (self.settings)();
         let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
-        let wc = irori_runtime::WineContext::new(
-            setup.wine.clone(),
-            setup.prefix.clone(),
-            false,
-            irori_runtime::runtimes::umu_path(),
-        );
+        let umu = irori_runtime::runtimes::is_umu_supported(&settings, true)
+            .then(irori_runtime::runtimes::umu_path);
+        let wc = wine_context(setup, umu);
         let mut argv = vec![program.display().to_string()];
         argv.extend(args);
         let mut cmd = irori_runtime::prefix::WineCommand::new(argv);
@@ -380,12 +461,39 @@ fn game_settings(defaults: &GameSettings, wine: &WineInstallation, prefix: &Path
     }
 }
 
+/// The Wine layer a launcher's prefix runs with. Proton goes through `umu`
+/// when there is one, as games do: run directly, outside the Steam Linux
+/// Runtime, its 32-bit parts need the system's 32-bit loader, which a
+/// Flatpak without its i386 extension doesn't have, and the installer can't
+/// start. A prefix Proton made directly keeps working, since umu uses its
+/// `pfx` folder.
+fn wine_context(setup: &Setup, umu: Option<PathBuf>) -> irori_runtime::WineContext {
+    irori_runtime::WineContext::new(
+        setup.wine.clone(),
+        setup.prefix.clone(),
+        umu.is_some(),
+        umu.unwrap_or_default(),
+    )
+}
+
+/// Where the setup's `drive_c` and registry are: what [`wine_root`] finds on
+/// disk, and before the prefix exists, `<prefix>/pfx` for Proton, which
+/// keeps them there.
+fn windows_root(setup: &Setup) -> PathBuf {
+    let found = wine_root(&setup.prefix);
+    if found == setup.prefix && setup.wine.kind == WineKind::Proton {
+        setup.prefix.join("pfx")
+    } else {
+        found
+    }
+}
+
 /// The launcher's program on this computer.
 fn launcher_program(launcher: Launcher, setup: Option<&Setup>) -> Option<PathBuf> {
     if cfg!(windows) {
         return Some(PathBuf::from(launcher.windows_exe_path()));
     }
-    setup.map(|s| launcher.exe_in_prefix(&wine_root(&s.prefix)))
+    setup.map(|s| launcher.exe_in_prefix(&windows_root(s)))
 }
 
 /// What a scan of the launchers' data found.
@@ -869,6 +977,157 @@ mod tests {
         store.forget(Launcher::Rockstar).await.unwrap();
         assert!(store.games().is_empty());
         assert!(program.is_file() && game.is_dir());
+    }
+
+    #[test]
+    fn proton_runs_through_umu_when_there_is_one() {
+        let setup = Setup {
+            prefix: PathBuf::from("/prefixes/Battle.net"),
+            wine: WineInstallation {
+                bin: "/proton/GE-Proton10-25/proton".into(),
+                name: "GE-Proton10-25".into(),
+                kind: WineKind::Proton,
+                ..Default::default()
+            },
+            set_up_at: String::new(),
+        };
+        let wc = wine_context(&setup, Some(PathBuf::from("/umu/umu-run")));
+        assert!(wc.uses_umu);
+        assert_eq!(wc.runner_bin(), Path::new("/umu/umu-run"));
+        let direct = wine_context(&setup, None);
+        assert!(!direct.uses_umu);
+        assert_eq!(
+            direct.runner_bin(),
+            Path::new("/proton/GE-Proton10-25/proton")
+        );
+        // Both find the launcher where Proton keeps the Windows files.
+        assert_eq!(windows_root(&setup), Path::new("/prefixes/Battle.net/pfx"));
+    }
+
+    #[tokio::test]
+    async fn finds_launchers_set_up_with_proton_in_pfx() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("prefixes/Battle.net");
+        let exe = Launcher::BattleNet.exe_in_prefix(&prefix.join("pfx"));
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"").unwrap();
+        let file = StateFile {
+            setups: BTreeMap::from([(
+                Launcher::BattleNet,
+                Setup {
+                    prefix,
+                    wine: WineInstallation {
+                        bin: "/proton".into(),
+                        kind: WineKind::Proton,
+                        ..Default::default()
+                    },
+                    set_up_at: String::new(),
+                },
+            )]),
+        };
+        json_store::write(&dir.path().join("config/launchers.json"), &file).unwrap();
+        let store = store(dir.path(), true);
+        store.init().await.unwrap();
+        let status = store
+            .statuses()
+            .into_iter()
+            .find(|s| s.launcher == Launcher::BattleNet)
+            .unwrap();
+        assert_eq!(status.installed, !cfg!(windows));
+    }
+
+    /// A Wine that makes the prefix, then acts like an installer which starts
+    /// the launcher it installed and keeps running.
+    #[cfg(unix)]
+    fn fake_wine(dir: &Path, installs: bool) -> WineInstallation {
+        use std::os::unix::fs::PermissionsExt;
+        let script = |name: &str, body: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path.display().to_string()
+        };
+        let install = if installs {
+            r#"mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Battle.net"
+touch "$WINEPREFIX/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
+echo $$ >> "$WINEPREFIX/../running"
+exec sleep 30"#
+        } else {
+            "echo setup failed >&2\nexit 3"
+        };
+        WineInstallation {
+            bin: script(
+                "wine",
+                &format!(
+                    r#"if [ "$1" = wineboot ]; then
+  mkdir -p "$WINEPREFIX/drive_c" "$WINEPREFIX/dosdevices"
+  touch "$WINEPREFIX/system.reg" "$WINEPREFIX/user.reg" "$WINEPREFIX/userdef.reg"
+  exit 0
+fi
+{install}
+"#
+                ),
+            ),
+            name: "Fake Wine".into(),
+            kind: WineKind::Wine,
+            wineserver: Some(script("wineserver", "exit 0")),
+            ..Default::default()
+        }
+    }
+
+    #[cfg(unix)]
+    fn setup_with(dir: &Path, installs: bool) -> (Arc<LaunchersStore>, Setup, PathBuf) {
+        let store = store(dir, true);
+        let setup = Setup {
+            prefix: store.default_prefix(Launcher::BattleNet),
+            wine: fake_wine(dir, installs),
+            set_up_at: String::new(),
+        };
+        let installer = dir.join("setup.exe");
+        std::fs::write(&installer, b"").unwrap();
+        (store, setup, installer)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn setup_ends_when_the_launcher_is_installed_though_it_keeps_running() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, setup, installer) = setup_with(dir.path(), true);
+        let done = tokio::time::timeout(
+            Duration::from_secs(20),
+            store.run_installer(
+                Launcher::BattleNet,
+                &setup,
+                &installer,
+                &OpContext::detached(),
+            ),
+        )
+        .await;
+        let running = std::fs::read_to_string(setup.prefix.parent().unwrap().join("running"));
+        for pid in running.iter().flat_map(|s| s.lines()) {
+            let _ = std::process::Command::new("kill").arg(pid).status();
+        }
+        done.expect("setup waited for the launcher to exit")
+            .unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn setup_fails_when_the_installer_exits_without_installing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, setup, installer) = setup_with(dir.path(), false);
+        let e = store
+            .run_installer(
+                Launcher::BattleNet,
+                &setup,
+                &installer,
+                &OpContext::detached(),
+            )
+            .await
+            .unwrap_err();
+        assert!(format!("{e:#}").contains("closed before Battle.net was installed"));
+        let log = std::fs::read_to_string(dir.path().join("cache/logs/battlenet-setup.log"));
+        assert!(log.unwrap().contains("setup failed"));
     }
 
     fn dummy_request(dir: &Path) -> LaunchRequest {

@@ -464,6 +464,7 @@
   "manage.launchers.open": "Deschide {launcher}",
   "manage.launchers.scan": "Caută jocuri",
   "manage.launchers.downloading": "Se descarcă programul de instalare…",
+  "manage.launchers.creating_prefix": "Se creează prefixul Wine…",
   "manage.launchers.installing": "Urmează pașii programului de instalare {launcher}…",
   "manage.launchers.setup_failed": "{launcher} nu a putut fi configurat",
   "manage.launchers.open_failed": "{launcher} nu a putut fi deschis",

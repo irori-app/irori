@@ -1,0 +1,446 @@
+---
+import { ArrowRight, ArrowUpRight, Check } from '@lucide/vue'
+import CompareTable from '../components/CompareTable.astro'
+import CoverWall from '../components/CoverWall.astro'
+import DownloadCta from '../components/DownloadCta.astro'
+import Faq from '../components/Faq.astro'
+import FeatureCard from '../components/FeatureCard.astro'
+import HearthFrame from '../components/HearthFrame.astro'
+import Hotspots from '../components/Hotspots.astro'
+import InstallTabs from '../components/InstallTabs.vue'
+import Screen from '../components/Screen.astro'
+import StatsCard from '../components/StatsCard.astro'
+import Base from '../layouts/Base.astro'
+import { MEASURED, REPO, SITE, STORES } from '../data/site'
+import { dictionary, format, localePath, type Locale } from '../i18n/config'
+import { getLatestRelease } from '../lib/github'
+import { entries, slugOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const h = t.home
+const p = (path: string) => localePath(locale, path)
+const latest = await getLatestRelease()
+const features = await entries('features', locale)
+const guides = (await entries('guides', locale)).slice(0, 4)
+
+const figures = [
+  { value: MEASURED.memoryMiB, unit: 'MiB', label: h.performance.figures.memory },
+  { value: MEASURED.idleCpu, unit: '%', label: h.performance.figures.cpu },
+  { value: MEASURED.binaryMB, unit: 'MB', label: h.performance.figures.binary },
+  { value: MEASURED.languages, unit: '', label: h.performance.figures.languages },
+]
+const platforms = [
+  { name: t.os.linux, body: h.platforms.linux },
+  { name: t.os.macos, body: h.platforms.macos },
+  { name: t.os.windows, body: h.platforms.windows },
+]
+/** Sparks rising from the hearth; placed at build time so every visit sees the same fire. */
+const embers = Array.from({ length: 16 }, (_, i) => ({
+  left: (i * 37) % 100,
+  delay: ((i * 7) % 11) * 0.7,
+  duration: 7 + ((i * 5) % 6),
+  size: 2 + (i % 3),
+  drift: ((i % 5) - 2) * 18,
+}))
+
+const software = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Irori',
+  url: SITE,
+  description: h.description,
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Linux, macOS, Windows',
+  license: 'https://opensource.org/licenses/MIT',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  ...(latest ? { softwareVersion: latest.version, downloadUrl: `${REPO}/releases/latest` } : {}),
+  sameAs: [REPO],
+}
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: t.faq.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+}
+const website = { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Irori', url: SITE }
+---
+
+<Base locale={locale} title={h.title} description={h.description} path="/" schema={[website, software, faqSchema]}>
+  <!-- Hero -->
+  <section class="hero relative isolate flex min-h-[min(100svh,56rem)] items-center overflow-hidden" aria-labelledby="hero-title">
+    <CoverWall locale={locale} />
+    <div class="hero-shade" aria-hidden="true"></div>
+    <div class="embers" aria-hidden="true">
+      {embers.map((e) => <span style={`left:${e.left}%;--delay:${e.delay}s;--dur:${e.duration}s;--size:${e.size}px;--drift:${e.drift}px`} />)}
+    </div>
+    <div class="gutter pointer-events-none relative z-[2] mx-auto w-full max-w-7xl pb-24 pt-28 sm:pt-32">
+      <div class="hero-copy pointer-events-auto flex max-w-[38rem] flex-col gap-6">
+        {
+          latest && (
+            <a href={p('/changelog/')} class="news group inline-flex max-w-full items-center gap-2 self-start rounded-full border border-grain py-1 pl-1 pr-3 text-sm text-paper">
+              <span class="rounded-full bg-flame px-2.5 py-0.5 font-mono text-xs font-medium text-flame-ink">{format(h.hero.news, { version: latest.version })}</span>
+              <span class="truncate text-smoke group-hover:text-paper">{h.hero.newsLink}</span>
+              <ArrowRight class="size-3.5 shrink-0 text-smoke transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </a>
+          )
+        }
+        <p class="entry" lang="ja">
+          <ruby class="font-display text-2xl text-paper">囲<rt>i</rt>炉<rt>ro</rt>裏<rt>ri</rt></ruby>
+          <span class="text-smoke" lang="en"><em class="not-italic text-tatami">{h.hero.word}</em> {h.hero.meaning}</span>
+        </p>
+        <h1 id="hero-title" class="hero-title font-display font-bold text-paper">
+          {h.hero.title.split(' ').map((word, i) => <><span class="word" style={`--i:${i}`}>{word}</span>{' '}</>)}
+        </h1>
+        <p class="max-w-[34rem] text-lg text-smoke sm:text-xl sm:leading-relaxed">{h.hero.lede}</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <DownloadCta locale={locale} class="h-13 px-7 text-[1.05rem]" />
+          <a href={p('/features/')} class="btn btn-ghost h-13">{h.hero.explore} <ArrowRight class="size-4" aria-hidden="true" /></a>
+        </div>
+        <ul class="flex flex-wrap gap-x-5 gap-y-2 text-[0.93rem] text-smoke">
+          {h.hero.ticks.map((tick) => <li class="inline-flex items-center gap-1.5"><Check class="size-4 text-tatami" aria-hidden="true" />{tick}</li>)}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stores -->
+  <section class="border-y border-grain bg-soot/60" aria-labelledby="stores-title">
+    <div class="gutter mx-auto grid max-w-7xl gap-8 py-14 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:items-center lg:gap-12">
+      <div class="flex min-w-0 flex-col gap-3" data-reveal>
+        <p class="tag">{h.stores.tag}</p>
+        <h2 id="stores-title" class="font-display text-2xl font-bold text-paper sm:text-3xl">{h.stores.title}</h2>
+        <p class="text-[0.97rem] text-smoke">{h.stores.body}</p>
+        <a href={p('/features/stores/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{h.stores.more} <ArrowRight class="size-4" aria-hidden="true" /></a>
+      </div>
+      <ul class="lattice grid min-w-0 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {
+          STORES.map((store, i) => (
+            <li class="store flex min-h-20 flex-col justify-center gap-0.5 bg-ash px-4 py-3" data-reveal style={`--reveal-delay:${i % 5}`}>
+              <span class="font-display text-[1.02rem] font-bold leading-tight text-paper">{store.name}</span>
+              <span class="font-mono text-xs text-smoke">{h.stores.notes[store.id]}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Tour -->
+  <section class="gutter mx-auto max-w-7xl py-24 lg:py-32" aria-labelledby="tour-title">
+    <div class="mb-12 flex max-w-2xl flex-col gap-3" data-reveal>
+      <p class="tag">{h.tour.tag}</p>
+      <h2 id="tour-title" class="section-title">{h.tour.title}</h2>
+      <p class="text-smoke">{h.tour.body}</p>
+    </div>
+    <Hotspots locale={locale} />
+  </section>
+
+  <!-- Features -->
+  <section class="gutter mx-auto max-w-7xl py-12 lg:py-16" aria-labelledby="features-title">
+    <div class="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex max-w-2xl flex-col gap-3" data-reveal>
+        <p class="tag">{h.features.tag}</p>
+        <h2 id="features-title" class="section-title">{h.features.title}</h2>
+        <p class="text-smoke">{h.features.body}</p>
+      </div>
+      <a href={p('/features/')} class="btn btn-ghost btn-sm self-start sm:self-auto">{h.features.all} <ArrowRight class="size-4" aria-hidden="true" /></a>
+    </div>
+    <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((f, i) => (
+          <li>
+            <FeatureCard href={p(`/features/${slugOf(f.id)}/`)} tag={f.data.tag} title={f.data.title} summary={f.data.summary} iconName={f.data.icon} delay={i % 3} />
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <!-- Platforms -->
+  <section class="gutter mx-auto max-w-7xl py-24 lg:py-32" aria-labelledby="platforms-title">
+    <div class="mb-12 flex max-w-2xl flex-col gap-3" data-reveal>
+      <p class="tag">{h.platforms.tag}</p>
+      <h2 id="platforms-title" class="section-title">{h.platforms.title}</h2>
+      <p class="text-smoke">{h.platforms.body}</p>
+    </div>
+    <ol class="platforms grid gap-4 md:grid-cols-3">
+      {
+        platforms.map((platform, i) => (
+          <li class="platform flex flex-col gap-3 rounded-2xl border border-grain bg-soot/60 p-6" data-reveal style={`--reveal-delay:${i}`} data-glow>
+            <span class="font-mono text-sm text-flame-text">0{i + 1}</span>
+            <span class="font-display text-3xl font-bold text-paper">{platform.name}</span>
+            <span class="text-[0.97rem] leading-relaxed text-smoke">{platform.body}</span>
+          </li>
+        ))
+      }
+    </ol>
+    <a href={p('/features/wine/')} class="link mt-6 inline-flex items-center gap-1 text-[0.95rem]">{h.platforms.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats-band relative overflow-hidden border-y border-grain" aria-labelledby="stats-title">
+    <div class="gutter mx-auto grid max-w-7xl items-center gap-12 py-24 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:py-32">
+      <div class="flex min-w-0 flex-col gap-4" data-reveal>
+        <p class="tag">{h.stats.tag}</p>
+        <h2 id="stats-title" class="section-title">{h.stats.title}</h2>
+        <p class="text-smoke">{h.stats.body}</p>
+        <a href={p('/features/stats/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{h.stats.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+      </div>
+      <StatsCard locale={locale} />
+    </div>
+  </section>
+
+  <!-- Performance -->
+  <section class="gutter mx-auto max-w-7xl py-24 lg:py-32" aria-labelledby="numbers-title">
+    <div class="mb-12 flex max-w-2xl flex-col gap-3" data-reveal>
+      <p class="tag">{h.performance.tag}</p>
+      <h2 id="numbers-title" class="section-title">{h.performance.title}</h2>
+      <p class="text-smoke">{h.performance.body}</p>
+    </div>
+    <dl class="lattice grid grid-cols-2 lg:grid-cols-4">
+      {
+        figures.map((figure) => (
+          <div class="flex min-w-0 flex-col gap-2 bg-ash p-5 sm:p-7">
+            <dt class="order-2 text-[0.95rem] text-smoke">{figure.label}</dt>
+            <dd class="order-1 flex items-baseline gap-2 font-mono tabular-nums text-paper">
+              <span class="text-5xl font-medium tracking-tight sm:text-6xl" data-count={figure.value}>{figure.value}</span>
+              <span class="text-lg text-tatami">{figure.unit}</span>
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+    <figure class="versus mt-8 flex flex-col gap-4 rounded-2xl border border-grain bg-soot/60 p-6" data-animate>
+      <figcaption class="tag">{h.performance.versus}</figcaption>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-baseline justify-between gap-4 text-[0.95rem]"><span class="text-paper">{h.performance.irori}</span><span class="font-mono text-paper">{MEASURED.memoryMiB} MiB</span></div>
+        <span class="vbar"><span class="vfill is-irori" style={`--w:${(MEASURED.memoryMiB / MEASURED.heroicMiB) * 100}%`}></span></span>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-baseline justify-between gap-4 text-[0.95rem]"><span class="text-smoke">{h.performance.heroic}</span><span class="font-mono text-smoke">{MEASURED.heroicMiB} MiB</span></div>
+        <span class="vbar"><span class="vfill" style="--w:100%"></span></span>
+      </div>
+      <p class="font-mono text-xs text-smoke">{h.performance.note}</p>
+    </figure>
+    <a href={p('/features/performance/')} class="link mt-6 inline-flex items-center gap-1 text-[0.95rem]">{h.performance.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+  </section>
+
+  <!-- Big Picture -->
+  <section class="gutter mx-auto grid max-w-7xl items-center gap-12 py-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:py-16" aria-labelledby="bp-title">
+    <HearthFrame class="min-w-0" data-reveal="scale">
+      <Screen locale={locale} id="bigpicture" sizes="(min-width: 1024px) 56vw, 100vw" />
+    </HearthFrame>
+    <div class="flex min-w-0 flex-col gap-4" data-reveal>
+      <p class="tag">{h.bigpicture.tag}</p>
+      <h2 id="bp-title" class="section-title">{h.bigpicture.title}</h2>
+      <p class="text-smoke">{h.bigpicture.body}</p>
+      <ul class="flex flex-col border-t border-grain">
+        {h.bigpicture.points.map((point) => <li class="border-b border-grain py-3 text-[0.97rem] text-paper">{point}</li>)}
+      </ul>
+      <a href={p('/features/bigpicture/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{h.bigpicture.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+    </div>
+  </section>
+
+  <!-- Compare and guides -->
+  <section class="gutter mx-auto max-w-7xl py-24 lg:py-32" aria-labelledby="compare-title">
+    <div class="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex max-w-2xl flex-col gap-3" data-reveal>
+        <p class="tag">{h.compare.tag}</p>
+        <h2 id="compare-title" class="section-title">{h.compare.title}</h2>
+        <p class="text-smoke">{h.compare.body}</p>
+      </div>
+      <a href={p('/compare/')} class="btn btn-ghost btn-sm self-start sm:self-auto">{h.compare.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+    </div>
+    <div data-reveal><CompareTable locale={locale} short caption={h.compare.title} /></div>
+
+    <div class="mt-24 mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex max-w-2xl flex-col gap-3" data-reveal>
+        <p class="tag">{h.guides.tag}</p>
+        <h2 class="section-title">{h.guides.title}</h2>
+        <p class="text-smoke">{h.guides.body}</p>
+      </div>
+      <a href={p('/guides/')} class="btn btn-ghost btn-sm self-start sm:self-auto">{h.guides.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+    </div>
+    <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        guides.map((g, i) => (
+          <li data-reveal style={`--reveal-delay:${i}`}>
+            <a href={p(`/guides/${slugOf(g.id)}/`)} class="group flex h-full flex-col gap-2 rounded-2xl border border-grain bg-soot/60 p-5 transition-colors hover:border-wood" data-glow>
+              <span class="font-display text-lg font-bold leading-snug text-paper">{g.data.title}</span>
+              <span class="text-[0.93rem] leading-snug text-smoke">{g.data.summary}</span>
+              <ArrowUpRight class="mt-auto size-4 text-smoke transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-flame-text" aria-hidden="true" />
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <!-- Download -->
+  <section id="download" class="border-y border-grain bg-soot/60" aria-labelledby="download-title">
+    <div class="gutter mx-auto grid max-w-7xl gap-12 py-24 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
+      <div class="flex min-w-0 flex-col gap-4" data-reveal>
+        <p class="tag">{h.download.tag}</p>
+        <h2 id="download-title" class="section-title">{h.download.title}</h2>
+        <p class="text-smoke">{h.download.body}</p>
+        <a href={p('/download/')} class="link inline-flex items-center gap-1 self-start">{t.download.h1} <ArrowRight class="size-4" aria-hidden="true" /></a>
+      </div>
+      <InstallTabs client:visible t={t.download} os={t.os} />
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="gutter mx-auto grid max-w-7xl gap-10 py-24 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]" aria-labelledby="faq-title">
+    <div class="flex flex-col gap-3" data-reveal>
+      <p class="tag">{h.faq.tag}</p>
+      <h2 id="faq-title" class="section-title">{h.faq.title}</h2>
+      <a href={p('/docs/faq/')} class="link mt-2 inline-flex items-center gap-1 self-start text-[0.95rem]">{h.faq.more} <ArrowRight class="size-4" aria-hidden="true" /></a>
+    </div>
+    <Faq items={t.faq} />
+  </section>
+</Base>
+
+<style>
+  .hero-shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, var(--ash) 0%, color-mix(in oklab, var(--ash) 96%, transparent) 34%, color-mix(in oklab, var(--ash) 70%, transparent) 50%, color-mix(in oklab, var(--ash) 15%, transparent) 72%, transparent 90%),
+      linear-gradient(0deg, var(--ash) 0%, transparent 28%),
+      linear-gradient(180deg, color-mix(in oklab, var(--ash) 70%, transparent) 0%, transparent 18%),
+      radial-gradient(60% 50% at 20% 100%, var(--glow), transparent 70%);
+  }
+  @media (max-width: 1023px) {
+    .hero-shade {
+      background:
+        linear-gradient(0deg, var(--ash) 8%, color-mix(in oklab, var(--ash) 88%, transparent) 55%, color-mix(in oklab, var(--ash) 55%, transparent) 100%),
+        radial-gradient(80% 50% at 30% 100%, var(--glow), transparent 70%);
+    }
+  }
+  .hero-title {
+    font-size: clamp(2.7rem, 7.2vw, 5.4rem);
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+  }
+  .word {
+    display: inline-block;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .word {
+      animation: word-in 900ms var(--ease-out) both;
+      animation-delay: calc(120ms + var(--i) * 70ms);
+    }
+    .hero-copy > :not(h1) {
+      animation: copy-in 900ms var(--ease-out) both;
+      animation-delay: 260ms;
+    }
+  }
+  @keyframes word-in {
+    from { opacity: 0; transform: translateY(0.45em) rotate(2deg); filter: blur(6px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  /* Only movement, so the text counts as painted at once. */
+  @keyframes copy-in {
+    from { transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .news {
+    background: color-mix(in oklab, var(--ash) 70%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--grain);
+    max-width: 34rem;
+  }
+  .entry rt {
+    font-family: var(--font-code);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--tatami);
+  }
+  .entry span {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .h-13 {
+    height: 3.25rem;
+  }
+
+  /* Sparks drifting up from the bottom of the hero. */
+  .embers {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .embers span {
+    position: absolute;
+    bottom: -10px;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 999px;
+    background: var(--ember);
+    box-shadow: 0 0 8px 2px rgb(255 140 60 / 0.7);
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .embers span {
+      animation: ember-rise var(--dur) ease-in infinite;
+      animation-delay: var(--delay);
+    }
+  }
+  @keyframes ember-rise {
+    0% { transform: translate(0, 0); opacity: 0; }
+    10% { opacity: 0.9; }
+    70% { opacity: 0.5; }
+    100% { transform: translate(var(--drift), -70vh); opacity: 0; }
+  }
+  :global(html:not(.dark)) .embers span {
+    box-shadow: 0 0 6px 1px rgb(255 120 40 / 0.5);
+  }
+
+  .stats-band {
+    background:
+      radial-gradient(50% 60% at 90% 50%, var(--glow), transparent 70%),
+      color-mix(in oklab, var(--soot) 60%, transparent);
+  }
+  .vbar {
+    display: block;
+    height: 0.75rem;
+    border-radius: 999px;
+    background: var(--hearth);
+    overflow: hidden;
+  }
+  .vfill {
+    display: block;
+    height: 100%;
+    width: var(--w);
+    border-radius: inherit;
+    background: var(--wood);
+  }
+  .vfill.is-irori {
+    background: linear-gradient(90deg, var(--flame), var(--ember));
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.js) .versus:not(.is-visible) .vfill {
+      width: 0;
+    }
+    .vfill {
+      transition: width 1400ms var(--ease-out) 200ms;
+    }
+    .vfill.is-irori {
+      transition-delay: 600ms;
+    }
+  }
+</style>

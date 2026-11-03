@@ -1,0 +1,76 @@
+---
+/** The top of a section index: breadcrumbs, the title and one paragraph, over a warm glow. */
+import Breadcrumbs from './Breadcrumbs.astro'
+import CoverWall from './CoverWall.astro'
+import type { Crumb } from '../layouts/Base.astro'
+import type { Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  crumbs: Crumb[]
+  title: string
+  lede: string
+  /** A short cover wall behind the header's right side. */
+  wall?: boolean
+}
+const { locale, crumbs, title, lede, wall = false } = Astro.props
+---
+
+<header class:list={['page-header relative overflow-hidden', wall && 'has-wall']}>
+  {
+    wall && (
+      <div class="header-wall">
+        <CoverWall locale={locale} size="band" />
+        <div class="header-shade" aria-hidden="true" />
+      </div>
+    )
+  }
+  <div class="gutter pointer-events-none relative mx-auto [&>*]:pointer-events-auto flex max-w-7xl flex-col gap-5 pb-14 pt-28 sm:pb-16 sm:pt-36">
+    <Breadcrumbs locale={locale} crumbs={crumbs} />
+    <h1 class="max-w-4xl font-display text-[clamp(2.4rem,6vw,4.4rem)] font-bold leading-[1.02] text-paper rise">{title}</h1>
+    <p class="rise max-w-2xl text-lg text-smoke" style="--rise-delay:80ms">{lede}</p>
+    <slot />
+  </div>
+</header>
+
+<style>
+  .header-wall {
+    position: absolute;
+    inset: 0;
+  }
+  /* On a phone the title needs the whole width; the wall stays on the home page there. */
+  @media (max-width: 639px) {
+    .header-wall {
+      display: none;
+    }
+  }
+  .header-shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, var(--ash) 0%, color-mix(in oklab, var(--ash) 94%, transparent) 38%, color-mix(in oklab, var(--ash) 40%, transparent) 62%, transparent 85%),
+      linear-gradient(0deg, var(--ash) 0%, transparent 35%),
+      linear-gradient(180deg, color-mix(in oklab, var(--ash) 80%, transparent) 0%, transparent 25%);
+  }
+  @media (max-width: 1023px) {
+    .header-shade {
+      background: linear-gradient(0deg, var(--ash) 10%, color-mix(in oklab, var(--ash) 86%, transparent) 60%, color-mix(in oklab, var(--ash) 70%, transparent));
+    }
+  }
+  .has-wall > .gutter {
+    z-index: 2;
+  }
+  .has-wall :global(.wall-toggle) {
+    z-index: 3;
+    bottom: 1rem;
+  }
+  .page-header::before {
+    content: '';
+    position: absolute;
+    inset: -20% -10% 0 40%;
+    background: radial-gradient(closest-side, var(--glow), transparent);
+    pointer-events: none;
+  }
+</style>

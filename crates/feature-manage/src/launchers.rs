@@ -430,16 +430,21 @@ impl LaunchersSection {
                     ))
                     .value(progress.percent.unwrap_or(0.))
                     .loading(
-                        progress.percent.is_none() || live.step.as_deref() == Some("Installing"),
+                        progress.percent.is_none() || live.step.as_deref() != Some("Downloading"),
                     ),
                 )
-                .child(div().text_xs().text_color(muted).child(
-                    if live.step.as_deref() == Some("Installing") {
-                        t_args("manage.launchers.installing", &[("launcher", name)])
-                    } else {
-                        t("manage.launchers.downloading")
-                    },
-                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(match live.step.as_deref() {
+                            Some("Installing") => {
+                                t_args("manage.launchers.installing", &[("launcher", name)])
+                            }
+                            Some("Creating Wine prefix") => t("manage.launchers.creating_prefix"),
+                            _ => t("manage.launchers.downloading"),
+                        }),
+                )
                 .into_any_element()
         } else if status.installed {
             h_flex()

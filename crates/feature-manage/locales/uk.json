@@ -464,6 +464,7 @@
   "manage.launchers.open": "Відкрити {launcher}",
   "manage.launchers.scan": "Знайти ігри",
   "manage.launchers.downloading": "Завантаження інсталятора…",
+  "manage.launchers.creating_prefix": "Створення префікса Wine…",
   "manage.launchers.installing": "Дотримуйтеся вказівок інсталятора {launcher}…",
   "manage.launchers.setup_failed": "Не вдалося налаштувати {launcher}",
   "manage.launchers.open_failed": "Не вдалося відкрити {launcher}",

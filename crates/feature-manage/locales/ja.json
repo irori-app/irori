@@ -464,6 +464,7 @@
   "manage.launchers.open": "{launcher} を開く",
   "manage.launchers.scan": "ゲームを探す",
   "manage.launchers.downloading": "インストーラーをダウンロードしています…",
+  "manage.launchers.creating_prefix": "Wine プレフィックスを作成しています…",
   "manage.launchers.installing": "{launcher} のインストーラーの指示に従ってください…",
   "manage.launchers.setup_failed": "{launcher} をセットアップできませんでした",
   "manage.launchers.open_failed": "{launcher} を開けませんでした",
