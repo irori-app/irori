@@ -1,0 +1,35 @@
+---
+/** The main Download button. It names the visitor's system once the browser says which. */
+import { Download } from '@lucide/vue'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  class?: string
+}
+const { locale, class: className } = Astro.props
+const t = dictionary(locale).os
+const href = localePath(locale, '/download/')
+---
+
+<a
+  href={href}
+  class:list={['btn btn-primary', className]}
+  data-download-cta
+  data-template={t.downloadFor}
+  data-names={JSON.stringify({ linux: t.linux, macos: t.macos, windows: t.windows })}
+>
+  <Download class="size-[1.1rem]" aria-hidden="true" />
+  <span data-label>{t.download}</span>
+</a>
+
+<script>
+  import { detectPlatform } from '../lib/platform'
+
+  const platform = detectPlatform()
+  document.querySelectorAll<HTMLAnchorElement>('[data-download-cta]').forEach((link) => {
+    const names = JSON.parse(link.dataset.names ?? '{}') as Record<string, string>
+    link.querySelector('[data-label]')!.textContent = (link.dataset.template ?? '{os}').replace('{os}', names[platform] ?? '')
+    link.href = `${link.pathname}#${platform}`
+  })
+</script>

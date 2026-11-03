@@ -1,0 +1,98 @@
+---
+/**
+ * Light or dark. The first visit follows the system; a click remembers the
+ * choice and the new theme spreads out from the button as a growing circle.
+ */
+import { Moon, Sun } from '@lucide/vue'
+import { dictionary, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+  class?: string
+}
+const { locale, class: className } = Astro.props
+const t = dictionary(locale)
+---
+
+<button
+  type="button"
+  class:list={['theme-switch relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-paper transition-colors hover:bg-soot', className]}
+  data-theme-switch
+  data-to-light={t.theme.toLight}
+  data-to-dark={t.theme.toDark}
+  aria-label={t.theme.toLight}
+>
+  <Sun class="sun size-[1.15rem]" aria-hidden="true" />
+  <Moon class="moon size-[1.15rem]" aria-hidden="true" />
+</button>
+
+<style>
+  .theme-switch :global(svg) {
+    position: absolute;
+    transition: transform 500ms var(--ease-out), opacity 300ms;
+  }
+  /* The icon shows the theme a click turns on. */
+  .theme-switch :global(.moon) {
+    transform: translateY(140%) rotate(-60deg);
+    opacity: 0;
+  }
+  :global(html:not(.dark)) .theme-switch :global(.sun) {
+    transform: translateY(-140%) rotate(60deg);
+    opacity: 0;
+  }
+  :global(html:not(.dark)) .theme-switch :global(.moon) {
+    transform: none;
+    opacity: 1;
+  }
+</style>
+
+<script>
+  const root = document.documentElement
+  const label = (button: HTMLElement) =>
+    button.setAttribute('aria-label', (root.classList.contains('dark') ? button.dataset.toLight : button.dataset.toDark) ?? '')
+
+  function apply(dark: boolean) {
+    root.classList.toggle('dark', dark)
+    try {
+      localStorage.setItem('irori-theme', dark ? 'dark' : 'light')
+    } catch {
+      // Private windows may refuse storage; the theme still applies for this visit.
+    }
+    document.querySelectorAll<HTMLElement>('[data-theme-switch]').forEach(label)
+    document.dispatchEvent(new CustomEvent('irori:theme', { detail: { dark } }))
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-theme-switch]').forEach((button) => {
+    label(button)
+    button.addEventListener('click', () => {
+      const dark = !root.classList.contains('dark')
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (reduced) return apply(dark)
+      if (!document.startViewTransition) {
+        root.classList.add('theme-fading')
+        apply(dark)
+        setTimeout(() => root.classList.remove('theme-fading'), 450)
+        return
+      }
+      const box = button.getBoundingClientRect()
+      const x = box.left + box.width / 2
+      const y = box.top + box.height / 2
+      const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
+      root.style.setProperty('--theme-x', `${x}px`)
+      root.style.setProperty('--theme-y', `${y}px`)
+      root.style.setProperty('--theme-r', `${radius}px`)
+      document.startViewTransition(() => apply(dark))
+    })
+  })
+
+  // Follow the system while the visitor hasn't picked a theme.
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+    try {
+      if (localStorage.getItem('irori-theme')) return
+    } catch {
+      // Without storage there is no saved choice to respect.
+    }
+    root.classList.toggle('dark', event.matches)
+    document.querySelectorAll<HTMLElement>('[data-theme-switch]').forEach(label)
+  })
+</script>

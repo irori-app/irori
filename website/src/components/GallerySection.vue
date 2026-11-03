@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
-import ScreenImage from '@/components/ScreenImage.vue'
+import ScreenImage, { type Screen } from '@/components/ScreenImage.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTheme } from '@/composables/useTheme'
-import { SCREENS } from '@/data/content'
+
+const props = defineProps<{
+  screens: Screen[]
+  labels: { tag: string; title: string; body: string; dark: string; light: string; open: string; previous: string; next: string }
+}>()
 
 const { isDark } = useTheme()
 const variant = ref<'dark' | 'light'>(isDark.value ? 'dark' : 'light')
 watch(isDark, (dark) => (variant.value = dark ? 'dark' : 'light'))
 
-const screens = computed(() => (variant.value === 'light' ? SCREENS.filter((s) => s.light) : SCREENS))
+const screens = computed(() => (variant.value === 'light' ? props.screens.filter((s) => s.light) : props.screens))
 const open = ref<number | null>(null)
 const current = computed(() => (open.value === null ? null : screens.value[open.value]))
 
@@ -29,22 +33,17 @@ function onKey(event: KeyboardEvent) {
 </script>
 
 <template>
-  <section id="screenshots" aria-labelledby="screens-title" class="gutter mx-auto flex max-w-7xl flex-col gap-10 py-24">
+  <section id="screenshots" aria-labelledby="screens-title" class="flex flex-col gap-10">
     <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
       <div class="flex max-w-2xl flex-col gap-3">
-        <p class="tag">Screenshots</p>
-        <h2 id="screens-title" class="font-display text-[clamp(1.9rem,3.6vw,2.8rem)] font-bold leading-[1.08] text-paper">
-          Look around the room
-        </h2>
-        <p class="text-smoke">
-          Every screen as it runs on macOS. The games are made up for this page; their covers
-          were drawn for it too.
-        </p>
+        <p class="tag">{{ labels.tag }}</p>
+        <h2 id="screens-title" class="section-title">{{ labels.title }}</h2>
+        <p class="text-smoke">{{ labels.body }}</p>
       </div>
       <Tabs v-model="variant">
         <TabsList class="h-10 rounded-full bg-soot p-1">
-          <TabsTrigger value="dark" class="rounded-full px-4">Dark</TabsTrigger>
-          <TabsTrigger value="light" class="rounded-full px-4">Light</TabsTrigger>
+          <TabsTrigger value="dark" class="rounded-full px-4">{{ labels.dark }}</TabsTrigger>
+          <TabsTrigger value="light" class="rounded-full px-4">{{ labels.light }}</TabsTrigger>
         </TabsList>
       </Tabs>
     </div>
@@ -54,7 +53,7 @@ function onKey(event: KeyboardEvent) {
         <button
           type="button"
           class="group flex w-full flex-col gap-3 text-left"
-          :aria-label="`Open the ${screen.title} screenshot`"
+          :aria-label="labels.open.replace('{title}', screen.title)"
           @click="open = index"
         >
           <span class="block overflow-hidden rounded-xl border border-grain bg-soot transition-[transform,box-shadow] duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_24px_50px_-28px_var(--glow)]">
@@ -81,10 +80,10 @@ function onKey(event: KeyboardEvent) {
             <DialogDescription class="text-smoke">{{ current.caption }}</DialogDescription>
           </div>
           <span class="font-mono text-sm tabular-nums text-smoke">{{ (open ?? 0) + 1 }} / {{ screens.length }}</span>
-          <Button variant="outline" size="icon" class="rounded-full" aria-label="Previous screenshot" @click="step(-1)">
+          <Button variant="outline" size="icon" class="rounded-full" :aria-label="labels.previous" @click="step(-1)">
             <ChevronLeft />
           </Button>
-          <Button variant="outline" size="icon" class="rounded-full" aria-label="Next screenshot" @click="step(1)">
+          <Button variant="outline" size="icon" class="rounded-full" :aria-label="labels.next" @click="step(1)">
             <ChevronRight />
           </Button>
         </div>
