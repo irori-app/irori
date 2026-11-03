@@ -1,0 +1,61 @@
+---
+/** Questions and answers as native disclosure widgets, with FAQPage data for search engines. */
+interface Props {
+  items: { q: string; a: string }[]
+  open?: boolean
+}
+const { items, open = true } = Astro.props
+---
+
+<div class="flex min-w-0 flex-col border-t border-grain">
+  {
+    items.map((item, index) => (
+      <details class="faq group border-b border-grain" open={open && index === 0}>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-5 font-display text-lg font-bold text-paper">
+          {item.q}
+          <span class="faq-mark" aria-hidden="true" />
+        </summary>
+        <p class="max-w-[42rem] pb-6 leading-relaxed text-smoke">{item.a}</p>
+      </details>
+    ))
+  }
+</div>
+
+<style>
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .faq-mark {
+    position: relative;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+  }
+  .faq-mark::before,
+  .faq-mark::after {
+    content: '';
+    position: absolute;
+    inset: 50% 0 auto;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--flame);
+    transition: transform 300ms var(--ease-out);
+  }
+  .faq-mark::after {
+    transform: rotate(90deg);
+  }
+  details[open] .faq-mark::after {
+    transform: rotate(0);
+  }
+  details::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition: block-size 350ms var(--ease-out), content-visibility 350ms allow-discrete;
+  }
+  details[open]::details-content {
+    block-size: auto;
+  }
+  :global(:root) {
+    interpolate-size: allow-keywords;
+  }
+</style>

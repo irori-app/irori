@@ -1,0 +1,12 @@
+---
+import type { GetStaticPaths } from 'astro'
+import Feature from '../../views/Feature.astro'
+import { entries, slugOf } from '../../lib/pages'
+
+export const getStaticPaths = (async () =>
+  (await entries('features', 'en')).map((entry) => ({ params: { slug: slugOf(entry.id) }, props: { entry } }))) satisfies GetStaticPaths
+
+const { entry } = Astro.props
+---
+
+<Feature locale="en" entry={entry} />

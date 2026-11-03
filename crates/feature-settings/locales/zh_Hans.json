@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "缩短过渡动画并避免移动效果。",
   "settings.field.ui_reduce_motion.label": "减少动态效果",
   "settings.field.ui_show_store_badges.label": "显示商店标识",
+  "settings.field.ui_system_accent.help": "用系统设置中的强调色为 Irori 自带主题着色，并随其变化。从列表中选择的主题保留自己的颜色。",
+  "settings.field.ui_system_accent.label": "使用系统强调色",
   "settings.field.ui_theme.label": "颜色模式",
   "settings.field.ui_theme_name.label": "主题",
   "settings.field.ui_tile_size.help": "游戏库网格中游戏封面的宽度。",

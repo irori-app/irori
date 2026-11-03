@@ -1,0 +1,39 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import Article from '../layouts/Article.astro'
+import { dictionary, type Locale } from '../i18n/config'
+import { entries, relatedOf, slugOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+  entry: CollectionEntry<'docs'>
+}
+const { locale, entry } = Astro.props
+const t = dictionary(locale)
+const related = await relatedOf('docs', entry.data.related, locale)
+const siblings = (await entries('docs', locale)).map((doc) => ({ title: doc.data.title, path: `/docs/${slugOf(doc.id)}/` }))
+const crumbs = [
+  { name: t.nav.docs, path: '/docs/' },
+  { name: entry.data.title, path: `/docs/${slugOf(entry.id)}/` },
+]
+let schema: object[] = []
+if (slugOf(entry.id) === 'faq') {
+  // The FAQ's questions are its second-level headings; answers are the paragraphs under them.
+  const pairs = [...(entry.body ?? '').matchAll(/^## (.+)\n\n([\s\S]*?)(?=\n## |$)/gm)]
+  schema = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: pairs.map(([, q, a]) => ({
+        '@type': 'Question',
+        name: q!.trim(),
+        acceptedAnswer: { '@type': 'Answer', text: a!.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim() },
+      })),
+    },
+  ]
+}
+---
+
+<Article locale={locale} section="docs" entry={entry} related={related} crumbs={crumbs} siblings={siblings} siblingsLabel={t.nav.docs} schema={schema}>
+  <p slot="tag" class="tag">{t.nav.docs}</p>
+</Article>

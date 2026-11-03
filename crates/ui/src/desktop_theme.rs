@@ -5,12 +5,15 @@
 //! paints. Each fills in a [`Palette`], and the rest is derived here, so they
 //! all read the same way and text stays legible whatever the desktop's colours
 //! are. Desktops that only have an accent colour tint one of Irori's themes
-//! with [`accented`].
+//! with [`accented`], and systems with shades of it with [`system_accented`].
+//! A system in high contrast gets a theme of its own colours,
+//! [`high_contrast`].
 
 use gpui_kit::component::{ThemeConfig, try_parse_color};
 use gpui_kit::{Hsla, Rgba, SharedString, rgb};
 use serde_json::json;
 
+use crate::desktop_accent::{Accent, ContrastColors};
 use crate::style::{ICON_CONTRAST, TEXT_CONTRAST, contrast, legible_towards};
 
 /// The contrast to aim for, a little over what is needed: colours are rounded
@@ -219,12 +222,19 @@ impl Palette {
     }
 
     pub(crate) fn theme(&self) -> Option<ThemeConfig> {
+        self.theme_with(self.colors())
+    }
+
+    fn theme_with(
+        &self,
+        colors: serde_json::Map<String, serde_json::Value>,
+    ) -> Option<ThemeConfig> {
         let theme = json!({
             "name": self.name,
             "mode": if self.dark { "dark" } else { "light" },
             "radius": self.radius,
             "radius.lg": self.radius_lg,
-            "colors": self.colors(),
+            "colors": colors,
         });
         serde_json::from_value(theme)
             .inspect_err(|e| tracing::warn!("building a theme from {}'s: {e}", self.name))
@@ -240,14 +250,8 @@ impl Palette {
 /// these surfaces, as a colour that fills or marks things and as one that
 /// writes on them. A colour that already reads stays exactly as it is.
 pub(crate) fn accented(base: &ThemeConfig, accent: Rgba) -> Option<ThemeConfig> {
-    let parse = |color: &Option<SharedString>| try_parse_color(color.as_ref()?).ok();
     let colors = &base.colors;
-    let surfaces = [
-        parse(&colors.background)?,
-        parse(&colors.sidebar)?,
-        parse(&colors.secondary)?,
-        parse(&colors.popover)?,
-    ];
+    let surfaces = surfaces(base)?;
     let background = surfaces[0].to_rgb();
     let dark = base.mode.is_dark();
     let towards = if dark {
@@ -294,6 +298,131 @@ pub(crate) fn accented(base: &ThemeConfig, accent: Rgba) -> Option<ThemeConfig> 
     Some(theme)
 }
 
+/// `base` in the system's accent for its colour mode: the first of the
+/// system's shades of it that reads on Irori's surfaces, and the system's
+/// highlight colour for selected text where Irori's text reads on it.
+///
+/// Windows makes its shades for this, lighter ones for dark surfaces and
+/// darker ones for light, so a shade of the system's own is truer to it than
+/// the accent [`accented`] would move until it reads.
+pub(crate) fn system_accented(base: &ThemeConfig, accent: &Accent) -> Option<ThemeConfig> {
+    let shade = pick_shade(&accent.shades, &surfaces(base)?)?;
+    let mut theme = accented(base, shade)?;
+    let foreground = parse(&base.colors.foreground)?;
+    // Selections are painted under the text, so the system's opaque highlight
+    // works as it does in its own apps, as long as Irori's text reads on it.
+    if let Some(selection) = accent.selection
+        && contrast(foreground, selection.into()) >= TEXT_CONTRAST
+    {
+        theme.colors.selection = Some(SharedString::from(hex(selection)));
+    }
+    Some(theme)
+}
+
+/// The first of `shades` that reads as text on every one of `surfaces`, or
+/// failing that the one that comes closest, which [`accented`] then holds.
+pub(crate) fn pick_shade(shades: &[Rgba], surfaces: &[Hsla]) -> Option<Rgba> {
+    let least = |color: &Rgba| {
+        surfaces
+            .iter()
+            .map(|surface| contrast((*color).into(), *surface))
+            .fold(f32::INFINITY, f32::min)
+    };
+    shades
+        .iter()
+        .find(|shade| least(shade) >= TEXT)
+        .or_else(|| shades.iter().max_by(|a, b| least(a).total_cmp(&least(b))))
+        .copied()
+}
+
+/// A theme of the system's high-contrast colours, which stands in for every
+/// theme while high contrast is on. Borders take the text colour and links the
+/// link colour, as in the system's own apps; the highlight colour fills what
+/// Irori fills with its accent.
+pub(crate) fn high_contrast(system: &ContrastColors) -> Option<ThemeConfig> {
+    let (black, white) = (rgb(0x000000), rgb(0xffffff));
+    let window = system.window;
+    let dark = contrast(window.into(), white.into()) > contrast(window.into(), black.into());
+    let palette = Palette {
+        name: HIGH_CONTRAST,
+        dark,
+        accent: system.highlight,
+        background: window,
+        sidebar: window,
+        panel: window,
+        raised: system.button_face,
+        popover: window,
+        foreground: system.window_text,
+        muted: system.gray_text,
+        bright_foreground: system.window_text,
+        // Windows' console colours: high-contrast themes have no others.
+        red: rgb(0xe74856),
+        green: rgb(0x16c60c),
+        yellow: rgb(0xf9f1a5),
+        blue: system.hotlight,
+        magenta: rgb(0xb4009e),
+        cyan: rgb(0x61d6d6),
+        orange: rgb(0xf7630c),
+        radius: 6,
+        radius_lg: 8,
+    };
+    let mut colors = palette.colors();
+    let surfaces = [window, system.button_face];
+    let mut set = |keys: &[&str], color: Rgba| {
+        for key in keys {
+            colors.insert(key.to_string(), hex(color).into());
+        }
+    };
+    set(
+        &[
+            "border",
+            "input.border",
+            "sidebar.border",
+            "title_bar.border",
+            "status_bar.border",
+            "window.border",
+            "list.active.border",
+        ],
+        palette.readable(system.window_text, &surfaces, TEXT),
+    );
+    set(
+        &["link", "link.hover", "link.active"],
+        palette.readable(system.hotlight, &surfaces, TEXT),
+    );
+    let reads_on = |color: Rgba, fill: Rgba| contrast(color.into(), fill.into()) >= TEXT_CONTRAST;
+    if reads_on(system.highlight_text, system.highlight) {
+        set(
+            &["primary.foreground", "sidebar.primary.foreground"],
+            system.highlight_text,
+        );
+    }
+    if reads_on(system.button_text, system.button_face) {
+        set(&["secondary.foreground"], system.button_text);
+    }
+    if reads_on(system.window_text, system.highlight) {
+        set(&["selection.background"], system.highlight);
+    }
+    palette.theme_with(colors)
+}
+
+/// The high-contrast theme's name. Never shown or stored.
+pub(crate) const HIGH_CONTRAST: &str = "High contrast";
+
+/// The surfaces Irori's accent has to read on, in `base`.
+fn surfaces(base: &ThemeConfig) -> Option<[Hsla; 4]> {
+    let colors = &base.colors;
+    Some([
+        parse(&colors.background)?,
+        parse(&colors.sidebar)?,
+        parse(&colors.secondary)?,
+        parse(&colors.popover)?,
+    ])
+}
+
+fn parse(color: &Option<SharedString>) -> Option<Hsla> {
+    try_parse_color(color.as_ref()?).ok()
+}
+
 pub(crate) fn mix(from: Rgba, to: Rgba, amount: f32) -> Rgba {
     let channel = |a: f32, b: f32| a + (b - a) * amount;
     Rgba {
@@ -322,4 +451,182 @@ fn hex(color: Rgba) -> String {
 
 fn alpha(color: Rgba, alpha: u8) -> String {
     format!("{}{alpha:02x}", hex(color))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Windows' default blue and its shades, as `UISettings` gives them.
+    const WINDOWS_BLUE: u32 = 0x0078d4;
+    const LIGHTER: [u32; 3] = [0x429ce3, 0x76b9ed, 0x99ebff];
+    const DARKER: [u32; 3] = [0x005a9e, 0x004275, 0x001a68];
+
+    fn shades(accent: u32, more: [u32; 3]) -> Vec<Rgba> {
+        std::iter::once(accent).chain(more).map(rgb).collect()
+    }
+
+    fn irori(name: &str) -> ThemeConfig {
+        let doc: serde_json::Value =
+            serde_json::from_str(include_str!("../../../assets/themes/irori.json")).unwrap();
+        let theme = doc["themes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap();
+        serde_json::from_value(theme.clone()).unwrap()
+    }
+
+    fn least(color: Rgba, surfaces: &[Hsla]) -> f32 {
+        surfaces
+            .iter()
+            .map(|s| contrast(color.into(), *s))
+            .fold(f32::INFINITY, f32::min)
+    }
+
+    #[test]
+    fn the_first_shade_that_reads_is_the_one() {
+        for (surface, more) in [(0x1c1c1c, LIGHTER), (0xf3f3f3, DARKER)] {
+            let surfaces = [rgb(surface).into()];
+            let shades = shades(WINDOWS_BLUE, more);
+            let picked = pick_shade(&shades, &surfaces).unwrap();
+            let at = shades.iter().position(|s| *s == picked).unwrap();
+            assert!(least(picked, &surfaces) >= TEXT, "{surface:06x}");
+            for earlier in &shades[..at] {
+                assert!(least(*earlier, &surfaces) < TEXT, "{surface:06x}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_accent_that_reads_needs_no_shade() {
+        let surfaces = [rgb(0xffffff).into()];
+        let shades = shades(0x005a9e, LIGHTER);
+        assert_eq!(pick_shade(&shades, &surfaces), Some(rgb(0x005a9e)));
+    }
+
+    #[test]
+    fn with_no_shade_that_reads_the_closest_is_picked() {
+        // Every shade lighter, on white: the darkest of them comes closest.
+        let surfaces = [rgb(0xffffff).into()];
+        let shades = shades(0x76b9ed, [0x99ebff, 0xc0f0ff, 0xe0f8ff]);
+        assert_eq!(pick_shade(&shades, &surfaces), Some(rgb(0x76b9ed)));
+        assert_eq!(pick_shade(&[], &surfaces), None);
+    }
+
+    #[test]
+    fn a_dark_theme_takes_windows_lighter_shade() {
+        let base = irori("Irori Night");
+        let accent = Accent {
+            shades: shades(WINDOWS_BLUE, LIGHTER),
+            selection: None,
+        };
+        let theme = system_accented(&base, &accent).unwrap();
+        let primary = parse(&theme.colors.primary).unwrap();
+        assert_ne!(primary, rgb(WINDOWS_BLUE).into());
+        let wanted: Vec<Hsla> = LIGHTER.map(|c| rgb(c).into()).to_vec();
+        assert!(wanted.contains(&primary), "{primary:?}");
+    }
+
+    #[test]
+    fn the_systems_highlight_is_used_where_text_reads_on_it() {
+        let base = irori("Irori Day");
+        let blue = shades(WINDOWS_BLUE, DARKER);
+        // macOS's light highlight for its blue accent.
+        let accent = Accent {
+            shades: blue.clone(),
+            selection: Some(rgb(0xb3d7ff)),
+        };
+        let theme = system_accented(&base, &accent).unwrap();
+        assert_eq!(parse(&theme.colors.selection), Some(rgb(0xb3d7ff).into()));
+
+        // Irori Day's dark text can't be read on a near-black highlight.
+        let unreadable = Accent {
+            shades: blue,
+            selection: Some(rgb(0x101010)),
+        };
+        let theme = system_accented(&base, &unreadable).unwrap();
+        assert_ne!(parse(&theme.colors.selection), Some(rgb(0x101010).into()));
+    }
+
+    /// Windows 11's "Night sky" and "Desert" contrast themes.
+    fn night_sky() -> ContrastColors {
+        ContrastColors {
+            window: rgb(0x000000),
+            window_text: rgb(0xffffff),
+            highlight: rgb(0xd6b4fd),
+            highlight_text: rgb(0x2b2b2b),
+            hotlight: rgb(0x8080ff),
+            gray_text: rgb(0xa6a6a6),
+            button_face: rgb(0x000000),
+            button_text: rgb(0xffffff),
+        }
+    }
+
+    fn desert() -> ContrastColors {
+        ContrastColors {
+            window: rgb(0xfffaef),
+            window_text: rgb(0x3d3d3d),
+            highlight: rgb(0x903909),
+            highlight_text: rgb(0xfff5e3),
+            hotlight: rgb(0x1c5e75),
+            gray_text: rgb(0x676767),
+            button_face: rgb(0xfffaef),
+            button_text: rgb(0x202020),
+        }
+    }
+
+    #[test]
+    fn high_contrast_is_the_systems_colours() {
+        for (system, dark) in [(night_sky(), true), (desert(), false)] {
+            let theme = high_contrast(&system).unwrap();
+            let c = &theme.colors;
+            assert_eq!(theme.mode.is_dark(), dark);
+            assert_eq!(parse(&c.background), Some(system.window.into()));
+            assert_eq!(parse(&c.foreground), Some(system.window_text.into()));
+            assert_eq!(parse(&c.border), Some(system.window_text.into()));
+            assert_eq!(parse(&c.input), Some(system.window_text.into()));
+            assert_eq!(parse(&c.primary), Some(system.highlight.into()));
+            assert_eq!(
+                parse(&c.primary_foreground),
+                Some(system.highlight_text.into())
+            );
+            assert_eq!(parse(&c.link), Some(system.hotlight.into()));
+            // Selections are drawn under the page's text, so the highlight
+            // is opaque only where that text reads on it.
+            let selection = parse(&c.selection).unwrap();
+            let opaque = contrast(system.window_text.into(), system.highlight.into());
+            if opaque >= TEXT_CONTRAST {
+                assert_eq!(selection, system.highlight.into());
+            } else {
+                assert_eq!(
+                    Hsla {
+                        a: 1.0,
+                        ..selection
+                    },
+                    system.highlight.into()
+                );
+                assert!(selection.a < 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn high_contrast_holds_what_the_system_leaves_unreadable() {
+        // A home-made theme whose link colour vanishes on its window.
+        let system = ContrastColors {
+            hotlight: rgb(0x101010),
+            highlight_text: rgb(0x000000),
+            ..night_sky()
+        };
+        let theme = high_contrast(&system).unwrap();
+        let c = &theme.colors;
+        let background = rgb(0x000000).into();
+        let link = parse(&c.link).unwrap();
+        assert!(contrast(link, background) >= TEXT_CONTRAST, "{link:?}");
+        let primary = parse(&c.primary).unwrap();
+        let on_primary = parse(&c.primary_foreground).unwrap();
+        assert!(contrast(on_primary, primary) >= TEXT_CONTRAST);
+    }
 }

@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "Zkrátit přechody a omezit pohyb.",
   "settings.field.ui_reduce_motion.label": "Omezit pohyb",
   "settings.field.ui_show_store_badges.label": "Zobrazovat štítky obchodů",
+  "settings.field.ui_system_accent.help": "Obarví vlastní motiv Irori barvou zvýraznění z nastavení systému a sleduje její změny. Motiv vybraný ze seznamu si ponechá vlastní barvy.",
+  "settings.field.ui_system_accent.label": "Použít barvu zvýraznění systému",
   "settings.field.ui_theme.label": "Barevný režim",
   "settings.field.ui_theme_name.label": "Motiv",
   "settings.field.ui_tile_size.help": "Šířka obalů her v mřížce knihovny.",

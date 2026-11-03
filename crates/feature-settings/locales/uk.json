@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "Скоротити переходи й уникати руху.",
   "settings.field.ui_reduce_motion.label": "Зменшити рух",
   "settings.field.ui_show_store_badges.label": "Показувати значки крамниць",
+  "settings.field.ui_system_accent.help": "Забарвлює власну тему Irori кольором акценту з налаштувань системи й стежить за його змінами. Тема, вибрана зі списку, зберігає власні кольори.",
+  "settings.field.ui_system_accent.label": "Використовувати колір акценту системи",
   "settings.field.ui_theme.label": "Колірний режим",
   "settings.field.ui_theme_name.label": "Тема",
   "settings.field.ui_tile_size.help": "Ширина обкладинок ігор у сітці бібліотеки.",

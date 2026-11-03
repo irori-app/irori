@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "전환 효과를 짧게 하고 움직임을 줄입니다.",
   "settings.field.ui_reduce_motion.label": "동작 줄이기",
   "settings.field.ui_show_store_badges.label": "스토어 배지 표시",
+  "settings.field.ui_system_accent.help": "Irori 기본 테마를 시스템 설정의 강조 색으로 물들이고 바뀔 때마다 따라갑니다. 목록에서 고른 테마는 자체 색을 유지합니다.",
+  "settings.field.ui_system_accent.label": "시스템 강조 색 사용",
   "settings.field.ui_theme.label": "색상 모드",
   "settings.field.ui_theme_name.label": "테마",
   "settings.field.ui_tile_size.help": "라이브러리 그리드에 표시되는 게임 커버의 너비입니다.",
