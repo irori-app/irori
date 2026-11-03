@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "Korta övergångar och undvik rörelse.",
   "settings.field.ui_reduce_motion.label": "Minska rörelse",
   "settings.field.ui_show_store_badges.label": "Visa butiksmärken",
+  "settings.field.ui_system_accent.help": "Färgar Iroris eget tema med accentfärgen från systeminställningarna och följer den när den ändras. Ett tema som väljs i listan behåller sina egna färger.",
+  "settings.field.ui_system_accent.label": "Använd systemets accentfärg",
   "settings.field.ui_theme.label": "Färgläge",
   "settings.field.ui_theme_name.label": "Tema",
   "settings.field.ui_tile_size.help": "Bredden på spelomslag i biblioteksrutnätet.",
