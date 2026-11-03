@@ -7,9 +7,9 @@ from the shadcn-vue registry and owned here). Every page is plain HTML with its 
 description, canonical address, Open Graph image, breadcrumbs and structured data.
 
 ```bash
-pnpm install
-pnpm dev      # http://localhost:4321
-pnpm build    # type-checks with astro check, then writes dist/
+bun install
+bun dev       # http://localhost:4321
+bun run build # type-checks with astro check, then writes dist/
 ```
 
 The build reads Irori's releases and star count from the GitHub API, once each. Without
@@ -80,8 +80,8 @@ The list is `src/data/game-covers.json` (title, Steam app id, file name). To cha
 the list and run:
 
 ```bash
-pnpm covers              # fetch covers that are missing, and their accent colours
-pnpm covers --force      # fetch them all again
+bun covers              # fetch covers that are missing, and their accent colours
+bun covers --force      # fetch them all again
 ```
 
 `scripts/fetch-covers.mjs` downloads each cover once from Steam's public library art, cuts it
