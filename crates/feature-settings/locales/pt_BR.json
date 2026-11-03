@@ -294,6 +294,8 @@
   "settings.field.ui_reduce_motion.help": "Encurtar transições e evitar movimento.",
   "settings.field.ui_reduce_motion.label": "Reduzir movimento",
   "settings.field.ui_show_store_badges.label": "Mostrar selos das lojas",
+  "settings.field.ui_system_accent.help": "Tinge o tema próprio do Irori com a cor de destaque das configurações do sistema e a acompanha quando muda. Um tema escolhido na lista mantém as próprias cores.",
+  "settings.field.ui_system_accent.label": "Usar a cor de destaque do sistema",
   "settings.field.ui_theme.label": "Modo de cor",
   "settings.field.ui_theme_name.label": "Tema",
   "settings.field.ui_tile_size.help": "Largura das capas dos jogos na grade da biblioteca.",
