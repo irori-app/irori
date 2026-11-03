@@ -464,6 +464,7 @@
   "manage.launchers.open": "{launcher} openen",
   "manage.launchers.scan": "Games zoeken",
   "manage.launchers.downloading": "Installatieprogramma downloaden…",
+  "manage.launchers.creating_prefix": "Wine-prefix aanmaken…",
   "manage.launchers.installing": "Volg het installatieprogramma van {launcher}…",
   "manage.launchers.setup_failed": "Kan {launcher} niet instellen",
   "manage.launchers.open_failed": "Kan {launcher} niet openen",
