@@ -39,6 +39,8 @@
   "game.common.version": "Versie",
   "game.compat.anticheat": "Anti-cheat",
   "game.compat.anticheat_reference": "Anti-cheatbron (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blokkeert {mode} onder Wine en Proton. De verhaalmodus werkt.",
+  "game.compat.anticheat_online_only_unnamed": "Anti-cheat blokkeert {mode} onder Wine en Proton. De verhaalmodus werkt.",
   "game.compat.anticheat_removed": "Anti-cheat verwijderd",
   "game.compat.anticheat_status.broken": "Werkt niet",
   "game.compat.anticheat_status.denied": "Geweigerd",

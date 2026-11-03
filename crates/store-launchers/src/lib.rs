@@ -8,6 +8,10 @@
 //! (`irori-launchers-data`). Games start through the launcher (its URI or
 //! flags); the launcher installs, updates and removes them, so Irori doesn't.
 //!
+//! A launcher can also be adopted from a prefix the user already has, closed
+//! (everything in its prefix stops), and removed from Irori, which forgets it
+//! and leaves its prefix and games on disk.
+//!
 //! Everything is behind `iroriThirdPartyLaunchers`: while it is off the store
 //! lists nothing.
 
@@ -25,15 +29,18 @@ use irori_core::{
     OpContext, Outcome, Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest, UserInfo,
     WineInstallation, WineKind, json_store, util,
 };
-use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport};
+use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 pub use irori_launchers_data::Launcher as LauncherKind;
+pub use irori_launchers_data::SignIn as LauncherSignIn;
 
 const MANAGED_BY_LAUNCHER: &str =
     "This game belongs to its launcher; install, update and remove it there";
 
+/// Steam's fixed art addresses, used for the Rockstar titles Irori knows.
+const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
 /// How often a running installer is checked for the launcher's program.
 const INSTALL_POLL: Duration = Duration::from_secs(2);
 
@@ -62,6 +69,7 @@ struct State {
     setups: BTreeMap<Launcher, Setup>,
     found: Vec<InstalledGame>,
     games: Vec<Arc<GameInfo>>,
+    sign_in: BTreeMap<Launcher, SignIn>,
     warnings: Vec<String>,
 }
 
@@ -74,6 +82,8 @@ pub struct LauncherStatus {
     pub installed: bool,
     /// Games found for it.
     pub games: usize,
+    /// Whether someone is signed in to it, as of the last scan.
+    pub sign_in: SignIn,
 }
 
 pub struct LaunchersStore {
@@ -151,6 +161,7 @@ impl LaunchersStore {
                     installed: launcher_program(launcher, setup.as_ref())
                         .is_some_and(|p| p.exists()),
                     games: s.found.iter().filter(|g| g.launcher == launcher).count(),
+                    sign_in: s.sign_in.get(&launcher).copied().unwrap_or_default(),
                     setup,
                 }
             })
@@ -324,6 +335,61 @@ impl LaunchersStore {
         Ok(())
     }
 
+    /// Use a prefix the user already has, with the launcher installed in it,
+    /// run with `wine`. Nothing in the prefix changes.
+    pub async fn adopt(
+        &self,
+        launcher: Launcher,
+        prefix: PathBuf,
+        wine: Option<WineInstallation>,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            !cfg!(windows),
+            "On Windows, Irori finds the launcher by itself"
+        );
+        let wine = wine
+            .filter(WineInstallation::is_set)
+            .context("Choose a Wine build for the launcher")?;
+        let _one = self.busy.lock().await;
+        let prefix = tokio::task::spawn_blocking(move || adoptable_prefix(launcher, &prefix))
+            .await
+            .context("checking the prefix stopped")??;
+        self.state.write().setups.insert(
+            launcher,
+            Setup {
+                prefix,
+                wine,
+                set_up_at: util::now_rfc3339(),
+            },
+        );
+        self.save().await?;
+        drop(_one);
+        self.rescan().await;
+        Ok(())
+    }
+
+    /// Stop the launcher, and with it everything running in its prefix
+    /// (its games too). On Windows, the processes started from its folder.
+    pub async fn close(&self, launcher: Launcher) -> Result<()> {
+        let setup = self.state.read().setups.get(&launcher).cloned();
+        if cfg!(windows) {
+            let folder = launcher_program(launcher, setup.as_ref())
+                .and_then(|p| p.parent().map(Path::to_path_buf))
+                .context("unknown launcher folder")?;
+            tokio::task::spawn_blocking(move || stop_processes_in(&folder))
+                .await
+                .context("closing stopped")?;
+        } else {
+            let setup =
+                setup.with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
+            irori_runtime::prefix::kill(&setup.wine, &setup.prefix)
+                .await
+                .with_context(|| format!("Could not close {}", launcher.display_name()))?;
+        }
+        self.rescan().await;
+        Ok(())
+    }
+
     /// Forget a launcher's setup. Its prefix and games stay on disk.
     pub async fn forget(&self, launcher: Launcher) -> Result<()> {
         self.state.write().setups.remove(&launcher);
@@ -367,7 +433,7 @@ impl LaunchersStore {
     /// Read every set-up launcher's local data again.
     async fn rescan(&self) {
         let setups = self.state.read().setups.clone();
-        let report = tokio::task::spawn_blocking(move || scan(&setups))
+        let report = tokio::task::spawn_blocking(move || Scan::run(&setups))
             .await
             .unwrap_or_default();
         let games = report
@@ -379,6 +445,7 @@ impl LaunchersStore {
             let mut s = self.state.write();
             s.found = report.games;
             s.games = games;
+            s.sign_in = report.sign_in;
             s.warnings = report.warnings;
         }
         self.bus.emit(Event::LibraryChanged(Runner::Launchers));
@@ -409,13 +476,15 @@ fn wine_context(setup: &Setup, umu: Option<PathBuf>) -> irori_runtime::WineConte
     )
 }
 
-/// Where the prefix's `drive_c` and registry are: Proton keeps them in
-/// `<prefix>/pfx`.
+/// Where the setup's `drive_c` and registry are: what [`wine_root`] finds on
+/// disk, and before the prefix exists, `<prefix>/pfx` for Proton, which
+/// keeps them there.
 fn windows_root(setup: &Setup) -> PathBuf {
-    if setup.wine.kind == WineKind::Proton {
+    let found = wine_root(&setup.prefix);
+    if found == setup.prefix && setup.wine.kind == WineKind::Proton {
         setup.prefix.join("pfx")
     } else {
-        setup.prefix.clone()
+        found
     }
 }
 
@@ -427,20 +496,99 @@ fn launcher_program(launcher: Launcher, setup: Option<&Setup>) -> Option<PathBuf
     setup.map(|s| launcher.exe_in_prefix(&windows_root(s)))
 }
 
-/// Read the launchers' data. Blocking.
-fn scan(setups: &BTreeMap<Launcher, Setup>) -> ScanReport {
-    let mut report = ScanReport::default();
-    if cfg!(windows) {
-        let registry = windows_registry();
-        for launcher in Launcher::ALL {
-            report.merge(launcher.scan_drive(Path::new("C:\\"), &registry));
+/// What a scan of the launchers' data found.
+#[derive(Default)]
+struct Scan {
+    games: Vec<InstalledGame>,
+    sign_in: BTreeMap<Launcher, SignIn>,
+    warnings: Vec<String>,
+}
+
+impl Scan {
+    /// Read the launchers' data. Blocking.
+    fn run(setups: &BTreeMap<Launcher, Setup>) -> Scan {
+        let mut report = ScanReport::default();
+        let mut sign_in = BTreeMap::new();
+        if cfg!(windows) {
+            let registry = windows_registry();
+            let documents: Vec<PathBuf> = std::env::var_os("USERPROFILE")
+                .map(|home| PathBuf::from(home).join("Documents"))
+                .into_iter()
+                .collect();
+            for launcher in Launcher::ALL {
+                report.merge(launcher.scan_drive(Path::new("C:\\"), &registry));
+                sign_in.insert(launcher, launcher.sign_in(&documents));
+            }
+        } else {
+            for (launcher, setup) in setups {
+                let root = wine_root(&setup.prefix);
+                report.merge(launcher.scan_prefix(&root));
+                let documents =
+                    irori_launchers_data::user_documents(&irori_launchers_data::drive_c(&root));
+                sign_in.insert(*launcher, launcher.sign_in(&documents));
+            }
         }
-    } else {
-        for (launcher, setup) in setups {
-            report.merge(launcher.scan_prefix(&windows_root(setup)));
+        Scan {
+            games: report.games,
+            sign_in,
+            warnings: report.warnings,
         }
     }
-    report
+}
+
+/// The folder of a prefix that holds `drive_c` and the registry: `pfx`
+/// inside a Proton prefix.
+fn wine_root(prefix: &Path) -> PathBuf {
+    let proton = prefix.join("pfx");
+    if proton.join("drive_c").is_dir() {
+        proton
+    } else {
+        prefix.to_path_buf()
+    }
+}
+
+/// `prefix` when the launcher is installed in it, else an error saying what
+/// is wrong. A Proton prefix may be given by its `pfx` folder or the folder
+/// holding it. Blocking.
+fn adoptable_prefix(launcher: Launcher, prefix: &Path) -> Result<PathBuf> {
+    let prefix = if prefix.file_name().is_some_and(|n| n == "pfx")
+        && prefix.parent().is_some_and(|p| p.join("pfx").is_dir())
+    {
+        prefix.parent().map(Path::to_path_buf).unwrap_or_default()
+    } else {
+        prefix.to_path_buf()
+    };
+    let drive = irori_launchers_data::drive_c(&wine_root(&prefix));
+    anyhow::ensure!(
+        drive.is_dir(),
+        "{} isn't a Wine prefix: it has no drive_c folder",
+        prefix.display()
+    );
+    let program = drive.join(launcher.exe_path());
+    anyhow::ensure!(
+        program.is_file(),
+        "{} isn't installed in {}",
+        launcher.display_name(),
+        prefix.display()
+    );
+    Ok(prefix)
+}
+
+/// Stop every process started from `folder` (Windows). Blocking.
+fn stop_processes_in(folder: &Path) {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let folder = folder.to_string_lossy();
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::Always),
+    );
+    for process in sys.processes().values() {
+        if process::runs_from(&folder, process.exe(), &[]) {
+            process.kill();
+        }
+    }
 }
 
 /// The machine-wide registry keys launchers write, exported with `reg`
@@ -491,11 +639,20 @@ fn decode_reg(bytes: &[u8]) -> String {
 
 /// What the library shows for a launcher's game.
 fn game_info(g: &InstalledGame) -> GameInfo {
+    let known = (g.launcher == Launcher::Rockstar)
+        .then(|| rockstar::title_by_id(&g.id))
+        .flatten();
+    let art = |file: &str| known.map(|t| format!("{STEAM_CDN}/{}/{file}", t.steam_app_id));
     GameInfo {
         runner: Some(Runner::Launchers),
         app_name: g.app_name(),
         title: g.title.clone(),
         publisher: Some(g.launcher.display_name().to_string()),
+        developer: known.map(|_| "Rockstar Games".to_string()),
+        art_cover: art("library_600x900_2x.jpg"),
+        art_square: art("header.jpg"),
+        art_background: art("library_hero.jpg"),
+        art_logo: art("logo.png"),
         is_installed: true,
         install: Some(InstalledInfo {
             install_path: g.install_dir.display().to_string(),
@@ -715,6 +872,111 @@ mod tests {
             .await
             .is_err()
         );
+    }
+
+    #[test]
+    fn rockstar_titles_get_steam_art() {
+        let g = InstalledGame {
+            launcher: Launcher::Rockstar,
+            id: "rdr2".into(),
+            title: "Red Dead Redemption 2".into(),
+            install_dir: PathBuf::from(r"C:\Program Files\Rockstar Games\Red Dead Redemption 2"),
+            executable: Some("RDR2.exe".into()),
+            launch: LaunchSpec::LauncherArgs(Vec::new()),
+        };
+        let info = game_info(&g);
+        assert_eq!(
+            info.art_cover.as_deref(),
+            Some(
+                "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_600x900_2x.jpg"
+            )
+        );
+        assert!(
+            info.art_background
+                .unwrap()
+                .ends_with("/1174180/library_hero.jpg")
+        );
+        assert!(info.art_logo.unwrap().ends_with("/1174180/logo.png"));
+        assert_eq!(info.developer.as_deref(), Some("Rockstar Games"));
+
+        let unknown = game_info(&InstalledGame {
+            id: "some-new-game".into(),
+            ..g
+        });
+        assert_eq!(unknown.art_cover, None);
+        assert_eq!(unknown.developer, None);
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn adopts_a_prefix_that_has_the_launcher() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(dir.path(), true);
+        store.init().await.unwrap();
+        let wine = WineInstallation {
+            bin: "/usr/bin/wine".into(),
+            name: "Wine".into(),
+            ..Default::default()
+        };
+
+        // A Proton prefix, chosen by its `pfx` folder.
+        let prefix = dir.path().join("old/Rockstar");
+        let drive = prefix.join("pfx/drive_c");
+        std::fs::create_dir_all(&drive).unwrap();
+        let err = store
+            .adopt(Launcher::Rockstar, prefix.join("pfx"), Some(wine.clone()))
+            .await
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("isn't installed in"), "{err:#}");
+        assert!(store.statuses()[3].setup.is_none());
+
+        let program = drive.join(Launcher::Rockstar.exe_path());
+        std::fs::create_dir_all(program.parent().unwrap()).unwrap();
+        std::fs::write(&program, b"MZ").unwrap();
+        let game = drive.join("Program Files/Rockstar Games/Grand Theft Auto V");
+        std::fs::create_dir_all(&game).unwrap();
+        std::fs::write(
+            prefix.join("pfx/system.reg"),
+            "WINE REGISTRY Version 2\n\n[Software\\\\Wow6432Node\\\\Rockstar Games\\\\Grand Theft Auto V] 1\n\
+             \"InstallFolder\"=\"C:\\\\Program Files\\\\Rockstar Games\\\\Grand Theft Auto V\"\n",
+        )
+        .unwrap();
+        let profile = drive.join("users/steamuser/Documents/Rockstar Games/Launcher");
+        std::fs::create_dir_all(&profile).unwrap();
+        std::fs::write(
+            profile.join("launcher.log"),
+            "[t] [DISPLAY] [Main ] [launcher] Presence Event - Signed In\n",
+        )
+        .unwrap();
+
+        assert!(
+            store
+                .adopt(Launcher::Rockstar, prefix.join("pfx"), None)
+                .await
+                .is_err(),
+            "a Wine build is needed"
+        );
+        store
+            .adopt(Launcher::Rockstar, prefix.join("pfx"), Some(wine))
+            .await
+            .unwrap();
+        let status = store.statuses()[3].clone();
+        assert_eq!(status.launcher, Launcher::Rockstar);
+        assert_eq!(status.setup.as_ref().unwrap().prefix, prefix);
+        assert!(status.installed);
+        assert_eq!(status.games, 1);
+        assert_eq!(status.sign_in, SignIn::SignedIn);
+        assert_eq!(
+            store.games()[0].title,
+            "Grand Theft Auto V Legacy",
+            "{:?}",
+            store.warnings()
+        );
+
+        // Removing it from Irori leaves the prefix alone.
+        store.forget(Launcher::Rockstar).await.unwrap();
+        assert!(store.games().is_empty());
+        assert!(program.is_file() && game.is_dir());
     }
 
     #[test]

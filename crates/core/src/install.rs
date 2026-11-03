@@ -274,6 +274,30 @@ impl SaveConflict {
     }
 }
 
+/// The game starts through another company's launcher (a Rockstar title
+/// bought on Epic needs the Rockstar Games Launcher), and that launcher isn't
+/// in the game's Wine prefix. Stores return it from `launch`; the UI offers
+/// to run the vendor's installer in the prefix
+/// (`Backend::install_launcher_for`) and then starts the game.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{launcher} isn't installed in this game's Wine prefix, and the game starts through it.")]
+pub struct LauncherMissing {
+    /// The launcher's name, never translated.
+    pub launcher: String,
+    /// The vendor's own download of the launcher's Windows installer.
+    pub installer_url: String,
+    /// The launcher's program where it must be once installed: inside the
+    /// prefix's `drive_c`.
+    pub program: PathBuf,
+}
+
+impl LauncherMissing {
+    /// The missing launcher behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&LauncherMissing> {
+        error.downcast_ref()
+    }
+}
+
 /// Direction of a cloud-save sync.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SyncDirection {

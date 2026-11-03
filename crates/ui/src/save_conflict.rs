@@ -14,8 +14,8 @@ use crate::i18n::{t, t_args};
 use crate::state::{backend, run};
 
 /// When `error` is a save conflict, ask which saves of `id` to keep, then
-/// sync that way and start the game with `params`. A missing emulator, core
-/// or BIOS gets its fix offered instead. Returns whether it took care of the
+/// sync that way and start the game with `params`. A missing emulator, core,
+/// BIOS or launcher gets its fix offered instead. Returns whether it took care of the
 /// error; otherwise the caller reports it as usual.
 pub fn resolve_launch_error(
     id: &GameId,
@@ -24,7 +24,9 @@ pub fn resolve_launch_error(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    if crate::engine_problem::resolve(id, &params, error, window, cx) {
+    if crate::engine_problem::resolve(id, &params, error, window, cx)
+        || crate::launcher_problem::resolve(id, &params, error, window, cx)
+    {
         return true;
     }
     let Some(conflict) = SaveConflict::of(error).cloned() else {

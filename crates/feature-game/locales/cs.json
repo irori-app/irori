@@ -39,6 +39,8 @@
   "game.common.version": "Verze",
   "game.compat.anticheat": "Anticheat",
   "game.compat.anticheat_reference": "Zdroj informací o anticheatu (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blokuje {mode} ve Wine a Protonu. Příběhový režim funguje.",
+  "game.compat.anticheat_online_only_unnamed": "Anticheat blokuje {mode} ve Wine a Protonu. Příběhový režim funguje.",
   "game.compat.anticheat_removed": "Anticheat odstraněn",
   "game.compat.anticheat_status.broken": "Nefunkční",
   "game.compat.anticheat_status.denied": "Zakázáno",

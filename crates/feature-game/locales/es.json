@@ -39,6 +39,8 @@
   "game.common.version": "Versión",
   "game.compat.anticheat": "Antitrampas",
   "game.compat.anticheat_reference": "Referencia del antitrampas (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} bloquea {mode} en Wine y Proton. El modo historia funciona.",
+  "game.compat.anticheat_online_only_unnamed": "El antitrampas bloquea {mode} en Wine y Proton. El modo historia funciona.",
   "game.compat.anticheat_removed": "Antitrampas eliminado",
   "game.compat.anticheat_status.broken": "No funciona",
   "game.compat.anticheat_status.denied": "Denegado",
