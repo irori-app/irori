@@ -39,6 +39,8 @@
   "game.common.version": "Wersja",
   "game.compat.anticheat": "Anti-cheat",
   "game.compat.anticheat_reference": "Źródło informacji o anti-cheacie (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blokuje {mode} w Wine i Protonie. Tryb fabularny działa.",
+  "game.compat.anticheat_online_only_unnamed": "Anti-cheat blokuje {mode} w Wine i Protonie. Tryb fabularny działa.",
   "game.compat.anticheat_removed": "Anti-cheat usunięty",
   "game.compat.anticheat_status.broken": "Nie działa",
   "game.compat.anticheat_status.denied": "Zablokowany",

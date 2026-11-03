@@ -17,6 +17,7 @@ mod launch;
 mod metadata;
 mod overlay;
 mod playtime;
+mod rockstar;
 mod run;
 mod saves;
 mod state;

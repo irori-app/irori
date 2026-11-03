@@ -39,6 +39,8 @@
   "game.common.version": "版本",
   "game.compat.anticheat": "反作弊",
   "game.compat.anticheat_reference": "反作弊信息来源（AreWeAntiCheatYet）",
+  "game.compat.anticheat_online_only": "在 Wine 和 Proton 下，{anticheat} 会阻止 {mode}。故事模式可以正常游玩。",
+  "game.compat.anticheat_online_only_unnamed": "在 Wine 和 Proton 下，反作弊会阻止 {mode}。故事模式可以正常游玩。",
   "game.compat.anticheat_removed": "反作弊已移除",
   "game.compat.anticheat_status.broken": "无法运行",
   "game.compat.anticheat_status.denied": "已拒绝",

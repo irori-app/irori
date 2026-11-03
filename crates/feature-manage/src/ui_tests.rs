@@ -359,3 +359,79 @@ fn account_cards_are_all_as_tall_as_the_tallest(cx: &mut TestAppContext) {
         assert_eq!(other.size.height, gog.size.height);
     }
 }
+
+/// The Rockstar card of a prefix adopted with a game and a signed-in
+/// account offers Close and Remove from Irori; removing brings Set up back
+/// and leaves the prefix on disk.
+#[cfg(not(windows))]
+#[gpui_kit::test]
+fn rockstar_card_after_adopting_a_prefix(cx: &mut TestAppContext) {
+    use irori_core::{AppSettings, EventBus, WineInstallation};
+    use irori_launchers::{LauncherKind, LaunchersStore};
+
+    setup(cx);
+    let dir = tempfile::tempdir().expect("temp dir").keep();
+    let drive = dir.join("Rockstar/drive_c");
+    let program = drive.join(LauncherKind::Rockstar.exe_path());
+    std::fs::create_dir_all(program.parent().expect("parent")).expect("mkdir");
+    std::fs::write(&program, b"MZ").expect("write");
+    let log = drive.join("users/me/Documents/Rockstar Games/Launcher/launcher.log");
+    std::fs::create_dir_all(log.parent().expect("parent")).expect("mkdir");
+    std::fs::write(
+        &log,
+        "[t] [DISPLAY] [Main ] [launcher] Presence Event - Signed In\n",
+    )
+    .expect("write");
+
+    let app = Arc::new(AppSettings {
+        third_party_launchers: true,
+        ..Default::default()
+    });
+    let store = LaunchersStore::with_dirs(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        dir.join("config"),
+        dir.join("cache"),
+    );
+    let wine = WineInstallation {
+        bin: "/usr/bin/wine".into(),
+        name: "Wine".into(),
+        ..Default::default()
+    };
+    let adopted = store.clone();
+    let prefix = dir.join("Rockstar");
+    let b = cx.update(|cx| irori_ui::backend(cx));
+    b.settings.update_app(|s| s.third_party_launchers = true);
+    futures::executor::block_on(b.spawn(async move {
+        adopted
+            .adopt(LauncherKind::Rockstar, prefix, Some(wine))
+            .await
+    }))
+    .expect("task runs")
+    .expect("adopts the prefix");
+
+    cx.update(|cx| crate::install_launchers_store(store, cx));
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| crate::launchers::LaunchersSection::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("launcher-rockstar-signed-in").is_some());
+    assert!(vcx.debug_bounds("launcher-rockstar-close").is_some());
+    assert!(vcx.debug_bounds("launcher-rockstar-set-up").is_none());
+
+    click(&mut vcx, "launcher-rockstar-remove");
+    for _ in 0..50 {
+        if vcx.debug_bounds("launcher-rockstar-set-up").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        vcx.run_until_parked();
+    }
+    assert!(vcx.debug_bounds("launcher-rockstar-set-up").is_some());
+    assert!(vcx.debug_bounds("launcher-rockstar-close").is_none());
+    assert!(program.is_file(), "the prefix stays on disk");
+}

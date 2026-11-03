@@ -39,6 +39,8 @@
   "game.common.version": "Versiune",
   "game.compat.anticheat": "Anti-cheat",
   "game.compat.anticheat_reference": "Sursă anti-cheat (AreWeAntiCheatYet)",
+  "game.compat.anticheat_online_only": "{anticheat} blochează {mode} în Wine și Proton. Modul poveste funcționează.",
+  "game.compat.anticheat_online_only_unnamed": "Anti-cheat-ul blochează {mode} în Wine și Proton. Modul poveste funcționează.",
   "game.compat.anticheat_removed": "Anti-cheat eliminat",
   "game.compat.anticheat_status.broken": "Nefuncțional",
   "game.compat.anticheat_status.denied": "Refuzat",

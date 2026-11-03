@@ -650,6 +650,63 @@ impl Backend {
         irori_runtime::run_in_prefix(&app, &settings, target, argv, false, ctx).await
     }
 
+    /// Install the launcher a game starts through ([`irori_core::LauncherMissing`],
+    /// from its launch) in the game's Wine prefix: download the vendor's
+    /// installer, then run it there and wait while the user follows it.
+    pub async fn install_launcher_for(
+        &self,
+        id: &GameId,
+        missing: &irori_core::LauncherMissing,
+        cancel: CancellationToken,
+    ) -> Result<()> {
+        let game = self.installed_game(id)?;
+        if self.statuses.is_busy(id) {
+            bail!("another operation is in progress");
+        }
+        let _guard = self.statuses.guard(id, StatusKind::Redist);
+        let ctx = self.op_context(id, cancel);
+        let file = missing
+            .installer_url
+            .rsplit('/')
+            .next()
+            .map(irori_core::paths::sanitize)
+            .filter(|f| f.to_ascii_lowercase().ends_with(".exe"))
+            .unwrap_or_else(|| "launcher-setup.exe".to_string());
+        let installer = Paths::get()
+            .store_cache_dir(irori_core::Runner::Launchers)
+            .join("installers")
+            .join(file);
+        ctx.step.as_ref()("Downloading");
+        irori_runtime::download::download(
+            &missing.installer_url,
+            &installer,
+            &ctx.progress,
+            &ctx.cancel,
+        )
+        .await
+        .with_context(|| format!("Could not download the {} installer", missing.launcher))?;
+        ctx.step.as_ref()("Installing");
+        let app = self.settings.app();
+        let settings = self.settings.game(id);
+        let target = Target {
+            id,
+            game: &game,
+            platform: InstallPlatform::Windows,
+        };
+        let argv = vec![installer.to_string_lossy().into_owned()];
+        let result = irori_runtime::run_in_prefix(&app, &settings, target, argv, true, ctx).await;
+        let _ = tokio::fs::remove_file(&installer).await;
+        result.with_context(|| format!("The {} installer failed", missing.launcher))?;
+        anyhow::ensure!(
+            tokio::fs::try_exists(&missing.program)
+                .await
+                .unwrap_or(false),
+            "The installer closed before {} was installed",
+            missing.launcher
+        );
+        Ok(())
+    }
+
     pub async fn winetricks(&self, id: &GameId, verbs: Vec<String>) -> Result<ExecResult> {
         let game = self.game(id).context("unknown game")?;
         let app = self.settings.app();
