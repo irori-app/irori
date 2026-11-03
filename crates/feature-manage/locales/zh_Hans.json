@@ -464,6 +464,7 @@
   "manage.launchers.open": "打开 {launcher}",
   "manage.launchers.scan": "查找游戏",
   "manage.launchers.downloading": "正在下载安装程序…",
+  "manage.launchers.creating_prefix": "正在创建 Wine 前缀…",
   "manage.launchers.installing": "请按照 {launcher} 安装程序的提示操作…",
   "manage.launchers.setup_failed": "无法设置 {launcher}",
   "manage.launchers.open_failed": "无法打开 {launcher}",
