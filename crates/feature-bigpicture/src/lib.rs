@@ -8,11 +8,12 @@
 
 pub mod gamepad;
 mod grid;
+mod layout;
 mod model;
 mod text;
 mod view;
 
-use gpui_kit::{App, Global, KeyBinding};
+use gpui_kit::{App, Global, KeyBinding, actions};
 use irori_core::GameId;
 use irori_ui::Route;
 use irori_ui::nav::{self, navigator};
@@ -22,6 +23,18 @@ pub use view::BigPictureView;
 
 /// Key context of the Big Picture root element.
 pub const CONTEXT: &str = "BigPicture";
+
+/// Key context of the Library tab's search field, which sits outside
+/// [`CONTEXT`] so typed letters are not taken for Big Picture's keys.
+pub const SEARCH_CONTEXT: &str = "BigPictureSearch";
+
+actions!(
+    irori_bigpicture,
+    [
+        /// Leave the Library's search field for the results.
+        CloseSearch
+    ]
+);
 
 /// Big Picture's interface translations (`bigpicture.*` keys), one catalog
 /// per language in [`irori_ui::i18n::LANGUAGES`].
@@ -65,7 +78,8 @@ pub fn init(cx: &mut App) {
 
 /// Keyboard equivalents of the controller inputs inside Big Picture: arrows
 /// move, Enter opens, Space or Ctrl+Enter plays, Escape or Backspace goes back,
-/// M or Shift+F10 opens the menu, Page Up/Down page through a shelf.
+/// M or Shift+F10 opens the menu, Page Up/Down switch tabs. In the search
+/// field, Escape, Enter and Down return to the results.
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some(CONTEXT);
     cx.bind_keys([
@@ -82,6 +96,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-f10", gamepad::Menu, ctx),
         KeyBinding::new("pageup", gamepad::PrevPage, ctx),
         KeyBinding::new("pagedown", gamepad::NextPage, ctx),
+        KeyBinding::new("escape", CloseSearch, Some(SEARCH_CONTEXT)),
+        KeyBinding::new("down", CloseSearch, Some(SEARCH_CONTEXT)),
     ]);
 }
 
