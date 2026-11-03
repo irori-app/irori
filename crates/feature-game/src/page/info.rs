@@ -97,10 +97,45 @@ mod link_tests {
     }
 }
 
-/// Width of the side column with the details and play history, in rem.
+/// Width of the details column, in rem.
 const SIDE_COLUMN_REM: f32 = 24.;
-/// Pages narrower than this (in rem) put the side column under the tabs.
-const SIDE_COLUMN_PAGE_REM: f32 = 64.;
+
+/// How the body's columns are arranged for the page's width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    /// Cover column, main column, details column.
+    Three,
+    /// Cover column and main column; the details close the main column.
+    Two,
+    /// Everything in one column, the cover column first.
+    Stacked,
+}
+
+impl Layout {
+    /// Pages at least this wide (in rem) get three columns.
+    const THREE_REM: f32 = 84.;
+    /// Pages at least this wide (in rem) get two columns.
+    const TWO_REM: f32 = 50.;
+
+    fn for_page(page_rem: f32) -> Self {
+        if page_rem >= Self::THREE_REM {
+            Layout::Three
+        } else if page_rem >= Self::TWO_REM {
+            Layout::Two
+        } else {
+            Layout::Stacked
+        }
+    }
+
+    /// Width of the cover, in rem.
+    fn cover_rem(self) -> f32 {
+        match self {
+            Layout::Three => 16.,
+            Layout::Two => 13.,
+            Layout::Stacked => 11.,
+        }
+    }
+}
 
 /// Characters of a changelog shown before "Show full changelog".
 const CHANGELOG_EXCERPT_CHARS: usize = 12_000;
@@ -133,33 +168,6 @@ pub(super) fn changelog_excerpt(text: &str, budget: usize) -> (&str, bool) {
         Some(i) => (&text[..i], true),
         None => (text, false),
     }
-}
-
-/// Store text (HTML or Markdown) as one plain paragraph, for summaries.
-pub(super) fn plain_text(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut in_tag = false;
-    for c in text.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' if in_tag => {
-                in_tag = false;
-                out.push(' ');
-            }
-            _ if in_tag => {}
-            '#' | '*' | '_' | '`' => {}
-            c => out.push(c),
-        }
-    }
-    let out = out
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&apos;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&nbsp;", " ");
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 impl GamePage {
@@ -233,45 +241,45 @@ impl GamePage {
         let strip = self.render_screenshot_strip(window, cx);
         let details = self.render_details_panel(game, cx);
         let timeline = self.render_timeline(window, cx);
-        let side_by_side = self
-            .page_rem(window)
-            .is_none_or(|page| page >= SIDE_COLUMN_PAGE_REM);
+        let page = self.page_rem(window).unwrap_or(f32::MAX);
+        let layout = Layout::for_page(page);
+        let cover = self.render_cover_column(game, layout.cover_rem(), cx);
         let main = v_flex()
             .flex_1()
             .min_w_0()
-            .gap_4()
-            .child(bar)
-            .child(content);
+            .w_full()
+            .gap_8()
+            .children(strip)
+            .child(v_flex().w_full().gap_4().child(bar).child(content))
+            .child(timeline);
         let side = v_flex()
             .gap_4()
-            .when_else(
-                side_by_side,
-                |c| c.w(rems(SIDE_COLUMN_REM)).flex_shrink_0(),
-                |c| c.w_full(),
-            )
             .child(details)
-            .children(timeline)
             .children(self.overlay.clone());
-        v_flex()
+        let row = |d: gpui_kit::Div| d.w_full().flex().flex_row().items_start().gap_8();
+        let body = match layout {
+            Layout::Three => row(div())
+                .child(cover)
+                .child(main)
+                .child(side.w(rems(SIDE_COLUMN_REM)).flex_shrink_0()),
+            Layout::Two => row(div()).child(cover).child(main.child(side.w_full())),
+            Layout::Stacked => div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap_8()
+                .child(cover)
+                .child(main)
+                .child(side.w_full()),
+        };
+        div()
             .id("game-body")
             .w_full()
             .flex_shrink_0()
-            .gap_8()
             .px_8()
             .pb_8()
-            .children(strip)
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .when_else(
-                        side_by_side,
-                        |d| d.flex_row().items_start().gap_8(),
-                        |d| d.flex_col().gap_8(),
-                    )
-                    .child(main)
-                    .child(side),
-            )
+            .child(body)
             .into_any_element()
     }
 
@@ -567,7 +575,15 @@ impl GamePage {
 
 #[cfg(test)]
 mod tests {
-    use super::changelog_excerpt;
+    use super::{Layout, changelog_excerpt};
+
+    #[test]
+    fn columns_follow_the_page_width() {
+        assert_eq!(Layout::for_page(120.), Layout::Three);
+        assert_eq!(Layout::for_page(84.), Layout::Three);
+        assert_eq!(Layout::for_page(70.), Layout::Two);
+        assert_eq!(Layout::for_page(30.), Layout::Stacked);
+    }
 
     #[test]
     fn changelog_excerpt_cuts_at_a_heading() {

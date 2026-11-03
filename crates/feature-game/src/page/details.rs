@@ -1,13 +1,12 @@
 //! The details panel beside the page's content: who made the game, how much
-//! it was played, where it is installed, how it runs on Linux and how long it
-//! takes to beat, as a table of label and value rows.
+//! it was played, where it is installed and how long it takes to beat, as a
+//! table of label and value rows.
 
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::progress::Progress;
-use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -20,7 +19,7 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use super::GamePage;
-use crate::hooks::{AnticheatStatus, HowLongToBeat, SteamDeckStatus};
+use crate::hooks::HowLongToBeat;
 use crate::i18n::{platform_label, playtime_label};
 use crate::load::{calendar_date, format_day, parse_date};
 use crate::ops;
@@ -93,7 +92,7 @@ impl GamePage {
             .child(
                 div()
                     .pb_2()
-                    .child(irori_ui::style::caption(t("game.info.details"), cx)),
+                    .child(super::section_title(t("game.info.details"), self.ink.text)),
             )
             .children(group(credits, cx))
             .children(group(play, cx))
@@ -102,7 +101,7 @@ impl GamePage {
             .into_any_element()
     }
 
-    /// Developer, publisher, release date and store.
+    /// Developer, publisher and release date.
     fn credit_rows(&self, game: &GameInfo, muted: Hsla) -> Vec<AnyElement> {
         let mut rows = Vec::new();
         if let Some(d) = game.developer.as_ref().filter(|d| !d.is_empty()) {
@@ -118,11 +117,6 @@ impl GamePage {
         if let Some(date) = self.release_date(game) {
             rows.push(row(t("game.details.released"), text(date), muted));
         }
-        let store = match self.id.runner {
-            irori_core::Runner::Sideload => t("game.details.added_by_you"),
-            runner => runner.store_name().into(),
-        };
-        rows.push(row(t("game.details.store"), text(store), muted));
         rows
     }
 
@@ -338,63 +332,12 @@ impl GamePage {
         rows
     }
 
-    /// ProtonDB, Steam Deck and anticheat as badges, and HowLongToBeat.
+    /// HowLongToBeat, as a bar marking the user's own play time.
     fn compat_detail_rows(&self, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
         let Some(info) = self.compat.ready() else {
             return Vec::new();
         };
         let mut rows = Vec::new();
-        let mut badges: Vec<AnyElement> = Vec::new();
-        if let Some(tier) = &info.protondb_tier {
-            let tag = match tier.as_str() {
-                "platinum" | "gold" | "native" => Tag::success(),
-                "silver" | "bronze" => Tag::warning(),
-                "borked" => Tag::danger(),
-                _ => Tag::secondary(),
-            };
-            badges.push(
-                tag.small()
-                    .child(t_args(
-                        "game.header.protondb",
-                        &[("tier", &super::compat::tier_label(tier))],
-                    ))
-                    .into_any_element(),
-            );
-        }
-        if let Some(deck) = info.steam_deck.filter(|d| *d != SteamDeckStatus::Unknown) {
-            let tag = match deck {
-                SteamDeckStatus::Verified => Tag::success(),
-                SteamDeckStatus::Playable => Tag::warning(),
-                _ => Tag::danger(),
-            };
-            badges.push(
-                tag.small()
-                    .child(t_args("game.header.deck", &[("status", &deck.label())]))
-                    .into_any_element(),
-            );
-        }
-        if let Some(ac) = &info.anticheat {
-            let tag = match ac.status {
-                AnticheatStatus::Supported | AnticheatStatus::Running => Tag::success(),
-                AnticheatStatus::Broken | AnticheatStatus::Denied => Tag::danger(),
-                _ => Tag::warning(),
-            };
-            badges.push(
-                tag.small()
-                    .child(t_args(
-                        "game.details.anticheat",
-                        &[("status", &ac.status.label())],
-                    ))
-                    .into_any_element(),
-            );
-        }
-        if !badges.is_empty() {
-            rows.push(row(
-                t("game.compat.title"),
-                h_flex().gap_1().flex_wrap().children(badges),
-                muted,
-            ));
-        }
         if let Some(h) = info
             .how_long_to_beat
             .as_ref()
