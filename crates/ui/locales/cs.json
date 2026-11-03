@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori zatím nemá emulátor pro její systém.",
   "ui.lutris.reason.steam_not_found": "Není ve vaší knihovně Steam v tomto počítači.",
   "ui.lutris.reason.store_not_supported": "Irori nemá obchod pro „{store}“.",
-  "ui.lutris.reason.failed": "Nepodařilo se ji přidat: {error}"
+  "ui.lutris.reason.failed": "Nepodařilo se ji přidat: {error}",
+  "ui.play_status.title": "Stav hraní",
+  "ui.play_status.set": "Nastavit stav",
+  "ui.play_status.clear": "Zrušit stav",
+  "ui.play_status.not_played": "Nehráno",
+  "ui.play_status.plan_to_play": "Chci hrát",
+  "ui.play_status.playing": "Hraji",
+  "ui.play_status.on_hold": "Odloženo",
+  "ui.play_status.beaten": "Dohráno",
+  "ui.play_status.abandoned": "Opuštěno",
+  "ui.play_status.played": "Hráno"
 }

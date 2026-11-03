@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "Irori 暂时没有适用于其系统的模拟器。",
   "ui.lutris.reason.steam_not_found": "它不在此电脑上的 Steam 库中。",
   "ui.lutris.reason.store_not_supported": "Irori 不支持“{store}”商店。",
-  "ui.lutris.reason.failed": "无法添加：{error}"
+  "ui.lutris.reason.failed": "无法添加：{error}",
+  "ui.play_status.title": "游玩状态",
+  "ui.play_status.set": "设置状态",
+  "ui.play_status.clear": "清除状态",
+  "ui.play_status.not_played": "未玩",
+  "ui.play_status.plan_to_play": "想玩",
+  "ui.play_status.playing": "正在玩",
+  "ui.play_status.on_hold": "搁置",
+  "ui.play_status.beaten": "已通关",
+  "ui.play_status.abandoned": "已弃坑",
+  "ui.play_status.played": "玩过"
 }

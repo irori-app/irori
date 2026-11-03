@@ -1,5 +1,6 @@
 //! Launcher-owned per-user library data: favourites, hidden games, recently
-//! played, custom categories, playtime and title/art overrides.
+//! played, custom categories, playtime, play statuses, backlog goals and
+//! title/art overrides.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -9,6 +10,8 @@ use irori_core::game::{GameOverrides, PlaytimeRecord};
 use irori_core::{Event, EventBus, GameId, GameInfo, Paths, json_store, util};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+
+use crate::play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 
 /// Persisted shape. Game keys are `GameId::key()` strings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -29,6 +32,55 @@ pub struct UserData {
     /// hidden once; unhiding it here sticks, and unhiding it on the store
     /// unhides it here.
     pub store_hidden_imported: BTreeSet<String>,
+    /// The play status the user set per game, with when they set it.
+    pub play_status: BTreeMap<String, PlayStatusRecord>,
+    /// How many games the user means to beat, by calendar year.
+    pub backlog_goals: BTreeMap<i32, u32>,
+}
+
+impl UserData {
+    /// The status the user set for a game, if any.
+    pub fn play_status(&self, key: &str) -> Option<PlayStatus> {
+        self.play_status.get(key).map(|r| r.status)
+    }
+
+    /// The status filters and stats group a game under (see
+    /// [`EffectiveStatus`]).
+    pub fn effective_status(&self, key: &str) -> EffectiveStatus {
+        match self.play_status(key) {
+            Some(status) => status.into(),
+            None if self
+                .playtime
+                .get(key)
+                .is_some_and(|r| r.total_minutes > 0 || r.last_played.is_some()) =>
+            {
+                EffectiveStatus::Played
+            }
+            None => EffectiveStatus::NotPlayed,
+        }
+    }
+}
+
+/// Set (or clear) the play status of `keys`, dated `now`. A game already
+/// in that status keeps the date it got it.
+fn apply_play_status(d: &mut UserData, keys: &[String], status: Option<PlayStatus>, now: &str) {
+    for key in keys {
+        match status {
+            Some(status) if d.play_status(key) == Some(status) => {}
+            Some(status) => {
+                d.play_status.insert(
+                    key.clone(),
+                    PlayStatusRecord {
+                        status,
+                        since: now.to_string(),
+                    },
+                );
+            }
+            None => {
+                d.play_status.remove(key);
+            }
+        }
+    }
 }
 
 /// Which of a store's playtime totals name games, and which stored records
@@ -269,6 +321,34 @@ impl UserDataService {
         });
     }
 
+    /// Set a game's play status, or clear it with `None`.
+    pub fn set_play_status(&self, id: &GameId, status: Option<PlayStatus>) {
+        let now = util::now_rfc3339();
+        self.update(Some(id), |d| {
+            apply_play_status(d, &[id.key()], status, &now)
+        });
+    }
+
+    /// Set or clear the play status of several games in one change.
+    pub fn set_play_status_many(&self, ids: &[GameId], status: Option<PlayStatus>) {
+        let now = util::now_rfc3339();
+        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        self.update(None, |d| apply_play_status(d, &keys, status, &now));
+    }
+
+    /// Set how many games the user means to beat in `year`; `None` or zero
+    /// removes the goal.
+    pub fn set_backlog_goal(&self, year: i32, goal: Option<u32>) {
+        self.update(None, |d| match goal.filter(|g| *g > 0) {
+            Some(goal) => {
+                d.backlog_goals.insert(year, goal);
+            }
+            None => {
+                d.backlog_goals.remove(&year);
+            }
+        });
+    }
+
     /// Drop one game from the recently played list.
     pub fn remove_recent(&self, id: &GameId) {
         let key = id.key();
@@ -458,6 +538,66 @@ mod tests {
         ]);
         let grown = grown_totals(&data, Runner::Legendary, &totals);
         assert_eq!(grown, [("legendary:Sugar".to_string(), 600)]);
+    }
+
+    #[test]
+    fn play_status_keeps_its_date_until_it_changes() {
+        let mut data = UserData::default();
+        let keys = ["gog:1".to_string()];
+        apply_play_status(&mut data, &keys, Some(PlayStatus::Playing), "monday");
+        apply_play_status(&mut data, &keys, Some(PlayStatus::Playing), "tuesday");
+        assert_eq!(data.play_status["gog:1"].since, "monday");
+        apply_play_status(&mut data, &keys, Some(PlayStatus::Beaten), "friday");
+        assert_eq!(
+            data.play_status["gog:1"],
+            PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "friday".into()
+            }
+        );
+        apply_play_status(&mut data, &keys, None, "later");
+        assert!(data.play_status.is_empty());
+    }
+
+    #[test]
+    fn games_without_a_status_count_as_played_from_their_playtime() {
+        let mut data = UserData::default();
+        data.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 30,
+                ..Default::default()
+            },
+        );
+        assert_eq!(data.effective_status("gog:1"), EffectiveStatus::Played);
+        assert_eq!(data.effective_status("gog:2"), EffectiveStatus::NotPlayed);
+        apply_play_status(
+            &mut data,
+            &["gog:1".into()],
+            Some(PlayStatus::OnHold),
+            "now",
+        );
+        assert_eq!(data.effective_status("gog:1"), EffectiveStatus::OnHold);
+    }
+
+    #[test]
+    fn older_library_files_read_without_statuses() {
+        let data: UserData = serde_json::from_str(r#"{"favourites":["gog:1"]}"#).unwrap();
+        assert!(data.play_status.is_empty() && data.backlog_goals.is_empty());
+        let mut data = data;
+        data.backlog_goals.insert(2026, 12);
+        apply_play_status(
+            &mut data,
+            &["gog:1".into()],
+            Some(PlayStatus::PlanToPlay),
+            "now",
+        );
+        let text = serde_json::to_string(&data).unwrap();
+        assert!(text.contains(r#""backlog_goals":{"2026":12}"#), "{text}");
+        assert!(text.contains(r#""status":"planToPlay""#), "{text}");
+        let back: UserData = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.play_status, data.play_status);
+        assert_eq!(back.backlog_goals, data.backlog_goals);
     }
 
     #[test]

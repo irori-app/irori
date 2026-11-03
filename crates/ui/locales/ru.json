@@ -84,5 +84,15 @@
   "ui.lutris.reason.system_not_supported": "В Irori пока нет эмулятора для её системы.",
   "ui.lutris.reason.steam_not_found": "Её нет в вашей библиотеке Steam на этом компьютере.",
   "ui.lutris.reason.store_not_supported": "В Irori нет магазина «{store}».",
-  "ui.lutris.reason.failed": "Не удалось добавить: {error}"
+  "ui.lutris.reason.failed": "Не удалось добавить: {error}",
+  "ui.play_status.title": "Статус прохождения",
+  "ui.play_status.set": "Задать статус",
+  "ui.play_status.clear": "Сбросить статус",
+  "ui.play_status.not_played": "Не начато",
+  "ui.play_status.plan_to_play": "В планах",
+  "ui.play_status.playing": "Играю",
+  "ui.play_status.on_hold": "Отложено",
+  "ui.play_status.beaten": "Пройдено",
+  "ui.play_status.abandoned": "Заброшено",
+  "ui.play_status.played": "Сыграно"
 }
