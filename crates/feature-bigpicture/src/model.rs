@@ -1,7 +1,8 @@
-//! Big Picture's derived data: shelves of games, the actions a game offers in
-//! its overlay, the quick menu, and install defaults. Pure functions over
-//! snapshots so they are tested without a window.
+//! Big Picture's derived data: Home's shelves, the Library tab's filters, the
+//! rows of the game page, the quick menu, and install defaults. Pure functions
+//! over snapshots so they are tested without a window.
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -17,16 +18,16 @@ use irori_ui::i18n::{t, t_args};
 
 use crate::text::store_name;
 
-/// A shelf of games.
+/// A shelf of games on Home.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RowKind {
     ContinuePlaying,
-    Installed,
     Favourites,
-    All,
-    Store(Runner),
+    Installed,
     /// Emulated games of one system (a systems catalog id).
     System(&'static str),
+    /// Every game; only when no other shelf has any.
+    All,
 }
 
 impl RowKind {
@@ -37,7 +38,6 @@ impl RowKind {
             RowKind::Installed => t("bigpicture.shelf.installed"),
             RowKind::Favourites => t("bigpicture.shelf.favourites"),
             RowKind::All => t("bigpicture.shelf.all"),
-            RowKind::Store(runner) => store_name(runner),
             RowKind::System(id) => irori_engines::systems::get(id)
                 .map_or_else(|| SharedString::new_static(id), |s| s.name.clone().into()),
         }
@@ -50,7 +50,6 @@ impl RowKind {
             RowKind::Installed => "installed",
             RowKind::Favourites => "favourites",
             RowKind::All => "all",
-            RowKind::Store(runner) => runner.id(),
             RowKind::System(id) => id,
         }
     }
@@ -68,9 +67,10 @@ fn parse_key(key: &str) -> Option<GameId> {
     Some(GameId::new(Runner::from_id(runner)?, app))
 }
 
-/// Build the shelves. Hidden games are left out everywhere; empty shelves are
-/// dropped; per-store shelves appear only when games come from more than one
-/// store (otherwise they would repeat "All games").
+/// Build Home's shelves: Continue playing, Favourites, Installed, then one
+/// per system for emulated games. Hidden games are left out and empty shelves
+/// dropped; "All games" stands in when nothing else has a game, so a new
+/// library still shows something to play.
 pub fn build_rows(library: &LibrarySnapshot, user: &UserData, max_recent: usize) -> Vec<Row> {
     let visible: Vec<&Arc<GameInfo>> = library
         .games
@@ -79,6 +79,13 @@ pub fn build_rows(library: &LibrarySnapshot, user: &UserData, max_recent: usize)
         .collect();
     let by_key: HashMap<String, &Arc<GameInfo>> =
         visible.iter().map(|g| (g.id().key(), *g)).collect();
+    let pick = |keep: &dyn Fn(&GameInfo) -> bool| -> Vec<Arc<GameInfo>> {
+        visible
+            .iter()
+            .filter(|g| keep(g))
+            .map(|g| (*g).clone())
+            .collect()
+    };
 
     let recent: Vec<Arc<GameInfo>> = user
         .recent
@@ -87,71 +94,262 @@ pub fn build_rows(library: &LibrarySnapshot, user: &UserData, max_recent: usize)
         .filter_map(|k| by_key.get(k.as_str()).map(|g| (*g).clone()))
         .take(max_recent.max(1))
         .collect();
-    let installed = visible
-        .iter()
-        .filter(|g| g.is_installed)
-        .map(|g| (*g).clone())
-        .collect();
-    let favourites = visible
-        .iter()
-        .filter(|g| user.favourites.contains(&g.id().key()))
-        .map(|g| (*g).clone())
-        .collect();
-    let all: Vec<Arc<GameInfo>> = visible.iter().map(|g| (*g).clone()).collect();
-
     let mut rows = vec![
         Row {
             kind: RowKind::ContinuePlaying,
             games: recent,
         },
         Row {
-            kind: RowKind::Installed,
-            games: installed,
+            kind: RowKind::Favourites,
+            games: pick(&|g| user.favourites.contains(&g.id().key())),
         },
         Row {
-            kind: RowKind::Favourites,
-            games: favourites,
+            kind: RowKind::Installed,
+            games: pick(&|g| g.is_installed),
         },
     ];
-    let stores: Vec<Runner> = Runner::ALL
-        .into_iter()
-        .filter(|r| all.iter().any(|g| g.runner() == *r))
-        .collect();
-    if stores.len() > 1 {
-        // Emulated games get a shelf per system instead (below).
-        for runner in stores.iter().filter(|r| **r != Runner::Emulation) {
-            rows.push(Row {
-                kind: RowKind::Store(*runner),
-                games: all
-                    .iter()
-                    .filter(|g| g.runner() == *runner)
-                    .cloned()
-                    .collect(),
-            });
-        }
-    }
     for system in irori_engines::systems::all() {
+        let id = system.id.as_str();
         rows.push(Row {
-            kind: RowKind::System(system.id.as_str()),
-            games: all
-                .iter()
-                .filter(|g| g.system.as_deref() == Some(system.id.as_str()))
-                .cloned()
-                .collect(),
+            kind: RowKind::System(id),
+            games: pick(&|g| g.system.as_deref() == Some(id)),
         });
     }
-    rows.insert(
-        3,
-        Row {
-            kind: RowKind::All,
-            games: all,
-        },
-    );
     rows.retain(|r| !r.games.is_empty());
+    if rows.is_empty() && !visible.is_empty() {
+        rows.push(Row {
+            kind: RowKind::All,
+            games: pick(&|_| true),
+        });
+    }
     rows
 }
 
-/// What the overlay needs to know about a game's current state.
+// ---- Library tab --------------------------------------------------------
+
+/// Which games the Library tab lists.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Show {
+    #[default]
+    All,
+    Favourites,
+    Store(Runner),
+    /// Games the user hid, so they can be found and shown again.
+    Hidden,
+}
+
+impl Show {
+    pub fn label(self) -> SharedString {
+        match self {
+            Show::All => t("bigpicture.show.all"),
+            Show::Favourites => t("bigpicture.show.favourites"),
+            Show::Store(runner) => store_name(runner),
+            Show::Hidden => t("bigpicture.show.hidden"),
+        }
+    }
+}
+
+/// The Library tab's order.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Sort {
+    #[default]
+    Title,
+    RecentlyPlayed,
+    MostPlayed,
+    RecentlyAdded,
+}
+
+impl Sort {
+    pub const ALL: [Sort; 4] = [
+        Sort::Title,
+        Sort::RecentlyPlayed,
+        Sort::MostPlayed,
+        Sort::RecentlyAdded,
+    ];
+
+    pub fn label(self) -> SharedString {
+        t(match self {
+            Sort::Title => "bigpicture.sort.title",
+            Sort::RecentlyPlayed => "bigpicture.sort.recent",
+            Sort::MostPlayed => "bigpicture.sort.most_played",
+            Sort::RecentlyAdded => "bigpicture.sort.added",
+        })
+    }
+}
+
+/// The Library tab's install filter. Play statuses join it once the library
+/// records them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum StatusFilter {
+    #[default]
+    Any,
+    Installed,
+    NotInstalled,
+}
+
+impl StatusFilter {
+    pub const ALL: [StatusFilter; 3] = [
+        StatusFilter::Any,
+        StatusFilter::Installed,
+        StatusFilter::NotInstalled,
+    ];
+
+    pub fn label(self) -> SharedString {
+        t(match self {
+            StatusFilter::Any => "bigpicture.status_filter.any",
+            StatusFilter::Installed => "bigpicture.status_filter.installed",
+            StatusFilter::NotInstalled => "bigpicture.status_filter.not_installed",
+        })
+    }
+
+    fn keeps(self, game: &GameInfo) -> bool {
+        match self {
+            StatusFilter::Any => true,
+            StatusFilter::Installed => game.is_installed,
+            StatusFilter::NotInstalled => !game.is_installed,
+        }
+    }
+}
+
+/// The Library tab's filter chips, in order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Chip {
+    Show,
+    Sort,
+    Status,
+    Search,
+}
+
+impl Chip {
+    pub const ALL: [Chip; 4] = [Chip::Show, Chip::Sort, Chip::Status, Chip::Search];
+
+    pub fn label(self) -> SharedString {
+        t(match self {
+            Chip::Show => "bigpicture.chip.show",
+            Chip::Sort => "bigpicture.chip.sort",
+            Chip::Status => "bigpicture.chip.status",
+            Chip::Search => "bigpicture.chip.search",
+        })
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Chip::Show => "bp-chip-show",
+            Chip::Sort => "bp-chip-sort",
+            Chip::Status => "bp-chip-status",
+            Chip::Search => "bp-chip-search",
+        }
+    }
+}
+
+/// Everything the Library tab filters and sorts by.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct LibraryFilter {
+    pub show: Show,
+    pub sort: Sort,
+    pub status: StatusFilter,
+    pub query: String,
+}
+
+/// What the Show chip offers for this library: every game, favourites, each
+/// store when there are several, and hidden games when there are any.
+pub fn show_options(library: &LibrarySnapshot, user: &UserData) -> Vec<Show> {
+    let mut out = vec![Show::All, Show::Favourites];
+    let stores: Vec<Runner> = Runner::ALL
+        .into_iter()
+        .filter(|r| library.games.iter().any(|g| g.runner() == *r))
+        .collect();
+    if stores.len() > 1 {
+        out.extend(stores.into_iter().map(Show::Store));
+    }
+    if library
+        .games
+        .iter()
+        .any(|g| user.hidden.contains(&g.id().key()))
+    {
+        out.push(Show::Hidden);
+    }
+    out
+}
+
+/// The option after `current` in `options`, wrapping to the first.
+pub fn cycle<T: PartialEq + Copy>(options: &[T], current: T) -> T {
+    let next = options
+        .iter()
+        .position(|o| *o == current)
+        .map_or(0, |i| (i + 1) % options.len().max(1));
+    options.get(next).copied().unwrap_or(current)
+}
+
+/// The Library tab's games for `filter`. Hidden games appear only under
+/// [`Show::Hidden`]. The search matches every word of the query anywhere in
+/// the title, ignoring case.
+pub fn library_games(
+    library: &LibrarySnapshot,
+    user: &UserData,
+    filter: &LibraryFilter,
+) -> Vec<Arc<GameInfo>> {
+    let words: Vec<String> = filter
+        .query
+        .split_whitespace()
+        .map(str::to_lowercase)
+        .collect();
+    let mut games: Vec<Arc<GameInfo>> = library
+        .games
+        .iter()
+        .filter(|g| {
+            let key = g.id().key();
+            let hidden = user.hidden.contains(&key);
+            let shown = match filter.show {
+                Show::All => !hidden,
+                Show::Favourites => !hidden && user.favourites.contains(&key),
+                Show::Store(runner) => !hidden && g.runner() == runner,
+                Show::Hidden => hidden,
+            };
+            shown && filter.status.keeps(g) && {
+                let title = g.title.to_lowercase();
+                words.iter().all(|w| title.contains(w.as_str()))
+            }
+        })
+        .cloned()
+        .collect();
+    let played = |g: &GameInfo| user.playtime.get(&g.id().key());
+    let by_title = |a: &Arc<GameInfo>, b: &Arc<GameInfo>| sort_key(a).cmp(&sort_key(b));
+    match filter.sort {
+        Sort::Title => games.sort_by(by_title),
+        Sort::RecentlyPlayed => games.sort_by(|a, b| {
+            let last = |g: &GameInfo| played(g).and_then(|p| p.last_played.clone());
+            last(b).cmp(&last(a)).then_with(|| by_title(a, b))
+        }),
+        Sort::MostPlayed => games.sort_by_key(|g| {
+            (
+                Reverse(played(g).map_or(0, |p| p.total_minutes)),
+                sort_key(g),
+            )
+        }),
+        Sort::RecentlyAdded => games.sort_by(|a, b| {
+            let added = |g: &GameInfo| {
+                g.date_added
+                    .clone()
+                    .or_else(|| user.first_seen.get(&g.id().key()).cloned())
+            };
+            added(b).cmp(&added(a)).then_with(|| by_title(a, b))
+        }),
+    }
+    games
+}
+
+fn sort_key(game: &GameInfo) -> String {
+    if game.sort_title.is_empty() {
+        game.title.to_lowercase()
+    } else {
+        game.sort_title.to_lowercase()
+    }
+}
+
+// ---- game page ----------------------------------------------------------
+
+/// What the game page needs to know about a game's current state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GameState {
     pub installed: bool,
@@ -163,11 +361,12 @@ pub struct GameState {
     pub in_queue: bool,
     pub has_update: bool,
     pub favourite: bool,
+    pub hidden: bool,
     /// Another launcher (Steam) installs and removes it.
     pub external: bool,
 }
 
-/// A command in the game overlay.
+/// A command that runs through the backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameAction {
     Play,
@@ -175,13 +374,11 @@ pub enum GameAction {
     Install,
     CancelDownload,
     Update,
-    AddFavourite,
-    RemoveFavourite,
     Uninstall,
 }
 
 impl GameAction {
-    /// Translated button label.
+    /// Translated label.
     pub fn label(self) -> SharedString {
         t(match self {
             GameAction::Play => "bigpicture.action.play",
@@ -189,8 +386,6 @@ impl GameAction {
             GameAction::Install => "bigpicture.action.install",
             GameAction::CancelDownload => "bigpicture.action.cancel_download",
             GameAction::Update => "bigpicture.action.update",
-            GameAction::AddFavourite => "bigpicture.action.add_favourite",
-            GameAction::RemoveFavourite => "bigpicture.action.remove_favourite",
             GameAction::Uninstall => "bigpicture.action.uninstall",
         })
     }
@@ -202,52 +397,93 @@ impl GameAction {
             GameAction::Install => IconName::Download,
             GameAction::CancelDownload => IconName::X,
             GameAction::Update => IconName::CircleArrowUp,
-            GameAction::AddFavourite => IconName::Star,
-            GameAction::RemoveFavourite => IconName::StarOff,
             GameAction::Uninstall => IconName::Trash,
-        }
-    }
-
-    /// Stable element id of the action's button.
-    pub fn id(self) -> &'static str {
-        match self {
-            GameAction::Play => "bp-action-play",
-            GameAction::Stop => "bp-action-stop",
-            GameAction::Install => "bp-action-install",
-            GameAction::CancelDownload => "bp-action-cancel-download",
-            GameAction::Update => "bp-action-update",
-            GameAction::AddFavourite | GameAction::RemoveFavourite => "bp-action-favourite",
-            GameAction::Uninstall => "bp-action-uninstall",
         }
     }
 }
 
-/// The overlay's commands for a game, main action first.
-pub fn game_actions(state: GameState) -> Vec<GameAction> {
-    let mut out = Vec::with_capacity(4);
+/// The game's main command: Stop while it runs, else Play, Cancel download
+/// while it downloads, else Install.
+pub fn main_action(state: GameState) -> GameAction {
     if state.playing {
-        out.push(GameAction::Stop);
+        GameAction::Stop
     } else if state.installed {
-        out.push(GameAction::Play);
-        if state.has_update && !state.in_queue {
-            out.push(GameAction::Update);
-        }
+        GameAction::Play
     } else if state.in_queue {
-        out.push(GameAction::CancelDownload);
+        GameAction::CancelDownload
     } else {
-        out.push(GameAction::Install);
+        GameAction::Install
     }
-    if state.installed && state.in_queue {
-        out.push(GameAction::CancelDownload);
+}
+
+/// A row of the game page's action list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageRow {
+    Action(GameAction),
+    /// ‹ Windows › — the platform Install picks, for games with several.
+    Platform,
+    Favourite,
+    Settings,
+    Playtime,
+    Hidden,
+}
+
+impl PageRow {
+    /// Stable element id.
+    pub fn id(self) -> &'static str {
+        match self {
+            PageRow::Action(GameAction::Play) => "bp-row-play",
+            PageRow::Action(GameAction::Stop) => "bp-row-stop",
+            PageRow::Action(GameAction::Install) => "bp-row-install",
+            PageRow::Action(GameAction::CancelDownload) => "bp-row-cancel-download",
+            PageRow::Action(GameAction::Update) => "bp-row-update",
+            PageRow::Action(GameAction::Uninstall) => "bp-row-uninstall",
+            PageRow::Platform => "bp-row-platform",
+            PageRow::Favourite => "bp-row-favourite",
+            PageRow::Settings => "bp-row-settings",
+            PageRow::Playtime => "bp-row-playtime",
+            PageRow::Hidden => "bp-row-hidden",
+        }
     }
-    out.push(if state.favourite {
-        GameAction::RemoveFavourite
-    } else {
-        GameAction::AddFavourite
-    });
+
+    /// Whether the row starts the "Manage" group.
+    pub fn starts_manage(self) -> bool {
+        matches!(
+            self,
+            PageRow::Action(GameAction::Uninstall) | PageRow::Hidden
+        )
+    }
+
+    /// Whether Left and Right change the row's value.
+    pub fn has_value(self) -> bool {
+        matches!(
+            self,
+            PageRow::Platform | PageRow::Favourite | PageRow::Hidden
+        )
+    }
+}
+
+/// The game page's rows: the main command, Update and Cancel download when
+/// they apply, the install platform, Favourite, Game settings and Playtime,
+/// then the "Manage" group (Uninstall, Hidden). `platforms` is how many
+/// platforms the game installs for.
+pub fn page_rows(state: GameState, platforms: usize) -> Vec<PageRow> {
+    let main = main_action(state);
+    let mut out = vec![PageRow::Action(main)];
+    if state.installed && !state.playing && state.has_update && !state.in_queue {
+        out.push(PageRow::Action(GameAction::Update));
+    }
+    if state.in_queue && main != GameAction::CancelDownload {
+        out.push(PageRow::Action(GameAction::CancelDownload));
+    }
+    if main == GameAction::Install && platforms > 1 {
+        out.push(PageRow::Platform);
+    }
+    out.extend([PageRow::Favourite, PageRow::Settings, PageRow::Playtime]);
     if state.installed && !state.playing && !state.external {
-        out.push(GameAction::Uninstall);
+        out.push(PageRow::Action(GameAction::Uninstall));
     }
+    out.push(PageRow::Hidden);
     out
 }
 
@@ -264,6 +500,17 @@ pub fn disabled_reason(action: GameAction, state: GameState) -> Option<SharedStr
         _ => None,
     }
 }
+
+/// Platforms the game installs for, in the order the platform row cycles.
+pub fn install_platforms(game: &GameInfo) -> Vec<InstallPlatform> {
+    game.platforms
+        .iter()
+        .copied()
+        .filter(|p| *p != InstallPlatform::Browser)
+        .collect()
+}
+
+// ---- quick menu ---------------------------------------------------------
 
 /// Entries of the quick menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -374,7 +621,7 @@ pub fn default_install_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use irori_core::SdlOption;
+    use irori_core::{PlaytimeRecord, SdlOption};
 
     fn game(runner: Runner, app: &str, installed: bool) -> Arc<GameInfo> {
         Arc::new(
@@ -394,6 +641,10 @@ mod tests {
         rows.iter().map(|r| r.kind).collect()
     }
 
+    fn titles(games: &[Arc<GameInfo>]) -> Vec<&str> {
+        games.iter().map(|g| g.title.as_str()).collect()
+    }
+
     #[test]
     fn rows_skip_hidden_and_empty_shelves() {
         let mut lib = LibrarySnapshot::default();
@@ -408,36 +659,125 @@ mod tests {
         let rows = build_rows(&lib, &user, 8);
         assert_eq!(
             kinds(&rows),
-            vec![RowKind::ContinuePlaying, RowKind::Installed, RowKind::All]
+            vec![RowKind::ContinuePlaying, RowKind::Installed]
         );
-        assert_eq!(rows[0].games[0].app_name, "b");
-        assert_eq!(rows[1].games.len(), 1);
-        assert_eq!(rows[2].games.len(), 2);
+        assert_eq!(titles(&rows[0].games), vec!["B"]);
+        assert_eq!(titles(&rows[1].games), vec!["A"]);
     }
 
     #[test]
-    fn store_rows_only_with_several_stores() {
+    fn all_games_stand_in_for_an_empty_home() {
         let mut lib = LibrarySnapshot::default();
         lib.games = vec![
             game(Runner::Gog, "a", false),
             game(Runner::Legendary, "b", false),
         ];
+        let rows = build_rows(&lib, &UserData::default(), 8);
+        assert_eq!(kinds(&rows), vec![RowKind::All]);
+        assert_eq!(rows[0].games.len(), 2);
+
         let mut user = UserData::default();
         user.favourites.insert("legendary:b".into());
-        let rows = build_rows(&lib, &user, 8);
         assert_eq!(
-            kinds(&rows),
-            vec![
-                RowKind::Favourites,
-                RowKind::All,
-                RowKind::Store(Runner::Legendary),
-                RowKind::Store(Runner::Gog)
-            ]
+            kinds(&build_rows(&lib, &user, 8)),
+            vec![RowKind::Favourites]
         );
+        assert!(build_rows(&LibrarySnapshot::default(), &user, 8).is_empty());
     }
 
     #[test]
-    fn overlay_actions_follow_state() {
+    fn library_filters_sort_and_search() {
+        let mut lib = LibrarySnapshot::default();
+        lib.games = vec![
+            game(Runner::Gog, "charlie", true),
+            game(Runner::Legendary, "alpha", false),
+            game(Runner::Gog, "bravo two", true),
+            game(Runner::Gog, "delta", false),
+        ];
+        let mut user = UserData::default();
+        user.hidden.insert("gog:delta".into());
+        user.favourites.insert("gog:charlie".into());
+        user.playtime.insert(
+            "gog:charlie".into(),
+            PlaytimeRecord {
+                total_minutes: 30,
+                last_played: Some("2026-10-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        user.playtime.insert(
+            "legendary:alpha".into(),
+            PlaytimeRecord {
+                total_minutes: 90,
+                last_played: Some("2026-09-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        let mut filter = LibraryFilter::default();
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter)),
+            vec!["ALPHA", "BRAVO TWO", "CHARLIE"]
+        );
+        filter.sort = Sort::RecentlyPlayed;
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter)),
+            vec!["CHARLIE", "ALPHA", "BRAVO TWO"]
+        );
+        filter.sort = Sort::MostPlayed;
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter)),
+            vec!["ALPHA", "CHARLIE", "BRAVO TWO"]
+        );
+        filter.status = StatusFilter::Installed;
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter)),
+            vec!["CHARLIE", "BRAVO TWO"]
+        );
+        filter.query = "two  BRA".into();
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter)),
+            vec!["BRAVO TWO"]
+        );
+        let hidden = LibraryFilter {
+            show: Show::Hidden,
+            ..Default::default()
+        };
+        assert_eq!(titles(&library_games(&lib, &user, &hidden)), vec!["DELTA"]);
+        let favourites = LibraryFilter {
+            show: Show::Favourites,
+            ..Default::default()
+        };
+        assert_eq!(
+            titles(&library_games(&lib, &user, &favourites)),
+            vec!["CHARLIE"]
+        );
+        let epic = LibraryFilter {
+            show: Show::Store(Runner::Legendary),
+            ..Default::default()
+        };
+        assert_eq!(titles(&library_games(&lib, &user, &epic)), vec!["ALPHA"]);
+
+        assert_eq!(
+            show_options(&lib, &user),
+            vec![
+                Show::All,
+                Show::Favourites,
+                Show::Store(Runner::Legendary),
+                Show::Store(Runner::Gog),
+                Show::Hidden
+            ]
+        );
+        assert_eq!(
+            show_options(&lib, &UserData::default()).last(),
+            Some(&Show::Store(Runner::Gog))
+        );
+        assert_eq!(cycle(&Sort::ALL, Sort::RecentlyAdded), Sort::Title);
+        assert_eq!(cycle(&Sort::ALL, Sort::Title), Sort::RecentlyPlayed);
+        assert_eq!(cycle(&[Show::All], Show::Hidden), Show::All);
+    }
+
+    #[test]
+    fn page_rows_follow_state() {
         let installed = GameState {
             installed: true,
             installable: true,
@@ -445,23 +785,32 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            game_actions(installed),
+            page_rows(installed, 2),
             vec![
-                GameAction::Play,
-                GameAction::Update,
-                GameAction::AddFavourite,
-                GameAction::Uninstall
+                PageRow::Action(GameAction::Play),
+                PageRow::Action(GameAction::Update),
+                PageRow::Favourite,
+                PageRow::Settings,
+                PageRow::Playtime,
+                PageRow::Action(GameAction::Uninstall),
+                PageRow::Hidden,
             ]
         );
         let playing = GameState {
             playing: true,
-            favourite: true,
             ..installed
         };
+        assert_eq!(page_rows(playing, 1)[0], PageRow::Action(GameAction::Stop));
+        assert!(!page_rows(playing, 1).contains(&PageRow::Action(GameAction::Uninstall)));
+        let not_installed = GameState {
+            installable: true,
+            ..Default::default()
+        };
         assert_eq!(
-            game_actions(playing),
-            vec![GameAction::Stop, GameAction::RemoveFavourite]
+            &page_rows(not_installed, 2)[..2],
+            &[PageRow::Action(GameAction::Install), PageRow::Platform]
         );
+        assert!(!page_rows(not_installed, 1).contains(&PageRow::Platform));
         let queued = GameState {
             in_queue: true,
             installable: true,
@@ -469,22 +818,52 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            game_actions(queued),
-            vec![GameAction::CancelDownload, GameAction::AddFavourite]
+            &page_rows(queued, 2)[..2],
+            &[
+                PageRow::Action(GameAction::CancelDownload),
+                PageRow::Favourite
+            ]
         );
+        let updating = GameState {
+            in_queue: true,
+            ..installed
+        };
+        assert_eq!(
+            &page_rows(updating, 1)[..2],
+            &[
+                PageRow::Action(GameAction::Play),
+                PageRow::Action(GameAction::CancelDownload)
+            ]
+        );
+        let steam = GameState {
+            external: true,
+            ..installed
+        };
+        assert!(!page_rows(steam, 1).contains(&PageRow::Action(GameAction::Uninstall)));
+
         let verifying = GameState {
             busy: Some(StatusKind::Repairing),
             ..installed
         };
         assert!(disabled_reason(GameAction::Play, verifying).is_some());
-        assert!(disabled_reason(GameAction::AddFavourite, verifying).is_none());
-        let steam = GameState {
-            external: true,
-            ..installed
+        assert!(disabled_reason(GameAction::Stop, verifying).is_none());
+        assert!(disabled_reason(GameAction::Install, GameState::default()).is_some());
+    }
+
+    #[test]
+    fn install_platforms_leave_out_the_browser() {
+        let g = GameInfo {
+            platforms: vec![
+                InstallPlatform::Windows,
+                InstallPlatform::Browser,
+                InstallPlatform::Linux,
+            ],
+            ..Default::default()
         };
-        assert!(!game_actions(steam).contains(&GameAction::Uninstall));
-        let browser_only = GameState::default();
-        assert!(disabled_reason(GameAction::Install, browser_only).is_some());
+        assert_eq!(
+            install_platforms(&g),
+            vec![InstallPlatform::Windows, InstallPlatform::Linux]
+        );
     }
 
     #[test]

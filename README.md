@@ -66,7 +66,9 @@ and kept in a bounded GPU cache.
 - Cloud saves (Epic, GOG), GOG achievements and playtime, EOS overlay, ProtonDB, Steam
   Deck, anticheat and HowLongToBeat info.
 - Big Picture mode and full controller navigation (Xbox, PlayStation incl. DualSense,
-  Switch Pro, Steam Deck), with hotplug and battery display. It opens by itself in the
+  Switch Pro, Steam Deck), with hotplug and battery display. Home's shelves and a
+  filterable Library grid glide over the focused game's art, each game has a page of
+  actions, and the button hints match the controller in hand. It opens by itself in the
   Steam Deck's Game Mode, reads each press once alongside Steam Input, and scales up to
   200 % for TVs.
 - "Add to Steam" for any game, installed or not, filed under an "Irori" collection;
