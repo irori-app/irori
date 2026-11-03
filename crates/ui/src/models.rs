@@ -37,6 +37,11 @@ impl LibraryModel {
         self.user.hidden.contains(&id.key())
     }
 
+    /// The user's rating of the game, from 1 to 5 stars, if rated.
+    pub fn rating(&self, id: &GameId) -> Option<u8> {
+        self.user.ratings.get(&id.key()).copied()
+    }
+
     pub fn has_update(&self, id: &GameId) -> bool {
         self.updates.contains(id)
     }

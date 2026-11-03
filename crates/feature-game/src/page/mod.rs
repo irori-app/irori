@@ -1,15 +1,19 @@
-//! The game page (`Route::Game`): a header with the cover beside the title,
-//! facts and the primary action over a blurred backdrop, then tabs. A slim bar
-//! keeps the primary action in reach once the header scrolls away.
+//! The game page (`Route::Game`), over the game's art blurred across the
+//! whole page: a header with the cover, primary action and rating beside the
+//! title and play stats; a strip of screenshots; then tabs beside a side
+//! column with the details table and the play history. A slim bar keeps the
+//! primary action in reach once the header scrolls away.
 
 mod achievements;
 mod compat;
+mod details;
 mod extras;
 mod hero;
 mod info;
 mod menu;
 mod overlay;
 mod screenshots;
+mod timeline;
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -20,16 +24,16 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::SelectEvent;
-use gpui_kit::component::{ActiveTheme as _, WindowExt as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, StyledExt as _, WindowExt as _, v_flex};
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Hsla,
     InteractiveElement as _, IntoElement, ParentElement, Pixels, Render, ScrollHandle,
     SharedString, StatefulInteractiveElement as _, Styled, Subscription, Window, canvas, div, px,
 };
 use irori_core::{Achievement, ExtraInfo, GameId, GameInfo, LaunchOption};
 use irori_services::LaunchParams;
 use irori_ui::art::{LruImageCache, art_store};
-use irori_ui::components::EmptyState;
+use irori_ui::components::{ArtBackdrop, BackdropInk, EmptyState};
 use irori_ui::i18n::t;
 use irori_ui::{Route, backend, models, navigate};
 
@@ -60,13 +64,22 @@ pub enum GamePageEvent {
     RequestCategories,
 }
 
+/// A small uppercase label over the page ("SCREENSHOTS", "DETAILS"), in
+/// `color`: the backdrop's or a panel's muted ink.
+pub(crate) fn caption(text: impl Into<SharedString>, color: Hsla) -> Div {
+    let text: SharedString = text.into();
+    div()
+        .text_xs()
+        .font_bold()
+        .text_color(color)
+        .child(SharedString::from(text.to_uppercase()))
+}
+
 /// Section of the info area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InfoTab {
     About,
-    Details,
     Achievements,
-    Screenshots,
     Compatibility,
     Requirements,
     Changelog,
@@ -113,6 +126,12 @@ pub struct GamePage {
     /// Index of the screenshot open in the viewer.
     viewer: Option<usize>,
     viewer_focus: FocusHandle,
+    /// The viewer's filmstrip, scrolled to keep the open screenshot in view.
+    viewer_strip: ScrollHandle,
+    /// The play history.
+    timeline: timeline::TimelineView,
+    /// Text colours over the backdrop, as of the last render.
+    ink: BackdropInk,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -145,6 +164,11 @@ impl GamePage {
                 this.on_status_changed(window, cx)
             }),
             cx.observe(&m.downloads, |_, _, cx| cx.notify()),
+            cx.observe_in(&m.sessions, window, |this, _, window, cx| {
+                if this.played_last(cx) {
+                    this.load_timeline(window, cx);
+                }
+            }),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&m.settings, |_, _, cx| cx.notify()),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
@@ -191,6 +215,9 @@ impl GamePage {
             changelog_expanded: false,
             viewer: None,
             viewer_focus: cx.focus_handle(),
+            viewer_strip: ScrollHandle::new(),
+            timeline: timeline::TimelineView::default(),
+            ink: BackdropInk::of(None, cx),
             _subscriptions: subscriptions,
         };
         this.was_playing = models(cx).statuses.read(cx).is_playing(&this.id);
@@ -234,6 +261,7 @@ impl GamePage {
         self.load_achievements(window, cx);
         self.load_compat(window, cx);
         self.load_install_state(window, cx);
+        self.load_timeline(window, cx);
     }
 
     /// Data that depends on the game being installed.
@@ -603,7 +631,9 @@ impl Render for GamePage {
                     ),
             );
         };
-        let backdrop = self.render_backdrop(&game, cx);
+        let art = game.hero_art().map(str::to_owned);
+        self.ink = BackdropInk::of(art.as_deref(), cx);
+        let backdrop = ArtBackdrop::new(art).image_cache(&self.image_cache);
         let header = self.render_header(&game, window, cx);
         let body = self.render_body(&game, window, cx);
         self.sticky = self.sticky_wanted();

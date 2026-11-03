@@ -176,6 +176,11 @@ pub fn set_favourite(id: &GameId, on: bool, cx: &mut App) {
     backend(cx).userdata.set_favourite(id, on);
 }
 
+/// Rate the game from 1 to 5 stars, or clear its rating.
+pub fn set_rating(id: &GameId, stars: Option<u8>, cx: &mut App) {
+    backend(cx).userdata.set_rating(id, stars);
+}
+
 pub fn set_hidden(id: &GameId, on: bool, cx: &mut App) {
     backend(cx).userdata.set_hidden(id, on);
 }

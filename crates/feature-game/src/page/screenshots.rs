@@ -1,9 +1,12 @@
-//! Screenshots tab: the store's screenshots in a grid, and a viewer that shows one
-//! at a time over the page, navigated with the arrow keys.
+//! Screenshots: a strip of the store's screenshots across the page, the last
+//! tile counting those that don't fit ("+13"), and a viewer that shows one
+//! at a time over the page with a filmstrip of the rest. The viewer follows
+//! the arrow keys, Home, End and Escape, which is also how a controller
+//! reaches it.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, KeyDownEvent, ObjectFit,
@@ -15,86 +18,130 @@ use irori_ui::style::KeyboardFocusable as _;
 
 use super::GamePage;
 
-/// Pixel width screenshots are decoded at in the grid.
+/// Pixel width screenshots are decoded at in the strip and the filmstrip.
 const THUMB_WIDTH: u32 = 640;
 /// Largest pixel width screenshots are decoded at in the viewer.
 const FULL_WIDTH: u32 = 1920;
-/// Narrowest a grid screenshot gets before the grid drops a column, in rem.
-const MIN_TILE_REM: f32 = 18.;
-/// Gap between grid screenshots (`gap_3`), in rem.
+/// Narrowest a strip tile gets before the strip shows one fewer, in rem.
+const MIN_TILE_REM: f32 = 12.;
+/// Gap between strip tiles (`gap_3`), in rem.
 const GAP_REM: f32 = 0.75;
-/// Most columns the grid uses, so screenshots stay large on wide windows.
-const MAX_COLUMNS: u16 = 5;
+/// Most tiles the strip shows, so screenshots stay large on wide windows.
+const MAX_TILES: usize = 5;
+/// Height of a filmstrip thumbnail in the viewer, in rem.
+const FILMSTRIP_REM: f32 = 4.5;
 
-/// Columns of screenshots that fit `available` rem, at least one.
-fn screenshot_columns(available: f32) -> u16 {
+/// Tiles of the strip that fit `available` rem, at least one.
+fn strip_tiles(available: f32) -> usize {
     let fit = ((available + GAP_REM) / (MIN_TILE_REM + GAP_REM)).floor();
-    (fit.max(1.) as u16).min(MAX_COLUMNS)
+    (fit.max(1.) as usize).min(MAX_TILES)
+}
+
+/// How many tiles to show of `count` screenshots when `fit` fit, and how
+/// many the last tile stands for beyond itself ("+N"), if any.
+fn strip_layout(count: usize, fit: usize) -> (usize, Option<usize>) {
+    if count <= fit {
+        (count, None)
+    } else {
+        (fit, Some(count - fit + 1))
+    }
 }
 
 impl GamePage {
-    fn screenshots(&self) -> Vec<String> {
+    pub(super) fn screenshots(&self) -> Vec<String> {
         self.extra
             .ready()
             .map(|e| e.screenshots.clone())
             .unwrap_or_default()
     }
 
-    pub(super) fn render_screenshots(
+    /// The screenshot strip, or nothing when the store has none.
+    pub(super) fn render_screenshot_strip(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) -> Option<AnyElement> {
         let shots = self.screenshots();
+        if shots.is_empty() {
+            return None;
+        }
         // The body is inset by `px_8` on both sides.
-        let columns = self
+        let fit = self
             .page_rem(window)
-            .map_or(3, |page| screenshot_columns(page - 4.));
+            .map_or(4, |page| strip_tiles(page - 4.));
+        let (shown, more) = strip_layout(shots.len(), fit);
+        let theme = cx.theme();
+        let (scrim, on_scrim) = (theme.background.opacity(0.72), theme.foreground);
         let tiles: Vec<AnyElement> = shots
             .iter()
+            .take(shown)
             .enumerate()
-            .filter_map(|(index, url)| {
+            .map(|(index, url)| {
                 let content = match art_image(url, THUMB_WIDTH, false, cx) {
                     ArtImage::Ready(img) => img
                         .image_cache(&self.image_cache)
                         .size_full()
-                        .rounded_md()
                         .object_fit(ObjectFit::Cover)
                         .into_any_element(),
                     ArtImage::Loading => art_loading(),
-                    // A screenshot that failed to load is left out, not shown as a hole.
-                    ArtImage::Missing => return None,
+                    ArtImage::Missing => irori_ui::components::art_missing(cx),
                 };
-                Some(
-                    div()
-                        .id(("screenshot", index))
-                        .keyboard_focusable(cx)
-                        .w_full()
-                        .aspect_ratio(16. / 9.)
-                        .rounded_md()
-                        .overflow_hidden()
-                        .bg(cx.theme().muted)
-                        .cursor_pointer()
-                        .child(content)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_screenshot(index, window, cx)
-                        }))
-                        .into_any_element(),
-                )
+                let extra = more.filter(|_| index + 1 == shown);
+                div()
+                    .id(("screenshot", index))
+                    .keyboard_focusable(cx)
+                    .relative()
+                    .flex_1()
+                    .min_w_0()
+                    .aspect_ratio(16. / 9.)
+                    .rounded_md()
+                    .overflow_hidden()
+                    .bg(cx.theme().muted)
+                    .cursor_pointer()
+                    .child(content)
+                    .when_some(extra, |d, n| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .bg(scrim)
+                                .text_color(on_scrim)
+                                .text_2xl()
+                                .font_bold()
+                                .child(t_args(
+                                    "game.screenshots.more",
+                                    &[("count", &n.to_string())],
+                                )),
+                        )
+                    })
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_screenshot(index, window, cx)
+                    }))
+                    .into_any_element()
             })
             .collect();
-        div()
-            .w_full()
-            .grid()
-            .grid_cols(columns)
-            .gap_3()
-            .children(tiles)
-            .into_any_element()
+        Some(
+            v_flex()
+                .w_full()
+                .gap_3()
+                .child(super::caption(
+                    t("game.info.tab_screenshots"),
+                    self.ink.muted,
+                ))
+                .child(h_flex().w_full().gap_3().children(tiles))
+                .into_any_element(),
+        )
     }
 
     fn open_screenshot(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.viewer = Some(index);
         self.viewer_focus.focus(window, cx);
+        self.viewer_strip.scroll_to_item(index);
         cx.notify();
     }
 
@@ -108,9 +155,14 @@ impl GamePage {
     fn step_viewer(&mut self, step: isize, cx: &mut Context<Self>) {
         let count = self.screenshots().len() as isize;
         if let (Some(index), true) = (self.viewer, count > 0) {
-            self.viewer = Some((index as isize + step).rem_euclid(count) as usize);
-            cx.notify();
+            self.show_in_viewer((index as isize + step).rem_euclid(count) as usize, cx);
         }
+    }
+
+    fn show_in_viewer(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.viewer = Some(index);
+        self.viewer_strip.scroll_to_item(index);
+        cx.notify();
     }
 
     /// The open screenshot over the whole page, or nothing.
@@ -143,8 +195,13 @@ impl GamePage {
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                     match event.keystroke.key.as_str() {
                         "escape" => this.close_viewer(window, cx),
-                        "left" => this.step_viewer(-1, cx),
-                        "right" => this.step_viewer(1, cx),
+                        "left" | "up" | "pageup" => this.step_viewer(-1, cx),
+                        "right" | "down" | "pagedown" | "space" => this.step_viewer(1, cx),
+                        "home" => this.show_in_viewer(0, cx),
+                        "end" => {
+                            let last = this.screenshots().len().saturating_sub(1);
+                            this.show_in_viewer(last, cx)
+                        }
                         _ => return,
                     }
                     cx.stop_propagation();
@@ -211,21 +268,89 @@ impl GamePage {
                                 .on_click(cx.listener(|this, _, _, cx| this.step_viewer(1, cx))),
                         ),
                 )
+                .child(self.render_filmstrip(&shots, index, cx))
                 .into_any_element(),
         )
     }
 }
 
+impl GamePage {
+    /// Every screenshot small under the open one, the open one outlined;
+    /// choosing one shows it.
+    fn render_filmstrip(
+        &self,
+        shots: &[String],
+        current: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let thumbs: Vec<AnyElement> = shots
+            .iter()
+            .enumerate()
+            .map(|(index, url)| {
+                let image = art_img(url, THUMB_WIDTH, false, cx);
+                let theme = cx.theme();
+                div()
+                    .id(("filmstrip", index))
+                    .flex_shrink_0()
+                    .h(rems(FILMSTRIP_REM))
+                    .aspect_ratio(16. / 9.)
+                    .rounded_md()
+                    .overflow_hidden()
+                    .border_2()
+                    .border_color(if index == current {
+                        theme.primary
+                    } else {
+                        theme.transparent
+                    })
+                    .bg(theme.muted)
+                    .cursor_pointer()
+                    .when(index != current, |d| d.opacity(0.6))
+                    .when_some(image, |d, img| {
+                        d.child(
+                            img.image_cache(&self.image_cache)
+                                .size_full()
+                                .object_fit(ObjectFit::Cover),
+                        )
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.show_in_viewer(index, cx)))
+                    .into_any_element()
+            })
+            .collect();
+        div()
+            .id("screenshot-filmstrip")
+            .w_full()
+            .flex_shrink_0()
+            .overflow_x_scroll()
+            .track_scroll(&self.viewer_strip)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .justify_center()
+                    .min_w_full()
+                    .children(thumbs),
+            )
+            .into_any_element()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MAX_COLUMNS, screenshot_columns};
+    use super::{MAX_TILES, strip_layout, strip_tiles};
 
     #[test]
-    fn columns_fill_the_width() {
-        assert_eq!(screenshot_columns(0.), 1);
-        assert_eq!(screenshot_columns(18.), 1);
-        assert_eq!(screenshot_columns(36.75), 2);
-        assert_eq!(screenshot_columns(70.), 3);
-        assert_eq!(screenshot_columns(500.), MAX_COLUMNS);
+    fn tiles_fill_the_width() {
+        assert_eq!(strip_tiles(0.), 1);
+        assert_eq!(strip_tiles(12.), 1);
+        assert_eq!(strip_tiles(24.75), 2);
+        assert_eq!(strip_tiles(52.), 4);
+        assert_eq!(strip_tiles(500.), MAX_TILES);
+    }
+
+    #[test]
+    fn the_last_tile_counts_the_rest() {
+        assert_eq!(strip_layout(3, 4), (3, None));
+        assert_eq!(strip_layout(4, 4), (4, None));
+        // Three tiles, the fourth standing for itself and 13 more.
+        assert_eq!(strip_layout(17, 4), (4, Some(14)));
     }
 }

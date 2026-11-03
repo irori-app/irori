@@ -1,10 +1,11 @@
-//! Tabs below the header: about, details, achievements, screenshots,
-//! compatibility, requirements and changelog.
+//! The body below the header: the screenshot strip across the page, then the
+//! tabs (about, achievements, compatibility, requirements, changelog, extras)
+//! beside a side column with the details table and the play history.
 
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -17,20 +18,18 @@ use gpui_kit::{
     AnyElement, App, Context, InteractiveElement as _, IntoElement, ParentElement, SharedString,
     Styled, Window, div, rems,
 };
-use irori_core::util::{format_bytes, unix_now};
 use irori_core::{GameId, GameInfo};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::{backend, models};
+use irori_ui::models;
 
 use super::{GamePage, InfoTab};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::i18n::{platform_label, playtime_label, status_label};
-use crate::load::{Load, format_day, looks_like_html};
-use crate::saves::CloudSupport;
+use crate::dlc;
+use crate::i18n::status_label;
+use crate::load::{Load, looks_like_html};
 use crate::state::{ActionInputs, PrimaryAction, completion_percent};
-use crate::{dlc, ops};
 
 /// Rich store text (HTML from GOG, Markdown elsewhere).
 pub(super) fn rich_text(id: impl Into<gpui_kit::ElementId>, text: &str) -> AnyElement {
@@ -98,35 +97,10 @@ mod link_tests {
     }
 }
 
-fn section_title(title: impl Into<SharedString>, cx: &App) -> AnyElement {
-    div()
-        .text_sm()
-        .font_semibold()
-        .text_color(cx.theme().muted_foreground)
-        .child(title.into())
-        .into_any_element()
-}
-
-/// One fact of the Details tab: a small card with a label above its value.
-fn detail_row(label: SharedString, value: impl IntoElement, cx: &App) -> AnyElement {
-    v_flex()
-        .flex_1()
-        .min_w(rems(14.))
-        .gap_1()
-        .px_3()
-        .py_2()
-        .rounded_md()
-        .bg(cx.theme().secondary)
-        .text_sm()
-        .child(
-            div()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child(label),
-        )
-        .child(div().min_w_0().truncate().child(value))
-        .into_any_element()
-}
+/// Width of the side column with the details and play history, in rem.
+const SIDE_COLUMN_REM: f32 = 24.;
+/// Pages narrower than this (in rem) put the side column under the tabs.
+const SIDE_COLUMN_PAGE_REM: f32 = 64.;
 
 /// Characters of a changelog shown before "Show full changelog".
 const CHANGELOG_EXCERPT_CHARS: usize = 12_000;
@@ -190,10 +164,7 @@ pub(super) fn plain_text(text: &str) -> String {
 
 impl GamePage {
     fn tabs(&self) -> Vec<(InfoTab, SharedString)> {
-        let mut tabs = vec![
-            (InfoTab::About, t("game.info.tab_about")),
-            (InfoTab::Details, t("game.info.details")),
-        ];
+        let mut tabs = vec![(InfoTab::About, t("game.info.tab_about"))];
         if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
             let unlocked = list.iter().filter(|a| a.unlocked_at.is_some()).count();
             tabs.push((
@@ -208,9 +179,6 @@ impl GamePage {
             ));
         }
         let extra = self.extra.ready();
-        if extra.is_some_and(|e| !e.screenshots.is_empty()) {
-            tabs.push((InfoTab::Screenshots, t("game.info.tab_screenshots")));
-        }
         if self.has_compat() {
             tabs.push((InfoTab::Compatibility, t("game.compat.title")));
         }
@@ -254,9 +222,7 @@ impl GamePage {
             }));
         let content = match self.tab {
             InfoTab::About => self.render_about(game, window, cx),
-            InfoTab::Details => self.render_details(game, cx),
             InfoTab::Achievements => self.render_achievements(window, cx),
-            InfoTab::Screenshots => self.render_screenshots(window, cx),
             InfoTab::Compatibility => self
                 .render_compat(cx)
                 .unwrap_or_else(|| div().into_any_element()),
@@ -264,15 +230,48 @@ impl GamePage {
             InfoTab::Changelog => self.render_changelog(cx),
             InfoTab::Extras => self.render_extras(game, window, cx),
         };
+        let strip = self.render_screenshot_strip(window, cx);
+        let details = self.render_details_panel(game, cx);
+        let timeline = self.render_timeline(window, cx);
+        let side_by_side = self
+            .page_rem(window)
+            .is_none_or(|page| page >= SIDE_COLUMN_PAGE_REM);
+        let main = v_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_4()
+            .child(bar)
+            .child(content);
+        let side = v_flex()
+            .gap_4()
+            .when_else(
+                side_by_side,
+                |c| c.w(rems(SIDE_COLUMN_REM)).flex_shrink_0(),
+                |c| c.w_full(),
+            )
+            .child(details)
+            .children(timeline)
+            .children(self.overlay.clone());
         v_flex()
             .id("game-body")
             .w_full()
             .flex_shrink_0()
-            .gap_4()
+            .gap_8()
             .px_8()
             .pb_8()
-            .child(bar)
-            .child(content)
+            .children(strip)
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .when_else(
+                        side_by_side,
+                        |d| d.flex_row().items_start().gap_8(),
+                        |d| d.flex_col().gap_8(),
+                    )
+                    .child(main)
+                    .child(side),
+            )
             .into_any_element()
     }
 
@@ -328,7 +327,7 @@ impl GamePage {
         };
         let dlcs = self.render_dlcs(game, window, cx);
         v_flex()
-            .max_w(rems(48.))
+            .max_w(rems(52.))
             .gap_6()
             .child(body)
             .children(dlcs)
@@ -345,7 +344,7 @@ impl GamePage {
         Some(
             v_flex()
                 .gap_2()
-                .child(section_title("REDmod", cx))
+                .child(super::caption("REDmod", self.ink.muted))
                 .child(
                     div()
                         .text_sm()
@@ -383,12 +382,12 @@ impl GamePage {
         let base_inputs = ActionInputs::from_game(game, statuses.kind(&self.id), queue, false);
         let base_idle = PrimaryAction::from_inputs(&base_inputs).is_idle();
         let editable = game.is_installed && dlc::dlcs_editable(game);
-        let mut col = v_flex().gap_2().child(section_title(
+        let mut col = v_flex().gap_2().child(super::caption(
             t_args(
                 "game.info.dlc_title",
                 &[("count", &game.dlcs.len().to_string())],
             ),
-            cx,
+            self.ink.muted,
         ));
         if !game.is_installed {
             col = col.child(
@@ -562,171 +561,6 @@ impl GamePage {
                         })),
                 )
             })
-            .into_any_element()
-    }
-
-    fn render_details(&self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
-        let m = models(cx);
-        let library = m.library.read(cx);
-        let record = library.user.playtime.get(&self.id.key()).cloned();
-        let now = unix_now() as i64;
-        let minutes = record.as_ref().map(|r| r.total_minutes).unwrap_or(0);
-        let b = backend(cx);
-        let mut col = h_flex().w_full().flex_wrap().gap_3().child(detail_row(
-            t("game.info.playtime"),
-            playtime_label(
-                minutes,
-                record.as_ref().is_some_and(|r| r.last_played.is_some()),
-            ),
-            cx,
-        ));
-        if let Some(r) = &record {
-            if let Some(last) = &r.last_played {
-                col = col.child(detail_row(
-                    t("game.info.last_played"),
-                    format_day(last, now),
-                    cx,
-                ));
-            }
-            if let Some(first) = &r.first_played {
-                col = col.child(detail_row(
-                    t("game.info.first_played"),
-                    format_day(first, now),
-                    cx,
-                ));
-            }
-        }
-        // Steam picks the build and Proton, syncs saves and decides about
-        // offline play for its games; Irori only knows where they are.
-        let managed = self.id.runner.manages_installs();
-        match &game.install {
-            Some(install) if game.is_installed => {
-                if managed {
-                    col = col.child(detail_row(
-                        t("game.common.platform"),
-                        platform_label(install.platform),
-                        cx,
-                    ));
-                }
-                let mut version = install.version.clone();
-                if let Some(branch) = install.branch.as_ref().filter(|b| !b.is_empty()) {
-                    version = format!("{version} ({branch})");
-                }
-                if install.pinned_version {
-                    version =
-                        t_args("game.info.version_pinned", &[("version", &version)]).to_string();
-                }
-                if !version.trim().is_empty() {
-                    col = col.child(detail_row(t("game.common.version"), version, cx));
-                }
-                let size = if install.install_size_bytes > 0 {
-                    format_bytes(install.install_size_bytes)
-                } else {
-                    install.install_size.clone()
-                };
-                if !size.is_empty() {
-                    col = col.child(detail_row(t("game.info.size"), size, cx));
-                }
-                if let Some(language) = &install.language {
-                    col = col.child(detail_row(
-                        t("game.common.language"),
-                        crate::load::language_name(language),
-                        cx,
-                    ));
-                }
-                if let Some(path) = game.install_path() {
-                    let id = self.id.clone();
-                    col = col.child(detail_row(
-                        t("game.common.location"),
-                        Button::new("open-install-path")
-                            .xsmall()
-                            .ghost()
-                            .icon(IconName::FolderOpen)
-                            .label(path.display().to_string())
-                            .tooltip(t("game.common.open_folder"))
-                            .on_click(move |_, window, cx| {
-                                ops::open_install_folder(&id, window, cx)
-                            }),
-                        cx,
-                    ));
-                }
-                if install.platform.needs_wine() {
-                    let settings = b.settings.game(&self.id);
-                    let wine = if settings.wine_version.is_set() {
-                        settings.wine_version.name.clone()
-                    } else {
-                        t("game.info.not_set").to_string()
-                    };
-                    col = col.child(detail_row("Wine".into(), wine, cx));
-                    let prefix = irori_runtime::prefix_path(&b.settings.app(), &settings, game);
-                    col = col.child(detail_row(
-                        t("game.common.prefix"),
-                        prefix.display().to_string(),
-                        cx,
-                    ));
-                }
-            }
-            _ => {
-                let platforms = crate::install::installable_platforms(game)
-                    .iter()
-                    .map(|p| platform_label(*p).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                col = col.child(detail_row(t("game.info.platforms"), platforms, cx));
-            }
-        }
-        if !managed {
-            col = col.child(detail_row(
-                t("game.info.launcher"),
-                self.id.runner.store_name(),
-                cx,
-            ));
-            return v_flex()
-                .gap_6()
-                .child(col)
-                .children(self.overlay.clone())
-                .into_any_element();
-        }
-        if let Some(account) = b
-            .store(self.id.runner)
-            .and_then(|s| s.game_account(&self.id.app_name))
-        {
-            col = col.child(detail_row(t("game.info.account"), account.display_name, cx));
-        }
-        col = col.child(detail_row(
-            t("game.info.offline_play"),
-            if game.can_run_offline {
-                t("game.info.offline_supported")
-            } else {
-                t("game.info.offline_needs_connection")
-            },
-            cx,
-        ));
-        let store_supports = b
-            .store(self.id.runner)
-            .is_some_and(|s| s.supports_cloud_saves());
-        let saves = match CloudSupport::of(game, store_supports) {
-            CloudSupport::Supported => {
-                if b.settings.game(&self.id).auto_sync_saves {
-                    t("game.info.saves_auto")
-                } else {
-                    t("game.info.saves_manual")
-                }
-            }
-            CloudSupport::NotInstalled => t("game.info.saves_available"),
-            CloudSupport::NativeBuild => t("game.info.saves_windows_only"),
-            CloudSupport::StoreUnsupported | CloudSupport::GameUnsupported => {
-                t("game.info.saves_not_supported")
-            }
-        };
-        col = col.child(detail_row(t("game.info.cloud_saves"), saves, cx));
-        if let Some(app) = &game.third_party_managed_app {
-            col = col.child(detail_row(t("game.info.launcher"), app.clone(), cx));
-        }
-        v_flex()
-            .gap_6()
-            .child(col)
-            .children(self.overlay.clone())
             .into_any_element()
     }
 }
