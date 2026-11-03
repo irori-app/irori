@@ -19,9 +19,9 @@ const { locale, crumbs, title, lede, wall = false } = Astro.props
 <header class:list={['page-header relative overflow-hidden', wall && 'has-wall']}>
   {
     wall && (
-      <div class="header-wall" aria-hidden="true">
+      <div class="header-wall">
         <CoverWall locale={locale} size="band" />
-        <div class="header-shade" />
+        <div class="header-shade" aria-hidden="true" />
       </div>
     )
   }

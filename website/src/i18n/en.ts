@@ -288,7 +288,6 @@ export const en = {
       body: 'Every screen as it runs on macOS. The games are made up for this site; their covers were drawn for it too.',
       dark: 'Dark',
       light: 'Light',
-      open: 'Open the {title} screenshot',
       previous: 'Previous screenshot',
       next: 'Next screenshot',
     },
