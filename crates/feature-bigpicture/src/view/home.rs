@@ -20,7 +20,7 @@ use super::{BigPictureView, Colors};
 use crate::layout::{FOCUS_SCALE, Metrics, SHELF_HEADING, strip_range, strip_start};
 use crate::model::GameState;
 use crate::text::{self, status_label, status_with_percent, store_name};
-use crate::view::tile::Cover;
+use crate::view::tile::{Cover, CoverSlot};
 
 /// Spring that moves shelves and the grid: critically damped, a little
 /// slower than focus feedback so the motion reads as travel.
@@ -257,20 +257,12 @@ impl BigPictureView {
                 width: m.tile,
                 scale: FOCUS_SCALE,
                 focused: is_row && focused == Some((row_ix, ix)) && self.overlay.is_none(),
-            };
-            tiles.push(self.render_cover(
-                cover,
-                c,
-                move |this, _, cx| {
-                    let lens = this.lens();
-                    this.grid.set(row_ix, ix, &lens);
-                    if let Some(id) = this.tab_game().map(|g| g.id()) {
-                        this.open_page(id, cx);
-                    }
+                slot: CoverSlot::Shelf {
+                    row: row_ix,
+                    col: ix,
                 },
-                window,
-                cx,
-            ));
+            };
+            tiles.push(self.render_cover(cover, c, window, cx));
         }
         let count = row.games.len();
         v_flex()
