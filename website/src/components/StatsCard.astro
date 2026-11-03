@@ -1,0 +1,175 @@
+---
+/**
+ * A card in the style of Irori's Stats page, with the demo library's numbers.
+ * When it scrolls into view the streak ring fills, the weekly bars rise and the
+ * trend line draws; the finished picture is what the page carries.
+ */
+import { COVERS } from '../data/covers'
+import { dictionary, format, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale).home.stats.card
+
+const streak = 21
+const longest = 28
+const weeks = [4, 9, 6, 14, 11, 18, 22, 16, 31, 36, 28, 24]
+const most = [
+  { slug: 'ironbark-hollow', minutes: 74 * 60 + 24 },
+  { slug: 'saltglass-tide', minutes: 61 * 60 + 52 },
+  { slug: 'moth-cartographer', minutes: 44 * 60 + 20 },
+  { slug: 'ashfall-courier', minutes: 41 * 60 + 47 },
+].map((game) => ({ ...game, title: COVERS.find((c) => c.slug === game.slug)!.title }))
+const top = most[0]!.minutes
+const hours = (m: number) => `${Math.floor(m / 60)} h ${m % 60} min`
+
+const R = 52
+const C = 2 * Math.PI * R
+const peak = Math.max(...weeks)
+const trend = weeks.map((h, i) => `${(i + 0.5) * (100 / weeks.length)},${96 - (h / peak) * 84}`).join(' ')
+---
+
+<figure class="stats-card" data-animate aria-label={t.label}>
+  <div class="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+    <div class="flex items-center gap-4 rounded-2xl border border-grain bg-ash/70 p-4">
+      <svg viewBox="0 0 120 120" class="ring size-28 shrink-0 -rotate-90" aria-hidden="true">
+        <circle cx="60" cy="60" r={R} class="ring-track" />
+        <circle cx="60" cy="60" r={R} class="ring-fill" style={`--c:${C};--to:${C * (1 - streak / longest)}`} />
+      </svg>
+      <div class="flex min-w-0 flex-col">
+        <span class="tag">{t.streak}</span>
+        <span class="font-mono text-3xl font-medium tabular-nums text-paper">
+          {format(t.streakValue, { days: streak })}
+        </span>
+        <span class="text-sm text-smoke">{format(t.ofLongest, { days: longest })}</span>
+      </div>
+    </div>
+    <div class="flex min-w-0 flex-col justify-center rounded-2xl border border-grain bg-ash/70 p-4">
+      <span class="tag">{t.week}</span>
+      <span class="font-mono text-4xl font-medium tracking-tight text-paper">{t.weekValue}</span>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-grain bg-ash/70 p-4">
+    <span class="tag">{t.perWeek}</span>
+    <div class="relative mt-3 h-36">
+      <div class="absolute inset-0 flex items-end gap-[3%]">
+        {weeks.map((h, i) => <span class="bar" style={`height:${(h / peak) * 88}%;--i:${i}`} />)}
+      </div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="absolute inset-0 size-full overflow-visible" aria-hidden="true">
+        <polyline points={trend} pathLength="1" class="trend" />
+      </svg>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-grain bg-ash/70 p-4">
+    <span class="tag">{t.mostPlayed}</span>
+    <ol class="mt-3 flex flex-col gap-2.5">
+      {
+        most.map((game, i) => (
+          <li class="flex items-center gap-3">
+            <img src={`/covers/${game.slug}.svg`} alt="" width="32" height="48" loading="lazy" class="h-10 w-auto rounded" />
+            <span class="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span class="flex items-baseline justify-between gap-3">
+                <span class="truncate text-[0.95rem] text-paper">{game.title}</span>
+                <span class="shrink-0 font-mono text-sm tabular-nums text-smoke">{hours(game.minutes)}</span>
+              </span>
+              <span class="most-track">
+                <span class="most-fill" style={`--w:${(game.minutes / top) * 100}%;--i:${i}`} />
+              </span>
+            </span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+  <figcaption class="sr-only">{t.label}</figcaption>
+</figure>
+
+<style>
+  .stats-card {
+    margin: 0;
+    padding: clamp(0.9rem, 2vw, 1.25rem);
+    border-radius: 1.6rem;
+    border: 1px solid var(--grain);
+    background:
+      radial-gradient(120% 70% at 100% 0%, var(--glow), transparent 60%),
+      var(--soot);
+    box-shadow: 0 40px 90px -40px rgb(0 0 0 / 0.55);
+  }
+  .ring circle {
+    fill: none;
+    stroke-width: 12;
+  }
+  .ring-track {
+    stroke: var(--hearth);
+  }
+  .ring-fill {
+    stroke: var(--flame);
+    stroke-linecap: round;
+    stroke-dasharray: var(--c);
+    stroke-dashoffset: var(--to);
+  }
+  .bar {
+    flex: 1;
+    border-radius: 0.35rem 0.35rem 0.15rem 0.15rem;
+    background: linear-gradient(180deg, var(--ember), var(--flame));
+    transform-origin: bottom;
+  }
+  .trend {
+    fill: none;
+    stroke: var(--paper);
+    stroke-opacity: 0.55;
+    stroke-width: 1.6;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+  .most-track {
+    display: block;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--hearth);
+    overflow: hidden;
+  }
+  .most-fill {
+    display: block;
+    height: 100%;
+    width: var(--w);
+    border-radius: inherit;
+    background: var(--flame);
+  }
+
+  /* Before it is seen, the card holds its empty state; seeing it plays the fill. */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.js) .stats-card:not(.is-visible) .ring-fill {
+      stroke-dashoffset: var(--c);
+    }
+    :global(.js) .stats-card:not(.is-visible) .bar {
+      transform: scaleY(0);
+    }
+    :global(.js) .stats-card:not(.is-visible) .trend {
+      stroke-dashoffset: 1;
+    }
+    :global(.js) .stats-card:not(.is-visible) .most-fill {
+      width: 0;
+    }
+    .ring-fill {
+      transition: stroke-dashoffset 1600ms var(--ease-out) 200ms;
+    }
+    .bar {
+      transition: transform 900ms var(--ease-out);
+      transition-delay: calc(300ms + var(--i) * 60ms);
+    }
+    .trend {
+      transition: stroke-dashoffset 1800ms ease-in-out 900ms;
+    }
+    .most-fill {
+      transition: width 1200ms var(--ease-out);
+      transition-delay: calc(600ms + var(--i) * 120ms);
+    }
+  }
+</style>

@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro'
+import { dictionary, localePath, type Locale } from '../i18n/config'
+
+interface Props {
+  locale: Locale
+}
+const { locale } = Astro.props
+const t = dictionary(locale)
+const links = [
+  { path: '/features/', label: t.nav.features },
+  { path: '/guides/', label: t.nav.guides },
+  { path: '/docs/', label: t.nav.docs },
+  { path: '/download/', label: t.nav.download },
+]
+---
+
+<Base locale={locale} title={t.notFound.title} description={t.notFound.description} path="/404/" noindex>
+  <section class="gutter mx-auto flex min-h-[70vh] max-w-3xl flex-col items-start justify-center gap-6 pt-28">
+    <p class="font-mono text-7xl font-medium text-flame-text sm:text-8xl">404</p>
+    <h1 class="font-display text-[clamp(2.2rem,5vw,3.4rem)] font-bold leading-[1.05] text-paper">{t.notFound.h1}</h1>
+    <p class="text-lg text-smoke">{t.notFound.body}</p>
+    <div class="flex flex-wrap gap-2">
+      <a href={localePath(locale, '/')} class="btn btn-primary">{t.notFound.home}</a>
+      {links.map((link) => <a href={localePath(locale, link.path)} class="btn btn-ghost">{link.label}</a>)}
+    </div>
+  </section>
+</Base>
