@@ -1,0 +1,162 @@
+---
+/** The floating navigation: sections, the live GitHub star count, the theme and Download. */
+import { Menu, X } from '@lucide/vue'
+import BrandLockup from './BrandLockup.vue'
+import GithubMark from './GithubMark.astro'
+import ThemeSwitch from './ThemeSwitch.astro'
+import { REPO } from '../data/site'
+import { dictionary, format, localePath, type Locale } from '../i18n/config'
+import { getStars } from '../lib/github'
+
+interface Props {
+  locale: Locale
+  path: string
+}
+
+const { locale, path } = Astro.props
+const t = dictionary(locale)
+const stars = await getStars()
+const links = [
+  { path: '/features/', label: t.nav.features },
+  { path: '/guides/', label: t.nav.guides },
+  { path: '/compare/', label: t.nav.compare },
+  { path: '/docs/', label: t.nav.docs },
+  { path: '/changelog/', label: t.nav.changelog },
+]
+const current = (link: string) => path.startsWith(link)
+---
+
+<header class="site-nav pointer-events-none fixed inset-x-0 z-50 px-3 sm:px-4" data-nav>
+  <div class="nav-bar pointer-events-auto mx-auto flex h-14 max-w-6xl items-center gap-2 rounded-full border border-grain/80 pl-4 pr-2 sm:gap-3">
+    <a href={localePath(locale, '/')} class="shrink-0 rounded-full text-paper" aria-label={t.nav.home}>
+      <BrandLockup id="nav" />
+    </a>
+    <nav aria-label={t.nav.label} class="ml-auto hidden items-center lg:flex">
+      {
+        links.map((link) => (
+          <a
+            href={localePath(locale, link.path)}
+            aria-current={current(link.path) ? 'page' : undefined}
+            class="rounded-full px-3 py-1.5 text-[0.95rem] text-smoke transition-colors hover:bg-soot hover:text-paper aria-[current=page]:text-paper aria-[current=page]:bg-soot"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </nav>
+    <a
+      href={REPO}
+      class="stars ml-auto hidden h-9 items-center gap-2 rounded-full border border-grain px-3 font-mono text-sm text-smoke transition-colors hover:border-wood hover:text-paper sm:inline-flex lg:ml-1"
+      aria-label={stars === null ? t.nav.github : format(t.nav.stars, { count: stars })}
+      data-stars-label={t.nav.stars}
+    >
+      <GithubMark class="size-4" />
+      <span class="inline-flex items-center gap-1 tabular-nums">
+        <svg viewBox="0 0 16 16" class="size-3.5 text-ember" fill="currentColor" aria-hidden="true">
+          <path d="M8 .9l2.1 4.4 4.8.6-3.5 3.3.9 4.8L8 11.7 3.7 14l.9-4.8L1.1 5.9l4.8-.6z" />
+        </svg>
+        <span data-stars>{stars ?? '—'}</span>
+      </span>
+    </a>
+    <ThemeSwitch locale={locale} class="ml-auto sm:ml-0" />
+    <a href={localePath(locale, '/download/')} class="btn btn-primary btn-sm hidden sm:inline-flex">{t.nav.download}</a>
+    <button
+      type="button"
+      class="grid size-10 place-items-center rounded-full text-paper hover:bg-soot lg:hidden"
+      aria-expanded="false"
+      aria-controls="nav-menu"
+      data-menu-button
+      data-open-label={t.nav.menu}
+      data-close-label={t.nav.close}
+      aria-label={t.nav.menu}
+    >
+      <Menu class="size-5 menu-open" aria-hidden="true" />
+      <X class="size-5 menu-close hidden" aria-hidden="true" />
+    </button>
+  </div>
+  <div id="nav-menu" class="nav-menu pointer-events-auto mx-auto mt-2 hidden max-w-6xl rounded-3xl border border-grain p-3 lg:hidden" data-menu>
+    <nav aria-label={t.nav.label} class="flex flex-col">
+      {
+        links.map((link) => (
+          <a
+            href={localePath(locale, link.path)}
+            aria-current={current(link.path) ? 'page' : undefined}
+            class="rounded-2xl px-4 py-3 font-display text-lg font-bold text-paper hover:bg-soot aria-[current=page]:bg-soot"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <div class="mt-2 flex flex-wrap gap-2 border-t border-grain px-1 pt-3">
+        <a href={localePath(locale, '/download/')} class="btn btn-primary flex-1">{t.nav.download}</a>
+        <a href={REPO} class="btn btn-ghost"><GithubMark class="size-4" /> {t.nav.github}</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-nav {
+    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  }
+  .nav-bar,
+  .nav-menu {
+    background: color-mix(in oklab, var(--ash) 78%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    transition: box-shadow 300ms, background-color 300ms;
+  }
+  [data-nav].is-scrolled .nav-bar {
+    background: color-mix(in oklab, var(--ash) 90%, transparent);
+    box-shadow: 0 18px 40px -24px rgb(0 0 0 / 0.55);
+  }
+</style>
+
+<script>
+  const nav = document.querySelector<HTMLElement>('[data-nav]')!
+  const button = nav.querySelector<HTMLButtonElement>('[data-menu-button]')!
+  const menu = nav.querySelector<HTMLElement>('[data-menu]')!
+
+  const setOpen = (open: boolean) => {
+    menu.classList.toggle('hidden', !open)
+    button.setAttribute('aria-expanded', String(open))
+    button.setAttribute('aria-label', (open ? button.dataset.closeLabel : button.dataset.openLabel) ?? '')
+    button.querySelector('.menu-open')?.classList.toggle('hidden', open)
+    button.querySelector('.menu-close')?.classList.toggle('hidden', !open)
+  }
+  button.addEventListener('click', () => setOpen(menu.classList.contains('hidden')))
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !menu.classList.contains('hidden')) {
+      setOpen(false)
+      button.focus()
+    }
+  })
+
+  const onScroll = () => nav.classList.toggle('is-scrolled', window.scrollY > 8)
+  onScroll()
+  window.addEventListener('scroll', onScroll, { passive: true })
+
+  // The build baked in a star count; refresh it, at most once an hour per visitor. Shields
+  // caches GitHub's answer, so visitors never run into GitHub's own rate limit.
+  const KEY = 'irori-stars'
+  const show = (count: string) => {
+    nav.querySelectorAll('[data-stars]').forEach((el) => (el.textContent = count))
+    const link = nav.querySelector<HTMLElement>('.stars')
+    link?.setAttribute('aria-label', (link.dataset.starsLabel ?? '{count}').replace('{count}', count))
+  }
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(KEY) ?? 'null') as { count: string; at: number } | null
+    if (cached && Date.now() - cached.at < 3_600_000) show(cached.count)
+    else
+      fetch('https://img.shields.io/github/stars/irori-app/irori.json')
+        .then((response) => (response.ok ? response.json() : null))
+        .then((badge: { value?: string } | null) => {
+          if (!badge?.value || !/^[\d.,]+k?$/i.test(badge.value)) return
+          show(badge.value)
+          sessionStorage.setItem(KEY, JSON.stringify({ count: badge.value, at: Date.now() }))
+        })
+        .catch(() => {})
+  } catch {
+    // Storage can be refused in private windows; the baked-in count stays.
+  }
+</script>

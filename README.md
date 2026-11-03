@@ -90,6 +90,11 @@ and kept in a bounded GPU cache.
 - Several accounts per store (Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io) in
   one library; each installed game launches with the account it was installed with.
 - One-click import of your Heroic accounts, installs, settings, favourites and categories.
+- Looks at home on every desktop: follows the COSMIC, KDE Plasma and Omarchy themes, and
+  elsewhere tints its own in the system's accent colour (GNOME and other Linux desktops,
+  macOS with its highlight colour, Windows with its accent shades), live as you change it.
+  Honours Increase contrast, Reduce transparency and Windows high contrast. Translucent
+  chrome over macOS vibrancy, Windows 11 Mica or the Linux compositor's blur.
 - Translated into 19 languages, switchable live; searchable settings.
 - Tray menu with recent games, desktop and Steam shortcuts, Discord Rich Presence,
   EOS overlay, GOG REDmod and private branches, winetricks browser, log upload.

@@ -1,0 +1,57 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import HearthFrame from '../components/HearthFrame.astro'
+import Screen from '../components/Screen.astro'
+import Article from '../layouts/Article.astro'
+import { SCREENS, SYSTEMS, type ScreenId } from '../data/site'
+import { dictionary, type Locale } from '../i18n/config'
+import { icon } from '../lib/icons'
+import { relatedOf } from '../lib/pages'
+
+interface Props {
+  locale: Locale
+  entry: CollectionEntry<'features'>
+}
+const { locale, entry } = Astro.props
+const t = dictionary(locale)
+const data = entry.data
+const screen = data.screen && data.screen in SCREENS ? (data.screen as ScreenId) : null
+const related = await relatedOf('features', data.related, locale)
+const Icon = icon(data.icon)
+const crumbs = [
+  { name: t.nav.features, path: '/features/' },
+  { name: data.tag, path: `/features/${entry.id.split('/')[1]}/` },
+]
+---
+
+<Article locale={locale} section="features" entry={entry} related={related} crumbs={crumbs}>
+  <p slot="tag" class="tag inline-flex items-center gap-2"><Icon class="size-4" aria-hidden="true" /> {data.tag}</p>
+  <Fragment slot="hero">
+    {
+      screen && (
+        <HearthFrame class="rise mt-12" style="--rise-delay:200ms">
+          <Screen locale={locale} id={screen} eager sizes="(min-width: 1280px) 1200px, 100vw" />
+        </HearthFrame>
+      )
+    }
+    {
+      data.highlights.length > 0 && (
+        <ul class="mt-12 grid gap-px overflow-hidden rounded-2xl border border-grain bg-grain sm:grid-cols-2 lg:grid-cols-3">
+          {data.highlights.map((item, index) => (
+            <li class="flex flex-col gap-1.5 bg-ash p-6" data-reveal style={`--reveal-delay:${index % 3}`}>
+              <span class="font-display text-lg font-bold text-paper">{item.title}</span>
+              <span class="text-[0.95rem] leading-relaxed text-smoke">{item.body}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    {
+      entry.id.endsWith('/emulators') && (
+        <ul class="mt-6 flex flex-wrap gap-1.5" aria-label={data.tag}>
+          {SYSTEMS.map((system) => <li class="rounded-md border border-grain bg-soot px-2 py-0.5 font-mono text-xs text-smoke">{system}</li>)}
+        </ul>
+      )
+    }
+  </Fragment>
+</Article>

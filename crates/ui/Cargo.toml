@@ -38,6 +38,29 @@ tempfile = "3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 sysinfo.workspace = true
+# The accent, high contrast and transparency effects, at the version GPUI builds.
+windows = { version = "0.62", features = ["Foundation", "UI_ViewManagement"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The accent, highlight colour and display options, at the versions GPUI builds.
+block2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "objc2-core-foundation",
+    "NSAccessibility",
+    "NSAppearance",
+    "NSColor",
+    "NSColorSpace",
+    "NSWorkspace",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "NSNotification",
+    "NSOperation",
+    "NSString",
+] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # The desktop portal's accent colour, with the features GPUI already builds ashpd with.

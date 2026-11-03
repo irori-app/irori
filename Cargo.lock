@@ -4999,6 +4999,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "ashpd",
+ "block2 0.6.2",
  "dirs 6.0.0",
  "futures",
  "gpui-kit",
@@ -5010,6 +5011,8 @@ dependencies = [
  "irori-services",
  "libc",
  "notify",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
  "once_cell",
  "open",
  "parking_lot",
@@ -5026,6 +5029,7 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "wayland-protocols",
+ "windows 0.62.2",
  "x11rb",
 ]
 
