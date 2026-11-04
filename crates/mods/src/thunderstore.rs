@@ -182,7 +182,7 @@ pub fn parse_ecosystem(schema: &Value) -> Ecosystem {
         }
     }
     out.communities
-        .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        .sort_by_cached_key(|c| c.name.to_lowercase());
     if let Some(loaders) = schema.get("modloaderPackages").and_then(Value::as_array) {
         for l in loaders {
             let (Some(package), Some(root), Some(loader)) = (

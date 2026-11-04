@@ -20,6 +20,7 @@ mod games;
 mod hooks;
 mod inhibit;
 mod library;
+pub mod mods;
 mod network;
 pub mod play_status;
 pub mod screenshots;
@@ -50,6 +51,7 @@ pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
+pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
@@ -223,6 +225,11 @@ impl Backend {
     }
 
     fn spawn_background_tasks(&self, interactive: bool) {
+        // Only the app: a command-line run may sit beside a running game.
+        if interactive {
+            let b = self.clone();
+            self.spawn(async move { b.recover_mods().await });
+        }
         // Initialise stores from disk, then build the library.
         let b = self.clone();
         self.spawn(async move {

@@ -18,6 +18,8 @@ pub struct Cli {
     /// Open the Lutris script installer at a lutris.net game
     /// (`irori://lutris/<slug>`, `lutris:<slug>`).
     pub lutris: Option<String>,
+    /// A Nexus Mods "Mod manager download" link (`nxm://…`) to install.
+    pub nxm: Option<String>,
     pub big_picture: bool,
     /// Start hidden in the tray.
     pub minimized: bool,
@@ -36,6 +38,7 @@ impl Cli {
                 "--minimized" | "--tray" => cli.minimized = true,
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
+                s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
                 s if s.contains("://") => cli.apply_url(s),
                 s if s.starts_with("lutris:") => cli.lutris = lutris_slug(&s["lutris:".len()..]),
                 _ => {}
@@ -119,6 +122,7 @@ impl Cli {
             || self.open.is_some()
             || self.route.is_some()
             || self.lutris.is_some()
+            || self.nxm.is_some()
             || self.big_picture
     }
 }
@@ -175,7 +179,8 @@ Options:
 
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
-      irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>";
+      irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
+      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)";
 
 #[cfg(test)]
 mod tests {
@@ -218,6 +223,17 @@ mod tests {
             Some(Route::Settings("general".into()))
         );
         assert!(!parse(&["https://example.com"]).has_request());
+    }
+
+    #[test]
+    fn nexus_links_are_kept_for_the_mod_installer() {
+        let cli = parse(&["nxm://stardewvalley/mods/1/files/2?key=k&expires=1"]);
+        assert_eq!(
+            cli.nxm.as_deref(),
+            Some("nxm://stardewvalley/mods/1/files/2?key=k&expires=1")
+        );
+        assert!(cli.has_request());
+        assert_eq!(cli.launch, None);
     }
 
     #[test]

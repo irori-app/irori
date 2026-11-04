@@ -65,6 +65,7 @@
   "shell.palette.random_keywords": "aleatório surpresa embaralhar roleta",
   "shell.notice.exit_hotkey": "{engine}: para sair de um jogo, {keys}",
   "shell.notice.udmabuf": "{engine}: esta conta não pode usar /dev/udmabuf, então os jogos podem ficar lentos. Adicione-se ao grupo dono dele (geralmente kvm) e entre novamente.",
+  "shell.notice.mods_not_restored": "Os mods de {title} ainda estão na pasta dele",
   "shell.palette.set_up_emulation": "Configurar emulação",
   "shell.palette.set_up_emulation_keywords": "emulador ROM console retrô BIOS RetroArch",
   "shell.palette.lutris_script": "Instalar com um script do Lutris",
