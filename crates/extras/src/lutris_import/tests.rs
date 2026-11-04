@@ -185,7 +185,7 @@ fn fixture(home: &Path) -> LutrisDirs {
     );
     write(
         &config.join("games/the-witcher.yml"),
-        "game:\n  exe: bin/witcher.exe\n  args: -nointro\n  prefix: ~/Games/prefixes/witcher\n  arch: win64\nsystem:\n  env:\n    GAME_ONLY: true\n    DXVK_HUD: ''\n",
+        "game:\n  exe: bin/witcher.exe\n  args: -nointro\n  prefix: ~/Games/prefixes/witcher\n  arch: win64\nsystem:\n  env:\n    GAME_ONLY: true\n    DXVK_HUD: ''\n  prelaunch_command: /opt/trainer --fast\n  postexit_command: /opt/backup.sh\n",
     );
     write(
         &config.join("games/supertux.yml"),
@@ -245,6 +245,18 @@ fn plans_every_kind_of_game() {
 
     let witcher = by_slug(&plan, "the-witcher");
     assert_eq!(witcher.name, "The Witcher");
+    assert_eq!(
+        witcher.commands,
+        LaunchCommands {
+            prelaunch: Some("/opt/trainer --fast".into()),
+            prelaunch_wait: false,
+            postexit: Some("/opt/backup.sh".into()),
+        }
+    );
+    assert_eq!(
+        by_slug(&plan, "supertux").commands,
+        LaunchCommands::default()
+    );
     assert!(witcher.favourite);
     assert!(!witcher.hidden);
     assert_eq!(witcher.categories, vec!["RPG".to_string()]);

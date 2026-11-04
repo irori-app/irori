@@ -37,6 +37,7 @@ fn planned(name: String, id: String, runner: &str, kind: ImportKind) -> PlannedG
         playtime_minutes: 0,
         last_played: None,
         cover: None,
+        commands: Default::default(),
     }
 }
 
