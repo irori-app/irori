@@ -16,6 +16,8 @@
   "shell.nav.forward": "Вперёд (Alt+Вправо)",
   "shell.notice.component_update_failed": "Не удалось обновить {name}",
   "shell.notice.component_updated": "{name} обновлён до {version}",
+  "shell.palette.storage": "Хранилище и очистка",
+  "shell.palette.storage_keywords": "диск накопитель место размер свободно освободить очистка очистить удалить хранилище disk storage",
   "shell.search.placeholder": "Поиск игр и команд…",
   "shell.offline": "Не в сети",
   "shell.offline.tooltip": "Вы не в сети. Установленные игры, которые это поддерживают, всё равно запустятся.",

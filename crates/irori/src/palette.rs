@@ -161,6 +161,14 @@ impl Palette {
         );
         push(
             CommandItem::new()
+                .label(t("shell.palette.storage"))
+                .keywords([t("shell.palette.storage_keywords")])
+                .icon(IconName::HardDrive),
+            PaletteTarget::Route(Route::Settings("storage".into())),
+            targets,
+        );
+        push(
+            CommandItem::new()
                 .label(t("shell.palette.set_up_emulation"))
                 .keywords([t("shell.palette.set_up_emulation_keywords")])
                 .icon(IconName::Joystick),

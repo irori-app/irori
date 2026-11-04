@@ -33,6 +33,7 @@ pub mod search;
 pub mod sessions;
 pub mod settings;
 pub mod status;
+pub mod storage;
 pub mod updates;
 pub mod userdata;
 
@@ -65,6 +66,7 @@ pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
 pub use settings::SettingsService;
 pub use status::StatusRegistry;
+pub use storage::{CleanupKind, StorageReport};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 
