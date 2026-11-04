@@ -384,7 +384,10 @@ mod tests {
         );
         assert_eq!(started.spec.env["IRORI_RUNNER"], "gog");
         assert_eq!(started.spec.env["WINEPREFIX"], "/p");
-        assert_eq!(started.spec.cwd.as_deref(), Some(Path::new("/opt/voice")));
+        // Without a drive letter "/opt/voice/voice" isn't absolute on Windows.
+        if cfg!(unix) {
+            assert_eq!(started.spec.cwd.as_deref(), Some(Path::new("/opt/voice")));
+        }
         assert_eq!(started.delay, Duration::from_secs(5));
         assert!(!started.in_prefix && started.stop_with_game);
     }
