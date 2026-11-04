@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} har installerats",
   "settings.field.action_import_lutris.label": "Importera från Lutris",
   "settings.field.action_import_lutris.help": "För över installerade spel, emulerade spel, favoriter, kategorier och speltid från Lutris. Lutris lämnas orört.",
+  "settings.field.achievement_notices.label": "Visa nya prestationer efter spelandet",
+  "settings.field.achievement_notices.help": "När ett spel stängs kontrollerar Irori dess prestationer och visar vad du låste upp.",
   "settings.error.import_lutris": "Det gick inte att importera från Lutris",
   "settings.field.action_import_bottles.label": "Importera från Bottles",
   "settings.field.action_import_bottles.help": "Lägger till programmen i varje flaska och spelen som installerats i dem, med flaskan som prefix. Bottles lämnas orört.",

@@ -60,6 +60,7 @@ impl StatsView {
             .when(!o.games.is_empty(), |d| {
                 d.child(self.render_top_games(&o, &library, cx))
             })
+            .child(self.render_achievements_section(&library, window, cx))
             .into_any_element()
     }
 
@@ -165,6 +166,18 @@ impl StatsView {
                 body,
                 game(first),
                 Some(Target::Game((*first).clone())),
+                cx,
+            ));
+        }
+
+        if let Some((body, latest)) = self.achievement_insight(o.period, library) {
+            cards.push(insight(
+                "stats-insight-achievements",
+                IconName::Trophy,
+                t("library.stats.insight.achievements.title"),
+                body,
+                latest.as_ref().and_then(game),
+                latest.map(Target::Game),
                 cx,
             ));
         }

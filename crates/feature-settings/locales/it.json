@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} installato",
   "settings.field.action_import_lutris.label": "Importa da Lutris",
   "settings.field.action_import_lutris.help": "Importa da Lutris giochi installati, giochi emulati, preferiti, categorie e tempo di gioco. Lutris non viene modificato.",
+  "settings.field.achievement_notices.label": "Annuncia i nuovi obiettivi dopo aver giocato",
+  "settings.field.achievement_notices.help": "Quando chiudi un gioco, Irori controlla i suoi obiettivi e mostra quelli sbloccati.",
   "settings.error.import_lutris": "Impossibile importare da Lutris",
   "settings.field.action_import_bottles.label": "Importa da Bottles",
   "settings.field.action_import_bottles.help": "Aggiunge i programmi di ogni bottiglia e i giochi installati al loro interno, con la bottiglia come prefisso. Bottles non viene modificato.",
