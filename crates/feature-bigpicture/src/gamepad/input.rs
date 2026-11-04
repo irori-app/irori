@@ -403,7 +403,9 @@ fn parse_ids(list: &str) -> Vec<(u16, u16)> {
 }
 
 /// The Guide button acts on a short press, when released: holding it is how
-/// many controllers switch off, which must not toggle Big Picture.
+/// many controllers switch off, which must not toggle Big Picture. Held with
+/// another button it makes a chord (Guide + X saves a clip), and then its
+/// release does nothing.
 #[derive(Debug, Default)]
 pub struct GuideTap {
     pressed: Vec<(usize, Instant)>,
@@ -425,6 +427,13 @@ impl GuideTap {
         };
         let (_, at) = self.pressed.swap_remove(ix);
         now.saturating_duration_since(at) <= Self::MAX_HOLD
+    }
+
+    /// Whether a button pressed on `device` makes a chord with Guide held
+    /// there. Guide's release then no longer counts as a press.
+    pub fn chord(&mut self, device: usize) -> bool {
+        let held = self.pressed.iter().position(|(d, _)| *d == device);
+        held.map(|ix| self.pressed.swap_remove(ix)).is_some()
     }
 }
 
@@ -508,6 +517,19 @@ mod tests {
         tap.press(1, t0);
         assert!(!tap.release(0, t0 + ms(10)));
         assert!(!tap.release(1, t0 + GuideTap::MAX_HOLD + ms(1)));
+    }
+
+    #[test]
+    fn a_chord_with_guide_does_not_toggle_on_release() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        assert!(!tap.chord(0));
+        tap.press(0, t0);
+        assert!(!tap.chord(1));
+        assert!(tap.chord(0));
+        assert!(!tap.release(0, t0 + ms(200)));
+        tap.press(0, t0);
+        assert!(tap.release(0, t0 + ms(200)));
     }
 
     #[test]

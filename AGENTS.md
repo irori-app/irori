@@ -452,7 +452,9 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them, and journal notes link them.
+  and its insight card show them, and journal notes link them. Video files (mp4, mkv,
+  webm, mov) count too: the replay buffer's clip folders, each named after its game, are
+  read the same way.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure
@@ -464,6 +466,14 @@ commands without a window.
   the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
   logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
   through `fs_guard::ensure_deletable`. Settings → Storage draws it.
+- **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
+  defaults or one game), gpu-screen-recorder runs as its own process for the session,
+  found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
+  bundled. `Backend::save_clip` sends it SIGUSR1 (the process is found by its `-o`
+  folder, which also finds the Flatpak's); the path it prints is renamed to
+  `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
+  `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
+  palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
@@ -476,7 +486,7 @@ commands without a window.
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
      a Steam game's Proton prefix is reached only through `protontricks-launch`.
-  7. Sleep inhibition, then session tracking. At the end the programs that stop
+  7. Sleep inhibition, the replay buffer, then session tracking. At the end the programs that stop
      with the game are stopped (not-yet-started ones never start) before the
      after-launch script, then `GameExited`. While programs run in the prefix,
      a game whose launcher exits early is followed by its folder, not
