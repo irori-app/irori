@@ -545,7 +545,8 @@ pub async fn check() -> Result<(PathBuf, Option<(u32, u32)>)> {
     }
 }
 
-#[cfg(test)]
+// The sandbox exists only on Linux, and the expected arguments are Linux paths.
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 
@@ -885,7 +886,6 @@ mod tests {
         assert_eq!(parse_version("nonsense"), None);
     }
 
-    #[cfg(unix)]
     #[test]
     fn detects_root_entries_and_devices() {
         let dir = tempfile::tempdir().unwrap();
@@ -913,7 +913,6 @@ mod tests {
         assert_eq!(names, ["dri", "hidraw3", "nvidia0", "nvidiactl"]);
     }
 
-    #[cfg(unix)]
     #[test]
     fn real_paths_are_added() {
         let dir = tempfile::tempdir().unwrap();
