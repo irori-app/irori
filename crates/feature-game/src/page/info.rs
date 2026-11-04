@@ -192,7 +192,7 @@ impl GamePage {
     fn tabs(&self) -> Vec<(InfoTab, SharedString)> {
         let mut tabs = vec![(InfoTab::About, t("game.info.tab_about"))];
         if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
-            let unlocked = list.iter().filter(|a| a.unlocked_at.is_some()).count();
+            let unlocked = list.iter().filter(|a| a.is_unlocked()).count();
             tabs.push((
                 InfoTab::Achievements,
                 t_args(

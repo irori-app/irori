@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "{verb} geïnstalleerd",
   "settings.field.action_import_lutris.label": "Importeren uit Lutris",
   "settings.field.action_import_lutris.help": "Neem geïnstalleerde games, geëmuleerde games, favorieten, categorieën en speeltijd over uit Lutris. Lutris zelf blijft ongewijzigd.",
+  "settings.field.achievement_notices.label": "Nieuwe prestaties melden na het spelen",
+  "settings.field.achievement_notices.help": "Als een game sluit, controleert Irori de prestaties en laat zien wat je hebt ontgrendeld.",
   "settings.error.import_lutris": "Kan niet importeren uit Lutris"
 }

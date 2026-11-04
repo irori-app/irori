@@ -361,6 +361,10 @@ impl Backend {
                     );
                 }
             }
+            if b.is_online() {
+                let (b, id, title) = (b.clone(), id.clone(), game.title.clone());
+                tokio::spawn(async move { b.after_session_achievements(&id, &title).await });
+            }
             b.bus.emit(Event::GameExited {
                 id,
                 seconds,

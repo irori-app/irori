@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "{verb}을(를) 설치했습니다",
   "settings.field.action_import_lutris.label": "Lutris에서 가져오기",
   "settings.field.action_import_lutris.help": "Lutris에서 설치된 게임, 에뮬레이션 게임, 즐겨찾기, 카테고리, 플레이 시간을 가져옵니다. Lutris 자체는 변경되지 않습니다.",
+  "settings.field.achievement_notices.label": "플레이 후 새 업적 알림",
+  "settings.field.achievement_notices.help": "게임을 종료하면 Irori가 업적을 확인하고 달성한 업적을 보여 줍니다.",
   "settings.error.import_lutris": "Lutris에서 가져올 수 없습니다"
 }

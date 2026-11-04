@@ -8,6 +8,7 @@
 //! safe to call from render.
 
 pub mod accounts;
+pub mod achievements;
 pub mod app_update;
 pub mod backup;
 mod discord;
@@ -43,6 +44,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::{Notify, broadcast};
 
 pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
+pub use achievements::{AchievementIndex, AchievementTotals, GameAchievements, Unlock};
 pub use app_update::{AppUpdateStatus, InstallKind, Release};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
@@ -97,6 +99,8 @@ pub struct Inner {
     stores_ready: AtomicBool,
     /// New versions of Irori itself.
     app_update: app_update::AppUpdater,
+    /// Every game's achievements, summed up.
+    achievement_store: achievements::AchievementStore,
 }
 
 impl Deref for Backend {
@@ -168,6 +172,7 @@ impl Backend {
             updates_checked: AtomicBool::new(false),
             stores_ready: AtomicBool::new(false),
             app_update: app_update::AppUpdater::load(interactive),
+            achievement_store: achievements::AchievementStore::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {

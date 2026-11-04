@@ -109,6 +109,8 @@ pub struct GamePage {
     extras: Load<Arc<Vec<irori_core::ExtraFile>>>,
     achievement_filter: AchievementFilter,
     achievement_view: achievements::RowsCache,
+    /// Hidden achievements the user chose to see.
+    achievement_reveal: achievements::Reveal,
     launch_options: Vec<LaunchOption>,
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
@@ -207,6 +209,7 @@ impl GamePage {
             extras: Load::Idle,
             achievement_filter: AchievementFilter::All,
             achievement_view: achievements::RowsCache::default(),
+            achievement_reveal: achievements::Reveal::default(),
             launch_options: Vec::new(),
             launch_select,
             selected_option: None,
@@ -396,15 +399,15 @@ impl GamePage {
         let id = self.id.clone();
         let language = b.settings.app().ui_language.clone();
         let task = irori_ui::run(cx, async move {
-            let store = b
-                .store(id.runner)
-                .ok_or_else(|| crate::i18n::store_unavailable(id.runner))?;
-            store.achievements(&id.app_name, &language).await
+            if b.store(id.runner).is_none() {
+                return Err(crate::i18n::store_unavailable(id.runner));
+            }
+            b.achievements(&id, &language).await
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
-                this.achievements = Load::from_result(result.map(Arc::new));
+                this.achievements = Load::from_result(result);
                 if this.tab == InfoTab::Achievements && !this.has_achievements() {
                     this.tab = InfoTab::About;
                 }

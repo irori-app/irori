@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "Nainstalováno: {verb}",
   "settings.field.action_import_lutris.label": "Importovat z Lutris",
   "settings.field.action_import_lutris.help": "Převezme z Lutris nainstalované hry, emulované hry, oblíbené položky, kategorie a odehraný čas. Samotný Lutris zůstane beze změny.",
+  "settings.field.achievement_notices.label": "Po hraní oznámit nové úspěchy",
+  "settings.field.achievement_notices.help": "Po zavření hry Irori zkontroluje její úspěchy a ukáže, co jste získali.",
   "settings.error.import_lutris": "Import z Lutris se nezdařil"
 }

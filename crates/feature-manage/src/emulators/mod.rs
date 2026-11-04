@@ -1,10 +1,12 @@
 //! The Emulators page ([`Route::Emulators`](irori_ui::Route::Emulators)):
 //! every emulator Irori knows with the installs found on this computer,
 //! one-click installs and updates of the versions Irori manages, RetroArch
-//! cores, and each system's default emulator.
+//! cores, each system's default emulator, and the RetroAchievements account
+//! ([`retro`]).
 
 mod configure;
 mod ops;
+mod retro;
 mod setup;
 
 use std::collections::{BTreeMap, HashMap};
@@ -107,6 +109,7 @@ pub struct EmulatorsView {
     search: Entity<InputState>,
     system_selects: HashMap<String, Entity<SelectState<Vec<EngineChoice>>>>,
     ops: Entity<EngineOps>,
+    retro: Entity<retro::RetroView>,
     seen_revision: u64,
     ticking: bool,
     placeholder_language: String,
@@ -147,7 +150,9 @@ impl EmulatorsView {
             }),
         ];
         let seen_revision = ops.read(cx).revision;
+        let retro = cx.new(|cx| retro::RetroView::new(window, cx));
         let mut this = Self {
+            retro,
             tab_ix: 0,
             statuses: None,
             bios: HashMap::new(),
@@ -1429,7 +1434,8 @@ impl Render for EmulatorsView {
         }
         let content = match self.tab_ix {
             0 => self.render_engines(cx),
-            _ => self.render_systems(cx),
+            1 => self.render_systems(cx),
+            _ => self.retro.clone().into_any_element(),
         };
         let empty = self.statuses.as_ref().is_some_and(|s| s.is_empty());
         v_flex()
@@ -1478,6 +1484,10 @@ impl Render for EmulatorsView {
                                         .selected_index(self.tab_ix)
                                         .child(Tab::new().label(t("manage.emulators.tab.engines")))
                                         .child(Tab::new().label(t("manage.emulators.tab.systems")))
+                                        .child(
+                                            Tab::new()
+                                                .label(t("manage.emulators.tab.achievements")),
+                                        )
                                         .on_click(cx.listener(|this, ix: &usize, _, cx| {
                                             this.tab_ix = *ix;
                                             cx.notify();
@@ -1501,7 +1511,7 @@ impl Render for EmulatorsView {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scrollbar()
-                    .child(div().px_6().py_4().child(if empty {
+                    .child(div().px_6().py_4().child(if empty && self.tab_ix < 2 {
                         EmptyState::new(IconName::Joystick, t("manage.emulators.title"))
                             .into_any_element()
                     } else {

@@ -130,7 +130,8 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/gog` | `irori-gog-api` | GOG protocol (port of gogdl): auth, content system, depots, Linux installers, saves |
 | `crates/amazon` | `irori-amazon-api` | Amazon Games protocol (port of nile): device sign-in, library, signed manifests |
 | `crates/itch` | `irori-itch-api` | itch.io protocol (its public API): API-key login, owned keys, uploads, download links |
-| `crates/steam` | `irori-steam-api` | Steam Web API: login (QR, password and Steam Guard, tokens), owned and Family games, store art and pages |
+| `crates/steam` | `irori-steam-api` | Steam Web API: login (QR, password and Steam Guard, tokens), owned and Family games, store art and pages, achievements |
+| `crates/retroachievements` | `irori-retroachievements-api` | RetroAchievements: Web API (profile, console game lists, game progress), the emulators' token login, and rcheevos-compatible ROM hashes |
 | `crates/gog-galaxy` | `irori-gog-galaxy` | Hosts comet (Galaxy service for games: achievements, stats, leaderboards) on `127.0.0.1:9977` for the games Irori started |
 | `crates/comet` | `comet` | Small fork of comet, vendored so Irori can fix it; its README lists every difference from upstream |
 | `crates/store-epic` | `irori-epic` | Epic `Store` (`Runner::Legendary`) |
@@ -183,10 +184,11 @@ irori-core                        (depends on nothing internal)
   ├─ irori-engines   (core, runtime, depot)
   ├─ irori-scripts   (core, runtime, depot; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
-  │                   irori-steam-api
+  │                   irori-steam-api, irori-retroachievements-api
   │                   (depot and secrets only, not core)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
-  │                   irori-steam, irori-sideload, irori-emulation (+ engines),
+  │                   irori-steam, irori-sideload, irori-emulation (+ engines,
+  │                   irori-retroachievements-api),
   │                   irori-launchers (+ runtime, irori-launchers-data)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts; stores reach it as `DynStore`)
 irori-ui          (services, core)
@@ -223,8 +225,9 @@ and `launch.rs` before changing anything below the UI.
 - Operations: `install`, `update` and `repair` take an `OpContext` and return an
   `Outcome`. Also `uninstall(RemoveArgs)`, `import`, `set_install_path`, and
   `launch` → `LaunchPlan`.
-- Optional, with defaults: cloud saves, achievements, `remote_playtime` (minutes by
-  app name), `after_exit`, extras, `forget_install`, `set_version_pinned`.
+- Optional, with defaults: cloud saves, achievements (`achievements`, and
+  `forget_achievements` to drop a cached answer after a session), `remote_playtime`
+  (minutes by app name), `after_exit`, extras, `forget_install`, `set_version_pinned`.
 - Accounts, with defaults for stores with one login: `accounts`, `can_add_account`,
   `account_login_flow`/`account_login`/`account_logout`/`refresh_account` by slot,
   and `game_account`.
@@ -385,6 +388,16 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
+  store directly, so every answer is summed up per game in `state/achievements.json`
+  (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that
+  file; "Check played games" (`scan_achievements`) asks stores one game at a time.
+  After a session the game's cached answer is dropped and asked again; with
+  `iroriAchievementNotices` on, new unlocks raise a notice. Stores cache their answers
+  with `irori_core::achievement_cache` (15 minutes; stale answers stand in offline).
+  Sources: GOG and Epic web APIs, Steam's `IPlayerService` (definitions are public;
+  unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
+  for the ROM library.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other
@@ -667,6 +680,15 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
   test; `rusqlite` is built with `bundled` on every OS.
+- **RetroAchievements.** The ROM library's optional account is a RetroAchievements one
+  (`irori-emulation::retro`): username and Web API key through `Store::login`, kept with
+  `irori_secrets`, shown and changed on the Emulators page's Achievements tab. Games
+  match by rcheevos' hash of their file (`irori_retroachievements_api::hash`; CHD, CSO
+  and PBP can't be read), against each console's game list (cached a week). "Sign
+  emulators in" exchanges the password once for the emulators' token (never kept) and
+  writes it where each emulator reads it (`irori_engines::cheevos`: RetroArch, PCSX2,
+  PPSSPP, Dolphin); DuckStation encrypts its token per machine, so Irori only turns
+  achievements on there.
 - **Fix dialogs.** `irori_ui::save_conflict::resolve_launch_error` also turns
   `EngineMissing` and `BiosMissing` into dialogs with a fix (install and play, use the
   default version, choose the BIOS folder). Every place that starts a game already

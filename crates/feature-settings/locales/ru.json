@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "{verb} установлен",
   "settings.field.action_import_lutris.label": "Импорт из Lutris",
   "settings.field.action_import_lutris.help": "Перенести установленные игры, эмулируемые игры, избранное, категории и время в играх из Lutris. Сам Lutris не изменится.",
+  "settings.field.achievement_notices.label": "Сообщать о новых достижениях после игры",
+  "settings.field.achievement_notices.help": "Когда игра закрывается, Irori проверяет её достижения и показывает, что вы получили.",
   "settings.error.import_lutris": "Не удалось импортировать из Lutris"
 }
