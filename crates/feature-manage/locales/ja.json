@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Blizzard と Activision のゲーム：World of Warcraft、Diablo、Overwatch、Call of Duty。",
   "manage.launchers.about.ea": "EA のゲーム。Steam や Epic で所有していて EA app が必要なゲームも含みます。",
   "manage.launchers.about.ubisoft": "Ubisoft のゲーム。起動に Ubisoft Connect が必要なゲームも含みます。",
-  "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption などの Rockstar のゲーム。"
+  "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption などの Rockstar のゲーム。",
+  "manage.launchers.about.xbox": "Xbox アプリ、Microsoft Store、PC Game Pass のゲーム。Irori が自動で見つけます。インストールと削除は Xbox アプリで行います。",
+  "manage.launchers.xbox.windows_only": "Xbox アプリは Windows 専用です。Windows で Irori を起動すると、これらのゲームがライブラリに表示されます。",
+  "manage.launchers.xbox.get_app": "Xbox アプリを入手",
+  "manage.launchers.state.windows_only": "Windows のみ",
+  "manage.launchers.state.no_xbox_app": "Xbox アプリ未インストール"
 }

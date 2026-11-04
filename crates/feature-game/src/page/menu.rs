@@ -357,6 +357,19 @@ pub(super) fn build_menu(
             ),
         );
     }
+    // Xbox app games (`xbox:<package family>`) open their Microsoft Store
+    // page, where the Xbox app's install and remove commands are.
+    if id.runner == Runner::Launchers && id.app_name.starts_with("xbox:") {
+        let i = id.clone();
+        menu = menu.item(
+            PopupMenuItem::new(t_args(
+                "game.menu.show_in_client",
+                &[("store", "Microsoft Store")],
+            ))
+            .icon(IconName::ExternalLink)
+            .on_click(move |_, window, cx| ops::client_action(&i, ClientAction::Show, window, cx)),
+        );
+    }
     if let Some(url) = store_url.filter(|u| !u.is_empty()) {
         menu = menu
             .item(PopupMenuItem::link(t("game.menu.store_page"), url).icon(IconName::ExternalLink));
