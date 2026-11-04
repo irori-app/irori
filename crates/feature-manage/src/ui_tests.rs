@@ -422,6 +422,10 @@ fn rockstar_card_after_adopting_a_prefix(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("launcher-rockstar-signed-in").is_some());
     assert!(vcx.debug_bounds("launcher-rockstar-close").is_some());
     assert!(vcx.debug_bounds("launcher-rockstar-set-up").is_none());
+    assert!(
+        vcx.debug_bounds("launcher-xbox-windows-only").is_some(),
+        "the Xbox app's card says it is Windows-only"
+    );
 
     click(&mut vcx, "launcher-rockstar-remove");
     for _ in 0..50 {

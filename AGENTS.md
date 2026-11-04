@@ -140,8 +140,8 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo` |
 | `crates/store-steam` | `irori-steam` | Steam `Store` (`Runner::Steam`): local library, optional account, game watch, the login API the UI draws |
 | `crates/store-sideload` | `irori-sideload` | Apps the user adds (native, Windows, browser) |
-| `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) |
-| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect and Rockstar (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
+| `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) and Xbox app packages (`.GamingRoot`, `MicrosoftGame.config`, `AppxManifest.xml`, Gaming Services) |
+| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
@@ -750,6 +750,25 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   (`irori_ui::launcher_problem`) offers to run the vendor's installer in that prefix
   (`Backend::install_launcher_for`) and then plays. Steam installs the launcher for
   its own copies.
+- **Xbox app, Microsoft Store and PC Game Pass** (`irori_launchers_data::xbox`),
+  Windows only. Nothing to set up and no `Launcher` variant: the scan reads the
+  `.GamingRoot` file at each drive's root (`RGBX`, a count, UTF-16 folder names) and
+  each `<folder>\<game>\Content`, plus the packages Gaming Services lists
+  (`HKLM\SOFTWARE\Microsoft\GamingServices\PackageRepository\Package`, folders from
+  the AppModel package repository), read with `windows-registry`. A package is a game
+  when it has a `MicrosoftGame.config`, sits in a gaming root, or Gaming Services
+  lists it; one without an application (DLC, frameworks) or of the Xbox platform
+  itself is not. App names are `xbox:<package family name>` (the family name is
+  computed from the identity's publisher, so it survives updates). Titles prefer the
+  config's names, then the manifest's, with `ms-resource:` references looked up in
+  Windows' `MrtCache`, then the game's folder name. Art is the package's own logos at
+  their largest `scale-`/`targetsize-` variant (`file://` paths); sizes are added up in
+  the background after a scan. Games start with
+  `rundll32 shell32.dll,ShellExec_RunDLL shell:AppsFolder\<family>!<app id>`, which
+  returns at once with success, and a `GameWatch` follows (and stops) the processes
+  running from the package folder. The game menu's "Show in Microsoft Store"
+  (`ClientAction::Show`) opens `ms-windows-store://pdp/`; installs, updates and removal
+  stay with the Xbox app. On Linux and macOS the card says it is Windows-only.
 - **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
   anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
   `online_only`, the install gate lets them through and the game page says which mode

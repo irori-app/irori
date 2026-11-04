@@ -10,6 +10,9 @@
 //!   a scan of a prefix.
 //! * [`registry`]: a reader for Wine's `.reg` files, which Ubisoft Connect and
 //!   Rockstar use to record installs.
+//! * [`xbox`]: games the Xbox app or the Microsoft Store installed as Windows
+//!   packages. They need no setup and run only on Windows, so they are not a
+//!   [`Launcher`]: they have their own [`xbox::XboxGame`] and scan.
 //! * [`scan_prefix`] / [`scan_drive`] scan for every launcher at once. A bad
 //!   file never fails a scan: it becomes a warning in the [`ScanReport`].
 //!
@@ -23,6 +26,7 @@ pub mod ea;
 pub mod registry;
 pub mod rockstar;
 pub mod ubisoft;
+pub mod xbox;
 mod yaml;
 
 use std::fs;

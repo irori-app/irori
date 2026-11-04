@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Ігри Blizzard і Activision: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "Ігри EA, зокрема придбані в Steam чи Epic, яким потрібен EA app.",
   "manage.launchers.about.ubisoft": "Ігри Ubisoft, зокрема ті, яким для запуску потрібен Ubisoft Connect.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption та інші ігри Rockstar."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption та інші ігри Rockstar.",
+  "manage.launchers.about.xbox": "Ігри з програми Xbox, Microsoft Store і PC Game Pass. Irori знаходить їх сам; встановлюйте й видаляйте їх у програмі Xbox.",
+  "manage.launchers.xbox.windows_only": "Програма Xbox працює лише у Windows. Запустіть Irori у Windows, щоб побачити ці ігри в бібліотеці.",
+  "manage.launchers.xbox.get_app": "Отримати програму Xbox",
+  "manage.launchers.state.windows_only": "Лише Windows",
+  "manage.launchers.state.no_xbox_app": "Програму Xbox не встановлено"
 }
