@@ -1,8 +1,8 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
 //! library by play status, show or save a library view, switch its view
-//! (grid, list, Focus), back up, sync, and run window commands, all from the
-//! keyboard.
+//! (grid, list, Focus), back up, sync, save a clip while the replay buffer
+//! records, and run window commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -49,6 +49,19 @@ enum PaletteTarget {
     SaveBackups(GameId),
     BackUp,
     Sync,
+    /// Save a clip of the replay buffer.
+    SaveClip,
+}
+
+/// The library's state that its palette commands change.
+struct LibraryCommands<'a> {
+    /// Whether the library groups by play status, while a library view
+    /// exists.
+    grouped: Option<bool>,
+    /// The saved library views, to show one.
+    views: &'a [(u64, SharedString)],
+    /// How the library shows games; the other layouts are offered.
+    layout: LibraryLayout,
 }
 
 /// Retained palette state, owned by the shell.
@@ -67,26 +80,40 @@ impl Palette {
         }
     }
 
-    /// Rows for `games`. `open` is the game whose page is shown, with its
-    /// play status: its status commands come first. `grouped` is whether the
-    /// library groups by play status, while a library view exists. `layout`
-    /// is how the library shows games; the other views are offered.
-    /// `sync` is whether library sync is on.
+    /// Rows for `games`. `replay` is the game the replay buffer records:
+    /// saving a clip comes first. `open` is the game whose page is shown,
+    /// with its play status: its status commands come next. `library` is
+    /// what the library commands change. `sync` is whether library sync is
+    /// on.
     fn items(
         games: &[Arc<GameInfo>],
+        replay: Option<&str>,
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
-        grouped: Option<bool>,
-        views: &[(u64, gpui_kit::SharedString)],
-        layout: LibraryLayout,
+        library: LibraryCommands<'_>,
         sync: bool,
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
+        let LibraryCommands {
+            grouped,
+            views,
+            layout,
+        } = library;
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
         let mut push =
             |item: CommandItem, target: PaletteTarget, targets: &mut Vec<PaletteTarget>| {
                 items.push(item);
                 targets.push(target);
             };
+        if let Some(title) = replay {
+            push(
+                CommandItem::new()
+                    .label(t_args("shell.palette.save_clip", &[("title", title)]))
+                    .keywords([t("shell.palette.save_clip_keywords")])
+                    .icon(IconName::Clapperboard),
+                PaletteTarget::SaveClip,
+                targets,
+            );
+        }
         if let Some((game, current)) = open {
             let keywords = [irori_ui::play_status::title()];
             for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
@@ -371,12 +398,17 @@ impl Palette {
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
+        let replay = irori_ui::backend(cx).replay().map(|r| r.title);
+        let library = LibraryCommands {
+            grouped,
+            views: &views,
+            layout,
+        };
         let items = Rc::new(Self::items(
             &games,
+            replay.as_deref(),
             open,
-            grouped,
-            &views,
-            layout,
+            library,
             sync,
             &mut targets,
         ));
@@ -446,6 +478,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
         }
+        PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

@@ -32,6 +32,7 @@ mod launch_presets;
 mod launch_programs;
 mod logs;
 pub mod registry;
+mod replay;
 mod saves;
 mod storage;
 mod stores;
