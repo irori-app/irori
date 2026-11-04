@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Încarci acest jurnal?",
   "settings.option.library_layout.grid": "Grilă",
   "settings.option.library_layout.list": "Listă",
+  "settings.option.library_layout.focus": "Detaliu",
   "settings.option.sharpness.sharpest": "5 (cea mai clară)",
   "settings.option.sharpness.softest": "1 (cea mai fină)",
   "settings.option.steam_runtime.none": "Niciunul",

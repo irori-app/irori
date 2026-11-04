@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Ladda upp den här loggen?",
   "settings.option.library_layout.grid": "Rutnät",
   "settings.option.library_layout.list": "Lista",
+  "settings.option.library_layout.focus": "Fokus",
   "settings.option.sharpness.sharpest": "5 (skarpast)",
   "settings.option.sharpness.softest": "1 (mjukast)",
   "settings.option.steam_runtime.none": "Ingen",

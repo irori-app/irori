@@ -148,7 +148,12 @@ impl GamePage {
         )
     }
 
-    fn open_screenshot(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_screenshot(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.viewer = Some(index);
         self.viewer_focus.focus(window, cx);
         self.viewer_strip.scroll_to_item(index);
