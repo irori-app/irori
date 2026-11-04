@@ -258,6 +258,25 @@ the play session it was taken in. Irori never moves, renames or removes them.
 gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
 Steam saves them instead.
 
+### Mods
+
+A game's mods sit in `<data>/mods/<runner>/<app>/` and go into the game only
+while it runs from Irori:
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| How mods are applied | Overlay with `fuse-overlayfs` when installed (the game folder is never written), else links | Hard links, else symbolic links, else copies | Hard links, else copies (symbolic links need administrator rights or developer mode) |
+| `nxm://` links (Nexus Mods "Mod manager download") | On request: `irori-nxm.desktop` in the user's applications folder and `xdg-mime default` | Not available (link handlers come from the app bundle); Premium members install from the mod's page | On request: `HKCU\Software\Classes\nxm` |
+| rar archives | `unrar`, `7z` or `bsdtar` on `PATH` | Same | Same, or 7-Zip in Program Files |
+
+Kernel overlayfs is not used: an unprivileged user may mount it only in a user
+and mount namespace of its own, which only the processes inside see, and
+Steam's runtime container, Proton and Wine's server would all have to start
+inside it as a remapped root. Links are recorded in `deployment.json` before
+any file is touched, and a game file a mod replaces is renamed beside itself
+(`<name>.irori-original`), so a crash at any point is undone exactly when
+Irori next starts.
+
 ### New versions of Irori
 
 Irori looks for its own new versions only where nothing else updates it. It works out

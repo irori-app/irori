@@ -105,6 +105,7 @@ pub enum InfoTab {
     Requirements,
     Changelog,
     Extras,
+    Mods,
 }
 
 /// Game page for one game. Owns the page's async data; live state (status,
@@ -127,6 +128,8 @@ pub struct GamePage {
     compat: Load<CompatibilityInfo>,
     /// EOS overlay controls (Epic Windows installs with a store handle).
     overlay: Option<Entity<EosOverlayPanel>>,
+    /// The Mods tab, made when first opened.
+    mods: Option<Entity<crate::mods::ModsPanel>>,
     files_available: bool,
     shortcuts_exist: Option<bool>,
     tab: InfoTab,
@@ -256,6 +259,7 @@ impl GamePage {
             selected_option: None,
             compat: Load::Idle,
             overlay: None,
+            mods: None,
             files_available: true,
             shortcuts_exist: None,
             tab: InfoTab::About,

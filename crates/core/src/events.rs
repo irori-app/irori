@@ -99,6 +99,8 @@ pub enum Event {
     WineVersionsChanged,
     /// An emulator, core or BIOS folder was installed, removed or rescanned.
     EnginesChanged,
+    /// A game's mods were installed, removed, reordered or switched.
+    ModsChanged(GameId),
     SettingsChanged,
     /// Per-game settings changed.
     GameSettingsChanged(GameId),
