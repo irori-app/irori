@@ -98,6 +98,49 @@ pub trait GameWatch: Send + Sync {
     fn stop(&self, force: bool);
 }
 
+/// Why a game set to run sandboxed could not be: Irori refuses to start it
+/// rather than run it without the sandbox the user asked for. The UI turns
+/// it into an explanation with the way out.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{}", self.problem.message())]
+pub struct SandboxUnavailable {
+    pub problem: SandboxProblem,
+}
+
+/// What stands in the way of the sandbox.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SandboxProblem {
+    /// `bwrap` (bubblewrap) is not installed.
+    Missing,
+    /// Irori runs as a Flatpak, which lets no program inside it build a
+    /// sandbox of its own.
+    Flatpak,
+    /// `bwrap` is there but the system refuses it new namespaces (user
+    /// namespaces turned off or restricted). `detail` is bwrap's own error.
+    Refused { detail: String },
+    /// The sandbox is only built on Linux.
+    Unsupported,
+}
+
+impl SandboxProblem {
+    /// English text for logs and the command line; the UI shows its own.
+    pub fn message(&self) -> String {
+        match self {
+            SandboxProblem::Missing => "This game is set to run in a sandbox, but bubblewrap (bwrap) isn't installed. Install the bubblewrap package, or turn the sandbox off in the game's settings.".into(),
+            SandboxProblem::Flatpak => "This game is set to run in a sandbox, but the Flatpak version of Irori can't start one: Flatpak doesn't let programs inside it create sandboxes. Use Irori's native package, or turn the sandbox off in the game's settings.".into(),
+            SandboxProblem::Refused { detail } => format!("This game is set to run in a sandbox, but the system doesn't let bubblewrap create one ({detail}). Allow unprivileged user namespaces, or turn the sandbox off in the game's settings."),
+            SandboxProblem::Unsupported => "Sandboxed games are only available on Linux.".into(),
+        }
+    }
+}
+
+impl SandboxUnavailable {
+    /// The sandbox problem behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&SandboxUnavailable> {
+        error.downcast_ref()
+    }
+}
+
 impl fmt::Debug for dyn GameWatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("GameWatch")

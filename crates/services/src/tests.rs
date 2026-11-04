@@ -224,6 +224,7 @@ fn script_install(game_dir: &Path) -> crate::ScriptInstall {
         picked: Default::default(),
         source_url: Some("file:///scripts/test-game.yml".into()),
         resolution: None,
+        sandbox: Default::default(),
     }
 }
 
@@ -253,7 +254,8 @@ fn script_installs_ask_the_ui_and_produce_a_library_entry() {
     assert!(progress.wine.is_none(), "a Linux script uses no Wine");
     assert!(run.log_file.is_file());
 
-    let game = crate::scripts::script_game(&outcome, &game_dir, None, None).unwrap();
+    let game =
+        crate::scripts::script_game(&outcome, &game_dir, None, None, Default::default()).unwrap();
     assert!(matches!(
         game.entry,
         crate::scripts::ScriptLibraryEntry::App { windows: false, .. }

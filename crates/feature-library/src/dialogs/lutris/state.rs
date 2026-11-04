@@ -192,6 +192,8 @@ pub struct ConsentChecks {
     pub shell_acknowledged: bool,
     /// One per [`Consent::outside_writes`] entry.
     pub outside: Vec<bool>,
+    /// Run the installer's programs, and the game, sandboxed (Linux).
+    pub sandbox: irori_core::SandboxSettings,
 }
 
 impl ConsentChecks {
@@ -199,6 +201,7 @@ impl ConsentChecks {
         Self {
             shell_acknowledged: false,
             outside: vec![false; consent.outside_writes.len()],
+            sandbox: Default::default(),
         }
     }
 
