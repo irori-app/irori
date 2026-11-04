@@ -27,9 +27,11 @@ pub struct LutrisSkip {
     pub detail: Option<String>,
 }
 
-/// What a Lutris import did, for its summary.
+/// What a Lutris, Bottles or Faugus Launcher import did, for its summary.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LutrisSummary {
+    /// The launcher imported from, when it isn't Lutris ("Bottles").
+    pub launcher: Option<String>,
     /// Games in Lutris's library.
     pub found: usize,
     /// Games added to Irori (apps and ROM library entries).
@@ -61,6 +63,8 @@ pub struct Hooks {
     /// screens, which the library and Big Picture don't depend on).
     pub open_emulation_setup: Option<OpenFn>,
     pub import_from_lutris: Option<LutrisFn>,
+    pub import_from_bottles: Option<LutrisFn>,
+    pub import_from_faugus: Option<LutrisFn>,
 }
 
 impl Global for Hooks {}
@@ -100,6 +104,60 @@ pub fn import_from_lutris(cx: &mut App) -> Task<Result<LutrisSummary>> {
         Some(f) => f(cx),
         None => Task::ready(Err(anyhow::anyhow!("import is not available"))),
     }
+}
+
+/// Import the programs set up in Bottles.
+pub fn import_from_bottles(cx: &mut App) -> Task<Result<LutrisSummary>> {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.import_from_bottles.clone())
+    {
+        Some(f) => f(cx),
+        None => Task::ready(Err(anyhow::anyhow!("import is not available"))),
+    }
+}
+
+/// Import the games set up in Faugus Launcher.
+pub fn import_from_faugus(cx: &mut App) -> Task<Result<LutrisSummary>> {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.import_from_faugus.clone())
+    {
+        Some(f) => f(cx),
+        None => Task::ready(Err(anyhow::anyhow!("import is not available"))),
+    }
+}
+
+/// Whether Bottles has a bottles folder on this computer (native or
+/// Flatpak). A custom bottles folder is found by the import itself.
+pub fn bottles_detected() -> bool {
+    let home = dirs::home_dir().unwrap_or_default();
+    let data = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(|| home.join(".local/share"));
+    [
+        data.join("bottles/bottles"),
+        data.join("bottles/data.yml"),
+        home.join(".var/app/com.usebottles.bottles/data/bottles/bottles"),
+    ]
+    .iter()
+    .any(|p| p.exists())
+}
+
+/// Whether Faugus Launcher has a game list on this computer.
+pub fn faugus_detected() -> bool {
+    let home = dirs::home_dir().unwrap_or_default();
+    let config = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .unwrap_or_else(|| home.join(".config"));
+    [
+        config.join("faugus-launcher/games.json"),
+        home.join(".var/app/io.github.Faugus.faugus-launcher/config/faugus-launcher/games.json"),
+    ]
+    .iter()
+    .any(|p| p.is_file())
 }
 
 /// Whether a Lutris library exists on this computer (native or Flatpak).

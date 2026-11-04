@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Beklemede",
   "ui.play_status.beaten": "Bitirildi",
   "ui.play_status.abandoned": "Bırakıldı",
-  "ui.play_status.played": "Oynandı"
+  "ui.play_status.played": "Oynandı",
+  "ui.import.summary.title": "{launcher} kaynağından içe aktarıldı",
+  "ui.import.summary.games": "{launcher} içinde {found} oyun: {imported} oyun Irori’ye eklendi.",
+  "ui.import.summary.wine_build": "{launcher}, burada kurulu olmayan {build} sürümünü kullanıyordu. Oyun açılmazsa ayarlarından başka bir sürüm seçin.",
+  "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları"
 }

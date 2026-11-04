@@ -1,6 +1,7 @@
 //! Bulk actions on the games picked in selection mode (install, uninstall,
-//! add to Steam, categories, favourite and hide), from a bar floating over
-//! the library.
+//! add to Steam, categories, play status, favourite and hide), from a bar
+//! floating over the library. Edits of library data say what they did in a
+//! notification with an Undo that puts every game back as it was.
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use gpui_kit::{
     SharedString, Styled as _, Window, div,
 };
 use irori_core::{GameId, GameInfo, RemoveArgs};
+use irori_services::{PlayStatus, UserDataService};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -341,7 +343,31 @@ impl LibraryView {
                 for (name, all_in) in &categories {
                     let (ids, name, add) = (category_ids.clone(), name.clone(), !*all_in);
                     menu = menu.item(PopupMenuItem::new(name.clone()).checked(*all_in).on_click(
-                        move |_, _, cx| backend(cx).userdata.set_category_many(&ids, &name, add),
+                        move |_, window, cx| {
+                            let message = counted(
+                                if add {
+                                    (
+                                        "library.bulk.done.categorized_one",
+                                        "library.bulk.done.categorized_other",
+                                    )
+                                } else {
+                                    (
+                                        "library.bulk.done.uncategorized_one",
+                                        "library.bulk.done.uncategorized_other",
+                                    )
+                                },
+                                ids.len(),
+                                &[("category", &name)],
+                            );
+                            let name = name.clone();
+                            edit_with_undo(
+                                ids.clone(),
+                                message,
+                                move |u, ids| u.set_category_many(ids, &name, add),
+                                window,
+                                cx,
+                            )
+                        },
                     ));
                 }
                 if !categories.is_empty() {
@@ -365,7 +391,7 @@ impl LibraryView {
             .label(irori_ui::play_status::title())
             .disabled(nothing)
             .dropdown_menu(move |menu, _, cx| {
-                irori_ui::play_status::menu_many(menu, status_ids.clone(), cx)
+                irori_ui::play_status::menu_many_with(menu, status_ids.clone(), cx, set_statuses)
             });
         let favourite = {
             let ids = ids.clone();
@@ -383,7 +409,28 @@ impl LibraryView {
                     t("library.bulk.favourite")
                 })
                 .disabled(nothing)
-                .on_click(move |_, _, cx| backend(cx).userdata.set_favourites(&ids, !all_favourite))
+                .on_click(move |_, window, cx| {
+                    let on = !all_favourite;
+                    let key = if on {
+                        (
+                            "library.bulk.done.favourited_one",
+                            "library.bulk.done.favourited_other",
+                        )
+                    } else {
+                        (
+                            "library.bulk.done.unfavourited_one",
+                            "library.bulk.done.unfavourited_other",
+                        )
+                    };
+                    let message = counted(key, ids.len(), &[]);
+                    edit_with_undo(
+                        ids.clone(),
+                        message,
+                        move |u, ids| u.set_favourites(ids, on),
+                        window,
+                        cx,
+                    )
+                })
         };
         let hide = Button::new("bulk-hide")
             .small()
@@ -399,7 +446,28 @@ impl LibraryView {
                 t("library.bulk.hide")
             })
             .disabled(nothing)
-            .on_click(move |_, _, cx| backend(cx).userdata.set_hidden_many(&ids, !all_hidden));
+            .on_click(move |_, window, cx| {
+                let on = !all_hidden;
+                let key = if on {
+                    (
+                        "library.bulk.done.hidden_one",
+                        "library.bulk.done.hidden_other",
+                    )
+                } else {
+                    (
+                        "library.bulk.done.unhidden_one",
+                        "library.bulk.done.unhidden_other",
+                    )
+                };
+                let message = counted(key, ids.len(), &[]);
+                edit_with_undo(
+                    ids.clone(),
+                    message,
+                    move |u, ids| u.set_hidden_many(ids, on),
+                    window,
+                    cx,
+                )
+            });
 
         Some(
             div()
@@ -448,6 +516,85 @@ impl LibraryView {
                 .into_any_element(),
         )
     }
+}
+
+/// The `_one` or `_other` key of `keys` for `count`, with `count` and
+/// `args` filled in.
+fn counted(keys: (&str, &str), count: usize, args: &[(&str, &str)]) -> SharedString {
+    let count_text = count.to_string();
+    let mut all: Vec<(&str, &str)> = vec![("count", &count_text)];
+    all.extend_from_slice(args);
+    t_args(if count == 1 { keys.0 } else { keys.1 }, &all)
+}
+
+/// Set (or clear) the play status of the picked games, with an undo.
+fn set_statuses(
+    ids: Vec<GameId>,
+    status: Option<PlayStatus>,
+    window: &mut Window,
+    cx: &mut gpui_kit::App,
+) {
+    let message = match status {
+        Some(status) => counted(
+            (
+                "library.bulk.done.status_one",
+                "library.bulk.done.status_other",
+            ),
+            ids.len(),
+            &[("status", &irori_ui::play_status::label(status))],
+        ),
+        None => counted(
+            (
+                "library.bulk.done.status_cleared_one",
+                "library.bulk.done.status_cleared_other",
+            ),
+            ids.len(),
+            &[],
+        ),
+    };
+    edit_with_undo(
+        ids,
+        message,
+        move |u, ids| u.set_play_status_many(ids, status),
+        window,
+        cx,
+    );
+}
+
+/// Apply a bulk edit of library data off the UI thread and say so in a
+/// notification whose Undo restores every game's previous favourite,
+/// hidden, category and play-status values.
+fn edit_with_undo(
+    ids: Vec<GameId>,
+    message: SharedString,
+    edit: impl FnOnce(&UserDataService, &[GameId]) + Send + 'static,
+    window: &mut Window,
+    cx: &mut gpui_kit::App,
+) {
+    let b = backend(cx);
+    let before = b.userdata.capture(&ids);
+    irori_ui::state::run_infallible(cx, async move { edit(&b.userdata, &ids) }).detach();
+    window.push_notification(
+        Notification::success(message)
+            .action(move |_, _, cx| {
+                let note = cx.entity().downgrade();
+                let before = before.clone();
+                Button::new("bulk-undo")
+                    .label(t("library.bulk.undo"))
+                    .small()
+                    .on_click(move |_, window, cx| {
+                        let (b, before) = (backend(cx), before.clone());
+                        irori_ui::state::run_infallible(
+                            cx,
+                            async move { b.userdata.restore(&before) },
+                        )
+                        .detach();
+                        let _ = note.update(cx, |n, cx| n.dismiss(window, cx));
+                    })
+            })
+            .autohide(true),
+        cx,
+    );
 }
 
 /// Uninstall `games` one after another, reporting each failure.

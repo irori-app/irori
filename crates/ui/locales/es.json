@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "En pausa",
   "ui.play_status.beaten": "Completado",
   "ui.play_status.abandoned": "Abandonado",
-  "ui.play_status.played": "Jugado"
+  "ui.play_status.played": "Jugado",
+  "ui.import.summary.title": "Importado de {launcher}",
+  "ui.import.summary.games": "{found} juegos en {launcher}: {imported} añadidos a Irori.",
+  "ui.import.summary.wine_build": "{launcher} usaba {build}, que no está instalado aquí. Si el juego no arranca, elige otra versión en sus ajustes.",
+  "ui.import.summary.warnings": "Archivos de {launcher} que Irori no pudo leer"
 }

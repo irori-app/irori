@@ -12,6 +12,8 @@ use irori_services::{Backend, DownloadState};
 pub const COMMANDS: &[&str] = &[
     "import-heroic",
     "import-lutris",
+    "import-bottles",
+    "import-faugus",
     "list",
     "refresh",
     "info",
@@ -25,6 +27,8 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori accounts                      Show which stores are logged in
   irori import-heroic                 Import accounts, installs and settings from Heroic
   irori import-lutris                 Import games, categories and playtime from Lutris
+  irori import-bottles                Import the programs of every Bottles bottle
+  irori import-faugus                 Import the games of Faugus Launcher
   irori refresh                       Refresh every store's library
   irori list [--installed]            List the library
   irori info <runner>/<app> [--platform windows|linux]
@@ -45,6 +49,20 @@ pub fn run(args: &[String]) -> Result<i32> {
             "accounts" => accounts(&backend),
             "import-heroic" => import_heroic(&backend).await,
             "import-lutris" => import_lutris(&backend).await,
+            "import-bottles" => {
+                let s =
+                    crate::lutris::import_bottles(&backend, crate::stores::SIDELOAD.get().cloned())
+                        .await?;
+                print_launcher_summary("Bottles", &s);
+                Ok(0)
+            }
+            "import-faugus" => {
+                let s =
+                    crate::lutris::import_faugus(&backend, crate::stores::SIDELOAD.get().cloned())
+                        .await?;
+                print_launcher_summary("Faugus Launcher", &s);
+                Ok(0)
+            }
             "refresh" => {
                 backend.refresh_all(false).await;
                 println!("{} games", backend.library().len());
@@ -138,6 +156,23 @@ async fn import_heroic(backend: &Backend) -> Result<i32> {
     );
     backend.refresh_all(false).await;
     accounts(backend)
+}
+
+/// What a Bottles or Faugus Launcher import did, for the terminal.
+fn print_launcher_summary(launcher: &str, s: &irori_ui::hooks::LutrisSummary) {
+    println!("{} games in {launcher}: {} imported", s.found, s.imported);
+    for (title, build) in &s.wine_missing {
+        println!("! {title}: Wine build {build} isn't installed; it uses your default build");
+    }
+    for skip in &s.skipped {
+        match &skip.detail {
+            Some(d) => println!("✗ {}: {} ({d})", skip.title, skip.reason),
+            None => println!("✗ {}: {}", skip.title, skip.reason),
+        }
+    }
+    for w in &s.warnings {
+        println!("! {w}");
+    }
 }
 
 async fn import_lutris(backend: &Backend) -> Result<i32> {

@@ -259,6 +259,7 @@ impl GamePage {
         let strip = self.render_screenshot_strip(window, cx);
         let details = self.render_details_panel(game, cx);
         let timeline = self.render_timeline(window, cx);
+        let related = self.render_related(game, cx);
         let page = self.page_rem(window).unwrap_or(f32::MAX);
         let layout = Layout::for_page(page);
         let cover = self.render_cover_column(game, layout.cover_rem(), cx);
@@ -269,7 +270,8 @@ impl GamePage {
             .gap_8()
             .children(strip)
             .child(v_flex().w_full().gap_4().child(bar).child(content))
-            .child(timeline);
+            .child(timeline)
+            .children(related);
         let side = v_flex()
             .gap_4()
             .child(details)

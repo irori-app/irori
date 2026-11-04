@@ -1,12 +1,14 @@
 //! Dialogs owned by the library: categories, adding or editing a manually
-//! added app, editing a game's title and art, and installing with a Lutris
-//! script.
+//! added app or a whole folder of games, editing a game's title and art,
+//! installing with a Lutris script, and saving and managing library views.
 
 pub mod categories;
 pub mod edit_game;
+pub mod folder;
 pub mod lutris;
 pub mod sideload;
 pub mod steamgrid;
+pub mod views;
 
 use std::future::Future;
 use std::path::PathBuf;

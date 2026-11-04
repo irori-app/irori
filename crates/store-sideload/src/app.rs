@@ -159,8 +159,9 @@ pub(crate) struct LibraryFile {
 pub(crate) const LIBRARY_VERSION: u32 = 1;
 
 impl StoredApp {
-    /// The library entry shown for this app.
-    pub fn to_game_info(&self) -> GameInfo {
+    /// The library entry shown for this app; `present` is whether its
+    /// program was found (an app without one is listed as not installed).
+    pub fn to_game_info(&self, present: bool) -> GameInfo {
         let app = &self.app;
         let platform = app.platform.install_platform();
         let install_dir = app.install_dir();
@@ -177,7 +178,7 @@ impl StoredApp {
             art_square: background.clone().filter(|_| cover.is_none()),
             art_cover: cover,
             art_background: background,
-            is_installed: true,
+            is_installed: present || app.platform == SideloadPlatform::Browser,
             install: Some(InstalledInfo {
                 install_path: install_dir
                     .as_deref()
@@ -379,7 +380,9 @@ mod tests {
             app_name: "abc".into(),
             app: windows_app().normalized().unwrap(),
         };
-        let g = stored.to_game_info();
+        // A program that is gone leaves the app listed, not installed.
+        assert!(!stored.to_game_info(false).is_installed);
+        let g = stored.to_game_info(true);
         assert_eq!(g.runner, Some(Runner::Sideload));
         assert_eq!(g.app_name, "abc");
         assert_eq!(g.sort_title, "game");
@@ -414,7 +417,8 @@ mod tests {
                 ..Default::default()
             },
         }
-        .to_game_info();
+        .to_game_info(false);
+        assert!(web.is_installed);
         assert!(!web.can_run_offline);
         assert!(web.launch_full_screen);
         assert_eq!(web.browser_url.as_deref(), Some("https://x.org/"));

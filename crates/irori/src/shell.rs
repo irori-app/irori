@@ -38,6 +38,9 @@ pub struct AppShell {
     /// otherwise collapses on its own. Not saved: a wide window forgets it.
     narrow_expanded: bool,
     recent: Entity<sidebar::RecentGames>,
+    saved_views: Entity<sidebar::SavedViewsNav>,
+    /// The start-with-system choice last written to the system.
+    autostart: (bool, bool),
     /// Games we minimized the window for, to restore when they exit.
     minimized_for: Option<GameId>,
     /// The game seen playing, whose log was offered when it started.
@@ -58,6 +61,12 @@ pub struct AppShell {
 
 impl AppShell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        // Written at every start, so the entry names the program running now.
+        let autostart = {
+            let app = &models(cx).settings.read(cx).app;
+            (app.start_with_system, app.start_with_system_minimized)
+        };
+        crate::autostart::sync(autostart.0, autostart.1);
         let m = models(cx).clone();
         let nav = navigator(cx);
         let subs = vec![
@@ -103,6 +112,12 @@ impl AppShell {
                     this.applied_ui = Some(prefs);
                 }
                 this.sync_glass(window, cx);
+                let app = &settings.read(cx).app;
+                let autostart = (app.start_with_system, app.start_with_system_minimized);
+                if autostart != this.autostart {
+                    this.autostart = autostart;
+                    crate::autostart::sync(autostart.0, autostart.1);
+                }
             }),
             // Entering or leaving fullscreen.
             cx.observe_window_bounds(window, |this, window, cx| this.sync_glass(window, cx)),
@@ -134,6 +149,8 @@ impl AppShell {
             sidebar_collapsed: collapsed,
             narrow_expanded: false,
             recent: cx.new(sidebar::RecentGames::new),
+            saved_views: cx.new(sidebar::SavedViewsNav::new),
+            autostart,
             minimized_for: None,
             log_shown_for: None,
             playing_ticker: None,
@@ -526,7 +543,9 @@ impl AppShell {
                 None,
                 cx,
             ))
-            .when(!collapsed, |d| d.child(self.recent.clone()))
+            .when(!collapsed, |d| {
+                d.child(self.saved_views.clone()).child(self.recent.clone())
+            })
             .child(div().flex_1())
             .when(!cfg!(windows), |d| {
                 d.child(item(

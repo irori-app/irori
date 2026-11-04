@@ -45,6 +45,29 @@ pub struct UserData {
 /// Most stars a game can be rated.
 pub const MAX_RATING: u8 = 5;
 
+/// The favourite, hidden, category and play-status values some games had,
+/// to put back exactly when a bulk edit is undone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BulkSnapshot {
+    keys: Vec<String>,
+    favourites: BTreeSet<String>,
+    hidden: BTreeSet<String>,
+    /// Every category that existed, with which of the games were in it.
+    categories: BTreeMap<String, BTreeSet<String>>,
+    play_status: BTreeMap<String, PlayStatusRecord>,
+}
+
+impl BulkSnapshot {
+    /// How many games it covers.
+    pub fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+}
+
 impl UserData {
     /// The status the user set for a game, if any.
     pub fn play_status(&self, key: &str) -> Option<PlayStatus> {
@@ -64,6 +87,69 @@ impl UserData {
                 EffectiveStatus::Played
             }
             None => EffectiveStatus::NotPlayed,
+        }
+    }
+}
+
+impl UserData {
+    /// What `ids` are now, for [`UserData::restore`].
+    pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
+        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        let pick = |set: &BTreeSet<String>| -> BTreeSet<String> {
+            keys.iter().filter(|k| set.contains(*k)).cloned().collect()
+        };
+        BulkSnapshot {
+            favourites: pick(&self.favourites),
+            hidden: pick(&self.hidden),
+            categories: self
+                .categories
+                .iter()
+                .map(|(name, games)| (name.clone(), pick(games)))
+                .collect(),
+            play_status: keys
+                .iter()
+                .filter_map(|k| Some((k.clone(), self.play_status.get(k)?.clone())))
+                .collect(),
+            keys,
+        }
+    }
+
+    /// Put the captured games back as they were. Categories made since keep
+    /// existing unless the restore empties them; categories deleted since
+    /// stay deleted.
+    pub fn restore(&mut self, snap: &BulkSnapshot) {
+        let set = |set: &mut BTreeSet<String>, key: &String, on: bool| {
+            if on {
+                set.insert(key.clone());
+            } else {
+                set.remove(key);
+            }
+        };
+        let mut emptied = Vec::new();
+        for (name, games) in self.categories.iter_mut() {
+            let before = snap.categories.get(name);
+            let had = !games.is_empty();
+            for key in &snap.keys {
+                set(games, key, before.is_some_and(|b| b.contains(key)));
+            }
+            if before.is_none() && had && games.is_empty() {
+                emptied.push(name.clone());
+            }
+        }
+        for name in emptied {
+            self.categories.remove(&name);
+        }
+        for key in &snap.keys {
+            set(&mut self.favourites, key, snap.favourites.contains(key));
+            set(&mut self.hidden, key, snap.hidden.contains(key));
+            match snap.play_status.get(key) {
+                Some(record) => {
+                    self.play_status.insert(key.clone(), record.clone());
+                }
+                None => {
+                    self.play_status.remove(key);
+                }
+            }
         }
     }
 }
@@ -373,6 +459,16 @@ impl UserDataService {
         });
     }
 
+    /// The current values of `ids`, to undo a bulk edit with [`Self::restore`].
+    pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
+        self.snapshot().capture(ids)
+    }
+
+    /// Put games back as [`Self::capture`] saw them.
+    pub fn restore(&self, snap: &BulkSnapshot) {
+        self.update(None, |d| d.restore(snap));
+    }
+
     /// Drop one game from the recently played list.
     pub fn remove_recent(&self, id: &GameId) {
         let key = id.key();
@@ -475,6 +571,57 @@ impl UserDataService {
 mod tests {
     use super::*;
     use irori_core::Runner;
+
+    #[test]
+    fn restoring_a_capture_undoes_bulk_edits_exactly() {
+        let a = GameId::new(Runner::Gog, "a");
+        let b = GameId::new(Runner::Gog, "b");
+        let other = GameId::new(Runner::Gog, "other");
+        let mut d = UserData::default();
+        d.favourites.insert(a.key());
+        d.hidden.insert(b.key());
+        d.categories
+            .insert("RPG".into(), [a.key(), other.key()].into());
+        d.categories.insert("Empty".into(), BTreeSet::new());
+        d.play_status.insert(
+            a.key(),
+            PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "2024-01-01T00:00:00Z".into(),
+            },
+        );
+        let before = d.clone();
+        let snap = d.capture(&[a.clone(), b.clone()]);
+        assert_eq!(snap.len(), 2);
+
+        // A bulk pass over both games: favourite, unhide, recategorize,
+        // new status, and a category made on the way.
+        d.favourites.insert(b.key());
+        d.hidden.remove(&b.key());
+        d.categories.get_mut("RPG").unwrap().remove(&a.key());
+        d.categories.get_mut("Empty").unwrap().insert(b.key());
+        d.categories.insert("New".into(), [a.key(), b.key()].into());
+        d.categories.insert("Made later".into(), BTreeSet::new());
+        apply_play_status(
+            &mut d,
+            &[a.key(), b.key()],
+            Some(PlayStatus::Playing),
+            "2026-11-04T10:00:00Z",
+        );
+        // Another game changed meanwhile keeps its change.
+        d.favourites.insert(other.key());
+
+        d.restore(&snap);
+        let mut expected = before;
+        expected.favourites.insert(other.key());
+        expected
+            .categories
+            .insert("Made later".into(), BTreeSet::new());
+        assert_eq!(d.favourites, expected.favourites);
+        assert_eq!(d.hidden, expected.hidden);
+        assert_eq!(d.categories, expected.categories);
+        assert_eq!(d.play_status, expected.play_status);
+    }
 
     fn game(app: &str, store_hidden: bool) -> Arc<GameInfo> {
         Arc::new(GameInfo {

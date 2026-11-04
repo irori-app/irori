@@ -4,12 +4,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use fuzzy_matcher::FuzzyMatcher;
-use fuzzy_matcher::skim::SkimMatcherV2;
 use irori_core::{Event, GameId, GameInfo, InstallPlatform, Runner};
 use serde::{Deserialize, Serialize};
 
 use crate::Backend;
+use crate::search::{Query, SearchIndex};
 use crate::userdata::UserData;
 
 static REVISION: AtomicU64 = AtomicU64::new(0);
@@ -24,9 +23,16 @@ pub struct LibrarySnapshot {
     /// Account ids owning each game, for stores with several signed-in
     /// accounts (see [`irori_core::Store::game_owners`]).
     pub owners: HashMap<GameId, Vec<String>>,
+    /// Folded search fields, built on the first search of this revision.
+    search: std::sync::OnceLock<SearchIndex>,
 }
 
 impl LibrarySnapshot {
+    /// The search index of these games, built on first use.
+    pub fn search(&self) -> &SearchIndex {
+        self.search.get_or_init(|| SearchIndex::build(&self.games))
+    }
+
     pub fn get(&self, id: &GameId) -> Option<&Arc<GameInfo>> {
         self.index.get(id).map(|&ix| &self.games[ix])
     }
@@ -132,9 +138,9 @@ impl LibraryFilter {
     ) -> Vec<Arc<GameInfo>> {
         let category = self.category.as_ref().and_then(|c| user.categories.get(c));
         let mut out: Vec<(i64, Arc<GameInfo>)> = Vec::with_capacity(library.games.len());
-        let matcher = (!self.query.trim().is_empty()).then(SkimMatcherV2::default);
-        let query = self.query.trim();
-        for g in &library.games {
+        let query = Query::new(&self.query);
+        let index = query.as_ref().map(|_| library.search());
+        for (ix, g) in library.games.iter().enumerate() {
             let key = g.id().key();
             let hidden = user.hidden.contains(&key);
             if self.hidden_only {
@@ -186,17 +192,17 @@ impl LibraryFilter {
             if self.updates_only && !updates.contains(&g.id()) {
                 continue;
             }
-            let score = match &matcher {
-                Some(m) => match m.fuzzy_match(&g.title, query) {
+            let score = match (&query, index) {
+                (Some(q), Some(index)) => match index.score(ix, q, g) {
                     Some(s) => s,
                     None => continue,
                 },
-                None => 0,
+                _ => 0,
             };
             out.push((score, g.clone()));
         }
 
-        if matcher.is_some() {
+        if query.is_some() {
             out.sort_by(|a, b| {
                 b.0.cmp(&a.0)
                     .then_with(|| a.1.sort_title.cmp(&b.1.sort_title))
@@ -314,8 +320,11 @@ impl Backend {
             .map(|g| match user.overrides.get(&g.id().key()) {
                 Some(o) => {
                     let mut g = (*g).clone();
-                    if let Some(t) = &o.title {
-                        g.title = t.clone();
+                    if let Some(t) = &o.title
+                        && *t != g.title
+                    {
+                        g.alt_titles
+                            .push(std::mem::replace(&mut g.title, t.clone()));
                     }
                     if let Some(c) = &o.art_cover {
                         g.art_cover = Some(c.clone());
@@ -384,6 +393,7 @@ impl Backend {
             games,
             index,
             owners,
+            search: Default::default(),
         });
         self.bus.emit(Event::LibraryUpdated(revision));
     }
@@ -414,6 +424,7 @@ mod tests {
             games,
             index,
             owners: HashMap::new(),
+            search: Default::default(),
         }
     }
 

@@ -98,6 +98,14 @@ pub(super) fn build_menu(
             ),
         );
     } else if !game.is_installed {
+        if sideload && game.browser_url.is_none() {
+            let i = id.clone();
+            menu = menu.item(
+                item("game.menu.locate_program", IconName::FolderSearch)
+                    .disabled(!idle)
+                    .on_click(move |_, window, cx| ops::locate_program(&i, window, cx)),
+            );
+        }
         if !sideload {
             let i = id.clone();
             menu = menu.item(
@@ -364,7 +372,11 @@ pub(super) fn build_menu(
                 }),
         );
     }
-    if game.is_installed && id.runner.manages_installs() && id.runner != Runner::Emulation {
+    // An added game whose program is gone can still leave the library.
+    if (game.is_installed || sideload)
+        && id.runner.manages_installs()
+        && id.runner != Runner::Emulation
+    {
         menu = menu.separator();
         let i = id.clone();
         menu = menu.item(
