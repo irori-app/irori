@@ -2420,10 +2420,13 @@ impl LibraryView {
             Some(url) => art_image(url, physical_width(width, window), false, cx),
             None => ArtImage::Missing,
         };
+        // Store logos are drawn for dark backgrounds (often white lettering);
+        // the card's fade is the theme's background, so light themes show
+        // the title as text, as the game page does.
         let logo = game
             .art_logo
             .clone()
-            .filter(|l| !l.is_empty())
+            .filter(|l| !l.is_empty() && cx.theme().mode.is_dark())
             .and_then(|url| {
                 let px = physical_width(rems(CARD_REM * 0.6), window);
                 art_img(&url, px, true, cx)
@@ -2514,11 +2517,19 @@ impl LibraryView {
                             .min_w_0()
                             .child(match logo {
                                 // The game's logo says its name in its own type.
+                                // Its own height and width: sized only by its
+                                // box, a logo drew at its own size, over the
+                                // line below it.
                                 Some(logo) => div()
                                     .h(rems(CARD_LOGO_REM))
-                                    .max_w(rems(CARD_REM * 0.6))
+                                    .max_w_full()
                                     .mb_1()
-                                    .child(logo.h_full().object_fit(ObjectFit::Contain))
+                                    .overflow_hidden()
+                                    .child(
+                                        logo.h(rems(CARD_LOGO_REM))
+                                            .max_w(rems(CARD_REM * 0.6))
+                                            .object_fit(ObjectFit::Contain),
+                                    )
                                     .into_any_element(),
                                 None => div()
                                     .text_lg()
