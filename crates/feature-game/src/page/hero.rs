@@ -355,7 +355,8 @@ impl GamePage {
         )
     }
 
-    /// Favourite, settings, cloud saves and more actions, as icon buttons.
+    /// Favourite, settings, cloud saves, save backups and more actions, as icon
+    /// buttons.
     fn render_tools(&self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
         let fav = models(cx).library.read(cx).is_favourite(&self.id);
         let settings_id = self.id.clone();
@@ -424,6 +425,20 @@ impl GamePage {
                         .disabled(cloud != saves::CloudSupport::Supported)
                         .on_click(move |_, window, cx| {
                             saves::open_cloud_saves_sheet(saves_id.clone(), window, cx)
+                        }),
+                )
+            })
+            .when(irori_ui::save_backups::offers_backups(game), |row| {
+                let id = self.id.clone();
+                row.child(
+                    Button::new("game-save-backups")
+                        .outline()
+                        .rounded(PILL)
+                        .icon(IconName::DatabaseBackup)
+                        .accessibility_label(t("game.hero.save_backups"))
+                        .tooltip(t("game.hero.save_backups"))
+                        .on_click(move |_, window, cx| {
+                            irori_ui::save_backups::open_save_backups_sheet(id.clone(), window, cx)
                         }),
                 )
             })

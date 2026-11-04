@@ -65,8 +65,10 @@ pub enum FieldSection {
     Performance,
     /// Arguments, wrappers, environment, scripts.
     Launch,
-    /// Cloud save synchronisation.
+    /// Cloud save synchronisation and Ludusavi backups of one game.
     CloudSaves,
+    /// Ludusavi, which backs up the saves of every game.
+    Saves,
 }
 
 impl FieldSection {
@@ -79,10 +81,11 @@ impl FieldSection {
     ];
 
     /// Sections holding application-wide fields.
-    pub const APP: [FieldSection; 3] = [
+    pub const APP: [FieldSection; 4] = [
         FieldSection::General,
         FieldSection::Appearance,
         FieldSection::Advanced,
+        FieldSection::Saves,
     ];
 
     /// Translation key of the section heading.
@@ -94,7 +97,8 @@ impl FieldSection {
             FieldSection::Wine => "settings.section.wine",
             FieldSection::Performance => "settings.section.performance",
             FieldSection::Launch => "settings.section.launch",
-            FieldSection::CloudSaves => "settings.section.cloud_saves",
+            FieldSection::CloudSaves => "settings.section.game_saves",
+            FieldSection::Saves => "settings.section.saves",
         }
     }
 
@@ -219,6 +223,10 @@ pub enum PanelKind {
     EglSync,
     /// Manual cloud-save synchronisation of one game.
     SaveSync,
+    /// Ludusavi: where it was found, or how to get it.
+    Ludusavi,
+    /// Ludusavi backups of one game.
+    SaveBackups,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -500,7 +508,7 @@ impl FieldSpec {
 }
 
 use FieldKind::{Action, Choice, Custom, Panel, Text, Toggle};
-use FieldSection::{Advanced, Appearance, CloudSaves, General, Launch, Performance, Wine};
+use FieldSection::{Advanced, Appearance, CloudSaves, General, Launch, Performance, Saves, Wine};
 use Scope::{App, GameOnly, Shared};
 
 /// Interface languages by native name (never translated).
@@ -2035,6 +2043,55 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.panel_sync_saves.help")
     .keywords(&["cloud", "save", "sync", "upload", "download", "force"]),
+    game(
+        "iroriLudusaviAutoBackup",
+        "settings.field.ludusavi_auto_backup.label",
+        CloudSaves,
+        "settings.group.ludusavi",
+        Toggle,
+    )
+    .tag(Verbatim("Ludusavi"))
+    .help("settings.field.ludusavi_auto_backup.help")
+    .keywords(&["ludusavi", "backup", "save", "session", "exit"]),
+    game_only(
+        "panel.save-backups",
+        "settings.field.panel_save_backups.label",
+        CloudSaves,
+        "settings.group.ludusavi",
+        Panel(PanelKind::SaveBackups),
+    )
+    .help("settings.field.panel_save_backups.help")
+    .keywords(&["ludusavi", "backup", "restore", "save", "prefix"]),
+    // ---- Saves ----
+    app(
+        "panel.ludusavi",
+        "settings.field.panel_ludusavi.label",
+        Saves,
+        "settings.group.ludusavi",
+        Panel(PanelKind::Ludusavi),
+    )
+    .help("settings.field.panel_ludusavi.help")
+    .keywords(&["ludusavi", "backup", "save", "install"]),
+    app(
+        "iroriLudusaviPath",
+        "settings.field.ludusavi_path.label",
+        Saves,
+        "settings.group.ludusavi",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ludusavi_path.help")
+    .placeholder(Key("settings.field.ludusavi_path.placeholder"))
+    .keywords(&["ludusavi", "program", "path", "flatpak"]),
+    app(
+        "iroriLudusaviBackupPath",
+        "settings.field.ludusavi_backup_path.label",
+        Saves,
+        "settings.group.ludusavi",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.ludusavi_backup_path.help")
+    .placeholder(Key("settings.field.ludusavi_backup_path.placeholder"))
+    .keywords(&["ludusavi", "backup", "folder", "path"]),
 ];
 
 /// The field with this path.

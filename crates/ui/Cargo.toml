@@ -25,6 +25,7 @@ image.workspace = true
 sha2.workspace = true
 hex.workspace = true
 open.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 libc = "0.2"
 notify.workspace = true
 ron = { version = "0.12", default-features = false }

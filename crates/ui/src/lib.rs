@@ -20,6 +20,7 @@ pub mod motion;
 pub mod nav;
 mod omarchy;
 pub mod play_status;
+pub mod save_backups;
 pub mod save_conflict;
 pub mod state;
 pub mod style;

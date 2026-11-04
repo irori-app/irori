@@ -4892,6 +4892,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "which 8.0.6",
  "windows-sys 0.61.2",
 ]
 
@@ -5003,6 +5004,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "block2 0.6.2",
+ "chrono",
  "dirs 6.0.0",
  "futures",
  "gpui-kit",
