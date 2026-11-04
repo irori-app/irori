@@ -50,6 +50,8 @@ pub(crate) enum Message {
         kind: ControllerKind,
     },
     Controllers(Vec<ControllerInfo>),
+    /// Guide + X: save a clip of the replay buffer.
+    SaveClip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +253,14 @@ impl Reader {
                 let input = map_button(button, device.kind);
                 if input == GamepadInput::Guide {
                     self.guide.press(usize::from(id), Instant::now());
+                    return;
+                }
+                // X (Square on PlayStation) with Guide held: a clip, even
+                // while a game has the window.
+                if input == GamepadInput::Alt && self.guide.chord(usize::from(id)) {
+                    if self.enabled() {
+                        let _ = self.tx.unbounded_send(Message::SaveClip);
+                    }
                     return;
                 }
                 self.press(id, Source::DPad, input);

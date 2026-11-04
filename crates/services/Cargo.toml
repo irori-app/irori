@@ -36,8 +36,9 @@ plist.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# The desktop portal's Inhibit, with the features GPUI already builds ashpd with.
-ashpd = { version = "0.13", default-features = false, features = ["async-io", "inhibit", "network_monitor"] }
+# The desktop portal's Inhibit, NetworkMonitor and GlobalShortcuts (the clip
+# shortcut), with the features GPUI already builds ashpd with.
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts", "inhibit", "network_monitor"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

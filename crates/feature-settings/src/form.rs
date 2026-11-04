@@ -42,6 +42,7 @@ use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
     PanelKind, Scope, TextKind,
 };
+use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::value::{
     bool_at, effective_overrides, get_path, override_key, plan_game_write, remove_row,
@@ -632,6 +633,13 @@ impl SettingsForm {
                 }
                 _ => None,
             },
+            PanelKind::Replay => {
+                let game = match &self.target {
+                    FormTarget::Game(id) => Some(id.clone()),
+                    _ => None,
+                };
+                Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
+            }
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);

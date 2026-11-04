@@ -1,8 +1,10 @@
-//! Screenshots of the user's own play, found where they already land:
-//! Steam's screenshot folders, one per app, and the desktop's screenshot
-//! folders (Spectacle, GNOME, Game Bar, macOS). A Steam folder names its
-//! game; any other screenshot belongs to the play session it was taken in.
-//! Files are only read: Irori never moves, renames or removes them.
+//! Screenshots and clips of the user's own play, found where they already
+//! land: Steam's screenshot folders, one per app, the desktop's screenshot
+//! folders (Spectacle, GNOME, Game Bar, macOS) and the replay buffer's clip
+//! folders. A Steam folder names its game, and so does a clip folder named
+//! after a game in the library; any other file belongs to the play session
+//! it was taken in. Files are only read: Irori never moves, renames or
+//! removes them.
 //!
 //! Each folder's listing is cached in `<cache>/screenshots.json` with the
 //! folder's modified time, so a folder nothing was added to is not listed
@@ -21,6 +23,9 @@ use crate::sessions::Session;
 
 /// Image formats the art store can show.
 const EXTENSIONS: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
+/// Video formats of clips (the replay buffer's, Game Bar's, macOS's screen
+/// recordings), opened in the system's player.
+const VIDEO_EXTENSIONS: [&str; 4] = ["mp4", "mkv", "webm", "mov"];
 /// A screenshot belongs to a session from this long before it started...
 const LEAD_SECS: i64 = 5;
 /// ...until this long after it ended (a last look at the game's final frame).
@@ -31,7 +36,7 @@ const STEAM_SHORTCUT_IDS: u64 = 1 << 31;
 /// A folder changed this recently may still be written to within the same
 /// tick of its modified time, so its listing is not reused.
 const SETTLE_SECS: i64 = 2;
-const CACHE_VERSION: u32 = 1;
+const CACHE_VERSION: u32 = 2;
 
 /// One screenshot the user took while playing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +46,8 @@ pub struct Screenshot {
     pub taken: i64,
     /// `GameId::key()` of the game.
     pub game: String,
+    /// A video clip rather than a picture.
+    pub video: bool,
 }
 
 /// Every screenshot found, and where Irori looked.
@@ -67,18 +74,44 @@ pub struct Folder {
     /// The game every screenshot in it shows (a Steam app's folder); `None`
     /// when screenshots are matched to sessions by time.
     pub game: Option<String>,
+    /// A folder of the replay buffer's clips, which is no place to tell the
+    /// user to save screenshots in.
+    pub clips: bool,
 }
 
 /// Every folder screenshots land in on this system: Steam's (for every
-/// account on it) and the desktop's.
-pub fn folders(app: &AppSettings) -> Vec<Folder> {
+/// account on it), the desktop's and the replay buffer's clip folders.
+/// `game_of` names the game whose title a clip folder is named after.
+pub fn folders(app: &AppSettings, game_of: impl Fn(&str) -> Option<String>) -> Vec<Folder> {
     let steam = irori_runtime::locations::steam_path(app);
     let mut out = steam_folders(&steam);
-    out.extend(
-        desktop_folders()
-            .into_iter()
-            .map(|path| Folder { path, game: None }),
-    );
+    out.extend(desktop_folders().into_iter().map(|path| Folder {
+        path,
+        game: None,
+        clips: false,
+    }));
+    out.extend(clip_folders(
+        &crate::replay::clips_root(&app.game.replay),
+        game_of,
+    ));
+    out
+}
+
+/// The folders under `root`, one per game the replay buffer recorded.
+fn clip_folders(root: &Path, game_of: impl Fn(&str) -> Option<String>) -> Vec<Folder> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Folder> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| Folder {
+            game: e.file_name().to_str().and_then(&game_of),
+            path: e.path(),
+            clips: true,
+        })
+        .collect();
+    out.sort_by(|a, b| a.path.cmp(&b.path));
     out
 }
 
@@ -100,7 +133,11 @@ fn steam_folders(steam: &Path) -> Vec<Folder> {
             let path = app.path().join("screenshots");
             if path.is_dir() {
                 let game = (id < STEAM_SHORTCUT_IDS).then(|| format!("steam:{id}"));
-                out.push(Folder { path, game });
+                out.push(Folder {
+                    path,
+                    game,
+                    clips: false,
+                });
             }
         }
     }
@@ -229,6 +266,7 @@ pub fn build(folders: &[Folder], sessions: &[Session], cache_file: &Path) -> Scr
                     path: folder.path.join(name),
                     taken: *taken,
                     game: game.to_owned(),
+                    video: is_video(Path::new(name)),
                 });
             }
         }
@@ -248,7 +286,7 @@ pub fn build(folders: &[Folder], sessions: &[Session], cache_file: &Path) -> Scr
         shots,
         folders: folders
             .iter()
-            .filter(|f| f.game.is_none() && !is_steam_folder(&f.path))
+            .filter(|f| f.game.is_none() && !f.clips && !is_steam_folder(&f.path))
             .map(|f| f.path.clone())
             .collect(),
     }
@@ -278,7 +316,7 @@ fn list(dir: &Path, cached: Option<&Listing>, now: i64) -> Option<Listing> {
             .extension()
             .and_then(|e| e.to_str())
             .is_some_and(|e| EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)));
-        if !is_image || name.starts_with('.') {
+        if !(is_image || is_video(path)) || name.starts_with('.') {
             continue;
         }
         let Ok(meta) = entry.metadata() else {
@@ -307,6 +345,13 @@ fn list(dir: &Path, cached: Option<&Listing>, now: i64) -> Option<Listing> {
         modified
     };
     Some(Listing { modified, files })
+}
+
+/// Whether `path` names a video clip.
+fn is_video(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| VIDEO_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
 
 fn modified_of(meta: &std::fs::Metadata) -> Option<(i64, u32)> {
@@ -475,10 +520,12 @@ mod tests {
                 Folder {
                     path: remote.join("1245620/screenshots"),
                     game: Some("steam:1245620".into()),
+                    clips: false,
                 },
                 Folder {
                     path: remote.join("3228583970/screenshots"),
                     game: None,
+                    clips: false,
                 },
             ]
         );
@@ -515,14 +562,17 @@ mod tests {
             Folder {
                 path: shots.clone(),
                 game: None,
+                clips: false,
             },
             Folder {
                 path: steam.clone(),
                 game: Some("steam:1245620".into()),
+                clips: false,
             },
             Folder {
                 path: dir.path().join("missing"),
                 game: None,
+                clips: false,
             },
         ];
         let cache = dir.path().join("cache/screenshots.json");
@@ -575,6 +625,7 @@ mod tests {
         let folders = vec![Folder {
             path: shots.clone(),
             game: None,
+            clips: false,
         }];
         let cache = dir.path().join("screenshots.json");
         assert_eq!(build(&folders, &sessions, &cache).shots.len(), 1);
@@ -601,12 +652,51 @@ mod tests {
         let folders = vec![Folder {
             path: shots,
             game: None,
+            clips: false,
         }];
         let cache = dir.path().join("screenshots.json");
         assert!(build(&folders, &[], &cache).shots.is_empty());
         let start = local("2026-11-03 19:00:00");
         let sessions = vec![session("gog:hades", &rfc3339(start), 3600)];
         assert_eq!(build(&folders, &sessions, &cache).shots.len(), 1);
+    }
+
+    #[test]
+    fn clip_folders_name_their_game_and_hold_videos() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Irori");
+        touch(&root.join("Hades/Hades 2026-11-03 19-15-05.mp4"), None);
+        touch(&root.join("Gone/Gone 2026-11-03 19-20-00.mp4"), None);
+        touch(&root.join("loose.mp4"), None);
+        let folders = clip_folders(&root, |name| (name == "Hades").then(|| "gog:hades".into()));
+        assert_eq!(
+            folders,
+            vec![
+                Folder {
+                    path: root.join("Gone"),
+                    game: None,
+                    clips: true,
+                },
+                Folder {
+                    path: root.join("Hades"),
+                    game: Some("gog:hades".into()),
+                    clips: true,
+                },
+            ]
+        );
+        // The folder of a game no longer in the library goes by its sessions.
+        let start = local("2026-11-03 19:00:00");
+        let sessions = vec![session("legendary:Gone", &rfc3339(start), 3600)];
+        let index = build(&folders, &sessions, &dir.path().join("screenshots.json"));
+        let got: Vec<(&str, bool)> = index
+            .shots
+            .iter()
+            .map(|s| (s.game.as_str(), s.video))
+            .collect();
+        assert_eq!(got, vec![("legendary:Gone", true), ("gog:hades", true)]);
+        // Clip folders are not offered as places to save screenshots.
+        assert!(index.folders.is_empty());
+        assert!(clip_folders(&dir.path().join("missing"), |_| None).is_empty());
     }
 
     #[test]
