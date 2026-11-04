@@ -650,6 +650,8 @@ pub enum LibraryLayout {
     #[default]
     Grid,
     List,
+    /// A column of covers beside the selected game's page.
+    Focus,
 }
 
 /// How much of the desktop shows through Irori's window chrome.
@@ -684,6 +686,8 @@ pub struct UiPrefs {
     pub library_layout: LibraryLayout,
     /// Cover tile width in rem for the grid.
     pub tile_size: f32,
+    /// Width in rem of the game drawer beside the grid (`libraryDrawerWidth`).
+    pub library_drawer_width: f32,
     pub reduce_motion: bool,
     pub show_store_badges: bool,
     pub sidebar_collapsed: bool,
@@ -795,6 +799,7 @@ impl Default for UiPrefs {
             font_size: 16.0,
             library_layout: LibraryLayout::Grid,
             tile_size: 11.0,
+            library_drawer_width: 26.0,
             reduce_motion: false,
             show_store_badges: true,
             sidebar_collapsed: false,

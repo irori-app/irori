@@ -205,7 +205,9 @@ irori-sign-in     (standalone; Irori links it only on macOS/Windows)
   and `GamePageEvent`.
 - When a feature needs an operation that requires a concrete store crate (Heroic
   import, the GOG branch password), the shell installs a hook (`irori_ui::hooks`,
-  `irori_game::install_hooks`) instead of the feature depending on the store.
+  `irori_game::install_hooks`) instead of the feature depending on the store. The
+  same goes for another feature's views: the library's Focus view and grid drawer show
+  the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`).
 
 ## 4. Architecture
 

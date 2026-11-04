@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "このログをアップロードしますか？",
   "settings.option.library_layout.grid": "グリッド",
   "settings.option.library_layout.list": "リスト",
+  "settings.option.library_layout.focus": "フォーカス",
   "settings.option.sharpness.sharpest": "5（最もシャープ）",
   "settings.option.sharpness.softest": "1（最もソフト）",
   "settings.option.steam_runtime.none": "なし",

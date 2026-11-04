@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Upload this log?",
   "settings.option.library_layout.grid": "Grid",
   "settings.option.library_layout.list": "List",
+  "settings.option.library_layout.focus": "Focus",
   "settings.option.sharpness.sharpest": "5 (sharpest)",
   "settings.option.sharpness.softest": "1 (softest)",
   "settings.option.steam_runtime.none": "None",
