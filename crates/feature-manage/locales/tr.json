@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Blizzard ve Activision oyunları: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "EA oyunları; Steam veya Epic'te sahip olduğun ve EA app gerektirenler de dahil.",
   "manage.launchers.about.ubisoft": "Ubisoft oyunları; başlamak için Ubisoft Connect gerektirenler de dahil.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption ve diğer Rockstar oyunları."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption ve diğer Rockstar oyunları.",
+  "manage.launchers.about.xbox": "Xbox uygulaması, Microsoft Store ve PC Game Pass oyunları. Irori onları kendisi bulur; Xbox uygulamasında yükle ve kaldır.",
+  "manage.launchers.xbox.windows_only": "Xbox uygulaması yalnızca Windows'ta çalışır. Bu oyunları kitaplığında görmek için Irori'yi Windows'ta başlat.",
+  "manage.launchers.xbox.get_app": "Xbox uygulamasını edin",
+  "manage.launchers.state.windows_only": "Yalnızca Windows",
+  "manage.launchers.state.no_xbox_app": "Xbox uygulaması yüklü değil"
 }
