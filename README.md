@@ -155,6 +155,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   selected game's whole page over its art. Arrow keys move the selection in each.
 - **Add any game** yourself, with its own description, developer, release date, genres
   and art from SteamGridDB.
+- **Your own art for any game:** a cover, background and logo from a file, SteamGridDB
+  or one of your screenshots of it, in the game's Artwork settings.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
   favourites, categories and playtime.
 
@@ -227,6 +229,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the
   DXVK and VKD3D-Proton versions per Wine build, and turn on descriptor heap and
   Proton's DLSS, FSR and XeSS upgrades without looking up variables.
+- **Graphics tab per game (Linux):** pick which graphics card a game runs on when the
+  computer has more than one, turn on NVIDIA Smooth Motion, NVIDIA Reflex for Vulkan
+  games, or Lossless Scaling frame generation through lsfg-vk. Every option says why
+  it's greyed out when your hardware or drivers can't use it.
 - **Your folders, your shader cache:** choose where downloaded Wine and Proton builds
   go, and games get 10 GB of shader cache on NVIDIA and Mesa, so big games don't
   compile their shaders again at every start.

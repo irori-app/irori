@@ -123,6 +123,7 @@ fn main() -> Result<()> {
         irori_ui::init(backend.clone(), cx);
         irori_ui::i18n::register(strings::CATALOGS);
         irori_ui::hooks::install(stores::hooks(), cx);
+        irori_ui::art_picker::install(irori_library::open_art_picker_dialog, cx);
         irori_bigpicture::init(cx);
         irori_library::init(cx);
         irori_manage::init(cx);

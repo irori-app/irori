@@ -4,6 +4,7 @@
 //! notifications ([`system_notify`]) and domain components.
 
 pub mod art;
+pub mod art_picker;
 pub mod components;
 mod cosmic;
 mod desktop_accent;
