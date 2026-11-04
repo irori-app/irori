@@ -219,6 +219,10 @@ pub enum PanelKind {
     EglSync,
     /// Manual cloud-save synchronisation of one game.
     SaveSync,
+    /// Programs started alongside the game.
+    LaunchPrograms,
+    /// Launch presets: apply, save, apply to several games.
+    LaunchPresets,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -1889,6 +1893,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .requires(NEEDS_GAMESCOPE),
     // ---- Launch ----
     game(
+        "panel.launchPresets",
+        "settings.field.panel_launch_presets.label",
+        Launch,
+        "settings.group.presets",
+        Panel(PanelKind::LaunchPresets),
+    )
+    .help("settings.field.panel_launch_presets.help")
+    .keywords(&[
+        "preset",
+        "profile",
+        "template",
+        "steam deck",
+        "nvidia",
+        "latency",
+        "32-bit",
+        "apply",
+    ]),
+    game(
         "launcherArgs",
         "settings.field.launcher_args.label",
         Launch,
@@ -1969,6 +1991,25 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .keywords(&["script", "after", "post-exit"]),
+    game(
+        "panel.launchPrograms",
+        "settings.field.panel_launch_programs.label",
+        Launch,
+        "settings.group.programs",
+        Panel(PanelKind::LaunchPrograms),
+    )
+    .help("settings.field.panel_launch_programs.help")
+    .keywords(&[
+        "program",
+        "alongside",
+        "trainer",
+        "overlay",
+        "voice chat",
+        "discord",
+        "mod loader",
+        "companion",
+        "start with",
+    ]),
     game_only(
         "offlineMode",
         "settings.field.offline_mode.label",

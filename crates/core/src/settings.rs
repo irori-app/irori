@@ -249,6 +249,10 @@ pub struct GameSettings {
         skip_serializing_if = "Option::is_none"
     )]
     pub lutris_script: Option<LutrisScriptRecord>,
+    /// Programs started with the game (trainers, overlays, voice chat).
+    /// Irori-only.
+    #[serde(rename = "iroriLaunchPrograms")]
+    pub launch_programs: Vec<crate::launch_extras::LaunchProgram>,
 }
 
 /// Which Lutris install script installed a game (`iroriLutrisScript`).
@@ -329,6 +333,7 @@ impl Default for GameSettings {
             engine_options: BTreeMap::new(),
             engine_own_settings: false,
             lutris_script: None,
+            launch_programs: Vec::new(),
         }
     }
 }
@@ -557,6 +562,9 @@ pub struct AppSettings {
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
+    /// The user's own launch presets. Irori-only.
+    #[serde(rename = "iroriLaunchPresets")]
+    pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
 }
 
 impl Default for AppSettings {
@@ -580,6 +588,7 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             show_log_on_launch: false,
+            launch_presets: Vec::new(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
