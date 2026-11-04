@@ -190,7 +190,12 @@ impl BigPictureView {
         let m = models(cx);
         let queue = &m.downloads.read(cx).queue;
         let scale = m.settings.read(cx).app.ui.big_picture_scale;
-        menu_items(!queue.active.is_empty(), queue.paused, scale)
+        menu_items(
+            !queue.active.is_empty(),
+            queue.paused,
+            scale,
+            self.look.layout(),
+        )
     }
 
     pub(super) fn activate_menu_item(
@@ -232,6 +237,8 @@ impl BigPictureView {
                 });
                 task.detach();
             }
+            MenuItem::Layout(_) => self.next_layout(cx),
+            MenuItem::Themes => self.open_editor(window, cx),
             MenuItem::ToggleFullscreen => window.toggle_fullscreen(),
             MenuItem::SetUpEmulation => {
                 self.overlay = None;

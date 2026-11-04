@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Neon Arcade",
+  "author": "Irori",
+  "layout": "carousel",
+  "colors": {
+    "background": "#0a0b1f",
+    "foreground": "#eef0ff",
+    "accent": "#ff3ea5",
+    "surface": "#15173a"
+  },
+  "font": "mono",
+  "background": { "kind": "gradient", "from": "#0a0b1f", "to": "#3a0f5c", "angle": 160 },
+  "covers": { "shape": "square", "size": "medium", "corners": "sharp" },
+  "shelves": ["continue_playing", "favourites", "systems", "installed"]
+}

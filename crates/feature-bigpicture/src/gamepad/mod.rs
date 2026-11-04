@@ -18,6 +18,10 @@
 //!    Menu opens the command palette (Ctrl+K) and the shoulders page.
 //! 3. Guide toggles Big Picture from anywhere.
 //!
+//! With `iroriUi.bigPictureOnController` on, a controller connecting while
+//! Irori runs (not one already there when it starts) brings Irori to the
+//! front in Big Picture, unless a game is running.
+//!
 //! Input is ignored while `disable_controller` is set. When Irori is not the
 //! active window only Guide is honoured, and only while no game is running:
 //! it brings Irori to the front in Big Picture instead of acting on input
@@ -272,13 +276,48 @@ pub fn install(cx: &mut App) {
         })
         .detach();
     }
+    let started = Instant::now();
     cx.spawn(async move |cx| {
         while let Some(message) = rx.next().await {
             let disabled = shared.disabled.load(Ordering::Relaxed);
-            cx.update(|cx| on_message(message, disabled, &model, &echoes, cx));
+            cx.update(|cx| on_message(message, disabled, started, &model, &echoes, cx));
         }
     })
     .detach();
+}
+
+/// Controllers found this soon after start were there already; connecting
+/// them does not open Big Picture.
+const STARTUP_SCAN: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Whether a change in the controllers from `before` to `after` connected
+/// ones opens Big Picture (see the module docs).
+fn opens_big_picture(
+    enabled: bool,
+    before: usize,
+    after: usize,
+    since_start: std::time::Duration,
+    busy: bool,
+) -> bool {
+    enabled && after > before && since_start >= STARTUP_SCAN && !busy
+}
+
+/// Bring Irori to the front in Big Picture for a controller that just
+/// connected, when the user asked for that.
+fn open_for_controller(before: usize, after: usize, started: Instant, cx: &mut App) {
+    let enabled = cx
+        .try_global::<irori_ui::Models>()
+        .is_some_and(|m| m.settings.read(cx).app.ui.big_picture_on_controller);
+    let busy = game_running(cx)
+        || !cx.has_global::<irori_ui::nav::NavigatorHandle>()
+        || navigator(cx).read(cx).current() == &Route::BigPicture;
+    if !opens_big_picture(enabled, before, after, started.elapsed(), busy) {
+        return;
+    }
+    if let Some(handle) = cx.windows().into_iter().next() {
+        let _ = handle.update(cx, |_, window, _| window.activate_window());
+    }
+    nav::navigate(Route::BigPicture, cx);
 }
 
 thread_local! {
@@ -290,18 +329,25 @@ thread_local! {
 fn on_message(
     message: Message,
     disabled: bool,
+    started: Instant,
     model: &Entity<GamepadModel>,
     echoes: &RefCell<EchoFilter>,
     cx: &mut App,
 ) {
     match message {
-        Message::Controllers(list) => model.update(cx, |m, cx| {
-            if list.is_empty() {
-                m.last_kind = None;
+        Message::Controllers(list) => {
+            let (before, after) = (model.read(cx).controllers.len(), list.len());
+            model.update(cx, |m, cx| {
+                if list.is_empty() {
+                    m.last_kind = None;
+                }
+                m.controllers = list;
+                cx.notify();
+            });
+            if !disabled {
+                open_for_controller(before, after, started, cx);
             }
-            m.controllers = list;
-            cx.notify();
-        }),
+        }
         Message::Input { input, kind } => {
             if disabled
                 || !echoes
@@ -541,5 +587,25 @@ mod tests {
         cx.run_until_parked();
         let downs = window.update(cx, |aware, _, _| aware.downs).unwrap();
         assert_eq!(downs, 1);
+    }
+
+    #[test]
+    fn a_new_controller_opens_big_picture_only_when_asked() {
+        use super::{STARTUP_SCAN, opens_big_picture};
+        use std::time::Duration;
+        let later = STARTUP_SCAN + Duration::from_secs(1);
+        assert!(opens_big_picture(true, 0, 1, later, false));
+        assert!(opens_big_picture(true, 1, 2, later, false));
+        assert!(!opens_big_picture(false, 0, 1, later, false), "off");
+        assert!(!opens_big_picture(true, 1, 1, later, false), "no new one");
+        assert!(!opens_big_picture(true, 2, 1, later, false), "disconnected");
+        assert!(
+            !opens_big_picture(true, 0, 1, Duration::ZERO, false),
+            "at start"
+        );
+        assert!(
+            !opens_big_picture(true, 0, 1, later, true),
+            "playing or open"
+        );
     }
 }

@@ -17,12 +17,17 @@ anyhow.workspace = true
 parking_lot.workspace = true
 futures.workspace = true
 tracing.workspace = true
+once_cell.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+image.workspace = true
 gilrs = "0.11"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 regex.workspace = true
-serde_json.workspace = true
+tempfile = "3"
 # `gpui-kit/test-support` must not be enabled (it pulls the optional GPUI Fast
 # crates into resolution). GPUI's own test support exposes `TestAppContext` and
 # `#[gpui_kit::test]` through `gpui_kit::*` by feature unification.

@@ -13,10 +13,12 @@ use irori_core::{
     BIG_PICTURE_SCALES, GameId, GameInfo, InstallInfo, InstallPlatform, InstallRequest, Runner,
     StatusKind,
 };
-use irori_services::{LibrarySnapshot, UserData};
+use irori_services::{LibrarySnapshot, PlayStatus, UserData};
 use irori_ui::i18n::{t, t_args};
 
+use crate::layout::HomeLayout;
 use crate::text::store_name;
+use crate::theme::ShelfKind;
 
 /// A shelf of games on Home.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,6 +26,8 @@ pub enum RowKind {
     ContinuePlaying,
     Favourites,
     Installed,
+    RecentlyAdded,
+    PlanToPlay,
     /// Emulated games of one system (a systems catalog id).
     System(&'static str),
     /// Every game; only when no other shelf has any.
@@ -37,6 +41,8 @@ impl RowKind {
             RowKind::ContinuePlaying => t("bigpicture.shelf.continue_playing"),
             RowKind::Installed => t("bigpicture.shelf.installed"),
             RowKind::Favourites => t("bigpicture.shelf.favourites"),
+            RowKind::RecentlyAdded => t("bigpicture.shelf.recently_added"),
+            RowKind::PlanToPlay => t("bigpicture.shelf.plan_to_play"),
             RowKind::All => t("bigpicture.shelf.all"),
             RowKind::System(id) => irori_engines::systems::get(id)
                 .map_or_else(|| SharedString::new_static(id), |s| s.name.clone().into()),
@@ -49,6 +55,8 @@ impl RowKind {
             RowKind::ContinuePlaying => "continue",
             RowKind::Installed => "installed",
             RowKind::Favourites => "favourites",
+            RowKind::RecentlyAdded => "recently-added",
+            RowKind::PlanToPlay => "plan-to-play",
             RowKind::All => "all",
             RowKind::System(id) => id,
         }
@@ -67,11 +75,19 @@ fn parse_key(key: &str) -> Option<GameId> {
     Some(GameId::new(Runner::from_id(runner)?, app))
 }
 
-/// Build Home's shelves: Continue playing, Favourites, Installed, then one
-/// per system for emulated games. Hidden games are left out and empty shelves
-/// dropped; "All games" stands in when nothing else has a game, so a new
-/// library still shows something to play.
-pub fn build_rows(library: &LibrarySnapshot, user: &UserData, max_recent: usize) -> Vec<Row> {
+/// Games on the "Recently added" shelf.
+const RECENTLY_ADDED: usize = 24;
+
+/// Build Home's shelves of `shelves`, in that order (the systems shelf
+/// becomes one per system with emulated games). Hidden games are left out
+/// and empty shelves dropped; "All games" stands in when nothing else has a
+/// game, so a new library still shows something to play.
+pub fn build_rows(
+    library: &LibrarySnapshot,
+    user: &UserData,
+    max_recent: usize,
+    shelves: &[ShelfKind],
+) -> Vec<Row> {
     let visible: Vec<&Arc<GameInfo>> = library
         .games
         .iter()
@@ -87,33 +103,60 @@ pub fn build_rows(library: &LibrarySnapshot, user: &UserData, max_recent: usize)
             .collect()
     };
 
-    let recent: Vec<Arc<GameInfo>> = user
-        .recent
-        .iter()
-        .filter(|k| parse_key(k).is_some())
-        .filter_map(|k| by_key.get(k.as_str()).map(|g| (*g).clone()))
-        .take(max_recent.max(1))
-        .collect();
-    let mut rows = vec![
-        Row {
-            kind: RowKind::ContinuePlaying,
-            games: recent,
-        },
-        Row {
-            kind: RowKind::Favourites,
-            games: pick(&|g| user.favourites.contains(&g.id().key())),
-        },
-        Row {
-            kind: RowKind::Installed,
-            games: pick(&|g| g.is_installed),
-        },
-    ];
-    for system in irori_engines::systems::all() {
-        let id = system.id.as_str();
-        rows.push(Row {
-            kind: RowKind::System(id),
-            games: pick(&|g| g.system.as_deref() == Some(id)),
-        });
+    let mut rows = Vec::new();
+    for shelf in shelves {
+        match shelf {
+            ShelfKind::ContinuePlaying => rows.push(Row {
+                kind: RowKind::ContinuePlaying,
+                games: user
+                    .recent
+                    .iter()
+                    .filter(|k| parse_key(k).is_some())
+                    .filter_map(|k| by_key.get(k.as_str()).map(|g| (*g).clone()))
+                    .take(max_recent.max(1))
+                    .collect(),
+            }),
+            ShelfKind::Favourites => rows.push(Row {
+                kind: RowKind::Favourites,
+                games: pick(&|g| user.favourites.contains(&g.id().key())),
+            }),
+            ShelfKind::Installed => rows.push(Row {
+                kind: RowKind::Installed,
+                games: pick(&|g| g.is_installed),
+            }),
+            ShelfKind::RecentlyAdded => {
+                let added = |g: &GameInfo| {
+                    g.date_added
+                        .clone()
+                        .or_else(|| user.first_seen.get(&g.id().key()).cloned())
+                };
+                let mut games: Vec<Arc<GameInfo>> =
+                    pick(&|g| added(g).is_some_and(|d| !d.is_empty()));
+                games.sort_by(|a, b| {
+                    added(b)
+                        .cmp(&added(a))
+                        .then_with(|| sort_key(a).cmp(&sort_key(b)))
+                });
+                games.truncate(RECENTLY_ADDED);
+                rows.push(Row {
+                    kind: RowKind::RecentlyAdded,
+                    games,
+                });
+            }
+            ShelfKind::PlanToPlay => rows.push(Row {
+                kind: RowKind::PlanToPlay,
+                games: pick(&|g| user.play_status(&g.id().key()) == Some(PlayStatus::PlanToPlay)),
+            }),
+            ShelfKind::Systems => {
+                for system in irori_engines::systems::all() {
+                    let id = system.id.as_str();
+                    rows.push(Row {
+                        kind: RowKind::System(id),
+                        games: pick(&|g| g.system.as_deref() == Some(id)),
+                    });
+                }
+            }
+        }
     }
     rows.retain(|r| !r.games.is_empty());
     if rows.is_empty() && !visible.is_empty() {
@@ -551,6 +594,10 @@ pub enum MenuItem {
     ResumeDownloads,
     /// Cycles Big Picture's interface size; carries the current percent.
     InterfaceSize(u32),
+    /// Cycles Home's layout; carries the current one.
+    Layout(HomeLayout),
+    /// Opens the theme editor.
+    Themes,
     ToggleFullscreen,
     /// Leave Big Picture and open the "Set up emulation" guide.
     SetUpEmulation,
@@ -567,8 +614,15 @@ impl MenuItem {
                 &[("percent", percent.to_string().as_str())],
             );
         }
+        if let MenuItem::Layout(layout) = self {
+            return t_args(
+                "bigpicture.menu.layout",
+                &[("layout", layout.label().as_str())],
+            );
+        }
         t(match self {
-            MenuItem::InterfaceSize(_) => unreachable!("handled above"),
+            MenuItem::InterfaceSize(_) | MenuItem::Layout(_) => unreachable!("handled above"),
+            MenuItem::Themes => "bigpicture.menu.themes",
             MenuItem::PauseDownloads => "bigpicture.menu.pause_downloads",
             MenuItem::ResumeDownloads => "bigpicture.menu.resume_downloads",
             MenuItem::ToggleFullscreen => "bigpicture.menu.toggle_fullscreen",
@@ -583,6 +637,8 @@ impl MenuItem {
             MenuItem::PauseDownloads => IconName::CircleStop,
             MenuItem::ResumeDownloads => IconName::Play,
             MenuItem::InterfaceSize(_) => IconName::ZoomIn,
+            MenuItem::Layout(_) => IconName::LayoutDashboard,
+            MenuItem::Themes => IconName::Palette,
             MenuItem::ToggleFullscreen => IconName::Maximize,
             MenuItem::SetUpEmulation => IconName::Joystick,
             MenuItem::ExitBigPicture => IconName::LogOut,
@@ -595,6 +651,8 @@ impl MenuItem {
             MenuItem::PauseDownloads => "bp-menu-pause",
             MenuItem::ResumeDownloads => "bp-menu-resume",
             MenuItem::InterfaceSize(_) => "bp-menu-size",
+            MenuItem::Layout(_) => "bp-menu-layout",
+            MenuItem::Themes => "bp-menu-themes",
             MenuItem::ToggleFullscreen => "bp-menu-fullscreen",
             MenuItem::SetUpEmulation => "bp-menu-emulation",
             MenuItem::ExitBigPicture => "bp-menu-exit",
@@ -603,10 +661,15 @@ impl MenuItem {
     }
 }
 
-/// Quick menu entries given the download queue state and the interface
-/// size in percent.
-pub fn menu_items(has_downloads: bool, paused: bool, scale: u32) -> Vec<MenuItem> {
-    let mut out = Vec::with_capacity(6);
+/// Quick menu entries given the download queue state, the interface size
+/// in percent and Home's layout.
+pub fn menu_items(
+    has_downloads: bool,
+    paused: bool,
+    scale: u32,
+    layout: HomeLayout,
+) -> Vec<MenuItem> {
+    let mut out = Vec::with_capacity(9);
     if has_downloads {
         out.push(if paused {
             MenuItem::ResumeDownloads
@@ -616,6 +679,8 @@ pub fn menu_items(has_downloads: bool, paused: bool, scale: u32) -> Vec<MenuItem
     }
     out.extend([
         MenuItem::InterfaceSize(scale),
+        MenuItem::Layout(layout),
+        MenuItem::Themes,
         MenuItem::ToggleFullscreen,
         MenuItem::SetUpEmulation,
         MenuItem::ExitBigPicture,
@@ -688,7 +753,7 @@ mod tests {
         let mut user = UserData::default();
         user.hidden.insert("gog:c".into());
         user.recent = vec!["gog:c".into(), "gog:b".into(), "bogus".into()];
-        let rows = build_rows(&lib, &user, 8);
+        let rows = build_rows(&lib, &user, 8, &ShelfKind::DEFAULT);
         assert_eq!(
             kinds(&rows),
             vec![RowKind::ContinuePlaying, RowKind::Installed]
@@ -698,23 +763,68 @@ mod tests {
     }
 
     #[test]
+    fn themes_choose_and_order_the_shelves() {
+        let mut lib = LibrarySnapshot::default();
+        let mut newer = (*game(Runner::Gog, "new", false)).clone();
+        newer.date_added = Some("2026-05-01T00:00:00Z".into());
+        lib.games = vec![
+            game(Runner::Gog, "a", true),
+            game(Runner::Gog, "old", false),
+            Arc::new(newer),
+            game(Runner::Gog, "never", false),
+        ];
+        let mut user = UserData::default();
+        user.first_seen
+            .insert("gog:old".into(), "2025-01-01T00:00:00Z".into());
+        user.play_status.insert(
+            "gog:old".into(),
+            irori_services::PlayStatusRecord {
+                status: PlayStatus::PlanToPlay,
+                since: "2026-01-01T00:00:00Z".into(),
+            },
+        );
+        let rows = build_rows(
+            &lib,
+            &user,
+            8,
+            &[
+                ShelfKind::PlanToPlay,
+                ShelfKind::RecentlyAdded,
+                ShelfKind::Installed,
+            ],
+        );
+        assert_eq!(
+            kinds(&rows),
+            vec![
+                RowKind::PlanToPlay,
+                RowKind::RecentlyAdded,
+                RowKind::Installed
+            ]
+        );
+        assert_eq!(titles(&rows[0].games), vec!["OLD"]);
+        assert_eq!(titles(&rows[1].games), vec!["NEW", "OLD"]);
+        // No shelves at all still shows every game.
+        assert_eq!(kinds(&build_rows(&lib, &user, 8, &[])), vec![RowKind::All]);
+    }
+
+    #[test]
     fn all_games_stand_in_for_an_empty_home() {
         let mut lib = LibrarySnapshot::default();
         lib.games = vec![
             game(Runner::Gog, "a", false),
             game(Runner::Legendary, "b", false),
         ];
-        let rows = build_rows(&lib, &UserData::default(), 8);
+        let rows = build_rows(&lib, &UserData::default(), 8, &ShelfKind::DEFAULT);
         assert_eq!(kinds(&rows), vec![RowKind::All]);
         assert_eq!(rows[0].games.len(), 2);
 
         let mut user = UserData::default();
         user.favourites.insert("legendary:b".into());
         assert_eq!(
-            kinds(&build_rows(&lib, &user, 8)),
+            kinds(&build_rows(&lib, &user, 8, &ShelfKind::DEFAULT)),
             vec![RowKind::Favourites]
         );
-        assert!(build_rows(&LibrarySnapshot::default(), &user, 8).is_empty());
+        assert!(build_rows(&LibrarySnapshot::default(), &user, 8, &ShelfKind::DEFAULT).is_empty());
     }
 
     #[test]
@@ -945,12 +1055,21 @@ mod tests {
     #[test]
     fn menu_offers_download_control_only_with_downloads() {
         assert_eq!(
-            menu_items(false, false, 100)[0],
+            menu_items(false, false, 100, HomeLayout::Shelves)[0],
             MenuItem::InterfaceSize(100)
         );
-        assert_eq!(menu_items(true, false, 100)[0], MenuItem::PauseDownloads);
-        assert_eq!(menu_items(true, true, 150)[0], MenuItem::ResumeDownloads);
-        assert_eq!(menu_items(true, true, 150)[1], MenuItem::InterfaceSize(150));
+        assert_eq!(
+            menu_items(true, false, 100, HomeLayout::Shelves)[0],
+            MenuItem::PauseDownloads
+        );
+        assert_eq!(
+            menu_items(true, true, 150, HomeLayout::Shelves)[0],
+            MenuItem::ResumeDownloads
+        );
+        let items = menu_items(true, true, 150, HomeLayout::Wall);
+        assert_eq!(items[1], MenuItem::InterfaceSize(150));
+        assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
+        assert_eq!(items[3], MenuItem::Themes);
     }
 
     #[test]
