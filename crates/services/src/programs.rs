@@ -372,7 +372,8 @@ mod tests {
     #[test]
     fn native_programs_run_on_their_own_with_the_game_named() {
         let mut p = program("/opt/voice/voice");
-        p.args = "--minimized --room 'my room'".into();
+        // Double quotes group an argument under both POSIX and Windows rules.
+        p.args = "--minimized --room \"my room\"".into();
         p.delay_seconds = 5;
         let env = wine(WineKind::Wine, false);
         let plan = plan(&input(std::slice::from_ref(&p), &env));
