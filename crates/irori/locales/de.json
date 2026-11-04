@@ -79,5 +79,14 @@
   "shell.app_update.download": "Herunterladen",
   "shell.app_update.copy_command": "Befehl kopieren",
   "shell.app_update.updated": "Irori wurde auf {version} aktualisiert",
-  "shell.app_update.release_notes": "Versionshinweise"
+  "shell.app_update.release_notes": "Versionshinweise",
+  "shell.tray.save_clip": "Clip speichern",
+  "shell.palette.save_clip": "Clip von {title} speichern",
+  "shell.palette.save_clip_keywords": "clip replay aufnahme video aufzeichnen",
+  "shell.notice.replay_not_recording": "Der Replay-Puffer nimmt nicht auf",
+  "shell.notice.replay_missing": "Installiere gpu-screen-recorder von Flathub oder aus den Paketen deiner Distribution, um Clips aufzunehmen.",
+  "shell.notice.replay_turn_on": "Aktiviere ihn unter Leistung → Replay-Puffer, in den Spiel-Standards oder in den Einstellungen dieses Spiels.",
+  "shell.notice.replay_stopped": "Der Replay-Puffer wurde beendet",
+  "shell.notice.clip_saved": "Clip von {title} gespeichert",
+  "shell.notice.clip_failed": "Der Clip wurde nicht gespeichert"
 }

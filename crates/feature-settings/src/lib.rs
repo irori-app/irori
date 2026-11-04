@@ -28,6 +28,7 @@ mod game_view;
 mod i18n;
 mod logs;
 pub mod registry;
+mod replay;
 mod saves;
 mod stores;
 pub mod value;

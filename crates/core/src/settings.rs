@@ -249,6 +249,43 @@ pub struct GameSettings {
         skip_serializing_if = "Option::is_none"
     )]
     pub lutris_script: Option<LutrisScriptRecord>,
+    /// Keep the last moments of play ready to save as a clip. Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriReplay")]
+    pub replay: ReplaySettings,
+}
+
+/// The replay buffer (`iroriReplay`): gpu-screen-recorder keeps the last
+/// `seconds` of a game Irori started, and a clip is saved on request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ReplaySettings {
+    pub enabled: bool,
+    /// How much play a clip holds.
+    pub seconds: u32,
+    /// gpu-screen-recorder's quality preset: `medium`, `high`, `very_high`
+    /// or `ultra`.
+    pub quality: String,
+    /// `desktop` (what the speakers play), `desktop_and_mic` or `none`.
+    pub audio: String,
+    /// `screen` (the first monitor) or `portal` (the desktop asks once
+    /// what to record).
+    pub capture: String,
+    /// Where clips go, in a folder per game; empty for Videos/Irori.
+    pub folder: String,
+}
+
+impl Default for ReplaySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            seconds: 60,
+            quality: "very_high".into(),
+            audio: "desktop".into(),
+            capture: "screen".into(),
+            folder: String::new(),
+        }
+    }
 }
 
 /// Which Lutris install script installed a game (`iroriLutrisScript`).
@@ -329,6 +366,7 @@ impl Default for GameSettings {
             engine_options: BTreeMap::new(),
             engine_own_settings: false,
             lutris_script: None,
+            replay: ReplaySettings::default(),
         }
     }
 }
@@ -794,6 +832,28 @@ impl Default for UiPrefs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_replay_buffer_is_off_and_one_game_may_turn_it_on() {
+        let defaults = GameSettings::default();
+        assert!(!defaults.replay.enabled);
+        let json = serde_json::to_value(&defaults).unwrap();
+        assert_eq!(json["iroriReplay"]["seconds"], 60);
+        assert_eq!(json["iroriReplay"]["quality"], "very_high");
+        // A game's override holds the whole object; missing fields take
+        // their defaults.
+        let mut overrides = GameSettingsOverrides::default();
+        overrides.set(
+            "iroriReplay",
+            serde_json::json!({"enabled": true, "seconds": 30}),
+        );
+        let game = overrides.apply(&defaults);
+        assert!(game.replay.enabled);
+        assert_eq!(game.replay.seconds, 30);
+        assert_eq!(game.replay.audio, "desktop");
+        let old: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.game.replay, ReplaySettings::default());
+    }
 
     #[test]
     fn ember_keys_load_under_irori_names() {

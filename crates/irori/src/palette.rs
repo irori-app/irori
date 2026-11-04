@@ -1,6 +1,7 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
-//! library by play status, and run window commands, all from the keyboard.
+//! library by play status, save a clip while the replay buffer records, and
+//! run window commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -29,6 +30,8 @@ enum PaletteTarget {
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
     GroupByStatus(bool),
+    /// Save a clip of the replay buffer.
+    SaveClip,
 }
 
 /// Retained palette state, owned by the shell.
@@ -47,11 +50,14 @@ impl Palette {
         }
     }
 
-    /// Rows for `games`. `open` is the game whose page is shown, with its
-    /// play status: its status commands come first. `grouped` is whether the
-    /// library groups by play status, while a library view exists.
+    /// Rows for `games`. `replay` is the game the replay buffer records:
+    /// saving a clip comes first. `open` is the game whose page is shown,
+    /// with its play status: its status commands come next. `grouped` is
+    /// whether the library groups by play status, while a library view
+    /// exists.
     fn items(
         games: &[Arc<GameInfo>],
+        replay: Option<&str>,
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
         grouped: Option<bool>,
         targets: &mut Vec<PaletteTarget>,
@@ -62,6 +68,16 @@ impl Palette {
                 items.push(item);
                 targets.push(target);
             };
+        if let Some(title) = replay {
+            push(
+                CommandItem::new()
+                    .label(t_args("shell.palette.save_clip", &[("title", title)]))
+                    .keywords([t("shell.palette.save_clip_keywords")])
+                    .icon(IconName::Clapperboard),
+                PaletteTarget::SaveClip,
+                targets,
+            );
+        }
         if let Some((game, current)) = open {
             let keywords = [irori_ui::play_status::title()];
             for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
@@ -224,7 +240,14 @@ impl Palette {
         };
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
-        let items = Rc::new(Self::items(&games, open, grouped, &mut targets));
+        let replay = irori_ui::backend(cx).replay().map(|r| r.title);
+        let items = Rc::new(Self::items(
+            &games,
+            replay.as_deref(),
+            open,
+            grouped,
+            &mut targets,
+        ));
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -280,6 +303,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
+        PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

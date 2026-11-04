@@ -79,5 +79,14 @@
   "shell.app_update.download": "Pobierz",
   "shell.app_update.copy_command": "Kopiuj polecenie",
   "shell.app_update.updated": "Zaktualizowano Irori do wersji {version}",
-  "shell.app_update.release_notes": "Informacje o wydaniu"
+  "shell.app_update.release_notes": "Informacje o wydaniu",
+  "shell.tray.save_clip": "Zapisz klip",
+  "shell.palette.save_clip": "Zapisz klip z {title}",
+  "shell.palette.save_clip_keywords": "klip powtórka nagraj wideo przechwytywanie",
+  "shell.notice.replay_not_recording": "Bufor powtórek nie nagrywa",
+  "shell.notice.replay_missing": "Zainstaluj gpu-screen-recorder z Flathuba lub z pakietów swojej dystrybucji, aby nagrywać klipy.",
+  "shell.notice.replay_turn_on": "Włącz go w sekcji Wydajność → Bufor powtórek, w domyślnych ustawieniach gier lub w ustawieniach tej gry.",
+  "shell.notice.replay_stopped": "Bufor powtórek się zatrzymał",
+  "shell.notice.clip_saved": "Zapisano klip z {title}",
+  "shell.notice.clip_failed": "Nie zapisano klipu"
 }

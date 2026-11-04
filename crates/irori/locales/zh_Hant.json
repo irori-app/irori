@@ -79,5 +79,14 @@
   "shell.app_update.download": "下載",
   "shell.app_update.copy_command": "複製指令",
   "shell.app_update.updated": "Irori 已更新至 {version}",
-  "shell.app_update.release_notes": "版本資訊"
+  "shell.app_update.release_notes": "版本資訊",
+  "shell.tray.save_clip": "儲存片段",
+  "shell.palette.save_clip": "儲存 {title} 的片段",
+  "shell.palette.save_clip_keywords": "片段 重播 錄製 影片 擷取",
+  "shell.notice.replay_not_recording": "重播緩衝未在錄製",
+  "shell.notice.replay_missing": "請從 Flathub 或發行版的套件安裝 gpu-screen-recorder 以錄製片段。",
+  "shell.notice.replay_turn_on": "請在遊戲預設設定或此遊戲設定的「效能 → 重播緩衝」中開啟。",
+  "shell.notice.replay_stopped": "重播緩衝已停止",
+  "shell.notice.clip_saved": "已儲存 {title} 的片段",
+  "shell.notice.clip_failed": "片段未儲存"
 }

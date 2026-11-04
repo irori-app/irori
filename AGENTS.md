@@ -392,7 +392,16 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them.
+  and its insight card show them. Video files (mp4, mkv, webm, mov) count too: the
+  replay buffer's clip folders, each named after its game, are read the same way.
+- **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
+  defaults or one game), gpu-screen-recorder runs as its own process for the session,
+  found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
+  bundled. `Backend::save_clip` sends it SIGUSR1 (the process is found by its `-o`
+  folder, which also finds the Flatpak's); the path it prints is renamed to
+  `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
+  `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
+  palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
@@ -400,7 +409,8 @@ commands without a window.
   4. Before-launch script.
   5. `store.launch` builds the `LaunchPlan`.
   6. `process::spawn`, with a capped game log.
-  7. Sleep inhibition, then session tracking, ending in `GameExited`.
+  7. Sleep inhibition, the replay buffer, then session tracking, ending in
+     `GameExited`.
 
 ### 4.3 Stores
 

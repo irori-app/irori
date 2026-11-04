@@ -122,7 +122,7 @@ signature changes. A build signed with a Developer ID asks once.
 | Runtimes/data | XDG data / `irori` | `~/Library/Application Support/irori` | LocalAppData / `irori` |
 | Cache | XDG cache / `irori` | `~/Library/Caches/irori` | LocalAppData / `irori` (dirs cache location) |
 | Steam default | `~/.steam/steam` | `~/Library/Application Support/Steam` | ProgramFiles(x86) / `Steam` |
-| Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
+| Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures, replay clips (Videos/`Irori`/<game>) | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
 isolated testing. A configured Steam path takes precedence when it holds a Steam
@@ -220,7 +220,52 @@ The stats page's Album reads screenshots from Steam's
 game) and from the screenshot folders in the table above, where a file counts for
 the play session it was taken in. Irori never moves, renames or removes them.
 gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
-Steam saves them instead.
+Steam saves them instead. Videos (mp4, mkv, webm, mov) in those folders and in the
+replay buffer's clip folders show with a play badge over their game's art and open in
+the system's player.
+
+### Replay buffer
+
+Linux only. With Settings › Performance › Replay buffer turned on (for every game or
+for one), a game Irori starts runs with
+[gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/) beside it in
+replay mode, keeping the last 15 seconds to 10 minutes in memory. Irori never bundles
+it: it runs `gpu-screen-recorder` from `PATH`, else the Flatpak
+`com.dec05eba.gpu_screen_recorder` (user or system install, given access to the clip
+folder with `--filesystem`), and the settings link to Flathub when neither is there.
+Distribution packages exist for Arch, Fedora (Copr), Nobara, openSUSE, Debian/Ubuntu
+and others.
+
+The recorder is started as
+`gpu-screen-recorder -w screen -c mp4 -f 60 -r <seconds> -bm cbr -q <kbit/s> -v no -a default_output -o <clips>/<game>`
+(`-w portal -restore-portal-session yes` when the desktop should be asked once what to
+record; `default_output|default_input` mixes in the microphone; no `-a` without sound).
+Quality presets are constant bitrates (10, 20, 35 and 60 Mbit/s) because a constant
+bitrate keeps the buffer the same size whatever is on screen, as the recorder advises
+for replays; the settings show the resulting memory, about bitrate × length (35 Mbit/s
+for 60 seconds is about 250 MB). Whole-screen capture on AMD and Intel uses the
+recorder's `gsr-kms-server`, which the distribution packages and a system-wide Flatpak
+install set up; a user Flatpak install asks for a password or needs portal capture.
+
+A clip is saved by sending the recorder SIGUSR1. The recorder process is found by its
+`-o` folder, so the Flatpak's process inside its sandbox is found like a native one.
+It prints the saved `Replay_<date>_<time>.mp4`, which Irori renames to
+`<game> <date> <time>.mp4` and confirms with a notice (a desktop notification while the
+game has focus). The session's end sends SIGINT, which stops the recorder without
+saving. Ways to save:
+
+- a controller: hold Guide and press X (Square on PlayStation, X on Nintendo layouts),
+  read by Irori's controller thread also while the game has the window; Guide's release
+  then does not toggle Big Picture;
+- the tray menu's "Save clip" and the command palette, while the buffer records;
+- a key from the XDG GlobalShortcuts portal (KDE Plasma 6, GNOME 48, Hyprland). Irori
+  registers as `app.irori.Irori` through the host app registry, suggests Alt+F10 and lets
+  the desktop assign and change the keys. Where the portal is missing the settings say
+  that keys pressed in a game cannot reach Irori and point to the other ways.
+
+Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
+after its title, which is how the Album finds the game; a folder whose game left the
+library is matched to sessions by time like screenshots.
 
 ### New versions of Irori
 

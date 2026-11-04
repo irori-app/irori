@@ -17,6 +17,8 @@
 //!    Escape and falls back to navigating back, Alt sends Ctrl+Enter (play),
 //!    Menu opens the command palette (Ctrl+K) and the shoulders page.
 //! 3. Guide toggles Big Picture from anywhere.
+//! 4. Guide + X (Square on PlayStation) saves a clip of the replay buffer,
+//!    also while a game has the window.
 //!
 //! Input is ignored while `disable_controller` is set. When Irori is not the
 //! active window only Guide is honoured, and only while no game is running:
@@ -302,6 +304,12 @@ fn on_message(
             m.controllers = list;
             cx.notify();
         }),
+        Message::SaveClip => {
+            let backend = irori_ui::backend(cx);
+            if backend.replay().is_some() || game_running(cx) {
+                backend.save_clip();
+            }
+        }
         Message::Input { input, kind } => {
             if disabled
                 || !echoes

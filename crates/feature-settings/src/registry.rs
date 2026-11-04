@@ -219,6 +219,8 @@ pub enum PanelKind {
     EglSync,
     /// Manual cloud-save synchronisation of one game.
     SaveSync,
+    /// The replay buffer's recorder, ways to save a clip and memory use.
+    Replay,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -403,6 +405,12 @@ impl FieldSpec {
                 | "iroriCrossoverBottlesPath"
         );
         if mac_only && host != HostPlatform::Mac {
+            return false;
+        }
+        // gpu-screen-recorder, which the replay buffer runs, is Linux only.
+        if (self.path == "panel.replay" || self.path.starts_with("iroriReplay."))
+            && host != HostPlatform::Linux
+        {
             return false;
         }
         if host == HostPlatform::Linux {
@@ -686,6 +694,78 @@ const WINDOW_TYPE: &[ChoiceOption] = &[
     ),
 ];
 
+const REPLAY_SECONDS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(15),
+        Key("settings.option.replay_seconds.15"),
+    ),
+    opt(
+        ChoiceValue::Num(30),
+        Key("settings.option.replay_seconds.30"),
+    ),
+    opt(
+        ChoiceValue::Num(60),
+        Key("settings.option.replay_seconds.60"),
+    ),
+    opt(
+        ChoiceValue::Num(120),
+        Key("settings.option.replay_seconds.120"),
+    ),
+    opt(
+        ChoiceValue::Num(300),
+        Key("settings.option.replay_seconds.300"),
+    ),
+    opt(
+        ChoiceValue::Num(600),
+        Key("settings.option.replay_seconds.600"),
+    ),
+];
+
+const REPLAY_QUALITY: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("medium"),
+        Key("settings.option.replay_quality.medium"),
+    ),
+    opt(
+        ChoiceValue::Str("high"),
+        Key("settings.option.replay_quality.high"),
+    ),
+    opt(
+        ChoiceValue::Str("very_high"),
+        Key("settings.option.replay_quality.very_high"),
+    ),
+    opt(
+        ChoiceValue::Str("ultra"),
+        Key("settings.option.replay_quality.ultra"),
+    ),
+];
+
+const REPLAY_AUDIO: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("desktop"),
+        Key("settings.option.replay_audio.desktop"),
+    ),
+    opt(
+        ChoiceValue::Str("desktop_and_mic"),
+        Key("settings.option.replay_audio.desktop_and_mic"),
+    ),
+    opt(
+        ChoiceValue::Str("none"),
+        Key("settings.option.replay_audio.none"),
+    ),
+];
+
+const REPLAY_CAPTURE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("screen"),
+        Key("settings.option.replay_capture.screen"),
+    ),
+    opt(
+        ChoiceValue::Str("portal"),
+        Key("settings.option.replay_capture.portal"),
+    ),
+];
+
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -704,6 +784,11 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     "settings.requires.fps_limit",
 )];
 const NEEDS_VKD3D: &[Condition] = &[when("autoInstallVkd3d", true, "settings.requires.vkd3d")];
+const NEEDS_REPLAY: &[Condition] = &[when(
+    "iroriReplay.enabled",
+    true,
+    "settings.requires.replay",
+)];
 const NEEDS_GAMESCOPE: &[Condition] = &[when(
     "gamescope.iroriEnabled",
     true,
@@ -1743,6 +1828,79 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.shader_cache_size.help")
     .keywords(&["shader", "cache", "stutter", "nvidia", "mesa", "gl"]),
+    game(
+        "panel.replay",
+        "settings.field.panel_replay.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Panel(PanelKind::Replay),
+    )
+    .keywords(&[
+        "replay",
+        "clip",
+        "record",
+        "video",
+        "capture",
+        "gpu-screen-recorder",
+        "shadowplay",
+    ]),
+    game(
+        "iroriReplay.enabled",
+        "settings.field.replay_enabled.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Toggle,
+    )
+    .help("settings.field.replay_enabled.help")
+    .keywords(&["replay", "clip", "record", "video", "instant replay"]),
+    game(
+        "iroriReplay.seconds",
+        "settings.field.replay_seconds.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_SECONDS),
+    )
+    .keywords(&["replay", "clip", "length", "duration", "seconds"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.quality",
+        "settings.field.replay_quality.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_QUALITY),
+    )
+    .help("settings.field.replay_quality.help")
+    .keywords(&["replay", "clip", "quality", "bitrate"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.audio",
+        "settings.field.replay_audio.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_AUDIO),
+    )
+    .keywords(&["replay", "clip", "audio", "sound", "microphone"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.capture",
+        "settings.field.replay_capture.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_CAPTURE),
+    )
+    .help("settings.field.replay_capture.help")
+    .keywords(&["replay", "clip", "monitor", "screen", "portal", "wayland"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.folder",
+        "settings.field.replay_folder.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Text(TextKind::Directory),
+    )
+    .placeholder(Key("settings.field.replay_folder.placeholder"))
+    .keywords(&["replay", "clip", "folder", "videos", "output"])
+    .requires(NEEDS_REPLAY),
     game(
         "enableDXVKFpsLimit",
         "settings.field.enable_dxvk_fps_limit.label",
