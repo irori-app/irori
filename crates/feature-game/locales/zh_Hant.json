@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "自 {date} 起 {count} 次遊玩",
   "game.timeline.title": "遊玩紀錄",
   "game.timeline.view_days": "時間軸",
-  "game.timeline.view_sessions": "遊玩紀錄"
+  "game.timeline.view_sessions": "遊玩紀錄",
+  "game.sandbox.title": "沙盒中",
+  "game.sandbox.running": "正在沙盒中執行",
+  "game.sandbox.no_network": "無網路",
+  "game.sandbox.no_home": "無家目錄",
+  "game.sandbox.details": "沙盒對遊戲隱藏的內容",
+  "game.sandbox.cant_reach": "無法存取",
+  "game.sandbox.cant_network": "網際網路、區域網路以及在本機監聽的程式",
+  "game.sandbox.cant_home": "你的家目錄和其他磁碟",
+  "game.sandbox.cant_session": "桌面工作階段服務和你的其他程式",
+  "game.sandbox.can_reach": "可以存取",
+  "game.sandbox.can_game": "它的安裝資料夾和 Wine 前綴",
+  "game.sandbox.can_home": "一個專屬的家目錄，用來保存它的存檔和設定",
+  "game.sandbox.can_devices": "顯示器、音效、顯示卡和控制器",
+  "game.sandbox.x11": "在 X11 桌面上，遊戲與其他視窗共用顯示伺服器，因此仍可能看到它們及其輸入。",
+  "game.sandbox.open_home": "開啟它的家目錄",
+  "game.sandbox.change": "沙盒設定"
 }

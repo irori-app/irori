@@ -18,10 +18,11 @@ use futures::channel::{mpsc, oneshot};
 use irori_core::process::{self, CancellationToken, CommandSpec, RunOptions};
 use irori_core::{
     AppSettings, EnvVar, GameId, GameSettings, LutrisScriptRecord, OpContext, Paths, Runner,
-    WineInstallation, WineKind, async_trait,
+    SandboxSettings, WineInstallation, WineKind, async_trait,
 };
 use irori_runtime::Cancelled;
 use irori_runtime::prefix::{self, WineCommand, WineContext};
+use irori_runtime::sandbox::{SandboxKind, SandboxPlan};
 use irori_scripts::model::{AutosetupStore, RegType};
 use irori_scripts::{
     Approvals, AutosetupRequest, Context, DiscRequest, DosExecRequest, ExecRequest, FileRequest,
@@ -51,6 +52,10 @@ pub struct ScriptInstall {
     pub source_url: Option<String>,
     /// The desktop resolution, for `$RESOLUTION`.
     pub resolution: Option<(u32, u32)>,
+    /// Run the script's programs in a sandbox, and the game after it. Its
+    /// writable folders are the game folder, the cache, the prefix and the
+    /// outside folders the user approved.
+    pub sandbox: SandboxSettings,
 }
 
 /// A question the running script asks the user. Answering `None`, or
@@ -270,12 +275,14 @@ fn env_value(env: &BTreeMap<String, String>) -> Value {
 
 /// Describe what `outcome` becomes in the library. `wine` is the build the
 /// install used; `program` replaces the game's program (the user's choice
-/// after [`irori_scripts::ScriptError::MissingExecutable`]).
+/// after [`irori_scripts::ScriptError::MissingExecutable`]); a game
+/// installed in a sandbox keeps playing in it.
 pub fn script_game(
     outcome: &Outcome,
     game_dir: &Path,
     wine: Option<&WineInstallation>,
     program: Option<&Path>,
+    sandbox: SandboxSettings,
 ) -> Result<ScriptGame> {
     let game = outcome.game.as_ref().with_context(|| {
         format!(
@@ -380,8 +387,36 @@ pub fn script_game(
             }
         }
     };
+    if sandbox.is_enabled() {
+        settings.push(("iroriSandbox", serde_json::to_value(sandbox)?));
+    }
     settings.push(("iroriLutrisScript", record));
     Ok(ScriptGame { entry, settings })
+}
+
+/// The home folder a sandboxed install of the script `slug` had, until the
+/// game it installed exists.
+fn install_sandbox_id(slug: &str) -> GameId {
+    GameId::new(Runner::Sideload, format!("lutris-{slug}"))
+}
+
+/// Give the game `id` that the script `slug` installed the home folder its
+/// installer wrote to in the sandbox, so the game finds what the installer
+/// left there.
+pub async fn adopt_install_home(slug: &str, id: &GameId) -> Result<()> {
+    let from = irori_runtime::sandbox::sandbox_home(&install_sandbox_id(slug));
+    let to = irori_runtime::sandbox::sandbox_home(id);
+    if !from.is_dir() || to.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = to.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Could not create {}", parent.display()))?;
+    }
+    tokio::fs::rename(&from, &to)
+        .await
+        .with_context(|| format!("Could not move {} to {}", from.display(), to.display()))
 }
 
 /// The `.reg` file text (without encoding) that sets one value.
@@ -659,6 +694,10 @@ impl Backend {
             log_file: log_file.clone(),
             cache_dir,
             game_dir: install.game_dir.clone(),
+            sandbox: install.sandbox,
+            slug: script.info.game_slug.clone(),
+            approved_writes: install.approvals.outside_writes.clone(),
+            handed: Mutex::new(install.picked.values().cloned().collect()),
         };
         let report: ProgressFn = {
             let progress = progress.clone();
@@ -743,9 +782,69 @@ struct Host {
     log_file: PathBuf,
     cache_dir: PathBuf,
     game_dir: PathBuf,
+    sandbox: SandboxSettings,
+    /// The script's slug, which names the sandbox's home folder.
+    slug: String,
+    /// Folders outside the game folder the user let the script write to.
+    approved_writes: Vec<PathBuf>,
+    /// Files and folders the user handed the script (installers, discs),
+    /// shown read-only in the sandbox.
+    handed: Mutex<Vec<PathBuf>>,
 }
 
 impl Host {
+    /// The sandbox to run a program of the script in (`kind`, with the
+    /// read-only `tools` it needs), when the user chose one; else nothing.
+    async fn sandbox_wrappers(
+        &self,
+        kind: SandboxKind,
+        tools: Vec<PathBuf>,
+        prefix: Option<&Path>,
+    ) -> Result<Vec<Vec<String>>> {
+        if !self.sandbox.is_enabled() {
+            return Ok(Vec::new());
+        }
+        // A folder missing when the sandbox starts would be made in its empty
+        // root, and what the script writes there lost.
+        for dir in [self.game_dir.as_path(), self.cache_dir.as_path()]
+            .into_iter()
+            .chain(prefix)
+        {
+            tokio::fs::create_dir_all(dir)
+                .await
+                .with_context(|| format!("Could not create {}", dir.display()))?;
+        }
+        let mut game_dirs = vec![self.game_dir.clone(), self.cache_dir.clone()];
+        game_dirs.extend(prefix.map(Path::to_path_buf));
+        game_dirs.extend(self.approved_writes.iter().cloned());
+        let mut tool_dirs = self.handed.lock().clone();
+        tool_dirs.extend(tools);
+        let overlay_dirs = (kind == SandboxKind::PressureVessel)
+            .then(irori_runtime::umu_data_dir)
+            .flatten()
+            .into_iter()
+            .collect();
+        let id = install_sandbox_id(&self.slug);
+        let plan = SandboxPlan {
+            settings: self.sandbox,
+            kind,
+            game_dirs,
+            tool_dirs,
+            overlay_dirs,
+            home: irori_runtime::sandbox::sandbox_home(&id),
+            gamescope: false,
+        };
+        Ok(vec![irori_runtime::sandbox::wrapper(&id, plan).await?])
+    }
+
+    /// Remember a file or folder the user handed the script.
+    fn handed(&self, path: Option<PathBuf>) -> Option<PathBuf> {
+        if let Some(p) = &path {
+            self.handed.lock().push(p.clone());
+        }
+        path
+    }
+
     fn log(&self, line: &str) {
         push_log(&self.progress, line);
         append_file(&self.log_file, line);
@@ -836,6 +935,10 @@ impl Host {
         let ctx = self.op(cancel);
         let wc = self.context(wine, prefix, &settings, &ctx).await;
         let mut cmd = WineCommand::new(argv);
+        if self.sandbox.is_enabled() {
+            let (kind, tools) = irori_runtime::sandbox_wine_parts(&self.app, &wc).await?;
+            cmd.wrappers = self.sandbox_wrappers(kind, tools, Some(prefix)).await?;
+        }
         cmd.cwd = cwd;
         cmd.wait = true;
         cmd.verb = "waitforexitandrun";
@@ -881,9 +984,10 @@ impl ScriptHost for Host {
             return Ok(Some(p.clone()));
         }
         let request = request.clone();
-        Ok(self
+        let picked = self
             .ask(|reply| ScriptPrompt::File { request, reply })
-            .await)
+            .await;
+        Ok(self.handed(picked))
     }
 
     async fn steam_file(
@@ -904,11 +1008,12 @@ impl ScriptHost for Host {
                 )
             })?;
         let rel = path.trim_matches(['/', '\\']);
-        Ok(if rel.is_empty() || rel == "." {
+        let file = if rel.is_empty() || rel == "." {
             dir
         } else {
             dir.join(rel)
-        })
+        };
+        Ok(self.handed(Some(file)).unwrap_or_default())
     }
 
     async fn choose(&self, menu: &MenuRequest) -> Result<Option<String>> {
@@ -938,7 +1043,7 @@ impl ScriptHost for Host {
                 .unwrap_or(None);
             if found.is_some() {
                 self.log(&format!("Using the disc at {}", root.display()));
-                return Ok(Some(root));
+                return Ok(self.handed(Some(root)));
             }
             retry = true;
         }
@@ -1127,6 +1232,24 @@ impl ScriptHost for Host {
                     .map(Path::to_path_buf)
             })
             .unwrap_or_else(|| self.game_dir.clone());
+        // DOSBox from Flatpak runs in Flatpak's own sandbox, which can't
+        // start inside this one.
+        anyhow::ensure!(
+            !(self.sandbox.is_enabled() && install.flatpak.is_some()),
+            "DOSBox Staging from Flatpak can't run in the sandbox. Install DOSBox Staging on the Emulators page, or turn the sandbox off for this install"
+        );
+        let wrappers = self
+            .sandbox_wrappers(
+                SandboxKind::Native,
+                install
+                    .program
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .into_iter()
+                    .collect(),
+                None,
+            )
+            .await?;
         let spec = match &install.flatpak {
             Some(id) => CommandSpec::new("flatpak")
                 .arg("run")
@@ -1147,15 +1270,19 @@ impl ScriptHost for Host {
             .map(|a| a.to_string_lossy().into_owned())
             .collect();
         self.log(&format!("Running DOSBox Staging {}", shown.join(" ")));
-        self.run(spec, cancel).await
+        self.run(spec.wrapped(&wrappers), cancel).await
     }
 
     async fn execute(&self, request: &ExecRequest, cancel: &CancellationToken) -> Result<i32> {
         self.log(&format!("Running {}", request.program.display()));
+        let wrappers = self
+            .sandbox_wrappers(SandboxKind::Native, Vec::new(), None)
+            .await?;
         let spec = CommandSpec::new(&request.program)
             .args(request.args.iter().cloned())
             .envs(request.env.clone())
-            .cwd(&request.working_dir);
+            .cwd(&request.working_dir)
+            .wrapped(&wrappers);
         self.run(spec, cancel).await
     }
 
@@ -1168,7 +1295,10 @@ impl ScriptHost for Host {
         }
         .envs(request.env.clone())
         .cwd(&request.working_dir);
-        self.run(spec, cancel).await
+        let wrappers = self
+            .sandbox_wrappers(SandboxKind::Native, Vec::new(), None)
+            .await?;
+        self.run(spec.wrapped(&wrappers), cancel).await
     }
 
     async fn store_autosetup(
@@ -1272,7 +1402,7 @@ mod tests {
             g.env.insert("DXVK_HUD".into(), "fps".into());
         });
         let wine = build("Wine 9.0", WineKind::Wine);
-        let game = script_game(&out, dir, Some(&wine), None).unwrap();
+        let game = script_game(&out, dir, Some(&wine), None, Default::default()).unwrap();
         assert_eq!(
             game.entry,
             ScriptLibraryEntry::App {
@@ -1315,20 +1445,43 @@ mod tests {
     fn a_chosen_program_finishes_an_install_that_named_none() {
         let dir = Path::new("/games/open");
         let out = outcome("linux", |_| {});
-        assert!(script_game(&out, dir, None, None).is_err());
-        let game = script_game(&out, dir, None, Some(&dir.join("start.sh"))).unwrap();
+        assert!(script_game(&out, dir, None, None, Default::default()).is_err());
+        let game = script_game(
+            &out,
+            dir,
+            None,
+            Some(&dir.join("start.sh")),
+            Default::default(),
+        )
+        .unwrap();
         assert!(matches!(
             game.entry,
             ScriptLibraryEntry::App { windows: false, ref program, .. } if program == &dir.join("start.sh")
         ));
         assert_eq!(setting(&game, "winePrefix"), None);
+        assert_eq!(setting(&game, "iroriSandbox"), None);
+    }
+
+    #[test]
+    fn a_game_installed_in_a_sandbox_keeps_playing_in_it() {
+        let dir = Path::new("/games/example");
+        let out = outcome("linux", |g| g.exe = Some(dir.join("start.sh")));
+        let sandbox = SandboxSettings {
+            no_network: true,
+            no_home: false,
+        };
+        let game = script_game(&out, dir, None, None, sandbox).unwrap();
+        assert_eq!(
+            setting(&game, "iroriSandbox"),
+            Some(&json!({"noNetwork": true, "noHome": false}))
+        );
     }
 
     #[test]
     fn emulator_games_join_the_rom_library_with_their_engine() {
         let dir = Path::new("/games/quake");
         let out = outcome("dosbox", |g| g.main_file = Some(dir.join("dosbox.conf")));
-        let game = script_game(&out, dir, None, None).unwrap();
+        let game = script_game(&out, dir, None, None, Default::default()).unwrap();
         assert_eq!(
             game.entry,
             ScriptLibraryEntry::Emulated {
@@ -1346,14 +1499,14 @@ mod tests {
             g.main_file = Some(PathBuf::from("/roms/game.sfc"));
             g.options.insert("core".into(), json!("snes9x"));
         });
-        let game = script_game(&out, Path::new("/roms"), None, None).unwrap();
+        let game = script_game(&out, Path::new("/roms"), None, None, Default::default()).unwrap();
         assert!(matches!(
             game.entry,
             ScriptLibraryEntry::Emulated { ref system, .. } if system == "snes"
         ));
 
         let out = outcome("steam", |g| g.exe = Some(PathBuf::from("/x")));
-        assert!(script_game(&out, dir, None, None).is_err());
+        assert!(script_game(&out, dir, None, None, Default::default()).is_err());
         assert!(!runner_supported("steam"));
         assert!(runner_supported("dosbox") && runner_supported("wine"));
     }

@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "{date}以降 {count} 回のセッション",
   "game.timeline.title": "プレイ履歴",
   "game.timeline.view_days": "タイムライン",
-  "game.timeline.view_sessions": "セッション"
+  "game.timeline.view_sessions": "セッション",
+  "game.sandbox.title": "サンドボックス内",
+  "game.sandbox.running": "サンドボックスで実行中",
+  "game.sandbox.no_network": "ネットワークなし",
+  "game.sandbox.no_home": "ホームフォルダーなし",
+  "game.sandbox.details": "サンドボックスがゲームから隠すもの",
+  "game.sandbox.cant_reach": "アクセスできないもの",
+  "game.sandbox.cant_network": "インターネット、ローカルネットワーク、このコンピューターで待ち受けているプログラム",
+  "game.sandbox.cant_home": "ホームフォルダーとほかのドライブ",
+  "game.sandbox.cant_session": "デスクトップのセッションサービスとほかのプログラム",
+  "game.sandbox.can_reach": "アクセスできるもの",
+  "game.sandbox.can_game": "インストールフォルダーと Wine プレフィックス",
+  "game.sandbox.can_home": "セーブデータと設定を保存する専用のホームフォルダー",
+  "game.sandbox.can_devices": "ディスプレイ、サウンド、グラフィックカード、コントローラー",
+  "game.sandbox.x11": "X11 デスクトップでは、ゲームはほかのウィンドウとディスプレイサーバーを共有するため、それらのウィンドウや入力を見られる可能性があります。",
+  "game.sandbox.open_home": "専用のホームフォルダーを開く",
+  "game.sandbox.change": "サンドボックスの設定"
 }

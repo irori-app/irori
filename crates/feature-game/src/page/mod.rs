@@ -13,6 +13,7 @@ mod hero;
 mod info;
 mod menu;
 mod overlay;
+mod sandbox;
 mod screenshots;
 mod timeline;
 
@@ -144,6 +145,10 @@ pub struct GamePage {
     timeline: timeline::TimelineView,
     /// Text colours over the backdrop, as of the last render.
     ink: BackdropInk,
+    /// The game's sandbox setting, read when settings change.
+    sandbox: irori_core::SandboxSettings,
+    /// The sandbox card shows what the game can and can't reach.
+    sandbox_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -182,7 +187,10 @@ impl GamePage {
                 }
             }),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
-            cx.observe(&m.settings, |_, _, cx| cx.notify()),
+            cx.observe(&m.settings, |this, _, cx| {
+                this.sandbox = sandbox::configured(&this.id, cx);
+                cx.notify()
+            }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
             cx.subscribe_in(
                 &launch_select,
@@ -230,8 +238,11 @@ impl GamePage {
             viewer_strip: ScrollHandle::new(),
             timeline: timeline::TimelineView::default(),
             ink: BackdropInk::of(None, cx),
+            sandbox: Default::default(),
+            sandbox_open: false,
             _subscriptions: subscriptions,
         };
+        this.sandbox = sandbox::configured(&this.id, cx);
         this.was_playing = models(cx).statuses.read(cx).is_playing(&this.id);
         this.load_all(window, cx);
         this

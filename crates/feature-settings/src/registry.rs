@@ -437,6 +437,8 @@ impl FieldSpec {
                     | "downloadProtonToSteam"
                     | "showValveProton"
                     | "iroriShaderCacheSize"
+                    | "iroriSandbox.noNetwork"
+                    | "iroriSandbox.noHome"
             )
         {
             return false;
@@ -1988,6 +1990,41 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ignore_game_updates.help")
     .keywords(&["update", "ignore", "pin", "version"]),
+    game_only(
+        "iroriSandbox.noNetwork",
+        "settings.field.sandbox_no_network.label",
+        Launch,
+        "settings.group.sandbox",
+        Toggle,
+    )
+    .help("settings.field.sandbox_no_network.help")
+    .keywords(&[
+        "sandbox",
+        "bubblewrap",
+        "bwrap",
+        "network",
+        "internet",
+        "untrusted",
+        "isolate",
+    ]),
+    game_only(
+        "iroriSandbox.noHome",
+        "settings.field.sandbox_no_home.label",
+        Launch,
+        "settings.group.sandbox",
+        Toggle,
+    )
+    .help("settings.field.sandbox_no_home.help")
+    .keywords(&[
+        "sandbox",
+        "bubblewrap",
+        "bwrap",
+        "home",
+        "files",
+        "privacy",
+        "untrusted",
+        "isolate",
+    ]),
     game(
         "verboseLogs",
         "settings.field.verbose_logs.label",

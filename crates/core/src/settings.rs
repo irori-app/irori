@@ -249,6 +249,29 @@ pub struct GameSettings {
         skip_serializing_if = "Option::is_none"
     )]
     pub lutris_script: Option<LutrisScriptRecord>,
+    /// What the game is kept from when it runs in a bubblewrap sandbox.
+    /// Linux only; Irori-only.
+    #[serde(rename = "iroriSandbox")]
+    pub sandbox: SandboxSettings,
+}
+
+/// The sandbox a game runs in (`iroriSandbox`). Off when nothing is blocked.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SandboxSettings {
+    /// Start the game in a network namespace of its own: no internet, no
+    /// local network, no programs listening on this computer.
+    pub no_network: bool,
+    /// Hide the user's home folder and other drives: the game sees its own
+    /// folders and a home folder of its own.
+    pub no_home: bool,
+}
+
+impl SandboxSettings {
+    /// Whether the game runs sandboxed at all.
+    pub fn is_enabled(&self) -> bool {
+        self.no_network || self.no_home
+    }
 }
 
 /// Which Lutris install script installed a game (`iroriLutrisScript`).
@@ -329,6 +352,7 @@ impl Default for GameSettings {
             engine_options: BTreeMap::new(),
             engine_own_settings: false,
             lutris_script: None,
+            sandbox: SandboxSettings::default(),
         }
     }
 }

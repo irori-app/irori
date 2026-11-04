@@ -198,7 +198,11 @@ impl SettingsForm {
             .filter(|f| match &target {
                 FormTarget::App => f.scope == Scope::App,
                 FormTarget::Defaults => f.applies_to_game(false),
-                FormTarget::Game(_) => f.applies_to_game(true),
+                FormTarget::Game(id) => {
+                    f.applies_to_game(true)
+                        && (!f.path.starts_with("iroriSandbox.")
+                            || irori_runtime::sandbox::applies_to(id.runner))
+                }
             })
             .collect();
         let sections = match target {

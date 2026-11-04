@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "{count} sessions depuis le {date}",
   "game.timeline.title": "Historique de jeu",
   "game.timeline.view_days": "Chronologie",
-  "game.timeline.view_sessions": "Sessions"
+  "game.timeline.view_sessions": "Sessions",
+  "game.sandbox.title": "En bac à sable",
+  "game.sandbox.running": "En cours, dans le bac à sable",
+  "game.sandbox.no_network": "Sans réseau",
+  "game.sandbox.no_home": "Sans dossier personnel",
+  "game.sandbox.details": "Ce que le bac à sable cache au jeu",
+  "game.sandbox.cant_reach": "Inaccessible",
+  "game.sandbox.cant_network": "Internet, votre réseau local et les programmes à l’écoute sur cet ordinateur",
+  "game.sandbox.cant_home": "Votre dossier personnel et les autres disques",
+  "game.sandbox.cant_session": "Les services de session de votre bureau et vos autres programmes",
+  "game.sandbox.can_reach": "Accessible",
+  "game.sandbox.can_game": "Son dossier d’installation et son préfixe Wine",
+  "game.sandbox.can_home": "Un dossier personnel à lui, qui garde ses sauvegardes et réglages",
+  "game.sandbox.can_devices": "L’affichage, le son, la carte graphique et les manettes",
+  "game.sandbox.x11": "Sur un bureau X11, le jeu partage le serveur d’affichage avec vos autres fenêtres et pourrait encore les voir, ainsi que leurs saisies.",
+  "game.sandbox.open_home": "Ouvrir son dossier personnel",
+  "game.sandbox.change": "Réglages du bac à sable"
 }

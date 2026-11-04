@@ -265,6 +265,82 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+## Sandboxed games (Linux)
+
+A game, an added app or a Lutris script install can run in a
+[bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`) sandbox, for
+programs the user doesn't trust. The per-game settings (Launch → Sandbox) have
+two switches, `iroriSandbox.noNetwork` ("Block the network") and
+`iroriSandbox.noHome` ("Hide the home folder"); the Lutris installer window
+offers the same two, which then apply to the script's programs and to the game
+it installs. The game page shows a "Sandboxed" card under Play ("Running
+sandboxed" while it plays) that opens to list what the game can and can't
+reach.
+
+Inside, the game sees an empty root holding only:
+
+| What | How |
+| --- | --- |
+| `/usr`, `/etc`, `/opt`, `/lib*`, `/bin`, `/sbin`, `/nix` | read-only (symlinks kept as symlinks) |
+| Install folder, Wine prefix, `target_exe`'s folder | read-write |
+| Wine or Proton build, umu-run, EAC/BattlEye runtimes, Steam's `legacycompat` | read-only |
+| umu's Steam runtime (`~/.local/share/umu`) | read-only with a throwaway writable layer (`--overlay-src`/`--tmp-overlay`, bubblewrap 0.10+; older bubblewrap binds it writable) |
+| GPU, controllers, sound | `/dev/dri`, `/dev/nvidia*`, `/dev/input`, `/dev/hidraw*`, `/dev/snd`; never `/dev/uinput` |
+| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, `/tmp/.X11-unix`, the X cookie, gamescope's socket when gamescope is on |
+| `/proc`, `/tmp`, `/run`, `/var/tmp`, `/dev/shm` | private (new PID namespace, fresh tmpfs) |
+| `/sys`, `/run/udev`, fontconfig's cache, DNS configuration | read-only |
+
+"Hide the home folder" puts `<data>/sandbox/<runner>/<app>` where the home
+folder was (same path, so `$HOME` and the paths in Irori's variables stay
+valid): native games keep their saves and settings there, the game card opens
+it, and other drives (`/mnt`, `/media`, `/run/media`, any other top-level
+folder) stay hidden. Without it the home folder and those drives are shown
+writable, as outside the sandbox. "Block the network" gives the game a network
+namespace with only loopback: no internet, no LAN, nothing listening on the
+computer (GOG Galaxy's comet on port 9977 included); X11 clients then reach the
+display through `/tmp/.X11-unix` instead of the abstract socket. In every mode
+the session D-Bus is left out (it can start programs outside the sandbox) and
+`DBUS_SESSION_BUS_ADDRESS` unset, `--new-session` stops terminal input
+injection, and `--die-with-parent` ends the sandbox with Irori's stop. A plain
+Wine game waits for its prefix's wineserver inside the sandbox, as everything
+in the sandbox ends with its first process; Proton's `waitforexitandrun` and
+umu wait on their own. Under X11 the game still shares the display server with
+every other window; the game card says so.
+
+Wrappers: gamescope and gamemoderun run outside the sandbox (they need the
+compositor and D-Bus; gamemoderun registers the sandbox, which lives as long as
+the game), the user's wrappers, MangoHud and umu-run inside it.
+
+**umu and pressure-vessel.** umu runs Proton in pressure-vessel, which is
+itself bubblewrap. It nests inside Irori's sandbox: the outer sandbox has its
+own PID namespace and a fresh `/proc`, so pressure-vessel can mount its own,
+and it keeps user namespaces (games run without umu get
+`--unshare-user --disable-userns` on bubblewrap 0.8+, so they can't create
+more namespaces). pressure-vessel's own options are not the layer to restrict
+a game with: it shares the home folder, D-Bus and the runtime directory by
+design, isn't a security boundary, and doesn't apply to direct Proton, plain
+Wine or native games. With the network blocked umu can't update the Steam
+runtime (`UMU_RUNTIME_UPDATE=0` inside); Irori's unsandboxed launches keep it
+current, and a sandboxed first launch needs the runtime already downloaded.
+
+**When the sandbox can't start, the game doesn't.** Irori checks bubblewrap
+before every sandboxed start (`bwrap --unshare-pid --unshare-net … true`) and
+refuses with `SandboxUnavailable`, which the UI turns into a dialog with the
+fix: bubblewrap missing (with the `apt`/`dnf`/`pacman`/`zypper` command),
+unprivileged user namespaces refused (Ubuntu 24.04's AppArmor restriction, with
+bubblewrap's own message), or Irori running as a Flatpak, whose seccomp
+filter lets no program inside it create namespaces; there the native package
+is the way to sandbox games. Emulated games (the ROM library) don't offer the
+sandbox yet: their emulators may be Flatpaks, which can't start inside it.
+
+`crates/runtime/src/sandbox.rs` builds the argument list as a pure function of
+the host's layout and the game's needs; its tests cover each mode and runner
+kind, and three opt-in tests start a real native program, Wine and umu in it:
+
+```bash
+IRORI_SANDBOX_SMOKE=1 IRORI_SANDBOX_PROTON="<Proton folder>" cargo test -p irori-runtime sandbox -- --ignored
+```
+
 ## Window translucency
 
 Settings → Appearance → Translucency lets the desktop show through the title bar

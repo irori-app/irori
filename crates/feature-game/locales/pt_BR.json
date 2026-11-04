@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "{count} sessões desde {date}",
   "game.timeline.title": "Histórico de jogo",
   "game.timeline.view_days": "Linha do tempo",
-  "game.timeline.view_sessions": "Sessões"
+  "game.timeline.view_sessions": "Sessões",
+  "game.sandbox.title": "Em sandbox",
+  "game.sandbox.running": "Rodando na sandbox",
+  "game.sandbox.no_network": "Sem rede",
+  "game.sandbox.no_home": "Sem pasta pessoal",
+  "game.sandbox.details": "O que a sandbox esconde do jogo",
+  "game.sandbox.cant_reach": "Sem acesso a",
+  "game.sandbox.cant_network": "A internet, sua rede local e os programas escutando neste computador",
+  "game.sandbox.cant_home": "Sua pasta pessoal e outras unidades",
+  "game.sandbox.cant_session": "Os serviços de sessão da área de trabalho e seus outros programas",
+  "game.sandbox.can_reach": "Com acesso a",
+  "game.sandbox.can_game": "Sua pasta de instalação e o prefixo do Wine",
+  "game.sandbox.can_home": "Uma pasta pessoal própria, que guarda seus saves e configurações",
+  "game.sandbox.can_devices": "A tela, o som, a placa de vídeo e os controles",
+  "game.sandbox.x11": "Em uma área de trabalho X11 o jogo compartilha o servidor gráfico com suas outras janelas, então ainda poderia vê-las e ver o que você digita.",
+  "game.sandbox.open_home": "Abrir sua pasta pessoal",
+  "game.sandbox.change": "Configurações da sandbox"
 }

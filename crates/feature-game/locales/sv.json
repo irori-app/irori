@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "{count} sessioner sedan {date}",
   "game.timeline.title": "Spelhistorik",
   "game.timeline.view_days": "Tidslinje",
-  "game.timeline.view_sessions": "Sessioner"
+  "game.timeline.view_sessions": "Sessioner",
+  "game.sandbox.title": "I sandlåda",
+  "game.sandbox.running": "Körs i sandlåda",
+  "game.sandbox.no_network": "Inget nätverk",
+  "game.sandbox.no_home": "Ingen hemmapp",
+  "game.sandbox.details": "Vad sandlådan skyddar från spelet",
+  "game.sandbox.cant_reach": "Når inte",
+  "game.sandbox.cant_network": "Internet, ditt lokala nätverk och program som lyssnar på den här datorn",
+  "game.sandbox.cant_home": "Din hemmapp och andra enheter",
+  "game.sandbox.cant_session": "Skrivbordets sessionstjänster och dina andra program",
+  "game.sandbox.can_reach": "Når",
+  "game.sandbox.can_game": "Sin installationsmapp och Wine-prefix",
+  "game.sandbox.can_home": "En egen hemmapp, där dess sparfiler och inställningar finns kvar",
+  "game.sandbox.can_devices": "Skärmen, ljudet, grafikkortet och handkontrollerna",
+  "game.sandbox.x11": "På ett X11-skrivbord delar spelet visningsservern med dina andra fönster och kan fortfarande se dem och det du skriver.",
+  "game.sandbox.open_home": "Öppna dess hemmapp",
+  "game.sandbox.change": "Sandlådeinställningar"
 }
