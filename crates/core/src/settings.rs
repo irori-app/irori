@@ -756,6 +756,59 @@ pub enum Translucency {
     Strong,
 }
 
+/// How tightly the library packs its covers and rows. Separate from the
+/// interface size, which scales everything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Density {
+    Compact,
+    #[default]
+    Comfortable,
+    Spacious,
+}
+
+impl Density {
+    /// Factor on the cover size the user picked.
+    pub fn cover_scale(self) -> f32 {
+        match self {
+            Density::Compact => 0.85,
+            Density::Comfortable => 1.0,
+            Density::Spacious => 1.15,
+        }
+    }
+
+    /// Factor on the space between covers and the height of list rows' padding.
+    pub fn spacing_scale(self) -> f32 {
+        match self {
+            Density::Compact => 0.55,
+            Density::Comfortable => 1.0,
+            Density::Spacious => 1.5,
+        }
+    }
+
+    /// Factor on the height of a row in the list layout.
+    pub fn row_scale(self) -> f32 {
+        match self {
+            Density::Compact => 0.8,
+            Density::Comfortable => 1.0,
+            Density::Spacious => 1.2,
+        }
+    }
+}
+
+/// What the library shows behind its covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LibraryBackground {
+    #[default]
+    None,
+    /// The focused game's art, else the last played game's, else the first
+    /// game shown, blurred.
+    GameArt,
+    /// A picture the user picked (`libraryBackgroundPicture`), blurred.
+    Picture,
+}
+
 /// Irori-only presentation preferences.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -796,6 +849,20 @@ pub struct UiPrefs {
     pub big_picture_theme: String,
     /// Open Big Picture when a controller connects while Irori runs.
     pub big_picture_on_controller: bool,
+    /// The accent colour the user picked, `#rrggbb` ("" = the theme's own,
+    /// or the system's where Irori follows it).
+    pub accent_color: String,
+    pub density: Density,
+    /// Interface typeface ("" = Manrope, Irori's own).
+    pub font_family: String,
+    pub library_background: LibraryBackground,
+    /// The picture behind the library when `libraryBackground` is `picture`.
+    pub library_background_picture: String,
+    /// How strongly the background shows, in percent of the most text keeps
+    /// legible over it.
+    pub library_background_strength: u32,
+    /// How much of the theme's background is laid over it, in percent.
+    pub library_background_dim: u32,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -874,6 +941,15 @@ impl UiPrefs {
     pub fn big_picture_zoom(&self) -> f32 {
         self.big_picture_scale.clamp(100, 200) as f32 / 100.0
     }
+
+    /// The accent colour the user picked, if it is a valid `#rrggbb`.
+    pub fn accent_rgb(&self) -> Option<u32> {
+        let hex = self.accent_color.trim().strip_prefix('#')?;
+        if hex.len() != 6 {
+            return None;
+        }
+        u32::from_str_radix(hex, 16).ok()
+    }
 }
 
 impl Default for UiPrefs {
@@ -899,6 +975,13 @@ impl Default for UiPrefs {
             big_picture_layout: String::new(),
             big_picture_theme: String::new(),
             big_picture_on_controller: false,
+            accent_color: String::new(),
+            density: Density::Comfortable,
+            font_family: String::new(),
+            library_background: LibraryBackground::None,
+            library_background_picture: String::new(),
+            library_background_strength: 70,
+            library_background_dim: 20,
         }
     }
 }
@@ -906,6 +989,28 @@ impl Default for UiPrefs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn appearance_keys_default_and_round_trip() {
+        let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+        assert_eq!(ui.density, Density::Comfortable);
+        assert_eq!(ui.library_background, LibraryBackground::None);
+        assert_eq!(ui.accent_rgb(), None);
+        let ui: UiPrefs = serde_json::from_str(
+            r##"{"accentColor":"#3a7BFF","density":"compact","libraryBackground":"game_art"}"##,
+        )
+        .unwrap();
+        assert_eq!(ui.accent_rgb(), Some(0x3a7bff));
+        assert_eq!(ui.density, Density::Compact);
+        assert_eq!(ui.library_background, LibraryBackground::GameArt);
+        for bad in ["3a7bff", "#3a7bf", "#3a7bfg", "#3a7bff00"] {
+            let ui = UiPrefs {
+                accent_color: bad.into(),
+                ..UiPrefs::default()
+            };
+            assert_eq!(ui.accent_rgb(), None, "{bad}");
+        }
+    }
 
     #[test]
     fn ember_keys_load_under_irori_names() {

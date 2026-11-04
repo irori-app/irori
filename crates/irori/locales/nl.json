@@ -16,6 +16,8 @@
   "shell.nav.forward": "Vooruit (Alt+Rechts)",
   "shell.notice.component_update_failed": "{name} kon niet worden geüpdatet",
   "shell.notice.component_updated": "{name} geüpdatet naar {version}",
+  "shell.palette.storage": "Opslag en opruimen",
+  "shell.palette.storage_keywords": "schijf station ruimte grootte vrij vrijmaken opruimen verwijderen wissen",
   "shell.search.placeholder": "Games en opdrachten zoeken…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Je bent offline. Geïnstalleerde games die het ondersteunen, starten nog steeds.",
