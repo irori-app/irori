@@ -249,12 +249,15 @@ impl LaunchOption {
     }
 }
 
-/// A store achievement (GOG today).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// An achievement of a game: GOG, Epic, Steam, or RetroAchievements for
+/// the ROM library.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Achievement {
     pub id: String,
     pub key: String,
+    /// False for a hidden achievement: its name and description stay
+    /// covered until it is unlocked or the user asks to see them.
     pub visible: bool,
     pub name: String,
     pub description: String,
@@ -265,6 +268,36 @@ pub struct Achievement {
     pub rarity_label: String,
     /// RFC 3339 timestamp, if unlocked.
     pub unlocked_at: Option<String>,
+    /// What it is worth: RetroAchievements points, Epic XP; 0 when the
+    /// store gives achievements no value.
+    pub points: u32,
+    /// RFC 3339 timestamp of a hardcore unlock (RetroAchievements: played
+    /// without save states or rewinding).
+    pub hardcore_unlocked_at: Option<String>,
+    /// How far towards it the player is, `0.0..=1.0`, for achievements the
+    /// store tracks progress of; `None` otherwise.
+    pub progress: Option<f32>,
+}
+
+impl Achievement {
+    /// Whether the player has it, in any mode.
+    pub fn is_unlocked(&self) -> bool {
+        self.unlocked_at.is_some() || self.hardcore_unlocked_at.is_some()
+    }
+
+    /// When it was unlocked: the earlier of the two modes.
+    pub fn unlock_time(&self) -> Option<&str> {
+        match (&self.unlocked_at, &self.hardcore_unlocked_at) {
+            (Some(a), Some(b)) => Some(
+                if crate::util::parse_rfc3339(b) < crate::util::parse_rfc3339(a) {
+                    b
+                } else {
+                    a
+                },
+            ),
+            (a, b) => a.as_deref().or(b.as_deref()),
+        }
+    }
 }
 
 /// User account of a store.

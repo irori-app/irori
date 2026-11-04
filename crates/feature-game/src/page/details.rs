@@ -239,7 +239,7 @@ impl GamePage {
             ));
         }
         if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
-            let unlocked = list.iter().filter(|a| a.unlocked_at.is_some()).count();
+            let unlocked = list.iter().filter(|a| a.is_unlocked()).count();
             let percent = completion_percent(unlocked, list.len());
             rows.push(row(
                 t("game.header.achievements"),

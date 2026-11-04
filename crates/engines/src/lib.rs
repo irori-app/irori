@@ -20,6 +20,7 @@
 
 pub mod archive;
 pub mod bios;
+pub mod cheevos;
 pub mod discovery;
 pub mod host;
 pub mod install;

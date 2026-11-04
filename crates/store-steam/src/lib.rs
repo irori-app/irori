@@ -17,10 +17,12 @@
 //! computer (`localconfig.vdf`) and what the account reports.
 
 mod account;
+mod achievements;
 mod client;
 mod entries;
 mod scan;
 pub mod signin;
+mod stats_file;
 mod watch;
 
 use std::collections::{HashMap, HashSet};
@@ -88,6 +90,7 @@ pub struct SteamStore {
     /// One refresh at a time.
     refreshing: tokio::sync::Mutex<()>,
     me: std::sync::Weak<SteamStore>,
+    achievement_cache: irori_core::achievement_cache::AchievementCache,
     /// Watches Steam's library folders (the ones in the key).
     watcher: Mutex<Option<(Vec<PathBuf>, notify::RecommendedWatcher)>>,
     runtime: Mutex<Option<tokio::runtime::Handle>>,
@@ -136,7 +139,12 @@ impl SteamStore {
         let client = Client::with_endpoints(endpoints)
             .inspect_err(|e| tracing::warn!("Steam's web client: {e:#}"))
             .ok();
+        let achievement_cache = irori_core::achievement_cache::AchievementCache::new(
+            files.library.with_file_name("achievements.json"),
+            achievements::MAX_AGE_SECS,
+        );
         Arc::new_cyclic(|me| Self {
+            achievement_cache,
             bus,
             settings,
             steam_dir,
@@ -160,6 +168,28 @@ impl SteamStore {
         self.steam_dir
             .clone()
             .unwrap_or_else(|| irori_runtime::locations::steam_path(&(self.settings)()))
+    }
+
+    /// The signed-in account with an access token that still works, renewed
+    /// when it is about to expire; `None` without an account or when Steam
+    /// can't renew it now.
+    async fn live_session(&self) -> Option<Session> {
+        let session = self.session.read().clone()?;
+        let client = self.client().ok()?;
+        match account::fresh(client, &session).await {
+            Ok(Some(renewed)) => {
+                if let Err(e) = self.files.write_session(&renewed) {
+                    tracing::warn!("saving the Steam sign-in: {e:#}");
+                }
+                *self.session.write() = Some(renewed.clone());
+                Some(renewed)
+            }
+            Ok(None) => Some(session),
+            Err(e) => {
+                tracing::debug!("renewing the Steam sign-in: {e:#}");
+                None
+            }
+        }
     }
 
     fn client(&self) -> Result<&Client> {
@@ -683,6 +713,18 @@ impl Store for SteamStore {
 
     /// The larger of what Steam recorded on this computer and what the
     /// account reports, per game.
+    async fn achievements(
+        &self,
+        app_name: &str,
+        language: &str,
+    ) -> Result<Vec<irori_core::Achievement>> {
+        self.game_achievements(app_name, language).await
+    }
+
+    async fn forget_achievements(&self, app_name: &str) {
+        self.achievement_cache.forget(app_name).await
+    }
+
     async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
         if (self.settings)().disable_playtime_sync {
             return Ok(HashMap::new());

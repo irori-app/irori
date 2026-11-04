@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} 已安装",
   "settings.field.action_import_lutris.label": "从 Lutris 导入",
   "settings.field.action_import_lutris.help": "从 Lutris 迁移已安装的游戏、模拟游戏、收藏、分类和游玩时间。Lutris 本身不会被更改。",
+  "settings.field.achievement_notices.label": "游戏结束后通知新成就",
+  "settings.field.achievement_notices.help": "游戏关闭时，Irori 会检查其成就并显示你解锁的内容。",
   "settings.error.import_lutris": "无法从 Lutris 导入",
   "settings.field.action_import_bottles.label": "从 Bottles 导入",
   "settings.field.action_import_bottles.help": "添加每个 bottle 中的程序以及安装在其中的游戏，并以该 bottle 作为前缀。不会更改 Bottles 本身。",

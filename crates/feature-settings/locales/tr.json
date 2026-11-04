@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} kuruldu",
   "settings.field.action_import_lutris.label": "Lutris'ten içe aktar",
   "settings.field.action_import_lutris.help": "Yüklü oyunları, emüle edilen oyunları, favorileri, kategorileri ve oynama süresini Lutris'ten aktarın. Lutris'in kendisi değişmez.",
+  "settings.field.achievement_notices.label": "Oynadıktan sonra yeni başarımları bildir",
+  "settings.field.achievement_notices.help": "Bir oyun kapandığında Irori başarımlarını denetler ve açtıklarınızı gösterir.",
   "settings.error.import_lutris": "Lutris'ten içe aktarılamadı",
   "settings.field.action_import_bottles.label": "Bottles’tan içe aktar",
   "settings.field.action_import_bottles.help": "Her şişenin programlarını ve içine kurulan oyunları, şişeyi önek olarak kullanarak ekler. Bottles’a dokunulmaz.",

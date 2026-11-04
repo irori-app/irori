@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 irori-core.workspace = true
 irori-engines.workspace = true
+irori-retroachievements-api.workspace = true
+irori-secrets.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -26,3 +28,4 @@ notify.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+irori-depot = { workspace = true, features = ["test-server"] }

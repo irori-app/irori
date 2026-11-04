@@ -1222,6 +1222,21 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["recent", "tray"]),
     app(
+        "iroriAchievementNotices",
+        "settings.field.achievement_notices.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.achievement_notices.help")
+    .keywords(&[
+        "achievements",
+        "trophies",
+        "unlocked",
+        "notification",
+        "retroachievements",
+    ]),
+    app(
         "discordRPC",
         "settings.field.discord_rpc.label",
         General,
