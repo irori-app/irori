@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "Отправить этот журнал?",
   "settings.option.library_layout.grid": "Сетка",
   "settings.option.library_layout.list": "Список",
+  "settings.option.library_layout.focus": "Фокус",
   "settings.option.sharpness.sharpest": "5 (максимальная резкость)",
   "settings.option.sharpness.softest": "1 (минимальная резкость)",
   "settings.option.steam_runtime.none": "Нет",

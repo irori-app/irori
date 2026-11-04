@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "이 로그를 업로드하시겠습니까?",
   "settings.option.library_layout.grid": "그리드",
   "settings.option.library_layout.list": "목록",
+  "settings.option.library_layout.focus": "포커스",
   "settings.option.sharpness.sharpest": "5(가장 선명)",
   "settings.option.sharpness.softest": "1(가장 부드러움)",
   "settings.option.steam_runtime.none": "없음",

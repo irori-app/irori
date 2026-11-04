@@ -1,11 +1,12 @@
 //! Application-level operations that need crates the UI layer does not depend
-//! on (the concrete store crates). The shell installs them at startup; feature
-//! crates call them.
+//! on (the concrete store crates, or another feature). The shell installs them
+//! at startup; feature crates call them.
 
 use std::sync::Arc;
 
 use anyhow::Result;
-use gpui_kit::{App, Global, Task, Window};
+use gpui_kit::{AnyView, App, Global, Task, Window};
+use irori_core::GameId;
 
 /// What a Heroic import brought over, for the confirmation message.
 #[derive(Debug, Clone, Default)]
@@ -50,7 +51,18 @@ pub struct LutrisSummary {
     pub warnings: Vec<String>,
 }
 
+/// How the library shows a game without leaving the library.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GamePanel {
+    /// The whole game page beside the Focus view's column of covers. The
+    /// library draws the game's backdrop behind both; the panel draws none.
+    Focus,
+    /// A summary of the game in the grid's side drawer.
+    Drawer,
+}
+
 type ImportFn = Arc<dyn Fn(&mut App) -> Task<Result<ImportSummary>>>;
+type GamePanelFn = Arc<dyn Fn(GameId, GamePanel, &mut Window, &mut App) -> AnyView>;
 type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 
@@ -61,6 +73,10 @@ pub struct Hooks {
     /// screens, which the library and Big Picture don't depend on).
     pub open_emulation_setup: Option<OpenFn>,
     pub import_from_lutris: Option<LutrisFn>,
+    /// Make a view of one game for the library's Focus view and drawer (the
+    /// game page lives in the game feature, which the library doesn't
+    /// depend on).
+    pub game_panel: Option<GamePanelFn>,
 }
 
 impl Global for Hooks {}
@@ -100,6 +116,19 @@ pub fn import_from_lutris(cx: &mut App) -> Task<Result<LutrisSummary>> {
         Some(f) => f(cx),
         None => Task::ready(Err(anyhow::anyhow!("import is not available"))),
     }
+}
+
+/// A view of `id` shaped as `panel`, or `None` without the hook (tests).
+pub fn game_panel(
+    id: GameId,
+    panel: GamePanel,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.game_panel.clone())?;
+    Some(hook(id, panel, window, cx))
 }
 
 /// Whether a Lutris library exists on this computer (native or Flatpak).

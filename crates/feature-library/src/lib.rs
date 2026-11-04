@@ -1,5 +1,6 @@
 //! The library screen: every game of every store in a virtualized cover grid
-//! or list, with instant search, store switcher, filters, sorting, a
+//! (a click opens a drawer about the game beside it), a list, or Focus (a
+//! column of covers beside the selected game's page), with instant search, store switcher, filters, sorting, a
 //! "Continue playing" row, keyboard navigation, per-game context menus, custom
 //! categories, manually added apps and per-game title/art overrides.
 //!
@@ -34,6 +35,7 @@ mod selection;
 mod stats;
 mod top;
 mod view;
+mod views;
 
 use std::sync::Arc;
 
@@ -89,6 +91,16 @@ gpui_kit::actions!(
         EndSelection,
         /// Turn grouping the library by play status on or off.
         ToggleStatusGroups,
+        /// Show the library as a cover grid.
+        ShowGrid,
+        /// Show the library as a list.
+        ShowList,
+        /// Show the library as a column of covers beside the selected game.
+        ShowFocus,
+        /// Show the library the next way (grid, list, Focus).
+        NextLibraryView,
+        /// Open the grid's drawer on the focused game, or close it.
+        ToggleDrawer,
     ]
 );
 
@@ -112,6 +124,10 @@ pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-f", FocusSearch, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("ctrl-g", ToggleStatusGroups, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("alt-1", ShowGrid, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("alt-2", ShowList, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("alt-3", ShowFocus, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("ctrl-shift-v", NextLibraryView, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("/", FocusSearch, grid),
         KeyBinding::new("left", SelectLeft, grid),
         KeyBinding::new("right", SelectRight, grid),
@@ -122,6 +138,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("pageup", SelectPageUp, grid),
         KeyBinding::new("pagedown", SelectPageDown, grid),
         KeyBinding::new("enter", OpenSelected, grid),
+        KeyBinding::new("i", ToggleDrawer, grid),
         KeyBinding::new("space", ActivateSelected, grid),
         KeyBinding::new("ctrl-enter", ActivateSelected, grid),
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
@@ -170,6 +187,23 @@ pub fn set_groups_by_status(on: bool, cx: &mut App) {
         let group = if on { Grouping::Status } else { Grouping::None };
         model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
     }
+}
+
+/// How the library shows games: grid, list or Focus (`iroriUi.libraryLayout`).
+pub fn library_layout(cx: &App) -> irori_core::settings::LibraryLayout {
+    irori_ui::models(cx).settings.read(cx).app.ui.library_layout
+}
+
+/// Show the library as `layout` from now on. An open library view follows
+/// the setting.
+pub fn set_library_layout(layout: irori_core::settings::LibraryLayout, cx: &mut App) {
+    let backend = irori_ui::backend(cx);
+    irori_ui::state::run_infallible(cx, async move {
+        backend
+            .settings
+            .update_app(|s| s.ui.library_layout = layout)
+    })
+    .detach();
 }
 
 /// Show an error notification in `window`.

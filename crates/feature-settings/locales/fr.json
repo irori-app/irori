@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "Envoyer ce journal ?",
   "settings.option.library_layout.grid": "Grille",
   "settings.option.library_layout.list": "Liste",
+  "settings.option.library_layout.focus": "Focus",
   "settings.option.sharpness.sharpest": "5 (la plus nette)",
   "settings.option.sharpness.softest": "1 (la plus douce)",
   "settings.option.steam_runtime.none": "Aucun",

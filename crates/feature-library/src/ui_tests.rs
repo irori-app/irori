@@ -325,7 +325,10 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
         ..Default::default()
     };
     let click = |cx: &mut TestAppContext, app: &str, m: gpui_kit::Modifiers| {
-        cx.update(|cx| view.update(cx, |v, cx| v.click_for_test(&game(app), m, cx)));
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |v, cx| v.click_for_test(&game(app), m, 1, window, cx))
+        })
+        .unwrap();
     };
 
     // Ctrl-click starts selection mode; Shift-click picks the range.
@@ -369,6 +372,120 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "escape");
     draw(cx);
     assert_eq!(state(cx), (Vec::new(), false));
+}
+
+#[gpui_kit::test]
+fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1600.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    let game = |app: &str| GameId::new(Runner::Gog, app);
+    let focused = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).focused_game().cloned());
+    let state = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window))
+            .unwrap()
+    };
+    let click = |cx: &mut TestAppContext, app: &str, count: usize| {
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |v, cx| {
+                v.click_for_test(&game(app), Default::default(), count, window, cx)
+            })
+        })
+        .unwrap();
+        draw(cx);
+    };
+    let route = |cx: &mut TestAppContext| {
+        cx.read(|cx| irori_ui::nav::navigator(cx).read(cx).current().clone())
+    };
+
+    // Grid: a click selects the game and opens the drawer within its limits.
+    assert_eq!(state(cx).0, LibraryLayout::Grid);
+    let before = route(cx);
+    click(cx, "2", 1);
+    let (layout, open, width) = state(cx);
+    assert_eq!((layout, open), (LibraryLayout::Grid, true));
+    assert!(
+        (crate::views::DRAWER_MIN_REM..=crate::views::DRAWER_MAX_REM).contains(&width),
+        "{width}"
+    );
+    assert_eq!(focused(cx), Some(game("2")));
+    assert_eq!(route(cx), before, "a single click stays in the library");
+
+    // Arrow keys move the selection, and the drawer with it; Escape closes it.
+    cx.simulate_keystrokes(window, "right");
+    draw(cx);
+    assert_eq!(focused(cx), Some(game("3")));
+    assert!(state(cx).1);
+    cx.simulate_keystrokes(window, "escape");
+    draw(cx);
+    assert!(!state(cx).1);
+    // I opens the drawer from the keyboard, and closes it again.
+    cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    assert!(state(cx).1);
+    cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    assert!(!state(cx).1);
+
+    // Focus keeps the selected game and shows it beside the covers; the
+    // arrow keys step through the column.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    draw(cx);
+    assert_eq!(state(cx).0, LibraryLayout::Focus);
+    assert_eq!(focused(cx), Some(game("3")));
+    cx.simulate_keystrokes(window, "right");
+    draw(cx);
+    assert_eq!(focused(cx), Some(game("4")));
+    click(cx, "1", 1);
+    assert_eq!(focused(cx), Some(game("1")));
+
+    // A search hiding the selected game moves Focus to a shown one; the page
+    // is never left empty.
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.update_filter(|f| f.query = "wilds".into(), cx)
+        })
+    });
+    draw(cx);
+    assert_eq!(focused(cx), Some(game("5")));
+    cx.update(|cx| view.update(cx, |v, cx| v.update_filter(|f| f.query.clear(), cx)));
+    draw(cx);
+    assert_eq!(focused(cx), Some(game("5")));
+
+    // Alt+1 goes back to the grid with the game still selected; the drawer
+    // stays closed until a click.
+    cx.simulate_keystrokes(window, "alt-1");
+    draw(cx);
+    assert_eq!(state(cx).0, LibraryLayout::Grid);
+    assert_eq!(focused(cx), Some(game("5")));
+    assert!(!state(cx).1);
+
+    // A double click opens the game's page.
+    click(cx, "2", 2);
+    assert_eq!(route(cx), irori_ui::Route::Game(game("2")));
 }
 
 #[gpui_kit::test]
