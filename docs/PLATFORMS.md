@@ -70,6 +70,10 @@ Both binaries are required, so a package never silently omits store sign-in.
 
 - Linux needs the GPUI libraries listed in CI, plus GTK 3 and WebKitGTK 4.1 for
   sign-in. `packaging/install.sh` retains the per-user Linux installation flow.
+  `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` and its `.zsync` (see
+  [AppImage](#appimage)). It needs [appimagetool](https://github.com/AppImage/appimagetool)
+  (`IRORI_APPIMAGETOOL`, else on `PATH`) and `zsyncmake`; `IRORI_APPIMAGE_RUNTIME`
+  names the AppImage runtime to use instead of the one appimagetool downloads.
 - macOS needs Xcode Command Line Tools. The package includes an `.app` with the
   helper and `irori://` URL declaration. XZ support links statically; packaging rejects
   non-system dynamic libraries so Homebrew paths cannot leak into distributed binaries.
@@ -89,12 +93,13 @@ Both binaries are required, so a package never silently omits store sign-in.
   See Microsoft's [deployment guidance](https://learn.microsoft.com/en-us/cpp/windows/deployment-in-visual-cpp).
   No administrator access is required for Irori itself. Game
   redistributables may have their own UAC requirements. Public builds need
-  Authenticode signing before distribution.
+  Authenticode signing before distribution. `--portable` also writes
+  `Irori-X.Y.Z-windows-portable.zip` (see [Portable Windows build](#portable-windows-build)).
 
 CI builds and tests Linux, Windows x64, macOS Intel and Apple silicon and uploads
 unsigned validation packages using the small `ci` Cargo profile. It does not publish a release.
-`release.yml` builds the release packages (tarball, `.deb`, `.rpm`, Flatpak, macOS
-disk images, the Windows installer and zip), tests that they install and start, and
+`release.yml` builds the release packages (tarball, AppImage, `.deb`, `.rpm`, Flatpak,
+macOS disk images, the Windows installer, zip and portable zip), tests that they install and start, and
 drafts a GitHub release for a `v*` tag; [RELEASING.md](RELEASING.md) covers signing
 and the package channels.
 
@@ -125,7 +130,9 @@ signature changes. A build signed with a Developer ID asks once.
 | Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
-isolated testing. A configured Steam path takes precedence when it holds a Steam
+isolated testing. On Windows a file named `portable` beside `irori.exe` does the same
+with `irori.exe`'s folder as the root (`config`, `data` and `cache` beside it); see
+[Portable Windows build](#portable-windows-build). `IRORI_HOME` wins over the file. A configured Steam path takes precedence when it holds a Steam
 library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
 `~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
 (`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
@@ -237,7 +244,7 @@ how it was installed when it starts:
 | Homebrew | `Caskroom/irori` under `/opt/homebrew` or `/usr/local` | Checks; offers `brew upgrade --cask irori` |
 | Scoop | `scoop/apps/irori` in the program's path | Checks; offers `scoop update irori` |
 | winget | `install.ini` beside the program says `Channel=winget` | Checks; offers `winget upgrade Irori.Irori` |
-| Windows setup or zip, disk image, macOS zip, tarball | none of the above | Checks; links to the release page |
+| Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; links to the release page |
 
 The check asks GitHub's `releases/latest` for `irori-app/irori` (which leaves out drafts
 and pre-releases) at most once a day, only while online and only in the app, never in the
@@ -251,6 +258,52 @@ release notes. Irori never downloads or installs itself.
 
 Packagers who build Irori themselves set `IRORI_UPDATE_EXPLANATION` (for example
 "Update Irori with your distribution's package manager.") when building.
+
+### Portable Windows build
+
+`Irori-X.Y.Z-windows-portable.zip` unpacks to an `Irori-portable` folder that runs from
+anywhere, a USB drive included. It holds the same programs and Visual C++ runtime as the
+other zip, without `install.ps1`, plus a `portable` file. While that file is beside
+`irori.exe` (`irori_core::paths::portable_root`), Irori:
+
+- keeps settings, logins, state, logs, Wine builds and caches in `config`, `data` and
+  `cache` next to `irori.exe`, never in AppData;
+- registers no `irori://` handler and adds no Start menu shortcuts (Settings hides the
+  option; "Add shortcut" puts one on the desktop only), so it writes nothing to the
+  registry. Games and their own installers may still change Windows as they always do.
+
+Logins stay encrypted with the key in this Windows account's Credential Manager, so on
+another computer or account the stores ask to sign in again. Deleting the `portable`
+file makes that copy use the usual AppData folders and leaves the folder's data where it
+is. The marker is honoured on Windows only: a Unix `bin` folder may hold an unrelated
+program called `portable`.
+
+### AppImage
+
+`Irori-X.Y.Z-x86_64.AppImage` holds `irori`, `irori-sign-in`, the desktop entry, the icon
+and the AppStream metainfo, and nothing else: no libraries. It is built on Ubuntu 22.04
+from the same binaries as the tarball and the `.deb`, so it runs where they run (glibc
+2.35 or newer) and uses the system's graphics, Vulkan, Wayland, X11 and font libraries.
+Bundling none keeps the download small (about 32 MB for Irori 0.3.0, against 34 MB for
+the tarball) and keeps `LD_LIBRARY_PATH` out of the Wine, Proton and native games Irori
+starts. It is compressed with zstd in 128 KiB blocks, appimagetool's default: its xz
+setting came out larger (34 MB), and larger blocks start slower.
+
+- **Sign-in.** `irori-sign-in` uses the system's WebKitGTK 4.1 and GTK 3. Where they are
+  missing the window can't start, and Irori opens the store's page in the browser instead
+  and reads the code from the clipboard, as with any install without the window.
+  WebKitGTK isn't bundled: it needs its own helper processes, GPU drivers and the
+  system's TLS certificates, and a partial copy breaks in ways the fallback doesn't.
+- **Updates.** The AppImage carries update information
+  (`gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync`), so
+  AppImageUpdate, Gear Lever and AppImageLauncher download only the changed blocks
+  from the latest release's `.zsync`. Irori itself treats it as a manual install
+  (below) and links to the release page.
+- **Desktop.** Shortcuts and the `irori://` handler point at the AppImage file
+  (`$APPIMAGE`), not its temporary mount. It needs FUSE to mount itself; without FUSE
+  run it with `--appimage-extract-and-run`. `<name>.AppImage.home` and `.config` folders
+  beside it (the runtime's `--appimage-portable-home` and `--appimage-portable-config`)
+  move Irori's data with it.
 
 ### Steam Deck and Steam Input
 

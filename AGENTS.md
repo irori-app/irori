@@ -280,8 +280,11 @@ and `launch.rs` before changing anything below the UI.
 
 **Paths** (`paths.rs`):
 
-- `Paths::get()` is global. `IRORI_HOME` relocates everything; otherwise the OS
-  config, data and cache directories plus `irori`.
+- `Paths::get()` is global. `IRORI_HOME` relocates everything; so does, on Windows
+  only, a `portable` file beside `irori.exe` (the portable zip), with the executable's
+  folder as the root. Otherwise the OS config, data and cache directories plus `irori`.
+  A portable Irori (`paths::is_portable`) registers no URL handler and adds no Start
+  menu shortcuts.
 - Store config goes under `store_config_dir(runner)`, as do credentials (written only
   through `irori_secrets`, see below), store caches under
   `store_cache_dir(runner)`, and Irori state (`library.json`, `downloads.json`,
@@ -1024,7 +1027,9 @@ building and the release checklist.
 
 - Requires both `irori` and `irori-sign-in`, so a package never silently loses the
   sign-in window.
-- Linux: a tarball with the desktop entry and icon.
+- Linux: a tarball with the desktop entry and icon. `--appimage` adds an x86-64
+  AppImage (appimagetool, zsync update information) that bundles no libraries and
+  refuses an `irori` linking WebKitGTK.
 - macOS: `Irori.app` with the `irori://` scheme.
   - Rejects any dylib outside the system paths.
   - Signs the helper before the bundle (`IRORI_SIGN_IDENTITY`, ad-hoc by default).
@@ -1034,6 +1039,7 @@ building and the release checklist.
   - Bundles `vcruntime140.dll` and `vcruntime140_1.dll`.
   - The installer installs per user under `%LOCALAPPDATA%\Programs\Irori` and
     registers the URL handler and a Start-menu shortcut.
+  - `--portable` adds a zip without `install.ps1` and with the `portable` marker.
 
 **Desktop behaviour to keep working**
 
