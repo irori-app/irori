@@ -1,7 +1,8 @@
 //! The album tab: the period's screenshots over the latest one, the games
 //! they show as chips that narrow the grid, and the grid itself. The page is
 //! one list that draws only the rows on screen. A screenshot opens in the system's image viewer;
-//! its menu also shows it in its folder or opens its game.
+//! its menu also shows it in its folder or opens its game. A clip is drawn
+//! over its game's art with a play badge and opens in the system's player.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -13,7 +14,7 @@ use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{ActiveTheme as _, Icon, StyledExt as _, h_flex, v_flex, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, Context, ElementId, InteractiveElement as _, IntoElement, ObjectFit,
+    AnyElement, App, Context, ElementId, InteractiveElement as _, IntoElement, ObjectFit,
     ParentElement as _, Pixels, SharedString, Size, StatefulInteractiveElement as _, Styled as _,
     StyledImage as _, Window, canvas, div, px, rems, size,
 };
@@ -232,7 +233,7 @@ impl StatsView {
             Some(self.render_art_credit(game, why, cx))
         });
         let headline = self.render_album_headline(album, &library, cx);
-        let art = latest.map(|s| s.url.to_string());
+        let art = latest.and_then(|s| shot_art(s, &library));
         self.render_hero(art, headline, credit, window, cx)
     }
 
@@ -248,6 +249,14 @@ impl StatsView {
             "library.stats.album.games_other",
             album.games.len() as u64,
         )];
+        let clips = album.clips();
+        if clips > 0 {
+            facts.push(text::count(
+                "library.stats.album.clips_one",
+                "library.stats.album.clips_other",
+                clips as u64,
+            ));
+        }
         if let Some(game) = album
             .top()
             .filter(|_| album.games.len() > 1)
@@ -466,12 +475,25 @@ impl StatsView {
             .get(&shot.id)
             .map(|g| g.title.clone().into())
             .unwrap_or_else(|| shot.id.app_name.to_string().into());
-        let picture = match art_img(&shot.url, physical, false, cx) {
-            Some(img) => img
-                .size_full()
-                .object_fit(ObjectFit::Cover)
-                .into_any_element(),
-            None => art_loading(),
+        let picture =
+            match shot_art(shot, library).and_then(|url| art_img(&url, physical, false, cx)) {
+                Some(img) => img
+                    .size_full()
+                    .object_fit(ObjectFit::Cover)
+                    .into_any_element(),
+                None if shot.video => div().size_full().into_any_element(),
+                None => art_loading(),
+            };
+        let picture = if shot.video {
+            play_badge(picture, cx)
+        } else {
+            picture
+        };
+        let date = text::short_date(shot.day);
+        let caption: SharedString = if shot.video {
+            t_args("library.stats.album.clip_date", &[("date", &date)])
+        } else {
+            date
         };
         let path = shot.path.clone();
         let (open, reveal, id) = (path.clone(), path, shot.id.clone());
@@ -517,10 +539,15 @@ impl StatsView {
                     .min_w_0()
                     .child(div().text_sm().font_medium().truncate().child(title))
                     .child(
-                        div()
+                        h_flex()
+                            .gap_1()
+                            .min_w_0()
                             .text_xs()
                             .text_color(muted)
-                            .child(text::short_date(shot.day)),
+                            .when(shot.video, |d| {
+                                d.child(Icon::new(IconName::Video).size_3().flex_shrink_0())
+                            })
+                            .child(div().min_w_0().truncate().child(caption)),
                     ),
             )
             .into_any_element()
@@ -551,6 +578,52 @@ impl StatsView {
         }
         self.album_shown = Arc::new(album.shown(self.album_game.as_ref()));
     }
+}
+
+/// What a shot's tile shows: the screenshot itself, or for a clip its
+/// game's wide art (else its cover).
+fn shot_art(shot: &Shot, library: &LibrarySnapshot) -> Option<String> {
+    if !shot.video {
+        return Some(shot.url.to_string());
+    }
+    let game = library.get(&shot.id)?;
+    game.art_background
+        .clone()
+        .or_else(|| game.art_cover.clone())
+}
+
+/// A clip's art with a play badge in its middle, over a scrim that keeps the
+/// badge apart from bright art.
+fn play_badge(art: AnyElement, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let (bg, fg, border) = (theme.background, theme.foreground, theme.border);
+    div()
+        .relative()
+        .size_full()
+        .child(art)
+        .child(
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(bg.opacity(0.25))
+                .child(
+                    div()
+                        .size_12()
+                        .rounded_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(bg.opacity(0.85))
+                        .border_1()
+                        .border_color(border)
+                        .text_color(fg)
+                        .child(Icon::new(IconName::Play).size_5()),
+                ),
+        )
+        .into_any_element()
 }
 
 #[cfg(test)]

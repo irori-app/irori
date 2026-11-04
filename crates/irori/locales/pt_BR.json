@@ -79,5 +79,14 @@
   "shell.app_update.download": "Baixar",
   "shell.app_update.copy_command": "Copiar comando",
   "shell.app_update.updated": "Irori atualizado para a versão {version}",
-  "shell.app_update.release_notes": "Notas da versão"
+  "shell.app_update.release_notes": "Notas da versão",
+  "shell.tray.save_clip": "Salvar clipe",
+  "shell.palette.save_clip": "Salvar um clipe de {title}",
+  "shell.palette.save_clip_keywords": "clipe replay gravar vídeo captura",
+  "shell.notice.replay_not_recording": "O buffer de replay não está gravando",
+  "shell.notice.replay_missing": "Instale o gpu-screen-recorder pelo Flathub ou pelos pacotes da sua distribuição para gravar clipes.",
+  "shell.notice.replay_turn_on": "Ative-o em Desempenho → Buffer de replay, nos padrões dos jogos ou nas configurações deste jogo.",
+  "shell.notice.replay_stopped": "O buffer de replay parou",
+  "shell.notice.clip_saved": "Clipe de {title} salvo",
+  "shell.notice.clip_failed": "O clipe não foi salvo"
 }

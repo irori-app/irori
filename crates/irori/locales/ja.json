@@ -79,5 +79,14 @@
   "shell.app_update.download": "ダウンロード",
   "shell.app_update.copy_command": "コマンドをコピー",
   "shell.app_update.updated": "Irori を {version} に更新しました",
-  "shell.app_update.release_notes": "リリースノート"
+  "shell.app_update.release_notes": "リリースノート",
+  "shell.tray.save_clip": "クリップを保存",
+  "shell.palette.save_clip": "{title} のクリップを保存",
+  "shell.palette.save_clip_keywords": "クリップ リプレイ 録画 動画 キャプチャ",
+  "shell.notice.replay_not_recording": "リプレイバッファーは録画していません",
+  "shell.notice.replay_missing": "クリップを録画するには、Flathub またはディストリビューションのパッケージから gpu-screen-recorder をインストールしてください。",
+  "shell.notice.replay_turn_on": "ゲームの既定設定またはこのゲームの設定の「パフォーマンス → リプレイバッファー」で有効にしてください。",
+  "shell.notice.replay_stopped": "リプレイバッファーが停止しました",
+  "shell.notice.clip_saved": "{title} のクリップを保存しました",
+  "shell.notice.clip_failed": "クリップを保存できませんでした"
 }

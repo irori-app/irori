@@ -22,6 +22,7 @@ mod inhibit;
 mod library;
 mod network;
 pub mod play_status;
+pub mod replay;
 pub mod screenshots;
 pub mod scripts;
 pub mod sessions;
@@ -51,6 +52,7 @@ pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+pub use replay::{Recorder, ReplayInfo, ShortcutState};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
@@ -89,6 +91,8 @@ pub struct Inner {
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
     presence: discord::Presence,
+    /// The replay buffer of the session it records, and its shortcut.
+    replay: replay::ReplayState,
     /// Stores whose saved login was refused, with the store's reason.
     expired_logins: RwLock<BTreeMap<Runner, String>>,
     /// The update check ran at least once this session.
@@ -164,6 +168,7 @@ impl Backend {
             online: AtomicBool::new(true),
             auto_paused: AtomicBool::new(false),
             presence: discord::Presence::default(),
+            replay: replay::ReplayState::default(),
             expired_logins: RwLock::new(BTreeMap::new()),
             updates_checked: AtomicBool::new(false),
             stores_ready: AtomicBool::new(false),
@@ -249,6 +254,11 @@ impl Backend {
             b.downloads_wake.notify_one();
             if !interactive {
                 return;
+            }
+            // The clip shortcut works from the first game on.
+            if cfg!(target_os = "linux") && b.settings.app().game.replay.enabled {
+                let shortcut = b.clone();
+                b.spawn(async move { shortcut.listen_for_clip_shortcut().await });
             }
             if irori_secrets::unreadable_logins() {
                 b.bus.startup_notice(

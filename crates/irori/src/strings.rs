@@ -49,15 +49,21 @@ mod tests {
         let re = regex::Regex::new(r#""(shell\.[a-z0-9_.]+)""#).unwrap();
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let services = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../services/src");
-        for d in [dir, services] {
+        let mut dirs = vec![dir, services];
+        while let Some(d) = dirs.pop() {
             for entry in std::fs::read_dir(&d).unwrap().flatten() {
-                let src = std::fs::read_to_string(entry.path()).unwrap();
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                let src = std::fs::read_to_string(&path).unwrap();
                 for cap in re.captures_iter(&src) {
                     // Keys passed to `item(...)` and `keys(...)` are literals too.
                     assert!(
                         en.contains_key(&cap[1]),
                         "{} uses unknown key {}",
-                        entry.path().display(),
+                        path.display(),
                         &cap[1]
                     );
                 }

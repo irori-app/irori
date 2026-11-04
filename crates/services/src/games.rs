@@ -77,11 +77,22 @@ impl Backend {
         crate::sessions::read_all()
     }
 
-    /// Screenshots the user took while playing, newest first. Reads the
-    /// session history and lists the screenshot folders; call off the UI
-    /// thread.
+    /// Screenshots the user took and clips the replay buffer saved while
+    /// playing, newest first. Reads the session history and lists the
+    /// folders; call off the UI thread.
     pub fn screenshots(&self) -> crate::screenshots::ScreenshotIndex {
-        let folders = crate::screenshots::folders(&self.settings.app());
+        // A clip folder is named after its game's title; an installed copy
+        // wins over another store's copy of the same game.
+        let library = self.library();
+        let mut titles = std::collections::HashMap::new();
+        for g in library.games.iter().filter(|g| !g.is_dlc) {
+            let name = irori_core::paths::sanitize(g.title.trim());
+            if g.is_installed || !titles.contains_key(&name) {
+                titles.insert(name, g.id().key());
+            }
+        }
+        let folders =
+            crate::screenshots::folders(&self.settings.app(), |name| titles.get(name).cloned());
         crate::screenshots::build(
             &folders,
             &self.sessions(),
@@ -270,6 +281,9 @@ impl Backend {
             },
         );
         drop(guard);
+        // Recording starts before the status says "playing", so whatever
+        // follows that status sees the replay buffer.
+        self.start_replay(id, &game.title, &settings.replay);
         self.statuses.set(id, StatusKind::Playing);
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
@@ -316,6 +330,7 @@ impl Backend {
             if plan.track_wineserver && Self::target_platform(&game).needs_wine() {
                 let _ = irori_runtime::wait_prefix(&settings).await;
             }
+            b.stop_replay(&id).await;
             let seconds = started.elapsed().as_secs();
             let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
             let crashed = failed_start(status, seconds, stopped);

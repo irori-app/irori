@@ -79,5 +79,14 @@
   "shell.app_update.download": "Ladda ned",
   "shell.app_update.copy_command": "Kopiera kommando",
   "shell.app_update.updated": "Irori har uppdaterats till version {version}",
-  "shell.app_update.release_notes": "Versionsinformation"
+  "shell.app_update.release_notes": "Versionsinformation",
+  "shell.tray.save_clip": "Spara klipp",
+  "shell.palette.save_clip": "Spara ett klipp från {title}",
+  "shell.palette.save_clip_keywords": "klipp repris spela in video inspelning",
+  "shell.notice.replay_not_recording": "Reprisbufferten spelar inte in",
+  "shell.notice.replay_missing": "Installera gpu-screen-recorder från Flathub eller din distributions paket för att spela in klipp.",
+  "shell.notice.replay_turn_on": "Slå på den under Prestanda → Reprisbuffert, i standardinställningarna för spel eller i det här spelets inställningar.",
+  "shell.notice.replay_stopped": "Reprisbufferten stoppades",
+  "shell.notice.clip_saved": "Klipp från {title} sparat",
+  "shell.notice.clip_failed": "Klippet sparades inte"
 }

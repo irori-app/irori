@@ -79,5 +79,14 @@
   "shell.app_update.download": "Завантажити",
   "shell.app_update.copy_command": "Скопіювати команду",
   "shell.app_update.updated": "Irori оновлено до версії {version}",
-  "shell.app_update.release_notes": "Примітки до випуску"
+  "shell.app_update.release_notes": "Примітки до випуску",
+  "shell.tray.save_clip": "Зберегти кліп",
+  "shell.palette.save_clip": "Зберегти кліп із {title}",
+  "shell.palette.save_clip_keywords": "кліп повтор запис відео захоплення",
+  "shell.notice.replay_not_recording": "Буфер повтору не записує",
+  "shell.notice.replay_missing": "Щоб записувати кліпи, встановіть gpu-screen-recorder із Flathub або з пакетів вашого дистрибутива.",
+  "shell.notice.replay_turn_on": "Увімкніть його в розділі «Продуктивність → Буфер повтору» в типових налаштуваннях ігор або в налаштуваннях цієї гри.",
+  "shell.notice.replay_stopped": "Буфер повтору зупинився",
+  "shell.notice.clip_saved": "Кліп із {title} збережено",
+  "shell.notice.clip_failed": "Кліп не збережено"
 }
