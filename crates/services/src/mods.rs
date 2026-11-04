@@ -225,8 +225,9 @@ impl Backend {
                 .iter()
                 .map(|(id, files)| (id.as_str(), files.as_slice()))
                 .collect();
+            let aligner = std::cell::RefCell::new(irori_mods::CaseAligner::new(&game_dir));
             let conflicts = conflicts::find(&refs, |rel| {
-                let path = irori_mods::align_case(&game_dir, rel);
+                let path = aligner.borrow_mut().align(rel);
                 game_dir.join(&path).is_file()
             });
             let icons = list
@@ -1092,14 +1093,12 @@ fn present_files(config: &ModuleConfig, game_dir: &Path, lib: &ModLibrary) -> Ar
         .for_each(|(c, _)| collect(c, &mut asked));
     let prefix = layout::data_dir(game_dir).unwrap_or_default();
     let mod_files = enabled_files(lib).unwrap_or_default();
+    let mut aligner = irori_mods::CaseAligner::new(game_dir);
     let present = asked
         .into_iter()
         .filter(|path| {
             let rel = layout::prefixed(&prefix, path);
-            game_dir
-                .join(irori_mods::align_case(game_dir, &rel))
-                .is_file()
-                || mod_files.contains(&rel.to_lowercase())
+            game_dir.join(aligner.align(&rel)).is_file() || mod_files.contains(&rel.to_lowercase())
         })
         .map(|p| p.to_lowercase())
         .collect();

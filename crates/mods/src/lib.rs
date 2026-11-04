@@ -33,7 +33,7 @@ pub mod thunderstore;
 
 pub use conflicts::{Conflicts, FileConflict, ModConflicts};
 pub use deploy::{Applied, Deployment, Layer};
-pub use fsutil::align_case;
+pub use fsutil::{CaseAligner, align_case};
 pub use library::{ModLibrary, Staging, WRITTEN_LAYER};
 pub use model::{DeployMethod, ModEntry, ModList, ModSource, is_valid_id};
 pub use net::{DownloadProgress, MAX_MOD_BYTES, download_to};

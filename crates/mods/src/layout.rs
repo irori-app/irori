@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::fsutil::{align_case, join_rel, move_file, walk_files};
+use crate::fsutil::{CaseAligner, join_rel, move_file, walk_files};
 
 /// Entries archivers add that are never part of a mod.
 fn is_junk(name: &str) -> bool {
@@ -141,6 +141,7 @@ pub fn import(
     mut map: impl FnMut(&str) -> Option<String>,
 ) -> Result<usize> {
     let mut moved = 0;
+    let mut aligner = CaseAligner::new(game_dir);
     for (rel, _) in walk_files(from)? {
         if rel.split('/').any(is_junk) {
             continue;
@@ -148,7 +149,7 @@ pub fn import(
         let Some(target) = map(&rel) else {
             continue;
         };
-        let target = align_case(game_dir, &target);
+        let target = aligner.align(&target);
         if irori_core::archive_guard::relative_entry_path(Path::new(&target)).is_none() {
             continue;
         }
