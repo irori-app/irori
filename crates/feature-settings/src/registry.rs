@@ -229,6 +229,8 @@ pub enum ActionKind {
     OpenLogsFolder,
     ImportHeroic,
     ImportLutris,
+    ImportBottles,
+    ImportFaugus,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -691,6 +693,14 @@ const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
     when("exitToTray", true, "settings.requires.close_to_tray"),
 ];
+const NEEDS_START_WITH_SYSTEM: &[Condition] = &[
+    when("noTrayIcon", false, "settings.requires.tray_icon"),
+    when(
+        "iroriStartWithSystem",
+        true,
+        "settings.requires.start_with_system",
+    ),
+];
 const NEEDS_WAYLAND: &[Condition] = &[when(
     "enableWineWayland",
     true,
@@ -919,6 +929,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.start_in_tray.help")
     .keywords(&["tray", "minimized", "startup"])
     .requires(NEEDS_EXIT_TO_TRAY),
+    app(
+        "iroriStartWithSystem",
+        "settings.field.start_with_system.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.start_with_system.help")
+    .keywords(&["autostart", "login", "startup", "boot", "log in"]),
+    app(
+        "iroriStartWithSystemMinimized",
+        "settings.field.start_with_system_minimized.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.start_with_system_minimized.help")
+    .keywords(&["autostart", "tray", "minimized", "startup"])
+    .requires(NEEDS_START_WITH_SYSTEM),
     app(
         "minimizeOnLaunch",
         "settings.field.minimize_on_launch.label",
@@ -1429,6 +1458,24 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.action_import_lutris.help")
     .keywords(&["lutris", "import", "migrate", "emulator"]),
+    app(
+        "action.import-bottles",
+        "settings.field.action_import_bottles.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportBottles),
+    )
+    .help("settings.field.action_import_bottles.help")
+    .keywords(&["bottles", "import", "migrate", "wine", "prefix"]),
+    app(
+        "action.import-faugus",
+        "settings.field.action_import_faugus.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportFaugus),
+    )
+    .help("settings.field.action_import_faugus.help")
+    .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
     app(
         "action.clear-caches",
         "settings.field.action_clear_caches.label",

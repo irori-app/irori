@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb} установлен",
   "settings.field.action_import_lutris.label": "Импорт из Lutris",
   "settings.field.action_import_lutris.help": "Перенести установленные игры, эмулируемые игры, избранное, категории и время в играх из Lutris. Сам Lutris не изменится.",
-  "settings.error.import_lutris": "Не удалось импортировать из Lutris"
+  "settings.error.import_lutris": "Не удалось импортировать из Lutris",
+  "settings.field.action_import_bottles.label": "Импорт из Bottles",
+  "settings.field.action_import_bottles.help": "Добавляет программы всех бутылок и установленные в них игры, с бутылкой в качестве префикса. Bottles не изменяется.",
+  "settings.field.action_import_faugus.label": "Импорт из Faugus Launcher",
+  "settings.field.action_import_faugus.help": "Добавляет игры из Faugus Launcher с их префиксом, версией Proton, переменными и аргументами. Faugus Launcher не изменяется.",
+  "settings.error.import_launcher": "Не удалось импортировать",
+  "settings.field.start_with_system.label": "Запускать вместе с системой",
+  "settings.field.start_with_system.help": "Открывает Irori при входе в систему.",
+  "settings.field.start_with_system_minimized.label": "При запуске с системой сворачивать в трей",
+  "settings.field.start_with_system_minimized.help": "При запуске во время входа Irori ждёт в трее, не показывая окно.",
+  "settings.requires.start_with_system": "Требуется запуск вместе с системой"
 }

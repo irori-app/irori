@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Pausad",
   "ui.play_status.beaten": "Avklarad",
   "ui.play_status.abandoned": "Övergiven",
-  "ui.play_status.played": "Spelad"
+  "ui.play_status.played": "Spelad",
+  "ui.import.summary.title": "Importerat från {launcher}",
+  "ui.import.summary.games": "{found} spel i {launcher}: {imported} tillagda i Irori.",
+  "ui.import.summary.wine_build": "{launcher} använde {build}, som inte är installerat här. Välj en annan version i spelets inställningar om det inte startar.",
+  "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa"
 }

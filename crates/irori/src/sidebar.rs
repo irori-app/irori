@@ -1,5 +1,6 @@
-//! The sidebar: Irori's mark, the main destinations, recently played games,
-//! the management pages and the way into Big Picture.
+//! The sidebar: Irori's mark, the main destinations, the saved library
+//! views, recently played games, the management pages and the way into Big
+//! Picture.
 
 use std::sync::Arc;
 
@@ -220,6 +221,85 @@ impl Render for RecentGames {
                     .pt_5()
                     .pb_2()
                     .child(caption(t("shell.nav.recent"), cx).text_color(palette.caption)),
+            )
+            .children(rows)
+        })
+    }
+}
+
+/// The saved library views, one click from anywhere. A view of its own so
+/// renaming or reordering views redraws only it.
+pub(crate) struct SavedViewsNav {
+    /// Following the library's criteria, once a library view exists, to
+    /// mark the view it shows.
+    filters: Option<Subscription>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl SavedViewsNav {
+    pub(crate) fn new(cx: &mut Context<Self>) -> Self {
+        let views = irori_library::saved_views(cx);
+        Self {
+            filters: None,
+            _subscriptions: vec![
+                cx.observe(&views, |_, _, cx| cx.notify()),
+                cx.observe(&navigator(cx), |_, _, cx| cx.notify()),
+            ],
+        }
+    }
+}
+
+impl Render for SavedViewsNav {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.filters.is_none()
+            && let Some(filters) = irori_library::active_filters(cx)
+        {
+            self.filters = Some(cx.observe(&filters, |_, _, cx| cx.notify()));
+        }
+        let views = irori_library::saved_view_list(cx);
+        let on_library = *navigator(cx).read(cx).current() == Route::Library;
+        let active = on_library.then(|| irori_library::active_view(cx)).flatten();
+        let theme = cx.theme();
+        let palette = SidebarPalette::new(cx);
+        let hover_bg = palette.highlight;
+        let radius = theme.radius;
+        let (active_fg, fg) = (palette.selected_text, palette.text);
+        let (active_icon, icon) = (palette.selected_icon, palette.icon);
+        let rows: Vec<AnyElement> = views
+            .into_iter()
+            .map(|(id, name)| {
+                let selected = active == Some(id);
+                h_flex()
+                    .id(ElementId::Name(format!("saved-view:{id}").into()))
+                    .keyboard_focusable(cx)
+                    .h(rems(2.25))
+                    .px_3()
+                    .gap_3()
+                    .rounded(radius)
+                    .cursor_pointer()
+                    .text_sm()
+                    .text_color(if selected { active_fg } else { fg })
+                    .when(selected, |d| d.bg(hover_bg).font_semibold())
+                    .when(!selected, |d| {
+                        d.hover(move |s| s.bg(hover_bg).text_color(active_fg))
+                    })
+                    .child(
+                        Icon::new(IconName::Bookmark)
+                            .small()
+                            .text_color(if selected { active_icon } else { icon }),
+                    )
+                    .child(div().flex_1().min_w_0().truncate().child(name))
+                    .on_click(move |_, _, cx| irori_library::apply_view(id, cx))
+                    .into_any_element()
+            })
+            .collect();
+        v_flex().w_full().gap_0p5().when(!rows.is_empty(), |d| {
+            d.child(
+                div()
+                    .px_3()
+                    .pt_5()
+                    .pb_2()
+                    .child(caption(t("shell.nav.views"), cx).text_color(palette.caption)),
             )
             .children(rows)
         })

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::{App, PathPromptOptions, SharedString, Task, Window};
-use irori_core::{ClientAction, GameId, LaunchOption, UpdateRequest};
+use irori_core::{ClientAction, GameId, LaunchOption, Runner, UpdateRequest};
 use irori_extras::shortcuts::{self, ShortcutTargets};
 use irori_services::LaunchParams;
 use irori_ui::i18n::{t, t_args};
@@ -382,9 +382,41 @@ pub fn client_action(id: &GameId, action: ClientAction, window: &mut Window, cx:
     .detach();
 }
 
+/// Point an added game at its program's new place (a file, or a folder with
+/// one program in it). Its title, art, settings and playtime stay.
+pub fn locate_program(id: &GameId, window: &mut Window, cx: &mut App) {
+    let id = id.clone();
+    let platform = backend(cx)
+        .game(&id)
+        .and_then(|g| g.installed_platform())
+        .unwrap_or_else(|| irori_core::HostPlatform::current().native());
+    let pick = pick_path(window, cx, false, t("game.ops.pick_program"));
+    window
+        .spawn(cx, async move |cx| {
+            let Some(path) = pick.await else { return };
+            let _ = cx.update(|window, cx| {
+                let b = backend(cx);
+                let title = title_of(&id, cx);
+                let id = id.clone();
+                run_reporting(
+                    window,
+                    cx,
+                    t_args("game.ops.locate_failed", &[("title", &title)]),
+                    async move { b.import(&id, &path, platform).await },
+                    |_, _, _| {},
+                )
+                .detach();
+            });
+        })
+        .detach();
+}
+
 /// Point the install record at another folder without moving files (for
 /// installs whose drive moved or that were copied elsewhere).
 pub fn change_install_location(id: &GameId, window: &mut Window, cx: &mut App) {
+    if id.runner == Runner::Sideload {
+        return locate_program(id, window, cx);
+    }
     let id = id.clone();
     let pick = pick_path(window, cx, true, t("game.ops.pick_use_folder"));
     window

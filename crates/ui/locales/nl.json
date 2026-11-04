@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Gepauzeerd",
   "ui.play_status.beaten": "Uitgespeeld",
   "ui.play_status.abandoned": "Gestopt",
-  "ui.play_status.played": "Gespeeld"
+  "ui.play_status.played": "Gespeeld",
+  "ui.import.summary.title": "Geïmporteerd uit {launcher}",
+  "ui.import.summary.games": "{found} games in {launcher}: {imported} toegevoegd aan Irori.",
+  "ui.import.summary.wine_build": "{launcher} gebruikte {build}, dat hier niet is geïnstalleerd. Kies een andere versie in de instellingen van de game als die niet start.",
+  "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen"
 }
