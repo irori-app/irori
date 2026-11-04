@@ -1403,10 +1403,11 @@ fi
         assert_eq!(info.runner(), Runner::Launchers);
         assert_eq!(info.third_party_managed_app.as_deref(), Some("Xbox app"));
         assert_eq!(info.folder_name.as_deref(), Some("Sky Racer"));
-        assert_eq!(
-            info.cover_art(),
-            Some("file:///d/XboxGames/Sky Racer/Content/Logo480.png")
+        let logo = format!(
+            "file://{}",
+            dir.join("XboxGames/Sky Racer/Content/Logo480.png").display()
         );
+        assert_eq!(info.cover_art(), Some(logo.as_str()));
         assert_eq!(
             info.store_url.as_deref(),
             Some("https://apps.microsoft.com/detail/9NZTKMP36L8J")
