@@ -556,6 +556,8 @@
   "game.timeline.title": "Historial de juego",
   "game.timeline.view_days": "Cronología",
   "game.timeline.view_sessions": "Sesiones",
+  "game.timeline.view_journal": "Diario",
+  "game.journal.write": "Escribir una nota sobre este día",
   "game.sandbox.title": "Aislado",
   "game.sandbox.running": "Ejecutándose aislado",
   "game.sandbox.no_network": "Sin red",

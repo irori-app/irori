@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "명령 복사",
   "shell.app_update.updated": "Irori가 {version}(으)로 업데이트되었습니다",
   "shell.app_update.release_notes": "릴리스 노트",
+  "shell.palette.year_in_review": "연말 결산 열기",
+  "shell.palette.year_in_review_keywords": "결산 요약 연간",
   "shell.nav.views": "보기",
   "shell.palette.show_view": "보기 표시: {name}",
   "shell.palette.views_keywords": "보기 저장 필터",

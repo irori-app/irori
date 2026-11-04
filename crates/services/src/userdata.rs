@@ -1,6 +1,6 @@
 //! Launcher-owned per-user library data: favourites, hidden games, recently
-//! played, custom categories, playtime, play statuses, backlog goals and
-//! title/art overrides.
+//! played, custom categories, playtime, play statuses, backlog goals,
+//! title/art overrides and the play journal.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -11,6 +11,7 @@ use irori_core::{Event, EventBus, GameId, GameInfo, Paths, json_store, util};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
+use crate::journal::{self, Journal, JournalEntry};
 use crate::play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 
 /// Persisted shape. Game keys are `GameId::key()` strings.
@@ -40,6 +41,9 @@ pub struct UserData {
     /// have no entry.
     #[serde(default)]
     pub ratings: BTreeMap<String, u8>,
+    /// The user's notes, per game and day played.
+    #[serde(default)]
+    pub journal: Journal,
 }
 
 /// Most stars a game can be rated.
@@ -88,6 +92,11 @@ impl UserData {
             }
             None => EffectiveStatus::NotPlayed,
         }
+    }
+
+    /// The user's note on a game for one day, if they wrote one.
+    pub fn journal_entry(&self, key: &str, day: chrono::NaiveDate) -> Option<&JournalEntry> {
+        self.journal.get(key)?.get(&day)
     }
 }
 
@@ -467,6 +476,20 @@ impl UserDataService {
     /// Put games back as [`Self::capture`] saw them.
     pub fn restore(&self, snap: &BulkSnapshot) {
         self.update(None, |d| d.restore(snap));
+    }
+
+    /// Write a game's note for `day`, or remove it with `None` or a note
+    /// with nothing in it.
+    pub fn set_journal_entry(
+        &self,
+        id: &GameId,
+        day: chrono::NaiveDate,
+        entry: Option<JournalEntry>,
+    ) {
+        let now = util::now_rfc3339();
+        self.update(Some(id), |d| {
+            journal::apply(&mut d.journal, &id.key(), day, entry, &now)
+        });
     }
 
     /// Drop one game from the recently played list.

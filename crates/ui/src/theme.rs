@@ -57,7 +57,8 @@ const ACCENT_WAIT: Duration = Duration::from_millis(100);
 /// Irori's typeface (Manrope, SIL Open Font License), used by every theme.
 pub const FONT_FAMILY: &str = "Manrope";
 
-const FONTS: &[&[u8]] = &[
+/// Irori's font files, for drawing outside the window (the shareable cards).
+pub const FONTS: &[&[u8]] = &[
     include_bytes!("../../../assets/fonts/Manrope-Regular.ttf"),
     include_bytes!("../../../assets/fonts/Manrope-Medium.ttf"),
     include_bytes!("../../../assets/fonts/Manrope-SemiBold.ttf"),

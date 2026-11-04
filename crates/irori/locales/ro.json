@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Copiază comanda",
   "shell.app_update.updated": "Irori a fost actualizat la versiunea {version}",
   "shell.app_update.release_notes": "Note de lansare",
+  "shell.palette.year_in_review": "Deschide Anul în revistă",
+  "shell.palette.year_in_review_keywords": "rezumat recapitulare an",
   "shell.nav.views": "Vizualizări",
   "shell.palette.show_view": "Arată vizualizarea: {name}",
   "shell.palette.views_keywords": "vizualizare salvată filtru",
