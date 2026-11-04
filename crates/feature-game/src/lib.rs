@@ -5,7 +5,9 @@
 //! at startup (translations, key bindings), may install [`GameHooks`] to override the
 //! compatibility source (default: `irori_extras`) and to provide GOG
 //! private-branch passwords, and passes the concrete Epic and GOG stores to
-//! [`install_store_handles`] (EOS overlay, REDmod). It routes
+//! [`install_store_handles`] (EOS overlay, REDmod). A game's mods live in
+//! the Mods tab ([`ModsPanel`]); the shell hands `nxm://` links to
+//! [`open_nxm_dialog`]. It routes
 //! [`GamePageEvent::RequestEdit`] and [`GamePageEvent::RequestCategories`]
 //! to the library's dialogs. Other features open
 //! the same workflows through the `open_*` functions and reuse the game
@@ -24,6 +26,7 @@ mod launch_problem;
 mod load;
 mod logs;
 mod manage;
+mod mods;
 pub mod ops;
 mod page;
 mod play_with;
@@ -53,6 +56,7 @@ pub use manage::{
     ImportForm, UninstallOptions, open_cancel_download_dialog, open_import_dialog,
     open_move_dialog, open_uninstall_dialog,
 };
+pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog};
 pub use page::{AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu};
 pub use play_with::open_play_with_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};

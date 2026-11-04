@@ -392,6 +392,8 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
                 });
             }
             Event::WineVersionsChanged | Event::EnginesChanged => settings = true,
+            // The mods tab listens on the bus itself.
+            Event::ModsChanged(_) => {}
         }
     }
 

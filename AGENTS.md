@@ -93,7 +93,8 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
-  Heroic's `heroic://launch/...`. Any web page or program can open a link, so
+  Heroic's `heroic://launch/...`, and Nexus Mods' `nxm://<game>/mods/<mod>/files/<file>`
+  (installs the file after asking which game it is for). Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
@@ -146,6 +147,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) and Xbox app packages (`.GamingRoot`, `MicrosoftGame.config`, `AppxManifest.xml`, Gaming Services) |
 | `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
+| `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
@@ -185,13 +187,14 @@ irori-core                        (depends on nothing internal)
   ├─ irori-runtime, irori-depot, irori-extras
   ├─ irori-engines   (core, runtime, depot)
   ├─ irori-scripts   (core, runtime, depot; knows nothing of stores or the UI)
+  ├─ irori-mods      (core, depot; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
   │                   irori-steam-api
   │                   (depot and secrets only, not core)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   │                   irori-steam, irori-sideload, irori-emulation (+ engines),
   │                   irori-launchers (+ runtime, irori-launchers-data)
-  └─ irori-services   (core, depot, runtime, extras, engines, scripts; stores reach it as `DynStore`)
+  └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods; stores reach it as `DynStore`)
 irori-ui          (services, core)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
@@ -837,6 +840,40 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
+
+### 4.11 Mods
+
+- **Storage** (`irori_mods::ModLibrary`): `<data>/mods/<runner>/<app>/` holds
+  `mods.json` (load order; later wins), one folder per mod whose `files/` already
+  mirror the game folder, `.written/` (what the game wrote into mod files and
+  folders, applied on top), and `deployment.json` while mods are applied. Mod ids
+  are `[a-z0-9-]` only, so they never name anything outside that folder.
+- **Only while playing.** `Backend::launch_with` calls `apply_mods` right before
+  the game starts and `restore_mods` after it exits (after the saves sync).
+  Leftovers from a crash are taken out at start (`recover_mods`, the app only:
+  a command-line run may sit beside a running game). Mods can't change while
+  the game runs.
+- **Never delete game files.** Links: the full manifest is written before any
+  file is touched; a game file a mod replaces is renamed to
+  `<name>.irori-original` beside itself; `deploy::undeploy` is safe to rerun at
+  any step and calls `fs_guard::ensure_deletable` on the game folder first. A
+  file Irori put there that the game changed or replaced goes to `.written/`.
+  Overlay (Linux, `fuse-overlayfs`): the game folder is a lower layer and is
+  never written; after unmounting, `overlay::settle` moves what the game wrote
+  outside the mods' own files and folders into the game folder, where it would
+  have gone without mods. Paths compare without letter case and follow the game
+  folder's spelling (`align_case`).
+- **Sources.** Archives go through `irori_mods::archive` (zip and 7z in process;
+  rar through `unrar`/`7z`/`bsdtar` after listing every name), with
+  `archive_guard` on every entry and no links. FOMOD (`fomod.rs`) is parsed as
+  data only (no DTDs, no scripted installers); the UI asks the steps
+  (`FomodPrompt`, `Backend::finish_fomod`). Thunderstore's ecosystem schema (cached
+  a day) names each community's Steam/Epic ids, programs, loader and install
+  rules; only BepInEx and MelonLoader communities install. Nexus Mods uses the
+  user's personal API key (through `irori_secrets`, never logged); free accounts
+  install through `nxm://` links, which carry a one-time key.
+- **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
+  game menu), `Event::ModsChanged(GameId)` refreshes it.
 
 ## 5. Rust conventions
 
