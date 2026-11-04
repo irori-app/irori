@@ -12,6 +12,10 @@ import zipfile
 
 import package
 
+# AppDirs hold relative symlinks (`irori.desktop`, `.DirIcon`), which Windows
+# can't follow; AppImages are only built on Linux.
+needs_posix_links = unittest.skipIf(os.name == "nt", "AppDirs need POSIX symlinks")
+
 
 def write_pe(path: Path, machine: int = 0x8664) -> None:
     data = bytearray(70)
@@ -93,6 +97,7 @@ class LinuxPackagingTests(unittest.TestCase):
     def test_elf_needed_reads_a_real_executable(self):
         self.assertIn("libc.so.6", package.elf_needed(Path("/bin/sh").resolve()))
 
+    @needs_posix_links
     def test_appimage_holds_both_programs_desktop_entry_icon_and_metainfo(self):
         tarball, seen = self.build_appimage()
         output = self.root / "output"
@@ -113,6 +118,7 @@ class LinuxPackagingTests(unittest.TestCase):
         self.assertNotIn("LD_LIBRARY_PATH", run)
         self.assertFalse(any(name.endswith(".so") or ".so." in name for name in seen["files"]))
 
+    @needs_posix_links
     def test_appimage_carries_update_information_and_the_pinned_runtime(self):
         _, seen = self.build_appimage()
         command = seen["command"]
@@ -124,6 +130,7 @@ class LinuxPackagingTests(unittest.TestCase):
         self.assertTrue(package.APPIMAGE_UPDATE_INFORMATION.startswith("gh-releases-zsync|irori-app|irori|latest|"))
         self.assertTrue((self.root / f"output/Irori-{self.version()}-x86_64.AppImage.zsync").is_file())
 
+    @needs_posix_links
     def test_update_information_needs_its_zsync_file(self):
         self.zsync = False
         with self.assertRaisesRegex(RuntimeError, "zsyncmake"):
