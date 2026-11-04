@@ -25,6 +25,7 @@ mod library;
 pub mod mods;
 mod network;
 pub mod play_status;
+mod programs;
 pub mod related;
 pub mod screenshots;
 pub mod scripts;

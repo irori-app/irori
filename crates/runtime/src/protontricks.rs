@@ -45,6 +45,35 @@ fn command_from(
         })
 }
 
+/// How to start `protontricks-launch`, which runs a Windows program in a
+/// Steam game's Proton prefix with the game's Proton build: the program on
+/// `PATH`, else the Flathub app. `None` when neither is installed.
+pub fn launch_command() -> Option<Vec<String>> {
+    let home = dirs::home_dir().unwrap_or_default();
+    launch_command_from(
+        &|name| which::which(name).ok(),
+        &[
+            home.join(".local/share/flatpak/app"),
+            PathBuf::from("/var/lib/flatpak/app"),
+        ],
+    )
+}
+
+fn launch_command_from(
+    lookup: &dyn Fn(&str) -> Option<PathBuf>,
+    flatpak_app_dirs: &[PathBuf],
+) -> Option<Vec<String>> {
+    if let Some(bin) = lookup("protontricks-launch") {
+        return Some(vec![bin.to_string_lossy().into_owned()]);
+    }
+    let mut argv = command_from(
+        &|name| (name != "protontricks").then(|| lookup(name)).flatten(),
+        flatpak_app_dirs,
+    )?;
+    argv.insert(2, "--command=protontricks-launch".into());
+    Some(argv)
+}
+
 /// Arguments after the program: `--gui <id>` opens winetricks' window on the
 /// game's prefix; with verbs, `<id> -q <verbs>` installs them unattended.
 pub fn args(app_id: &str, verbs: &[String]) -> Vec<String> {
@@ -118,6 +147,36 @@ mod tests {
             ["/usr/bin/flatpak", "run", FLATPAK_ID]
         );
         assert_eq!(command_from(&|_| None, &apps), None);
+    }
+
+    #[test]
+    fn finds_protontricks_launch() {
+        let dir = tempfile::tempdir().unwrap();
+        let apps = vec![dir.path().to_path_buf()];
+        let native = |n: &str| {
+            (n == "protontricks-launch").then(|| PathBuf::from("/usr/bin/protontricks-launch"))
+        };
+        assert_eq!(
+            launch_command_from(&native, &apps).unwrap(),
+            ["/usr/bin/protontricks-launch"]
+        );
+        // `protontricks` alone on PATH doesn't bring the launcher.
+        let only_tricks = |n: &str| match n {
+            "protontricks" => Some(PathBuf::from("/usr/bin/protontricks")),
+            "flatpak" => Some(PathBuf::from("/usr/bin/flatpak")),
+            _ => None,
+        };
+        assert_eq!(launch_command_from(&only_tricks, &apps), None);
+        std::fs::create_dir_all(dir.path().join(FLATPAK_ID)).unwrap();
+        assert_eq!(
+            launch_command_from(&only_tricks, &apps).unwrap(),
+            [
+                "/usr/bin/flatpak",
+                "run",
+                "--command=protontricks-launch",
+                FLATPAK_ID
+            ]
+        );
     }
 
     #[test]

@@ -46,6 +46,20 @@ pub(crate) fn folder_probe(folder: String) -> Probe {
     Arc::new(move || game_running(&folder))
 }
 
+/// Wait while `probe` sees the game, checking every few seconds.
+pub(crate) async fn wait_while(probe: Probe) {
+    loop {
+        let p = probe.clone();
+        let running = tokio::task::spawn_blocking(move || p())
+            .await
+            .unwrap_or(false);
+        if !running {
+            return;
+        }
+        tokio::time::sleep(POLL).await;
+    }
+}
+
 /// Wait for the followed game to end: once `probe` saw it and no longer
 /// does, or — when it never shows up — once the launcher exits or the grace
 /// period passes. Returns the launcher's exit status when it ended.
