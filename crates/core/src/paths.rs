@@ -1,5 +1,6 @@
 //! Filesystem layout. Everything lives under XDG directories; `IRORI_HOME`
-//! relocates all of it (used by tests and portable installs).
+//! relocates all of it (used by tests), and so does a `portable` file beside
+//! `irori.exe` (the portable Windows zip).
 
 use std::path::{Path, PathBuf};
 
@@ -8,6 +9,9 @@ use once_cell::sync::OnceCell;
 use crate::runner::{GameId, Runner};
 
 static PATHS: OnceCell<Paths> = OnceCell::new();
+
+/// The file beside `irori.exe` that keeps everything in the executable's folder.
+pub const PORTABLE_MARKER: &str = "portable";
 
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -41,6 +45,9 @@ impl Paths {
     fn resolve() -> Paths {
         if let Some(root) = std::env::var_os("IRORI_HOME") {
             return Paths::under(Path::new(&root));
+        }
+        if let Some(root) = portable_root() {
+            return Paths::under(&root);
         }
         let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
         let paths = Paths {
@@ -182,6 +189,31 @@ impl Paths {
     }
 }
 
+/// The folder of a portable Irori: `irori.exe`'s own, when a [`PORTABLE_MARKER`]
+/// file sits beside it. Only on Windows, where the zip is unpacked anywhere; a
+/// Unix `bin` folder may hold an unrelated program called `portable`.
+pub fn portable_root() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    portable_root_of(&exe)
+}
+
+fn portable_root_of(exe: &Path) -> Option<PathBuf> {
+    let dir = exe.parent()?;
+    dir.join(PORTABLE_MARKER)
+        .is_file()
+        .then(|| dir.to_path_buf())
+}
+
+/// Whether this Irori keeps its files beside its executable, so it must leave
+/// the system alone: no registry entries, Start menu shortcuts or URL handler.
+pub fn is_portable() -> bool {
+    static PORTABLE: OnceCell<bool> = OnceCell::new();
+    *PORTABLE.get_or_init(|| portable_root().is_some())
+}
+
 /// Replace characters that are unsafe in file names. The result is always a
 /// plain name: never empty, `.` or `..`, which would lead to another folder.
 pub fn sanitize(name: &str) -> String {
@@ -233,5 +265,25 @@ mod tests {
         assert_eq!(sanitize("../a"), ".._a");
         assert_eq!(sanitize("Game: The Sequel"), "Game_ The Sequel");
         assert_eq!(sanitize(".hidden"), ".hidden");
+    }
+
+    #[test]
+    fn portable_marker_keeps_everything_beside_the_executable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("irori.exe");
+        std::fs::write(&exe, b"").unwrap();
+        assert_eq!(portable_root_of(&exe), None);
+
+        std::fs::create_dir(tmp.path().join(PORTABLE_MARKER)).unwrap();
+        assert_eq!(portable_root_of(&exe), None, "a folder is not the marker");
+        std::fs::remove_dir(tmp.path().join(PORTABLE_MARKER)).unwrap();
+
+        std::fs::write(tmp.path().join(PORTABLE_MARKER), b"").unwrap();
+        let root = portable_root_of(&exe).unwrap();
+        assert_eq!(root, tmp.path());
+        let paths = Paths::under(&root);
+        assert_eq!(paths.config, tmp.path().join("config"));
+        assert_eq!(paths.data, tmp.path().join("data"));
+        assert_eq!(paths.cache, tmp.path().join("cache"));
     }
 }

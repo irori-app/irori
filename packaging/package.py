@@ -4,6 +4,9 @@
     cargo build --locked --release -p irori -p irori-sign-in
     python3 packaging/package.py --platform macos --binary-dir target/release --output dist
 
+`--appimage` (Linux) also writes an AppImage with appimagetool, and `--portable`
+(Windows) a zip whose Irori keeps everything in its own folder.
+
 Signing is deliberately separate: use a Developer ID for public macOS releases
 and Authenticode for Windows. CI packages are unsigned test artifacts.
 """
@@ -12,6 +15,7 @@ import os
 from pathlib import Path
 import plistlib
 import shutil
+import stat
 import struct
 import subprocess
 import tarfile
@@ -54,6 +58,141 @@ def make_dmg(app: Path, dmg: Path, identity: str) -> None:
 
 
 WINDOWS_CRT_FILES = ("vcruntime140.dll", "vcruntime140_1.dll")
+
+# Read by `irori_core::paths::portable_root`; its text is for whoever opens it.
+PORTABLE_MARKER = "portable"
+PORTABLE_NOTE = """\
+While this file is here, Irori keeps its settings, logins, downloads, Wine
+builds and caches in this folder, and leaves the rest of Windows alone: no
+Start menu shortcut, no irori:// links, no registry entries.
+
+Logins are encrypted with a key kept in this Windows account's Credential
+Manager, so on another computer you sign in to your stores again.
+
+Delete this file to use the usual folders in your user profile instead.
+"""
+
+# AppImageUpdate finds new versions on the GitHub release marked latest.
+APPIMAGE_UPDATE_INFORMATION = "gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync"
+# The AppImage bundles no libraries, so nothing leaks into the games Irori
+# starts through LD_LIBRARY_PATH. Irori uses the system's GPU and window
+# libraries, as the tarball does, and the sign-in window the system's
+# WebKitGTK: without it the window fails to start and Irori signs in through
+# the browser instead.
+APPIMAGE_RUN = """\
+#!/bin/sh
+here=$(dirname "$(readlink -f "$0")")
+exec "$here/usr/bin/irori" "$@"
+"""
+# Libraries Irori must start without (AGENTS.md, "WebKitGTK must stay optional").
+SIGN_IN_ONLY_LIBRARIES = ("libwebkit2gtk", "libjavascriptcoregtk", "libgtk-3", "libsoup")
+
+ELF_X86_64 = 62
+PT_LOAD, PT_DYNAMIC = 1, 2
+DT_NEEDED, DT_STRTAB = 1, 5
+
+
+def elf_needed(binary: Path) -> list[str]:
+    """The libraries a 64-bit little-endian ELF executable links (`DT_NEEDED`).
+    Fails for anything that isn't an x86-64 Linux executable."""
+    data = binary.read_bytes()
+    if data[:4] != b"\x7fELF" or data[4] != 2 or data[5] != 1:
+        raise ValueError(f"Not a 64-bit Linux executable: {binary}")
+    if struct.unpack_from("<H", data, 18)[0] != ELF_X86_64:
+        raise ValueError(f"The AppImage currently requires x86-64 binaries: {binary}")
+    phoff, = struct.unpack_from("<Q", data, 32)
+    phentsize, phnum = struct.unpack_from("<HH", data, 54)
+    loads, dynamic = [], None
+    for index in range(phnum):
+        kind, _, offset, address, _, size = struct.unpack_from("<IIQQQQ", data, phoff + index * phentsize)
+        if kind == PT_LOAD:
+            loads.append((address, offset, size))
+        elif kind == PT_DYNAMIC:
+            dynamic = (offset, size)
+    if dynamic is None:
+        return []
+    entries = [struct.unpack_from("<qQ", data, dynamic[0] + at) for at in range(0, dynamic[1], 16)]
+    strtab = next((value for tag, value in entries if tag == DT_STRTAB), None)
+    base = next((offset + strtab - address for address, offset, size in loads
+                 if strtab is not None and address <= strtab < address + size), None)
+    if base is None:
+        raise ValueError(f"No dynamic string table in {binary}")
+    return [data[base + value:data.index(b"\0", base + value)].decode() for tag, value in entries if tag == DT_NEEDED]
+
+
+def validate_linux_x64(binaries: list[Path]) -> None:
+    """Never put another architecture in the x86-64 AppImage, nor let Irori
+    itself depend on the sign-in window's libraries."""
+    for binary in binaries:
+        needed = elf_needed(binary)
+        if binary.name == "irori":
+            for library in needed:
+                if library.startswith(SIGN_IN_ONLY_LIBRARIES):
+                    raise RuntimeError(f"irori links {library}, so it would not start without WebKitGTK. "
+                                       "Only irori-sign-in may link it.")
+
+
+def appimagetool_command(appdir: Path, appimage: Path) -> list[str]:
+    """appimagetool's command line. `IRORI_APPIMAGETOOL` names the tool (else
+    `appimagetool` on PATH) and `IRORI_APPIMAGE_RUNTIME` a pinned runtime
+    (else the tool downloads its own)."""
+    tool = os.environ.get("IRORI_APPIMAGETOOL") or shutil.which("appimagetool")
+    if not tool:
+        raise FileNotFoundError("Install appimagetool or set IRORI_APPIMAGETOOL to build the AppImage.")
+    # zstd in 128 KiB blocks, appimagetool's default: smaller than its xz and
+    # quicker to start than larger blocks (appimagetool issue 64).
+    command = [tool, "--no-appstream", "--comp", "zstd", "--updateinformation", APPIMAGE_UPDATE_INFORMATION]
+    if runtime := os.environ.get("IRORI_APPIMAGE_RUNTIME"):
+        command += ["--runtime-file", runtime]
+    return [*command, str(appdir), str(appimage)]
+
+
+def make_appimage(root: Path, binaries: list[Path], output: Path, version: str) -> Path:
+    """`Irori-X.Y.Z-x86_64.AppImage` and, for AppImageUpdate, its `.zsync`."""
+    appimage = output / f"Irori-{version}-x86_64.AppImage"
+    if appimage.exists():
+        raise FileExistsError(f"Never overwriting {appimage}")
+    with tempfile.TemporaryDirectory() as temporary:
+        appdir = Path(temporary) / "Irori.AppDir"
+        for directory in ("usr/bin", "usr/share/applications", "usr/share/icons/hicolor/scalable/apps",
+                          "usr/share/metainfo", "usr/share/doc/irori"):
+            (appdir / directory).mkdir(parents=True)
+        for binary in binaries:
+            shutil.copy2(binary, appdir / "usr/bin" / binary.name)
+        shutil.copy2(root / "packaging/irori.desktop", appdir / "usr/share/applications/irori.desktop")
+        shutil.copy2(root / "packaging/irori.svg", appdir / "usr/share/icons/hicolor/scalable/apps/irori.svg")
+        shutil.copy2(root / "packaging/linux/app.irori.Irori.metainfo.xml", appdir / "usr/share/metainfo")
+        shutil.copy2(root / "LICENSE", appdir / "usr/share/doc/irori/LICENSE")
+        # appimagetool and desktop integrations read these from the AppDir's top.
+        (appdir / "irori.desktop").symlink_to("usr/share/applications/irori.desktop")
+        (appdir / "irori.svg").symlink_to("usr/share/icons/hicolor/scalable/apps/irori.svg")
+        (appdir / ".DirIcon").symlink_to("irori.svg")
+        run = appdir / "AppRun"
+        run.write_text(APPIMAGE_RUN)
+        run.chmod(0o755)
+        environment = {**os.environ, "ARCH": "x86_64", "VERSION": version,
+                       # The tool is an AppImage itself; containers have no FUSE.
+                       "APPIMAGE_EXTRACT_AND_RUN": "1"}
+        subprocess.run(appimagetool_command(appdir, appimage), check=True, env=environment, cwd=output)
+    if not appimage.is_file():
+        raise RuntimeError(f"appimagetool did not write {appimage}")
+    if not appimage.with_name(appimage.name + ".zsync").is_file():
+        raise RuntimeError(f"appimagetool wrote no {appimage.name}.zsync, so AppImageUpdate would find "
+                           "nothing. Install zsync (zsyncmake) and package again.")
+    appimage.chmod(appimage.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return appimage
+
+
+def make_portable_zip(staging: Path, archive: Path) -> None:
+    """The Windows files without the installer script, plus the marker that
+    keeps Irori's data beside it. Its folder has its own name, so unpacking
+    it over the installable zip's folder can't make that one portable."""
+    folder = "Irori-portable"
+    with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as zip_file:
+        for file in sorted(staging.rglob("*")):
+            if file.is_file() and file.name != "install.ps1":
+                zip_file.write(file, f"{folder}/{file.relative_to(staging).as_posix()}")
+        zip_file.writestr(f"{folder}/{PORTABLE_MARKER}", PORTABLE_NOTE)
 
 
 def validate_windows_x64(binary: Path) -> None:
@@ -99,9 +238,13 @@ def windows_crt_directory() -> Path:
     )
 
 
-def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False) -> Path:
-    """Package the binaries and return the archive. On macOS, `dmg` also writes a
-    disk image next to it."""
+def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
+            appimage: bool = False, portable: bool = False) -> Path:
+    """Package the binaries and return the archive. Next to it, `dmg` also writes
+    a macOS disk image, `appimage` a Linux AppImage and `portable` a portable
+    Windows zip."""
+    if dmg and platform != "macos" or appimage and platform != "linux" or portable and platform != "windows":
+        raise ValueError("--dmg is for macOS, --appimage for Linux and --portable for Windows")
     root = Path(__file__).resolve().parent.parent
     version = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     suffix = ".exe" if platform == "windows" else ""
@@ -112,6 +255,8 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False) ->
     if platform == "macos":
         for binary in binaries:
             validate_macos_dependencies(binary)
+    if appimage:
+        validate_linux_x64(binaries)
     windows_runtime = []
     if platform == "windows":
         runtime_directory = windows_crt_directory()
@@ -174,6 +319,8 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False) ->
             for file in staging.rglob("*"):
                 if file.is_file():
                     zip_file.write(file, file.relative_to(output))
+        if portable:
+            make_portable_zip(staging, output / f"Irori-{version}-windows-portable.zip")
     else:
         shutil.copy2(root / "packaging/irori.desktop", staging)
         shutil.copy2(root / "packaging/irori.svg", staging)
@@ -182,6 +329,8 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False) ->
         archive = output / f"Irori-{version}-linux.tar.gz"
         with tarfile.open(archive, "x:gz") as tar:
             tar.add(staging, arcname="Irori")
+        if appimage:
+            make_appimage(root, binaries, output, version)
     return archive
 
 
@@ -191,5 +340,7 @@ if __name__ == "__main__":
     parser.add_argument("--binary-dir", type=Path, default=Path("target/release"))
     parser.add_argument("--output", type=Path, default=Path("dist"))
     parser.add_argument("--dmg", action="store_true", help="macOS: also build a disk image")
+    parser.add_argument("--appimage", action="store_true", help="Linux: also build an AppImage (needs appimagetool)")
+    parser.add_argument("--portable", action="store_true", help="Windows: also build the portable zip")
     args = parser.parse_args()
-    print(package(args.platform, args.binary_dir.resolve(), args.output.resolve(), args.dmg))
+    print(package(args.platform, args.binary_dir.resolve(), args.output.resolve(), args.dmg, args.appimage, args.portable))

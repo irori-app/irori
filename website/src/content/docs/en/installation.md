@@ -1,10 +1,10 @@
 ---
 title: Installation
 seoTitle: 'Install Irori on Linux, macOS and Windows'
-description: 'Every way to install Irori: apt, dnf and pacman repositories, Flatpak, Homebrew, the macOS disk image, the Windows installer and Scoop, plus building from source.'
+description: 'Every way to install Irori: apt, dnf and pacman, Flatpak, AppImage, Homebrew, the disk image, the Windows installer, portable zip and Scoop, or from source.'
 summary: Packages for every system, how they update, and building from source.
 order: 2
-updated: 2026-11-03
+updated: 2026-11-04
 related: [getting-started, files-and-folders, troubleshooting]
 ---
 
@@ -53,8 +53,23 @@ flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/fl
 flatpak install --user ./Irori-*-linux.flatpak
 ```
 
-Irori isn’t on Flathub yet, so install each new version the same way. A tarball is on the
-releases page too.
+Irori isn’t on Flathub yet, so install each new version the same way.
+
+### AppImage
+
+One file for any distribution with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora,
+openSUSE, Arch and their relatives). Download `Irori-…-x86_64.AppImage` from the
+[latest release](https://github.com/irori-app/irori/releases/latest), then:
+
+```bash
+chmod +x Irori-*-x86_64.AppImage
+./Irori-*-x86_64.AppImage
+```
+
+It uses your system’s graphics libraries and, when it’s installed, its WebKitGTK for the
+sign-in window; without WebKitGTK, Irori signs in through your browser. AppImageUpdate,
+Gear Lever and AppImageLauncher update it in place, downloading only what changed. A
+tarball is on the releases page too.
 
 ## macOS
 
@@ -80,6 +95,15 @@ scoop bucket add irori https://github.com/irori-app/scoop-bucket
 scoop install irori
 ```
 
+### Portable
+
+`Irori-…-windows-portable.zip` runs from any folder, a USB drive too. Unpack it and start
+`irori.exe` in the `Irori-portable` folder. While the `portable` file sits beside
+`irori.exe`, Irori keeps its settings, logins, Wine builds and caches in that folder and
+adds nothing to Windows: no Start menu entry, no `irori://` links, no registry keys.
+Logins are encrypted with a key in your Windows account, so on another computer you sign in
+to your stores again. Delete the `portable` file to switch that copy to the usual folders.
+
 Windows builds aren’t signed yet, so SmartScreen may warn the first time: choose **More info**,
 then **Run anyway**.
 
@@ -94,7 +118,7 @@ Irori looks for its own new versions only where nothing else updates it:
 | Homebrew | Checks, and offers `brew upgrade --cask irori` |
 | Scoop | Checks, and offers `scoop update irori` |
 | winget | Checks, and offers `winget upgrade Irori.Irori` |
-| Windows setup or zip, disk image, tarball | Checks, and links to the release page |
+| Windows setup, zip or portable zip, disk image, tarball, AppImage | Checks, and links to the release page |
 
 The check asks GitHub at most once a day, only while online, and can be turned off in
 **Settings › General › Updates**. Irori never downloads or installs itself. Flathub, winget and
