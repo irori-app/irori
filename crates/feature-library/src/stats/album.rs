@@ -1,6 +1,6 @@
 //! What the album tab shows for one period: the screenshots the user took
-//! in it of games in the library, newest first, and those games by how many
-//! screenshots each has.
+//! and the clips the replay buffer saved in it of games in the library,
+//! newest first, and those games by how many each has.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -23,6 +23,8 @@ pub struct Shot {
     /// Unix time it was taken.
     pub taken: i64,
     pub day: NaiveDate,
+    /// A video clip, drawn over its game's art and played by the system.
+    pub video: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +50,11 @@ impl Album {
     /// The game with the most screenshots.
     pub fn top(&self) -> Option<&(GameId, usize)> {
         self.games.first()
+    }
+
+    /// How many of the shots are clips.
+    pub fn clips(&self) -> usize {
+        self.shots.iter().filter(|s| s.video).count()
     }
 }
 
@@ -92,6 +99,7 @@ pub fn compute(
             path: s.path.clone().into(),
             taken: s.taken,
             day,
+            video: s.video,
         });
     }
     shots.sort_by(|a, b| b.taken.cmp(&a.taken).then_with(|| a.path.cmp(&b.path)));
@@ -122,6 +130,7 @@ mod tests {
             path: format!("/shots/{game}-{taken}.png").into(),
             taken,
             game: game.into(),
+            video: false,
         }
     }
 
@@ -165,6 +174,24 @@ mod tests {
         assert_eq!(album.shown(None).len(), 5);
         assert_eq!(album.shots[0].day, day("2026-10-31"));
         assert_eq!(&*album.shots[0].url, "file:///shots/gog:hades-3050.png");
+        assert_eq!(album.clips(), 0);
+    }
+
+    #[test]
+    fn clips_count_with_the_screenshots_of_their_game() {
+        let mut clip = shot("gog:hades", 300);
+        clip.path = "/clips/Hades/Hades 2026-10-04 19-15-05.mp4".into();
+        clip.video = true;
+        let index = ScreenshotIndex {
+            shots: vec![clip, shot("gog:hades", 200)],
+            folders: Vec::new(),
+        };
+        let all = Period::containing(Span::All, day("2026-11-03"), None);
+        let album = compute(&index, all, |_| true, day_of, day("2026-11-03"));
+        assert_eq!(album.clips(), 1);
+        assert!(album.shots[0].video && !album.shots[1].video);
+        assert_eq!(album.games.len(), 1);
+        assert_eq!(album.games[0].1, 2);
     }
 
     #[test]

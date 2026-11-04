@@ -52,6 +52,8 @@ pub enum ShellCommand {
     Launch(GameId),
     BigPicture,
     Args(Vec<String>),
+    /// Save a clip of the replay buffer.
+    SaveClip,
 }
 
 fn main() -> Result<()> {
@@ -465,6 +467,7 @@ fn listen(
                     open_main_window(&app, cx);
                     nav::navigate(Route::BigPicture, cx);
                 }
+                ShellCommand::SaveClip => irori_ui::backend(cx).save_clip(),
                 ShellCommand::Args(args) => {
                     let cli = Cli::parse(args);
                     if !cli.has_request() {
@@ -497,7 +500,27 @@ fn start_tray(
             return;
         };
         app.lock().tray = Some(handle.clone());
-        cx.update(|cx| watch_recent_for_tray(handle, cx));
+        cx.update(|cx| {
+            watch_replay_for_tray(handle.clone(), cx);
+            watch_recent_for_tray(handle, cx);
+        });
+    })
+    .detach();
+}
+
+/// Offer "Save clip" in the tray while the replay buffer records. It starts
+/// and stops with the "playing" status, so the status model says when.
+#[cfg(target_os = "linux")]
+fn watch_replay_for_tray(handle: tray::TrayHandle, cx: &mut App) {
+    let statuses = models(cx).statuses.clone();
+    let last = std::rc::Rc::new(std::cell::Cell::new(false));
+    cx.observe(&statuses, move |_, cx| {
+        let b = irori_ui::backend(cx);
+        let replay = b.replay().is_some();
+        if last.replace(replay) != replay {
+            let h = handle.clone();
+            b.spawn(async move { tray::set_replay(&h, replay).await });
+        }
     })
     .detach();
 }

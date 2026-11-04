@@ -1,4 +1,5 @@
-//! System tray (StatusNotifierItem) with quick access to recent games.
+//! System tray (StatusNotifierItem) with quick access to recent games, and
+//! "Save clip" while the replay buffer records.
 
 use futures::channel::mpsc::UnboundedSender;
 use irori_core::GameId;
@@ -11,6 +12,8 @@ pub struct IroriTray {
     tx: UnboundedSender<ShellCommand>,
     recent: Vec<(GameId, String)>,
     dark_icon: bool,
+    /// The replay buffer records, so a clip can be saved.
+    replay: bool,
 }
 
 /// Handle to update the tray menu.
@@ -49,6 +52,19 @@ impl ksni::Tray for IroriTray {
             }
             .into(),
         ];
+        if self.replay {
+            items.push(
+                StandardItem {
+                    label: t("shell.tray.save_clip").to_string(),
+                    icon_name: "media-record".into(),
+                    activate: Box::new(|t: &mut Self| {
+                        let _ = t.tx.unbounded_send(ShellCommand::SaveClip);
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            );
+        }
         if !self.recent.is_empty() {
             items.push(
                 SubMenu {
@@ -103,6 +119,7 @@ pub async fn start(tx: UnboundedSender<ShellCommand>, dark_icon: bool) -> Option
         tx,
         recent: Vec::new(),
         dark_icon,
+        replay: false,
     };
     match tray.spawn().await {
         Ok(handle) => Some(handle),
@@ -116,4 +133,9 @@ pub async fn start(tx: UnboundedSender<ShellCommand>, dark_icon: bool) -> Option
 /// Replace the recent games shown in the tray menu.
 pub async fn set_recent(handle: &TrayHandle, recent: Vec<(GameId, String)>) {
     handle.update(move |t| t.recent = recent).await;
+}
+
+/// Show or hide "Save clip".
+pub async fn set_replay(handle: &TrayHandle, replay: bool) {
+    handle.update(move |t| t.replay = replay).await;
 }

@@ -283,6 +283,10 @@ pub struct GameSettings {
     /// match; empty for the automatic one. Per game only. Irori-only.
     #[serde(rename = "iroriLudusaviTitle")]
     pub ludusavi_title: String,
+    /// Keep the last moments of play ready to save as a clip. Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriReplay")]
+    pub replay: ReplaySettings,
 }
 
 /// The sandbox a game runs in (`iroriSandbox`). Off when nothing is blocked.
@@ -327,6 +331,39 @@ impl Default for LsfgSettings {
             multiplier: 2,
             flow_scale: 100,
             performance_mode: false,
+        }
+    }
+}
+
+/// The replay buffer (`iroriReplay`): gpu-screen-recorder keeps the last
+/// `seconds` of a game Irori started, and a clip is saved on request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ReplaySettings {
+    pub enabled: bool,
+    /// How much play a clip holds.
+    pub seconds: u32,
+    /// gpu-screen-recorder's quality preset: `medium`, `high`, `very_high`
+    /// or `ultra`.
+    pub quality: String,
+    /// `desktop` (what the speakers play), `desktop_and_mic` or `none`.
+    pub audio: String,
+    /// `screen` (the first monitor) or `portal` (the desktop asks once
+    /// what to record).
+    pub capture: String,
+    /// Where clips go, in a folder per game; empty for Videos/Irori.
+    pub folder: String,
+}
+
+impl Default for ReplaySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            seconds: 60,
+            quality: "very_high".into(),
+            audio: "desktop".into(),
+            capture: "screen".into(),
+            folder: String::new(),
         }
     }
 }
@@ -417,6 +454,7 @@ impl Default for GameSettings {
             launch_programs: Vec::new(),
             ludusavi_auto_backup: false,
             ludusavi_title: String::new(),
+            replay: ReplaySettings::default(),
         }
     }
 }
@@ -1109,6 +1147,28 @@ mod tests {
             };
             assert_eq!(ui.accent_rgb(), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn the_replay_buffer_is_off_and_one_game_may_turn_it_on() {
+        let defaults = GameSettings::default();
+        assert!(!defaults.replay.enabled);
+        let json = serde_json::to_value(&defaults).unwrap();
+        assert_eq!(json["iroriReplay"]["seconds"], 60);
+        assert_eq!(json["iroriReplay"]["quality"], "very_high");
+        // A game's override holds the whole object; missing fields take
+        // their defaults.
+        let mut overrides = GameSettingsOverrides::default();
+        overrides.set(
+            "iroriReplay",
+            serde_json::json!({"enabled": true, "seconds": 30}),
+        );
+        let game = overrides.apply(&defaults);
+        assert!(game.replay.enabled);
+        assert_eq!(game.replay.seconds, 30);
+        assert_eq!(game.replay.audio, "desktop");
+        let old: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.game.replay, ReplaySettings::default());
     }
 
     #[test]
