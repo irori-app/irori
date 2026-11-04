@@ -15,8 +15,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, InteractiveElement as _, IntoElement, ParentElement, SharedString,
-    Styled, Window, div, rems,
+    AnyElement, App, AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement,
+    SharedString, Styled, Window, div, rems,
 };
 use irori_core::{GameId, GameInfo};
 use irori_ui::i18n::{t, t_args};
@@ -218,6 +218,9 @@ impl GamePage {
         if self.id.runner == irori_core::Runner::Gog {
             tabs.push((InfoTab::Extras, t("game.info.tab_extras")));
         }
+        if self.game.as_ref().is_some_and(|g| crate::mods::applies(g)) {
+            tabs.push((InfoTab::Mods, t("game.info.tab_mods")));
+        }
         tabs
     }
 
@@ -255,6 +258,7 @@ impl GamePage {
             InfoTab::Requirements => self.render_requirements(cx),
             InfoTab::Changelog => self.render_changelog(cx),
             InfoTab::Extras => self.render_extras(game, window, cx),
+            InfoTab::Mods => self.render_mods(game, window, cx),
         };
         let strip = self.render_screenshot_strip(window, cx);
         let details = self.render_details_panel(game, cx);
@@ -361,6 +365,24 @@ impl GamePage {
             .children(dlcs)
             .children(self.render_redmod(game, cx))
             .into_any_element()
+    }
+
+    fn render_mods(
+        &mut self,
+        game: &Arc<GameInfo>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let panel = match &self.mods {
+            Some(panel) => panel.clone(),
+            None => {
+                let game = game.clone();
+                let panel = cx.new(|cx| crate::mods::ModsPanel::new(game, window, cx));
+                self.mods = Some(panel.clone());
+                panel
+            }
+        };
+        panel.into_any_element()
     }
 
     /// Entry to REDmod management for Cyberpunk 2077 on GOG.

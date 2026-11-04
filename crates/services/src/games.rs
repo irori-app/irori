@@ -261,8 +261,18 @@ impl Backend {
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
         let header = std::fs::metadata(&log_file).map(|m| m.len()).unwrap_or(0);
-        let mut child = process::spawn(&plan.command, Some(&log_file))?;
-        let pid = child.id().context("game exited immediately")?;
+        let mods = self.apply_mods(id, &game, &log_file).await?;
+        let spawned = process::spawn(&plan.command, Some(&log_file))
+            .and_then(|child| Ok((child.id().context("game exited immediately")?, child)));
+        let (pid, mut child) = match spawned {
+            Ok(started) => started,
+            Err(e) => {
+                if mods {
+                    self.restore_mods(id, &game.title).await;
+                }
+                return Err(e);
+            }
+        };
         let bound = (!app.disable_logs).then(|| {
             self.spawn(log_cap::bound_log(
                 log_file.clone(),
@@ -378,6 +388,10 @@ impl Backend {
                         .game(id.clone()),
                     );
                 }
+            }
+            // After the saves synced, which may live among the mods' files.
+            if mods {
+                b.restore_mods(&id, &game.title).await;
             }
             b.bus.emit(Event::GameExited {
                 id,
@@ -869,7 +883,7 @@ fn loggable_settings<T: serde::Serialize>(settings: &T) -> String {
     value.to_string()
 }
 
-fn append_log(path: &Path, text: &str) {
+pub(crate) fn append_log(path: &Path, text: &str) {
     use std::io::Write as _;
     if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(path) {
         let _ = f.write_all(text.as_bytes());
