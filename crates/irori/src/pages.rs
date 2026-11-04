@@ -119,6 +119,11 @@ impl Pages {
             Route::Stats => cx
                 .new(|cx| irori_library::StatsView::new(window, cx))
                 .into(),
+            Route::YearInReview(year) => {
+                let year = *year;
+                cx.new(|cx| irori_library::YearReviewView::new(year, window, cx))
+                    .into()
+            }
             Route::Onboarding => cx
                 .new(|cx| irori_manage::OnboardingView::new(window, cx))
                 .into(),

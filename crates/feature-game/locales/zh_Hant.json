@@ -556,6 +556,8 @@
   "game.timeline.title": "遊玩紀錄",
   "game.timeline.view_days": "時間軸",
   "game.timeline.view_sessions": "遊玩紀錄",
+  "game.timeline.view_journal": "日誌",
+  "game.journal.write": "為這一天寫筆記",
   "game.sandbox.title": "沙盒中",
   "game.sandbox.running": "正在沙盒中執行",
   "game.sandbox.no_network": "無網路",

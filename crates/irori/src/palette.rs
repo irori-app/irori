@@ -150,6 +150,17 @@ impl Palette {
         }
         push(
             CommandItem::new()
+                .label(t("shell.palette.year_in_review"))
+                .keywords([
+                    t("shell.palette.year_in_review_keywords"),
+                    t("shell.nav.stats"),
+                ])
+                .icon(IconName::Sparkles),
+            PaletteTarget::Route(Route::YearInReview(None)),
+            targets,
+        );
+        push(
+            CommandItem::new()
                 .label(t("shell.palette.set_up_emulation"))
                 .keywords([t("shell.palette.set_up_emulation_keywords")])
                 .icon(IconName::Joystick),

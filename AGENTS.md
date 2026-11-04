@@ -90,7 +90,8 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `-V/--version` and `-h/--help`.
 - Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture`,
-  `irori://settings/<section>`, `irori://lutris/<slug>` (the Lutris script installer at
+  `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
+  `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
   Heroic's `heroic://launch/...`. Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
@@ -389,9 +390,15 @@ commands without a window.
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
 - **User data:** favourites, hidden games, categories, recents, playtime, play
-  statuses, yearly backlog goals and art overrides live in `state/library.json` behind
-  `RwLock<Arc<UserData>>`, updated copy on write. Store playtime merges by keeping the
-  larger total and counts games only, never their DLC.
+  statuses, yearly backlog goals, art overrides and journal notes live in
+  `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store
+  playtime merges by keeping the larger total and counts games only, never their DLC.
+- **Journal** (`journal.rs`): one note per game per local calendar day (optional
+  title, text, paths of that day's screenshots), written with
+  `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
+  notes, and a restore keeps the later-written note of each day. Screens edit them
+  through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
+  Journal tab).
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -404,7 +411,12 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them.
+  and its insight card show them, and journal notes link them.
+- **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
+  `sessions.jsonl` in local time, told as full-window stories on
+  `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure
+  functions tested in `year.rs`; the shareable summary card is an SVG rendered to PNG
+  with resvg (`year_card.rs`, the rasterizer GPUI already builds), never a web engine.
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
@@ -488,7 +500,8 @@ cx.spawn_in(window, async move |this, cx| {
 **Navigation** (`nav.rs`):
 
 - `Route` variants: Library, Game, Downloads, Updates, Settings(section), GameSettings,
-  WineManager, Emulators, Accounts, Stores, Stats, BigPicture, Onboarding.
+  WineManager, Emulators, Accounts, Stores, Stats, YearInReview(year), BigPicture,
+  Onboarding.
 - Use `navigate(route, cx)`, `go_back`, `go_forward`. The shell decides which pages it
   caches.
 

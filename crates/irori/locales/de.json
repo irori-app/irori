@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Befehl kopieren",
   "shell.app_update.updated": "Irori wurde auf {version} aktualisiert",
   "shell.app_update.release_notes": "Versionshinweise",
+  "shell.palette.year_in_review": "Jahresrückblick öffnen",
+  "shell.palette.year_in_review_keywords": "rückblick zusammenfassung jahr",
   "shell.nav.views": "Ansichten",
   "shell.palette.show_view": "Ansicht zeigen: {name}",
   "shell.palette.views_keywords": "Ansicht gespeichert Filter",

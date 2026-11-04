@@ -24,6 +24,9 @@ pub enum Route {
     Stores,
     /// Play time per week, store and game, and streaks.
     Stats,
+    /// A year's play told as full-window stories; `None` opens the year
+    /// the review picks (see the stats page).
+    YearInReview(Option<i32>),
     /// Gamepad-first fullscreen mode.
     BigPicture,
     /// First-run welcome and setup.
@@ -42,7 +45,7 @@ impl Route {
             Route::Emulators => "emulators",
             Route::Accounts => "accounts",
             Route::Stores => "stores",
-            Route::Stats => "stats",
+            Route::Stats | Route::YearInReview(_) => "stats",
             Route::BigPicture => "big-picture",
             Route::Onboarding => "onboarding",
         }

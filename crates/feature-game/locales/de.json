@@ -556,6 +556,8 @@
   "game.timeline.title": "Spielverlauf",
   "game.timeline.view_days": "Zeitleiste",
   "game.timeline.view_sessions": "Sitzungen",
+  "game.timeline.view_journal": "Tagebuch",
+  "game.journal.write": "Notiz zu diesem Tag schreiben",
   "game.sandbox.title": "In der Sandbox",
   "game.sandbox.running": "Läuft in der Sandbox",
   "game.sandbox.no_network": "Kein Netzwerk",

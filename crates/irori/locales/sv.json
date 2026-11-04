@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Kopiera kommando",
   "shell.app_update.updated": "Irori har uppdaterats till version {version}",
   "shell.app_update.release_notes": "Versionsinformation",
+  "shell.palette.year_in_review": "Öppna Året som gått",
+  "shell.palette.year_in_review_keywords": "sammanfattning år recap",
   "shell.nav.views": "Vyer",
   "shell.palette.show_view": "Visa vy: {name}",
   "shell.palette.views_keywords": "vy sparad filter",

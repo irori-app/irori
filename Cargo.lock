@@ -4742,7 +4742,9 @@ name = "irori-library"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
+ "dirs 6.0.0",
  "futures",
  "gpui-kit",
  "gpui-pre",
@@ -4757,6 +4759,7 @@ dependencies = [
  "irori-ui",
  "parking_lot",
  "regex",
+ "resvg 0.46.0",
  "serde",
  "serde_json",
  "sysinfo 0.39.6",
@@ -5013,6 +5016,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "block2 0.6.2",
+ "chrono",
  "dirs 6.0.0",
  "futures",
  "gpui-kit",

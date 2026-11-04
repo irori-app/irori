@@ -556,6 +556,8 @@
   "game.timeline.title": "Історія гри",
   "game.timeline.view_days": "Хронологія",
   "game.timeline.view_sessions": "Сеанси",
+  "game.timeline.view_journal": "Щоденник",
+  "game.journal.write": "Написати нотатку про цей день",
   "game.sandbox.title": "У пісочниці",
   "game.sandbox.running": "Запущено в пісочниці",
   "game.sandbox.no_network": "Без мережі",
