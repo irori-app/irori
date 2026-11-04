@@ -14,13 +14,20 @@ use irori_core::{
 use crate::Backend;
 
 /// Keep every file the backend writes in a private temporary directory.
-fn isolate_paths() {
+///
+/// Panics when another test has already resolved the real folders: the
+/// tests would otherwise write to the user's own library and settings.
+pub(crate) fn isolate_paths() {
     static ONCE: Once = Once::new();
+    let root = std::env::temp_dir().join(format!("irori-services-{}", std::process::id()));
     ONCE.call_once(|| {
-        let root = std::env::temp_dir().join(format!("irori-services-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         Paths::init(Paths::under(&root));
     });
+    assert!(
+        Paths::get().config.starts_with(&root),
+        "a test used Irori's folders before isolate_paths(); call it first there"
+    );
 }
 
 /// A GOG-like store whose saved login can be refused and whose games can

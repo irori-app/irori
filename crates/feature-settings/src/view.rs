@@ -76,7 +76,7 @@ impl SettingsSection {
             }
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "advanced" => SettingsSection::Advanced,
-            "backup" | "restore" | "export" => SettingsSection::Backup,
+            "backup" | "restore" | "export" | "sync" => SettingsSection::Backup,
             "logs" | "log" => SettingsSection::Logs,
             "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
             "about" => SettingsSection::About,
@@ -203,7 +203,7 @@ impl SettingsView {
             app_form,
             defaults_form,
             log,
-            backup: cx.new(|_| BackupPanel::new()),
+            backup: cx.new(|cx| BackupPanel::new(window, cx)),
             app_update: cx.new(AppUpdatePanel::new),
             sysinfo: SysInfoState::default(),
             language: LanguageStamp::new(),
