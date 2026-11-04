@@ -589,6 +589,9 @@ fn apply_user_data(
 mod tests {
     use super::*;
 
+    // Lutris runs on Linux, and its commands and the arguments Irori keeps
+    // there use POSIX quoting; Windows splits arguments by its own rules.
+    #[cfg(unix)]
     #[test]
     fn lutris_commands_become_programs_alongside() {
         let p = program_of("/opt/trainer --speed '2 x'").unwrap();
