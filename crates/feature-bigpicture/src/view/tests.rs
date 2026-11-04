@@ -411,3 +411,111 @@ fn clicks_focus_covers_then_open_them_and_buttons_act_on_their_own_game(cx: &mut
     assert_eq!(target.map(|g| g.id()), Some(alpha));
     assert_eq!(focused_title(&view, cx), "Alpha");
 }
+
+#[gpui_kit::test]
+fn every_layout_draws_and_moves_and_the_editor_changes_them_live(cx: &mut TestAppContext) {
+    use crate::layout::HomeLayout;
+    use crate::theme::store::{self, ThemeRef};
+
+    let (handle, view) = open(cx);
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    };
+
+    // Every layout draws, and the arrows walk the shelf in each (Compact's
+    // list runs down).
+    for layout in HomeLayout::ALL {
+        view.update(cx, |v, cx| {
+            v.look.layout = layout;
+            cx.notify();
+        });
+        draw(cx);
+        assert_eq!(focused_title(&view, cx), "Alpha", "{layout:?}");
+        if layout == HomeLayout::Compact {
+            cx.dispatch_action(handle, gamepad::Down);
+        } else {
+            cx.dispatch_action(handle, gamepad::Right);
+        }
+        draw(cx);
+        assert_eq!(focused_title(&view, cx), "Charlie", "{layout:?}");
+        cx.simulate_keystrokes(
+            handle,
+            if layout == HomeLayout::Compact {
+                "up"
+            } else {
+                "left"
+            },
+        );
+    }
+    view.update(cx, |v, _| v.look.layout = HomeLayout::Shelves);
+
+    // The quick menu opens the editor (after Interface size and Layout).
+    cx.simulate_keystrokes(handle, "m down down enter");
+    cx.read(|cx| assert!(view.read(cx).look.editor.is_some()));
+    draw(cx);
+
+    // Layout changes live, without touching the setting yet.
+    cx.simulate_keystrokes(handle, "down right");
+    cx.read(|cx| {
+        let look = &view.read(cx).look;
+        assert_eq!(look.layout(), HomeLayout::Spotlight);
+        assert_eq!(look.layout, HomeLayout::Shelves);
+    });
+    draw(cx);
+
+    // The next gallery theme brings its own layout; a new accent changes it.
+    cx.simulate_keystrokes(handle, "up right");
+    cx.read(|cx| {
+        let look = &view.read(cx).look;
+        assert_eq!(look.theme().name, "Hearth");
+        assert_eq!(look.layout(), HomeLayout::Spotlight);
+    });
+    cx.simulate_keystrokes(handle, "down down right");
+    draw(cx);
+
+    // Closing keeps the change as the user's own copy, and uses it.
+    cx.simulate_keystrokes(handle, "escape");
+    let copy = ThemeRef::User("hearth-mine".into());
+    cx.read(|cx| {
+        let look = &view.read(cx).look;
+        assert!(look.editor.is_none());
+        assert_eq!(look.active, copy);
+        assert_eq!(look.theme.name, "Hearth (mine)");
+    });
+    wait_for(cx, |cx| {
+        models(cx).settings.read(cx).app.ui.big_picture_theme == "user:hearth-mine"
+    });
+    let file = store::themes_dir().join("hearth-mine.irori-theme.json");
+    wait_for(cx, |_| file.is_file());
+    draw(cx);
+
+    // Deleting it asks first, then goes back to Irori's own theme.
+    cx.simulate_keystrokes(handle, "m down down enter");
+    for _ in 0..30 {
+        cx.simulate_keystrokes(handle, "down");
+    }
+    cx.simulate_keystrokes(handle, "enter");
+    cx.read(|cx| {
+        assert_eq!(
+            view.read(cx).overlay,
+            Some(Overlay::DeleteTheme {
+                id: "hearth-mine".into(),
+                choice: 0
+            })
+        );
+    });
+    draw(cx);
+    cx.simulate_keystrokes(handle, "right enter");
+    wait_for(cx, |_| !file.exists());
+    cx.read(|cx| {
+        let look = &view.read(cx).look;
+        assert!(look.user.is_empty());
+        assert_eq!(look.active.setting(), "");
+    });
+    cx.simulate_keystrokes(handle, "escape");
+    cx.read(|cx| assert!(view.read(cx).look.editor.is_none()));
+}

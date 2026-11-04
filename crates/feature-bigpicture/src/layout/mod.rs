@@ -6,19 +6,18 @@
 //! Shelves and the grid scroll by animating one offset toward the focused
 //! item instead of through a scroll area, so they glide, and only the items
 //! near the view are built (they may hold thousands of games).
+//!
+//! Home's other layouts have their geometry in [`home`].
+
+pub mod home;
 
 use std::ops::Range;
 
-/// How Home arranges its games. Selectable layouts (a spotlight, a wheel…)
-/// become more variants here; each has its own renderer in `view::home`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum HomeLayout {
-    /// The focused game's title above shelves of covers.
-    #[default]
-    Shelves,
-}
+pub use home::HomeLayout;
 
-/// Cover aspect ratio (height / width).
+use crate::theme::CoverStyle;
+
+/// Aspect ratio (height / width) of box art, the default cover shape.
 pub const TILE_RATIO: f32 = 1.5;
 /// Scale of the focused cover on a shelf.
 pub const FOCUS_SCALE: f32 = 1.1;
@@ -44,6 +43,10 @@ const COMPACT_BELOW: f32 = 40.0;
 pub struct Metrics {
     pub width: f32,
     pub height: f32,
+    /// Covers' height over their width.
+    pub ratio: f32,
+    /// How much larger or smaller than the layout's choice covers are.
+    pub size: f32,
     /// Short screens leave out descriptions and use smaller headings.
     pub compact: bool,
     /// Space at the left and right of every screen.
@@ -59,8 +62,30 @@ pub struct Metrics {
     pub grid_cols: usize,
 }
 
+/// How far a cover of `ratio` may grow or shrink next to box art's limits:
+/// wider covers get wider limits, so all shapes cover about the same area.
+pub fn shape_scale(ratio: f32) -> f32 {
+    (TILE_RATIO / ratio.max(0.1)).sqrt()
+}
+
+/// Covers `tile` wide (at rest) that fit whole on a strip across `width`,
+/// starting at `gutter`.
+pub fn strip_tiles(width: f32, gutter: f32, tile: f32) -> usize {
+    (((width - gutter) / (tile * FOCUS_SCALE + TILE_GAP)).floor() as usize).max(1)
+}
+
 impl Metrics {
+    /// Sizes for box-art covers of the default size.
+    #[cfg(test)]
     pub fn new(width: f32, height: f32) -> Self {
+        Self::styled(width, height, CoverStyle::default())
+    }
+
+    /// Sizes for covers of `style`.
+    pub fn styled(width: f32, height: f32, style: CoverStyle) -> Self {
+        let ratio = style.shape.ratio();
+        let size = style.size.factor();
+        let limit = shape_scale(ratio);
         let compact = height < COMPACT_BELOW;
         let gutter = if width < 60.0 { 2.0 } else { 3.0 };
         let top_bar = if compact { 3.75 } else { 5.0 };
@@ -68,12 +93,18 @@ impl Metrics {
         let hero = if compact { 5.5 } else { 13.0 };
         // One whole shelf fits under the hero.
         let shelves = height - top_bar - hints - hero;
-        let tile = ((shelves - SHELF_HEADING - TILE_GAP) / (TILE_RATIO * FOCUS_SCALE))
-            .clamp(MIN_TILE, MAX_TILE);
+        let fit = (shelves - SHELF_HEADING - TILE_GAP) / (ratio * FOCUS_SCALE);
+        // At least two covers fit a shelf, whatever their shape.
+        let two = ((width - gutter) / 2.0 - TILE_GAP) / FOCUS_SCALE;
+        let tile = fit
+            .min(MAX_TILE * limit * size)
+            .max(MIN_TILE * limit * size.min(1.0))
+            .min(two);
         // One whole grid row fits under the chips and title.
         let grid = height - top_bar - hints - CHIPS - GRID_HEADER;
-        let grid_tile =
-            ((grid - TILE_GAP) / (TILE_RATIO * GRID_FOCUS_SCALE)).clamp(MIN_TILE - 0.5, GRID_TILE);
+        let grid_tile = ((grid - TILE_GAP) / (ratio * GRID_FOCUS_SCALE))
+            .min(GRID_TILE * limit * size)
+            .max((MIN_TILE - 0.5) * limit * size.min(1.0));
         let room = width - 2.0 * gutter + TILE_GAP;
         let grid_cols =
             ((room / (grid_tile * GRID_FOCUS_SCALE + TILE_GAP)).floor() as usize).max(2);
@@ -83,6 +114,8 @@ impl Metrics {
         Self {
             width,
             height,
+            ratio,
+            size,
             compact,
             gutter,
             top_bar,
@@ -94,19 +127,9 @@ impl Metrics {
         }
     }
 
-    /// Width of one place on a shelf, room for the focused scale included.
-    pub fn slot(&self) -> f32 {
-        self.tile * FOCUS_SCALE + TILE_GAP
-    }
-
     /// Height of a shelf: heading and covers.
     pub fn shelf(&self) -> f32 {
-        SHELF_HEADING + self.tile * TILE_RATIO * FOCUS_SCALE + TILE_GAP
-    }
-
-    /// Covers that fit a shelf whole.
-    pub fn shelf_tiles(&self) -> usize {
-        (((self.width - self.gutter) / self.slot()).floor() as usize).max(1)
+        SHELF_HEADING + self.tile * self.ratio * FOCUS_SCALE + TILE_GAP
     }
 
     /// Height of Home's shelf area.
@@ -126,7 +149,12 @@ impl Metrics {
 
     /// Height of one grid row.
     pub fn grid_row(&self) -> f32 {
-        self.grid_tile * TILE_RATIO * GRID_FOCUS_SCALE + TILE_GAP
+        self.grid_tile * self.ratio * GRID_FOCUS_SCALE + TILE_GAP
+    }
+
+    /// Height of the area between the top bar and the hints.
+    pub fn area(&self) -> f32 {
+        self.height - self.top_bar - self.hints
     }
 
     /// Height of the grid area.
@@ -225,7 +253,10 @@ mod tests {
                     "{w}×{h} at {scale}: {used} of {}",
                     m.height
                 );
-                assert!(m.shelf_tiles() >= 2, "{w}×{h} at {scale}");
+                assert!(
+                    strip_tiles(m.width, m.gutter, m.tile) >= 2,
+                    "{w}×{h} at {scale}"
+                );
                 assert!(m.grid_cols >= 2);
                 let grid_used = (m.grid_cols as f32) * m.grid_slot() - TILE_GAP;
                 assert!(grid_used <= m.width - 2.0 * m.gutter + 0.01);
@@ -234,6 +265,40 @@ mod tests {
         let deck = Metrics::new(1280.0 / 32.0, 800.0 / 32.0);
         assert!(deck.compact);
         assert!(!Metrics::new(80.0, 50.0).compact);
+    }
+
+    #[test]
+    fn every_cover_style_keeps_a_whole_shelf_and_grid_row() {
+        use crate::theme::{CoverShape, CoverSize};
+        for shape in CoverShape::ALL {
+            for size in CoverSize::ALL {
+                let style = CoverStyle {
+                    shape,
+                    size,
+                    ..Default::default()
+                };
+                for (w, h) in [(80.0, 50.0), (120.0, 67.5), (40.0, 25.0)] {
+                    let m = Metrics::styled(w, h, style);
+                    let used = m.top_bar + m.hero + m.shelf() + m.hints;
+                    assert!(used <= h + 0.01 || m.tile <= MIN_TILE * shape_scale(m.ratio));
+                    assert!(m.grid_cols >= 2);
+                    assert!(
+                        strip_tiles(m.width, m.gutter, m.tile) >= 2,
+                        "{shape:?} {size:?} {w}×{h}"
+                    );
+                }
+            }
+        }
+        let normal = Metrics::new(120.0, 67.5);
+        let small = Metrics::styled(
+            120.0,
+            67.5,
+            CoverStyle {
+                size: CoverSize::Small,
+                ..Default::default()
+            },
+        );
+        assert!(small.tile < normal.tile);
     }
 
     #[test]

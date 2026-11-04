@@ -1,7 +1,9 @@
-//! The focused game's art behind everything: blurred, darkened toward the
-//! bottom and the left where text sits, tinted with the art's own colour, and
-//! crossfading when the focus moves on. The fade is a one-shot animation, so
-//! nothing is drawn while Big Picture sits idle.
+//! What fills the screen behind everything, as the theme says: the focused
+//! game's art (blurred, tinted with the art's own colour, crossfading when
+//! the focus moves on), a gradient, the user's picture, or the background
+//! colour alone. Each is darkened toward the bottom and the left, where text
+//! sits. The fade is a one-shot animation, so nothing is drawn while Big
+//! Picture sits idle.
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -15,6 +17,7 @@ use irori_ui::motion::STANDARD;
 use irori_ui::style::{art_tint, reduce_motion};
 
 use super::{BigPictureView, Colors};
+use crate::theme::Background;
 
 /// Width in physical pixels of the stand-in shown until the blurred copy is
 /// ready: stretched this far, linear filtering blurs it too.
@@ -62,7 +65,48 @@ impl BigPictureView {
         c: Colors,
         _window: &mut Window,
         cx: &mut App,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        let veiled = |d: gpui_kit::Div| {
+            d
+                // Legibility: a light veil overall, deep shade along the
+                // bottom (shelves and hints) and the left (titles and lists).
+                .child(div().absolute().inset_0().bg(c.background.opacity(0.25)))
+                .child(div().absolute().inset_0().bg(linear_gradient(
+                    180.,
+                    linear_color_stop(c.background.opacity(0.), 0.3),
+                    linear_color_stop(c.background.opacity(0.92), 1.),
+                )))
+                .child(div().absolute().inset_0().bg(linear_gradient(
+                    90.,
+                    linear_color_stop(c.background.opacity(0.85), 0.),
+                    linear_color_stop(c.background.opacity(0.), 0.6),
+                )))
+        };
+        let base = div().absolute().inset_0().size_full().bg(c.background);
+        match self.look.theme().background.clone() {
+            Background::Art => {}
+            Background::Solid => return base.into_any_element(),
+            Background::Gradient { from, to, angle } => {
+                return veiled(base.child(div().absolute().inset_0().bg(linear_gradient(
+                    angle as f32,
+                    linear_color_stop(from.hsla(), 0.),
+                    linear_color_stop(to.hsla(), 1.),
+                ))))
+                .into_any_element();
+            }
+            Background::Picture(picture) => {
+                return veiled(
+                    base.child(
+                        gpui_kit::img(picture.image)
+                            .absolute()
+                            .inset_0()
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
+                    ),
+                )
+                .into_any_element();
+            }
+        }
         let animate = !reduce_motion(cx) && self.hero_gen > 0;
         let current = layer(self.hero.as_deref(), c, cx);
         let current: AnyElement = if animate {
@@ -76,28 +120,18 @@ impl BigPictureView {
         } else {
             current.into_any_element()
         };
-        div()
-            .absolute()
-            .inset_0()
-            .size_full()
-            .when(animate, |d| {
-                d.when_some(self.hero_prev.as_deref(), |d, prev| {
-                    d.child(layer(Some(prev), c, cx))
+        veiled(
+            div()
+                .absolute()
+                .inset_0()
+                .size_full()
+                .when(animate, |d| {
+                    d.when_some(self.hero_prev.as_deref(), |d, prev| {
+                        d.child(layer(Some(prev), c, cx))
+                    })
                 })
-            })
-            .child(current)
-            // Legibility: a light veil overall, deep shade along the bottom
-            // (shelves and hints) and the left (titles and lists).
-            .child(div().absolute().inset_0().bg(c.background.opacity(0.25)))
-            .child(div().absolute().inset_0().bg(linear_gradient(
-                180.,
-                linear_color_stop(c.background.opacity(0.), 0.3),
-                linear_color_stop(c.background.opacity(0.92), 1.),
-            )))
-            .child(div().absolute().inset_0().bg(linear_gradient(
-                90.,
-                linear_color_stop(c.background.opacity(0.85), 0.),
-                linear_color_stop(c.background.opacity(0.), 0.6),
-            )))
+                .child(current),
+        )
+        .into_any_element()
     }
 }

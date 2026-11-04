@@ -4364,18 +4364,23 @@ name = "irori-bigpicture"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "futures",
  "gilrs",
  "gpui-kit",
  "gpui-pre",
+ "image",
  "irori-core",
  "irori-engines",
  "irori-services",
  "irori-ui",
+ "once_cell",
  "parking_lot",
  "regex",
+ "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 

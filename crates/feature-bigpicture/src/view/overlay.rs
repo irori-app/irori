@@ -64,6 +64,82 @@ impl BigPictureView {
             .into_any_element()
     }
 
+    /// A question before a destructive command: Cancel (choice 0) or the
+    /// command (choice 1), centred over a scrim.
+    #[allow(clippy::too_many_arguments)]
+    fn confirm_dialog(
+        id: &'static str,
+        title: SharedString,
+        description: SharedString,
+        (confirm, icon, loading): (SharedString, IconName, bool),
+        choice: usize,
+        c: Colors,
+        m: Metrics,
+        on_confirm: impl Fn(&mut Self, &mut gpui_kit::Window, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let buttons = h_flex()
+            .gap_3()
+            .child(div().flex_1().child(Self::overlay_row(
+                SharedString::from(format!("{id}-cancel")),
+                IconName::X,
+                t("bigpicture.uninstall.cancel"),
+                choice == 0,
+                false,
+                false,
+                c,
+                |this, _, cx| {
+                    this.overlay = None;
+                    cx.notify();
+                },
+                cx,
+            )))
+            .child(div().flex_1().child(Self::overlay_row(
+                SharedString::from(format!("{id}-confirm")),
+                icon,
+                confirm,
+                choice == 1,
+                true,
+                loading,
+                c,
+                on_confirm,
+                cx,
+            )));
+        let dialog = v_flex()
+            .id(id)
+            .role(Role::AlertDialog)
+            .aria_label(title.clone())
+            .w(rems(36.))
+            .max_w(rems(m.width - 2.0 * m.gutter))
+            .p_8()
+            .gap_6()
+            .rounded(c.radius_lg)
+            .bg(c.popover)
+            .border_1()
+            .border_color(c.border)
+            .shadow_lg()
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(div().text_2xl().font_bold().line_clamp(2).child(title))
+                    .child(
+                        div()
+                            .text_lg()
+                            .text_color(c.muted_foreground)
+                            .child(description),
+                    ),
+            )
+            .child(buttons);
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(fade_in(SharedString::from(format!("{id}-in")), dialog))
+            .into_any_element()
+    }
+
     pub(super) fn render_overlay(
         &self,
         c: Colors,
@@ -152,75 +228,43 @@ impl BigPictureView {
                     .map(|g| g.title.clone())
                     .unwrap_or_else(|| id.app_name.to_string());
                 let loading = self.pending.contains(&id);
-                let buttons = h_flex()
-                    .gap_3()
-                    .child(div().flex_1().child(Self::overlay_row(
-                        "bp-confirm-cancel".into(),
-                        IconName::X,
-                        t("bigpicture.uninstall.cancel"),
-                        choice == 0,
-                        false,
-                        false,
-                        c,
-                        |this, _, cx| {
-                            this.overlay = None;
-                            cx.notify();
-                        },
-                        cx,
-                    )))
-                    .child(div().flex_1().child(Self::overlay_row(
-                        "bp-confirm-uninstall".into(),
-                        IconName::Trash,
-                        t("bigpicture.uninstall.confirm"),
-                        choice == 1,
-                        true,
-                        loading,
-                        c,
-                        move |this, window, cx| {
-                            this.overlay = None;
-                            this.uninstall(id.clone(), window, cx);
-                        },
-                        cx,
-                    )));
-                let dialog = v_flex()
-                    .id("bp-uninstall")
-                    .role(Role::AlertDialog)
-                    .aria_label(t_args(
-                        "bigpicture.uninstall.title",
-                        &[("title", title.as_str())],
-                    ))
-                    .w(rems(36.))
-                    .max_w(rems(m.width - 2.0 * m.gutter))
-                    .p_8()
-                    .gap_6()
-                    .rounded(c.radius_lg)
-                    .bg(c.popover)
-                    .border_1()
-                    .border_color(c.border)
-                    .shadow_lg()
-                    .child(
-                        v_flex()
-                            .gap_2()
-                            .child(div().text_2xl().font_bold().line_clamp(2).child(t_args(
-                                "bigpicture.uninstall.title",
-                                &[("title", title.as_str())],
-                            )))
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .text_color(c.muted_foreground)
-                                    .child(t("bigpicture.uninstall.description")),
-                            ),
-                    )
-                    .child(buttons);
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(fade_in("bp-uninstall-in", dialog))
-                    .into_any_element()
+                Self::confirm_dialog(
+                    "bp-uninstall",
+                    t_args("bigpicture.uninstall.title", &[("title", title.as_str())]),
+                    t("bigpicture.uninstall.description"),
+                    (t("bigpicture.uninstall.confirm"), IconName::Trash, loading),
+                    choice,
+                    c,
+                    m,
+                    move |this, window, cx| {
+                        this.overlay = None;
+                        this.uninstall(id.clone(), window, cx);
+                    },
+                    cx,
+                )
+            }
+            Overlay::DeleteTheme { id, choice } => {
+                let name = self
+                    .look
+                    .user
+                    .iter()
+                    .find(|u| u.id == id)
+                    .map(|u| u.theme.name.clone())
+                    .unwrap_or_else(|| id.clone());
+                Self::confirm_dialog(
+                    "bp-delete-theme",
+                    t_args("bigpicture.editor.delete_title", &[("name", name.as_str())]),
+                    t("bigpicture.editor.delete_description"),
+                    (t("bigpicture.editor.delete"), IconName::Trash, false),
+                    choice,
+                    c,
+                    m,
+                    move |this, window, cx| {
+                        this.overlay = None;
+                        this.delete_theme(id.clone(), window, cx);
+                    },
+                    cx,
+                )
             }
         };
         Some(

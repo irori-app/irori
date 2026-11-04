@@ -696,6 +696,15 @@ pub struct UiPrefs {
     pub big_picture_in_game_mode: bool,
     /// Size of Big Picture's interface in percent, for TVs.
     pub big_picture_scale: u32,
+    /// How Big Picture's Home arranges games (`shelves`, `spotlight`,
+    /// `cinema`, `wall`, `carousel`, `compact`); unknown values read as
+    /// `shelves`.
+    pub big_picture_layout: String,
+    /// Big Picture's theme: `builtin:<id>`, `user:<id>` (a file in the
+    /// config folder's `bigpicture/themes`), or "" for Irori's own.
+    pub big_picture_theme: String,
+    /// Open Big Picture when a controller connects while Irori runs.
+    pub big_picture_on_controller: bool,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -795,6 +804,9 @@ impl Default for UiPrefs {
             stores: ShownStores::default(),
             big_picture_in_game_mode: true,
             big_picture_scale: 100,
+            big_picture_layout: String::new(),
+            big_picture_theme: String::new(),
+            big_picture_on_controller: false,
         }
     }
 }
@@ -849,6 +861,14 @@ mod tests {
         assert_eq!(stores, ShownStores::default());
         assert_eq!(ui.big_picture_zoom(), 2.0);
         assert!(!ui.big_picture_in_game_mode);
+        let ui: UiPrefs = serde_json::from_str(
+            r#"{"bigPictureLayout":"carousel","bigPictureTheme":"user:x","bigPictureOnController":true}"#,
+        )
+        .unwrap();
+        assert_eq!(ui.big_picture_layout, "carousel");
+        assert_eq!(ui.big_picture_theme, "user:x");
+        assert!(ui.big_picture_on_controller);
+        assert!(!UiPrefs::default().big_picture_on_controller);
     }
 
     #[test]

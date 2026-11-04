@@ -269,7 +269,7 @@ impl BigPictureView {
             return vec![one(Confirm, "bigpicture.hint.done")];
         }
         match &self.overlay {
-            Some(Overlay::Uninstall { .. }) => {
+            Some(Overlay::Uninstall { .. } | Overlay::DeleteTheme { .. }) => {
                 return vec![
                     one(Confirm, "bigpicture.hint.select"),
                     one(Back, "bigpicture.hint.cancel"),
@@ -282,6 +282,21 @@ impl BigPictureView {
                 ];
             }
             None => {}
+        }
+        if let Some(editor) = &self.look.editor {
+            if editor.naming {
+                return vec![one(Confirm, "bigpicture.hint.done")];
+            }
+            let rows = editor.rows();
+            let row = rows.get(editor.ix.min(rows.len().saturating_sub(1)));
+            let mut out = vec![(vec![Up, Down], t("bigpicture.hint.choose"))];
+            if row.is_some_and(|r| r.has_value()) {
+                out.push((vec![Left, Right], t("bigpicture.hint.change")));
+            } else {
+                out.push(one(Confirm, "bigpicture.hint.select"));
+            }
+            out.push(one(Back, "bigpicture.hint.done"));
+            return out;
         }
         let mut out = Vec::new();
         if let Some(page) = &self.page {

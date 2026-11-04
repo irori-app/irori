@@ -146,6 +146,8 @@
   "settings.field.before_launch_script_path.label": "Script before launch",
   "settings.field.big_picture_in_game_mode.help": "When the Steam Deck’s Game Mode or Steam Big Picture starts Irori, it opens in Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Open Big Picture in Steam’s Game Mode",
+  "settings.field.big_picture_on_controller.label": "Open Big Picture when a controller connects",
+  "settings.field.big_picture_on_controller.help": "Plugging in or pairing a controller while Irori runs brings Irori to the front in Big Picture. Nothing changes while a game is running.",
   "settings.field.check_for_updates_on_startup.label": "Check for game updates on startup",
   "settings.field.check_for_app_updates.help": "Once a day, on GitHub. Flatpak and distribution packages update Irori with the rest of your system.",
   "settings.field.check_for_app_updates.label": "Check for new versions of Irori",

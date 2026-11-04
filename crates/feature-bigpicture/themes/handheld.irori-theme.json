@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Handheld",
+  "author": "Irori",
+  "layout": "compact",
+  "colors": {
+    "background": "#121316",
+    "foreground": "#eceef2",
+    "accent": "#8ab4ff",
+    "surface": "#1c1e23"
+  },
+  "font": "system",
+  "background": { "kind": "art" },
+  "covers": { "shape": "portrait", "size": "medium", "corners": "rounded" },
+  "shelves": ["continue_playing", "installed", "favourites", "systems"]
+}
