@@ -16,6 +16,8 @@
   "shell.nav.forward": "Framåt (Alt+Höger)",
   "shell.notice.component_update_failed": "{name} kunde inte uppdateras",
   "shell.notice.component_updated": "{name} uppdaterad till {version}",
+  "shell.palette.storage": "Lagring och rensning",
+  "shell.palette.storage_keywords": "disk enhet utrymme storlek ledigt frigör rensa rensning ta bort lagring storage",
   "shell.search.placeholder": "Sök spel och kommandon…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Du är offline. Installerade spel som stöder det startar ändå.",

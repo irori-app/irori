@@ -15,6 +15,11 @@
 //! What the system asks for accessibility applies to every theme, a picked one
 //! included: stronger borders for more contrast, a solid window for less
 //! transparency, and on Windows the high-contrast colours instead of any theme.
+//!
+//! An accent colour the user picks replaces the accent of whichever theme
+//! shows, the desktop's included, held legible on its surfaces the way the
+//! system's accent is. The interface typeface is Manrope unless the user picks
+//! another installed family.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -28,7 +33,7 @@ use tokio::runtime::Runtime;
 
 use crate::desktop_accent::{Accent, ContrastColors, SystemColors};
 pub use crate::desktop_theme::Desktop;
-use crate::desktop_theme::{DesktopThemes, Frost, high_contrast, system_accented};
+use crate::desktop_theme::{DesktopThemes, Frost, accented, high_contrast, system_accented};
 use crate::style::{ICON_CONTRAST, TEXT_CONTRAST, contrast, legible_towards};
 use crate::{cosmic, desktop_accent, kde, omarchy};
 
@@ -126,9 +131,62 @@ struct Applied {
     accent: u64,
     /// What the system asks for accessibility, which every theme follows.
     system: u64,
+    /// The accent the user picked, if any.
+    picked_accent: Option<u32>,
+    font_family: SharedString,
 }
 
 impl Global for Applied {}
+
+/// The font families installed, read once: the system's list doesn't change
+/// while Irori runs often enough to be worth watching.
+struct FontNames(Rc<[SharedString]>);
+
+impl Global for FontNames {}
+
+/// Every font family the interface can use, sorted, Manrope included.
+pub fn font_names(cx: &mut App) -> Rc<[SharedString]> {
+    if let Some(names) = cx.try_global::<FontNames>() {
+        return names.0.clone();
+    }
+    let mut names: Vec<SharedString> = cx
+        .text_system()
+        .all_font_names()
+        .into_iter()
+        // Families whose names start with a dot are the system's private ones.
+        .filter(|name| !name.starts_with('.'))
+        .map(SharedString::from)
+        .collect();
+    // Irori loads Manrope itself; not every platform lists added fonts.
+    if !names.iter().any(|name| name.as_ref() == FONT_FAMILY) {
+        names.push(FONT_FAMILY.into());
+        names.sort();
+    }
+    let names: Rc<[SharedString]> = names.into();
+    cx.set_global(FontNames(names.clone()));
+    names
+}
+
+/// The typeface `prefs` ask for: the picked family while it is installed,
+/// else Manrope.
+fn font_family(prefs: &UiPrefs, cx: &mut App) -> SharedString {
+    let picked = prefs.font_family.trim();
+    if picked.is_empty() || picked == FONT_FAMILY {
+        return FONT_FAMILY.into();
+    }
+    if font_names(cx).iter().any(|name| name.as_ref() == picked) {
+        SharedString::from(picked.to_string())
+    } else {
+        FONT_FAMILY.into()
+    }
+}
+
+/// Whether the system or a followed desktop asks windows not to be
+/// see-through ("Reduce transparency", "Transparency effects" off, COSMIC's
+/// frosted windows off). Pictures behind content stay off then too.
+pub fn reduce_transparency(cx: &App) -> bool {
+    desktop_frost(cx).is_some_and(|frost| !frost.on)
+}
 
 /// Extra zoom on top of the interface size while a screen asks for it
 /// (Big Picture on a TV). Absent means 1.
@@ -478,13 +536,25 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
                 .or_else(|| find(fallback)),
         }
     };
-    (for_mode(false), for_mode(true))
+    let (light, dark) = (for_mode(false), for_mode(true));
+    match prefs.accent_rgb() {
+        Some(picked) => {
+            let picked = gpui_kit::rgb(picked);
+            let tint = |theme: Option<Rc<ThemeConfig>>| {
+                let theme = theme?;
+                Some(accented(&theme, picked).map(Rc::new).unwrap_or(theme))
+            };
+            (tint(light), tint(dark))
+        }
+        None => (light, dark),
+    }
 }
 
 /// Irori's themes in the system's accent, while they are the ones to show.
 fn showing_accent<'a>(prefs: &UiPrefs, cx: &'a App) -> Option<&'a DesktopAccent> {
-    cx.try_global::<DesktopAccent>()
-        .filter(|_| prefs.theme_name.is_empty() && prefs.system_accent)
+    cx.try_global::<DesktopAccent>().filter(|_| {
+        prefs.theme_name.is_empty() && prefs.system_accent && prefs.accent_rgb().is_none()
+    })
 }
 
 /// Apply theme, mode and base font size (application zoom) from preferences.
@@ -517,6 +587,7 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         }
     };
     let font_size = prefs.font_size.clamp(12.0, 24.0);
+    let font_family = font_family(prefs, cx);
     let (light, dark) = pair(prefs, cx);
     let name = |t: &Option<Rc<ThemeConfig>>| t.as_ref().map(|t| t.name.clone()).unwrap_or_default();
     let next = Applied {
@@ -527,6 +598,11 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         desktop: cx.try_global::<DesktopTheme>().map_or(0, |d| d.revision),
         accent: showing_accent(prefs, cx).map_or(0, |a| a.revision),
         system: cx.try_global::<SystemLook>().map_or(0, |s| s.revision),
+        // The system's high-contrast theme keeps its own colours.
+        picked_accent: prefs
+            .accent_rgb()
+            .filter(|_| high_contrast_theme(cx).is_none()),
+        font_family: font_family.clone(),
     };
     let previous = cx.try_global::<Applied>().cloned();
     if previous.as_ref() == Some(&next) {
@@ -553,8 +629,9 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
             theme.apply_config(d);
         }
         theme.font_size = px(zoomed);
-        // The typeface is part of Irori's identity, whatever the colours.
-        theme.font_family = FONT_FAMILY.into();
+        // The typeface is part of Irori's identity, whatever the colours,
+        // unless the user picked another.
+        theme.font_family = font_family;
     });
     let mode = if is_dark {
         ThemeMode::Dark
@@ -759,6 +836,58 @@ mod tests {
                 let missing: Vec<_> = wanted.difference(&has).collect();
                 assert!(missing.is_empty(), "{} lacks {missing:?}", t["name"]);
             }
+        }
+    }
+
+    #[gpui_kit::test]
+    fn a_picked_accent_tints_any_theme_and_stays_legible(cx: &mut TestAppContext) {
+        setup(cx);
+        for (mode, name) in [
+            (ThemePreference::Dark, ""),
+            (ThemePreference::Light, ""),
+            (ThemePreference::Dark, "Catppuccin Mocha"),
+        ] {
+            cx.update(|cx| apply(&prefs(mode, name), None, cx));
+            let own = cx.read(|cx| cx.theme().primary);
+            let picked = UiPrefs {
+                accent_color: "#ff2d95".into(),
+                ..prefs(mode, name)
+            };
+            cx.update(|cx| apply(&picked, None, cx));
+            cx.read(|cx| {
+                let theme = cx.theme();
+                assert_ne!(theme.primary, own, "{name} kept its accent");
+                let pink = theme.link.to_rgb();
+                assert!(pink.r > pink.g && pink.b > pink.g, "{name}: {pink:?}");
+                assert!(
+                    contrast(theme.link, theme.background) >= TEXT_CONTRAST - 0.05,
+                    "{name}: links don't read"
+                );
+            });
+            // Clearing it brings the theme's own back.
+            cx.update(|cx| apply(&prefs(mode, name), None, cx));
+            assert_eq!(cx.read(|cx| cx.theme().primary), own);
+        }
+    }
+
+    #[gpui_kit::test]
+    fn a_missing_font_falls_back_to_manrope(cx: &mut TestAppContext) {
+        setup(cx);
+        let missing = UiPrefs {
+            font_family: "No Such Typeface 2049".into(),
+            ..UiPrefs::default()
+        };
+        cx.update(|cx| apply(&missing, None, cx));
+        assert_eq!(cx.read(|cx| cx.theme().font_family.clone()), FONT_FAMILY);
+        let names = cx.update(font_names);
+        assert!(names.iter().any(|n| n.as_ref() == FONT_FAMILY), "{names:?}");
+        if let Some(other) = names.iter().find(|n| n.as_ref() != FONT_FAMILY) {
+            let picked = UiPrefs {
+                font_family: other.to_string(),
+                ..UiPrefs::default()
+            };
+            cx.update(|cx| apply(&picked, None, cx));
+            assert_eq!(&cx.read(|cx| cx.theme().font_family.clone()), other);
         }
     }
 

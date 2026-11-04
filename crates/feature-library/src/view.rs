@@ -31,7 +31,7 @@ use gpui_kit::{
     SpringAnimation, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
     WeakEntity, Window, canvas, div, linear_color_stop, linear_gradient, point, px, rems, size,
 };
-use irori_core::settings::LibraryLayout;
+use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
@@ -160,6 +160,9 @@ pub struct LibraryView {
     top: TopCache,
     layout: LibraryLayout,
     tile_rem: f32,
+    density: Density,
+    /// The interface preferences, for the background behind the covers.
+    ui_prefs: UiPrefs,
     /// Measured size of the scroll region (zero until the first paint).
     viewport: Size<Pixels>,
     /// Capacity last given to `images`.
@@ -239,6 +242,8 @@ impl LibraryView {
                     this.layout = ui.library_layout;
                     this.scroll_to_focused();
                 }
+                this.density = ui.density;
+                this.ui_prefs = ui.clone();
                 let size = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
                 if (size - this.tile_rem).abs() > f32::EPSILON {
                     this.tile_rem = size;
@@ -290,6 +295,8 @@ impl LibraryView {
             top: TopCache::default(),
             layout: ui.library_layout,
             tile_rem,
+            density: ui.density,
+            ui_prefs: ui.clone(),
             viewport: Size::default(),
             image_capacity: IMAGE_CACHE_CAPACITY,
             frame: Frame::default(),
@@ -460,7 +467,7 @@ impl LibraryView {
         let available = list_rem - 2.0 * grid::EDGE_REM;
         let metrics = match self.layout {
             LibraryLayout::Focus => grid::grid_metrics(available, layouts::FOCUS_TILE_REM),
-            _ => grid::grid_metrics(available, self.tile_rem),
+            _ => grid::grid_metrics_at(available, self.tile_rem, self.density),
         };
 
         let key = FrameKey {
@@ -542,7 +549,7 @@ impl LibraryView {
             .map_or(0, |(_, games)| 2 * games.len());
         let (per_row, row_rem) = match self.layout {
             LibraryLayout::Grid | LibraryLayout::Focus => (metrics.columns, metrics.row_rem),
-            LibraryLayout::List => (1, grid::LIST_ROW_REM),
+            LibraryLayout::List => (1, metrics.list_row_rem),
         };
         let capacity = grid::cached_images(
             per_row,
@@ -1036,7 +1043,7 @@ impl LibraryView {
         let rem = window.rem_size();
         let row_rem = match self.layout {
             LibraryLayout::Grid | LibraryLayout::Focus => self.frame.metrics.row_rem,
-            LibraryLayout::List => grid::LIST_ROW_REM,
+            LibraryLayout::List => self.frame.metrics.list_row_rem,
         };
         let page_rows = (f32::from(self.scroll.bounds().size.height) / f32::from(rem * row_rem))
             .floor()
@@ -1245,7 +1252,7 @@ fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
         Item::Heading | Item::GroupHeading(_) => grid::HEADING_REM,
         Item::ListHeader => 2.25,
         Item::GridRow { .. } => metrics.row_rem,
-        Item::ListRow(_) => grid::LIST_ROW_REM,
+        Item::ListRow(_) => metrics.list_row_rem,
     }
 }
 
@@ -2036,7 +2043,7 @@ impl LibraryView {
             .h(rems(metrics.row_rem))
             .pt(rems(grid::ROW_INSET_REM))
             .px(rems(grid::EDGE_REM))
-            .gap(rems(grid::GAP_REM))
+            .gap(rems(metrics.gap_rem))
             .children(
                 games
                     .iter()
@@ -2728,7 +2735,7 @@ impl LibraryView {
         h_flex()
             .id(ElementId::Name(format!("row:{key}").into()))
             .w_full()
-            .h(rems(grid::LIST_ROW_REM))
+            .h(rems(self.frame.metrics.list_row_rem))
             .px(rems(grid::EDGE_REM))
             .gap_4()
             .border_b_1()
@@ -2868,22 +2875,52 @@ fn pick_mark(picked: bool, cx: &App) -> AnyElement {
     }
 }
 
+impl LibraryView {
+    /// The background the user chose behind the covers: the focused game's
+    /// art, else the last played game's, or their picture.
+    fn render_backdrop(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let prefs = &self.ui_prefs;
+        let game = match prefs.library_background {
+            LibraryBackground::None => return None,
+            LibraryBackground::GameArt => {
+                let b = backend(cx);
+                self.focused
+                    .as_ref()
+                    .and_then(|id| b.game(id))
+                    .or_else(|| b.recent_games(false).into_iter().next())
+                    // Nothing focused or played yet: the first game shown.
+                    .or_else(|| self.frame.games.first().cloned())
+            }
+            LibraryBackground::Picture => None,
+        };
+        let url = irori_ui::components::library_backdrop_url(prefs, game.as_deref(), cx)?;
+        Some(irori_ui::components::library_backdrop(prefs, Some(url)).image_cache(&self.images))
+    }
+}
+
 impl Render for LibraryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.prepare_frame(window, cx);
         self.sync_panel(window, cx);
         let bulk_bar = self.render_bulk_bar(cx);
-        // Focus sits over the selected game's art, covers and page alike.
-        let backdrop = (self.layout == LibraryLayout::Focus)
+        // Focus sits over the selected game's art, covers and page alike; the
+        // other layouts show the background the user chose.
+        let focus_backdrop = (self.layout == LibraryLayout::Focus)
             .then(|| {
                 let id = self.panels.shown_game().or(self.focused.as_ref())?;
                 let art = self.game(id, cx)?.hero_art().map(str::to_owned);
                 Some(ArtBackdrop::new(art).image_cache(&self.images))
             })
             .flatten();
+        let backdrop = if self.layout == LibraryLayout::Focus {
+            None
+        } else {
+            self.render_backdrop(cx)
+        };
         v_flex()
             .id("library")
             .relative()
+            .children(backdrop)
             .key_context(LIBRARY_CONTEXT)
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(|this, _: &ShowGrid, w, cx| {
@@ -2907,7 +2944,7 @@ impl Render for LibraryView {
             .size_full()
             .min_h_0()
             .text_color(cx.theme().foreground)
-            .children(backdrop)
+            .children(focus_backdrop)
             .child(self.render_header(cx))
             .child(self.render_body(window, cx))
             .children(bulk_bar)

@@ -16,6 +16,8 @@
   "shell.nav.forward": "Adelante (Alt+Derecha)",
   "shell.notice.component_update_failed": "No se pudo actualizar {name}",
   "shell.notice.component_updated": "{name} actualizado a {version}",
+  "shell.palette.storage": "Almacenamiento y limpieza",
+  "shell.palette.storage_keywords": "disco unidad espacio tamaño libre liberar limpiar limpieza eliminar borrar",
   "shell.search.placeholder": "Buscar juegos y comandos…",
   "shell.offline": "Sin conexión",
   "shell.offline.tooltip": "Estás sin conexión. Los juegos instalados que lo admiten se pueden iniciar igualmente.",

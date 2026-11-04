@@ -16,6 +16,8 @@
   "shell.nav.forward": "Avanti (Alt+Destra)",
   "shell.notice.component_update_failed": "Impossibile aggiornare {name}",
   "shell.notice.component_updated": "{name} aggiornato a {version}",
+  "shell.palette.storage": "Spazio di archiviazione e pulizia",
+  "shell.palette.storage_keywords": "disco unità spazio dimensione libero libera pulisci pulizia elimina",
   "shell.search.placeholder": "Cerca giochi e comandi…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Sei offline. I giochi installati che lo supportano si avviano comunque.",
