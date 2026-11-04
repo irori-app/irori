@@ -256,7 +256,8 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
     });
     assert_eq!(focused_title(&view, cx), "Alpha");
 
-    // Enter opens the game's page; Down and Right toggle Favourite.
+    // Enter opens the game's page; Right on Favourite (below Play and Play
+    // with logs) toggles it.
     cx.simulate_keystrokes(handle, "enter");
     cx.read(|cx| {
         let v = view.read(cx);
@@ -267,12 +268,13 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
         );
     });
     cx.dispatch_action(handle, gamepad::Down);
+    cx.dispatch_action(handle, gamepad::Down);
     cx.dispatch_action(handle, gamepad::Right);
     let alpha = GameId::new(Runner::Gog, "a");
     wait_for(cx, |cx| models(cx).library.read(cx).is_favourite(&alpha));
 
     // Uninstall asks first; Back answers the question, not the page.
-    cx.simulate_keystrokes(handle, "down down down enter");
+    cx.simulate_keystrokes(handle, "down down down down enter");
     cx.read(|cx| {
         assert_eq!(
             view.read(cx).overlay,
@@ -341,7 +343,57 @@ fn page_rows_and_quick_actions(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn clicks_focus_covers_then_open_them_and_buttons_act_on_their_own_game(cx: &mut TestAppContext) {
+fn show_log_puts_the_game_log_beside_the_rows(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx);
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    };
+    let charlie = GameId::new(Runner::Legendary, "c");
+    let path = Paths::get().game_log_file(&charlie);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "Starting\nerr: missing dll\n").unwrap();
+
+    // Charlie's page: Play, Play with logs, Favourite, Settings, Show log.
+    cx.dispatch_action(handle, gamepad::Right);
+    assert_eq!(focused_title(&view, cx), "Charlie");
+    cx.dispatch_action(handle, gamepad::Confirm);
+    for _ in 0..4 {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let game = v.page_game(cx).expect("page game");
+        let rows = crate::model::page_rows(BigPictureView::game_state(&game, cx), 1);
+        assert_eq!(rows[1], PageRow::Action(GameAction::PlayWithLog));
+        assert_eq!(rows[v.page.as_ref().unwrap().ix], PageRow::Log);
+        assert!(v.log.is_none());
+    });
+    cx.dispatch_action(handle, gamepad::Right);
+    draw(cx);
+    wait_for(cx, |cx| view.read(cx).log_lines() == Some(2));
+
+    // Leaving the page drops the panel; the next page shows its log again.
+    cx.dispatch_action(handle, gamepad::Back);
+    draw(cx);
+    cx.read(|cx| assert!(view.read(cx).log.is_none()));
+    cx.dispatch_action(handle, gamepad::Confirm);
+    draw(cx);
+    cx.read(|cx| assert!(view.read(cx).log.is_some()));
+    // Turning it off brings the details back.
+    view.update(cx, |v, cx| {
+        v.show_log = false;
+        cx.notify();
+    });
+    draw(cx);
+    cx.read(|cx| assert!(view.read(cx).log.is_none()));
+}
+
+#[gpui_kit::test]
+fn a_click_opens_a_cover_and_buttons_act_on_their_own_game(cx: &mut TestAppContext) {
     let (handle, view) = open(cx);
     let click = |slot: CoverSlot, count: usize, cx: &mut TestAppContext| {
         view.update(cx, |v, cx| v.click_cover(slot, count, cx));
@@ -367,20 +419,20 @@ fn clicks_focus_covers_then_open_them_and_buttons_act_on_their_own_game(cx: &mut
     };
     let charlie = GameId::new(Runner::Legendary, "c");
 
-    // One click focuses Charlie (the backdrop follows the focus) and a
-    // second opens its page.
+    // One click focuses Charlie (the backdrop follows the focus) and opens
+    // its page.
     let shelf_charlie = shelf("Charlie", cx);
     click(shelf_charlie, 1, cx);
     assert_eq!(focused_title(&view, cx), "Charlie");
-    assert_eq!(page(cx), None, "the first click only selects");
-    click(shelf_charlie, 1, cx);
     assert_eq!(page(cx), Some(charlie));
     cx.dispatch_action(handle, gamepad::Back);
     assert_eq!(page(cx), None);
 
-    // A double click on another cover opens it at once.
+    // The second click of a double click does nothing more.
     let shelf_alpha = shelf("Alpha", cx);
     click(shelf_alpha, 2, cx);
+    assert_eq!(page(cx), None);
+    click(shelf_alpha, 1, cx);
     assert_eq!(page(cx), Some(GameId::new(Runner::Gog, "a")));
     cx.dispatch_action(handle, gamepad::Back);
 
@@ -391,8 +443,10 @@ fn clicks_focus_covers_then_open_them_and_buttons_act_on_their_own_game(cx: &mut
     assert_eq!(focused_title(&view, cx), "Alpha");
     click(CoverSlot::Grid(2), 1, cx);
     assert_eq!(focused_title(&view, cx), "Charlie");
+    cx.dispatch_action(handle, gamepad::Back);
     click(CoverSlot::Grid(1), 1, cx);
     assert_eq!(focused_title(&view, cx), "Bravo");
+    cx.dispatch_action(handle, gamepad::Back);
     assert_eq!(page(cx), None);
     let bravo = GameId::new(Runner::Gog, "b");
     let target = view.update(cx, |v, cx| {
