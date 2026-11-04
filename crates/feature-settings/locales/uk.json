@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Надіслати цей журнал?",
   "settings.option.library_layout.grid": "Сітка",
   "settings.option.library_layout.list": "Список",
+  "settings.option.library_layout.focus": "Фокус",
   "settings.option.sharpness.sharpest": "5 (максимальна різкість)",
   "settings.option.sharpness.softest": "1 (мінімальна різкість)",
   "settings.option.steam_runtime.none": "Немає",

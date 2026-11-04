@@ -4,10 +4,15 @@
 //! tabs, play history and related games; and the details table. Narrower
 //! pages fold the details under the play history, then stack everything. A
 //! slim bar keeps the primary action in reach once it scrolls away.
+//!
+//! The library shows the same page without leaving the library
+//! ([`GamePage::embedded`]): whole beside its Focus view's covers, or as a
+//! summary in the grid's drawer (`drawer`).
 
 mod achievements;
 mod compat;
 mod details;
+mod drawer;
 mod extras;
 mod hero;
 mod info;
@@ -27,6 +32,7 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::SelectEvent;
 use gpui_kit::component::{ActiveTheme as _, StyledExt as _, WindowExt as _, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Hsla,
     InteractiveElement as _, IntoElement, ParentElement, Pixels, Render, ScrollHandle,
@@ -36,6 +42,7 @@ use irori_core::{Achievement, ExtraInfo, GameId, GameInfo, LaunchOption};
 use irori_services::LaunchParams;
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::{ArtBackdrop, BackdropInk, EmptyState};
+use irori_ui::hooks::GamePanel;
 use irori_ui::i18n::t;
 use irori_ui::{Route, backend, models, navigate};
 
@@ -102,6 +109,8 @@ pub enum InfoTab {
 /// queue, library entry) comes from the shared models.
 pub struct GamePage {
     id: GameId,
+    /// Where the library shows the page, when it is not on its own route.
+    panel: Option<GamePanel>,
     focus: FocusHandle,
     game: Option<Arc<GameInfo>>,
     extra: Load<ExtraInfo>,
@@ -161,6 +170,27 @@ impl GamePage {
     /// Create the page for `id` and start loading store details,
     /// achievements, launch options and compatibility data.
     pub fn new(id: GameId, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::build(id, None, window, cx)
+    }
+
+    /// The page for `id` inside the library, shaped as `panel`. It leaves
+    /// keyboard focus where it is, and in [`GamePanel::Focus`] draws no
+    /// backdrop: the library draws one behind its covers and the page.
+    pub fn embedded(
+        id: GameId,
+        panel: GamePanel,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::build(id, Some(panel), window, cx)
+    }
+
+    fn build(
+        id: GameId,
+        panel: Option<GamePanel>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let m = models(cx).clone();
         let game = m
             .library
@@ -198,10 +228,13 @@ impl GamePage {
             ),
         ];
         let focus = cx.focus_handle();
-        window.focus(&focus, cx);
+        if panel.is_none() {
+            window.focus(&focus, cx);
+        }
         let was_installed = game.as_ref().is_some_and(|g| g.is_installed);
         let mut this = Self {
             id,
+            panel,
             focus,
             game,
             extra: Load::Idle,
@@ -633,7 +666,7 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_open_log))
             .on_action(cx.listener(Self::on_open_settings))
             .size_full()
-            .bg(cx.theme().background)
+            .when(self.panel.is_none(), |d| d.bg(cx.theme().background))
             .text_color(cx.theme().foreground);
         let Some(game) = self.game.clone() else {
             return base.child(
@@ -647,8 +680,13 @@ impl Render for GamePage {
             );
         };
         let art = game.hero_art().map(str::to_owned);
+        if self.panel == Some(GamePanel::Drawer) {
+            self.ink = BackdropInk::of(None, cx);
+            return base.child(self.render_drawer(&game, window, cx));
+        }
         self.ink = BackdropInk::of(art.as_deref(), cx);
-        let backdrop = ArtBackdrop::new(art).image_cache(&self.image_cache);
+        let backdrop =
+            (self.panel.is_none()).then(|| ArtBackdrop::new(art).image_cache(&self.image_cache));
         let header = self.render_header(&game, cx);
         let body = self.render_body(&game, window, cx);
         self.sticky = self.sticky_wanted();
@@ -656,7 +694,7 @@ impl Render for GamePage {
         let viewer = self.render_viewer(window, cx);
         let page_width = self.page_width.clone();
         base.relative()
-            .child(backdrop)
+            .children(backdrop)
             .child(
                 div()
                     .id("game-page-scroll")

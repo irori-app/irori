@@ -1,7 +1,7 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
-//! library by play status, show or save a library view, and run window
-//! commands, all from the keyboard.
+//! library by play status, show or save a library view, switch its view
+//! (grid, list, Focus), and run window commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -11,6 +11,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _};
 use gpui_kit::{App, AppContext as _, Entity, ParentElement as _, Styled as _, Window, px};
+use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
@@ -36,6 +37,8 @@ enum PaletteTarget {
     SaveView,
     /// Pick a folder and add the games in it.
     AddFolder,
+    /// Show the library as a grid, a list or in Focus view, and show it.
+    LibraryView(LibraryLayout),
 }
 
 /// Retained palette state, owned by the shell.
@@ -56,12 +59,14 @@ impl Palette {
 
     /// Rows for `games`. `open` is the game whose page is shown, with its
     /// play status: its status commands come first. `grouped` is whether the
-    /// library groups by play status, while a library view exists.
+    /// library groups by play status, while a library view exists. `layout`
+    /// is how the library shows games; the other views are offered.
     fn items(
         games: &[Arc<GameInfo>],
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
         grouped: Option<bool>,
         views: &[(u64, gpui_kit::SharedString)],
+        layout: LibraryLayout,
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
@@ -202,6 +207,35 @@ impl Palette {
                 targets,
             );
         }
+        for (view, label, icon) in [
+            (
+                LibraryLayout::Grid,
+                "shell.palette.show_grid",
+                IconName::LayoutGrid,
+            ),
+            (
+                LibraryLayout::List,
+                "shell.palette.show_list",
+                IconName::List,
+            ),
+            (
+                LibraryLayout::Focus,
+                "shell.palette.show_focus",
+                IconName::LayoutPanelLeft,
+            ),
+        ] {
+            if view == layout {
+                continue;
+            }
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.layout_keywords")])
+                    .icon(icon),
+                PaletteTarget::LibraryView(view),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.refresh"))
@@ -261,7 +295,15 @@ impl Palette {
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
         let views = irori_library::saved_view_list(cx);
-        let items = Rc::new(Self::items(&games, open, grouped, &views, &mut targets));
+        let layout = irori_library::library_layout(cx);
+        let items = Rc::new(Self::items(
+            &games,
+            open,
+            grouped,
+            &views,
+            layout,
+            &mut targets,
+        ));
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -326,6 +368,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::LibraryView(layout) => {
+            irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
         }
     }

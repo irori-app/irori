@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Przesłać ten log?",
   "settings.option.library_layout.grid": "Siatka",
   "settings.option.library_layout.list": "Lista",
+  "settings.option.library_layout.focus": "Skupienie",
   "settings.option.sharpness.sharpest": "5 (najostrzej)",
   "settings.option.sharpness.softest": "1 (najłagodniej)",
   "settings.option.steam_runtime.none": "Brak",
