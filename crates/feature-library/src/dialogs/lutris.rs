@@ -481,6 +481,7 @@ impl LutrisDialog {
             picked: self.picked.clone(),
             source_url,
             resolution,
+            sandbox: self.checks.sandbox,
         };
         self.start(install, window, cx);
     }
@@ -659,11 +660,18 @@ impl LutrisDialog {
             .as_ref()
             .map(|i| i.game_dir.clone())
             .unwrap_or_default();
+        let sandbox = self
+            .last_install
+            .as_ref()
+            .map(|i| i.sandbox)
+            .unwrap_or_default();
+        let slug = outcome.record.slug.clone();
         let game = match script_game(
             &outcome,
             &game_dir,
             self.wine.as_ref().map(|w| &w.build),
             program.as_deref(),
+            sandbox,
         ) {
             Ok(game) => game,
             Err(e) => return self.fail(e, cx),
@@ -676,6 +684,9 @@ impl LutrisDialog {
             let id = add_game(&game, sideload, emulation).await?;
             for (key, value) in game.settings {
                 b.settings.set_game_value(&id, key, Some(value));
+            }
+            if sandbox.is_enabled() {
+                irori_services::scripts::adopt_install_home(&slug, &id).await?;
             }
             Ok(id)
         });
@@ -1370,6 +1381,9 @@ impl LutrisDialog {
                     ),
             );
         }
+        if cfg!(target_os = "linux") {
+            body = body.child(self.render_sandbox_choice(cx));
+        }
         if !plan.downloads.is_empty() {
             let hosts: Vec<String> = {
                 let mut h: Vec<String> = plan.downloads.iter().map(|d| d.host.clone()).collect();
@@ -1521,6 +1535,33 @@ impl LutrisDialog {
             .max_h(rems(30.))
             .overflow_y_scroll()
             .child(body)
+            .into_any_element()
+    }
+
+    /// Whether the script's programs, and the game it installs, run in a
+    /// sandbox: without the network, without the home folder, or both.
+    fn render_sandbox_choice(&self, cx: &mut Context<Self>) -> AnyElement {
+        let sandbox = self.checks.sandbox;
+        section(t("library.lutris.consent.sandbox"), cx)
+            .child(muted(t("library.lutris.consent.sandbox_hint"), cx))
+            .child(
+                Checkbox::new("lutris-sandbox-network")
+                    .label(t("library.lutris.consent.sandbox_network"))
+                    .checked(sandbox.no_network)
+                    .on_click(cx.listener(|this, v: &bool, _, cx| {
+                        this.checks.sandbox.no_network = *v;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                Checkbox::new("lutris-sandbox-home")
+                    .label(t("library.lutris.consent.sandbox_home"))
+                    .checked(sandbox.no_home)
+                    .on_click(cx.listener(|this, v: &bool, _, cx| {
+                        this.checks.sandbox.no_home = *v;
+                        cx.notify();
+                    })),
+            )
             .into_any_element()
     }
 
