@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "Relací od {date}: {count}",
   "game.timeline.title": "Historie hraní",
   "game.timeline.view_days": "Časová osa",
-  "game.timeline.view_sessions": "Relace"
+  "game.timeline.view_sessions": "Relace",
+  "game.ops.pick_program": "Vyberte program",
+  "game.ops.locate_failed": "„{title}“ se nepodařilo nasměrovat na program",
+  "game.hero.program_missing": "Program nebyl nalezen v {path}. Najděte ho, nebo hru odeberte z knihovny. Její údaje, odehraný čas a nastavení zůstanou zachovány.",
+  "game.menu.locate_program": "Najít program…",
+  "game.related.title": "Podobné hry",
+  "game.related.series": "Stejná série",
+  "game.related.developer": "Také od {name}",
+  "game.related.publisher": "Také vydal {name}",
+  "game.related.genres": "Společné žánry: {genres}",
+  "game.related.separator": ", "
 }

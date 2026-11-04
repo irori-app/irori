@@ -79,5 +79,11 @@
   "shell.app_update.download": "İndir",
   "shell.app_update.copy_command": "Komutu kopyala",
   "shell.app_update.updated": "Irori {version} sürümüne güncellendi",
-  "shell.app_update.release_notes": "Sürüm notları"
+  "shell.app_update.release_notes": "Sürüm notları",
+  "shell.nav.views": "Görünümler",
+  "shell.palette.show_view": "Görünümü göster: {name}",
+  "shell.palette.views_keywords": "görünüm kayıtlı filtre",
+  "shell.palette.save_view": "Kütüphanenin geçerli görünümünü kaydet…",
+  "shell.palette.add_folder": "Klasörden oyun ekle…",
+  "shell.palette.add_folder_keywords": "klasör tara içe aktar ekle programlar"
 }

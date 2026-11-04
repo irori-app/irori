@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "Nainstalováno: {verb}",
   "settings.field.action_import_lutris.label": "Importovat z Lutris",
   "settings.field.action_import_lutris.help": "Převezme z Lutris nainstalované hry, emulované hry, oblíbené položky, kategorie a odehraný čas. Samotný Lutris zůstane beze změny.",
-  "settings.error.import_lutris": "Import z Lutris se nezdařil"
+  "settings.error.import_lutris": "Import z Lutris se nezdařil",
+  "settings.field.action_import_bottles.label": "Importovat z Bottles",
+  "settings.field.action_import_bottles.help": "Přidá programy všech lahví a hry do nich nainstalované, s lahví jako prefixem. Bottles zůstane beze změny.",
+  "settings.field.action_import_faugus.label": "Importovat z Faugus Launcher",
+  "settings.field.action_import_faugus.help": "Přidá hry z Faugus Launcher s jejich prefixem, verzí Protonu, proměnnými a argumenty. Faugus Launcher zůstane beze změny.",
+  "settings.error.import_launcher": "Import se nezdařil",
+  "settings.field.start_with_system.label": "Spouštět se systémem",
+  "settings.field.start_with_system.help": "Otevře Irori po přihlášení k počítači.",
+  "settings.field.start_with_system_minimized.label": "Při spuštění se systémem začít v oznamovací oblasti",
+  "settings.field.start_with_system_minimized.help": "Když se Irori otevře po přihlášení, počká v oznamovací oblasti a okno nezobrazí.",
+  "settings.requires.start_with_system": "Vyžaduje spouštění se systémem"
 }

@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "Сеансів з {date}: {count}",
   "game.timeline.title": "Історія гри",
   "game.timeline.view_days": "Хронологія",
-  "game.timeline.view_sessions": "Сеанси"
+  "game.timeline.view_sessions": "Сеанси",
+  "game.ops.pick_program": "Виберіть програму",
+  "game.ops.locate_failed": "Не вдалося вказати програму для «{title}»",
+  "game.hero.program_missing": "Програму не знайдено за шляхом {path}. Вкажіть її або приберіть гру з бібліотеки. Відомості, час у грі й налаштування збережуться.",
+  "game.menu.locate_program": "Вказати програму…",
+  "game.related.title": "Схожі ігри",
+  "game.related.series": "Та сама серія",
+  "game.related.developer": "Також від {name}",
+  "game.related.publisher": "Також видано {name}",
+  "game.related.genres": "Спільні жанри: {genres}",
+  "game.related.separator": ", "
 }

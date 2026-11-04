@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{count} sessions depuis le {date}",
   "game.timeline.title": "Historique de jeu",
   "game.timeline.view_days": "Chronologie",
-  "game.timeline.view_sessions": "Sessions"
+  "game.timeline.view_sessions": "Sessions",
+  "game.ops.pick_program": "Choisissez le programme",
+  "game.ops.locate_failed": "Impossible de relier « {title} » au programme",
+  "game.hero.program_missing": "Le programme est introuvable dans {path}. Localisez-le ou retirez le jeu de la bibliothèque. Ses informations, son temps de jeu et ses réglages sont conservés.",
+  "game.menu.locate_program": "Localiser le programme…",
+  "game.related.title": "Dans le même esprit",
+  "game.related.series": "Même série",
+  "game.related.developer": "Aussi de {name}",
+  "game.related.publisher": "Aussi édité par {name}",
+  "game.related.genres": "Mêmes genres : {genres}",
+  "game.related.separator": ", "
 }

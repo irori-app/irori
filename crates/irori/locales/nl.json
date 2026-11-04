@@ -79,5 +79,11 @@
   "shell.app_update.download": "Downloaden",
   "shell.app_update.copy_command": "Opdracht kopiëren",
   "shell.app_update.updated": "Irori bijgewerkt naar versie {version}",
-  "shell.app_update.release_notes": "Release-opmerkingen"
+  "shell.app_update.release_notes": "Release-opmerkingen",
+  "shell.nav.views": "Weergaven",
+  "shell.palette.show_view": "Weergave tonen: {name}",
+  "shell.palette.views_keywords": "weergave opgeslagen filter",
+  "shell.palette.save_view": "Huidige weergave van de bibliotheek opslaan…",
+  "shell.palette.add_folder": "Games uit een map toevoegen…",
+  "shell.palette.add_folder_keywords": "map scannen importeren toevoegen programma’s"
 }

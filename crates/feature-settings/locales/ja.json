@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb}をインストールしました",
   "settings.field.action_import_lutris.label": "Lutrisからインポート",
   "settings.field.action_import_lutris.help": "Lutrisからインストール済みのゲーム、エミュレーションのゲーム、お気に入り、カテゴリー、プレイ時間を引き継ぎます。Lutris自体は変更されません。",
-  "settings.error.import_lutris": "Lutrisからインポートできませんでした"
+  "settings.error.import_lutris": "Lutrisからインポートできませんでした",
+  "settings.field.action_import_bottles.label": "Bottles からインポート",
+  "settings.field.action_import_bottles.help": "すべてのボトルのプログラムと、そこにインストールしたゲームを、ボトルをプレフィックスとして追加します。Bottles 自体は変更しません。",
+  "settings.field.action_import_faugus.label": "Faugus Launcher からインポート",
+  "settings.field.action_import_faugus.help": "Faugus Launcher のゲームを、プレフィックス、Proton のバージョン、変数、引数ごと追加します。Faugus Launcher 自体は変更しません。",
+  "settings.error.import_launcher": "インポートに失敗しました",
+  "settings.field.start_with_system.label": "システムの起動時に開始",
+  "settings.field.start_with_system.help": "コンピューターにログインしたときに Irori を開きます。",
+  "settings.field.start_with_system_minimized.label": "システム起動時はトレイで開始",
+  "settings.field.start_with_system_minimized.help": "ログイン時に Irori が開いたときは、ウィンドウを表示せずトレイで待機します。",
+  "settings.requires.start_with_system": "「システムの起動時に開始」が必要です"
 }

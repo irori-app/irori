@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{date}以降 {count} 回のセッション",
   "game.timeline.title": "プレイ履歴",
   "game.timeline.view_days": "タイムライン",
-  "game.timeline.view_sessions": "セッション"
+  "game.timeline.view_sessions": "セッション",
+  "game.ops.pick_program": "プログラムを選択",
+  "game.ops.locate_failed": "「{title}」のプログラムを設定できませんでした",
+  "game.hero.program_missing": "{path} にプログラムが見つかりません。場所を指定するか、ゲームをライブラリから削除してください。詳細、プレイ時間、設定はそのまま残ります。",
+  "game.menu.locate_program": "プログラムの場所を指定…",
+  "game.related.title": "似ているゲーム",
+  "game.related.series": "同じシリーズ",
+  "game.related.developer": "{name} の作品",
+  "game.related.publisher": "{name} の発売タイトル",
+  "game.related.genres": "共通のジャンル：{genres}",
+  "game.related.separator": "、"
 }

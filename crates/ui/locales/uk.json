@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Відкладено",
   "ui.play_status.beaten": "Пройдено",
   "ui.play_status.abandoned": "Покинуто",
-  "ui.play_status.played": "Зіграно"
+  "ui.play_status.played": "Зіграно",
+  "ui.import.summary.title": "Імпортовано з {launcher}",
+  "ui.import.summary.games": "Ігор у {launcher}: {found}. Додано до Irori: {imported}.",
+  "ui.import.summary.wine_build": "{launcher} використовував {build}, якого тут немає. Якщо гра не запуститься, виберіть іншу збірку в її налаштуваннях.",
+  "ui.import.summary.warnings": "Файли {launcher}, які Irori не зміг прочитати"
 }
