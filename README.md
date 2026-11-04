@@ -25,7 +25,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-library.webp">
-    <img alt="Irori's library, shown with demo games" src="website/public/screenshots/library.webp" width="100%">
+    <img alt="Irori's library on Linux, with a demo library of real games and their store art" src="website/public/screenshots/library.webp" width="100%">
   </picture>
 </p>
 
@@ -163,7 +163,7 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 <table>
   <tr>
     <td width="50%" align="center"><img src="website/public/screenshots/library-list.webp" width="100%" alt="The library as a list with store, size, playtime and status columns"><br><sub><b>List view</b></sub></td>
-    <td width="50%" align="center"><img src="website/public/screenshots/accounts.webp" width="100%" alt="Accounts page with several accounts per store"><br><sub><b>Several accounts per store</b></sub></td>
+    <td width="50%" align="center"><img src="website/public/screenshots/accounts.webp" width="100%" alt="Accounts page with Epic Games and GOG signed in and a button to add another account to each"><br><sub><b>Every store's accounts in one place</b></sub></td>
   </tr>
 </table>
 
@@ -191,10 +191,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
     <td width="50%" align="center">
       <picture>
         <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-game.webp">
-        <img src="website/public/screenshots/game.webp" width="100%" alt="Game page with playtime, last session and the Play button">
+        <img src="website/public/screenshots/game.webp" width="100%" alt="Baldur's Gate 3's page with screenshots, compatibility, play status, rating and the Play button">
       </picture><br><sub><b>Game page</b></sub>
     </td>
-    <td width="50%" align="center"><img src="website/public/screenshots/game-kiln.webp" width="100%" alt="Another game page, with its own art"><br><sub><b>Every game keeps its own settings, art and logs</b></sub></td>
+    <td width="50%" align="center"><img src="website/public/screenshots/game-kiln.webp" width="100%" alt="Outer Wilds's page with every session on a timeline"><br><sub><b>Play history on every game page</b></sub></td>
   </tr>
 </table>
 
@@ -256,17 +256,12 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   from its file name, a generated cover, and the BIOS files each system needs checked
   before you play.
 
-<table>
-  <tr>
-    <td width="50%" align="center">
-      <picture>
-        <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-emulators.webp">
-        <img src="website/public/screenshots/emulators.webp" width="100%" alt="Emulators page with installed emulators and RetroArch cores">
-      </picture><br><sub><b>Emulators</b></sub>
-    </td>
-    <td width="50%" align="center"><img src="website/public/screenshots/game-emulated.webp" width="100%" alt="An emulated game's page with its system, region and revision"><br><sub><b>Emulated games</b></sub></td>
-  </tr>
-</table>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-emulators.webp">
+    <img src="website/public/screenshots/emulators.webp" width="80%" alt="Emulators page with RetroArch, DuckStation, PPSSPP and Dolphin ready to install">
+  </picture><br><sub><b>Emulators</b></sub>
+</p>
 
 ## Big Picture and your play time
 
@@ -291,9 +286,13 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   ones your desktop saves (Spectacle, GNOME, Game Bar, macOS) while a game you started
   from Irori runs. Irori only reads them.
 
+<p align="center">
+  <img src="website/public/screenshots/bigpicture-handheld.webp" width="100%" alt="Big Picture on a handheld, in the Irori theme's Carousel layout">
+</p>
+
 <table>
   <tr>
-    <td width="50%" align="center"><img src="website/public/screenshots/bigpicture.webp" width="100%" alt="Big Picture with Continue playing and Installed shelves"><br><sub><b>Big Picture</b></sub></td>
+    <td width="50%" align="center"><img src="website/public/screenshots/bigpicture/glacier-shelves.webp" width="100%" alt="Big Picture in the Glacier theme, with Favourites and Installed shelves"><br><sub><b>Big Picture: eight themes, six layouts</b></sub></td>
     <td width="50%" align="center">
       <picture>
         <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-stats.webp">

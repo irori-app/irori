@@ -23,7 +23,6 @@ export const SCREENS = {
   emulators: { light: true },
   stats: { light: true },
   'library-list': { light: false },
-  'game-emulated': { light: false },
   wine: { light: true },
   bigpicture: { light: false },
   accounts: { light: false },
@@ -31,6 +30,21 @@ export const SCREENS = {
 } as const satisfies Record<string, { light: boolean }>
 
 export type ScreenId = keyof typeof SCREENS
+
+/**
+ * Big Picture on the home page's handheld, in /screenshots/bigpicture/: one built-in theme each,
+ * in the layout it comes with. `accent` is the screen's most telling colour (the light behind
+ * the device); names of themes and layouts are in the dictionaries.
+ */
+export const BIG_PICTURE_SHOTS = [
+  { stem: 'irori-carousel', theme: 'irori', layout: 'carousel', accent: '#ff7a3d' },
+  { stem: 'hearth-spotlight', theme: 'hearth', layout: 'spotlight', accent: '#5a9be0' },
+  { stem: 'noir-cinema', theme: 'noir', layout: 'cinema', accent: '#8fb3dc' },
+  { stem: 'moss-wall', theme: 'moss', layout: 'wall', accent: '#8fb86a' },
+  { stem: 'handheld-compact', theme: 'handheld', layout: 'compact', accent: '#e8b23c' },
+  { stem: 'glacier-shelves', theme: 'glacier', layout: 'shelves', accent: '#a7c8ff' },
+  { stem: 'neon-arcade-carousel', theme: 'neonArcade', layout: 'carousel', accent: '#e040fb' },
+] as const
 
 export const STORES = [
   { id: 'epic', name: 'Epic Games', feature: 'stores' },
