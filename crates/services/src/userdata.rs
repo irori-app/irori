@@ -319,10 +319,21 @@ impl UserDataService {
 
     /// Mutate, persist, and announce. `game` scopes the change event.
     pub fn update(&self, game: Option<&GameId>, f: impl FnOnce(&mut UserData)) {
+        self.update_if(game, |d| {
+            f(d);
+            true
+        });
+    }
+
+    /// [`UserDataService::update`] when `f` returns true; otherwise its
+    /// changes are dropped and nothing is written or announced.
+    pub fn update_if(&self, game: Option<&GameId>, f: impl FnOnce(&mut UserData) -> bool) {
         let snapshot = {
             let mut guard = self.data.write();
             let mut next = (**guard).clone();
-            f(&mut next);
+            if !f(&mut next) {
+                return;
+            }
             *guard = Arc::new(next);
             guard.clone()
         };

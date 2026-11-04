@@ -366,16 +366,20 @@ impl Backend {
             let crashed = failed_start(status, seconds, stopped);
             let exit_code = status.and_then(|s| s.code());
             b.statuses.clear(&id);
-            b.userdata.record_session(&id, seconds);
-            let session = crate::sessions::Session {
-                game: id.key(),
-                started: started_at,
-                seconds,
-                crashed,
-                exit_code: exit_code.filter(|_| crashed),
-            };
-            if let Err(e) = crate::sessions::append(&session) {
-                tracing::warn!("recording the session of {id}: {e:#}");
+            {
+                // Sync sees both or neither.
+                let _playtime = b.sync.playtime_guard();
+                b.userdata.record_session(&id, seconds);
+                let session = crate::sessions::Session {
+                    game: id.key(),
+                    started: started_at,
+                    seconds,
+                    crashed,
+                    exit_code: exit_code.filter(|_| crashed),
+                };
+                if let Err(e) = crate::sessions::append(&session) {
+                    tracing::warn!("recording the session of {id}: {e:#}");
+                }
             }
             if let Some(store) = b.store(id.runner)
                 && let Err(e) = store.after_exit(&id.app_name, seconds).await

@@ -35,6 +35,7 @@ pub mod registry;
 mod saves;
 mod storage;
 mod stores;
+mod sync;
 mod treemap;
 pub mod value;
 mod view;
