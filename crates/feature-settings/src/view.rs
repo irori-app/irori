@@ -39,6 +39,7 @@ pub enum SettingsSection {
     Appearance,
     Storage,
     Advanced,
+    Saves,
     Backup,
     Logs,
     SystemInfo,
@@ -46,12 +47,13 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 9] = [
+    pub const ALL: [SettingsSection; 10] = [
         SettingsSection::General,
         SettingsSection::GameDefaults,
         SettingsSection::Appearance,
         SettingsSection::Storage,
         SettingsSection::Advanced,
+        SettingsSection::Saves,
         SettingsSection::Backup,
         SettingsSection::Logs,
         SettingsSection::SystemInfo,
@@ -66,6 +68,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "appearance",
             SettingsSection::Storage => "storage",
             SettingsSection::Advanced => "advanced",
+            SettingsSection::Saves => "saves",
             SettingsSection::Backup => "backup",
             SettingsSection::Logs => "logs",
             SettingsSection::SystemInfo => "system",
@@ -82,6 +85,7 @@ impl SettingsSection {
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
+            "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
             "backup" | "restore" | "export" => SettingsSection::Backup,
             "logs" | "log" => SettingsSection::Logs,
             "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
@@ -97,6 +101,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "settings.page.appearance",
             SettingsSection::Storage => "settings.page.storage",
             SettingsSection::Advanced => "settings.page.advanced",
+            SettingsSection::Saves => "settings.page.saves",
             SettingsSection::Backup => "settings.page.backup",
             SettingsSection::Logs => "settings.page.logs",
             SettingsSection::SystemInfo => "settings.page.system_info",
@@ -116,6 +121,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Storage => "settings.page.storage_description",
             SettingsSection::Advanced => "settings.page.advanced_description",
+            SettingsSection::Saves => "settings.page.saves_description",
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
             SettingsSection::SystemInfo => "settings.page.system_info_description",
@@ -131,6 +137,7 @@ impl SettingsSection {
             SettingsSection::Appearance => IconName::Palette,
             SettingsSection::Storage => IconName::HardDrive,
             SettingsSection::Advanced => IconName::Wrench,
+            SettingsSection::Saves => IconName::DatabaseBackup,
             SettingsSection::Backup => IconName::ArchiveRestore,
             SettingsSection::Logs => IconName::ScrollText,
             SettingsSection::SystemInfo => IconName::Cpu,
@@ -158,6 +165,7 @@ impl SettingsSection {
             SettingsSection::General => Some(FieldSection::General),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
+            SettingsSection::Saves => Some(FieldSection::Saves),
             _ => None,
         }
     }
@@ -703,9 +711,9 @@ impl Render for SettingsView {
                         .child(self.preview.clone())
                         .child(self.app_form.clone())
                         .into_any_element(),
-                    SettingsSection::General | SettingsSection::Advanced => {
-                        self.app_form.clone().into_any_element()
-                    }
+                    SettingsSection::General
+                    | SettingsSection::Advanced
+                    | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),

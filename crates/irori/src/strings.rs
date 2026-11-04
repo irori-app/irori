@@ -49,8 +49,13 @@ mod tests {
         let re = regex::Regex::new(r#""(shell\.[a-z0-9_.]+)""#).unwrap();
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let services = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../services/src");
-        for d in [dir, services] {
+        let mut dirs = vec![dir, services];
+        while let Some(d) = dirs.pop() {
             for entry in std::fs::read_dir(&d).unwrap().flatten() {
+                if entry.path().is_dir() {
+                    dirs.push(entry.path());
+                    continue;
+                }
                 let src = std::fs::read_to_string(entry.path()).unwrap();
                 for cap in re.captures_iter(&src) {
                     // Keys passed to `item(...)` and `keys(...)` are literals too.
