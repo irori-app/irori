@@ -393,6 +393,12 @@ commands without a window.
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
   and its insight card show them.
+- **Storage** (`storage.rs`, `Backend::storage_report`, `Backend::clean_up`): what games,
+  prefixes, Wine builds, emulators and Irori's caches take per disk, measured on a
+  blocking thread and cached in `<cache>/storage.json` by folder and modified time, plus
+  the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
+  logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
+  through `fs_guard::ensure_deletable`. Settings → Storage draws it.
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
@@ -508,6 +514,13 @@ cx.spawn_in(window, async move |this, cx| {
   "Increase contrast" and Windows high contrast strengthen borders, Windows high contrast
   replaces the theme with its own colours (`desktop_theme::high_contrast`), and "Reduce
   transparency" or "Transparency effects" off keep Automatic translucency opaque.
+- An accent the user picks (`iroriUi.accentColor`) tints whichever theme shows, held
+  legible like the system's; `iroriUi.fontFamily` replaces Manrope while that family is
+  installed (`theme::font_names`).
+- The library's background (`iroriUi.libraryBackground`: the focused, last played or
+  first shown game's art, or a picture) goes through `components::library_backdrop`,
+  which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art)
+  and stays off while `theme::reduce_transparency` holds.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,

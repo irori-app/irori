@@ -16,6 +16,8 @@
   "shell.nav.forward": "Vorwärts (Alt+Rechts)",
   "shell.notice.component_update_failed": "{name} konnte nicht aktualisiert werden",
   "shell.notice.component_updated": "{name} auf {version} aktualisiert",
+  "shell.palette.storage": "Speicher und Aufräumen",
+  "shell.palette.storage_keywords": "festplatte laufwerk speicher platz größe frei aufräumen bereinigen löschen disk",
   "shell.search.placeholder": "Spiele und Befehle suchen…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Du bist offline. Installierte Spiele, die das unterstützen, starten trotzdem.",

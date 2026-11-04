@@ -23,13 +23,14 @@ use gpui_kit::{
     InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, Render,
     SharedString, Styled as _, Subscription, Task, Window, div,
 };
-use irori_core::settings::{AppSettings, GameSettings, WineInstallation};
+use irori_core::settings::{AppSettings, GameSettings, UiPrefs, WineInstallation};
 use irori_core::{GameId, InstallPlatform, Paths};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::Desktop;
 use irori_ui::{Route, backend, models};
 use serde_json::Value;
 
+use crate::appearance::{AccentPicker, FontPicker};
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
@@ -682,11 +683,19 @@ impl SettingsForm {
                 ));
                 self.choices.insert(spec.path, state);
             }
-            CustomKind::FontSize | CustomKind::TileSize => {
-                let (min, max, step) = if kind == CustomKind::FontSize {
-                    (12., 24., 1.)
-                } else {
-                    (8., 16., 0.5)
+            CustomKind::AccentColor => {
+                let view = cx.new(|cx| AccentPicker::new(window, cx));
+                self.panels.insert(spec.path, view.into());
+            }
+            CustomKind::FontFamily => {
+                let view = cx.new(|cx| FontPicker::new(window, cx));
+                self.panels.insert(spec.path, view.into());
+            }
+            CustomKind::FontSize | CustomKind::TileSize | CustomKind::Percent => {
+                let (min, max, step) = match kind {
+                    CustomKind::FontSize => (12., 24., 1.),
+                    CustomKind::TileSize => (8., 16., 0.5),
+                    _ => (0., 100., 5.),
                 };
                 let current = self
                     .value(spec.path)
@@ -1019,7 +1028,7 @@ impl SettingsForm {
             // The percentage follows the drag; the size applies on release.
             if released {
                 self.slider_writes.remove(path);
-                self.write(path, Value::from(v as f64), window, cx);
+                self.write(path, slider_json(path, v), window, cx);
             } else {
                 // Keeps `reload` from snapping the slider back meanwhile.
                 self.slider_writes.insert(path, Task::ready(()));
@@ -1033,7 +1042,7 @@ impl SettingsForm {
                 .await;
             this.update_in(cx, |this, window, cx| {
                 this.slider_writes.remove(path);
-                this.write(path, Value::from(v as f64), window, cx);
+                this.write(path, slider_json(path, v), window, cx);
             })
             .ok();
         });
@@ -1576,20 +1585,28 @@ impl SettingsForm {
                     .into_any_element(),
                 None => div().into_any_element(),
             },
-            CustomKind::FontSize | CustomKind::TileSize => {
+            CustomKind::AccentColor | CustomKind::FontFamily => match self.panels.get(path) {
+                Some(view) => view.clone().into_any_element(),
+                None => div().into_any_element(),
+            },
+            CustomKind::FontSize | CustomKind::TileSize | CustomKind::Percent => {
                 let Some(state) = self.sliders.get(path) else {
                     return div().into_any_element();
                 };
                 let v = state.read(cx).value().start();
-                let label = if kind == CustomKind::FontSize {
-                    format!("{:.0}%", v / 16. * 100.)
-                } else {
-                    format!("{v:.1} rem")
+                let label = match kind {
+                    CustomKind::FontSize => format!("{:.0}%", v / 16. * 100.),
+                    CustomKind::TileSize => format!("{v:.1} rem"),
+                    _ => format!("{v:.0}%"),
                 };
-                let reset_value = if kind == CustomKind::FontSize {
-                    16.
-                } else {
-                    11.
+                let defaults = UiPrefs::default();
+                let reset_value = match path {
+                    "iroriUi.fontSize" => defaults.font_size,
+                    "iroriUi.libraryBackgroundStrength" => {
+                        defaults.library_background_strength as f32
+                    }
+                    "iroriUi.libraryBackgroundDim" => defaults.library_background_dim as f32,
+                    _ => defaults.tile_size,
                 };
                 h_flex()
                     .gap_3()
@@ -1819,6 +1836,16 @@ fn theme_items(cx: &App) -> Vec<ChoiceItem> {
         items.push(ChoiceItem::new(name, label));
     }
     items
+}
+
+/// A slider's value as stored: percentages are whole numbers, sizes are not.
+fn slider_json(path: &str, v: f32) -> Value {
+    match registry::find(path).map(|f| f.kind) {
+        Some(FieldKind::Custom(CustomKind::Percent)) => {
+            Value::from(v.round().clamp(0., 100.) as u64)
+        }
+        _ => Value::from(v as f64),
+    }
 }
 
 /// Inline notice explaining why a whole group does not apply.

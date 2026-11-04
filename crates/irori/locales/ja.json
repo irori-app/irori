@@ -16,6 +16,8 @@
   "shell.nav.forward": "進む (Alt+→)",
   "shell.notice.component_update_failed": "{name} を更新できませんでした",
   "shell.notice.component_updated": "{name} を {version} に更新しました",
+  "shell.palette.storage": "ストレージとクリーンアップ",
+  "shell.palette.storage_keywords": "ディスク ドライブ 容量 サイズ 空き 解放 クリーンアップ 削除 ストレージ storage",
   "shell.search.placeholder": "ゲームとコマンドを検索…",
   "shell.offline": "オフライン",
   "shell.offline.tooltip": "オフラインです。対応しているインストール済みのゲームは起動できます。",

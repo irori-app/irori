@@ -22,11 +22,13 @@ use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::i18n::{t, t_args};
 
 use crate::app_update::AppUpdatePanel;
+use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
 use crate::form::{FormTarget, SettingsForm};
 use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
+use crate::storage::StoragePanel;
 use crate::widgets::{group_heading, muted, nav_button, panel};
 
 /// Sections of the settings page.
@@ -35,6 +37,7 @@ pub enum SettingsSection {
     General,
     GameDefaults,
     Appearance,
+    Storage,
     Advanced,
     Backup,
     Logs,
@@ -43,10 +46,11 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 8] = [
+    pub const ALL: [SettingsSection; 9] = [
         SettingsSection::General,
         SettingsSection::GameDefaults,
         SettingsSection::Appearance,
+        SettingsSection::Storage,
         SettingsSection::Advanced,
         SettingsSection::Backup,
         SettingsSection::Logs,
@@ -60,6 +64,7 @@ impl SettingsSection {
             SettingsSection::General => "general",
             SettingsSection::GameDefaults => "game-defaults",
             SettingsSection::Appearance => "appearance",
+            SettingsSection::Storage => "storage",
             SettingsSection::Advanced => "advanced",
             SettingsSection::Backup => "backup",
             SettingsSection::Logs => "logs",
@@ -75,6 +80,7 @@ impl SettingsSection {
                 SettingsSection::GameDefaults
             }
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
+            "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
             "backup" | "restore" | "export" => SettingsSection::Backup,
             "logs" | "log" => SettingsSection::Logs,
@@ -89,6 +95,7 @@ impl SettingsSection {
             SettingsSection::General => "settings.page.general",
             SettingsSection::GameDefaults => "settings.page.game_defaults",
             SettingsSection::Appearance => "settings.page.appearance",
+            SettingsSection::Storage => "settings.page.storage",
             SettingsSection::Advanced => "settings.page.advanced",
             SettingsSection::Backup => "settings.page.backup",
             SettingsSection::Logs => "settings.page.logs",
@@ -107,6 +114,7 @@ impl SettingsSection {
             SettingsSection::General => "settings.page.general_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
             SettingsSection::Appearance => "settings.page.appearance_description",
+            SettingsSection::Storage => "settings.page.storage_description",
             SettingsSection::Advanced => "settings.page.advanced_description",
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
@@ -121,6 +129,7 @@ impl SettingsSection {
             SettingsSection::General => IconName::Settings,
             SettingsSection::GameDefaults => IconName::Gamepad2,
             SettingsSection::Appearance => IconName::Palette,
+            SettingsSection::Storage => IconName::HardDrive,
             SettingsSection::Advanced => IconName::Wrench,
             SettingsSection::Backup => IconName::ArchiveRestore,
             SettingsSection::Logs => IconName::ScrollText,
@@ -137,6 +146,9 @@ impl SettingsSection {
                 "system information hardware cpu gpu memory driver os report"
             }
             SettingsSection::About => "about version license credits",
+            SettingsSection::Storage => {
+                "storage disk drive space size free clean cleanup delete prefix cache"
+            }
             _ => "",
         }
     }
@@ -169,6 +181,8 @@ pub struct SettingsView {
     log: Entity<LogViewer>,
     backup: Entity<BackupPanel>,
     app_update: Entity<AppUpdatePanel>,
+    preview: Entity<AppearancePreview>,
+    storage: Entity<StoragePanel>,
     sysinfo: SysInfoState,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
@@ -196,6 +210,7 @@ impl SettingsView {
         // upload history, so it stays the same in every language.
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
+        let storage = cx.new(StoragePanel::new);
         let mut this = Self {
             section: SettingsSection::General,
             search,
@@ -205,9 +220,12 @@ impl SettingsView {
             log,
             backup: cx.new(|_| BackupPanel::new()),
             app_update: cx.new(AppUpdatePanel::new),
+            preview: cx.new(AppearancePreview::new),
+            storage: storage.clone(),
             sysinfo: SysInfoState::default(),
             language: LanguageStamp::new(),
-            _subscriptions: vec![sub],
+            // The header's Rescan button shows the measuring.
+            _subscriptions: vec![sub, cx.observe(&storage, |_, _, cx| cx.notify())],
         };
         this.set_section(&section, window, cx);
         this
@@ -267,6 +285,9 @@ impl SettingsView {
             SettingsSection::Logs => self.log.update(cx, |l, cx| l.start(window, cx)),
             SettingsSection::SystemInfo if self.sysinfo.info.is_none() => {
                 self.load_sysinfo(window, cx)
+            }
+            SettingsSection::Storage => {
+                self.storage.update(cx, |s, cx| s.ensure_loaded(window, cx))
             }
             _ => {}
         }
@@ -592,6 +613,17 @@ impl SettingsView {
 
     fn header_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         match self.section {
+            SettingsSection::Storage => Some(
+                Button::new("storage-rescan")
+                    .outline()
+                    .icon(IconName::RefreshCw)
+                    .label(t("settings.storage.rescan"))
+                    .loading(self.storage.read(cx).loading())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.storage.update(cx, |s, cx| s.load(true, window, cx))
+                    }))
+                    .into_any_element(),
+            ),
             SettingsSection::SystemInfo => Some(
                 h_flex()
                     .gap_2()
@@ -667,9 +699,14 @@ impl Render for SettingsView {
                 self.render_search(cx)
             } else {
                 match section {
-                    SettingsSection::General
-                    | SettingsSection::Appearance
-                    | SettingsSection::Advanced => self.app_form.clone().into_any_element(),
+                    SettingsSection::Appearance => v_flex()
+                        .child(self.preview.clone())
+                        .child(self.app_form.clone())
+                        .into_any_element(),
+                    SettingsSection::General | SettingsSection::Advanced => {
+                        self.app_form.clone().into_any_element()
+                    }
+                    SettingsSection::Storage => self.storage.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
                     SettingsSection::SystemInfo => self.render_sysinfo(cx),

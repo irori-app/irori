@@ -20,6 +20,7 @@
 //! never per keystroke.
 
 mod app_update;
+mod appearance;
 mod backup;
 mod controllers;
 mod epic;
@@ -29,7 +30,9 @@ mod i18n;
 mod logs;
 pub mod registry;
 mod saves;
+mod storage;
 mod stores;
+mod treemap;
 pub mod value;
 mod view;
 mod widgets;

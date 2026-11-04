@@ -16,6 +16,8 @@
   "shell.nav.forward": "Înainte (Alt+Dreapta)",
   "shell.notice.component_update_failed": "{name} nu a putut fi actualizat",
   "shell.notice.component_updated": "{name} actualizat la {version}",
+  "shell.palette.storage": "Spațiu de stocare și curățare",
+  "shell.palette.storage_keywords": "disc unitate spațiu dimensiune liber eliberează curăță curățare șterge stocare storage",
   "shell.search.placeholder": "Caută jocuri și comenzi…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Ești offline. Jocurile instalate care permit asta pornesc în continuare.",
