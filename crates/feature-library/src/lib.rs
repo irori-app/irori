@@ -1,7 +1,8 @@
 //! The library screen: every game of every store in a virtualized cover grid
 //! or list, with instant search, store switcher, filters, sorting, a
 //! "Continue playing" row, keyboard navigation, per-game context menus, custom
-//! categories, manually added apps and per-game title/art overrides.
+//! categories, saved views, manually added apps and per-game title/art
+//! overrides.
 //!
 //! # Wiring (shell)
 //!
@@ -34,6 +35,7 @@ mod selection;
 mod stats;
 mod top;
 mod view;
+mod views;
 
 use std::sync::Arc;
 
@@ -44,13 +46,17 @@ use irori_sideload::SideloadStore;
 pub use commands::{GameCommand, GameState};
 pub use dialogs::categories::open_categories_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
+pub use dialogs::folder::open_add_folder_dialog;
 pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
+pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, Grouping, HiddenMode, InstallFilter, ViewFilter};
+pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
 pub use random::open_random_game;
 pub use stats::StatsView;
 pub use view::LibraryView;
+pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
 /// Requests for actions owned by other features. The shell routes them (for
 /// example to the game feature's install sheet).
@@ -62,6 +68,8 @@ pub enum LibraryEvent {
     RequestUninstall(GameId),
     /// Open the log viewer of a game.
     RequestLogs(GameId),
+    /// Choose where an added game's program went.
+    RequestLocate(GameId),
     /// Pick a folder of GOG offline installers and install from it.
     RequestImportInstallers,
 }

@@ -79,5 +79,11 @@
   "shell.app_update.download": "Télécharger",
   "shell.app_update.copy_command": "Copier la commande",
   "shell.app_update.updated": "Irori a été mis à jour vers la version {version}",
-  "shell.app_update.release_notes": "Notes de version"
+  "shell.app_update.release_notes": "Notes de version",
+  "shell.nav.views": "Vues",
+  "shell.palette.show_view": "Afficher la vue : {name}",
+  "shell.palette.views_keywords": "vue enregistrée filtre",
+  "shell.palette.save_view": "Enregistrer la vue actuelle de la bibliothèque…",
+  "shell.palette.add_folder": "Ajouter les jeux d’un dossier…",
+  "shell.palette.add_folder_keywords": "dossier analyser importer ajouter programmes"
 }

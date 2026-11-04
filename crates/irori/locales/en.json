@@ -79,5 +79,11 @@
   "shell.app_update.download": "Download",
   "shell.app_update.copy_command": "Copy command",
   "shell.app_update.updated": "Irori updated to {version}",
-  "shell.app_update.release_notes": "Release notes"
+  "shell.app_update.release_notes": "Release notes",
+  "shell.nav.views": "Views",
+  "shell.palette.show_view": "Show view: {name}",
+  "shell.palette.views_keywords": "view saved filter",
+  "shell.palette.save_view": "Save the library’s current view…",
+  "shell.palette.add_folder": "Add games from a folder…",
+  "shell.palette.add_folder_keywords": "folder scan import add programs"
 }

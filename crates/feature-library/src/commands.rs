@@ -34,6 +34,9 @@ pub enum GameCommand {
     Verify,
     /// Open the uninstall confirmation (owned by the game feature).
     Uninstall,
+    /// Choose where an added game's program went (owned by the game
+    /// feature).
+    Locate,
 }
 
 /// Facts about a game that decide which commands apply.
@@ -95,6 +98,8 @@ pub fn primary(state: &GameState) -> Option<GameCommand> {
     }
     if state.installed {
         Some(GameCommand::Play)
+    } else if state.sideload && !state.browser {
+        Some(GameCommand::Locate)
     } else if state.installable && !state.sideload {
         Some(GameCommand::Install)
     } else {
@@ -150,7 +155,8 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     }
 
     let mut danger = Vec::new();
-    if state.installed && managed && !busy && !playing {
+    // An added game whose program is gone can still be removed.
+    if (state.installed || state.sideload) && managed && !busy && !playing {
         danger.push(Uninstall);
     }
 
@@ -190,6 +196,7 @@ impl GameCommand {
             Verify => "library.command.verify",
             Uninstall if state.sideload => "library.command.remove_app",
             Uninstall => "library.command.uninstall",
+            Locate => "library.command.locate_program",
         };
         t(key).to_string()
     }
@@ -219,6 +226,7 @@ impl GameCommand {
             OpenFolder => IconName::FolderOpen,
             Verify => IconName::ShieldCheck,
             Uninstall => IconName::Trash,
+            Locate => IconName::FolderSearch,
         }
     }
 }
@@ -227,6 +235,23 @@ impl GameCommand {
 mod tests {
     use super::*;
     use GameCommand::*;
+
+    #[test]
+    fn added_game_without_its_program_offers_locate_and_removal() {
+        let gone = GameState {
+            sideload: true,
+            ..Default::default()
+        };
+        assert_eq!(primary(&gone), Some(Locate));
+        let all = flat(&gone);
+        assert!(all.contains(&Uninstall));
+        assert!(!all.contains(&Settings) && !all.contains(&OpenFolder));
+        let web = GameState {
+            browser: true,
+            ..gone
+        };
+        assert_eq!(primary(&web), None);
+    }
 
     fn flat(state: &GameState) -> Vec<GameCommand> {
         menu(state).into_iter().flatten().collect()
@@ -239,8 +264,9 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(primary(&s), Some(Install));
+        // An added game that isn't installed lost its program: Locate it.
         s.sideload = true;
-        assert_eq!(primary(&s), None);
+        assert_eq!(primary(&s), Some(Locate));
         s.sideload = false;
         s.installed = true;
         assert_eq!(primary(&s), Some(Play));

@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb} installé",
   "settings.field.action_import_lutris.label": "Importer depuis Lutris",
   "settings.field.action_import_lutris.help": "Récupère depuis Lutris les jeux installés, les jeux émulés, les favoris, les catégories et le temps de jeu. Lutris lui-même n’est pas modifié.",
-  "settings.error.import_lutris": "Impossible d’importer depuis Lutris"
+  "settings.error.import_lutris": "Impossible d’importer depuis Lutris",
+  "settings.field.action_import_bottles.label": "Importer depuis Bottles",
+  "settings.field.action_import_bottles.help": "Ajoute les programmes de chaque bouteille et les jeux qui y sont installés, avec la bouteille comme préfixe. Bottles n’est pas modifié.",
+  "settings.field.action_import_faugus.label": "Importer depuis Faugus Launcher",
+  "settings.field.action_import_faugus.help": "Ajoute les jeux de Faugus Launcher avec leur préfixe, leur version de Proton, leurs variables et leurs arguments. Faugus Launcher n’est pas modifié.",
+  "settings.error.import_launcher": "L’importation a échoué",
+  "settings.field.start_with_system.label": "Démarrer avec le système",
+  "settings.field.start_with_system.help": "Ouvre Irori quand vous ouvrez votre session.",
+  "settings.field.start_with_system_minimized.label": "Au démarrage avec le système, démarrer dans la zone de notification",
+  "settings.field.start_with_system_minimized.help": "Quand Irori s’ouvre à la connexion, il attend dans la zone de notification au lieu d’afficher sa fenêtre.",
+  "settings.requires.start_with_system": "Nécessite Démarrer avec le système"
 }

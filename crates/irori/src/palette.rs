@@ -1,6 +1,7 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
-//! library by play status, and run window commands, all from the keyboard.
+//! library by play status, show or save a library view, and run window
+//! commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -29,6 +30,12 @@ enum PaletteTarget {
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
     GroupByStatus(bool),
+    /// Show a saved library view.
+    View(u64),
+    /// Save the library's current criteria as a view.
+    SaveView,
+    /// Pick a folder and add the games in it.
+    AddFolder,
 }
 
 /// Retained palette state, owned by the shell.
@@ -54,6 +61,7 @@ impl Palette {
         games: &[Arc<GameInfo>],
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
         grouped: Option<bool>,
+        views: &[(u64, gpui_kit::SharedString)],
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
@@ -145,6 +153,14 @@ impl Palette {
         );
         push(
             CommandItem::new()
+                .label(t("shell.palette.add_folder"))
+                .keywords([t("shell.palette.add_folder_keywords")])
+                .icon(IconName::FolderPlus),
+            PaletteTarget::AddFolder,
+            targets,
+        );
+        push(
+            CommandItem::new()
                 .label(t("shell.palette.lutris_script"))
                 .keywords([t("shell.palette.lutris_script_keywords")])
                 .icon(IconName::ScrollText),
@@ -163,6 +179,26 @@ impl Palette {
                     .keywords([irori_ui::play_status::title()])
                     .icon(IconName::Rows3),
                 PaletteTarget::GroupByStatus(!grouped),
+                targets,
+            );
+        }
+        for (id, name) in views {
+            push(
+                CommandItem::new()
+                    .label(t_args("shell.palette.show_view", &[("name", name)]))
+                    .keywords([t("shell.palette.views_keywords")])
+                    .icon(IconName::Bookmark),
+                PaletteTarget::View(*id),
+                targets,
+            );
+        }
+        if grouped.is_some() {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.save_view"))
+                    .keywords([t("shell.palette.views_keywords")])
+                    .icon(IconName::BookmarkPlus),
+                PaletteTarget::SaveView,
                 targets,
             );
         }
@@ -224,7 +260,8 @@ impl Palette {
         };
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
-        let items = Rc::new(Self::items(&games, open, grouped, &mut targets));
+        let views = irori_library::saved_view_list(cx);
+        let items = Rc::new(Self::items(&games, open, grouped, &views, &mut targets));
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -280,6 +317,13 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
+        PaletteTarget::View(id) => irori_library::apply_view(id, cx),
+        PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
+        PaletteTarget::SaveView => {
+            irori_ui::navigate(Route::Library, cx);
+            // After the palette's own dialog has closed.
+            window.defer(cx, irori_library::open_save_view_dialog);
+        }
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

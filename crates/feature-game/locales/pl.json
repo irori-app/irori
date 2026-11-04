@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "Sesje od {date}: {count}",
   "game.timeline.title": "Historia gry",
   "game.timeline.view_days": "Oś czasu",
-  "game.timeline.view_sessions": "Sesje"
+  "game.timeline.view_sessions": "Sesje",
+  "game.ops.pick_program": "Wybierz program",
+  "game.ops.locate_failed": "Nie udało się wskazać programu dla „{title}”",
+  "game.hero.program_missing": "Nie znaleziono programu w {path}. Wskaż go lub usuń grę z biblioteki. Jej dane, czas gry i ustawienia zostaną zachowane.",
+  "game.menu.locate_program": "Wskaż program…",
+  "game.related.title": "Podobne gry",
+  "game.related.series": "Ta sama seria",
+  "game.related.developer": "Także od {name}",
+  "game.related.publisher": "Także wydane przez {name}",
+  "game.related.genres": "Wspólne gatunki: {genres}",
+  "game.related.separator": ", "
 }

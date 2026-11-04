@@ -4264,6 +4264,7 @@ name = "irori"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "dirs 6.0.0",
  "futures",
  "gpui-kit",
  "irori-amazon",
@@ -4303,6 +4304,7 @@ dependencies = [
  "tray-icon",
  "url",
  "uuid 1.28.0",
+ "windows-registry 0.6.1",
  "winresource",
 ]
 
@@ -4926,6 +4928,7 @@ dependencies = [
  "async-trait",
  "dirs 6.0.0",
  "irori-core",
+ "notify",
  "parking_lot",
  "serde",
  "serde_json",

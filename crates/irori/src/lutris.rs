@@ -5,13 +5,18 @@
 //! Steam and store games are matched to Irori's own stores. Favourites,
 //! hidden games, categories, playtime and covers come along. Every game that
 //! is not imported is reported with the reason.
+//!
+//! Bottles and Faugus Launcher are imported the same way from the plans of
+//! [`irori_extras::wine_launchers`]; a bottle's Start menu shortcuts are
+//! read here too, since games installed into a bottle show up there.
 
 use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::{GameId, GameOverrides, Runner, Store as _};
-use irori_extras::lutris_import::{self, ImportKind, LutrisDirs, PlannedGame};
+use irori_extras::lutris_import::{self, ImportKind, LutrisDirs, LutrisPlan, PlannedGame};
+use irori_extras::wine_launchers::{bottles, faugus};
 use irori_services::Backend;
 use irori_sideload::{SideloadApp, SideloadPlatform, SideloadStore};
 use irori_ui::hooks::{LutrisSkip, LutrisSummary};
@@ -57,21 +62,167 @@ pub async fn import(
     let mut summary = LutrisSummary::default();
     for dirs in installs {
         let plan = lutris_import::plan_async(dirs).await?;
-        summary.warnings.extend(plan.warnings);
-        for game in plan.games {
-            summary.found += 1;
-            apply_game(
-                backend,
-                sideload.as_deref(),
-                emulation.as_deref(),
-                game,
-                &mut summary,
-            )
-            .await;
-        }
+        apply_plan(
+            backend,
+            sideload.as_deref(),
+            emulation.as_deref(),
+            plan,
+            &mut summary,
+        )
+        .await;
     }
     backend.refresh_all(false).await;
     Ok(summary)
+}
+
+/// Import the programs of every bottle of every Bottles installation.
+pub async fn import_bottles(
+    backend: &Backend,
+    sideload: Option<Arc<SideloadStore>>,
+) -> Result<LutrisSummary> {
+    let installs = tokio::task::spawn_blocking(bottles::BottlesDirs::discover)
+        .await
+        .context("looking for Bottles stopped")?;
+    anyhow::ensure!(
+        !installs.is_empty(),
+        "No Bottles bottles were found on this computer"
+    );
+    let mut summary = LutrisSummary {
+        launcher: Some("Bottles".into()),
+        ..Default::default()
+    };
+    for dirs in installs {
+        let plan = tokio::task::spawn_blocking(move || {
+            let (mut plan, bottles) = bottles::plan(&dirs)?;
+            plan.games.extend(start_menu_games(&bottles, &plan));
+            anyhow::Ok(plan)
+        })
+        .await
+        .context("reading Bottles stopped")??;
+        apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
+    }
+    backend.refresh_all(false).await;
+    Ok(summary)
+}
+
+/// Import the games of every Faugus Launcher installation.
+pub async fn import_faugus(
+    backend: &Backend,
+    sideload: Option<Arc<SideloadStore>>,
+) -> Result<LutrisSummary> {
+    let files = tokio::task::spawn_blocking(faugus::discover)
+        .await
+        .context("looking for Faugus Launcher stopped")?;
+    anyhow::ensure!(
+        !files.is_empty(),
+        "No Faugus Launcher game list was found on this computer"
+    );
+    let mut summary = LutrisSummary {
+        launcher: Some("Faugus Launcher".into()),
+        ..Default::default()
+    };
+    for file in files {
+        let plan = tokio::task::spawn_blocking(move || faugus::plan(&file))
+            .await
+            .context("reading Faugus Launcher stopped")??;
+        apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
+    }
+    backend.refresh_all(false).await;
+    Ok(summary)
+}
+
+/// Games in a bottle's Start menus (where installers put their shortcuts)
+/// that the bottle's own program list doesn't have yet.
+fn start_menu_games(bottles: &[bottles::Bottle], plan: &LutrisPlan) -> Vec<PlannedGame> {
+    let listed: std::collections::HashSet<std::path::PathBuf> = plan
+        .games
+        .iter()
+        .filter_map(|g| match &g.kind {
+            ImportKind::Windows { exe, .. } => Some(exe.clone()),
+            _ => None,
+        })
+        .collect();
+    let mut seen = listed.clone();
+    let mut out = Vec::new();
+    for bottle in bottles {
+        let drive = bottle.path.join("drive_c");
+        let mut menus = vec![drive.join("ProgramData/Microsoft/Windows/Start Menu/Programs")];
+        if let Ok(users) = std::fs::read_dir(drive.join("users")) {
+            menus.extend(users.flatten().map(|u| {
+                u.path()
+                    .join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs")
+            }));
+        }
+        let mut folders = Vec::new();
+        for menu in menus {
+            collect_folders(&menu, 0, &mut folders);
+        }
+        for folder in folders {
+            for found in irori_sideload::scan::scan_folder(&folder) {
+                if found.kind != irori_sideload::scan::FoundKind::Shortcut
+                    || !seen.insert(found.executable.clone())
+                {
+                    continue;
+                }
+                out.push(PlannedGame {
+                    lutris_id: 0,
+                    name: found.title,
+                    slug: format!("{}/{}", bottle.name, found.executable.display()),
+                    runner: "bottles".into(),
+                    kind: ImportKind::Windows {
+                        exe: found.executable,
+                        args: Some(found.args).filter(|a| !a.is_empty()),
+                        working_dir: found.install_folder,
+                        prefix: Some(bottle.path.clone()),
+                        wine_version: Some(bottle.runner.clone()).filter(|r| !r.is_empty()),
+                        arch: None,
+                        env: Default::default(),
+                    },
+                    favourite: false,
+                    hidden: false,
+                    categories: Vec::new(),
+                    playtime_minutes: 0,
+                    last_played: None,
+                    cover: None,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// `dir` and its subfolders, two levels down (Start menu folders per
+/// publisher and game).
+fn collect_folders(dir: &Path, depth: usize, out: &mut Vec<std::path::PathBuf>) {
+    if !dir.is_dir() {
+        return;
+    }
+    out.push(dir.to_path_buf());
+    if depth >= 2 {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                collect_folders(&entry.path(), depth + 1, out);
+            }
+        }
+    }
+}
+
+/// Apply every game of one plan.
+async fn apply_plan(
+    backend: &Backend,
+    sideload: Option<&SideloadStore>,
+    emulation: Option<&irori_emulation::EmulationStore>,
+    plan: LutrisPlan,
+    summary: &mut LutrisSummary,
+) {
+    summary.warnings.extend(plan.warnings);
+    for game in plan.games {
+        summary.found += 1;
+        apply_game(backend, sideload, emulation, game, summary).await;
+    }
 }
 
 async fn apply_game(

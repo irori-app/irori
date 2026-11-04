@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "擱置",
   "ui.play_status.beaten": "已破關",
   "ui.play_status.abandoned": "已棄坑",
-  "ui.play_status.played": "玩過"
+  "ui.play_status.played": "玩過",
+  "ui.import.summary.title": "已從 {launcher} 匯入",
+  "ui.import.summary.games": "{launcher} 中有 {found} 款遊戲：已將 {imported} 款新增到 Irori。",
+  "ui.import.summary.wine_build": "{launcher} 使用的是 {build}，此處未安裝。如果遊戲無法啟動，請在其設定中選擇其他版本。",
+  "ui.import.summary.warnings": "Irori 無法讀取的 {launcher} 檔案"
 }

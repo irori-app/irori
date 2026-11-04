@@ -205,6 +205,7 @@ impl LibraryView {
                 .default_value(tile_rem)
         });
         let art = irori_ui::art::art_store(cx);
+        let saved_views = crate::views::saved_views(cx);
 
         let subscriptions = vec![
             cx.observe(&m.library, |_, _, cx| cx.notify()),
@@ -212,6 +213,7 @@ impl LibraryView {
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&art, |_, _, cx| cx.notify()),
             cx.observe(&filters, |_, _, cx| cx.notify()),
+            cx.observe(&saved_views, |_, _, cx| cx.notify()),
             cx.observe_in(&m.settings, window, |this, settings, window, cx| {
                 let ui = settings.read(cx).app.ui.clone();
                 this.layout = ui.library_layout;
@@ -758,6 +760,7 @@ impl LibraryView {
                 report(task, failed, window, cx);
             }
             GameCommand::Uninstall => cx.emit(LibraryEvent::RequestUninstall(id)),
+            GameCommand::Locate => cx.emit(LibraryEvent::RequestLocate(id)),
         }
     }
 
@@ -1150,6 +1153,9 @@ fn caption(game: &GameInfo, state: &GameState, status: Option<&GameStatus>) -> S
     match status {
         Some(s) if s.kind.is_busy() => parts.push(status_text(s)),
         _ if state.unavailable => parts.push(text("library.caption.files_missing")),
+        _ if state.sideload && !state.installed && !state.browser => {
+            parts.push(text("library.caption.program_missing"))
+        }
         // Installed games stand out by their full-colour cover; the caption
         // only names what needs attention.
         _ if state.installed => {
@@ -1498,6 +1504,7 @@ impl LibraryView {
                     )
                     .content(move |_, _, _| panel.clone()),
             )
+            .child(crate::dialogs::views::views_button(filter, cx))
             .child(
                 Button::new("library-sort")
                     .small()

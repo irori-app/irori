@@ -26,6 +26,9 @@ pub struct ActionInputs {
     pub files_available: bool,
     /// Play was clicked and the backend has not reported `Launching` yet.
     pub launch_pending: bool,
+    /// An added game whose program is gone: Locate points it at the
+    /// program's new place.
+    pub relocatable: bool,
 }
 
 impl ActionInputs {
@@ -52,6 +55,9 @@ impl ActionInputs {
             has_update,
             files_available: true,
             launch_pending: false,
+            relocatable: game.runner() == Runner::Sideload
+                && !game.is_installed
+                && game.browser_url.is_none(),
         }
     }
 }
@@ -129,6 +135,9 @@ impl PrimaryAction {
             _ => {}
         }
         if !i.installed {
+            if i.relocatable {
+                return PrimaryAction::Missing;
+            }
             if i.unsupported {
                 return PrimaryAction::Unsupported;
             }
@@ -262,6 +271,8 @@ mod tests {
             PrimaryAction::NotInstallable
         );
         assert_eq!(action(|i| i.unsupported = true), PrimaryAction::Unsupported);
+        // An added game whose program is gone offers Locate.
+        assert_eq!(action(|i| i.relocatable = true), PrimaryAction::Missing);
         assert_eq!(
             action(|i| {
                 i.installed = true;

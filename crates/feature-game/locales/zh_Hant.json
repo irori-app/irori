@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "自 {date} 起 {count} 次遊玩",
   "game.timeline.title": "遊玩紀錄",
   "game.timeline.view_days": "時間軸",
-  "game.timeline.view_sessions": "遊玩紀錄"
+  "game.timeline.view_sessions": "遊玩紀錄",
+  "game.ops.pick_program": "選擇程式",
+  "game.ops.locate_failed": "無法為「{title}」指定程式",
+  "game.hero.program_missing": "在 {path} 找不到程式。請尋找它，或從遊戲庫中移除該遊戲。其資訊、遊玩時間和設定都會保留。",
+  "game.menu.locate_program": "尋找程式…",
+  "game.related.title": "類似遊戲",
+  "game.related.series": "同一系列",
+  "game.related.developer": "同為 {name} 開發",
+  "game.related.publisher": "同為 {name} 發行",
+  "game.related.genres": "相同類型：{genres}",
+  "game.related.separator": "、"
 }
