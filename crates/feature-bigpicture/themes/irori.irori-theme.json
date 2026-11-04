@@ -1,0 +1,9 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Irori",
+  "font": "irori",
+  "background": { "kind": "art" },
+  "covers": { "shape": "portrait", "size": "medium", "corners": "rounded" },
+  "shelves": ["continue_playing", "favourites", "installed", "systems"]
+}

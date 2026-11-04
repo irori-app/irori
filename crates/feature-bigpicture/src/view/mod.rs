@@ -8,19 +8,29 @@
 //! Only the Library's search field takes real focus, and it sits outside that
 //! context so typed letters stay letters.
 //!
-//! Rendering lives in one module per region: `backdrop` (the focused game's
-//! art behind everything), `chrome` (top bar and hints), `home`, `library`,
-//! `page` (a game's page), `overlay` (quick menu and confirmation), `tile`
-//! (covers) and `commands` (what the backend runs).
+//! Rendering lives in one module per region: `backdrop` (the theme's
+//! background, or the focused game's art, behind everything), `chrome` (top
+//! bar and hints), `home` with a module per other Home layout (`spotlight`,
+//! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
+//! page), `overlay` (quick menu and confirmations), `editor` (the theme
+//! editor), `tile` (covers) and `commands` (what the backend runs). `look`
+//! holds the theme and layout in use and the colours they give.
 
 mod backdrop;
+mod carousel;
 mod chrome;
+mod cinema;
 mod commands;
+mod compact;
+mod editor;
 mod home;
 mod library;
+mod look;
 mod overlay;
 mod page;
+mod spotlight;
 mod tile;
+mod wall;
 
 #[cfg(test)]
 mod tests;
@@ -34,23 +44,26 @@ use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::{ActiveTheme as _, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable, Hsla, InteractiveElement as _,
-    IntoElement, ParentElement as _, Pixels, Render, Role, ScrollWheelEvent, SharedString,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, Role, ScrollWheelEvent, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::{GameId, GameInfo, InstallPlatform};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::i18n::t;
 use irori_ui::models;
+use look::{Colors, Look};
 
 use crate::gamepad::{self, GamepadInput};
-use crate::grid::{FocusGrid, GridMove};
+use crate::grid::FocusGrid;
+use crate::layout::home::{Dir, grid_move, wall_step};
 use crate::layout::{GridStep, HomeLayout, Metrics, grid_step};
 use crate::model::{
     Chip, GameAction, GameState, LibraryFilter, PageRow, Row, StatusFilter, build_rows,
     cover_action, cycle, disabled_reason, install_platforms, library_games, main_action, page_rows,
     show_options,
 };
+use crate::theme::ShelfKind;
 
 /// Focus must rest this long before the backdrop art follows it, so fast
 /// scrolling does not fetch a hero image per cover passed.
@@ -99,6 +112,11 @@ enum Overlay {
         id: GameId,
         choice: usize,
     },
+    /// "Delete the theme “…”?" over the editor, the same way.
+    DeleteTheme {
+        id: String,
+        choice: usize,
+    },
 }
 
 /// Where the Library tab's focus is.
@@ -120,54 +138,6 @@ struct LibraryTab {
     searching: bool,
 }
 
-/// Theme colours Big Picture paints with, read once per frame. Themes for
-/// Big Picture alone would fill this from their own palette.
-#[derive(Clone, Copy)]
-struct Colors {
-    background: Hsla,
-    foreground: Hsla,
-    muted: Hsla,
-    muted_foreground: Hsla,
-    ring: Hsla,
-    border: Hsla,
-    popover: Hsla,
-    primary: Hsla,
-    primary_foreground: Hsla,
-    danger: Hsla,
-    red: Hsla,
-    green: Hsla,
-    blue: Hsla,
-    yellow: Hsla,
-    magenta: Hsla,
-    radius: Pixels,
-    radius_lg: Pixels,
-}
-
-impl Colors {
-    fn of(cx: &App) -> Self {
-        let t = cx.theme();
-        Self {
-            background: t.background,
-            foreground: t.foreground,
-            muted: t.muted,
-            muted_foreground: t.muted_foreground,
-            ring: t.ring,
-            border: t.border,
-            popover: t.popover,
-            primary: t.primary,
-            primary_foreground: t.primary_foreground,
-            danger: t.danger,
-            red: t.red,
-            green: t.green,
-            blue: t.blue,
-            yellow: t.yellow,
-            magenta: t.magenta,
-            radius: t.radius,
-            radius_lg: t.radius_lg,
-        }
-    }
-}
-
 /// The Big Picture view (route [`irori_ui::Route::BigPicture`]). Owns its
 /// shelves and Library list (derived from the models when they change), the
 /// focus, the open page and overlay, and the window's fullscreen state while
@@ -175,12 +145,13 @@ impl Colors {
 /// state when released.
 pub struct BigPictureView {
     focus: FocusHandle,
-    layout: HomeLayout,
+    /// The theme and layout in use, the user's themes and the editor.
+    look: Look,
     tab: Tab,
     page: Option<GamePage>,
     overlay: Option<Overlay>,
     rows: Vec<Row>,
-    rows_key: Option<(u64, usize, u32)>,
+    rows_key: Option<(u64, usize, u32, Vec<ShelfKind>)>,
     grid: FocusGrid,
     library: LibraryTab,
     /// Wheel travel not yet turned into a focus move.
@@ -196,6 +167,7 @@ pub struct BigPictureView {
     hero_gen: u64,
     hero_task: Option<Task<()>>,
     _clock_task: Task<()>,
+    _editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -219,8 +191,9 @@ impl BigPictureView {
                 cx.notify();
             }),
             cx.observe(&m.settings, |this, settings, cx| {
-                let zoom = settings.read(cx).app.ui.big_picture_zoom();
-                irori_ui::theme::set_zoom(zoom, cx);
+                let ui = settings.read(cx).app.ui.clone();
+                irori_ui::theme::set_zoom(ui.big_picture_zoom(), cx);
+                this.look.follow_settings(&ui);
                 this.refresh(cx);
                 cx.notify();
             }),
@@ -229,7 +202,8 @@ impl BigPictureView {
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
             cx.observe_global::<crate::ShowGame>(|this, cx| this.show_requested_game(cx)),
             cx.on_focus_lost(window, |this, window, cx| {
-                if !this.library.searching {
+                let naming = this.look.editor.as_ref().is_some_and(|e| e.naming);
+                if !this.library.searching && !naming {
                     this.focus.focus(window, cx);
                 }
             }),
@@ -282,9 +256,10 @@ impl BigPictureView {
         });
 
         focus.focus(window, cx);
+        let look = Look::new(&m.settings.read(cx).app.ui);
         let mut this = Self {
             focus,
-            layout: HomeLayout::default(),
+            look,
             tab: Tab::Home,
             page: None,
             overlay: None,
@@ -309,8 +284,10 @@ impl BigPictureView {
             hero_gen: 0,
             hero_task: None,
             _clock_task: clock_task,
+            _editor_subscription: None,
             _subscriptions: subscriptions,
         };
+        this.load_user_themes(window, cx);
         this.refresh(cx);
         this.show_requested_game(cx);
         this.hero = this.focused_game().cloned();
@@ -391,10 +368,14 @@ impl BigPictureView {
         self.rows.iter().map(|r| r.games.len()).collect()
     }
 
-    fn metrics(window: &Window) -> Metrics {
+    fn metrics(&self, window: &Window) -> Metrics {
         let rem = window.rem_size();
         let size = window.viewport_size();
-        Metrics::new(size.width / rem, size.height / rem)
+        Metrics::styled(
+            size.width / rem,
+            size.height / rem,
+            self.look.theme().covers,
+        )
     }
 
     /// Rebuild the shelves and the Library list when their inputs changed,
@@ -408,12 +389,13 @@ impl BigPictureView {
         let max_recent = m.settings.read(cx).app.max_recent_games;
         let user_ptr = Arc::as_ptr(&user) as usize;
 
-        let key = (snapshot.revision, user_ptr, max_recent);
-        if self.rows_key != Some(key) {
+        let shelves = self.look.theme().shelves.clone();
+        let key = (snapshot.revision, user_ptr, max_recent, shelves);
+        if self.rows_key.as_ref() != Some(&key) {
             let previous = self.grid.focused(&self.lens()).and_then(|(r, c)| {
                 Some((self.rows.get(r)?.kind, self.rows.get(r)?.games.get(c)?.id()))
             });
-            self.rows = build_rows(&snapshot, &user, max_recent as usize);
+            self.rows = build_rows(&snapshot, &user, max_recent as usize, &key.3);
             self.rows_key = Some(key);
             let lens = self.lens();
             self.grid.clamp(&lens);
@@ -473,6 +455,8 @@ impl BigPictureView {
         }
         if let Some(overlay) = self.overlay.clone() {
             self.overlay_input(overlay, input, window, cx);
+        } else if self.look.editor.is_some() {
+            self.editor_input(input, window, cx);
         } else if input == GamepadInput::Menu {
             self.overlay = Some(Overlay::Menu { ix: 0 });
             cx.notify();
@@ -503,11 +487,11 @@ impl BigPictureView {
     }
 
     fn home_input(&mut self, input: GamepadInput, window: &mut Window, cx: &mut Context<Self>) {
-        let mv = match input {
-            GamepadInput::Up => GridMove::Up,
-            GamepadInput::Down => GridMove::Down,
-            GamepadInput::Left => GridMove::Left,
-            GamepadInput::Right => GridMove::Right,
+        let dir = match input {
+            GamepadInput::Up => Dir::Up,
+            GamepadInput::Down => Dir::Down,
+            GamepadInput::Left => Dir::Left,
+            GamepadInput::Right => Dir::Right,
             GamepadInput::Confirm => {
                 if let Some(id) = self.tab_game().map(|g| g.id()) {
                     self.open_page(id, cx);
@@ -525,7 +509,24 @@ impl BigPictureView {
             _ => return,
         };
         let lens = self.lens();
-        if self.grid.apply(mv, &lens) {
+        let layout = self.look.layout();
+        let moved = if layout == HomeLayout::Wall {
+            let cols = self.metrics(window).wall().cols;
+            match self
+                .grid
+                .focused(&lens)
+                .and_then(|focus| wall_step(&lens, cols, focus, dir))
+            {
+                Some((row, col)) => {
+                    self.grid.set(row, col, &lens);
+                    true
+                }
+                None => false,
+            }
+        } else {
+            self.grid.apply(grid_move(layout, dir), &lens)
+        };
+        if moved {
             self.after_focus_change(cx);
         }
     }
@@ -550,7 +551,7 @@ impl BigPictureView {
                 _ => {}
             },
             LibraryFocus::Grid => {
-                let cols = Self::metrics(window).grid_cols;
+                let cols = self.metrics(window).grid_cols;
                 let step = match input {
                     GamepadInput::Up => GridStep::Up,
                     GamepadInput::Down => GridStep::Down,
@@ -704,6 +705,25 @@ impl BigPictureView {
         cx: &mut Context<Self>,
     ) {
         match overlay {
+            Overlay::DeleteTheme { id, choice } => match input {
+                GamepadInput::Up
+                | GamepadInput::Down
+                | GamepadInput::Left
+                | GamepadInput::Right => {
+                    self.overlay = Some(Overlay::DeleteTheme {
+                        id,
+                        choice: 1 - choice.min(1),
+                    });
+                }
+                GamepadInput::Confirm | GamepadInput::Alt => {
+                    self.overlay = None;
+                    if choice == 1 {
+                        self.delete_theme(id, window, cx);
+                    }
+                }
+                GamepadInput::Back | GamepadInput::Menu => self.overlay = None,
+                _ => {}
+            },
             Overlay::Uninstall { id, choice } => match input {
                 GamepadInput::Up
                 | GamepadInput::Down
@@ -859,7 +879,7 @@ impl BigPictureView {
     /// Wheel or touchpad travel: vertical moves between shelves or grid
     /// rows, horizontal along a shelf.
     fn on_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.page.is_some() || self.overlay.is_some() {
+        if self.page.is_some() || self.overlay.is_some() || self.look.editor.is_some() {
             return;
         }
         let delta = event.delta.pixel_delta(window.line_height());
@@ -921,8 +941,9 @@ impl Focusable for BigPictureView {
 
 impl Render for BigPictureView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let c = Colors::of(cx);
-        let metrics = Self::metrics(window);
+        let c = Colors::of(cx, self.look.theme());
+        let metrics = self.metrics(window);
+        let font = self.look.theme().font.family(&cx.theme().mono_font_family);
         let empty = models(cx).library.read(cx).snapshot.games.is_empty();
         let content = if empty {
             self.render_empty(c, cx).into_any_element()
@@ -930,15 +951,21 @@ impl Render for BigPictureView {
             self.render_page(c, metrics, window, cx)
         } else {
             let tab = match self.tab {
-                Tab::Home => match self.layout {
+                Tab::Home => match self.look.layout() {
                     HomeLayout::Shelves => self.render_home(c, metrics, window, cx),
+                    HomeLayout::Spotlight => self.render_spotlight(c, metrics, window, cx),
+                    HomeLayout::Cinema => self.render_cinema(c, metrics, window, cx),
+                    HomeLayout::Wall => self.render_wall(c, metrics, window, cx),
+                    HomeLayout::Carousel => self.render_carousel(c, metrics, window, cx),
+                    HomeLayout::Compact => self.render_compact(c, metrics, window, cx),
                 },
                 Tab::Library => self.render_library(c, metrics, window, cx),
             };
-            // A tab (or the tab under a closed page) rises in as it appears;
-            // it keeps its id while showing, so this plays once.
+            // A tab (or the tab under a closed page) rises in as it appears,
+            // and again when Home changes layout; it keeps its id while
+            // showing, so this plays once.
             irori_ui::motion::rise_in(
-                SharedString::from(format!("bp-tab-{:?}", self.tab)),
+                SharedString::from(format!("bp-tab-{:?}-{}", self.tab, self.look.layout().id())),
                 div().size_full().child(tab),
                 12.,
             )
@@ -951,6 +978,7 @@ impl Render for BigPictureView {
             .overflow_hidden()
             .bg(c.background)
             .text_color(c.foreground)
+            .font_family(font)
             .child(
                 div()
                     .id("big-picture")
@@ -1007,6 +1035,9 @@ impl Render for BigPictureView {
                             .child(div().flex_1().min_h_0().w_full().child(content))
                             .child(self.render_hints(c, metrics, cx)),
                     )
+                    .when_some(self.render_editor(c, metrics, cx), |d, editor| {
+                        d.child(editor)
+                    })
                     .when_some(self.render_overlay(c, metrics, cx), |d, overlay| {
                         d.child(overlay)
                     }),

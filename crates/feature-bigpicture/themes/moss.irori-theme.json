@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Moss",
+  "author": "Irori",
+  "layout": "wall",
+  "colors": {
+    "background": "#0e1712",
+    "foreground": "#e4f1e8",
+    "accent": "#5bd68a",
+    "surface": "#17251d"
+  },
+  "font": "system",
+  "background": { "kind": "gradient", "from": "#0e1712", "to": "#1d3326", "angle": 200 },
+  "covers": { "shape": "portrait", "size": "small", "corners": "round" },
+  "shelves": ["favourites", "installed", "systems"]
+}
