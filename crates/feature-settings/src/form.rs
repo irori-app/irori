@@ -25,17 +25,19 @@ use gpui_kit::{
 };
 use irori_core::settings::{AppSettings, GameSettings, WineInstallation};
 use irori_core::{GameId, InstallPlatform, Paths};
+use irori_runtime::graphics::HostGraphics;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::Desktop;
 use irori_ui::{Route, backend, models};
 use serde_json::Value;
 
+use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
 use crate::registry::{
-    self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, PanelKind,
-    Scope, TextKind,
+    self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
+    PanelKind, Scope, TextKind,
 };
 use crate::saves::SaveSyncPanel;
 use crate::value::{
@@ -164,6 +166,8 @@ pub struct SettingsForm {
     /// move, mostly with an unchanged value.
     slider_seen: HashMap<&'static str, f32>,
     wine: Option<WinePicker>,
+    /// The graphics cards and layers the GPU options need, once looked for.
+    graphics: Option<Arc<HostGraphics>>,
     /// Release tags offered by each version picker, once loaded.
     tool_versions: HashMap<&'static str, Vec<String>>,
     tool_versions_requested: bool,
@@ -220,6 +224,7 @@ impl SettingsForm {
             slider_writes: HashMap::new(),
             slider_seen: HashMap::new(),
             wine: None,
+            graphics: None,
             tool_versions: HashMap::new(),
             tool_versions_requested: false,
             errors: HashMap::new(),
@@ -236,6 +241,9 @@ impl SettingsForm {
         };
         this.read_snapshot(cx);
         this.build_controls(window, cx);
+        if !matches!(this.target, FormTarget::App) {
+            this.load_graphics(window, cx);
+        }
         let settings_model = models(cx).settings.clone();
         this._subscriptions.push(
             cx.observe_in(&settings_model, window, |this, _, window, cx| {
@@ -312,6 +320,24 @@ impl SettingsForm {
         })
         .detach();
         cx.notify();
+    }
+
+    /// Look for the graphics cards, Smooth Motion and lsfg-vk.
+    fn load_graphics(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let app = b.settings.app();
+        let job = b.spawn_blocking(move || HostGraphics::probe(&app));
+        let task = irori_ui::run(cx, async move { Ok(job.await?) });
+        cx.spawn_in(window, async move |this, cx| {
+            let graphics = task.await.unwrap_or_default();
+            this.update_in(cx, |this, window, cx| {
+                this.graphics = Some(Arc::new(graphics));
+                this.sync_gpu_select(window, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Load the releases for the DXVK and VKD3D-Proton pickers (once).
@@ -449,6 +475,15 @@ impl SettingsForm {
     }
 
     fn disabled_reason(&self, spec: &FieldSpec) -> Option<SharedString> {
+        let need = NeedContext {
+            host: irori_core::HostPlatform::current(),
+            graphics: self.graphics.as_deref(),
+            chosen_gpu: !value_to_text(self.value("iroriGpu")).trim().is_empty(),
+            native_game: matches!(self.target, FormTarget::Game(_)) && self.native,
+        };
+        if let Some(reason) = spec.needs.iter().find_map(|n| n.blocker(&need)) {
+            return Some(t(reason));
+        }
         spec.requires
             .iter()
             .find(|c| self.bool_value(c.path) != c.equals)
@@ -538,6 +573,13 @@ impl SettingsForm {
                 FormTarget::Game(id) => {
                     let id = id.clone();
                     Some(cx.new(|cx| SaveSyncPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
+            PanelKind::Artwork => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| ArtworkPanel::new(id, window, cx)).into())
                 }
                 _ => None,
             },
@@ -662,6 +704,22 @@ impl SettingsForm {
                 ));
                 self.choices.insert(spec.path, state);
             }
+            CustomKind::GpuCard => {
+                let state =
+                    cx.new(|cx| SelectState::new(Vec::<ChoiceItem>::new(), None, window, cx));
+                let path = spec.path;
+                self._subscriptions.push(cx.subscribe_in(
+                    &state,
+                    window,
+                    move |this, _, event: &SelectEvent<Vec<ChoiceItem>>, window, cx| {
+                        if let SelectEvent::Confirm(Some(slot)) = event {
+                            this.write(path, Value::String(slot.to_string()), window, cx);
+                        }
+                    },
+                ));
+                self.choices.insert(spec.path, state);
+                self.sync_gpu_select(window, cx);
+            }
             CustomKind::ThemeName => {
                 let items = theme_items(cx);
                 let current = value_to_text(self.value(spec.path));
@@ -766,6 +824,7 @@ impl SettingsForm {
             }
         }
         self.sync_wine_select(window, cx);
+        self.sync_gpu_select(window, cx);
         cx.notify();
     }
 
@@ -799,7 +858,55 @@ impl SettingsForm {
             state.update(cx, |s, cx| s.set_items(items, window, cx));
         }
         self.sync_wine_select(window, cx);
+        self.sync_gpu_select(window, cx);
         cx.notify();
+    }
+
+    /// "Let the system choose", every card found, and the chosen card even
+    /// when it is gone (moved to another slot, or removed).
+    fn gpu_items(&self) -> Vec<ChoiceItem> {
+        let current = value_to_text(self.value("iroriGpu"));
+        let current = current.trim();
+        let mut items = vec![ChoiceItem::new("", t("settings.gpu.system_choice"))];
+        let cards = self.graphics.as_ref().map_or(&[][..], |g| &g.adapters[..]);
+        items.extend(cards.iter().map(|card| {
+            let label = if card.boot_vga {
+                t_args(
+                    "settings.gpu.card_desktop",
+                    &[("name", &card.name()), ("slot", &card.slot)],
+                )
+            } else {
+                t_args(
+                    "settings.gpu.card",
+                    &[("name", &card.name()), ("slot", &card.slot)],
+                )
+            };
+            ChoiceItem::new(card.slot.clone(), label)
+        }));
+        if !current.is_empty() && !cards.iter().any(|c| c.slot == current) {
+            let label = if self.graphics.is_some() {
+                t_args("settings.gpu.card_missing", &[("slot", current)])
+            } else {
+                current.to_string().into()
+            };
+            items.push(ChoiceItem::new(current.to_string(), label));
+        }
+        items
+    }
+
+    fn sync_gpu_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.choices.get("iroriGpu").cloned() else {
+            return;
+        };
+        let items = self.gpu_items();
+        let current: SharedString = value_to_text(self.value("iroriGpu"))
+            .trim()
+            .to_string()
+            .into();
+        state.update(cx, |s, cx| {
+            s.set_items(items, window, cx);
+            s.set_selected_value(&current, window, cx);
+        });
     }
 
     fn sync_wine_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1565,6 +1672,16 @@ impl SettingsForm {
                     .id(path)
                     .accessibility_label(spec.label_text())
                     .w_64()
+                    .into_any_element(),
+                None => div().into_any_element(),
+            },
+            CustomKind::GpuCard => match self.choices.get(path) {
+                Some(state) => Select::new(state)
+                    .id("field-iroriGpu")
+                    .accessibility_label(spec.label_text())
+                    .placeholder(t("settings.gpu.system_choice"))
+                    .disabled(row.disabled_reason.is_some())
+                    .w_80()
                     .into_any_element(),
                 None => div().into_any_element(),
             },

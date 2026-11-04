@@ -63,19 +63,25 @@ pub enum FieldSection {
     Wine,
     /// GameMode, overlays, frame limits, gamescope.
     Performance,
+    /// Graphics card, frame generation, upscaler upgrades, shader cache.
+    Gpu,
     /// Arguments, wrappers, environment, scripts.
     Launch,
     /// Cloud save synchronisation.
     CloudSaves,
+    /// One game's cover, background and logo.
+    Artwork,
 }
 
 impl FieldSection {
     /// Sections of the shared launch-settings form, in display order.
-    pub const GAME: [FieldSection; 4] = [
+    pub const GAME: [FieldSection; 6] = [
         FieldSection::Wine,
         FieldSection::Performance,
+        FieldSection::Gpu,
         FieldSection::Launch,
         FieldSection::CloudSaves,
+        FieldSection::Artwork,
     ];
 
     /// Sections holding application-wide fields.
@@ -93,8 +99,10 @@ impl FieldSection {
             FieldSection::Advanced => "settings.section.advanced",
             FieldSection::Wine => "settings.section.wine",
             FieldSection::Performance => "settings.section.performance",
+            FieldSection::Gpu => "settings.section.gpu",
             FieldSection::Launch => "settings.section.launch",
             FieldSection::CloudSaves => "settings.section.cloud_saves",
+            FieldSection::Artwork => "settings.section.artwork",
         }
     }
 
@@ -199,6 +207,8 @@ pub enum CustomKind {
     GogSaves,
     /// Theme picker from the theme registry.
     ThemeName,
+    /// Graphics card picker fed by `irori_runtime::graphics`.
+    GpuCard,
     /// Release picker of a tool installed into Wine prefixes.
     ToolVersion(DxTool),
     /// Base font size slider (interface zoom).
@@ -219,6 +229,8 @@ pub enum PanelKind {
     EglSync,
     /// Manual cloud-save synchronisation of one game.
     SaveSync,
+    /// One game's cover, background and logo, and fetching its details again.
+    Artwork,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -259,6 +271,86 @@ const fn when(path: &'static str, equals: bool, reason: &'static str) -> Conditi
     }
 }
 
+/// Something about the computer or the game a field needs. Unlike a
+/// [`Condition`] it isn't a setting the user can flip here, so the reason
+/// says what is missing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Need {
+    /// Linux: the GPU options set Mesa's, NVIDIA's and lsfg-vk's variables.
+    Linux,
+    /// More than one graphics card.
+    SeveralGpus,
+    /// No graphics card chosen in `iroriGpu` (it replaces this field).
+    NoChosenGpu,
+    /// A card on NVIDIA's own driver.
+    NvidiaDriver,
+    /// What NVIDIA Smooth Motion needs.
+    SmoothMotion,
+    /// lsfg-vk 2 and Lossless Scaling's DLL.
+    Lsfg,
+    /// A game run through Wine or Proton (or the defaults every game shares).
+    WindowsGame,
+}
+
+/// What [`Need::blocker`] looks at.
+#[derive(Debug, Clone, Copy)]
+pub struct NeedContext<'a> {
+    pub host: irori_core::HostPlatform,
+    /// `None` while the graphics cards are looked for.
+    pub graphics: Option<&'a irori_runtime::graphics::HostGraphics>,
+    /// A graphics card is chosen for the game.
+    pub chosen_gpu: bool,
+    /// One game's settings, installed as a native Linux build.
+    pub native_game: bool,
+}
+
+impl Need {
+    /// Translation key of why the field can't apply; `None` when it can.
+    pub fn blocker(self, cx: &NeedContext<'_>) -> Option<&'static str> {
+        use irori_core::HostPlatform;
+        use irori_runtime::graphics::{LsfgBlocker, SmoothMotionBlocker};
+        let probing = "settings.needs.probing";
+        match self {
+            Need::Linux => match cx.host {
+                HostPlatform::Linux => None,
+                HostPlatform::Mac => Some("settings.needs.linux_mac"),
+                HostPlatform::Windows => Some("settings.needs.linux_windows"),
+            },
+            Need::SeveralGpus => match cx.graphics {
+                None => Some(probing),
+                // A card chosen earlier stays changeable, so it can be undone.
+                Some(g) if g.adapters.len() < 2 && !cx.chosen_gpu => {
+                    Some("settings.needs.several_gpus")
+                }
+                Some(_) => None,
+            },
+            Need::NoChosenGpu => cx.chosen_gpu.then_some("settings.needs.no_chosen_gpu"),
+            Need::NvidiaDriver => match cx.graphics {
+                None => Some(probing),
+                Some(g) if !g.has_nvidia_driver() => Some("settings.needs.nvidia"),
+                Some(_) => None,
+            },
+            Need::SmoothMotion => match cx.graphics.map(|g| g.smooth_motion_blocker()) {
+                None => Some(probing),
+                Some(None) => None,
+                Some(Some(SmoothMotionBlocker::NoNvidia)) => Some("settings.needs.nvidia"),
+                Some(Some(SmoothMotionBlocker::OldCard)) => Some("settings.needs.rtx_40"),
+                Some(Some(SmoothMotionBlocker::OldDriver)) => Some("settings.needs.nvidia_575"),
+            },
+            Need::Lsfg => match cx.graphics.map(|g| g.lsfg_blocker()) {
+                None => Some(probing),
+                Some(None) => None,
+                Some(Some(LsfgBlocker::NotInstalled)) => Some("settings.needs.lsfg"),
+                Some(Some(LsfgBlocker::Outdated)) => Some("settings.needs.lsfg_update"),
+                Some(Some(LsfgBlocker::NoLosslessScaling)) => {
+                    Some("settings.needs.lossless_scaling")
+                }
+            },
+            Need::WindowsGame => cx.native_game.then_some("settings.needs.windows_game"),
+        }
+    }
+}
+
 /// Static description of one setting. Text members are translation keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -281,6 +373,8 @@ pub struct FieldSpec {
     pub tag: Option<Label>,
     pub placeholder: Option<Label>,
     pub requires: &'static [Condition],
+    /// What the computer or game must have; checked before `requires`.
+    pub needs: &'static [Need],
     /// Only shown in the settings of a game installed as a native Linux build.
     pub native_only: bool,
 }
@@ -306,6 +400,7 @@ impl FieldSpec {
             tag: None,
             placeholder: None,
             requires: &[],
+            needs: &[],
             native_only: false,
         }
     }
@@ -332,6 +427,11 @@ impl FieldSpec {
 
     const fn requires(mut self, requires: &'static [Condition]) -> Self {
         self.requires = requires;
+        self
+    }
+
+    const fn needs(mut self, needs: &'static [Need]) -> Self {
+        self.needs = needs;
         self
     }
 
@@ -500,7 +600,9 @@ impl FieldSpec {
 }
 
 use FieldKind::{Action, Choice, Custom, Panel, Text, Toggle};
-use FieldSection::{Advanced, Appearance, CloudSaves, General, Launch, Performance, Wine};
+use FieldSection::{
+    Advanced, Appearance, Artwork, CloudSaves, General, Gpu, Launch, Performance, Wine,
+};
 use Scope::{App, GameOnly, Shared};
 
 /// Interface languages by native name (never translated).
@@ -686,6 +788,22 @@ const WINDOW_TYPE: &[ChoiceOption] = &[
     ),
 ];
 
+const LSFG_MULTIPLIER: &[ChoiceOption] = &[
+    opt(ChoiceValue::Num(2), Verbatim("2×")),
+    opt(ChoiceValue::Num(3), Verbatim("3×")),
+    opt(ChoiceValue::Num(4), Verbatim("4×")),
+    opt(ChoiceValue::Num(6), Verbatim("6×")),
+    opt(ChoiceValue::Num(8), Verbatim("8×")),
+];
+
+const LSFG_FLOW_SCALE: &[ChoiceOption] = &[
+    opt(ChoiceValue::Num(25), Verbatim("25%")),
+    opt(ChoiceValue::Num(50), Verbatim("50%")),
+    opt(ChoiceValue::Num(75), Verbatim("75%")),
+    opt(ChoiceValue::Num(85), Verbatim("85%")),
+    opt(ChoiceValue::Num(100), Verbatim("100%")),
+];
+
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -703,6 +821,12 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     true,
     "settings.requires.fps_limit",
 )];
+const NEEDS_NVAPI: &[Condition] = &[when(
+    "autoInstallDxvkNvapi",
+    true,
+    "settings.requires.dxvk_nvapi",
+)];
+const NEEDS_LSFG: &[Condition] = &[when("iroriLsfg.enabled", true, "settings.requires.lsfg")];
 const NEEDS_VKD3D: &[Condition] = &[when("autoInstallVkd3d", true, "settings.requires.vkd3d")];
 const NEEDS_GAMESCOPE: &[Condition] = &[when(
     "gamescope.iroriEnabled",
@@ -1634,46 +1758,6 @@ pub static FIELDS: &[FieldSpec] = &[
         "d3d12",
     ]),
     game(
-        "iroriDlssUpgrade",
-        "settings.field.dlss_upgrade.label",
-        Wine,
-        "settings.group.graphics_translation",
-        Toggle,
-    )
-    .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
-    .keywords(&["dlss", "proton_dlss_upgrade", "nvidia"]),
-    game(
-        "iroriDlssIndicator",
-        "settings.field.dlss_indicator.label",
-        Wine,
-        "settings.group.graphics_translation",
-        Toggle,
-    )
-    .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
-    .keywords(&["dlss", "proton_dlss_indicator", "overlay"]),
-    game(
-        "iroriFsr4Upgrade",
-        "settings.field.fsr4_upgrade.label",
-        Wine,
-        "settings.group.graphics_translation",
-        Toggle,
-    )
-    .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
-    .keywords(&["fsr", "fsr4", "proton_fsr4_upgrade", "amd"]),
-    game(
-        "iroriXessUpgrade",
-        "settings.field.xess_upgrade.label",
-        Wine,
-        "settings.group.graphics_translation",
-        Toggle,
-    )
-    .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
-    .keywords(&["xess", "proton_xess_upgrade", "intel"]),
-    game(
         "preferSystemLibs",
         "settings.field.prefer_system_libs.label",
         Wine,
@@ -1725,24 +1809,6 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["fps", "hud", "dxvk", "counter"]),
-    game(
-        "nvidiaPrime",
-        "settings.field.nvidia_prime.label",
-        Performance,
-        "settings.group.system",
-        Toggle,
-    )
-    .help("settings.field.nvidia_prime.help")
-    .keywords(&["prime", "optimus", "dgpu", "nvidia", "hybrid"]),
-    game(
-        "iroriShaderCacheSize",
-        "settings.field.shader_cache_size.label",
-        Performance,
-        "settings.group.system",
-        Text(TextKind::Number { min: 0, max: 1024 }),
-    )
-    .help("settings.field.shader_cache_size.help")
-    .keywords(&["shader", "cache", "stutter", "nvidia", "mesa", "gl"]),
     game(
         "enableDXVKFpsLimit",
         "settings.field.enable_dxvk_fps_limit.label",
@@ -1887,6 +1953,176 @@ pub static FIELDS: &[FieldSpec] = &[
     .placeholder(Verbatim("--hdr-enabled"))
     .keywords(&["gamescope", "options", "arguments"])
     .requires(NEEDS_GAMESCOPE),
+    // ---- GPU ----
+    game(
+        "iroriGpu",
+        "settings.field.gpu.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Custom(CustomKind::GpuCard),
+    )
+    .help("settings.field.gpu.help")
+    .keywords(&[
+        "gpu",
+        "graphics card",
+        "dri_prime",
+        "mesa_vk_device_select",
+        "prime",
+        "multi gpu",
+        "integrated",
+        "discrete",
+    ])
+    .needs(&[Need::Linux, Need::SeveralGpus]),
+    game(
+        "nvidiaPrime",
+        "settings.field.nvidia_prime.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Toggle,
+    )
+    .help("settings.field.nvidia_prime.help")
+    .keywords(&["prime", "optimus", "dgpu", "nvidia", "hybrid"])
+    .needs(&[Need::NoChosenGpu]),
+    game(
+        "iroriSmoothMotion",
+        "settings.field.smooth_motion.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Toggle,
+    )
+    .tag(Verbatim("NVIDIA"))
+    .help("settings.field.smooth_motion.help")
+    .keywords(&[
+        "smooth motion",
+        "frame generation",
+        "nvpresent",
+        "nvidia",
+        "fps",
+    ])
+    .needs(&[Need::Linux, Need::SmoothMotion]),
+    game(
+        "iroriLsfg.enabled",
+        "settings.field.lsfg_enabled.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Toggle,
+    )
+    .tag(Verbatim("lsfg-vk"))
+    .help("settings.field.lsfg_enabled.help")
+    .keywords(&[
+        "lossless scaling",
+        "lsfg",
+        "lsfg-vk",
+        "frame generation",
+        "fps",
+    ])
+    .needs(&[Need::Linux, Need::Lsfg]),
+    game(
+        "iroriLsfg.multiplier",
+        "settings.field.lsfg_multiplier.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Choice(LSFG_MULTIPLIER),
+    )
+    .help("settings.field.lsfg_multiplier.help")
+    .keywords(&["lossless scaling", "lsfg", "multiplier", "frame generation"])
+    .needs(&[Need::Linux, Need::Lsfg])
+    .requires(NEEDS_LSFG),
+    game(
+        "iroriLsfg.flowScale",
+        "settings.field.lsfg_flow_scale.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Choice(LSFG_FLOW_SCALE),
+    )
+    .help("settings.field.lsfg_flow_scale.help")
+    .keywords(&["lossless scaling", "lsfg", "flow scale", "frame generation"])
+    .needs(&[Need::Linux, Need::Lsfg])
+    .requires(NEEDS_LSFG),
+    game(
+        "iroriLsfg.performanceMode",
+        "settings.field.lsfg_performance_mode.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Toggle,
+    )
+    .help("settings.field.lsfg_performance_mode.help")
+    .keywords(&[
+        "lossless scaling",
+        "lsfg",
+        "performance",
+        "frame generation",
+    ])
+    .needs(&[Need::Linux, Need::Lsfg])
+    .requires(NEEDS_LSFG),
+    game(
+        "iroriNvidiaReflex",
+        "settings.field.nvidia_reflex.label",
+        Gpu,
+        "settings.group.latency",
+        Toggle,
+    )
+    .tag(Verbatim("NVIDIA"))
+    .help("settings.field.nvidia_reflex.help")
+    .keywords(&[
+        "reflex",
+        "latency",
+        "dxvk-nvapi",
+        "vkreflex",
+        "nvidia",
+        "input lag",
+    ])
+    .needs(&[Need::Linux, Need::NvidiaDriver, Need::WindowsGame])
+    .requires(NEEDS_NVAPI),
+    game(
+        "iroriDlssUpgrade",
+        "settings.field.dlss_upgrade.label",
+        Gpu,
+        "settings.group.upscalers",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_feature.help")
+    .keywords(&["dlss", "proton_dlss_upgrade", "nvidia"]),
+    game(
+        "iroriDlssIndicator",
+        "settings.field.dlss_indicator.label",
+        Gpu,
+        "settings.group.upscalers",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_feature.help")
+    .keywords(&["dlss", "proton_dlss_indicator", "overlay"]),
+    game(
+        "iroriFsr4Upgrade",
+        "settings.field.fsr4_upgrade.label",
+        Gpu,
+        "settings.group.upscalers",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_feature.help")
+    .keywords(&["fsr", "fsr4", "proton_fsr4_upgrade", "amd"]),
+    game(
+        "iroriXessUpgrade",
+        "settings.field.xess_upgrade.label",
+        Gpu,
+        "settings.group.upscalers",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_feature.help")
+    .keywords(&["xess", "proton_xess_upgrade", "intel"]),
+    game(
+        "iroriShaderCacheSize",
+        "settings.field.shader_cache_size.label",
+        Gpu,
+        "settings.group.shader_cache",
+        Text(TextKind::Number { min: 0, max: 1024 }),
+    )
+    .help("settings.field.shader_cache_size.help")
+    .keywords(&["shader", "cache", "stutter", "nvidia", "mesa", "gl"]),
     // ---- Launch ----
     game(
         "launcherArgs",
@@ -2035,6 +2271,28 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.panel_sync_saves.help")
     .keywords(&["cloud", "save", "sync", "upload", "download", "force"]),
+    // ---- Artwork ----
+    game_only(
+        "panel.artwork",
+        "settings.field.panel_artwork.label",
+        Artwork,
+        "settings.group.custom_art",
+        Panel(PanelKind::Artwork),
+    )
+    .help("settings.field.panel_artwork.help")
+    .keywords(&[
+        "art",
+        "artwork",
+        "cover",
+        "background",
+        "hero",
+        "logo",
+        "image",
+        "steamgriddb",
+        "screenshot",
+        "metadata",
+        "refresh",
+    ]),
 ];
 
 /// The field with this path.
@@ -2186,6 +2444,140 @@ mod tests {
                 .applies_to_game(true)
         );
         assert!(find("iroriRetinaMode").unwrap().applies_to_game(true));
+    }
+
+    #[test]
+    fn gpu_options_live_in_the_graphics_section() {
+        for path in [
+            "iroriGpu",
+            "nvidiaPrime",
+            "iroriSmoothMotion",
+            "iroriLsfg.enabled",
+            "iroriLsfg.multiplier",
+            "iroriLsfg.flowScale",
+            "iroriLsfg.performanceMode",
+            "iroriNvidiaReflex",
+            "iroriDlssUpgrade",
+            "iroriFsr4Upgrade",
+            "iroriXessUpgrade",
+            "iroriShaderCacheSize",
+        ] {
+            let f = find(path).unwrap_or_else(|| panic!("{path}"));
+            assert_eq!(f.section, FieldSection::Gpu, "{path}");
+            assert_eq!(f.scope, Scope::Shared, "{path}");
+        }
+        assert_eq!(find("panel.artwork").unwrap().scope, Scope::GameOnly);
+        assert_eq!(
+            find("panel.artwork").unwrap().section,
+            FieldSection::Artwork
+        );
+        let paths = |q: &str| search(q).map(|f| f.path).collect::<Vec<_>>();
+        assert!(paths("frame generation").contains(&"iroriLsfg.enabled"));
+        assert!(paths("frame generation").contains(&"iroriSmoothMotion"));
+        assert!(paths("lossless").contains(&"iroriLsfg.multiplier"));
+        assert!(paths("graphics card").contains(&"iroriGpu"));
+        assert!(paths("steamgriddb").contains(&"panel.artwork"));
+        assert!(paths("cover").contains(&"panel.artwork"));
+    }
+
+    #[test]
+    fn needs_say_what_is_missing() {
+        use irori_core::HostPlatform::{Linux, Mac, Windows};
+        use irori_runtime::graphics::{GpuAdapter, HostGraphics, LsfgVk};
+        let amd = GpuAdapter {
+            slot: "0000:03:00.0".into(),
+            vendor: 0x1002,
+            device: 0x744c,
+            driver: "amdgpu".into(),
+            boot_vga: true,
+            model: None,
+        };
+        let one = HostGraphics {
+            adapters: vec![amd.clone()],
+            ..Default::default()
+        };
+        let cx = |host, graphics: Option<&'static HostGraphics>| NeedContext {
+            host,
+            graphics,
+            chosen_gpu: false,
+            native_game: false,
+        };
+        let one: &'static HostGraphics = Box::leak(Box::new(one));
+        assert_eq!(Need::Linux.blocker(&cx(Linux, Some(one))), None);
+        assert_eq!(
+            Need::Linux.blocker(&cx(Mac, None)),
+            Some("settings.needs.linux_mac")
+        );
+        assert_eq!(
+            Need::Linux.blocker(&cx(Windows, None)),
+            Some("settings.needs.linux_windows")
+        );
+        assert_eq!(
+            Need::SeveralGpus.blocker(&cx(Linux, None)),
+            Some("settings.needs.probing")
+        );
+        assert_eq!(
+            Need::SeveralGpus.blocker(&cx(Linux, Some(one))),
+            Some("settings.needs.several_gpus")
+        );
+        assert_eq!(
+            Need::SmoothMotion.blocker(&cx(Linux, Some(one))),
+            Some("settings.needs.nvidia")
+        );
+        assert_eq!(
+            Need::NvidiaDriver.blocker(&cx(Linux, Some(one))),
+            Some("settings.needs.nvidia")
+        );
+        assert_eq!(
+            Need::Lsfg.blocker(&cx(Linux, Some(one))),
+            Some("settings.needs.lsfg")
+        );
+
+        let mut two = one.clone();
+        two.adapters.push(GpuAdapter {
+            slot: "0000:01:00.0".into(),
+            vendor: 0x10de,
+            device: 0x2b85,
+            driver: "nvidia".into(),
+            boot_vga: false,
+            model: None,
+        });
+        two.lsfg = Some(LsfgVk {
+            manifest: "/m.json".into(),
+            current: false,
+            dll: None,
+        });
+        let two: &'static HostGraphics = Box::leak(Box::new(two));
+        assert_eq!(Need::SeveralGpus.blocker(&cx(Linux, Some(two))), None);
+        assert_eq!(Need::NvidiaDriver.blocker(&cx(Linux, Some(two))), None);
+        assert_eq!(
+            Need::SmoothMotion.blocker(&cx(Linux, Some(two))),
+            Some("settings.needs.nvidia_575")
+        );
+        assert_eq!(
+            Need::Lsfg.blocker(&cx(Linux, Some(two))),
+            Some("settings.needs.lsfg_update")
+        );
+
+        let chosen = NeedContext {
+            chosen_gpu: true,
+            native_game: true,
+            ..cx(Linux, Some(two))
+        };
+        assert_eq!(
+            Need::NoChosenGpu.blocker(&chosen),
+            Some("settings.needs.no_chosen_gpu")
+        );
+        assert_eq!(
+            Need::WindowsGame.blocker(&chosen),
+            Some("settings.needs.windows_game")
+        );
+        assert_eq!(Need::NoChosenGpu.blocker(&cx(Linux, None)), None);
+        let gone = NeedContext {
+            chosen_gpu: true,
+            ..cx(Linux, Some(one))
+        };
+        assert_eq!(Need::SeveralGpus.blocker(&gone), None);
     }
 
     #[test]

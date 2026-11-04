@@ -185,3 +185,43 @@ fn about_says_who_updates_irori(cx: &mut TestAppContext) {
         assert!(!status.announce && status.available.is_none());
     });
 }
+
+#[gpui_kit::test]
+fn graphics_and_artwork_tabs_draw_and_store_nested_values(cx: &mut TestAppContext) {
+    use crate::registry::FieldSection;
+
+    let id = GameId::new(Runner::Sideload, "ui-test-graphics");
+    let target = FormTarget::Game(id.clone());
+    let (handle, form) = open(cx, move |window, cx| SettingsForm::new(target, window, cx));
+    let backend = cx.update(|cx| irori_ui::backend(cx));
+    cx.update(|cx| {
+        form.update(cx, |f, cx| f.set_sections(vec![FieldSection::Gpu], cx));
+        // The new options show on every system, greyed out where they can't apply.
+        assert!(form.read(cx).visible_count() >= 7);
+        form.update(cx, |f, cx| f.set_query("cover background logo", cx));
+        assert_eq!(form.read(cx).visible_count(), 1);
+        form.update(cx, |f, cx| {
+            f.set_sections(vec![FieldSection::Gpu, FieldSection::Artwork], cx)
+        });
+    });
+    cx.update_window(handle, |_, window, cx| {
+        form.update(cx, |f, cx| {
+            f.write_for_test("iroriLsfg.multiplier", Value::from(3), window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(backend.settings.overrides(&id).is_overridden("iroriLsfg"));
+    let lsfg = backend.settings.game(&id).lsfg;
+    assert_eq!(
+        (lsfg.multiplier, lsfg.flow_scale, lsfg.enabled),
+        (3, 100, false)
+    );
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}

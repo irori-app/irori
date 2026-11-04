@@ -7,9 +7,11 @@
 //! 1. [`wrapper_env`]: game identity for wrappers and umu (`GAMEID=umu-0`)
 //! 2. [`generic_env`]: PRIME offload, `STEAM_COMPAT_INSTALL_PATH`, user
 //!    variables, `LD_PRELOAD` reset
-//! 3. known-fixes variables
-//! 4. [`wine_env`]: Wine/Proton variables (Windows games only)
-//! 5. `GAMEID=<umu id>` when umu runs the game and the game is in the umu
+//! 3. [`crate::graphics::graphics_env`]: the chosen graphics card, Smooth
+//!    Motion and lsfg-vk, except what the user's variables set
+//! 4. known-fixes variables
+//! 5. [`wine_env`]: Wine/Proton variables (Windows games only)
+//! 6. `GAMEID=<umu id>` when umu runs the game and the game is in the umu
 //!    database
 
 use std::collections::{BTreeMap, HashMap};
@@ -155,7 +157,12 @@ pub fn generic_env_for(
     host: &HostEnv,
 ) -> EnvMap {
     let mut env = EnvMap::new();
-    if platform == irori_core::HostPlatform::Linux && settings.nvidia_prime {
+    // A chosen graphics card replaces the offload switch
+    // (`crate::graphics::graphics_env`).
+    if platform == irori_core::HostPlatform::Linux
+        && settings.nvidia_prime
+        && settings.gpu.trim().is_empty()
+    {
         env.insert("DRI_PRIME".into(), "1".into());
         env.insert("__NV_PRIME_RENDER_OFFLOAD".into(), "1".into());
         env.insert("__GLX_VENDOR_LIBRARY_NAME".into(), "nvidia".into());
@@ -397,6 +404,17 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
                 set(key, "1");
             }
         }
+    }
+    // DXVK and VKD3D-Proton pass Reflex on by themselves once DXVK-NVAPI is
+    // on; Vulkan games need DXVK-NVAPI's layer, which stays off unless asked.
+    if gs.nvidia_reflex
+        && gs.auto_install_dxvk_nvapi
+        && !gs
+            .environment_options
+            .iter()
+            .any(|v| v.key.trim() == "DXVK_NVAPI_VKREFLEX")
+    {
+        set("DXVK_NVAPI_VKREFLEX", "1");
     }
     if proton {
         if gs.auto_install_dxvk_nvapi {
@@ -747,6 +765,95 @@ mod tests {
         let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&off, &w, &host));
         assert!(!env.contains_key("VKD3D_CONFIG"));
         assert!(!env.contains_key("PROTON_DLSS_UPGRADE"));
+    }
+
+    #[test]
+    fn a_chosen_card_replaces_the_offload_switch() {
+        use crate::graphics::{GpuAdapter, HostGraphics, graphics_env};
+        use irori_core::HostPlatform::Linux;
+        let mut gs = GameSettings {
+            nvidia_prime: true,
+            gpu: "0000:00:02.0".into(),
+            ..Default::default()
+        };
+        let host = HostEnv::from_pairs([("DRI_PRIME", "1")]);
+        let mut env = generic_env_for(Linux, &gs, None, None, &host);
+        assert!(!env.contains_key("DRI_PRIME"));
+        assert!(!env.contains_key("__NV_PRIME_RENDER_OFFLOAD"));
+        let graphics = HostGraphics {
+            adapters: vec![
+                GpuAdapter {
+                    slot: "0000:00:02.0".into(),
+                    vendor: 0x8086,
+                    device: 0xa780,
+                    driver: "i915".into(),
+                    boot_vga: true,
+                    model: None,
+                },
+                GpuAdapter {
+                    slot: "0000:01:00.0".into(),
+                    vendor: 0x10de,
+                    device: 0x2786,
+                    driver: "nvidia".into(),
+                    boot_vga: false,
+                    model: None,
+                },
+            ],
+            ..Default::default()
+        };
+        // The game's choice wins over the host's DRI_PRIME.
+        layer(&mut env, graphics_env(&gs, &graphics));
+        assert_eq!(env["DRI_PRIME"], "pci-0000_00_02_0");
+        assert_eq!(env["__VK_LAYER_NV_optimus"], "non_NVIDIA_only");
+
+        // The user's own variables win over the choice.
+        gs.environment_options = vec![user("__VK_LAYER_NV_optimus", "NVIDIA_only")];
+        let mut env = generic_env_for(Linux, &gs, None, None, &host);
+        layer(&mut env, graphics_env(&gs, &graphics));
+        assert_eq!(env["__VK_LAYER_NV_optimus"], "NVIDIA_only");
+
+        gs.gpu.clear();
+        let env = generic_env_for(Linux, &gs, None, None, &host);
+        assert_eq!(env["DRI_PRIME"], "1");
+        assert_eq!(env["__NV_PRIME_RENDER_OFFLOAD"], "1");
+    }
+
+    #[test]
+    fn reflex_turns_on_the_vulkan_layer_with_nvapi() {
+        use irori_core::HostPlatform::Linux;
+        let host = HostEnv::default();
+        let mut gs = GameSettings {
+            nvidia_reflex: true,
+            ..Default::default()
+        };
+        let p = proton();
+        let env = wine_env_for(Linux, &input(&gs, &p, &host));
+        assert_eq!(env["DXVK_NVAPI_VKREFLEX"], "1");
+        assert_eq!(env["PROTON_ENABLE_NVAPI"], "1");
+        let dir = tempfile::tempdir().unwrap();
+        let w = wine(dir.path());
+        let env = wine_env_for(Linux, &input(&gs, &w, &host));
+        assert_eq!(env["DXVK_NVAPI_VKREFLEX"], "1");
+        assert!(
+            !wine_env_for(irori_core::HostPlatform::Mac, &input(&gs, &w, &host))
+                .contains_key("DXVK_NVAPI_VKREFLEX")
+        );
+
+        // Reflex goes through DXVK-NVAPI; without it there is nothing to turn on.
+        gs.auto_install_dxvk_nvapi = false;
+        let env = wine_env_for(Linux, &input(&gs, &p, &host));
+        assert!(!env.contains_key("DXVK_NVAPI_VKREFLEX"));
+
+        gs.auto_install_dxvk_nvapi = true;
+        gs.environment_options = vec![user("DXVK_NVAPI_VKREFLEX", "0")];
+        let env = wine_env_for(Linux, &input(&gs, &p, &host));
+        assert!(
+            !env.contains_key("DXVK_NVAPI_VKREFLEX"),
+            "user value must win"
+        );
+
+        let off = GameSettings::default();
+        assert!(!wine_env_for(Linux, &input(&off, &p, &host)).contains_key("DXVK_NVAPI_VKREFLEX"));
     }
 
     #[test]
