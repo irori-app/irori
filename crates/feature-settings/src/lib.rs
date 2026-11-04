@@ -30,6 +30,7 @@ mod logs;
 pub mod registry;
 mod saves;
 mod stores;
+mod sync;
 pub mod value;
 mod view;
 mod widgets;

@@ -385,6 +385,19 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
+  settings, per-game settings, library data and playtime; restoring replaces settings
+  and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
+  before a new version first runs, and prune only their own files. Store sign-ins and the
+  `iroriBackups`/`iroriSync` settings never go in.
+- **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
+  WebDAV (`sync/target.rs`) and merges the others' (`sync/merge.rs`): every value the user
+  sets is a last-writer-wins register with a hybrid-clock time and the device that set
+  it, sessions merge as a set, and playtime is the largest total beyond sessions plus
+  every session, so nothing counts twice. New user data that should travel needs a
+  register there and a test in `sync/merge_tests.rs`; data that differs per computer
+  (paths, installs) must stay out. A session's playtime and history are written under
+  `SyncService::playtime_guard`.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other

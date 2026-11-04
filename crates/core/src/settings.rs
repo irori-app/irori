@@ -557,6 +557,13 @@ pub struct AppSettings {
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
+    /// Scheduled backups. Irori-only; stays on this computer (backups and
+    /// restores leave it alone).
+    #[serde(rename = "iroriBackups")]
+    pub backups: BackupPrefs,
+    /// Library sync between computers. Irori-only; stays on this computer.
+    #[serde(rename = "iroriSync")]
+    pub sync: SyncPrefs,
 }
 
 impl Default for AppSettings {
@@ -580,6 +587,8 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             show_log_on_launch: false,
+            backups: BackupPrefs::default(),
+            sync: SyncPrefs::default(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
@@ -657,6 +666,76 @@ pub enum Translucency {
     Subtle,
     /// Clearer chrome, and pages let a little of the desktop through too.
     Strong,
+}
+
+/// How often Irori backs up on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupSchedule {
+    Off,
+    Daily,
+    #[default]
+    Weekly,
+}
+
+/// Scheduled backups: when, where, how many and what goes in. Store
+/// sign-ins never do.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BackupPrefs {
+    pub schedule: BackupSchedule,
+    /// Where backups go ("" = the `backups` folder in Irori's data folder).
+    pub folder: String,
+    /// How many scheduled backups to keep; older ones are removed.
+    pub keep: u32,
+    /// Back up before a new version of Irori first runs.
+    pub before_updates: bool,
+    pub settings: bool,
+    pub game_settings: bool,
+    pub library: bool,
+    pub playtime: bool,
+    /// Copy the downloaded game art too (large; it can be downloaded again).
+    pub art: bool,
+}
+
+impl Default for BackupPrefs {
+    fn default() -> Self {
+        Self {
+            schedule: BackupSchedule::Weekly,
+            folder: String::new(),
+            keep: 10,
+            before_updates: true,
+            settings: true,
+            game_settings: true,
+            library: true,
+            playtime: true,
+            art: false,
+        }
+    }
+}
+
+/// Where the library syncs with Irori on other computers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncMode {
+    #[default]
+    Off,
+    /// A folder something else keeps in sync (Syncthing, Dropbox, a share).
+    Folder,
+    /// A WebDAV server; the login is kept with `irori_secrets`.
+    Webdav,
+}
+
+/// Library sync between computers.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SyncPrefs {
+    pub mode: SyncMode,
+    pub folder: String,
+    /// The WebDAV folder's address, without the login.
+    pub webdav_url: String,
+    /// What other computers call this one ("" = its host name).
+    pub device_name: String,
 }
 
 /// Irori-only presentation preferences.

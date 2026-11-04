@@ -252,6 +252,29 @@ release notes. Irori never downloads or installs itself.
 Packagers who build Irori themselves set `IRORI_UPDATE_EXPLANATION` (for example
 "Update Irori with your distribution's package manager.") when building.
 
+### Backups and sync
+
+Settings › Backup and sync backs up on its own, daily or weekly (weekly unless changed),
+and before a new version of Irori first runs. Backups are the same JSON files as one saved
+by hand, named `irori-backup-<date>-<time>.json` (`…-before-<version>.json` before an
+update), in `<data>/backups` or a folder the user picks; the newest few are kept (10
+unless changed, and three made before updates), files saved by hand are never removed.
+With "Downloaded game art" on, the art cache is copied into a `.art` folder beside the
+backup. A chosen folder that isn't there (an unplugged drive, a share that isn't
+mounted) fails the backup instead of being created. `state/backups.json` keeps the last
+result and the version that ran last. Store sign-ins never go in, nor do the backup and
+sync settings, which belong to each computer.
+
+Sync shares favourites, hidden games, ratings, play statuses, categories, custom titles
+and web art, yearly goals, playtime and the play history between computers. Each
+computer writes one file, `Irori sync/<device id>.json`, into a folder another program
+keeps in sync (Syncthing, Dropbox, Nextcloud, OneDrive, a network share), or into a
+WebDAV folder directly. Install folders, per-game and app settings, art from local files,
+recently played and store sign-ins stay on each computer. The WebDAV login is kept like
+the store logins (see [Saved logins](#saved-logins)) in `<config>/sync/webdav.json`;
+`state/sync.json` keeps the device id and what was last synced. How values merge is
+described in `crates/services/src/sync/merge.rs`.
+
 ### Steam Deck and Steam Input
 
 When Steam's controller interface starts Irori (`XDG_CURRENT_DESKTOP=gamescope`

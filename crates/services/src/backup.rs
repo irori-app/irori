@@ -4,7 +4,8 @@
 //! A backup holds up to four parts: the app settings, per-game settings,
 //! library data (favourites, hidden games, categories, play statuses,
 //! backlog goals, custom titles and art) and playtime with the session history. Store sign-ins are never
-//! included. Restoring replaces settings, but merges library data and
+//! included, nor are the backup and sync settings, which belong to each
+//! computer. Restoring replaces settings, but merges library data and
 //! playtime into what is already there, so an older backup never erases
 //! newer progress.
 
@@ -144,13 +145,19 @@ fn game_id(key: &str) -> Option<GameId> {
 }
 
 impl Backend {
-    /// Setting overrides of every game in the library.
+    /// Setting overrides of every game in the library, or ever seen in it
+    /// (the library is still empty while Irori starts).
     fn all_game_overrides(&self) -> Vec<(GameId, GameSettingsOverrides)> {
-        self.library()
-            .games
-            .iter()
-            .map(|g| {
-                let id = g.id();
+        let mut ids: BTreeSet<GameId> = self.library().games.iter().map(|g| g.id()).collect();
+        ids.extend(
+            self.userdata
+                .snapshot()
+                .first_seen
+                .keys()
+                .filter_map(|k| game_id(k)),
+        );
+        ids.into_iter()
+            .map(|id| {
                 let o = self.settings.overrides(&id);
                 (id, o)
             })
@@ -192,11 +199,14 @@ impl Backend {
         })
     }
 
-    /// The app settings for a backup, which travels: without the API key.
+    /// The app settings for a backup, which travels: without the API key,
+    /// and without where this computer backs up and syncs.
     fn backup_settings(&self) -> Result<Value> {
         let mut settings = serde_json::to_value(&*self.settings.app())?;
         if let Some(map) = settings.as_object_mut() {
-            map.remove("steamGridDbApiKey");
+            for key in ["steamGridDbApiKey", "iroriBackups", "iroriSync"] {
+                map.remove(key);
+            }
         }
         Ok(settings)
     }
@@ -233,9 +243,12 @@ impl Backend {
         {
             let mut settings: AppSettings = serde_json::from_value(value.clone())
                 .context("The settings in this backup could not be read")?;
+            let current = self.settings.app();
             if value.get("steamGridDbApiKey").is_none() {
-                settings.steam_grid_db_api_key = self.settings.app().steam_grid_db_api_key.clone();
+                settings.steam_grid_db_api_key = current.steam_grid_db_api_key.clone();
             }
+            settings.backups = current.backups.clone();
+            settings.sync = current.sync.clone();
             self.settings.replace_app(settings);
             summary.settings = true;
         }
@@ -260,6 +273,7 @@ impl Backend {
         if parts.playtime
             && let Some(pt) = &backup.playtime
         {
+            let _playtime = self.sync.playtime_guard();
             self.userdata
                 .update(None, |d| merge_playtime(&mut d.playtime, &pt.records));
             summary.playtime_games = pt.records.len();
