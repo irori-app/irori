@@ -9,6 +9,7 @@
 pub mod discovery;
 pub mod download;
 pub mod env;
+pub mod graphics;
 pub mod hooks;
 pub mod locations;
 pub mod mac_driver;
@@ -267,12 +268,28 @@ async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
     Ok(parts)
 }
 
+/// [`graphics::graphics_env`] for a launch, probing the host on a blocking
+/// thread when the settings need it. Linux only.
+async fn graphics_env(app: &AppSettings, settings: &GameSettings, host: &HostEnv) -> env::EnvMap {
+    if !cfg!(target_os = "linux") {
+        return env::EnvMap::new();
+    }
+    let (app, settings, host) = (app.clone(), settings.clone(), host.clone());
+    tokio::task::spawn_blocking(move || {
+        let found = graphics::HostGraphics::probe_for(&app, &settings, &host);
+        graphics::graphics_env(&settings, &found)
+    })
+    .await
+    .unwrap_or_default()
+}
+
 /// Prepare everything needed to start `target`: create/upgrade the prefix,
 /// auto-install DXVK/VKD3D/NVAPI and anticheat runtimes when enabled, download
 /// umu/Steam runtime when needed, and compute env vars and wrappers.
 ///
 /// Environment precedence (lowest first): game identity (`HEROIC_APP_*`,
 /// `STORE`, `GAMEID=umu-0`), generic variables and the user's variables,
+/// the GPU and frame generation options (minus what the user set),
 /// known-fixes variables, Wine/Proton variables, then the umu database
 /// `GAMEID`. Wrappers, outermost first: gamescope, user wrappers, MangoHud
 /// (without gamescope), gamemoderun, and umu-run for native games on the
@@ -323,6 +340,7 @@ pub async fn prepare_launch(
             &mut vars,
             env::generic_env(settings, install_path.as_deref(), runtime.as_deref(), &host),
         );
+        env::layer(&mut vars, graphics_env(app, settings, &host).await);
         env::layer(&mut vars, fixes);
         parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
         return Ok(LaunchEnvironment {
@@ -403,6 +421,7 @@ pub async fn prepare_launch(
         &mut vars,
         env::generic_env(&effective, install_path.as_deref(), None, &host),
     );
+    env::layer(&mut vars, graphics_env(app, &effective, &host).await);
     env::layer(&mut vars, fixes);
     env::layer(
         &mut vars,
