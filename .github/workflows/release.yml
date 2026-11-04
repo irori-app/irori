@@ -419,9 +419,9 @@ jobs:
           if ($process.ExitCode -ne 0 -or (Get-Content $out -Raw) -notmatch '^irori [0-9]+\.[0-9]+\.[0-9]+') { throw 'Portable Irori failed to start' }
           $process = Start-Process (Join-Path $app 'irori.exe') -ArgumentList 'list' -Wait -PassThru -RedirectStandardOutput $out
           if ($process.ExitCode -ne 0) { throw "irori list exited with $($process.ExitCode)" }
-          foreach ($name in @('config', 'data')) {
-            if (!(Test-Path (Join-Path $app $name))) { throw "Portable Irori did not keep its $name beside irori.exe" }
-          }
+          # `list` writes only its state under config; commands without a window
+          # log to stderr, so nothing creates data here.
+          if (!(Test-Path (Join-Path $app 'config'))) { throw 'Portable Irori did not keep its config beside irori.exe' }
           foreach ($dir in @((Join-Path $env:APPDATA 'irori'), (Join-Path $env:LOCALAPPDATA 'irori'))) {
             if (Test-Path $dir) { throw "Portable Irori wrote to $dir" }
           }
