@@ -1,10 +1,11 @@
 ---
 /**
- * A card in the style of Irori's Stats page, with the demo library's numbers.
+ * A card in the style of Irori's Stats page, with the numbers of the demo library
+ * the screenshots show: real games and their covers, invented play time.
  * When it scrolls into view the streak ring fills, the weekly bars rise and the
  * trend line draws; the finished picture is what the page carries.
  */
-import { COVERS } from '../data/covers'
+import games from '../data/game-covers.json'
 import { dictionary, format, type Locale } from '../i18n/config'
 
 interface Props {
@@ -17,11 +18,11 @@ const streak = 21
 const longest = 28
 const weeks = [4, 9, 6, 14, 11, 18, 22, 16, 31, 36, 28, 24]
 const most = [
-  { slug: 'ironbark-hollow', minutes: 74 * 60 + 24 },
-  { slug: 'saltglass-tide', minutes: 61 * 60 + 52 },
-  { slug: 'moth-cartographer', minutes: 44 * 60 + 20 },
-  { slug: 'ashfall-courier', minutes: 41 * 60 + 47 },
-].map((game) => ({ ...game, title: COVERS.find((c) => c.slug === game.slug)!.title }))
+  { file: 'baldur-s-gate-3', minutes: 108 * 60 + 32 },
+  { file: 'the-witcher-3-wild-hunt', minutes: 93 * 60 + 24 },
+  { file: 'stardew-valley', minutes: 78 * 60 + 40 },
+  { file: 'hades', minutes: 73 * 60 + 25 },
+].map((game) => ({ ...game, title: games.find((g) => g.file === game.file)!.title }))
 const top = most[0]!.minutes
 const hours = (m: number) => `${Math.floor(m / 60)} h ${m % 60} min`
 
@@ -70,7 +71,7 @@ const trend = weeks.map((h, i) => `${(i + 0.5) * (100 / weeks.length)},${96 - (h
       {
         most.map((game, i) => (
           <li class="flex items-center gap-3">
-            <img src={`/covers/${game.slug}.svg`} alt="" width="32" height="48" loading="lazy" class="h-10 w-auto rounded" />
+            <img src={`/covers/games/${game.file}-300.webp`} alt="" width="32" height="48" loading="lazy" decoding="async" class="h-10 w-auto rounded object-cover" />
             <span class="flex min-w-0 flex-1 flex-col gap-1.5">
               <span class="flex items-baseline justify-between gap-3">
                 <span class="truncate text-[0.95rem] text-paper">{game.title}</span>

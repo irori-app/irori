@@ -1,8 +1,7 @@
 /**
- * The made-up games of the demo library that the app's screenshots show, with covers
- * drawn as SVG by `/covers/<slug>.svg` (`src/pages/covers/[slug].svg.ts`). The stats card
- * uses them, and the cover walls fall back to them when the real game covers
- * (`game-covers.json`) aren't on disk.
+ * Made-up games with covers drawn as SVG by `/covers/<slug>.svg`
+ * (`src/pages/covers/[slug].svg.ts`). The Open Graph images use them, and the cover walls
+ * fall back to them when the real game covers (`game-covers.json`) aren't on disk.
  */
 
 export type Motif = 'sun' | 'moon' | 'waves' | 'orbits' | 'grid' | 'mosaic' | 'beam' | 'dunes' | 'pines' | 'ripples' | 'city' | 'rings'
