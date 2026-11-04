@@ -34,18 +34,22 @@ use crate::winetricks::WinetricksPanel;
 pub enum GameSection {
     Wine,
     Performance,
+    Gpu,
     Launch,
     CloudSaves,
+    Artwork,
     Tools,
     Log,
 }
 
 impl GameSection {
-    pub const ALL: [GameSection; 6] = [
+    pub const ALL: [GameSection; 8] = [
         GameSection::Wine,
         GameSection::Performance,
+        GameSection::Gpu,
         GameSection::Launch,
         GameSection::CloudSaves,
+        GameSection::Artwork,
         GameSection::Tools,
         GameSection::Log,
     ];
@@ -55,8 +59,10 @@ impl GameSection {
         match self {
             GameSection::Wine => "wine",
             GameSection::Performance => "performance",
+            GameSection::Gpu => "gpu",
             GameSection::Launch => "launch",
             GameSection::CloudSaves => "saves",
+            GameSection::Artwork => "art",
             GameSection::Tools => "tools",
             GameSection::Log => "log",
         }
@@ -67,6 +73,8 @@ impl GameSection {
         Some(match id {
             "wine" | "proton" => GameSection::Wine,
             "performance" | "other" => GameSection::Performance,
+            "gpu" | "graphics" | "frame-generation" => GameSection::Gpu,
+            "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
             "tools" => GameSection::Tools,
@@ -80,6 +88,8 @@ impl GameSection {
         t(match self {
             GameSection::Wine => "settings.game.section.wine",
             GameSection::Performance => "settings.game.section.performance",
+            GameSection::Gpu => "settings.game.section.gpu",
+            GameSection::Artwork => "settings.game.section.artwork",
             GameSection::Launch => "settings.game.section.launch",
             GameSection::CloudSaves => "settings.game.section.cloud_saves",
             GameSection::Tools => "settings.game.section.tools",
@@ -91,6 +101,8 @@ impl GameSection {
         match self {
             GameSection::Wine => IconName::Wine,
             GameSection::Performance => IconName::Gauge,
+            GameSection::Gpu => IconName::Gpu,
+            GameSection::Artwork => IconName::Images,
             GameSection::Launch => IconName::Rocket,
             GameSection::CloudSaves => IconName::Cloud,
             GameSection::Tools => IconName::Hammer,
@@ -102,6 +114,8 @@ impl GameSection {
         match self {
             GameSection::Wine => Some(FieldSection::Wine),
             GameSection::Performance => Some(FieldSection::Performance),
+            GameSection::Gpu => Some(FieldSection::Gpu),
+            GameSection::Artwork => Some(FieldSection::Artwork),
             GameSection::Launch => Some(FieldSection::Launch),
             GameSection::CloudSaves => Some(FieldSection::CloudSaves),
             _ => None,
@@ -671,6 +685,8 @@ mod tests {
             GameSection::from_id("other"),
             Some(GameSection::Performance)
         );
+        assert_eq!(GameSection::from_id("graphics"), Some(GameSection::Gpu));
+        assert_eq!(GameSection::from_id("artwork"), Some(GameSection::Artwork));
         assert_eq!(GameSection::from_id("?"), None);
     }
 }
