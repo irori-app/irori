@@ -19,6 +19,7 @@ irori-scripts.workspace = true
 irori-mods.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
+reqwest.workspace = true
 tokio-util.workspace = true
 futures.workspace = true
 serde.workspace = true
