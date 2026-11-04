@@ -3,7 +3,7 @@
 //!
 //! A backup holds up to four parts: the app settings, per-game settings,
 //! library data (favourites, hidden games, categories, play statuses,
-//! backlog goals, custom titles and art) and playtime with the session history. Store sign-ins are never
+//! backlog goals, custom titles and art, journal notes) and playtime with the session history. Store sign-ins are never
 //! included. Restoring replaces settings, but merges library data and
 //! playtime into what is already there, so an older backup never erases
 //! newer progress.
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Backend;
+use crate::journal::Journal;
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::{self, Session};
 
@@ -49,7 +50,7 @@ impl BackupParts {
 }
 
 /// Favourites, hidden games, categories, play statuses, backlog goals,
-/// custom titles and art, and ratings.
+/// custom titles and art, ratings and journal notes.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibraryBackup {
@@ -60,6 +61,7 @@ pub struct LibraryBackup {
     pub play_status: BTreeMap<String, PlayStatusRecord>,
     pub backlog_goals: BTreeMap<i32, u32>,
     pub ratings: BTreeMap<String, u8>,
+    pub journal: Journal,
 }
 
 /// Playtime totals and the session history.
@@ -184,6 +186,7 @@ impl Backend {
                 play_status: user.play_status.clone(),
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
+                journal: user.journal.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
@@ -341,7 +344,8 @@ impl Backend {
 /// members are added to what is there; custom titles, art and ratings from
 /// the backup replace the current ones of the same game. A play status is
 /// taken when it was set later than the current one, and a goal only for a
-/// year without one.
+/// year without one. A day's journal note is taken when it was written later
+/// than the current one.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
     d.hidden.extend(lib.hidden.iter().cloned());
@@ -374,10 +378,11 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .insert(key.clone(), (*stars).min(crate::userdata::MAX_RATING));
         }
     }
+    crate::journal::merge(&mut d.journal, &lib.journal);
 }
 
 /// Whether RFC 3339 time `a` is after `b`; unreadable times are never later.
-fn later(a: &str, b: &str) -> bool {
+pub(crate) fn later(a: &str, b: &str) -> bool {
     let parse = |t: &str| chrono::DateTime::parse_from_rfc3339(t).ok();
     match (parse(a), parse(b)) {
         (Some(a), Some(b)) => a > b,
@@ -508,6 +513,35 @@ mod tests {
         assert_eq!(d.overrides["gog:1"].title.as_deref(), Some("Mine"));
         assert_eq!(d.ratings["gog:1"], 4);
         assert_eq!(d.ratings["gog:2"], crate::userdata::MAX_RATING);
+    }
+
+    #[test]
+    fn journal_notes_travel_with_the_library_part() {
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap();
+        let mut journal = Journal::new();
+        journal.entry("gog:1".into()).or_default().insert(
+            day,
+            crate::JournalEntry {
+                text: "Found the hidden lift".into(),
+                updated: "2026-11-02T20:00:00Z".into(),
+                ..Default::default()
+            },
+        );
+        let backup = Backup {
+            library: Some(LibraryBackup {
+                journal: journal.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let text = serde_json::to_string(&backup).unwrap();
+        let back: Backup = serde_json::from_str(&text).unwrap();
+        let mut d = crate::UserData::default();
+        merge_library(&mut d, back.library.as_ref().unwrap());
+        assert_eq!(d.journal, journal);
+        // Backups from before the journal restore without notes.
+        let old: LibraryBackup = serde_json::from_str(r#"{"favourites":["gog:1"]}"#).unwrap();
+        assert!(old.journal.is_empty());
     }
 
     #[test]

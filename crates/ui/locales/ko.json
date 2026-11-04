@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "보류",
   "ui.play_status.beaten": "클리어",
   "ui.play_status.abandoned": "중단함",
-  "ui.play_status.played": "플레이함"
+  "ui.play_status.played": "플레이함",
+  "ui.journal.title_placeholder": "제목(선택 사항)",
+  "ui.journal.text_placeholder": "무슨 일이 있었나요? 어디까지 진행했는지, 무엇이 놀라웠는지, 다음에 해 볼 것…",
+  "ui.journal.screenshots": "그날의 스크린샷",
+  "ui.journal.no_screenshots": "그날 이 게임의 스크린샷이 없습니다.",
+  "ui.journal.delete": "메모 삭제",
+  "ui.journal.delete_title": "{day} 메모를 삭제할까요?",
+  "ui.journal.delete_description": "메모가 일지에서 삭제됩니다. 스크린샷은 그대로 남습니다.",
+  "ui.journal.cancel": "취소",
+  "ui.journal.save": "저장",
+  "ui.journal.label": "{title} · {date}"
 }

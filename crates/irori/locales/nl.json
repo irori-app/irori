@@ -79,5 +79,7 @@
   "shell.app_update.download": "Downloaden",
   "shell.app_update.copy_command": "Opdracht kopiëren",
   "shell.app_update.updated": "Irori bijgewerkt naar versie {version}",
-  "shell.app_update.release_notes": "Release-opmerkingen"
+  "shell.app_update.release_notes": "Release-opmerkingen",
+  "shell.palette.year_in_review": "Jaaroverzicht openen",
+  "shell.palette.year_in_review_keywords": "overzicht recap jaar"
 }

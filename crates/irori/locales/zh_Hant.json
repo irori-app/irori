@@ -79,5 +79,7 @@
   "shell.app_update.download": "下載",
   "shell.app_update.copy_command": "複製指令",
   "shell.app_update.updated": "Irori 已更新至 {version}",
-  "shell.app_update.release_notes": "版本資訊"
+  "shell.app_update.release_notes": "版本資訊",
+  "shell.palette.year_in_review": "開啟年度回顧",
+  "shell.palette.year_in_review_keywords": "回顧 總結 年度"
 }

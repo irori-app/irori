@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "自 {date} 起 {count} 次遊玩",
   "game.timeline.title": "遊玩紀錄",
   "game.timeline.view_days": "時間軸",
-  "game.timeline.view_sessions": "遊玩紀錄"
+  "game.timeline.view_sessions": "遊玩紀錄",
+  "game.timeline.view_journal": "日誌",
+  "game.journal.write": "為這一天寫筆記"
 }

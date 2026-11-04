@@ -79,5 +79,7 @@
   "shell.app_update.download": "다운로드",
   "shell.app_update.copy_command": "명령 복사",
   "shell.app_update.updated": "Irori가 {version}(으)로 업데이트되었습니다",
-  "shell.app_update.release_notes": "릴리스 노트"
+  "shell.app_update.release_notes": "릴리스 노트",
+  "shell.palette.year_in_review": "연말 결산 열기",
+  "shell.palette.year_in_review_keywords": "결산 요약 연간"
 }

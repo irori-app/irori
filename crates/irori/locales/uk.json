@@ -79,5 +79,7 @@
   "shell.app_update.download": "Завантажити",
   "shell.app_update.copy_command": "Скопіювати команду",
   "shell.app_update.updated": "Irori оновлено до версії {version}",
-  "shell.app_update.release_notes": "Примітки до випуску"
+  "shell.app_update.release_notes": "Примітки до випуску",
+  "shell.palette.year_in_review": "Відкрити підсумки року",
+  "shell.palette.year_in_review_keywords": "підсумки рік огляд"
 }

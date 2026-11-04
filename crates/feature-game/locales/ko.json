@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{date} 이후 세션 {count}회",
   "game.timeline.title": "플레이 기록",
   "game.timeline.view_days": "타임라인",
-  "game.timeline.view_sessions": "세션"
+  "game.timeline.view_sessions": "세션",
+  "game.timeline.view_journal": "일지",
+  "game.journal.write": "이날의 메모 쓰기"
 }

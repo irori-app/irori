@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{count} Sitzungen seit {date}",
   "game.timeline.title": "Spielverlauf",
   "game.timeline.view_days": "Zeitleiste",
-  "game.timeline.view_sessions": "Sitzungen"
+  "game.timeline.view_sessions": "Sitzungen",
+  "game.timeline.view_journal": "Tagebuch",
+  "game.journal.write": "Notiz zu diesem Tag schreiben"
 }

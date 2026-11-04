@@ -19,6 +19,7 @@ mod follow;
 mod games;
 mod hooks;
 mod inhibit;
+pub mod journal;
 mod library;
 mod network;
 pub mod play_status;
@@ -49,6 +50,7 @@ pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadS
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame};
+pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use screenshots::{Screenshot, ScreenshotIndex};

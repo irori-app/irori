@@ -92,7 +92,18 @@ impl Cli {
             "updates" => self.route = Some(Route::Updates),
             "accounts" => self.route = Some(Route::Accounts),
             "stores" => self.route = Some(Route::Stores),
-            "stats" => self.route = Some(Route::Stats),
+            "stats" => {
+                // `irori://stats/year[/<year>]` opens the Year in review.
+                let mut rest = url
+                    .path_segments()
+                    .into_iter()
+                    .flatten()
+                    .filter(|p| !p.is_empty());
+                self.route = Some(match rest.next() {
+                    Some("year") => Route::YearInReview(rest.next().and_then(|y| y.parse().ok())),
+                    _ => Route::Stats,
+                });
+            }
             "wine" => self.route = Some(Route::WineManager),
             "emulators" => self.route = Some(Route::Emulators),
             "lutris" => {
@@ -218,6 +229,21 @@ mod tests {
             Some(Route::Settings("general".into()))
         );
         assert!(!parse(&["https://example.com"]).has_request());
+    }
+
+    #[test]
+    fn stats_links_open_the_year_in_review() {
+        let route = |link: &str| parse(&[link]).route;
+        assert_eq!(route("irori://stats"), Some(Route::Stats));
+        assert_eq!(route("irori://stats/year"), Some(Route::YearInReview(None)));
+        assert_eq!(
+            route("irori://stats/year/2025"),
+            Some(Route::YearInReview(Some(2025)))
+        );
+        assert_eq!(
+            route("irori://stats/year/soon"),
+            Some(Route::YearInReview(None))
+        );
     }
 
     #[test]

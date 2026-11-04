@@ -12,6 +12,7 @@ mod engine_problem;
 pub mod glass;
 pub mod hooks;
 pub mod i18n;
+pub mod journal;
 mod kde;
 mod launcher_problem;
 pub mod lutris_summary;

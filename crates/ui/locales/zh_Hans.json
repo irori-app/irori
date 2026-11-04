@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "搁置",
   "ui.play_status.beaten": "已通关",
   "ui.play_status.abandoned": "已弃坑",
-  "ui.play_status.played": "玩过"
+  "ui.play_status.played": "玩过",
+  "ui.journal.title_placeholder": "标题（可选）",
+  "ui.journal.text_placeholder": "发生了什么？玩到了哪里、什么让你惊喜、下次想尝试什么……",
+  "ui.journal.screenshots": "当天的截图",
+  "ui.journal.no_screenshots": "当天没有这款游戏的截图。",
+  "ui.journal.delete": "删除笔记",
+  "ui.journal.delete_title": "删除 {day} 的笔记？",
+  "ui.journal.delete_description": "笔记会从日志中删除。截图保留在原处。",
+  "ui.journal.cancel": "取消",
+  "ui.journal.save": "保存",
+  "ui.journal.label": "{title} · {date}"
 }

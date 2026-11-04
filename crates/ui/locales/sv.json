@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Pausad",
   "ui.play_status.beaten": "Avklarad",
   "ui.play_status.abandoned": "Övergiven",
-  "ui.play_status.played": "Spelad"
+  "ui.play_status.played": "Spelad",
+  "ui.journal.title_placeholder": "Rubrik (valfri)",
+  "ui.journal.text_placeholder": "Vad hände? Hur långt du kom, vad som överraskade dig, vad du vill testa härnäst …",
+  "ui.journal.screenshots": "Skärmbilder från den dagen",
+  "ui.journal.no_screenshots": "Inga skärmbilder av spelet från den dagen.",
+  "ui.journal.delete": "Ta bort anteckning",
+  "ui.journal.delete_title": "Ta bort anteckningen för {day}?",
+  "ui.journal.delete_description": "Anteckningen försvinner ur dagboken. Skärmbilderna ligger kvar.",
+  "ui.journal.cancel": "Avbryt",
+  "ui.journal.save": "Spara",
+  "ui.journal.label": "{title} · {date}"
 }

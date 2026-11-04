@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{count} sessies sinds {date}",
   "game.timeline.title": "Speelgeschiedenis",
   "game.timeline.view_days": "Tijdlijn",
-  "game.timeline.view_sessions": "Sessies"
+  "game.timeline.view_sessions": "Sessies",
+  "game.timeline.view_journal": "Dagboek",
+  "game.journal.write": "Schrijf een notitie over deze dag"
 }

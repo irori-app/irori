@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{count} sessioner sedan {date}",
   "game.timeline.title": "Spelhistorik",
   "game.timeline.view_days": "Tidslinje",
-  "game.timeline.view_sessions": "Sessioner"
+  "game.timeline.view_sessions": "Sessioner",
+  "game.timeline.view_journal": "Dagbok",
+  "game.journal.write": "Skriv en anteckning om dagen"
 }
