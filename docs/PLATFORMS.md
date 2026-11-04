@@ -267,6 +267,22 @@ Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game
 after its title, which is how the Album finds the game; a folder whose game left the
 library is matched to sessions by time like screenshots.
 
+Cost. The capture and the encoding happen in the recorder's own process, on the GPU's
+video encoder; Irori only waits on the recorder's output pipe and polls nothing. Measured
+on Fedora/Nobara (KDE Plasma 6, Wayland, Radeon RX 7900) with Irori's backend running
+headless for 20 seconds before and after starting a buffer, with a stand-in that behaves
+like the recorder's replay mode:
+
+| | Buffer off | Buffer on |
+| --- | --- | --- |
+| Irori CPU time in 20 s | 0 ticks (< 10 ms) | 0 ticks (< 10 ms) |
+| Irori resident memory | 13.8 MB | 17.3 MB (+3.4 MB: the pipe reader and the portal connection of the clip shortcut) |
+
+Saving a clip lists the processes once (to find the recorder) and renames one file;
+stopping took 111 ms. The recorder's own memory is the buffer above (bitrate × length)
+plus its encoder. It was not installed on the machine these numbers come from, so its
+CPU and GPU cost while a game runs still has to be measured with the real program.
+
 ### New versions of Irori
 
 Irori looks for its own new versions only where nothing else updates it. It works out
