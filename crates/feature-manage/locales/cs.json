@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Hry od Blizzard a Activision: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "Hry od EA, včetně těch, které vlastníte na Steam nebo Epic a které vyžadují EA app.",
   "manage.launchers.about.ubisoft": "Hry od Ubisoft, včetně těch, které ke spuštění potřebují Ubisoft Connect.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption a další hry od Rockstar."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption a další hry od Rockstar.",
+  "manage.launchers.about.xbox": "Hry z aplikace Xbox, Microsoft Store a PC Game Pass. Irori je najde samo; instalujte a odebírejte je v aplikaci Xbox.",
+  "manage.launchers.xbox.windows_only": "Aplikace Xbox běží jen ve Windows. Spusťte Irori ve Windows a tyto hry uvidíte v knihovně.",
+  "manage.launchers.xbox.get_app": "Získat aplikaci Xbox",
+  "manage.launchers.state.windows_only": "Jen Windows",
+  "manage.launchers.state.no_xbox_app": "Aplikace Xbox není nainstalovaná"
 }

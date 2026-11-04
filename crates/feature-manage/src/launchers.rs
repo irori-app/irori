@@ -5,6 +5,10 @@
 //! already has, opens it so the user signs in and installs games there,
 //! scans it for games, closes it, and removes it from Irori (its prefix and
 //! games stay on disk).
+//!
+//! A last card is the Xbox app's: nothing to set up, since Windows lists its
+//! games; it opens the Xbox app and looks for games again, and elsewhere
+//! says it is Windows-only.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -29,7 +33,9 @@ use gpui_kit::{
     Subscription, Task, Window, div, rems,
 };
 use irori_core::{InstallProgress, OpContext, Runner, WineInstallation};
-use irori_launchers::{LauncherKind as Launcher, LauncherSignIn, LauncherStatus, LaunchersStore};
+use irori_launchers::{
+    LauncherKind as Launcher, LauncherSignIn, LauncherStatus, LaunchersStore, XboxStatus,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -64,6 +70,9 @@ impl SelectItem for WineChoice {
     }
 }
 
+/// Where the Xbox app comes from when it isn't installed.
+const XBOX_APP_PAGE: &str = "https://www.xbox.com/apps/xbox-app-for-pc";
+
 /// What a card's buttons ask of the store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -82,6 +91,7 @@ struct Live {
 /// The section of the Stores page.
 pub struct LaunchersSection {
     statuses: Vec<LauncherStatus>,
+    xbox: Option<XboxStatus>,
     wines: Vec<WineInstallation>,
     wine_select: Entity<SelectState<Vec<WineChoice>>>,
     running: HashMap<Launcher, Arc<Mutex<Live>>>,
@@ -101,6 +111,7 @@ impl LaunchersSection {
         ];
         let mut this = Self {
             statuses: Vec::new(),
+            xbox: None,
             wines: Vec::new(),
             wine_select,
             running: HashMap::new(),
@@ -117,6 +128,7 @@ impl LaunchersSection {
     fn refresh_statuses(&mut self, cx: &mut Context<Self>) {
         if let Some(store) = launchers_store(cx) {
             self.statuses = store.statuses();
+            self.xbox = Some(store.xbox_status());
         }
         cx.notify();
     }
@@ -353,6 +365,128 @@ impl LaunchersSection {
         .detach();
     }
 
+    /// Open the Xbox app, or look for its games again.
+    fn xbox_act(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(store) = launchers_store(cx) else {
+            return;
+        };
+        let task = irori_ui::run(cx, async move {
+            if open {
+                store.open_xbox_app().await
+            } else {
+                irori_core::Store::refresh(store.as_ref(), false).await
+            }
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Err(e) = result {
+                    notify_error(
+                        t_args(
+                            "manage.launchers.open_failed",
+                            &[("launcher", irori_launchers::XBOX_APP)],
+                        ),
+                        &e,
+                        window,
+                        cx,
+                    );
+                }
+                this.refresh_statuses(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// The Xbox app's card: its games on Windows, a note elsewhere.
+    fn render_xbox_card(&self, status: XboxStatus, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let name = irori_launchers::XBOX_APP;
+        let state = match (status.supported, status.app_installed, status.games) {
+            (false, _, _) => Tag::secondary()
+                .xsmall()
+                .child(t("manage.launchers.state.windows_only")),
+            (true, _, 1) => Tag::success()
+                .xsmall()
+                .child(t("manage.launchers.state.games_one")),
+            (true, _, n) if n > 1 => Tag::success().xsmall().child(t_args(
+                "manage.launchers.state.games_other",
+                &[("count", &n.to_string())],
+            )),
+            (true, true, _) => Tag::success()
+                .xsmall()
+                .child(t("manage.launchers.state.ready")),
+            (true, false, _) => Tag::secondary()
+                .xsmall()
+                .child(t("manage.launchers.state.no_xbox_app")),
+        };
+        let footer: AnyElement = if !status.supported {
+            div()
+                .debug_selector(|| "launcher-xbox-windows-only".to_string())
+                .text_xs()
+                .text_color(muted)
+                .child(t("manage.launchers.xbox.windows_only"))
+                .into_any_element()
+        } else {
+            h_flex()
+                .flex_wrap()
+                .justify_end()
+                .gap_2()
+                .child(
+                    Button::new("launcher-xbox-scan")
+                        .ghost()
+                        .small()
+                        .icon(IconName::RefreshCw)
+                        .label(t("manage.launchers.scan"))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.xbox_act(false, window, cx)),
+                        ),
+                )
+                .child(if status.app_installed {
+                    Button::new("launcher-xbox-open")
+                        .debug_selector(|| "launcher-xbox-open".to_string())
+                        .small()
+                        .icon(IconName::ExternalLink)
+                        .label(t_args("manage.launchers.open", &[("launcher", name)]))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.xbox_act(true, window, cx)),
+                        )
+                } else {
+                    Button::new("launcher-xbox-get")
+                        .primary()
+                        .small()
+                        .icon(IconName::ExternalLink)
+                        .label(t("manage.launchers.xbox.get_app"))
+                        .on_click(|_, _, cx| cx.open_url(XBOX_APP_PAGE))
+                })
+                .into_any_element()
+        };
+        card(cx)
+            .id("launcher-xbox")
+            .w(rems(22.))
+            .flex_grow(1.)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_semibold()
+                            .truncate()
+                            .child(name),
+                    )
+                    .child(state),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("manage.launchers.about.xbox")),
+            )
+            .child(h_flex().justify_end().child(footer))
+            .into_any_element()
+    }
+
     fn render_card(&self, status: &LauncherStatus, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
         let launcher = status.launcher;
@@ -555,11 +689,14 @@ impl Render for LaunchersSection {
         let muted = cx.theme().muted_foreground;
         let enabled = models(cx).settings.read(cx).app.third_party_launchers;
         let cards: Vec<AnyElement> = if enabled {
-            self.statuses
+            let mut cards: Vec<AnyElement> = self
+                .statuses
                 .clone()
                 .iter()
                 .map(|s| self.render_card(s, cx))
-                .collect()
+                .collect();
+            cards.extend(self.xbox.map(|x| self.render_xbox_card(x, cx)));
+            cards
         } else {
             Vec::new()
         };
