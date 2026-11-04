@@ -372,7 +372,8 @@ mod tests {
     #[test]
     fn native_programs_run_on_their_own_with_the_game_named() {
         let mut p = program("/opt/voice/voice");
-        p.args = "--minimized --room 'my room'".into();
+        // Double quotes group an argument under both POSIX and Windows rules.
+        p.args = "--minimized --room \"my room\"".into();
         p.delay_seconds = 5;
         let env = wine(WineKind::Wine, false);
         let plan = plan(&input(std::slice::from_ref(&p), &env));
@@ -383,7 +384,10 @@ mod tests {
         );
         assert_eq!(started.spec.env["IRORI_RUNNER"], "gog");
         assert_eq!(started.spec.env["WINEPREFIX"], "/p");
-        assert_eq!(started.spec.cwd.as_deref(), Some(Path::new("/opt/voice")));
+        // Without a drive letter "/opt/voice/voice" isn't absolute on Windows.
+        if cfg!(unix) {
+            assert_eq!(started.spec.cwd.as_deref(), Some(Path::new("/opt/voice")));
+        }
         assert_eq!(started.delay, Duration::from_secs(5));
         assert!(!started.in_prefix && started.stop_with_game);
     }
