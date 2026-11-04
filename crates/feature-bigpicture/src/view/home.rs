@@ -158,12 +158,16 @@ impl BigPictureView {
                     .aria_label(SharedString::from(game.title.clone()))
                     .max_w(rems(style.max_w))
                     .map(|d| match logo {
+                        // Sized only by its box, a logo drew at its own
+                        // size, over the facts and shelf below it.
                         Some(logo) => d
                             .h(rems(style.logo))
                             .max_w(rems(style.logo * LOGO_ASPECT))
+                            .overflow_hidden()
                             .child(
                                 logo.image_cache(&self.image_cache)
-                                    .h_full()
+                                    .h(rems(style.logo))
+                                    .max_w(rems(style.logo * LOGO_ASPECT))
                                     .object_fit(ObjectFit::Contain),
                             ),
                         None => d
