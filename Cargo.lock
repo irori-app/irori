@@ -4443,7 +4443,10 @@ dependencies = [
  "async-trait",
  "hex",
  "irori-core",
+ "irori-depot",
  "irori-engines",
+ "irori-retroachievements-api",
+ "irori-secrets",
  "notify",
  "once_cell",
  "parking_lot",
@@ -4777,11 +4780,13 @@ dependencies = [
  "gpui-pre",
  "irori-amazon-api",
  "irori-core",
+ "irori-emulation",
  "irori-engines",
  "irori-epic-api",
  "irori-extras",
  "irori-gog-api",
  "irori-launchers",
+ "irori-retroachievements-api",
  "irori-runtime",
  "irori-services",
  "irori-steam",
@@ -4818,6 +4823,22 @@ dependencies = [
  "uuid 1.28.0",
  "which 8.0.6",
  "zip",
+]
+
+[[package]]
+name = "irori-retroachievements-api"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "irori-depot",
+ "md-5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

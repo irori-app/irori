@@ -172,6 +172,20 @@ impl Client {
         query: &[(&str, String)],
         what: &str,
     ) -> Result<T> {
+        self.get_json_allowing(url, query, what, &[])
+            .await?
+            .with_context(|| format!("Steam sent no answer for {what}"))
+    }
+
+    /// [`Self::get_json`], with `None` for an HTTP status in `absent`: the
+    /// ones Steam answers when there is nothing to send.
+    pub(crate) async fn get_json_allowing<T: DeserializeOwned>(
+        &self,
+        url: String,
+        query: &[(&str, String)],
+        what: &str,
+        absent: &[u16],
+    ) -> Result<Option<T>> {
         let resp = self
             .http
             .get(url)
@@ -181,6 +195,9 @@ impl Client {
             .map_err(reqwest::Error::without_url)
             .context("Could not reach Steam")?;
         let status = resp.status();
+        if absent.contains(&status.as_u16()) {
+            return Ok(None);
+        }
         if !status.is_success() {
             if let Some(e) = SteamError::from_http_status(status.as_u16()) {
                 return Err(e.into());
@@ -196,6 +213,7 @@ impl Client {
             .map_err(reqwest::Error::without_url)
             .context("Steam's answer was cut off")?;
         serde_json::from_slice(&body)
+            .map(Some)
             .with_context(|| format!("Steam sent an unexpected answer for {what}"))
     }
 }

@@ -2,7 +2,8 @@
 //! folders the user chose (`iroriRomFolders`), played with emulators from
 //! `irori-engines`.
 //!
-//! There is no account. The library is `<store config>/library.json`;
+//! The store's optional account is a RetroAchievements one ([`retro`]),
+//! which adds the games' achievements. The library is `<store config>/library.json`;
 //! [`Store::refresh`] rescans the folders (incrementally: unchanged files are
 //! not looked at again) and a file watcher rescans after changes while Irori
 //! runs. Removing a game from the library never deletes its files; it is
@@ -14,6 +15,7 @@
 //! the emulator's command for the services layer to run like any game.
 
 mod names;
+pub mod retro;
 mod scan;
 
 use std::collections::BTreeSet;
@@ -82,6 +84,7 @@ pub struct EmulationStore {
     scanning: AtomicBool,
     watcher: Mutex<Option<(Vec<PathBuf>, notify::RecommendedWatcher)>>,
     runtime: Mutex<Option<tokio::runtime::Handle>>,
+    retro: retro::Retro,
 }
 
 impl EmulationStore {
@@ -102,7 +105,9 @@ impl EmulationStore {
         config_dir: PathBuf,
         cache_dir: PathBuf,
     ) -> Arc<Self> {
+        let retro = retro::Retro::new(&config_dir, &cache_dir, Default::default());
         Arc::new_cyclic(|me| Self {
+            retro,
             me: me.clone(),
             bus,
             settings,
@@ -417,6 +422,7 @@ impl Store for EmulationStore {
                 .await
                 .context("loading the ROM library stopped")?;
         self.publish(file.entries, file.added, file.removed);
+        self.retro.load().await;
         self.watch();
         Ok(())
     }
@@ -432,12 +438,53 @@ impl Store for EmulationStore {
         LoginFlow::None
     }
 
-    async fn login(&self, _input: &str) -> Result<UserInfo> {
-        self.user().context("no account")
+    /// Sign in to RetroAchievements ([`retro::login_input`]).
+    async fn login(&self, input: &str) -> Result<UserInfo> {
+        let user = self.retro.login(input).await?;
+        self.bus.emit(Event::AccountChanged(Runner::Emulation));
+        Ok(user)
     }
 
+    /// Sign out of RetroAchievements.
     async fn logout(&self) -> Result<()> {
+        self.retro.logout().await?;
+        self.bus.emit(Event::AccountChanged(Runner::Emulation));
         Ok(())
+    }
+
+    /// The RetroAchievements account, when signed in.
+    fn accounts(&self) -> Vec<irori_core::StoreAccount> {
+        self.retro
+            .user()
+            .map(|u| irori_core::StoreAccount {
+                slot: retro::SLOT.into(),
+                account_id: u.account_id,
+                display_name: u.display_name,
+                signed_in: true,
+                ..Default::default()
+            })
+            .into_iter()
+            .collect()
+    }
+
+    async fn achievements(
+        &self,
+        app_name: &str,
+        _language: &str,
+    ) -> Result<Vec<irori_core::Achievement>> {
+        let Some(entry) = self.entry(app_name) else {
+            return Ok(Vec::new());
+        };
+        // Multi-disc games are known by their first disc.
+        let file = entry.discs.first().unwrap_or(&entry.path);
+        if file.is_dir() {
+            return Ok(Vec::new());
+        }
+        self.retro.achievements(app_name, &entry.system, file).await
+    }
+
+    async fn forget_achievements(&self, app_name: &str) {
+        self.retro.forget(app_name).await
     }
 
     /// Rescan the ROM folders.

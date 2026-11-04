@@ -1,6 +1,7 @@
 //! Irori core: the domain model and contracts shared by every other crate.
 //! No UI dependency; everything here is usable from tests and headless tools.
 
+pub mod achievement_cache;
 pub mod archive_guard;
 pub mod events;
 pub mod fs_guard;

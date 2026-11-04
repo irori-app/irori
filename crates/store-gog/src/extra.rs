@@ -99,6 +99,7 @@ pub fn map_achievement(v: &Value) -> Achievement {
             .and_then(Value::as_str)
             .filter(|d| !d.is_empty())
             .map(str::to_string),
+        ..Default::default()
     }
 }
 

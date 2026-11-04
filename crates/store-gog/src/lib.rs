@@ -646,6 +646,10 @@ impl Store for GogStore {
     async fn achievements(&self, app_name: &str, language: &str) -> Result<Vec<Achievement>> {
         self.game_achievements(app_name, language).await
     }
+
+    async fn forget_achievements(&self, app_name: &str) {
+        self.clear_achievement_cache(app_name).await
+    }
 }
 
 #[cfg(test)]

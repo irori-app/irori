@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} installiert",
   "settings.field.action_import_lutris.label": "Aus Lutris importieren",
   "settings.field.action_import_lutris.help": "Installierte Spiele, emulierte Spiele, Favoriten, Kategorien und Spielzeit aus Lutris übernehmen. Lutris selbst bleibt unverändert.",
+  "settings.field.achievement_notices.label": "Neue Erfolge nach dem Spielen melden",
+  "settings.field.achievement_notices.help": "Wenn ein Spiel endet, prüft Irori seine Erfolge und zeigt, was Sie freigeschaltet haben.",
   "settings.error.import_lutris": "Import aus Lutris fehlgeschlagen",
   "settings.field.action_import_bottles.label": "Aus Bottles importieren",
   "settings.field.action_import_bottles.help": "Fügt die Programme aller Bottles und die darin installierten Spiele hinzu, mit der Bottle als Präfix. Bottles selbst bleibt unverändert.",
