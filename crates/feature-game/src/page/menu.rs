@@ -244,6 +244,22 @@ pub(super) fn build_menu(
                     .on_click(move |_, window, cx| crate::open_log_sheet(i.clone(), window, cx)),
             );
         }
+        if irori_ui::save_backups::offers_backups(&game) {
+            let i = id.clone();
+            menu = menu.item(
+                item("game.menu.back_up_saves", IconName::DatabaseBackup).on_click(
+                    move |_, window, cx| irori_ui::save_backups::back_up_now(&i, window, cx),
+                ),
+            );
+            let i = id.clone();
+            menu = menu.item(
+                item("game.menu.save_backups", IconName::ArchiveRestore).on_click(
+                    move |_, window, cx| {
+                        irori_ui::save_backups::open_save_backups_sheet(i.clone(), window, cx)
+                    },
+                ),
+            );
+        }
         let uses_wine = game
             .installed_platform()
             .unwrap_or(InstallPlatform::Windows)

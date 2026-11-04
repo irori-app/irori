@@ -541,6 +541,20 @@ impl SettingsForm {
                 }
                 _ => None,
             },
+            PanelKind::Ludusavi => Some(
+                cx.new(|cx| irori_ui::save_backups::LudusaviPanel::new(window, cx))
+                    .into(),
+            ),
+            PanelKind::SaveBackups => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(
+                        cx.new(|cx| irori_ui::save_backups::SaveBackupsPanel::new(id, window, cx))
+                            .into(),
+                    )
+                }
+                _ => None,
+            },
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);

@@ -249,6 +249,14 @@ pub struct GameSettings {
         skip_serializing_if = "Option::is_none"
     )]
     pub lutris_script: Option<LutrisScriptRecord>,
+    /// Back up the game's saves with Ludusavi after every session.
+    /// Irori-only.
+    #[serde(rename = "iroriLudusaviAutoBackup")]
+    pub ludusavi_auto_backup: bool,
+    /// The game's title in Ludusavi, when the user corrected the automatic
+    /// match; empty for the automatic one. Per game only. Irori-only.
+    #[serde(rename = "iroriLudusaviTitle")]
+    pub ludusavi_title: String,
 }
 
 /// Which Lutris install script installed a game (`iroriLutrisScript`).
@@ -329,6 +337,8 @@ impl Default for GameSettings {
             engine_options: BTreeMap::new(),
             engine_own_settings: false,
             lutris_script: None,
+            ludusavi_auto_backup: false,
+            ludusavi_title: String::new(),
         }
     }
 }
@@ -557,6 +567,14 @@ pub struct AppSettings {
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
+    /// The Ludusavi program to run for save backups; empty finds it on
+    /// `PATH`, in the usual install folders or on Flathub. Irori-only.
+    #[serde(rename = "iroriLudusaviPath")]
+    pub ludusavi_path: String,
+    /// Where Ludusavi keeps the backups Irori makes; empty for Ludusavi's
+    /// own backup folder. Irori-only.
+    #[serde(rename = "iroriLudusaviBackupPath")]
+    pub ludusavi_backup_path: String,
 }
 
 impl Default for AppSettings {
@@ -580,6 +598,8 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             show_log_on_launch: false,
+            ludusavi_path: String::new(),
+            ludusavi_backup_path: String::new(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,

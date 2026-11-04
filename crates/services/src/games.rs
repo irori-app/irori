@@ -361,6 +361,11 @@ impl Backend {
                     );
                 }
             }
+            // After the cloud upload, so Ludusavi copies the saves the
+            // cloud now holds too.
+            if settings.ludusavi_auto_backup {
+                b.back_up_after_session(&id, &game.title).await;
+            }
             b.bus.emit(Event::GameExited {
                 id,
                 seconds,

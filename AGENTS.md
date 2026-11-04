@@ -385,6 +385,14 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
+  `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
+  `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
+  id, then title, unless the user chose one (`iroriLudusaviTitle`). Windows games pass
+  the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
+  directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
+  after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
+  The UI is `irori_ui::save_backups`.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other

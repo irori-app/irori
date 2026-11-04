@@ -81,7 +81,7 @@ impl GameSection {
             GameSection::Wine => "settings.game.section.wine",
             GameSection::Performance => "settings.game.section.performance",
             GameSection::Launch => "settings.game.section.launch",
-            GameSection::CloudSaves => "settings.game.section.cloud_saves",
+            GameSection::CloudSaves => "settings.game.section.saves",
             GameSection::Tools => "settings.game.section.tools",
             GameSection::Log => "settings.game.section.log",
         })

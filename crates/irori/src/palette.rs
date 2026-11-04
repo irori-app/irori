@@ -9,7 +9,9 @@ use std::sync::Arc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _};
-use gpui_kit::{App, AppContext as _, Entity, ParentElement as _, Styled as _, Window, px};
+use gpui_kit::{
+    App, AppContext as _, Entity, ParentElement as _, SharedString, Styled as _, Window, px,
+};
 use irori_core::{GameId, GameInfo};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
@@ -29,6 +31,10 @@ enum PaletteTarget {
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
     GroupByStatus(bool),
+    /// Back up a game's saves with Ludusavi now.
+    BackUpSaves(GameId),
+    /// Show a game's Ludusavi backups.
+    SaveBackups(GameId),
 }
 
 /// Retained palette state, owned by the shell.
@@ -91,6 +97,31 @@ impl Palette {
                         .keywords(keywords)
                         .icon(IconName::X),
                     PaletteTarget::PlayStatus(game.id(), None),
+                    targets,
+                );
+            }
+            if irori_ui::save_backups::offers_backups(&game) {
+                let keywords = [SharedString::new_static("Ludusavi")];
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.back_up_saves",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords(keywords.clone())
+                        .icon(IconName::DatabaseBackup),
+                    PaletteTarget::BackUpSaves(game.id()),
+                    targets,
+                );
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.save_backups",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords(keywords)
+                        .icon(IconName::ArchiveRestore),
+                    PaletteTarget::SaveBackups(game.id()),
                     targets,
                 );
             }
@@ -280,6 +311,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
+        PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
+        PaletteTarget::SaveBackups(id) => {
+            irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
+        }
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

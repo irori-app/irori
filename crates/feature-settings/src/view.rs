@@ -36,6 +36,7 @@ pub enum SettingsSection {
     GameDefaults,
     Appearance,
     Advanced,
+    Saves,
     Backup,
     Logs,
     SystemInfo,
@@ -43,11 +44,12 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 8] = [
+    pub const ALL: [SettingsSection; 9] = [
         SettingsSection::General,
         SettingsSection::GameDefaults,
         SettingsSection::Appearance,
         SettingsSection::Advanced,
+        SettingsSection::Saves,
         SettingsSection::Backup,
         SettingsSection::Logs,
         SettingsSection::SystemInfo,
@@ -61,6 +63,7 @@ impl SettingsSection {
             SettingsSection::GameDefaults => "game-defaults",
             SettingsSection::Appearance => "appearance",
             SettingsSection::Advanced => "advanced",
+            SettingsSection::Saves => "saves",
             SettingsSection::Backup => "backup",
             SettingsSection::Logs => "logs",
             SettingsSection::SystemInfo => "system",
@@ -76,6 +79,7 @@ impl SettingsSection {
             }
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "advanced" => SettingsSection::Advanced,
+            "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
             "backup" | "restore" | "export" => SettingsSection::Backup,
             "logs" | "log" => SettingsSection::Logs,
             "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
@@ -90,6 +94,7 @@ impl SettingsSection {
             SettingsSection::GameDefaults => "settings.page.game_defaults",
             SettingsSection::Appearance => "settings.page.appearance",
             SettingsSection::Advanced => "settings.page.advanced",
+            SettingsSection::Saves => "settings.page.saves",
             SettingsSection::Backup => "settings.page.backup",
             SettingsSection::Logs => "settings.page.logs",
             SettingsSection::SystemInfo => "settings.page.system_info",
@@ -108,6 +113,7 @@ impl SettingsSection {
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Advanced => "settings.page.advanced_description",
+            SettingsSection::Saves => "settings.page.saves_description",
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
             SettingsSection::SystemInfo => "settings.page.system_info_description",
@@ -122,6 +128,7 @@ impl SettingsSection {
             SettingsSection::GameDefaults => IconName::Gamepad2,
             SettingsSection::Appearance => IconName::Palette,
             SettingsSection::Advanced => IconName::Wrench,
+            SettingsSection::Saves => IconName::DatabaseBackup,
             SettingsSection::Backup => IconName::ArchiveRestore,
             SettingsSection::Logs => IconName::ScrollText,
             SettingsSection::SystemInfo => IconName::Cpu,
@@ -146,6 +153,7 @@ impl SettingsSection {
             SettingsSection::General => Some(FieldSection::General),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
+            SettingsSection::Saves => Some(FieldSection::Saves),
             _ => None,
         }
     }
@@ -669,7 +677,8 @@ impl Render for SettingsView {
                 match section {
                     SettingsSection::General
                     | SettingsSection::Appearance
-                    | SettingsSection::Advanced => self.app_form.clone().into_any_element(),
+                    | SettingsSection::Advanced
+                    | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
                     SettingsSection::SystemInfo => self.render_sysinfo(cx),
