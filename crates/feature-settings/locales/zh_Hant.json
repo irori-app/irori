@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "已安裝 {verb}",
   "settings.field.action_import_lutris.label": "從 Lutris 匯入",
   "settings.field.action_import_lutris.help": "從 Lutris 移轉已安裝的遊戲、模擬遊戲、我的最愛、分類和遊玩時間。Lutris 本身不會被變更。",
-  "settings.error.import_lutris": "無法從 Lutris 匯入"
+  "settings.error.import_lutris": "無法從 Lutris 匯入",
+  "settings.field.action_import_bottles.label": "從 Bottles 匯入",
+  "settings.field.action_import_bottles.help": "新增每個 bottle 中的程式以及安裝在其中的遊戲，並以該 bottle 作為前綴。不會更改 Bottles 本身。",
+  "settings.field.action_import_faugus.label": "從 Faugus Launcher 匯入",
+  "settings.field.action_import_faugus.help": "新增 Faugus Launcher 中的遊戲，包括其前綴、Proton 版本、變數和參數。不會更改 Faugus Launcher 本身。",
+  "settings.error.import_launcher": "匯入失敗",
+  "settings.field.start_with_system.label": "隨系統啟動",
+  "settings.field.start_with_system.help": "登入電腦時開啟 Irori。",
+  "settings.field.start_with_system_minimized.label": "隨系統啟動時在系統匣中啟動",
+  "settings.field.start_with_system_minimized.help": "Irori 在登入時開啟後，會在系統匣中等待，而不顯示視窗。",
+  "settings.requires.start_with_system": "需要開啟「隨系統啟動」"
 }

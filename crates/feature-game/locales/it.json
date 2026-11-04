@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{count} sessioni dal {date}",
   "game.timeline.title": "Cronologia di gioco",
   "game.timeline.view_days": "Cronologia",
-  "game.timeline.view_sessions": "Sessioni"
+  "game.timeline.view_sessions": "Sessioni",
+  "game.ops.pick_program": "Scegli il programma",
+  "game.ops.locate_failed": "Impossibile collegare «{title}» al programma",
+  "game.hero.program_missing": "Il programma non è stato trovato in {path}. Trovalo o rimuovi il gioco dalla libreria. Dettagli, tempo di gioco e impostazioni vengono conservati.",
+  "game.menu.locate_program": "Trova il programma…",
+  "game.related.title": "Simili a questo",
+  "game.related.series": "Stessa serie",
+  "game.related.developer": "Anche di {name}",
+  "game.related.publisher": "Anche pubblicato da {name}",
+  "game.related.genres": "Stessi generi: {genres}",
+  "game.related.separator": ", "
 }

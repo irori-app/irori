@@ -7,6 +7,11 @@
 //! [`SideloadStore::add_app`], [`SideloadStore::edit_app`] and
 //! [`SideloadStore::remove_app`].
 //!
+//! An app whose program is gone (a deleted file, an unmounted drive) is
+//! listed as not installed and keeps everything else; the folders holding
+//! the programs are watched, so it is installed again as soon as the file
+//! is back. [`Store::import`] points an app at its program's new place.
+//!
 //! Launching: Linux apps run directly with the runtime's wrappers and
 //! environment; Windows apps run as `wine exec prefix + exe` with the cwd set
 //! to the executable's folder; browser apps open with `xdg-open`, or, when a
@@ -19,9 +24,11 @@ mod app;
 mod files;
 mod heroic;
 mod launch;
+pub mod scan;
 
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
@@ -31,7 +38,7 @@ use irori_core::{
     InstallRequest, LaunchPlan, LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome,
     Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest, UserInfo, json_store,
 };
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use app::{LIBRARY_VERSION, LibraryFile, StoredApp, generate_app_name};
 pub use app::{SideloadApp, SideloadPlatform};
@@ -39,6 +46,10 @@ pub use app::{SideloadApp, SideloadPlatform};
 /// How long availability checks wait for a slow or unresponsive filesystem
 /// (e.g. a disconnected network share) before reporting the app unavailable.
 const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Changes in a watched folder are let settle this long before programs
+/// are looked for again.
+const SETTLE: Duration = Duration::from_millis(500);
 
 const NOT_INSTALLABLE: &str = "Apps added manually are not installed or updated by Irori";
 
@@ -61,6 +72,8 @@ fn library_file(config_dir: &Path) -> PathBuf {
 #[derive(Default)]
 struct State {
     apps: Vec<StoredApp>,
+    /// Apps whose program was not found.
+    missing: HashSet<String>,
     games: Vec<Arc<GameInfo>>,
 }
 
@@ -74,6 +87,11 @@ pub struct SideloadStore {
     state: RwLock<State>,
     /// Serialises read-modify-write cycles of the library file.
     write_lock: tokio::sync::Mutex<()>,
+    me: Weak<Self>,
+    /// The runtime `init` ran on, for the folder watcher's rechecks.
+    runtime: Mutex<Option<tokio::runtime::Handle>>,
+    /// Folders holding the programs, and their watcher.
+    watcher: Mutex<Option<(BTreeSet<PathBuf>, notify::RecommendedWatcher)>>,
 }
 
 impl SideloadStore {
@@ -86,13 +104,16 @@ impl SideloadStore {
     }
 
     fn with_config_dir(bus: EventBus, settings: SettingsFn, config_dir: PathBuf) -> Arc<Self> {
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
             bus,
             settings,
             library_file: library_file(&config_dir),
             profiles_dir: config_dir.join("browser-profiles"),
             state: RwLock::new(State::default()),
             write_lock: tokio::sync::Mutex::new(()),
+            me: me.clone(),
+            runtime: Mutex::new(None),
+            watcher: Mutex::new(None),
         })
     }
 
@@ -251,14 +272,105 @@ impl SideloadStore {
                 .map(|_| file)
         })
         .await??;
-        self.publish(file.apps);
+        self.publish(file.apps).await;
         self.bus.emit(Event::LibraryChanged(Runner::Sideload));
         Ok(())
     }
 
-    fn publish(&self, apps: Vec<StoredApp>) {
-        let games = apps.iter().map(|a| Arc::new(a.to_game_info())).collect();
-        *self.state.write() = State { apps, games };
+    /// Show `apps`, each installed while its program exists.
+    async fn publish(&self, apps: Vec<StoredApp>) {
+        let missing = missing_programs(&apps).await;
+        self.show(apps, missing);
+        self.watch();
+    }
+
+    fn show(&self, apps: Vec<StoredApp>, missing: HashSet<String>) {
+        let games = apps
+            .iter()
+            .map(|a| Arc::new(a.to_game_info(!missing.contains(&a.app_name))))
+            .collect();
+        *self.state.write() = State {
+            apps,
+            missing,
+            games,
+        };
+    }
+
+    /// Look for every program again; republish and announce when one came
+    /// or went.
+    async fn recheck(&self) {
+        let apps = self.state.read().apps.clone();
+        let missing = missing_programs(&apps).await;
+        if missing == self.state.read().missing {
+            return;
+        }
+        let _write = self.write_lock.lock().await;
+        // The list may have changed while looking; look at the current one.
+        let apps = self.state.read().apps.clone();
+        let missing = missing_programs(&apps).await;
+        self.show(apps, missing);
+        self.watch();
+        self.bus.emit(Event::LibraryChanged(Runner::Sideload));
+    }
+
+    /// Watch the folders holding the programs (or, for a folder that is
+    /// gone, the nearest one still there) and recheck after changes
+    /// settle. Re-armed when the folders change.
+    fn watch(&self) {
+        use notify::{RecursiveMode, Watcher as _};
+        let folders: BTreeSet<PathBuf> = self
+            .state
+            .read()
+            .apps
+            .iter()
+            .filter(|a| a.app.platform != SideloadPlatform::Browser)
+            .filter_map(|a| a.app.executable.as_deref()?.parent().map(nearest_existing))
+            .flatten()
+            .collect();
+        let mut slot = self.watcher.lock();
+        if slot.as_ref().is_some_and(|(f, _)| *f == folders) {
+            return;
+        }
+        *slot = None;
+        if folders.is_empty() {
+            return;
+        }
+        let Some(runtime) = self.runtime.lock().clone() else {
+            return;
+        };
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+        let mut watcher =
+            match notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                if event.is_ok_and(|e| !e.kind.is_access()) {
+                    let _ = tx.send(());
+                }
+            }) {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::warn!("watching added apps' folders: {e}");
+                    return;
+                }
+            };
+        for folder in &folders {
+            if let Err(e) = watcher.watch(folder, RecursiveMode::NonRecursive) {
+                tracing::debug!("watching {}: {e}", folder.display());
+            }
+        }
+        let me = self.me.clone();
+        runtime.spawn(async move {
+            while rx.recv().await.is_some() {
+                loop {
+                    match tokio::time::timeout(SETTLE, rx.recv()).await {
+                        Ok(Some(())) => continue,
+                        Ok(None) => return,
+                        Err(_) => break,
+                    }
+                }
+                let Some(store) = me.upgrade() else { return };
+                store.recheck().await;
+            }
+        });
+        *slot = Some((folders, watcher));
     }
 
     /// Load `library.json`. A corrupt file is moved aside (`library.json.corrupt`)
@@ -281,7 +393,7 @@ impl SideloadStore {
             .await?;
         match loaded {
             Ok(file) => {
-                self.publish(file.apps);
+                self.publish(file.apps).await;
                 Ok(())
             }
             Err(e) => {
@@ -293,7 +405,7 @@ impl SideloadStore {
                     )
                     .message(format!("{e:#}")),
                 );
-                self.publish(Vec::new());
+                self.publish(Vec::new()).await;
                 Ok(())
             }
         }
@@ -317,6 +429,42 @@ impl SideloadStore {
             watch: None,
         })
     }
+}
+
+/// Apps (other than web apps) whose program is not there, or did not answer
+/// in time. Checked side by side, so one hung drive costs one timeout.
+async fn missing_programs(apps: &[StoredApp]) -> HashSet<String> {
+    let mut checks = tokio::task::JoinSet::new();
+    for stored in apps {
+        if stored.app.platform == SideloadPlatform::Browser {
+            continue;
+        }
+        let (name, exe) = (stored.app_name.clone(), stored.app.executable.clone());
+        checks.spawn(async move {
+            let present = match exe {
+                Some(exe) => matches!(
+                    tokio::time::timeout(AVAILABILITY_TIMEOUT, tokio::fs::try_exists(&exe)).await,
+                    Ok(Ok(true))
+                ),
+                None => false,
+            };
+            (name, present)
+        });
+    }
+    let mut missing = HashSet::new();
+    while let Some(result) = checks.join_next().await {
+        if let Ok((name, false)) = result {
+            missing.insert(name);
+        }
+    }
+    missing
+}
+
+/// `dir`, or its nearest ancestor that exists (a drive's mount point).
+fn nearest_existing(dir: &Path) -> Option<PathBuf> {
+    dir.ancestors()
+        .find(|p| !p.as_os_str().is_empty() && p.is_dir())
+        .map(Path::to_path_buf)
 }
 
 /// Fail unless `path` is an existing regular file.
@@ -365,6 +513,7 @@ impl Store for SideloadStore {
     }
 
     async fn init(&self) -> Result<()> {
+        *self.runtime.lock() = tokio::runtime::Handle::try_current().ok();
         self.load().await
     }
 
@@ -736,6 +885,57 @@ mod tests {
         f.store.remove_app(&id.app_name, false).await.unwrap();
         assert!(f.store.games().is_empty());
         assert!(exe.exists());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn missing_program_is_not_installed_until_it_returns() {
+        let f = fixture();
+        let exe = f.root.join("games/native/run.sh");
+        touch(&exe);
+        f.store.init().await.unwrap();
+        let id = f.store.add_app(linux_app(&exe)).await.unwrap();
+        let installed = |store: &SideloadStore| store.game(&id.app_name).unwrap().is_installed;
+        assert!(installed(&f.store));
+
+        // Gone: still listed with its details, not installed.
+        std::fs::remove_file(&exe).unwrap();
+        let wait = |want: bool| {
+            let store = f.store.clone();
+            async move {
+                for _ in 0..100 {
+                    if installed(&store) == want {
+                        return true;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                false
+            }
+        };
+        assert!(wait(false).await, "the watcher saw the program go");
+        assert_eq!(f.store.game(&id.app_name).unwrap().title, "Native");
+        // Back: installed again without a refresh.
+        touch(&exe);
+        assert!(wait(true).await, "the watcher saw the program return");
+
+        // Locate: a program somewhere else keeps the app and its details.
+        std::fs::remove_file(&exe).unwrap();
+        let moved = f.root.join("elsewhere/run.sh");
+        touch(&moved);
+        f.store
+            .import(
+                &id.app_name,
+                &moved,
+                linux_app(&moved).platform.install_platform(),
+            )
+            .await
+            .unwrap();
+        let game = f.store.game(&id.app_name).unwrap();
+        assert!(game.is_installed);
+        assert_eq!(game.title, "Native");
+        assert_eq!(
+            game.install.as_ref().unwrap().executable,
+            moved.display().to_string()
+        );
     }
 
     #[tokio::test]

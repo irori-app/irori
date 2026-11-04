@@ -79,5 +79,11 @@
   "shell.app_update.download": "다운로드",
   "shell.app_update.copy_command": "명령 복사",
   "shell.app_update.updated": "Irori가 {version}(으)로 업데이트되었습니다",
-  "shell.app_update.release_notes": "릴리스 노트"
+  "shell.app_update.release_notes": "릴리스 노트",
+  "shell.nav.views": "보기",
+  "shell.palette.show_view": "보기 표시: {name}",
+  "shell.palette.views_keywords": "보기 저장 필터",
+  "shell.palette.save_view": "라이브러리의 현재 보기 저장…",
+  "shell.palette.add_folder": "폴더에서 게임 추가…",
+  "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램"
 }

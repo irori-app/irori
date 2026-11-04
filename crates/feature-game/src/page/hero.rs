@@ -907,6 +907,23 @@ impl GamePage {
                     .into_any_element(),
             );
         }
+        if game.runner() == irori_core::Runner::Sideload
+            && !game.is_installed
+            && game.browser_url.is_none()
+        {
+            let path = game
+                .install
+                .as_ref()
+                .map(|i| i.executable.clone())
+                .unwrap_or_default();
+            return Some(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().warning)
+                    .child(t_args("game.hero.program_missing", &[("path", &path)]))
+                    .into_any_element(),
+            );
+        }
         if !self.files_available && game.is_installed {
             let path = game
                 .install_path()

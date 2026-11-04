@@ -3,6 +3,7 @@
 
 mod actions;
 mod app_update;
+mod autostart;
 mod cli;
 mod crash;
 mod headless;

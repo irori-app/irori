@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{count} sessioner sedan {date}",
   "game.timeline.title": "Spelhistorik",
   "game.timeline.view_days": "Tidslinje",
-  "game.timeline.view_sessions": "Sessioner"
+  "game.timeline.view_sessions": "Sessioner",
+  "game.ops.pick_program": "Välj programmet",
+  "game.ops.locate_failed": "Det gick inte att peka ”{title}” mot programmet",
+  "game.hero.program_missing": "Programmet hittades inte i {path}. Leta upp det eller ta bort spelet från biblioteket. Uppgifter, speltid och inställningar sparas.",
+  "game.menu.locate_program": "Hitta programmet…",
+  "game.related.title": "Mer i samma stil",
+  "game.related.series": "Samma serie",
+  "game.related.developer": "Också av {name}",
+  "game.related.publisher": "Också utgivet av {name}",
+  "game.related.genres": "Samma genrer: {genres}",
+  "game.related.separator": ", "
 }

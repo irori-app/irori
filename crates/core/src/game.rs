@@ -17,6 +17,10 @@ pub struct GameInfo {
     /// Sort key derived from the title (lowercase, articles stripped).
     #[serde(skip)]
     pub sort_title: String,
+    /// Other names the game is known by, for search: the store's title
+    /// when the user renamed it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub alt_titles: Vec<String>,
     pub developer: Option<String>,
     pub publisher: Option<String>,
     pub description: Option<String>,

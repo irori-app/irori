@@ -79,5 +79,11 @@
   "shell.app_update.download": "下载",
   "shell.app_update.copy_command": "复制命令",
   "shell.app_update.updated": "Irori 已更新至 {version}",
-  "shell.app_update.release_notes": "发行说明"
+  "shell.app_update.release_notes": "发行说明",
+  "shell.nav.views": "视图",
+  "shell.palette.show_view": "显示视图：{name}",
+  "shell.palette.views_keywords": "视图 保存 筛选",
+  "shell.palette.save_view": "保存游戏库当前视图…",
+  "shell.palette.add_folder": "从文件夹添加游戏…",
+  "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序"
 }

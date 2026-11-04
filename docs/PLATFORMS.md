@@ -123,6 +123,7 @@ signature changes. A build signed with a Developer ID asks once.
 | Cache | XDG cache / `irori` | `~/Library/Caches/irori` | LocalAppData / `irori` (dirs cache location) |
 | Steam default | `~/.steam/steam` | `~/Library/Application Support/Steam` | ProgramFiles(x86) / `Steam` |
 | Screenshots read | Spectacle's `imageSaveLocation`, Pictures/`Screenshots`, Pictures | `com.apple.screencapture` location (else Desktop), Pictures/`Screenshots` | Videos/`Captures` (Game Bar), Pictures/`Screenshots` |
+| Start with the system (`iroriStartWithSystem`) | XDG config / `autostart/irori.desktop` | `~/Library/LaunchAgents/app.irori.Irori.autostart.plist` (opens the app bundle) | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `Irori` |
 
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
 isolated testing. A configured Steam path takes precedence when it holds a Steam

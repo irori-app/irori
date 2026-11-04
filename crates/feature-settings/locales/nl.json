@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb} geïnstalleerd",
   "settings.field.action_import_lutris.label": "Importeren uit Lutris",
   "settings.field.action_import_lutris.help": "Neem geïnstalleerde games, geëmuleerde games, favorieten, categorieën en speeltijd over uit Lutris. Lutris zelf blijft ongewijzigd.",
-  "settings.error.import_lutris": "Kan niet importeren uit Lutris"
+  "settings.error.import_lutris": "Kan niet importeren uit Lutris",
+  "settings.field.action_import_bottles.label": "Importeren uit Bottles",
+  "settings.field.action_import_bottles.help": "Voegt de programma’s van elke bottle en de daarin geïnstalleerde games toe, met de bottle als prefix. Bottles zelf blijft ongewijzigd.",
+  "settings.field.action_import_faugus.label": "Importeren uit Faugus Launcher",
+  "settings.field.action_import_faugus.help": "Voegt de games uit Faugus Launcher toe met hun prefix, Proton-versie, variabelen en argumenten. Faugus Launcher zelf blijft ongewijzigd.",
+  "settings.error.import_launcher": "Importeren mislukt",
+  "settings.field.start_with_system.label": "Starten met het systeem",
+  "settings.field.start_with_system.help": "Opent Irori wanneer je je aanmeldt op je computer.",
+  "settings.field.start_with_system_minimized.label": "Bij starten met het systeem in het systeemvak beginnen",
+  "settings.field.start_with_system_minimized.help": "Wanneer Irori bij het aanmelden opent, wacht het in het systeemvak in plaats van zijn venster te tonen.",
+  "settings.requires.start_with_system": "Vereist Starten met het systeem"
 }

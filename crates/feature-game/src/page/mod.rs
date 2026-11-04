@@ -1,9 +1,9 @@
 //! The game page (`Route::Game`), over the game's art blurred across the
 //! whole page: the title and a details line, then three columns: the cover
 //! with the primary action, tools, rating and quick facts; the screenshots,
-//! tabs and play history; and the details table. Narrower pages fold the
-//! details under the play history, then stack everything. A slim bar keeps
-//! the primary action in reach once it scrolls away.
+//! tabs, play history and related games; and the details table. Narrower
+//! pages fold the details under the play history, then stack everything. A
+//! slim bar keeps the primary action in reach once it scrolls away.
 
 mod achievements;
 mod compat;
@@ -13,6 +13,7 @@ mod hero;
 mod info;
 mod menu;
 mod overlay;
+mod related;
 mod screenshots;
 mod timeline;
 
@@ -142,6 +143,7 @@ pub struct GamePage {
     viewer_strip: ScrollHandle,
     /// The play history.
     timeline: timeline::TimelineView,
+    related: related::RelatedCache,
     /// Text colours over the backdrop, as of the last render.
     ink: BackdropInk,
     _subscriptions: Vec<Subscription>,
@@ -229,6 +231,7 @@ impl GamePage {
             viewer_focus: cx.focus_handle(),
             viewer_strip: ScrollHandle::new(),
             timeline: timeline::TimelineView::default(),
+            related: related::RelatedCache::default(),
             ink: BackdropInk::of(None, cx),
             _subscriptions: subscriptions,
         };

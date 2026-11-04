@@ -75,6 +75,8 @@ Commands Irori offers without opening a window (`crates/irori/src/headless.rs`):
 irori accounts                                   which stores are logged in
 irori import-heroic                              import Heroic accounts, installs and settings
 irori import-lutris                              import Lutris games, categories and playtime (read-only)
+irori import-bottles                             import the programs of every Bottles bottle (read-only)
+irori import-faugus                              import Faugus Launcher's games (read-only)
 irori refresh                                    refresh every library
 irori list [--installed]
 irori info <runner>/<app> [--platform P]
@@ -364,6 +366,11 @@ commands without a window.
 - **Library:** store games without DLC, plus user overrides (title, art), become a
   sorted `Arc<LibrarySnapshot>` with a revision number. Rebuilds are debounced (30 ms)
   after `LibraryChanged`/`GameChanged`.
+- **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
+  (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
+  developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
+  exact, prefix, word, then fuzzy (a typo or two, letters in order), titles before
+  people. `related.rs` finds a game's series, studio and genre neighbours the same way.
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
   cancel go through a `CancellationToken`.
@@ -660,7 +667,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `GameInfo.tags` (region, revision) drive the system filter, badges, the generated
   cover and Big Picture's per-system shelves.
 - **Lutris import** (`irori-extras::lutris_import` reads; `crates/irori/src/lutris.rs`
-  applies). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is
+  applies; Bottles and Faugus Launcher plans from `irori-extras::wine_launchers` use
+  the same shapes and apply step). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is
   parsed, nothing is written there. Windows/Linux games become added apps with their
   prefix, Wine build (matched by name, else reported), arguments and variables;
   emulated games join the ROM library as added games with their emulator; Steam and

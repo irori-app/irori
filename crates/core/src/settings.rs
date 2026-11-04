@@ -490,6 +490,12 @@ pub struct AppSettings {
     pub minimize_on_launch: bool,
     pub start_in_console_mode: bool,
     pub start_in_tray: bool,
+    /// Start Irori when the user logs in. Irori-only.
+    #[serde(rename = "iroriStartWithSystem")]
+    pub start_with_system: bool,
+    /// When started with the system, start in the tray. Irori-only.
+    #[serde(rename = "iroriStartWithSystemMinimized")]
+    pub start_with_system_minimized: bool,
     pub allow_installation_broken_anticheat: bool,
     pub show_valve_proton: bool,
     pub steam_grid_db_api_key: String,
@@ -615,6 +621,8 @@ impl Default for AppSettings {
             minimize_on_launch: false,
             start_in_console_mode: false,
             start_in_tray: false,
+            start_with_system: false,
+            start_with_system_minimized: true,
             allow_installation_broken_anticheat: false,
             show_valve_proton: false,
             steam_grid_db_api_key: String::new(),

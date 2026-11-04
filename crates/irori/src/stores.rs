@@ -141,6 +141,18 @@ pub fn hooks() -> Hooks {
                     .await
             })
         })),
+        import_from_bottles: Some(Arc::new(|cx| {
+            let backend = irori_ui::backend(cx);
+            irori_ui::run(cx, async move {
+                crate::lutris::import_bottles(&backend, SIDELOAD.get().cloned()).await
+            })
+        })),
+        import_from_faugus: Some(Arc::new(|cx| {
+            let backend = irori_ui::backend(cx);
+            irori_ui::run(cx, async move {
+                crate::lutris::import_faugus(&backend, SIDELOAD.get().cloned()).await
+            })
+        })),
     }
 }
 

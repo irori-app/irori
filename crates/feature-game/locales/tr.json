@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{date} tarihinden beri {count} oturum",
   "game.timeline.title": "Oynama geçmişi",
   "game.timeline.view_days": "Zaman çizelgesi",
-  "game.timeline.view_sessions": "Oturumlar"
+  "game.timeline.view_sessions": "Oturumlar",
+  "game.ops.pick_program": "Programı seçin",
+  "game.ops.locate_failed": "“{title}” programa bağlanamadı",
+  "game.hero.program_missing": "Program {path} konumunda bulunamadı. Yerini gösterin veya oyunu kütüphaneden kaldırın. Bilgileri, oynama süresi ve ayarları korunur.",
+  "game.menu.locate_program": "Programı bul…",
+  "game.related.title": "Benzer oyunlar",
+  "game.related.series": "Aynı seri",
+  "game.related.developer": "Yine {name} yapımı",
+  "game.related.publisher": "Yine {name} yayını",
+  "game.related.genres": "Ortak türler: {genres}",
+  "game.related.separator": ", "
 }

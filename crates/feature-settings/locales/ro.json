@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb} a fost instalat",
   "settings.field.action_import_lutris.label": "Importă din Lutris",
   "settings.field.action_import_lutris.help": "Preia din Lutris jocurile instalate, jocurile emulate, favoritele, categoriile și timpul de joc. Lutris rămâne neschimbat.",
-  "settings.error.import_lutris": "Importul din Lutris a eșuat"
+  "settings.error.import_lutris": "Importul din Lutris a eșuat",
+  "settings.field.action_import_bottles.label": "Importă din Bottles",
+  "settings.field.action_import_bottles.help": "Adaugă programele fiecărei sticle și jocurile instalate în ele, cu sticla ca prefix. Bottles rămâne neschimbat.",
+  "settings.field.action_import_faugus.label": "Importă din Faugus Launcher",
+  "settings.field.action_import_faugus.help": "Adaugă jocurile din Faugus Launcher cu prefixul, versiunea Proton, variabilele și argumentele lor. Faugus Launcher rămâne neschimbat.",
+  "settings.error.import_launcher": "Importul a eșuat",
+  "settings.field.start_with_system.label": "Pornește odată cu sistemul",
+  "settings.field.start_with_system.help": "Deschide Irori când te conectezi la calculator.",
+  "settings.field.start_with_system_minimized.label": "La pornirea cu sistemul, începe în zona de notificare",
+  "settings.field.start_with_system_minimized.help": "Când Irori se deschide la conectare, așteaptă în zona de notificare în loc să-și arate fereastra.",
+  "settings.requires.start_with_system": "Necesită Pornește odată cu sistemul"
 }

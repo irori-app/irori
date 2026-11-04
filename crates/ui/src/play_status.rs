@@ -8,7 +8,7 @@ use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex};
 use gpui_kit::{
     AnyElement, App, ElementId, Hsla, IntoElement as _, ParentElement as _, SharedString,
-    Styled as _, div, px,
+    Styled as _, Window, div, px,
 };
 use irori_core::GameId;
 use irori_services::{EffectiveStatus, PlayStatus};
@@ -93,6 +93,21 @@ pub fn menu(menu: PopupMenu, id: &GameId, cx: &App) -> PopupMenu {
 /// [`menu`] for several games: a status is checked when every one of them
 /// has it, and clearing is offered when any has one.
 pub fn menu_many(menu: PopupMenu, ids: Vec<GameId>, cx: &App) -> PopupMenu {
+    menu_many_with(menu, ids, cx, |ids, status, _, cx| {
+        set_many(ids, status, cx)
+    })
+}
+
+/// [`menu_many`] whose picks go to `on_pick` (with the games and the
+/// status, `None` to clear it) instead of being set right away, so callers
+/// can offer an undo.
+pub fn menu_many_with(
+    menu: PopupMenu,
+    ids: Vec<GameId>,
+    cx: &App,
+    on_pick: impl Fn(Vec<GameId>, Option<PlayStatus>, &mut Window, &mut App) + 'static,
+) -> PopupMenu {
+    let on_pick = std::rc::Rc::new(on_pick);
     let user = models(cx).library.read(cx).user.clone();
     let statuses: Vec<Option<PlayStatus>> =
         ids.iter().map(|id| user.play_status(&id.key())).collect();
@@ -103,19 +118,19 @@ pub fn menu_many(menu: PopupMenu, ids: Vec<GameId>, cx: &App) -> PopupMenu {
         .filter(|first| statuses.iter().all(|s| *s == Some(*first)));
     let mut menu = menu;
     for status in PlayStatus::ALL {
-        let ids = ids.clone();
+        let (ids, on_pick) = (ids.clone(), on_pick.clone());
         menu = menu.item(
             PopupMenuItem::new(label(status))
                 .icon(Icon::new(icon(status)))
                 .checked(shared == Some(status))
-                .on_click(move |_, _, cx| set_many(ids.clone(), Some(status), cx)),
+                .on_click(move |_, window, cx| on_pick(ids.clone(), Some(status), window, cx)),
         );
     }
     if statuses.iter().any(Option::is_some) {
         menu = menu.separator().item(
             PopupMenuItem::new(t("ui.play_status.clear"))
                 .icon(Icon::new(IconName::X))
-                .on_click(move |_, _, cx| set_many(ids.clone(), None, cx)),
+                .on_click(move |_, window, cx| on_pick(ids.clone(), None, window, cx)),
         );
     }
     menu

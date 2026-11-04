@@ -1,6 +1,7 @@
-//! What a Lutris import did: counts, the store games to log in for, games
-//! that use the default Wine build, and every game that was not imported
-//! with its reason. Shown after the import from onboarding and Settings.
+//! What a Lutris, Bottles or Faugus Launcher import did: counts, the store
+//! games to log in for, games that use the default Wine build, and every
+//! game that was not imported with its reason. Shown after the import from
+//! onboarding and Settings.
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogFooter;
@@ -38,14 +39,24 @@ pub fn skip_reason(skip: &LutrisSkip) -> SharedString {
 /// The headline lines of a summary.
 pub fn summary_lines(s: &LutrisSummary) -> Vec<SharedString> {
     let n = |v: usize| v.to_string();
-    let mut lines = vec![t_args(
-        "ui.lutris.summary.games",
-        &[
-            ("found", &n(s.found)),
-            ("imported", &n(s.imported)),
-            ("matched", &n(s.matched)),
-        ],
-    )];
+    let mut lines = vec![match &s.launcher {
+        Some(launcher) => t_args(
+            "ui.import.summary.games",
+            &[
+                ("launcher", launcher),
+                ("found", &n(s.found)),
+                ("imported", &n(s.imported)),
+            ],
+        ),
+        None => t_args(
+            "ui.lutris.summary.games",
+            &[
+                ("found", &n(s.found)),
+                ("imported", &n(s.imported)),
+                ("matched", &n(s.matched)),
+            ],
+        ),
+    }];
     if s.favourites + s.categories + s.playtime_games > 0 {
         lines.push(t_args(
             "ui.lutris.summary.data",
@@ -100,10 +111,14 @@ pub fn open_lutris_summary(summary: LutrisSummary, window: &mut Window, cx: &mut
                     .wine_missing
                     .iter()
                     .map(|(title, build)| {
-                        row(
-                            title,
-                            t_args("ui.lutris.summary.wine_build", &[("build", build)]),
-                        )
+                        let detail = match &summary.launcher {
+                            Some(launcher) => t_args(
+                                "ui.import.summary.wine_build",
+                                &[("launcher", launcher), ("build", build)],
+                            ),
+                            None => t_args("ui.lutris.summary.wine_build", &[("build", build)]),
+                        };
+                        row(title, detail)
                     })
                     .collect(),
             ));
@@ -120,7 +135,12 @@ pub fn open_lutris_summary(summary: LutrisSummary, window: &mut Window, cx: &mut
         }
         if !summary.warnings.is_empty() {
             sections.push(section(
-                t("ui.lutris.summary.warnings"),
+                match &summary.launcher {
+                    Some(launcher) => {
+                        t_args("ui.import.summary.warnings", &[("launcher", launcher)])
+                    }
+                    None => t("ui.lutris.summary.warnings"),
+                },
                 summary
                     .warnings
                     .iter()
@@ -135,7 +155,10 @@ pub fn open_lutris_summary(summary: LutrisSummary, window: &mut Window, cx: &mut
             ));
         }
         dialog
-            .title(t("ui.lutris.summary.title"))
+            .title(match &summary.launcher {
+                Some(launcher) => t_args("ui.import.summary.title", &[("launcher", launcher)]),
+                None => t("ui.lutris.summary.title"),
+            })
             .w(width)
             .child(
                 v_flex()

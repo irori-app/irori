@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb}을(를) 설치했습니다",
   "settings.field.action_import_lutris.label": "Lutris에서 가져오기",
   "settings.field.action_import_lutris.help": "Lutris에서 설치된 게임, 에뮬레이션 게임, 즐겨찾기, 카테고리, 플레이 시간을 가져옵니다. Lutris 자체는 변경되지 않습니다.",
-  "settings.error.import_lutris": "Lutris에서 가져올 수 없습니다"
+  "settings.error.import_lutris": "Lutris에서 가져올 수 없습니다",
+  "settings.field.action_import_bottles.label": "Bottles에서 가져오기",
+  "settings.field.action_import_bottles.help": "모든 보틀의 프로그램과 그 안에 설치한 게임을 보틀을 프리픽스로 하여 추가합니다. Bottles는 변경하지 않습니다.",
+  "settings.field.action_import_faugus.label": "Faugus Launcher에서 가져오기",
+  "settings.field.action_import_faugus.help": "Faugus Launcher의 게임을 프리픽스, Proton 버전, 변수, 인수와 함께 추가합니다. Faugus Launcher는 변경하지 않습니다.",
+  "settings.error.import_launcher": "가져오지 못했습니다",
+  "settings.field.start_with_system.label": "시스템과 함께 시작",
+  "settings.field.start_with_system.help": "컴퓨터에 로그인하면 Irori를 엽니다.",
+  "settings.field.start_with_system_minimized.label": "시스템과 함께 시작할 때 트레이에서 시작",
+  "settings.field.start_with_system_minimized.help": "로그인 시 Irori가 열리면 창을 표시하지 않고 트레이에서 대기합니다.",
+  "settings.requires.start_with_system": "‘시스템과 함께 시작’이 필요합니다"
 }

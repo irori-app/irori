@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "Сеансов с {date}: {count}",
   "game.timeline.title": "История игры",
   "game.timeline.view_days": "Хронология",
-  "game.timeline.view_sessions": "Сеансы"
+  "game.timeline.view_sessions": "Сеансы",
+  "game.ops.pick_program": "Выберите программу",
+  "game.ops.locate_failed": "Не удалось указать программу для «{title}»",
+  "game.hero.program_missing": "Программа не найдена по пути {path}. Укажите её или уберите игру из библиотеки. Сведения, время в игре и настройки сохранятся.",
+  "game.menu.locate_program": "Указать программу…",
+  "game.related.title": "Похожие игры",
+  "game.related.series": "Та же серия",
+  "game.related.developer": "Тоже от {name}",
+  "game.related.publisher": "Тоже издано {name}",
+  "game.related.genres": "Общие жанры: {genres}",
+  "game.related.separator": ", "
 }

@@ -587,5 +587,15 @@
   "settings.winetricks.verb_installed": "{verb} kuruldu",
   "settings.field.action_import_lutris.label": "Lutris'ten içe aktar",
   "settings.field.action_import_lutris.help": "Yüklü oyunları, emüle edilen oyunları, favorileri, kategorileri ve oynama süresini Lutris'ten aktarın. Lutris'in kendisi değişmez.",
-  "settings.error.import_lutris": "Lutris'ten içe aktarılamadı"
+  "settings.error.import_lutris": "Lutris'ten içe aktarılamadı",
+  "settings.field.action_import_bottles.label": "Bottles’tan içe aktar",
+  "settings.field.action_import_bottles.help": "Her şişenin programlarını ve içine kurulan oyunları, şişeyi önek olarak kullanarak ekler. Bottles’a dokunulmaz.",
+  "settings.field.action_import_faugus.label": "Faugus Launcher’dan içe aktar",
+  "settings.field.action_import_faugus.help": "Faugus Launcher oyunlarını önekleri, Proton sürümleri, değişkenleri ve argümanlarıyla ekler. Faugus Launcher’a dokunulmaz.",
+  "settings.error.import_launcher": "İçe aktarma başarısız",
+  "settings.field.start_with_system.label": "Sistemle başlat",
+  "settings.field.start_with_system.help": "Bilgisayarınızda oturum açtığınızda Irori’yi açar.",
+  "settings.field.start_with_system_minimized.label": "Sistemle başlarken tepside başlat",
+  "settings.field.start_with_system_minimized.help": "Irori oturum açılışında başladığında penceresini göstermek yerine tepside bekler.",
+  "settings.requires.start_with_system": "Sistemle başlat gerekir"
 }

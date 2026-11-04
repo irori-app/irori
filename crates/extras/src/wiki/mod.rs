@@ -206,6 +206,22 @@ pub async fn steam_app_id(game: &GameInfo) -> Option<String> {
     info.steam_app_id().map(str::to_string)
 }
 
+/// Steam's cover and hero art for a game known only by its title (one
+/// added from a folder), through the Steam app ID PCGamingWiki gives it.
+pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
+    const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+    let game = GameInfo {
+        title: title.to_string(),
+        runner: Some(Runner::Sideload),
+        ..Default::default()
+    };
+    let id = steam_app_id(&game).await?;
+    Some((
+        format!("{STEAM_CDN}/{id}/library_600x900_2x.jpg"),
+        format!("{STEAM_CDN}/{id}/library_hero.jpg"),
+    ))
+}
+
 /// umu ID of a store game, for `GAMEID`. Found IDs are cached forever;
 /// "not found" answers for 6 hours. Sideloaded apps have none.
 pub async fn umu_id(runner: Runner, app_name: &str) -> Result<Option<String>> {
