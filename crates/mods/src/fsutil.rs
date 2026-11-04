@@ -1,6 +1,7 @@
 //! File helpers shared by installs and deployment: walking a mod's files,
 //! matching the game folder's letter case, moving files across folders.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
@@ -61,33 +62,86 @@ pub(crate) fn join_rel(root: &Path, rel: &str) -> PathBuf {
 /// `rel` spelled the way the game folder already spells its folders and
 /// files. Windows games don't care about letter case, but Linux does: a mod
 /// shipping `bepinex/Plugins` must land in the game's `BepInEx/plugins`, not
-/// beside it.
+/// beside it. [`CaseAligner`] spells many paths, listing each folder once.
 pub fn align_case(game_dir: &Path, rel: &str) -> String {
-    let mut dir = game_dir.to_path_buf();
-    let mut out: Vec<String> = Vec::new();
-    let mut exists = true;
-    for part in rel.split('/').filter(|p| !p.is_empty()) {
-        let mut name = part.to_string();
-        if exists {
-            if dir.join(part).symlink_metadata().is_err() {
-                match find_case_insensitive(&dir, part) {
-                    Some(found) => name = found,
+    CaseAligner::new(game_dir).align(rel)
+}
+
+/// Spells paths the way the game folder does, listing each folder once.
+///
+/// The spelling comes from the folder's listing, never from whether a path
+/// opens: on a case-insensitive file system (NTFS, APFS) `bepinex` opens the
+/// game's `BepInEx`, and keeping the mod's spelling would rename the game's
+/// own files when a replaced one is put back.
+pub struct CaseAligner {
+    game_dir: PathBuf,
+    /// Folder → (exact names, lower-cased name → first name with it); `None`
+    /// for a folder that can't be listed.
+    folders: HashMap<PathBuf, Option<Names>>,
+}
+
+struct Names {
+    exact: HashSet<String>,
+    lower: HashMap<String, String>,
+}
+
+impl CaseAligner {
+    pub fn new(game_dir: &Path) -> Self {
+        Self {
+            game_dir: game_dir.to_path_buf(),
+            folders: HashMap::new(),
+        }
+    }
+
+    /// `rel` with every part the game folder has spelled as it spells it;
+    /// parts below the first one it lacks stay as they are.
+    pub fn align(&mut self, rel: &str) -> String {
+        let mut dir = self.game_dir.clone();
+        let mut out: Vec<String> = Vec::new();
+        let mut exists = true;
+        for part in rel.split('/').filter(|p| !p.is_empty()) {
+            let mut name = part.to_string();
+            if exists {
+                match self.spelling(&dir, part) {
+                    Some(found) => {
+                        name = found;
+                        dir.push(&name);
+                    }
                     None => exists = false,
                 }
             }
-            dir.push(&name);
+            out.push(name);
         }
-        out.push(name);
+        out.join("/")
     }
-    out.join("/")
+
+    fn spelling(&mut self, dir: &Path, name: &str) -> Option<String> {
+        let names = self
+            .folders
+            .entry(dir.to_path_buf())
+            .or_insert_with(|| list_names(dir))
+            .as_ref()?;
+        if names.exact.contains(name) {
+            return Some(name.to_string());
+        }
+        names.lower.get(&name.to_lowercase()).cloned()
+    }
 }
 
-fn find_case_insensitive(dir: &Path, name: &str) -> Option<String> {
-    let lower = name.to_lowercase();
-    std::fs::read_dir(dir).ok()?.flatten().find_map(|e| {
-        let n = e.file_name().to_string_lossy().into_owned();
-        (n.to_lowercase() == lower).then_some(n)
-    })
+fn list_names(dir: &Path) -> Option<Names> {
+    let mut names = Names {
+        exact: HashSet::new(),
+        lower: HashMap::new(),
+    };
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        names
+            .lower
+            .entry(name.to_lowercase())
+            .or_insert_with(|| name.clone());
+        names.exact.insert(name);
+    }
+    Some(names)
 }
 
 /// Move the file `from` to `to`, creating `to`'s folder and replacing a file

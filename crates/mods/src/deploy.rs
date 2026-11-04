@@ -24,7 +24,7 @@ use anyhow::{Context as _, Result, bail};
 use irori_core::{AppSettings, archive_guard, fs_guard, json_store};
 use serde::{Deserialize, Serialize};
 
-use crate::fsutil::{align_case, join_rel, modified_ns, move_file, same_file, walk_files};
+use crate::fsutil::{CaseAligner, join_rel, modified_ns, move_file, same_file, walk_files};
 
 /// Suffix of a game file set aside while a mod replaces it.
 pub const BACKUP_SUFFIX: &str = ".irori-original";
@@ -95,6 +95,7 @@ pub enum LinkKind {
 /// spells it) → (layer index, path inside the layer).
 pub fn plan(game_dir: &Path, layers: &[Layer]) -> Result<BTreeMap<String, (usize, String)>> {
     let mut by_key: BTreeMap<String, (String, usize, String)> = BTreeMap::new();
+    let mut aligner = CaseAligner::new(game_dir);
     for (ix, layer) in layers.iter().enumerate() {
         for (rel, _) in walk_files(&layer.dir)? {
             if archive_guard::relative_entry_path(Path::new(&rel)).is_none() {
@@ -104,7 +105,7 @@ pub fn plan(game_dir: &Path, layers: &[Layer]) -> Result<BTreeMap<String, (usize
             let target = by_key
                 .get(&key)
                 .map(|(t, _, _)| t.clone())
-                .unwrap_or_else(|| align_case(game_dir, &rel));
+                .unwrap_or_else(|| aligner.align(&rel));
             by_key.insert(key, (target, ix, rel));
         }
     }

@@ -357,11 +357,16 @@ fn a_leftover_backup_stops_the_deployment() {
 
 #[test]
 fn deployment_follows_the_game_folders_letter_case() {
+    // Holds on case-sensitive and case-insensitive file systems alike: the
+    // spelling comes from the game folder's listing, not from what opens.
     let f = fixture();
     let lib = &f.lib;
+    write(&f.game, "Docs/Readme.TXT", "game docs");
+    let before = snapshot(&f.game);
     let mut list = ModList::default();
     let staging = lib.staging().unwrap();
     write(staging.path(), "t/bepinex/Plugins/case.dll", "x");
+    write(staging.path(), "t/docs/readme.txt", "mod docs");
     lib.add(
         &mut list,
         &staging.path().join("t"),
@@ -370,12 +375,24 @@ fn deployment_follows_the_game_folders_letter_case() {
         &AppSettings::default(),
     )
     .unwrap();
-    let plan = deploy::plan(&f.game, &lib.layers(&list).unwrap()).unwrap();
+    let layers = lib.layers(&list).unwrap();
+    let plan = deploy::plan(&f.game, &layers).unwrap();
     assert!(plan.contains_key("BepInEx/plugins/case.dll"), "{plan:?}");
+    assert!(plan.contains_key("Docs/Readme.TXT"), "{plan:?}");
     assert_eq!(
         crate::align_case(&f.game, "bepinex/PLUGINS/x/y"),
         "BepInEx/plugins/x/y"
     );
+
+    // Putting the replaced file back keeps the game's own spelling.
+    let manifest = lib.manifest_file();
+    deploy_links(&f.game, &layers, &manifest).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(f.game.join("Docs/Readme.TXT")).unwrap(),
+        "mod docs"
+    );
+    undeploy(&manifest, &lib.written_dir(), &AppSettings::default()).unwrap();
+    assert_eq!(snapshot(&f.game), before);
 }
 
 #[test]
