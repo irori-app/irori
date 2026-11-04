@@ -857,6 +857,10 @@ impl<S: Store> Store for MultiAccountStore<S> {
             .await
     }
 
+    async fn forget_achievements(&self, app_name: &str) {
+        self.store_for(app_name).forget_achievements(app_name).await
+    }
+
     /// Each game's longest total across the accounts.
     async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
         let slots = self.signed_in();

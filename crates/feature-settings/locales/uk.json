@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb} встановлено",
   "settings.field.action_import_lutris.label": "Імпорт з Lutris",
   "settings.field.action_import_lutris.help": "Перенести встановлені ігри, емульовані ігри, обране, категорії та час у грі з Lutris. Сам Lutris не зміниться.",
+  "settings.field.achievement_notices.label": "Повідомляти про нові досягнення після гри",
+  "settings.field.achievement_notices.help": "Коли гра закривається, Irori перевіряє її досягнення й показує, що ви отримали.",
   "settings.error.import_lutris": "Не вдалося імпортувати з Lutris",
   "settings.field.action_import_bottles.label": "Імпорт із Bottles",
   "settings.field.action_import_bottles.help": "Додає програми всіх пляшок і встановлені в них ігри, з пляшкою як префіксом. Bottles не змінюється.",

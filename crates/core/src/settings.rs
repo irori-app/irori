@@ -636,6 +636,10 @@ pub struct AppSettings {
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
+    /// Announce the achievements a session unlocked once the game exits.
+    /// Irori-only.
+    #[serde(rename = "iroriAchievementNotices")]
+    pub achievement_notices: bool,
 }
 
 impl Default for AppSettings {
@@ -659,6 +663,7 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             show_log_on_launch: false,
+            achievement_notices: false,
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,

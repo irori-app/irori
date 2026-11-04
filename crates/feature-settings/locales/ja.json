@@ -663,6 +663,8 @@
   "settings.winetricks.verb_installed": "{verb}をインストールしました",
   "settings.field.action_import_lutris.label": "Lutrisからインポート",
   "settings.field.action_import_lutris.help": "Lutrisからインストール済みのゲーム、エミュレーションのゲーム、お気に入り、カテゴリー、プレイ時間を引き継ぎます。Lutris自体は変更されません。",
+  "settings.field.achievement_notices.label": "プレイ後に新しい実績を通知",
+  "settings.field.achievement_notices.help": "ゲームを終了すると、Irori が実績を確認し、解除したものを表示します。",
   "settings.error.import_lutris": "Lutrisからインポートできませんでした",
   "settings.field.action_import_bottles.label": "Bottles からインポート",
   "settings.field.action_import_bottles.help": "すべてのボトルのプログラムと、そこにインストールしたゲームを、ボトルをプレフィックスとして追加します。Bottles 自体は変更しません。",
