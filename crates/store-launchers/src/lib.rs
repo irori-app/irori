@@ -1,5 +1,6 @@
 //! Official third-party launchers ([`Runner::Launchers`]): Battle.net, the
-//! EA app, Ubisoft Connect and the Rockstar Games Launcher.
+//! EA app, Ubisoft Connect and the Rockstar Games Launcher, plus the games
+//! of the Xbox app and the Microsoft Store on Windows.
 //!
 //! Irori never handles these launchers' accounts. It sets each launcher up
 //! once (a prefix of its own with a Wine build the user picks, and the
@@ -12,29 +13,43 @@
 //! (everything in its prefix stops), and removed from Irori, which forgets it
 //! and leaves its prefix and games on disk.
 //!
+//! Xbox app games (PC Game Pass, Microsoft Store) need no setup: on Windows
+//! the installed game packages are found by themselves
+//! (`irori_launchers_data::xbox`), start through the shell, and are followed
+//! by their processes. Elsewhere there are none.
+//!
 //! Everything is behind `iroriThirdPartyLaunchers`: while it is off the store
 //! lists nothing.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
 use irori_core::process::{self, CommandSpec};
 use irori_core::{
-    Event, EventBus, ExtraInfo, GameInfo, GameSettings, InstallInfo, InstallInfoQuery,
-    InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan, LaunchRequest, LoginFlow,
-    OpContext, Outcome, Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest, UserInfo,
-    WineInstallation, WineKind, json_store, util,
+    ClientAction, Event, EventBus, ExtraInfo, GameInfo, GameSettings, GameWatch, InstallInfo,
+    InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan, LaunchRequest,
+    LoginFlow, OpContext, Outcome, Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest,
+    UserInfo, WineInstallation, WineKind, json_store, util,
 };
+use irori_launchers_data::xbox::{self, XboxGame};
 use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 pub use irori_launchers_data::Launcher as LauncherKind;
 pub use irori_launchers_data::SignIn as LauncherSignIn;
+pub use irori_launchers_data::xbox::DISPLAY_NAME as XBOX_APP;
+
+/// Whether `app_name` is an Xbox app game's.
+pub fn is_xbox_game(app_name: &str) -> bool {
+    app_name
+        .strip_prefix(xbox::ID)
+        .is_some_and(|rest| rest.starts_with(':'))
+}
 
 const MANAGED_BY_LAUNCHER: &str =
     "This game belongs to its launcher; install, update and remove it there";
@@ -71,6 +86,21 @@ struct State {
     games: Vec<Arc<GameInfo>>,
     sign_in: BTreeMap<Launcher, SignIn>,
     warnings: Vec<String>,
+    xbox: Vec<XboxGame>,
+    xbox_app: bool,
+    /// Xbox games' sizes in bytes, by package folder and version.
+    sizes: HashMap<(PathBuf, Option<String>), u64>,
+}
+
+/// What the launchers page shows for the Xbox app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct XboxStatus {
+    /// Xbox games can be listed here: Windows only.
+    pub supported: bool,
+    /// The Xbox app is installed.
+    pub app_installed: bool,
+    /// Games found.
+    pub games: usize,
 }
 
 /// What the launchers page shows for one launcher.
@@ -96,6 +126,7 @@ pub struct LaunchersStore {
     state: RwLock<State>,
     /// One setup or scan at a time.
     busy: tokio::sync::Mutex<()>,
+    me: Weak<Self>,
 }
 
 impl LaunchersStore {
@@ -128,7 +159,7 @@ impl LaunchersStore {
         cache_dir: PathBuf,
         logs: PathBuf,
     ) -> Arc<Self> {
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
             bus,
             settings,
             state_file: config_dir.join("launchers.json"),
@@ -136,6 +167,7 @@ impl LaunchersStore {
             logs,
             state: RwLock::new(State::default()),
             busy: tokio::sync::Mutex::new(()),
+            me: me.clone(),
         })
     }
 
@@ -166,6 +198,26 @@ impl LaunchersStore {
                 }
             })
             .collect()
+    }
+
+    /// Whether Xbox games can be listed, and what the last scan found.
+    pub fn xbox_status(&self) -> XboxStatus {
+        let s = self.state.read();
+        XboxStatus {
+            supported: cfg!(windows),
+            app_installed: s.xbox_app,
+            games: s.xbox.len(),
+        }
+    }
+
+    /// Start the Xbox app (Windows), to sign in or install games there.
+    pub async fn open_xbox_app(&self) -> Result<()> {
+        anyhow::ensure!(cfg!(windows), "The Xbox app runs only on Windows");
+        process::spawn(
+            &shell_open(&format!("shell:AppsFolder\\{}", xbox::XBOX_APP_AUMID)),
+            None,
+        )?;
+        Ok(())
     }
 
     /// Files Irori couldn't read during the last scan.
@@ -436,19 +488,141 @@ impl LaunchersStore {
         let report = tokio::task::spawn_blocking(move || Scan::run(&setups))
             .await
             .unwrap_or_default();
-        let games = report
-            .games
-            .iter()
-            .map(|g| Arc::new(game_info(g)))
-            .collect();
-        {
+        let missing_sizes = {
             let mut s = self.state.write();
             s.found = report.games;
-            s.games = games;
             s.sign_in = report.sign_in;
             s.warnings = report.warnings;
-        }
+            s.xbox = report.xbox;
+            s.xbox_app = report.xbox_app;
+            s.games = library(&s);
+            s.xbox
+                .iter()
+                .map(|g| (g.install_dir.clone(), g.version.clone()))
+                .filter(|key| !s.sizes.contains_key(key))
+                .collect::<Vec<_>>()
+        };
         self.bus.emit(Event::LibraryChanged(Runner::Launchers));
+        if !missing_sizes.is_empty() {
+            self.measure(missing_sizes);
+        }
+    }
+
+    /// Add up the sizes of Xbox games' folders in the background, since a
+    /// large game takes a while, then show them.
+    fn measure(&self, folders: Vec<(PathBuf, Option<String>)>) {
+        let Ok(rt) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let me = self.me.clone();
+        rt.spawn(async move {
+            let sizes = tokio::task::spawn_blocking(move || {
+                folders
+                    .into_iter()
+                    .map(|(dir, version)| {
+                        let size = xbox::folder_size(&dir);
+                        ((dir, version), size)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .unwrap_or_default();
+            let Some(store) = me.upgrade() else { return };
+            {
+                let mut s = store.state.write();
+                s.sizes.extend(sizes);
+                s.games = library(&s);
+            }
+            store.bus.emit(Event::LibraryChanged(Runner::Launchers));
+        });
+    }
+
+    fn xbox_game(&self, app_name: &str) -> Option<XboxGame> {
+        if !is_xbox_game(app_name) {
+            return None;
+        }
+        self.state
+            .read()
+            .xbox
+            .iter()
+            .find(|g| g.app_name() == app_name)
+            .cloned()
+    }
+}
+
+/// Every game the library shows, from what the last scan found.
+fn library(s: &State) -> Vec<Arc<GameInfo>> {
+    let launchers = s.found.iter().map(game_info);
+    let xbox = s.xbox.iter().map(|g| {
+        let size = s
+            .sizes
+            .get(&(g.install_dir.clone(), g.version.clone()))
+            .copied();
+        xbox_game_info(g, size)
+    });
+    launchers.chain(xbox).map(Arc::new).collect()
+}
+
+/// The command that hands `target` (a link, or a `shell:` address) to the
+/// Windows shell, as the Start menu and Run box do. `ShellExec_RunDLL`
+/// returns at once and with success, so the session follows the game, not
+/// this command.
+fn shell_open(target: &str) -> CommandSpec {
+    CommandSpec::new("rundll32.exe")
+        .arg("shell32.dll,ShellExec_RunDLL")
+        .arg(target)
+}
+
+/// Follows an Xbox game by the processes running from its package folder:
+/// the shell starts it and hands it to Windows.
+struct XboxWatch {
+    folder: String,
+}
+
+impl XboxWatch {
+    fn processes(&self) -> sysinfo::System {
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing()
+                .with_cmd(UpdateKind::Always)
+                .with_exe(UpdateKind::Always),
+        );
+        sys
+    }
+
+    fn runs_here(&self, p: &sysinfo::Process) -> bool {
+        let cmd: Vec<String> = p
+            .cmd()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        process::runs_from(&self.folder, p.exe(), &cmd)
+    }
+}
+
+impl GameWatch for XboxWatch {
+    fn running(&self) -> bool {
+        self.processes()
+            .processes()
+            .values()
+            .any(|p| self.runs_here(p))
+    }
+
+    fn stop(&self, force: bool) {
+        for p in self.processes().processes().values() {
+            if self.runs_here(p) {
+                if force {
+                    p.kill();
+                } else {
+                    // Not supported on Windows; the forced stop that follows
+                    // ends the game there.
+                    let _ = p.kill_with(sysinfo::Signal::Term);
+                }
+            }
+        }
     }
 }
 
@@ -502,6 +676,8 @@ struct Scan {
     games: Vec<InstalledGame>,
     sign_in: BTreeMap<Launcher, SignIn>,
     warnings: Vec<String>,
+    xbox: Vec<XboxGame>,
+    xbox_app: bool,
 }
 
 impl Scan {
@@ -509,7 +685,10 @@ impl Scan {
     fn run(setups: &BTreeMap<Launcher, Setup>) -> Scan {
         let mut report = ScanReport::default();
         let mut sign_in = BTreeMap::new();
+        let mut xbox = xbox::XboxScan::default();
         if cfg!(windows) {
+            xbox = xbox::scan_windows();
+            report.warnings.append(&mut xbox.warnings);
             let registry = windows_registry();
             let documents: Vec<PathBuf> = std::env::var_os("USERPROFILE")
                 .map(|home| PathBuf::from(home).join("Documents"))
@@ -532,6 +711,8 @@ impl Scan {
             games: report.games,
             sign_in,
             warnings: report.warnings,
+            xbox: xbox.games,
+            xbox_app: xbox.xbox_app,
         }
     }
 }
@@ -676,6 +857,46 @@ fn game_info(g: &InstalledGame) -> GameInfo {
     .finalize()
 }
 
+/// What the library shows for an Xbox game. Its art is the package's own
+/// images; a cover from SteamGridDB can replace it as for any game.
+fn xbox_game_info(g: &XboxGame, size: Option<u64>) -> GameInfo {
+    let file = |p: &Option<PathBuf>| p.as_ref().map(|p| format!("file://{}", p.display()));
+    GameInfo {
+        runner: Some(Runner::Launchers),
+        app_name: g.app_name(),
+        title: g.title.clone(),
+        publisher: g.publisher.clone(),
+        description: g.description.clone(),
+        store_url: g.store_web_url(),
+        art_square: file(&g.art.square),
+        art_background: file(&g.art.wide),
+        art_icon: file(&g.art.icon),
+        is_installed: true,
+        install: Some(InstalledInfo {
+            install_path: g.install_dir.display().to_string(),
+            executable: g.executable.clone().unwrap_or_default(),
+            install_size: size.map(util::format_bytes).unwrap_or_default(),
+            install_size_bytes: size.unwrap_or_default(),
+            version: g.version.clone().unwrap_or_default(),
+            platform: InstallPlatform::Windows,
+            ..Default::default()
+        }),
+        installable: false,
+        third_party_managed_app: Some(xbox::DISPLAY_NAME.to_string()),
+        platforms: vec![InstallPlatform::Windows],
+        version: g.version.clone(),
+        folder_name: g
+            .install_dir
+            .parent()
+            .filter(|_| g.install_dir.ends_with(xbox::CONTENT))
+            .unwrap_or(&g.install_dir)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned()),
+        ..Default::default()
+    }
+    .finalize()
+}
+
 #[async_trait]
 impl Store for LaunchersStore {
     fn runner(&self) -> Runner {
@@ -773,6 +994,21 @@ impl Store for LaunchersStore {
         self.game(app_name).is_some()
     }
 
+    /// Xbox games: show the game's page in the Microsoft Store, where the
+    /// Xbox app's install, update and remove commands are too. The other
+    /// launchers keep their games to themselves.
+    async fn client_action(&self, app_name: &str, action: ClientAction) -> Result<()> {
+        let game = self
+            .xbox_game(app_name)
+            .context("This game's launcher has no page to show")?;
+        anyhow::ensure!(
+            action == ClientAction::Show,
+            "Install, update and remove Xbox games in the Xbox app"
+        );
+        process::spawn(&shell_open(&game.store_link()), None)?;
+        Ok(())
+    }
+
     /// Start the game through its launcher. The session follows the game's
     /// own processes (see the services layer), not the launcher's.
     async fn launch(
@@ -781,6 +1017,16 @@ impl Store for LaunchersStore {
         request: &LaunchRequest,
         _ctx: OpContext,
     ) -> Result<LaunchPlan> {
+        if let Some(game) = self.xbox_game(app_name) {
+            // Packaged games take no arguments from the shell.
+            return Ok(LaunchPlan {
+                command: shell_open(&game.launch_uri()),
+                track_wineserver: false,
+                watch: Some(Arc::new(XboxWatch {
+                    folder: game.install_dir.display().to_string(),
+                })),
+            });
+        }
         let game = self
             .state
             .read()
@@ -1128,6 +1374,104 @@ fi
         assert!(format!("{e:#}").contains("closed before Battle.net was installed"));
         let log = std::fs::read_to_string(dir.path().join("cache/logs/battlenet-setup.log"));
         assert!(log.unwrap().contains("setup failed"));
+    }
+
+    fn sky_racer(dir: &Path) -> XboxGame {
+        XboxGame {
+            family_name: "Studio.SkyRacer_abcdefghjkmnp".into(),
+            title: "Sky Racer".into(),
+            publisher: Some("Example Studio".into()),
+            description: None,
+            version: Some("1.6.0.0".into()),
+            app_id: "Game".into(),
+            executable: Some("SkyRacer.exe".into()),
+            install_dir: dir.join("XboxGames/Sky Racer/Content"),
+            store_id: Some("9NZTKMP36L8J".into()),
+            art: xbox::PackageArt {
+                square: Some(dir.join("XboxGames/Sky Racer/Content/Logo480.png")),
+                wide: None,
+                icon: None,
+            },
+        }
+    }
+
+    #[test]
+    fn xbox_games_show_their_package() {
+        let dir = Path::new("/d");
+        let info = xbox_game_info(&sky_racer(dir), Some(3 * 1024 * 1024 * 1024));
+        assert_eq!(info.app_name, "xbox:Studio.SkyRacer_abcdefghjkmnp");
+        assert_eq!(info.runner(), Runner::Launchers);
+        assert_eq!(info.third_party_managed_app.as_deref(), Some("Xbox app"));
+        assert_eq!(info.folder_name.as_deref(), Some("Sky Racer"));
+        let logo = format!(
+            "file://{}",
+            dir.join("XboxGames/Sky Racer/Content/Logo480.png")
+                .display()
+        );
+        assert_eq!(info.cover_art(), Some(logo.as_str()));
+        assert_eq!(
+            info.store_url.as_deref(),
+            Some("https://apps.microsoft.com/detail/9NZTKMP36L8J")
+        );
+        let install = info.install.as_ref().unwrap();
+        assert_eq!(install.install_size_bytes, 3 * 1024 * 1024 * 1024);
+        assert!(!install.install_size.is_empty());
+        assert_eq!(install.version, "1.6.0.0");
+        assert!(!info.installable);
+        assert!(is_xbox_game(&info.app_name));
+        assert!(!is_xbox_game("xboxish:x") && !is_xbox_game("battlenet:wow"));
+    }
+
+    #[tokio::test]
+    async fn xbox_games_start_through_the_shell_and_are_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let launchers = store(dir.path(), true);
+        launchers.init().await.unwrap();
+        let status = launchers.xbox_status();
+        assert_eq!(status.supported, cfg!(windows));
+        assert_eq!(status.games, 0);
+        {
+            let mut s = launchers.state.write();
+            s.xbox = vec![sky_racer(dir.path())];
+            s.games = library(&s);
+        }
+        assert_eq!(launchers.games().len(), 1);
+        assert_eq!(launchers.xbox_status().games, 1);
+
+        let app = "xbox:Studio.SkyRacer_abcdefghjkmnp";
+        let plan = launchers
+            .launch(app, &dummy_request(dir.path()), OpContext::detached())
+            .await
+            .unwrap();
+        assert_eq!(plan.command.program, Path::new("rundll32.exe"));
+        assert_eq!(
+            plan.command.args,
+            [
+                "shell32.dll,ShellExec_RunDLL",
+                r"shell:AppsFolder\Studio.SkyRacer_abcdefghjkmnp!Game"
+            ]
+        );
+        let watch = plan
+            .watch
+            .expect("the session follows the game's processes");
+        assert!(!watch.running(), "nothing runs from the game's folder");
+
+        let refused = launchers
+            .client_action(app, ClientAction::Uninstall)
+            .await
+            .unwrap_err();
+        assert!(format!("{refused:#}").contains("Xbox app"));
+        assert!(
+            launchers
+                .client_action("battlenet:wow", ClientAction::Show)
+                .await
+                .is_err()
+        );
+
+        // Turning the launchers off hides Xbox games too.
+        let off = store(dir.path(), false);
+        off.state.write().xbox = vec![sky_racer(dir.path())];
+        assert!(off.games().is_empty());
     }
 
     fn dummy_request(dir: &Path) -> LaunchRequest {

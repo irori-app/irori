@@ -139,6 +139,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io:** log in and install,
   update, repair, move or import games from one download queue, with several accounts
   per store. Each installed game launches with the account it was installed with.
+- **Xbox app and PC Game Pass on Windows:** games the Xbox app or the Microsoft Store
+  installed show up by themselves once "Other launchers" is on, with their own art and
+  size, and start in one click. No sign-in.
 - **Steam:** your installed games come in from Steam's own files with no login, with
   Steam's art. Log in (QR code, or password with Steam Guard) to add every game you own
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall

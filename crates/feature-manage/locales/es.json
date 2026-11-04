@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Juegos de Blizzard y Activision: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "Juegos de EA, incluidos los que tienes en Steam o Epic y necesitan la EA app.",
   "manage.launchers.about.ubisoft": "Juegos de Ubisoft, incluidos los que necesitan Ubisoft Connect para iniciarse.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption y otros juegos de Rockstar."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption y otros juegos de Rockstar.",
+  "manage.launchers.about.xbox": "Juegos de la aplicación Xbox, Microsoft Store y PC Game Pass. Irori los encuentra por sí solo; instálalos y desinstálalos en la aplicación Xbox.",
+  "manage.launchers.xbox.windows_only": "La aplicación Xbox solo funciona en Windows. Abre Irori en Windows para ver estos juegos en tu biblioteca.",
+  "manage.launchers.xbox.get_app": "Obtener la aplicación Xbox",
+  "manage.launchers.state.windows_only": "Solo Windows",
+  "manage.launchers.state.no_xbox_app": "Aplicación Xbox no instalada"
 }

@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Blizzard 및 Activision 게임: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "EA 게임. Steam이나 Epic에서 보유했지만 EA app이 필요한 게임도 포함됩니다.",
   "manage.launchers.about.ubisoft": "Ubisoft 게임. 실행에 Ubisoft Connect가 필요한 게임도 포함됩니다.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption 및 기타 Rockstar 게임."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption 및 기타 Rockstar 게임.",
+  "manage.launchers.about.xbox": "Xbox 앱, Microsoft Store, PC Game Pass 게임입니다. Irori가 알아서 찾아 주며, 설치와 제거는 Xbox 앱에서 합니다.",
+  "manage.launchers.xbox.windows_only": "Xbox 앱은 Windows에서만 실행됩니다. Windows에서 Irori를 실행하면 이 게임들이 라이브러리에 표시됩니다.",
+  "manage.launchers.xbox.get_app": "Xbox 앱 받기",
+  "manage.launchers.state.windows_only": "Windows 전용",
+  "manage.launchers.state.no_xbox_app": "Xbox 앱이 설치되지 않음"
 }

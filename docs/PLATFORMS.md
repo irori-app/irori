@@ -220,6 +220,10 @@ shortcuts use `.desktop`, Finder app bundles, or Windows shell links respectivel
 Windows cancellation uses `taskkill /T /F`; games that deliberately escape their
 launcher process tree still require game-specific testing. External EA/Ubisoft
 launchers may reuse an existing process, which limits playtime tracking.
+Xbox app and Microsoft Store games are Windows-only: they start through the shell
+(`shell:AppsFolder\<family>!<app id>`), and their sessions and the Stop button
+follow the processes running from the package folder. On Linux and macOS the Stores
+page explains this instead of listing them.
 
 ### Screenshots
 
