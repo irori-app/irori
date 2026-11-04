@@ -11,6 +11,7 @@ mod grid;
 mod layout;
 mod model;
 mod text;
+mod theme;
 mod view;
 
 use gpui_kit::{App, Global, KeyBinding, actions};

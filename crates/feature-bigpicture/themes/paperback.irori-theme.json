@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Paperback",
+  "author": "Irori",
+  "layout": "shelves",
+  "colors": {
+    "background": "#f3ede2",
+    "foreground": "#2b241e",
+    "accent": "#b4441c",
+    "surface": "#fbf8f2"
+  },
+  "font": "serif",
+  "background": { "kind": "solid" },
+  "covers": { "shape": "portrait", "size": "medium", "corners": "sharp" },
+  "shelves": ["continue_playing", "recently_added", "favourites", "installed"]
+}

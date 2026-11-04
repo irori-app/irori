@@ -14,9 +14,10 @@ use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnimationExt as _, AnyElement, BoxShadow, ClickEvent, Context, InteractiveElement as _,
-    IntoElement, ObjectFit, ParentElement as _, Role, SharedString, SpringAnimation,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div, point, px, rems,
+    AnimationExt as _, AnyElement, BoxShadow, ClickEvent, Context, Div, Hsla,
+    InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _, Role, SharedString,
+    SpringAnimation, Stateful, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    Window, div, point, px, rems,
 };
 use irori_core::{GameId, GameInfo, StatusKind};
 use irori_ui::components::{ArtImage, art_image, art_loading, missing_art_fill, physical_width};
@@ -25,9 +26,9 @@ use irori_ui::models;
 use irori_ui::motion::{HOVER_SPRING, fade_in};
 
 use super::{BigPictureView, Colors, LibraryFocus, Tab};
-use crate::layout::{TILE_GAP, TILE_RATIO};
 use crate::model::{CoverClick, cover_action, cover_click};
 use crate::text::status_with_percent;
+use crate::theme::CoverShape;
 
 /// How far the focused cover rises, in rem.
 const LIFT: f32 = 0.5;
@@ -41,6 +42,10 @@ pub(super) struct Cover {
     pub width: f32,
     /// Scale when focused.
     pub scale: f32,
+    /// The art's shape; the cover is `width × ratio` tall.
+    pub shape: CoverShape,
+    /// Space around the cover in its slot, in rem.
+    pub gap: f32,
     pub focused: bool,
     /// Where it sits, so a click can focus it.
     pub slot: CoverSlot,
@@ -140,17 +145,52 @@ impl BigPictureView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let (width, scale, ratio, gap) = (cover.width, cover.scale, cover.shape.ratio(), cover.gap);
+        let id = cover.id.clone();
+        let focused = cover.focused;
+        let tile = self.cover_tile(&cover, c, window, cx);
+        let lifted = tile.with_spring(
+            SharedString::from(format!("{id}-focus")),
+            SpringAnimation::new(HOVER_SPRING).to(if focused { 1.0 } else { 0.0 }),
+            move |el, f: f32| {
+                let w = width * (1.0 + (scale - 1.0) * f);
+                focus_frame(el.w(rems(w)).h(rems(w * ratio)).top(rems(-LIFT * f)), c, f)
+            },
+        );
+        div()
+            .w(rems(width * scale + gap))
+            .h(rems(width * ratio * scale + gap))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(lifted)
+            .into_any_element()
+    }
+
+    /// A cover without its size: art (or the title on a stand-in), badges,
+    /// progress and the button under the pointer, and what a click does.
+    pub(super) fn cover_tile(
+        &self,
+        cover: &Cover,
+        c: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let Cover {
             game,
             id,
             width,
             scale,
+            shape,
             focused,
             slot,
+            ..
         } = cover;
+        let (game, id, focused, slot) = (game.clone(), id.clone(), *focused, *slot);
         let state = Self::game_state(&game, cx);
         let status = models(cx).statuses.read(cx).get(&game.id()).cloned();
-        let image = match game.cover_art() {
+        let image = match shape.art(&game) {
             Some(url) => art_image(url, physical_width(rems(width * scale), window), false, cx),
             None => ArtImage::Missing,
         };
@@ -184,7 +224,7 @@ impl BigPictureView {
             )
         };
 
-        let tile = div()
+        div()
             .id(id.clone())
             .group(id.clone())
             .role(Role::Button)
@@ -301,38 +341,21 @@ impl BigPictureView {
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 this.click_cover(slot, event.click_count(), cx);
                 this.focus.focus(window, cx);
-            }));
-
-        let (ring, edge) = (c.ring, c.foreground);
-        let lifted = tile.with_spring(
-            SharedString::from(format!("{id}-focus")),
-            SpringAnimation::new(HOVER_SPRING).to(if focused { 1.0 } else { 0.0 }),
-            move |el, f: f32| {
-                let w = width * (1.0 + (scale - 1.0) * f);
-                el.w(rems(w))
-                    .h(rems(w * TILE_RATIO))
-                    .top(rems(-LIFT * f))
-                    .border_color(edge.opacity(0.9 * f))
-                    // Covers at rest cast no glow, so none is drawn.
-                    .when(f > 0.01, |el| {
-                        el.shadow(vec![BoxShadow {
-                            color: ring.opacity(0.55 * f),
-                            offset: point(px(0.), px(8.)),
-                            blur_radius: px(36.),
-                            spread_radius: px(2.),
-                            inset: false,
-                        }])
-                    })
-            },
-        );
-        div()
-            .w(rems(width * scale + TILE_GAP))
-            .h(rems(width * TILE_RATIO * scale + TILE_GAP))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(lifted)
-            .into_any_element()
+            }))
     }
+}
+
+/// The focused cover's edge and glow, `f` of the way in (0 at rest, so a
+/// cover at rest draws no shadow).
+pub(super) fn focus_frame(el: Stateful<Div>, c: Colors, f: f32) -> Stateful<Div> {
+    let (ring, edge): (Hsla, Hsla) = (c.ring, c.foreground);
+    el.border_color(edge.opacity(0.9 * f)).when(f > 0.01, |el| {
+        el.shadow(vec![BoxShadow {
+            color: ring.opacity(0.55 * f),
+            offset: point(px(0.), px(8.)),
+            blur_radius: px(36.),
+            spread_radius: px(2.),
+            inset: false,
+        }])
+    })
 }
