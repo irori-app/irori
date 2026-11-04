@@ -51,7 +51,7 @@ export const SYSTEMS = ['NES', 'SNES', 'N64', 'GB', 'GBC', 'GBA', 'NDS', '3DS', 
 export type Platform = 'linux' | 'macos' | 'windows'
 
 /** Install commands per system. Labels and notes are in the dictionaries (`download.options`). */
-export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | 'arch' | 'homebrew' | 'dmg' | 'installer' | 'scoop'; commands: string[] }[]> = {
+export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | 'arch' | 'appimage' | 'homebrew' | 'dmg' | 'installer' | 'portable' | 'scoop'; commands: string[] }[]> = {
   linux: [
     {
       id: 'debian',
@@ -85,6 +85,10 @@ export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | '
         'flatpak install --user ./Irori-*-linux.flatpak',
       ],
     },
+    {
+      id: 'appimage',
+      commands: ['chmod +x Irori-*-x86_64.AppImage', './Irori-*-x86_64.AppImage'],
+    },
   ],
   macos: [
     { id: 'homebrew', commands: ['brew install --cask irori-app/tap/irori'] },
@@ -92,6 +96,7 @@ export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | '
   ],
   windows: [
     { id: 'installer', commands: [] },
+    { id: 'portable', commands: [] },
     { id: 'scoop', commands: ['scoop bucket add irori https://github.com/irori-app/scoop-bucket', 'scoop install irori'] },
   ],
 }
