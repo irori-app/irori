@@ -336,6 +336,18 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             });
         }
     }
+    if let Some(link) = &cli.nxm {
+        open_main_window(app, cx);
+        let window = app.lock().window;
+        if let Some(handle) = window {
+            let link = link.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    irori_game::open_nxm_dialog(&link, window, cx)
+                })
+            });
+        }
+    }
     if let Some(id) = &cli.launch {
         if cli.launch_from_link {
             confirm_link_launch(id.clone(), app, cx);

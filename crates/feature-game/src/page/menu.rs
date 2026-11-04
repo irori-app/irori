@@ -215,6 +215,12 @@ pub(super) fn build_menu(
             );
             menu = menu.separator();
         }
+        if crate::mods::applies(&game) {
+            let g = game.clone();
+            menu = menu.item(item("game.menu.mods", IconName::Puzzle).on_click(
+                move |_, window, cx| crate::mods::open_mods_sheet(g.clone(), window, cx),
+            ));
+        }
         let i = id.clone();
         menu = menu.item(
             item("game.menu.open_install_folder", IconName::FolderOpen)

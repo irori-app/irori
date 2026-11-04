@@ -171,12 +171,14 @@ pub fn find(root: &Path) -> Option<(PathBuf, PathBuf)> {
 fn decode(bytes: &[u8]) -> Result<String> {
     let utf16 = |data: &[u8], le: bool| -> Result<String> {
         let units: Vec<u16> = data
-            .chunks_exact(2)
-            .map(|c| {
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| {
                 if le {
-                    u16::from_le_bytes([c[0], c[1]])
+                    u16::from_le_bytes(c)
                 } else {
-                    u16::from_be_bytes([c[0], c[1]])
+                    u16::from_be_bytes(c)
                 }
             })
             .collect();
@@ -692,4 +694,10 @@ fn copy_into(source: &Path, tree: &Path, rel: &str) -> Result<()> {
     std::fs::copy(source, &target)
         .with_context(|| format!("copying {} to {}", source.display(), target.display()))?;
     Ok(())
+}
+
+/// The file of an installer image (`fomod\images\a.png`, any letter case)
+/// under the installer's `root`.
+pub fn image_path(root: &Path, rel: &str) -> Option<PathBuf> {
+    find_path_ci(root, rel).filter(|p| p.is_file())
 }
