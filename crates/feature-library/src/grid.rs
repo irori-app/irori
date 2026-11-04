@@ -3,6 +3,8 @@
 
 use std::ops::Range;
 
+use irori_core::settings::Density;
+
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
 /// Room under the cover for the title and status lines, in rem.
@@ -63,6 +65,10 @@ pub struct GridMetrics {
     pub tile_rem: f32,
     /// Height of one grid row in rem (inset, cover, caption and gap).
     pub row_rem: f32,
+    /// Gap between tiles, in rem.
+    pub gap_rem: f32,
+    /// Height of one list-layout row, in rem.
+    pub list_row_rem: f32,
 }
 
 /// Fit tiles of at least `preferred_rem` into `available_rem` with `GAP_REM`
@@ -70,15 +76,23 @@ pub struct GridMetrics {
 /// past one and a half times the preferred width (very narrow windows with a
 /// single column).
 pub fn grid_metrics(available_rem: f32, preferred_rem: f32) -> GridMetrics {
-    let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM);
+    grid_metrics_at(available_rem, preferred_rem, Density::Comfortable)
+}
+
+/// [`grid_metrics`] at a density: covers, gaps and list rows scaled by it.
+pub fn grid_metrics_at(available_rem: f32, preferred_rem: f32, density: Density) -> GridMetrics {
+    let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM) * density.cover_scale();
+    let gap = GAP_REM * density.spacing_scale();
     let available = available_rem.max(preferred);
-    let columns = (((available + GAP_REM) / (preferred + GAP_REM)).floor() as usize).max(1);
-    let fill = (available - GAP_REM * (columns as f32 - 1.0)) / columns as f32;
+    let columns = (((available + gap) / (preferred + gap)).floor() as usize).max(1);
+    let fill = (available - gap * (columns as f32 - 1.0)) / columns as f32;
     let tile_rem = fill.min(preferred * 1.5).max(preferred.min(available));
     GridMetrics {
         columns,
         tile_rem,
-        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + CAPTION_REM + GAP_REM,
+        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + CAPTION_REM + gap,
+        gap_rem: gap,
+        list_row_rem: LIST_ROW_REM * density.row_scale(),
     }
 }
 
@@ -209,6 +223,12 @@ mod tests {
     #[test]
     fn metrics_fill_the_row() {
         // 58rem fits 4 tiles of 11rem with 1.25rem gaps, not 5 (5*11 + 4*1.25 = 60).
+        let compact = grid_metrics_at(58.0, 11.0, Density::Compact);
+        let spacious = grid_metrics_at(58.0, 11.0, Density::Spacious);
+        assert!(compact.columns > grid_metrics(58.0, 11.0).columns);
+        assert!(spacious.columns <= grid_metrics(58.0, 11.0).columns);
+        assert!(compact.gap_rem < GAP_REM && spacious.gap_rem > GAP_REM);
+        assert!(compact.list_row_rem < LIST_ROW_REM && spacious.list_row_rem > LIST_ROW_REM);
         let m = grid_metrics(58.0, 11.0);
         assert_eq!(m.columns, 4);
         let used = m.tile_rem * 4.0 + GAP_REM * 3.0;

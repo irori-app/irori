@@ -17,6 +17,9 @@ use gpui_kit::{
     Styled, StyledImage as _, Window, div, img, linear_color_stop, linear_gradient,
 };
 
+use irori_core::GameInfo;
+use irori_core::settings::{LibraryBackground, UiPrefs};
+
 use crate::art::{Ambient, LruImageCache, ambient};
 use crate::glass::over;
 use crate::motion::fade_in;
@@ -82,8 +85,13 @@ impl BackdropInk {
 
 /// How strongly `art` shows at the top of the page in the current theme.
 fn weight(art: &Ambient, cx: &App) -> f32 {
+    weight_at(art, 1., cx)
+}
+
+/// [`weight`] with the most it may reach scaled by `strength` (0 to 1).
+fn weight_at(art: &Ambient, strength: f32, cx: &App) -> f32 {
     let theme = cx.theme();
-    let max = MAX_WEIGHT[usize::from(!theme.mode.is_dark())];
+    let max = MAX_WEIGHT[usize::from(!theme.mode.is_dark())] * strength.clamp(0., 1.);
     strongest_legible_weight(
         theme.background,
         &[theme.foreground, theme.muted_foreground],
@@ -120,6 +128,32 @@ fn srgb([r, g, b]: [u8; 3]) -> Hsla {
     .into()
 }
 
+/// The art the library shows behind its covers, as `prefs` ask: `game`'s (the
+/// focused, else last played, else first shown) or the user's picture, as an
+/// art-store URL.
+/// None for no background, and while the system asks windows not to be
+/// see-through, which a picture behind text is as much as glass.
+pub fn library_backdrop_url(prefs: &UiPrefs, game: Option<&GameInfo>, cx: &App) -> Option<String> {
+    if crate::theme::reduce_transparency(cx) || prefs.library_background_strength == 0 {
+        return None;
+    }
+    match prefs.library_background {
+        LibraryBackground::None => None,
+        LibraryBackground::GameArt => game?.hero_art().map(str::to_owned),
+        LibraryBackground::Picture => {
+            let picture = prefs.library_background_picture.trim();
+            (!picture.is_empty()).then(|| format!("file://{picture}"))
+        }
+    }
+}
+
+/// The library's [`ArtBackdrop`] of `url`, at the strength and dim in `prefs`.
+pub fn library_backdrop(prefs: &UiPrefs, url: Option<String>) -> ArtBackdrop {
+    ArtBackdrop::new(url)
+        .strength(prefs.library_background_strength.min(100) as f32 / 100.)
+        .dim(prefs.library_background_dim.min(100) as f32 / 100.)
+}
+
 /// A game's blurred art filling its parent (which should be `relative`),
 /// over the theme's background. Place it first, so content paints over it,
 /// and colour that content with [`BackdropInk::of`] for the same art.
@@ -130,6 +164,8 @@ fn srgb([r, g, b]: [u8; 3]) -> Hsla {
 pub struct ArtBackdrop {
     url: Option<SharedString>,
     cache: Option<Entity<LruImageCache>>,
+    strength: f32,
+    dim: f32,
 }
 
 impl ArtBackdrop {
@@ -138,7 +174,23 @@ impl ArtBackdrop {
         Self {
             url: url.map(Into::into),
             cache: None,
+            strength: 1.,
+            dim: 0.,
         }
+    }
+
+    /// Show the art at `strength` (0 to 1) of the most the theme's text
+    /// stays legible over. Weaker art only reads better, so this never
+    /// costs legibility.
+    pub fn strength(mut self, strength: f32) -> Self {
+        self.strength = strength.clamp(0., 1.);
+        self
+    }
+
+    /// Lay the theme's background over the art at `dim` (0 to 1).
+    pub fn dim(mut self, dim: f32) -> Self {
+        self.dim = dim.clamp(0., 1.);
+        self
     }
 
     /// Keep the decoded image in `cache` rather than the window's own.
@@ -162,7 +214,7 @@ impl RenderOnce for ArtBackdrop {
         let Some(art) = art else {
             return base;
         };
-        let weight = weight(&art, cx);
+        let weight = weight_at(&art, self.strength, cx) * (1. - self.dim);
         if weight <= 0. {
             return base;
         }

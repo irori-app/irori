@@ -277,6 +277,34 @@ any file is touched, and a game file a mod replaces is renamed beside itself
 (`<name>.irori-original`), so a crash at any point is undone exactly when
 Irori next starts.
 
+### Storage
+
+Settings → Storage (`irori://settings/storage`) groups what Irori measures by the disk
+holding it: on Linux and macOS the deepest mount point a folder's real path (links
+followed) starts with, so a games folder linked to another disk counts there; on Windows
+the drive letter. Steam's and the third-party launchers' games are measured and shown
+too, though Irori never removes them. Sizes are the files' lengths, measured on a
+background thread and cached in `<cache>/storage.json` by folder and modified time for
+up to a week; Rescan measures everything again.
+
+Cleanups delete only what the rebuilt report offers at that moment, each item through
+`fs_guard::ensure_deletable`:
+
+| Cleanup | What goes | Never touched |
+| --- | --- | --- |
+| Download leftovers | `.irori-part` files in installed games with no download queued, folders in the games folder holding only an unfinished install (none while any download is queued), launcher installers in the Launchers cache | Folders without partial files, anything outside the games folder |
+| Unused Wine prefixes | Prefixes (`system.reg`, or `pfx/system.reg` for Proton) in the prefix folder that no installed game, no launcher setup and the defaults' prefix use | Custom prefixes elsewhere, the prefix folder itself; none is chosen until the user ticks it |
+| Old Wine and Proton builds | Builds Irori downloaded that no installed game, the defaults or a launcher uses, removed through the Wine manager's own removal; the newest of each kind stays | System Wine, Steam's Proton, Lutris and Bottles builds, CrossOver |
+| Art thumbnails | `<cache>/images/thumbs` | Downloaded originals |
+| Logs | Everything under the logs folder except the current `irori.log` | On Windows a log a running game holds open is skipped and goes next time |
+
+### Interface font
+
+The font list is the system's: fontconfig on Linux, Core Text on macOS and DirectWrite on
+Windows, read once a session, so a font installed while Irori runs shows up after a
+restart. Manrope, Irori's own, is always first. A picked font that is later uninstalled
+falls back to Manrope.
+
 ### New versions of Irori
 
 Irori looks for its own new versions only where nothing else updates it. It works out
@@ -595,6 +623,11 @@ Wherever Irori doesn't follow a desktop's whole theme, macOS and Windows include
 default theme stays Irori's own, in the system's accent colour. Settings → Appearance →
 “Use the system accent color” (`iroriUi.systemAccent`, on by default) turns this off.
 
+An accent the user picks in Settings → Appearance → Accent color (`iroriUi.accentColor`)
+wins over the system's and a followed desktop's, and tints whichever theme shows, a picked
+one included, held legible the same way. Clearing it hands the accent back. Windows high
+contrast keeps its own colours.
+
 ### Linux
 
 On a Linux desktop whose whole theme Irori doesn't follow, the default theme stays
@@ -667,6 +700,7 @@ picked, since it is about being able to see Irori at all:
 | macOS “Reduce transparency” | Automatic translucency stays opaque |
 | Windows high contrast (any contrast theme) | The theme is made of the system's colours (`Window`, `WindowText`, `Highlight`, `HighlightText`, `Hotlight`, `GrayText`, `ButtonFace`, `ButtonText`), with borders in the text colour; the mode follows the contrast theme |
 | Windows “Transparency effects” off | Automatic translucency stays opaque |
+| Any of these transparency settings, or COSMIC's frosted windows off | The library's background picture stays off |
 
 Status colours in a high-contrast theme are Windows' console colours, held legible on the
 contrast theme's window colour like any status colour.
