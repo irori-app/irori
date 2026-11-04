@@ -1405,7 +1405,8 @@ fi
         assert_eq!(info.folder_name.as_deref(), Some("Sky Racer"));
         let logo = format!(
             "file://{}",
-            dir.join("XboxGames/Sky Racer/Content/Logo480.png").display()
+            dir.join("XboxGames/Sky Racer/Content/Logo480.png")
+                .display()
         );
         assert_eq!(info.cover_art(), Some(logo.as_str()));
         assert_eq!(
