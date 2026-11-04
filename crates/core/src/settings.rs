@@ -275,6 +275,14 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLaunchPrograms")]
     pub launch_programs: Vec<crate::launch_extras::LaunchProgram>,
+    /// Back up the game's saves with Ludusavi after every session.
+    /// Irori-only.
+    #[serde(rename = "iroriLudusaviAutoBackup")]
+    pub ludusavi_auto_backup: bool,
+    /// The game's title in Ludusavi, when the user corrected the automatic
+    /// match; empty for the automatic one. Per game only. Irori-only.
+    #[serde(rename = "iroriLudusaviTitle")]
+    pub ludusavi_title: String,
 }
 
 /// The sandbox a game runs in (`iroriSandbox`). Off when nothing is blocked.
@@ -407,6 +415,8 @@ impl Default for GameSettings {
             lutris_script: None,
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
+            ludusavi_auto_backup: false,
+            ludusavi_title: String::new(),
         }
     }
 }
@@ -648,6 +658,14 @@ pub struct AppSettings {
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
+    /// The Ludusavi program to run for save backups; empty finds it on
+    /// `PATH`, in the usual install folders or on Flathub. Irori-only.
+    #[serde(rename = "iroriLudusaviPath")]
+    pub ludusavi_path: String,
+    /// Where Ludusavi keeps the backups Irori makes; empty for Ludusavi's
+    /// own backup folder. Irori-only.
+    #[serde(rename = "iroriLudusaviBackupPath")]
+    pub ludusavi_backup_path: String,
 }
 
 impl Default for AppSettings {
@@ -673,6 +691,8 @@ impl Default for AppSettings {
             show_log_on_launch: false,
             achievement_notices: false,
             launch_presets: Vec::new(),
+            ludusavi_path: String::new(),
+            ludusavi_backup_path: String::new(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,

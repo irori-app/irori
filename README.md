@@ -177,6 +177,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Per-game settings** inherit your defaults and show exactly what you overrode.
 - **Cloud saves** for Epic and GOG, GOG achievements and playtime, the EOS overlay,
   ProtonDB, Steam Deck, anticheat and HowLongToBeat info on every game.
+- **Save backups for every game** with [Ludusavi](https://github.com/mtkennerly/ludusavi),
+  if you install it: on request or after each session, looking in the game's real Wine or
+  Proton prefix, with a list of backups to restore from and a word on which of Ludusavi
+  and the store's cloud saves keeps each game.
 - **"Add to Steam"** for any game, installed or not; Steam starts Irori, which offers to
   install a game that isn't installed yet.
 - **Discord Rich Presence**, sleep held off while you play, and the game's log, which

@@ -91,7 +91,7 @@ impl GameSection {
             GameSection::Gpu => "settings.game.section.gpu",
             GameSection::Artwork => "settings.game.section.artwork",
             GameSection::Launch => "settings.game.section.launch",
-            GameSection::CloudSaves => "settings.game.section.cloud_saves",
+            GameSection::CloudSaves => "settings.game.section.saves",
             GameSection::Tools => "settings.game.section.tools",
             GameSection::Log => "settings.game.section.log",
         })
