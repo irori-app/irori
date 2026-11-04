@@ -5,13 +5,12 @@ import CoverWall from '../components/CoverWall.astro'
 import DownloadCta from '../components/DownloadCta.astro'
 import Faq from '../components/Faq.astro'
 import FeatureCard from '../components/FeatureCard.astro'
-import HearthFrame from '../components/HearthFrame.astro'
+import Handheld from '../components/Handheld.vue'
 import Hotspots from '../components/Hotspots.astro'
 import InstallTabs from '../components/InstallTabs.vue'
-import Screen from '../components/Screen.astro'
 import StatsCard from '../components/StatsCard.astro'
 import Base from '../layouts/Base.astro'
-import { MEASURED, REPO, SITE, STORES } from '../data/site'
+import { BIG_PICTURE_SHOTS, MEASURED, REPO, SITE, STORES } from '../data/site'
 import { dictionary, format, localePath, type Locale } from '../i18n/config'
 import { getLatestRelease } from '../lib/github'
 import { entries, slugOf } from '../lib/pages'
@@ -25,6 +24,8 @@ const h = t.home
 const p = (path: string) => localePath(locale, path)
 const latest = await getLatestRelease()
 const features = await entries('features', locale)
+const { themes, layouts, ...handheldLabels } = h.bigpicture.handheld
+const handheldShots = BIG_PICTURE_SHOTS.map((shot) => ({ ...shot, theme: themes[shot.theme], layout: layouts[shot.layout] }))
 const guides = (await entries('guides', locale)).slice(0, 4)
 
 const figures = [
@@ -229,18 +230,22 @@ const website = { '@context': 'https://schema.org', '@type': 'WebSite', name: 'I
   </section>
 
   <!-- Big Picture -->
-  <section class="gutter mx-auto grid max-w-7xl items-center gap-12 py-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:py-16" aria-labelledby="bp-title">
-    <HearthFrame class="min-w-0" data-reveal="scale">
-      <Screen locale={locale} id="bigpicture" sizes="(min-width: 1024px) 56vw, 100vw" />
-    </HearthFrame>
-    <div class="flex min-w-0 flex-col gap-4" data-reveal>
-      <p class="tag">{h.bigpicture.tag}</p>
-      <h2 id="bp-title" class="section-title">{h.bigpicture.title}</h2>
-      <p class="text-smoke">{h.bigpicture.body}</p>
-      <ul class="flex flex-col border-t border-grain">
-        {h.bigpicture.points.map((point) => <li class="border-b border-grain py-3 text-[0.97rem] text-paper">{point}</li>)}
-      </ul>
-      <a href={p('/features/bigpicture/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{h.bigpicture.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+  <section class="bp-band relative isolate overflow-hidden border-y border-grain" aria-labelledby="bp-title">
+    <div class="gutter mx-auto flex max-w-7xl flex-col gap-14 py-24 lg:py-32">
+      <div class="grid gap-8 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] lg:items-end">
+        <div class="flex min-w-0 flex-col gap-4" data-reveal>
+          <p class="tag">{h.bigpicture.tag}</p>
+          <h2 id="bp-title" class="section-title">{h.bigpicture.title}</h2>
+          <p class="text-smoke">{h.bigpicture.body}</p>
+        </div>
+        <div class="flex min-w-0 flex-col gap-4" data-reveal>
+          <ul class="flex flex-col border-t border-grain">
+            {h.bigpicture.points.map((point) => <li class="border-b border-grain py-3 text-[0.97rem] text-paper">{point}</li>)}
+          </ul>
+          <a href={p('/features/bigpicture/')} class="link inline-flex items-center gap-1 self-start text-[0.95rem]">{h.bigpicture.link} <ArrowRight class="size-4" aria-hidden="true" /></a>
+        </div>
+      </div>
+      <Handheld client:visible shots={handheldShots} labels={handheldLabels} />
     </div>
   </section>
 
@@ -410,6 +415,12 @@ const website = { '@context': 'https://schema.org', '@type': 'WebSite', name: 'I
     box-shadow: 0 0 6px 1px rgb(255 120 40 / 0.5);
   }
 
+  /* A dim room lit by the screen in the middle of it. */
+  .bp-band {
+    background:
+      radial-gradient(55% 45% at 50% 72%, var(--glow), transparent 72%),
+      linear-gradient(180deg, color-mix(in oklab, var(--soot) 70%, transparent), var(--ash) 85%);
+  }
   .stats-band {
     background:
       radial-gradient(50% 60% at 90% 50%, var(--glow), transparent 70%),

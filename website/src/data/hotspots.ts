@@ -8,12 +8,12 @@ import type { ScreenId } from './site'
 export const TOUR: { screen: ScreenId; points: { x: number; y: number }[] } = {
   screen: 'library',
   points: [
-    { x: 5.6, y: 14.2 },
-    { x: 46.5, y: 1.9 },
-    { x: 49, y: 17.4 },
-    { x: 24, y: 37 },
-    { x: 58, y: 70 },
-    { x: 96.3, y: 17.4 },
-    { x: 13.5, y: 96.4 },
+    { x: 13.9, y: 11.1 },
+    { x: 36.5, y: 1.9 },
+    { x: 55.3, y: 17.6 },
+    { x: 30, y: 34 },
+    { x: 58.3, y: 75 },
+    { x: 25.1, y: 21.1 },
+    { x: 8, y: 96.3 },
   ],
 }

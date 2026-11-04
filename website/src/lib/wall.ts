@@ -1,7 +1,7 @@
 /**
  * What the cover walls show. Real game covers (`src/data/game-covers.json`, fetched with
  * `scripts/fetch-covers.mjs`) are used once every listed cover has its files; until then
- * the walls show the demo library's drawn covers. Store tiles are mixed in either way.
+ * the walls show drawn covers of made-up games. Store tiles are mixed in either way.
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

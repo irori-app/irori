@@ -7,13 +7,13 @@ summary: The whole launcher with a controller, opening by itself in the Steam De
 icon: tv
 screen: bigpicture
 order: 6
-updated: 2026-11-03
+updated: 2026-11-04
 related: [emulators, library, playing]
 highlights:
+  - title: Eight themes, six layouts
+    body: Shelves, Spotlight, Cinema, Wall, Carousel or Compact, in a theme you pick, edit live or share as a file.
   - title: Every controller you own
-    body: Xbox, PlayStation including DualSense, Switch Pro and Steam Deck controllers.
-  - title: Hot-plug and battery
-    body: Plug a controller in or out at any time, and see how much charge it has left.
+    body: Xbox, PlayStation including DualSense, Switch Pro and Steam Deck controllers, plugged in at any time, with their charge shown.
   - title: The Guide button
     body: Opens and closes Big Picture from anywhere in Irori.
   - title: Steam Deck Game Mode
