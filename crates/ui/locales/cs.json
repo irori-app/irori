@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Odloženo",
   "ui.play_status.beaten": "Dohráno",
   "ui.play_status.abandoned": "Opuštěno",
-  "ui.play_status.played": "Hráno"
+  "ui.play_status.played": "Hráno",
+  "ui.journal.title_placeholder": "Název (nepovinný)",
+  "ui.journal.text_placeholder": "Co se stalo? Kam jste se dostali, co vás překvapilo, co zkusit příště…",
+  "ui.journal.screenshots": "Snímky obrazovky z toho dne",
+  "ui.journal.no_screenshots": "Z toho dne nejsou žádné snímky této hry.",
+  "ui.journal.delete": "Smazat poznámku",
+  "ui.journal.delete_title": "Smazat poznámku pro {day}?",
+  "ui.journal.delete_description": "Poznámka zmizí z deníku. Snímky obrazovky zůstanou, kde jsou.",
+  "ui.journal.cancel": "Zrušit",
+  "ui.journal.save": "Uložit",
+  "ui.journal.label": "{title} · {date}"
 }

@@ -79,5 +79,7 @@
   "shell.app_update.download": "Baixar",
   "shell.app_update.copy_command": "Copiar comando",
   "shell.app_update.updated": "Irori atualizado para a versão {version}",
-  "shell.app_update.release_notes": "Notas da versão"
+  "shell.app_update.release_notes": "Notas da versão",
+  "shell.palette.year_in_review": "Abrir a Retrospectiva do ano",
+  "shell.palette.year_in_review_keywords": "retrospectiva resumo anual"
 }

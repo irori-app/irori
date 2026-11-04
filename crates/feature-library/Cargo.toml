@@ -19,8 +19,13 @@ irori-extras.workspace = true
 irori-scripts.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true
+base64.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
+# The Year in review's shareable card; GPUI already builds resvg with these
+# features, so it adds nothing to the lockfile.
+resvg = { version = "0.46", default-features = false, features = ["text", "system-fonts", "raster-images"] }
+dirs.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde.workspace = true
 serde_json.workspace = true

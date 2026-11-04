@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{date}以降 {count} 回のセッション",
   "game.timeline.title": "プレイ履歴",
   "game.timeline.view_days": "タイムライン",
-  "game.timeline.view_sessions": "セッション"
+  "game.timeline.view_sessions": "セッション",
+  "game.timeline.view_journal": "日記",
+  "game.journal.write": "この日のメモを書く"
 }

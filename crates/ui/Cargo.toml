@@ -14,6 +14,7 @@ irori-engines.workspace = true
 dirs.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tokio.workspace = true
 futures.workspace = true
 parking_lot.workspace = true

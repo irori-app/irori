@@ -610,7 +610,10 @@ impl Render for AppShell {
         }
         let route = navigator(cx).read(cx).current().clone();
         let fullscreen_mode = matches!(route, Route::BigPicture);
-        let show_sidebar = !matches!(route, Route::BigPicture | Route::Onboarding);
+        let show_sidebar = !matches!(
+            route,
+            Route::BigPicture | Route::Onboarding | Route::YearInReview(_)
+        );
         let content = self.pages.view(&route, window, cx);
         // Each new page settles in from just below; its id changes with the route.
         let content = irori_ui::motion::rise_in(

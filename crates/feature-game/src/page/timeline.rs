@@ -3,12 +3,14 @@
 //! count or start time under it, the time played, the longest day and failed
 //! starts marked, a quiet line where the game rested for a while, and where it
 //! all began at the bottom. Hovering or focusing a day lists its sessions'
-//! times. The sessions view lists every session on its own.
+//! times. The sessions view lists every session on its own, and the
+//! journal view the user's notes per day (see [`super::journal`]).
 //!
 //! Rows are virtualized, so years of history cost what fits in the panel.
 //! The list is one Tab stop; the arrow keys, Home and End move between days,
 //! which is also how a controller reaches it.
 
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -26,11 +28,13 @@ use gpui_kit::{
     ParentElement, Pixels, ScrollStrategy, SharedString, Size, StatefulInteractiveElement as _,
     Styled, Window, div, px, rems, size,
 };
+use irori_services::JournalEntry;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::KeyboardFocusable as _;
 use irori_ui::{backend, models};
 
 use super::GamePage;
+use super::journal::JournalRow;
 use crate::load::{Load, calendar_date};
 
 /// Height of a day row, in rem.
@@ -180,6 +184,8 @@ pub(crate) enum TimelineMode {
     Days,
     /// One row per session.
     Sessions,
+    /// One row per day, with its journal note.
+    Journal,
 }
 
 /// The play history panel's state: the data, the measured rows, the row the
@@ -187,10 +193,14 @@ pub(crate) enum TimelineMode {
 pub(crate) struct TimelineView {
     pub data: Load<Arc<Timeline>>,
     mode: TimelineMode,
-    key: Option<(usize, TimelineMode, Pixels)>,
+    /// What the sizes were measured for: the timeline, the mode, the rem
+    /// size and, in the journal, the user data the notes come from.
+    key: Option<(usize, TimelineMode, Pixels, usize)>,
     sizes: Rc<Vec<Size<Pixels>>>,
+    /// The journal's rows, rebuilt with the sizes.
+    pub(super) journal: Rc<Vec<JournalRow>>,
     /// The row shown highlighted, with its session times for a day.
-    active: Option<usize>,
+    pub(super) active: Option<usize>,
     focus: Option<FocusHandle>,
     scroll: VirtualListScrollHandle,
 }
@@ -202,6 +212,7 @@ impl Default for TimelineView {
             mode: TimelineMode::Days,
             key: None,
             sizes: Rc::default(),
+            journal: Rc::default(),
             active: None,
             focus: None,
             scroll: VirtualListScrollHandle::new(),
@@ -210,14 +221,29 @@ impl Default for TimelineView {
 }
 
 impl TimelineView {
-    fn sync(&mut self, timeline: &Arc<Timeline>, rem: Pixels) {
-        let key = (Arc::as_ptr(timeline) as usize, self.mode, rem);
+    fn sync(
+        &mut self,
+        timeline: &Arc<Timeline>,
+        notes: Option<&BTreeMap<NaiveDate, JournalEntry>>,
+        user: usize,
+        rem: Pixels,
+    ) {
+        let user = if self.mode == TimelineMode::Journal {
+            user
+        } else {
+            0
+        };
+        let key = (Arc::as_ptr(timeline) as usize, self.mode, rem, user);
         if self.key == Some(key) {
             return;
+        }
+        if self.mode == TimelineMode::Journal {
+            self.journal = Rc::new(super::journal::rows(timeline, notes));
         }
         let heights: Vec<f32> = match self.mode {
             TimelineMode::Days => timeline.rows.iter().map(TimelineRow::rem).collect(),
             TimelineMode::Sessions => vec![SESSION_ROW_REM; timeline.sessions.len()],
+            TimelineMode::Journal => self.journal.iter().map(JournalRow::rem).collect(),
         };
         self.sizes = Rc::new(heights.iter().map(|h| size(px(0.), rem * *h)).collect());
         self.key = Some(key);
@@ -228,6 +254,7 @@ impl TimelineView {
         match self.mode {
             TimelineMode::Days => timeline.rows.iter().map(TimelineRow::rem).sum(),
             TimelineMode::Sessions => SESSION_ROW_REM * timeline.sessions.len() as f32,
+            TimelineMode::Journal => self.journal.iter().map(JournalRow::rem).sum(),
         }
     }
 }
@@ -245,7 +272,7 @@ fn next_day(rows: &[TimelineRow], from: Option<usize>, step: isize) -> Option<us
 }
 
 /// "45 min", "2 h 5 min"; "< 1 min" for a session cut short.
-fn duration(seconds: u64) -> SharedString {
+pub(super) fn duration(seconds: u64) -> SharedString {
     crate::i18n::playtime_label(seconds / 60, true)
 }
 
@@ -276,7 +303,7 @@ fn clock(time: NaiveTime) -> String {
 }
 
 /// A day relative to `today`: "Today", "Yesterday", "Oct 11", "Oct 11, 2024".
-fn day_label(day: NaiveDate, today: NaiveDate) -> String {
+pub(super) fn day_label(day: NaiveDate, today: NaiveDate) -> String {
     match (today - day).num_days() {
         0 => t("game.date.today").to_string(),
         1 => t("game.date.yesterday").to_string(),
@@ -306,7 +333,7 @@ fn played_line(seconds: u64) -> AnyElement {
 
 /// What marks a row on the rail.
 #[derive(Debug, Clone, Copy)]
-enum Dot {
+pub(super) enum Dot {
     /// The most recent day.
     Latest,
     Day,
@@ -397,7 +424,11 @@ impl GamePage {
                 &[("count", &timeline.played.to_string()), ("date", &date)],
             )
         });
-        let modes = [TimelineMode::Days, TimelineMode::Sessions];
+        let modes = [
+            TimelineMode::Days,
+            TimelineMode::Sessions,
+            TimelineMode::Journal,
+        ];
         let selected = modes
             .iter()
             .position(|m| *m == self.timeline.mode)
@@ -431,6 +462,7 @@ impl GamePage {
                         .selected_index(selected)
                         .child(Tab::new().label(t("game.timeline.view_days")))
                         .child(Tab::new().label(t("game.timeline.view_sessions")))
+                        .child(Tab::new().label(t("game.timeline.view_journal")))
                         .on_click(cx.listener(move |this, ix: &usize, _, cx| {
                             if let Some(mode) = modes.get(*ix) {
                                 this.timeline.mode = *mode;
@@ -439,39 +471,44 @@ impl GamePage {
                         })),
                 )
             });
-        let body =
-            if !has_rows {
-                div()
-                    .text_sm()
-                    .text_color(ink.panel_muted)
-                    .when(!self.timeline.data.is_loading(), |d| {
-                        d.child(t("game.timeline.empty"))
-                    })
-                    .into_any_element()
-            } else {
-                self.timeline.sync(&timeline, window.rem_size());
-                let height = self.timeline.height_rem(&timeline).min(MAX_LIST_REM);
-                let list = v_virtual_list(
-                    cx.entity(),
-                    "timeline-rows",
-                    self.timeline.sizes.clone(),
-                    |this, range, _, cx| this.render_timeline_rows(range, cx),
-                )
-                .track_scroll(&self.timeline.scroll)
-                .size_full();
-                div()
-                    .id("timeline-list")
-                    .track_focus(&focus)
-                    .keyboard_focusable(cx)
-                    .rounded_md()
-                    .w_full()
-                    .h(rems(height))
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                        this.on_timeline_key(event, cx)
-                    }))
-                    .child(list)
-                    .into_any_element()
-            };
+        let body = if !has_rows {
+            div()
+                .text_sm()
+                .text_color(ink.panel_muted)
+                .when(!self.timeline.data.is_loading(), |d| {
+                    d.child(t("game.timeline.empty"))
+                })
+                .into_any_element()
+        } else {
+            let user = models(cx).library.read(cx).user.clone();
+            self.timeline.sync(
+                &timeline,
+                user.journal.get(&self.id.key()),
+                Arc::as_ptr(&user) as usize,
+                window.rem_size(),
+            );
+            let height = self.timeline.height_rem(&timeline).min(MAX_LIST_REM);
+            let list = v_virtual_list(
+                cx.entity(),
+                "timeline-rows",
+                self.timeline.sizes.clone(),
+                |this, range, window, cx| this.render_timeline_rows(range, window, cx),
+            )
+            .track_scroll(&self.timeline.scroll)
+            .size_full();
+            div()
+                .id("timeline-list")
+                .track_focus(&focus)
+                .keyboard_focusable(cx)
+                .rounded_md()
+                .w_full()
+                .h(rems(height))
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    this.on_timeline_key(event, window, cx)
+                }))
+                .child(list)
+                .into_any_element()
+        };
         let theme = cx.theme();
         v_flex()
             .w_full()
@@ -487,14 +524,20 @@ impl GamePage {
     }
 
     /// Up, Down, Home and End move between rows (days, in the timeline); the
-    /// list keeps the row in view.
-    fn on_timeline_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+    /// list keeps the row in view. In the journal, Enter opens the day's note.
+    fn on_timeline_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(timeline) = self.timeline.data.ready().cloned() else {
             return;
         };
         let count = match self.timeline.mode {
             TimelineMode::Days => timeline.rows.len(),
             TimelineMode::Sessions => timeline.sessions.len(),
+            TimelineMode::Journal => self.timeline.journal.len(),
         };
         let current = self.timeline.active;
         let last = count.saturating_sub(1);
@@ -503,10 +546,21 @@ impl GamePage {
             (TimelineMode::Days, "up") => next_day(&timeline.rows, current, -1),
             (TimelineMode::Days, "home") => next_day(&timeline.rows, None, 1),
             (TimelineMode::Days, "end") => next_day(&timeline.rows, None, -1),
-            (TimelineMode::Sessions, "down") => Some(current.map_or(0, |ix| (ix + 1).min(last))),
-            (TimelineMode::Sessions, "up") => Some(current.map_or(0, |ix| ix.saturating_sub(1))),
-            (TimelineMode::Sessions, "home") => Some(0),
-            (TimelineMode::Sessions, "end") => Some(last),
+            (TimelineMode::Sessions | TimelineMode::Journal, "down") => {
+                Some(current.map_or(0, |ix| (ix + 1).min(last)))
+            }
+            (TimelineMode::Sessions | TimelineMode::Journal, "up") => {
+                Some(current.map_or(0, |ix| ix.saturating_sub(1)))
+            }
+            (TimelineMode::Sessions | TimelineMode::Journal, "home") => Some(0),
+            (TimelineMode::Sessions | TimelineMode::Journal, "end") => Some(last),
+            (TimelineMode::Journal, "enter") => {
+                cx.stop_propagation();
+                if let Some(ix) = current {
+                    self.open_journal_row(ix, window, cx);
+                }
+                return;
+            }
             _ => return,
         };
         cx.stop_propagation();
@@ -522,6 +576,7 @@ impl GamePage {
     fn render_timeline_rows(
         &mut self,
         range: Range<usize>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let Some(timeline) = self.timeline.data.ready().cloned() else {
@@ -542,11 +597,18 @@ impl GamePage {
                         let span = timeline.sessions.get(ix)?;
                         self.render_session_row(ix, span, today, cx)
                     }
+                    TimelineMode::Journal => {
+                        let journal = self.timeline.journal.clone();
+                        let row = journal.get(ix)?;
+                        let last = ix + 1 == journal.len();
+                        self.render_journal_row(ix, row, last, today, window, cx)
+                    }
                 };
                 Some(if motion {
                     let name = match mode {
                         TimelineMode::Days => "timeline-day-in",
                         TimelineMode::Sessions => "timeline-session-in",
+                        TimelineMode::Journal => "timeline-journal-in",
                     };
                     irori_ui::motion::rise_in((name, ix), div().w_full().child(row), RISE_PX)
                 } else {
@@ -558,7 +620,13 @@ impl GamePage {
 
     /// The rail through a row: a line from top to bottom (from the dot down
     /// on the first row, down to it on the last) and the row's dot, if any.
-    fn rail(&self, first: bool, last: bool, dot: Option<Dot>, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn rail(
+        &self,
+        first: bool,
+        last: bool,
+        dot: Option<Dot>,
+        cx: &Context<Self>,
+    ) -> AnyElement {
         let theme = cx.theme();
         let centre = RAIL_REM / 2.;
         div()
@@ -600,7 +668,7 @@ impl GamePage {
     }
 
     /// The date column of a timeline row: the day, and under it `under`.
-    fn date_column(&self, day: String, under: Option<SharedString>) -> AnyElement {
+    pub(super) fn date_column(&self, day: String, under: Option<SharedString>) -> AnyElement {
         v_flex()
             .w(rems(DATE_COLUMN_REM))
             .flex_shrink_0()

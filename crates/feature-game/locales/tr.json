@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{date} tarihinden beri {count} oturum",
   "game.timeline.title": "Oynama geçmişi",
   "game.timeline.view_days": "Zaman çizelgesi",
-  "game.timeline.view_sessions": "Oturumlar"
+  "game.timeline.view_sessions": "Oturumlar",
+  "game.timeline.view_journal": "Günlük",
+  "game.journal.write": "Bu gün hakkında not yaz"
 }

@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Wstrzymane",
   "ui.play_status.beaten": "Ukończone",
   "ui.play_status.abandoned": "Porzucone",
-  "ui.play_status.played": "Grane"
+  "ui.play_status.played": "Grane",
+  "ui.journal.title_placeholder": "Tytuł (opcjonalnie)",
+  "ui.journal.text_placeholder": "Co się wydarzyło? Dokąd dotarłeś, co cię zaskoczyło, co spróbować następnym razem…",
+  "ui.journal.screenshots": "Zrzuty ekranu z tego dnia",
+  "ui.journal.no_screenshots": "Brak zrzutów ekranu tej gry z tego dnia.",
+  "ui.journal.delete": "Usuń notatkę",
+  "ui.journal.delete_title": "Usunąć notatkę z {day}?",
+  "ui.journal.delete_description": "Notatka zniknie z dziennika. Zrzuty ekranu zostaną na miejscu.",
+  "ui.journal.cancel": "Anuluj",
+  "ui.journal.save": "Zapisz",
+  "ui.journal.label": "{title} · {date}"
 }

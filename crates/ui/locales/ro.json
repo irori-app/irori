@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "În pauză",
   "ui.play_status.beaten": "Terminat",
   "ui.play_status.abandoned": "Abandonat",
-  "ui.play_status.played": "Jucat"
+  "ui.play_status.played": "Jucat",
+  "ui.journal.title_placeholder": "Titlu (opțional)",
+  "ui.journal.text_placeholder": "Ce s-a întâmplat? Unde ai ajuns, ce te-a surprins, ce să încerci data viitoare…",
+  "ui.journal.screenshots": "Capturi de ecran din acea zi",
+  "ui.journal.no_screenshots": "Nicio captură a acestui joc din acea zi.",
+  "ui.journal.delete": "Șterge nota",
+  "ui.journal.delete_title": "Ștergi nota pentru {day}?",
+  "ui.journal.delete_description": "Nota dispare din jurnal. Capturile rămân unde sunt.",
+  "ui.journal.cancel": "Anulează",
+  "ui.journal.save": "Salvează",
+  "ui.journal.label": "{title} · {date}"
 }

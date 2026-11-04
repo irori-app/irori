@@ -79,5 +79,7 @@
   "shell.app_update.download": "Descarcă",
   "shell.app_update.copy_command": "Copiază comanda",
   "shell.app_update.updated": "Irori a fost actualizat la versiunea {version}",
-  "shell.app_update.release_notes": "Note de lansare"
+  "shell.app_update.release_notes": "Note de lansare",
+  "shell.palette.year_in_review": "Deschide Anul în revistă",
+  "shell.palette.year_in_review_keywords": "rezumat recapitulare an"
 }

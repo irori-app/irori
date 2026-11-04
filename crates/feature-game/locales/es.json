@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "{count} sesiones desde el {date}",
   "game.timeline.title": "Historial de juego",
   "game.timeline.view_days": "Cronología",
-  "game.timeline.view_sessions": "Sesiones"
+  "game.timeline.view_sessions": "Sesiones",
+  "game.timeline.view_journal": "Diario",
+  "game.journal.write": "Escribir una nota sobre este día"
 }

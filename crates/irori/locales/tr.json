@@ -79,5 +79,7 @@
   "shell.app_update.download": "İndir",
   "shell.app_update.copy_command": "Komutu kopyala",
   "shell.app_update.updated": "Irori {version} sürümüne güncellendi",
-  "shell.app_update.release_notes": "Sürüm notları"
+  "shell.app_update.release_notes": "Sürüm notları",
+  "shell.palette.year_in_review": "Yılın özetini aç",
+  "shell.palette.year_in_review_keywords": "özet yıl recap"
 }

@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "Sesiuni din {date}: {count}",
   "game.timeline.title": "Istoric de joc",
   "game.timeline.view_days": "Cronologie",
-  "game.timeline.view_sessions": "Sesiuni"
+  "game.timeline.view_sessions": "Sesiuni",
+  "game.timeline.view_journal": "Jurnal",
+  "game.journal.write": "Scrie o notă despre această zi"
 }

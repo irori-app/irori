@@ -50,6 +50,7 @@ pub use filter::{CategoryFilter, Grouping, HiddenMode, InstallFilter, ViewFilter
 pub use i18n::CATALOGS;
 pub use random::open_random_game;
 pub use stats::StatsView;
+pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
 
 /// Requests for actions owned by other features. The shell routes them (for

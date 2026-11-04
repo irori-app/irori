@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Em pausa",
   "ui.play_status.beaten": "Zerado",
   "ui.play_status.abandoned": "Abandonado",
-  "ui.play_status.played": "Jogado"
+  "ui.play_status.played": "Jogado",
+  "ui.journal.title_placeholder": "Título (opcional)",
+  "ui.journal.text_placeholder": "O que aconteceu? Até onde você chegou, o que te surpreendeu, o que tentar depois…",
+  "ui.journal.screenshots": "Capturas de tela desse dia",
+  "ui.journal.no_screenshots": "Não há capturas deste jogo nesse dia.",
+  "ui.journal.delete": "Excluir nota",
+  "ui.journal.delete_title": "Excluir a nota de {day}?",
+  "ui.journal.delete_description": "A nota sai do seu diário. As capturas ficam onde estão.",
+  "ui.journal.cancel": "Cancelar",
+  "ui.journal.save": "Salvar",
+  "ui.journal.label": "{title} · {date}"
 }

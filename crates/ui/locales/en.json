@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "On hold",
   "ui.play_status.beaten": "Beaten",
   "ui.play_status.abandoned": "Abandoned",
-  "ui.play_status.played": "Played"
+  "ui.play_status.played": "Played",
+  "ui.journal.title_placeholder": "Title (optional)",
+  "ui.journal.text_placeholder": "What happened? Where you got to, what surprised you, what to try next…",
+  "ui.journal.screenshots": "Screenshots from that day",
+  "ui.journal.no_screenshots": "No screenshots of this game from that day.",
+  "ui.journal.delete": "Delete note",
+  "ui.journal.delete_title": "Delete the note for {day}?",
+  "ui.journal.delete_description": "The note leaves your journal. Screenshots stay where they are.",
+  "ui.journal.cancel": "Cancel",
+  "ui.journal.save": "Save",
+  "ui.journal.label": "{title} · {date}"
 }

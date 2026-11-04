@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Beklemede",
   "ui.play_status.beaten": "Bitirildi",
   "ui.play_status.abandoned": "Bırakıldı",
-  "ui.play_status.played": "Oynandı"
+  "ui.play_status.played": "Oynandı",
+  "ui.journal.title_placeholder": "Başlık (isteğe bağlı)",
+  "ui.journal.text_placeholder": "Neler oldu? Nereye kadar geldin, seni ne şaşırttı, sırada ne denemek var…",
+  "ui.journal.screenshots": "O günün ekran görüntüleri",
+  "ui.journal.no_screenshots": "Bu oyunun o güne ait ekran görüntüsü yok.",
+  "ui.journal.delete": "Notu sil",
+  "ui.journal.delete_title": "{day} notu silinsin mi?",
+  "ui.journal.delete_description": "Not günlüğünden kaldırılır. Ekran görüntüleri yerinde kalır.",
+  "ui.journal.cancel": "İptal",
+  "ui.journal.save": "Kaydet",
+  "ui.journal.label": "{title} · {date}"
 }

@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Відкладено",
   "ui.play_status.beaten": "Пройдено",
   "ui.play_status.abandoned": "Покинуто",
-  "ui.play_status.played": "Зіграно"
+  "ui.play_status.played": "Зіграно",
+  "ui.journal.title_placeholder": "Заголовок (необов’язково)",
+  "ui.journal.text_placeholder": "Що сталося? Куди ви дійшли, що здивувало, що спробувати далі…",
+  "ui.journal.screenshots": "Знімки екрана за цей день",
+  "ui.journal.no_screenshots": "За цей день немає знімків цієї гри.",
+  "ui.journal.delete": "Видалити нотатку",
+  "ui.journal.delete_title": "Видалити нотатку за {day}?",
+  "ui.journal.delete_description": "Нотатка зникне зі щоденника. Знімки екрана залишаться на місці.",
+  "ui.journal.cancel": "Скасувати",
+  "ui.journal.save": "Зберегти",
+  "ui.journal.label": "{title} · {date}"
 }

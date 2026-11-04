@@ -79,5 +79,7 @@
   "shell.app_update.download": "ダウンロード",
   "shell.app_update.copy_command": "コマンドをコピー",
   "shell.app_update.updated": "Irori を {version} に更新しました",
-  "shell.app_update.release_notes": "リリースノート"
+  "shell.app_update.release_notes": "リリースノート",
+  "shell.palette.year_in_review": "年間まとめを開く",
+  "shell.palette.year_in_review_keywords": "振り返り まとめ 年間"
 }

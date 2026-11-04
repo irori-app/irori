@@ -79,5 +79,7 @@
   "shell.app_update.download": "Stáhnout",
   "shell.app_update.copy_command": "Kopírovat příkaz",
   "shell.app_update.updated": "Irori aktualizováno na verzi {version}",
-  "shell.app_update.release_notes": "Poznámky k vydání"
+  "shell.app_update.release_notes": "Poznámky k vydání",
+  "shell.palette.year_in_review": "Otevřít Rok v kostce",
+  "shell.palette.year_in_review_keywords": "rekapitulace shrnutí roku"
 }

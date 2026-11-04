@@ -7,6 +7,10 @@
 //! - **Backlog**: the games beaten and abandoned in a year on a timeline, the
 //!   yearly goal and its pace, and the library grouped by play status.
 //! - **Album**: the screenshots the user took in the period, by game.
+//! - **Journal**: the notes the user wrote on days in the period.
+//!
+//! The Year in review opens from the controls (and is offered on the
+//! overview through December and January); it is its own full-window route.
 //!
 //! Below both, the storage section shows the installed games by drive.
 //!
@@ -19,6 +23,8 @@ mod album_view;
 pub(crate) mod backlog;
 mod backlog_view;
 mod hero;
+pub(crate) mod journal;
+mod journal_view;
 pub(crate) mod model;
 pub(crate) mod overview;
 mod overview_view;
@@ -26,6 +32,10 @@ pub(crate) mod period;
 pub(crate) mod storage;
 mod storage_view;
 mod text;
+pub(crate) mod year;
+mod year_card;
+mod year_stories;
+pub(crate) mod year_view;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -60,6 +70,7 @@ pub(crate) enum Tab {
     Overview,
     Backlog,
     Album,
+    Journal,
 }
 
 pub struct StatsView {
@@ -88,6 +99,12 @@ pub struct StatsView {
     /// The album's width, measured while drawing.
     album_width: Pixels,
     album_scroll: VirtualListScrollHandle,
+    /// The journal tab's notes; `None` until the history is first read.
+    journal: Option<Arc<journal::JournalPage>>,
+    journal_sizes: Rc<Vec<Size<Pixels>>>,
+    journal_scroll: VirtualListScrollHandle,
+    /// Years with play, newest first, for the Year in review.
+    years: Vec<i32>,
     /// Installed games by drive; `None` until first read.
     storage: Option<Vec<DriveUsage>>,
     /// Library revision and user data the numbers were derived from.
@@ -134,6 +151,10 @@ impl StatsView {
             album_layout: GridLayout::for_width(0.),
             album_width: px(0.),
             album_scroll: VirtualListScrollHandle::new(),
+            journal: None,
+            journal_sizes: Rc::default(),
+            journal_scroll: VirtualListScrollHandle::new(),
+            years: Vec::new(),
             storage: None,
             seen: None,
             images: LruImageCache::new(48, cx),
@@ -215,6 +236,17 @@ impl StatsView {
             |id| snapshot.get(id).is_some(),
             today,
         ));
+        self.journal = Some(Arc::new(journal::compute(
+            &user.journal,
+            &history,
+            self.period(),
+            |id| snapshot.get(id).is_some(),
+            today,
+        )));
+        let mut years: Vec<i32> = history.sessions.iter().map(|p| p.day.year()).collect();
+        years.dedup();
+        years.reverse();
+        self.years = years;
         let keys: Vec<String> = snapshot.games.iter().map(|g| g.id().key()).collect();
         self.backlog = Some(backlog::compute(
             &history,
@@ -251,7 +283,7 @@ impl StatsView {
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let today = Self::today();
         match self.tab {
-            Tab::Overview | Tab::Album => {
+            Tab::Overview | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let to = if by < 0 {
                     period.previous()
@@ -283,8 +315,15 @@ impl StatsView {
                 .and_then(|s| album::local_day(s.taken));
             first = first.into_iter().chain(oldest).min();
         }
+        if self.tab == Tab::Journal {
+            let user = models(cx).library.read(cx).user.clone();
+            first = first
+                .into_iter()
+                .chain(journal::first_day(&user.journal))
+                .min();
+        }
         match self.tab {
-            Tab::Overview | Tab::Album => {
+            Tab::Overview | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let back = period
                     .previous()
@@ -356,6 +395,7 @@ impl StatsView {
         self.history.as_ref().is_some_and(|h| h.sessions.is_empty())
             && user.playtime.values().all(|r| r.total_minutes == 0)
             && user.play_status.is_empty()
+            && user.journal.is_empty()
             && self.screenshots.as_ref().is_none_or(|s| s.shots.is_empty())
     }
 }
@@ -375,6 +415,17 @@ impl Render for StatsView {
                 .image_cache(self.images.clone())
                 .child(self.render_album_page(window, cx));
         }
+        // So is a journal with notes.
+        let journal_page = self.tab == Tab::Journal
+            && self.history.is_some()
+            && self.journal.as_ref().is_some_and(|j| !j.notes.is_empty());
+        if journal_page {
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .image_cache(self.images.clone())
+                .child(self.render_journal_page(window, cx));
+        }
         let body: AnyElement = if self.history.is_none() {
             div()
                 .flex()
@@ -393,9 +444,14 @@ impl Render for StatsView {
                 .into_any_element()
         } else {
             match self.tab {
-                Tab::Overview => self.render_overview(window, cx),
+                Tab::Overview => v_flex()
+                    .gap_6()
+                    .children(self.render_year_offer(cx))
+                    .child(self.render_overview(window, cx))
+                    .into_any_element(),
                 Tab::Backlog => self.render_backlog(window, cx),
                 Tab::Album => self.render_album(window, cx),
+                Tab::Journal => self.render_journal(window, cx),
             }
         };
         let storage = self

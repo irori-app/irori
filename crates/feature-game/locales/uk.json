@@ -552,5 +552,7 @@
   "game.timeline.summary_other": "Сеансів з {date}: {count}",
   "game.timeline.title": "Історія гри",
   "game.timeline.view_days": "Хронологія",
-  "game.timeline.view_sessions": "Сеанси"
+  "game.timeline.view_sessions": "Сеанси",
+  "game.timeline.view_journal": "Щоденник",
+  "game.journal.write": "Написати нотатку про цей день"
 }

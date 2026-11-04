@@ -102,5 +102,15 @@
   "ui.play_status.on_hold": "Gepauzeerd",
   "ui.play_status.beaten": "Uitgespeeld",
   "ui.play_status.abandoned": "Gestopt",
-  "ui.play_status.played": "Gespeeld"
+  "ui.play_status.played": "Gespeeld",
+  "ui.journal.title_placeholder": "Titel (optioneel)",
+  "ui.journal.text_placeholder": "Wat gebeurde er? Hoe ver je kwam, wat je verraste, wat je hierna wilt proberen…",
+  "ui.journal.screenshots": "Screenshots van die dag",
+  "ui.journal.no_screenshots": "Geen screenshots van deze game op die dag.",
+  "ui.journal.delete": "Notitie verwijderen",
+  "ui.journal.delete_title": "Notitie voor {day} verwijderen?",
+  "ui.journal.delete_description": "De notitie verdwijnt uit je dagboek. Screenshots blijven waar ze zijn.",
+  "ui.journal.cancel": "Annuleren",
+  "ui.journal.save": "Opslaan",
+  "ui.journal.label": "{title} · {date}"
 }
