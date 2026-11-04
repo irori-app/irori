@@ -286,3 +286,193 @@ fn unanswered_script_questions_cancel_and_roll_back() {
     assert!(!game_dir.exists());
     assert!(run.progress.lock().rolling_back);
 }
+
+/// An added Linux game that runs a shell command.
+#[cfg(target_os = "linux")]
+struct PlayStore {
+    game: Arc<GameInfo>,
+    command: irori_core::process::CommandSpec,
+}
+
+#[cfg(target_os = "linux")]
+#[async_trait]
+impl Store for PlayStore {
+    fn runner(&self) -> Runner {
+        Runner::Sideload
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        None
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("no accounts")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        vec![self.game.clone()]
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        (*self.game.app_name == *app).then(|| self.game.clone())
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("added apps aren't installed")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("added apps aren't installed")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("added apps aren't updated")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("added apps aren't repaired")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        Ok(())
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        Ok(())
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        Ok(())
+    }
+    async fn launch(&self, _: &str, request: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        Ok(LaunchPlan {
+            command: self.command.clone().envs(request.environment.env.clone()),
+            track_wineserver: false,
+            watch: None,
+        })
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn programs_alongside_start_and_stop_with_the_game() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let marks = dir.path().join("marks");
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "programs-alongside".into(),
+            title: "Programs Alongside".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().display().to_string(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("sh").args(["-c", "sleep 2"]),
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    // The first program writes its game's name and then lives on until it is
+    // stopped; the second would start after the game is over.
+    let programs = serde_json::json!([
+        {
+            "name": "Voice",
+            "path": "sh",
+            "args": format!("-c 'echo \"$IRORI_GAME_TITLE\" > {}; exec sleep 60'", marks.display()),
+        },
+        {"name": "Trainer", "path": "sh", "args": "-c true", "delaySeconds": 30},
+    ]);
+    b.settings
+        .set_game_value(&id, "iroriLaunchPrograms", Some(programs));
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    let exited = b.runtime().block_on(async {
+        tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            loop {
+                if let Ok(Event::GameExited { id: e, .. }) = rx.recv().await
+                    && e == id
+                {
+                    return;
+                }
+            }
+        })
+        .await
+    });
+    assert!(exited.is_ok(), "the game ended");
+    assert_eq!(
+        std::fs::read_to_string(&marks).unwrap().trim(),
+        "Programs Alongside"
+    );
+    let log = std::fs::read_to_string(b.game_log(&id)).unwrap();
+    assert!(log.contains("Starting Voice"), "{log}");
+    assert!(log.contains("Stopping Voice: the game ended"), "{log}");
+    assert!(
+        log.contains("Not starting Trainer: the game ended first"),
+        "{log}"
+    );
+}
+
+#[test]
+fn launch_presets_save_apply_and_go() {
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| Vec::new()).unwrap();
+    let (from, to) = (
+        irori_core::GameId::new(Runner::Sideload, "preset-from"),
+        irori_core::GameId::new(Runner::Sideload, "preset-to"),
+    );
+    assert!(b.settings.save_launch_preset("Empty", Some(&from)).is_err());
+    b.settings
+        .set_game_value(&from, "showMangohud", Some(serde_json::Value::Bool(true)));
+    b.settings.set_game_value(
+        &from,
+        "launcherArgs",
+        Some(serde_json::Value::String("-windowed".into())),
+    );
+    let preset = b
+        .settings
+        .save_launch_preset(" Overlay ", Some(&from))
+        .unwrap();
+    assert_eq!(preset.name, "Overlay");
+    assert!(b.settings.launch_presets().contains(&preset));
+
+    b.settings
+        .apply_launch_preset(&preset, std::slice::from_ref(&to));
+    let overrides = b.settings.overrides(&to);
+    assert!(overrides.is_overridden("showMangohud"));
+    assert!(
+        !overrides.is_overridden("launcherArgs"),
+        "not a launch preset key"
+    );
+    assert!(b.settings.game(&to).show_mangohud);
+
+    b.settings.remove_launch_preset(&preset.id);
+    assert!(
+        !b.settings
+            .launch_presets()
+            .iter()
+            .any(|p| p.id == preset.id)
+    );
+    assert!(b.settings.game(&to).show_mangohud, "applied settings stay");
+}

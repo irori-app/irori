@@ -35,6 +35,8 @@ use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
+use crate::launch_presets::LaunchPresetsPanel;
+use crate::launch_programs::LaunchProgramsPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
     PanelKind, Scope, TextKind,
@@ -587,6 +589,20 @@ impl SettingsForm {
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EglSyncPanel::new(epic, window, cx)).into()),
+            PanelKind::LaunchPrograms => {
+                let target = self.target.clone();
+                Some(
+                    cx.new(|cx| LaunchProgramsPanel::new(target, window, cx))
+                        .into(),
+                )
+            }
+            PanelKind::LaunchPresets => {
+                let target = self.target.clone();
+                Some(
+                    cx.new(|cx| LaunchPresetsPanel::new(target, window, cx))
+                        .into(),
+                )
+            }
             PanelKind::SaveSync => match &self.target {
                 FormTarget::Game(id) => {
                     let id = id.clone();

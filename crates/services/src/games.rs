@@ -246,6 +246,8 @@ impl Backend {
             run_script(&settings.before_launch_script_path, &game, &log_file).await?;
         }
 
+        // Programs alongside run with the Wine layer the store gets.
+        let request_env = environment.clone();
         let request = LaunchRequest {
             option,
             extra_args,
@@ -280,6 +282,7 @@ impl Backend {
                 log_cap::GAME_LOG_CAP,
             ))
         });
+        let programs = self.start_programs(id, &game, &settings, &request_env, &log_file);
         let awake = self.spawn(Inhibitor::acquire_owned(format!("Playing {}", game.title)));
         let started = Instant::now();
         let started_at = util::now_rfc3339();
@@ -337,12 +340,26 @@ impl Backend {
             if discord.is_some() {
                 b.presence.clear().await;
             }
+            let install_path = game
+                .install_path()
+                .map(|p| p.to_string_lossy().into_owned());
             // A sandbox ends with everything in it, its wineserver too.
-            if plan.track_wineserver
-                && sandbox.is_none()
-                && Self::target_platform(&game).needs_wine()
-            {
-                let _ = irori_runtime::wait_prefix(&settings).await;
+            match crate::programs::prefix_wait(
+                plan.track_wineserver && sandbox.is_none(),
+                Self::target_platform(&game).needs_wine(),
+                programs.as_ref().is_some_and(|p| p.running_in_prefix()),
+                install_path.as_deref(),
+            ) {
+                crate::programs::PrefixWait::None => {}
+                crate::programs::PrefixWait::Wineserver => {
+                    let _ = irori_runtime::wait_prefix(&settings).await;
+                }
+                crate::programs::PrefixWait::Folder(folder) => {
+                    crate::follow::wait_while(crate::follow::folder_probe(folder)).await;
+                }
+            }
+            if let Some(programs) = programs {
+                programs.end().await;
             }
             let seconds = started.elapsed().as_secs();
             let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
@@ -405,6 +422,44 @@ impl Backend {
             });
         });
         Ok(())
+    }
+
+    /// Start the game's programs alongside, if it has any. Steam games reach
+    /// Steam's Proton prefix through `protontricks-launch`.
+    fn start_programs(
+        &self,
+        id: &GameId,
+        game: &GameInfo,
+        settings: &irori_core::GameSettings,
+        environment: &irori_core::LaunchEnvironment,
+        log_file: &Path,
+    ) -> Option<crate::programs::Programs> {
+        let programs = &settings.launch_programs;
+        if !programs.iter().any(|p| p.enabled) {
+            return None;
+        }
+        let steam_launch = (cfg!(target_os = "linux")
+            && id.runner == irori_core::Runner::Steam
+            && programs.iter().any(|p| p.enabled && p.in_prefix))
+        .then(|| {
+            let install = game.install_path()?;
+            let prefix = irori_runtime::protontricks::prefix_of(&install, &id.app_name)?;
+            if !prefix.is_dir() {
+                return None;
+            }
+            let mut argv = irori_runtime::protontricks::launch_command()?;
+            argv.extend(["--appid".to_string(), id.app_name.to_string()]);
+            Some(argv)
+        })
+        .flatten();
+        let plan = crate::programs::plan(&crate::programs::PlanInput {
+            programs,
+            environment,
+            host: irori_core::HostPlatform::current(),
+            identity: crate::programs::identity_env(game),
+            steam_launch,
+        });
+        Some(crate::programs::Programs::start(plan, log_file))
     }
 
     /// Queue an install of `id` with default options into the default install
@@ -895,13 +950,7 @@ pub(crate) fn append_log(path: &Path, text: &str) {
 }
 
 async fn run_script(script: &str, game: &GameInfo, log_file: &Path) -> Result<()> {
-    let spec = CommandSpec::new(script)
-        .env("IRORI_GAME_TITLE", game.title.clone())
-        .env("IRORI_APP_NAME", game.app_name.clone())
-        .env("IRORI_RUNNER", game.runner().id())
-        .env("HEROIC_GAME_TITLE", game.title.clone())
-        .env("HEROIC_APP_NAME", game.app_name.clone())
-        .env("HEROIC_APP_RUNNER", game.runner().id());
+    let spec = CommandSpec::new(script).envs(crate::programs::identity_env(game));
     let res = process::run(&spec, RunOptions::default().log_file(log_file)).await?;
     if !res.success() {
         tracing::warn!("script {script} exited with {:?}", res.code);
