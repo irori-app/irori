@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Jocuri Blizzard și Activision: World of Warcraft, Diablo, Overwatch, Call of Duty.",
   "manage.launchers.about.ea": "Jocuri EA, inclusiv cele pe care le ai pe Steam sau Epic și care au nevoie de EA app.",
   "manage.launchers.about.ubisoft": "Jocuri Ubisoft, inclusiv cele care au nevoie de Ubisoft Connect ca să pornească.",
-  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption și alte jocuri Rockstar."
+  "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption și alte jocuri Rockstar.",
+  "manage.launchers.about.xbox": "Jocuri din aplicația Xbox, Microsoft Store și PC Game Pass. Irori le găsește singur; instalează-le și dezinstalează-le din aplicația Xbox.",
+  "manage.launchers.xbox.windows_only": "Aplicația Xbox rulează doar pe Windows. Pornește Irori pe Windows ca să vezi aceste jocuri în bibliotecă.",
+  "manage.launchers.xbox.get_app": "Descarcă aplicația Xbox",
+  "manage.launchers.state.windows_only": "Doar Windows",
+  "manage.launchers.state.no_xbox_app": "Aplicația Xbox nu este instalată"
 }

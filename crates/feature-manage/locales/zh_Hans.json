@@ -487,5 +487,10 @@
   "manage.launchers.about.battlenet": "Blizzard 和 Activision 的游戏：World of Warcraft、Diablo、Overwatch、Call of Duty。",
   "manage.launchers.about.ea": "EA 的游戏，包括你在 Steam 或 Epic 上拥有但需要 EA app 的游戏。",
   "manage.launchers.about.ubisoft": "Ubisoft 的游戏，包括需要 Ubisoft Connect 才能启动的游戏。",
-  "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption 及其他 Rockstar 游戏。"
+  "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption 及其他 Rockstar 游戏。",
+  "manage.launchers.about.xbox": "来自 Xbox 应用、Microsoft Store 和 PC Game Pass 的游戏。Irori 会自动找到它们；请在 Xbox 应用中安装和卸载。",
+  "manage.launchers.xbox.windows_only": "Xbox 应用仅能在 Windows 上运行。在 Windows 上启动 Irori，即可在游戏库中看到这些游戏。",
+  "manage.launchers.xbox.get_app": "获取 Xbox 应用",
+  "manage.launchers.state.windows_only": "仅限 Windows",
+  "manage.launchers.state.no_xbox_app": "未安装 Xbox 应用"
 }

@@ -144,7 +144,7 @@ pub fn parse_installer_data(bytes: &[u8], install_dir: PathBuf) -> anyhow::Resul
 }
 
 /// Manifests are UTF-8, but old Origin ones may be UTF-16 with a byte-order mark.
-fn decode_text(bytes: &[u8]) -> String {
+pub(crate) fn decode_text(bytes: &[u8]) -> String {
     let utf16 = |bytes: &[u8], from: fn([u8; 2]) -> u16| {
         let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|c| from(*c)).collect();
         String::from_utf16_lossy(&units)
