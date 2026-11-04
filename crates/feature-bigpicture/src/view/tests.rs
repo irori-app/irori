@@ -358,9 +358,9 @@ fn show_log_puts_the_game_log_beside_the_rows(cx: &mut TestAppContext) {
     std::fs::write(&path, "Starting\nerr: missing dll\n").unwrap();
 
     // Charlie's page: Play, Play with logs, Favourite, Settings, Show log.
-    cx.dispatch_action(handle, gamepad::Right);
-    assert_eq!(focused_title(&view, cx), "Charlie");
-    cx.dispatch_action(handle, gamepad::Confirm);
+    // Opened directly: tests share a data folder, so Home's shelves depend on
+    // what the others favourited.
+    view.update(cx, |v, cx| v.open_page(charlie.clone(), cx));
     for _ in 0..4 {
         cx.dispatch_action(handle, gamepad::Down);
     }
@@ -380,7 +380,7 @@ fn show_log_puts_the_game_log_beside_the_rows(cx: &mut TestAppContext) {
     cx.dispatch_action(handle, gamepad::Back);
     draw(cx);
     cx.read(|cx| assert!(view.read(cx).log.is_none()));
-    cx.dispatch_action(handle, gamepad::Confirm);
+    view.update(cx, |v, cx| v.open_page(charlie.clone(), cx));
     draw(cx);
     cx.read(|cx| assert!(view.read(cx).log.is_some()));
     // Turning it off brings the details back.
