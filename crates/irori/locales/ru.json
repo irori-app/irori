@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Скопировать команду",
   "shell.app_update.updated": "Irori обновлён до версии {version}",
   "shell.app_update.release_notes": "Примечания к выпуску",
+  "shell.palette.year_in_review": "Открыть итоги года",
+  "shell.palette.year_in_review_keywords": "итоги год обзор",
   "shell.nav.views": "Виды",
   "shell.palette.show_view": "Показать вид: {name}",
   "shell.palette.views_keywords": "вид сохранённый фильтр",

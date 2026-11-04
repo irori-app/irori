@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Copy command",
   "shell.app_update.updated": "Irori updated to {version}",
   "shell.app_update.release_notes": "Release notes",
+  "shell.palette.year_in_review": "Open the Year in review",
+  "shell.palette.year_in_review_keywords": "recap wrapped annual summary",
   "shell.nav.views": "Views",
   "shell.palette.show_view": "Show view: {name}",
   "shell.palette.views_keywords": "view saved filter",

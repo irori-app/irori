@@ -556,6 +556,8 @@
   "game.timeline.title": "Play history",
   "game.timeline.view_days": "Timeline",
   "game.timeline.view_sessions": "Sessions",
+  "game.timeline.view_journal": "Journal",
+  "game.journal.write": "Write a note about this day",
   "game.sandbox.title": "Sandboxed",
   "game.sandbox.running": "Running sandboxed",
   "game.sandbox.no_network": "No network",

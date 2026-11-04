@@ -104,6 +104,18 @@ pub fn short_date(date: NaiveDate) -> SharedString {
     )
 }
 
+/// "Oct 19, 2026" in the interface language's order.
+pub fn long_date(day: NaiveDate) -> SharedString {
+    t_args(
+        "library.stats.long_date",
+        &[
+            ("day", &day.day().to_string()),
+            ("month", &month_short(day)),
+            ("year", &day.year().to_string()),
+        ],
+    )
+}
+
 /// "October 2026".
 pub fn month_year(date: NaiveDate) -> SharedString {
     t_args(

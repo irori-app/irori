@@ -556,6 +556,8 @@
   "game.timeline.title": "Historique de jeu",
   "game.timeline.view_days": "Chronologie",
   "game.timeline.view_sessions": "Sessions",
+  "game.timeline.view_journal": "Journal",
+  "game.journal.write": "Écrire une note sur ce jour",
   "game.sandbox.title": "En bac à sable",
   "game.sandbox.running": "En cours, dans le bac à sable",
   "game.sandbox.no_network": "Sans réseau",

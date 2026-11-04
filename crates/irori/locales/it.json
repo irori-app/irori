@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Copia comando",
   "shell.app_update.updated": "Irori aggiornato alla versione {version}",
   "shell.app_update.release_notes": "Note di rilascio",
+  "shell.palette.year_in_review": "Apri il Riepilogo dell’anno",
+  "shell.palette.year_in_review_keywords": "riepilogo recap annuale",
   "shell.nav.views": "Viste",
   "shell.palette.show_view": "Mostra vista: {name}",
   "shell.palette.views_keywords": "vista salvata filtro",

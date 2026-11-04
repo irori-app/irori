@@ -556,6 +556,8 @@
   "game.timeline.title": "プレイ履歴",
   "game.timeline.view_days": "タイムライン",
   "game.timeline.view_sessions": "セッション",
+  "game.timeline.view_journal": "日記",
+  "game.journal.write": "この日のメモを書く",
   "game.sandbox.title": "サンドボックス内",
   "game.sandbox.running": "サンドボックスで実行中",
   "game.sandbox.no_network": "ネットワークなし",
