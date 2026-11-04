@@ -144,9 +144,16 @@ pub async fn add_with_report(
         return Ok(report);
     }
     let launcher = LauncherCommand::detect();
+    // A portable Irori leaves the system as it found it: only the shortcut the
+    // user put on the desktop points at it.
+    let portable = irori_core::paths::is_portable();
+    let targets = ShortcutTargets {
+        app_menu: targets.app_menu && !portable,
+        ..targets
+    };
 
     if targets.desktop || targets.app_menu {
-        if let Err(e) = desktop::register_url_scheme(&launcher).await {
+        if !portable && let Err(e) = desktop::register_url_scheme(&launcher).await {
             report
                 .errors
                 .push(format!("registering irori:// links: {e:#}"));
