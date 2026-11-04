@@ -159,6 +159,17 @@ fn original_path(url: &str) -> PathBuf {
     Paths::get().images_dir().join("orig").join(digest(url))
 }
 
+/// Every file the art store may keep for `url`.
+fn cached_files(url: &str) -> Vec<PathBuf> {
+    let (ambient, rgb) = ambient_paths(url);
+    let mut files = vec![original_path(url), ambient, rgb];
+    for width in BUCKETS {
+        files.push(thumb_path(url, width, false));
+        files.push(thumb_path(url, width, true));
+    }
+    files
+}
+
 /// A local file referenced by a URL-ish string, if it is one.
 fn local_path(url: &str) -> Option<PathBuf> {
     if let Some(p) = url.strip_prefix("file://") {
@@ -317,6 +328,34 @@ impl ArtStore {
         })
         .detach();
         None
+    }
+
+    /// Drop what is kept of `urls`, in memory and on disk, so they are
+    /// downloaded and cut again the next time they are shown (art a store
+    /// replaced under the same address, an edited local file).
+    pub fn forget(&mut self, urls: Vec<String>, cx: &mut Context<Self>) {
+        let urls: HashSet<String> = urls.into_iter().filter(|u| !u.is_empty()).collect();
+        if urls.is_empty() {
+            return;
+        }
+        let files: Vec<PathBuf> = urls.iter().flat_map(|u| cached_files(u)).collect();
+        let job = backend(cx).spawn_blocking(move || {
+            for file in files {
+                // Most sizes were never cut, so most files don't exist.
+                let _ = std::fs::remove_file(file);
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let _ = job.await;
+            let _ = this.update(cx, |store, cx| {
+                let known = |url: &SharedString| urls.contains(url.as_ref());
+                store.ready.retain(|k, _| !known(&k.url));
+                store.failed.retain(|k| !known(&k.url));
+                store.ambient.retain(|k, _| !known(k));
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Forget failures so they are retried (after connectivity returns).

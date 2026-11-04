@@ -241,6 +241,24 @@ pub struct GameSettings {
     /// `PROTON_XESS_UPGRADE`. Irori-only.
     #[serde(rename = "iroriXessUpgrade")]
     pub xess_upgrade: bool,
+    /// PCI address of the graphics card the game renders on
+    /// (`0000:03:00.0`); empty leaves the choice to the system. Takes
+    /// precedence over `nvidiaPrime`. Linux only; Irori-only.
+    #[serde(rename = "iroriGpu")]
+    pub gpu: String,
+    /// NVIDIA Smooth Motion frame generation
+    /// (`NVPRESENT_ENABLE_SMOOTH_MOTION`). Linux only; Irori-only.
+    #[serde(rename = "iroriSmoothMotion")]
+    pub smooth_motion: bool,
+    /// NVIDIA Reflex in Vulkan games run through Wine or Proton, through
+    /// DXVK-NVAPI's Reflex layer (`DXVK_NVAPI_VKREFLEX`). Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriNvidiaReflex")]
+    pub nvidia_reflex: bool,
+    /// Lossless Scaling frame generation through the lsfg-vk Vulkan layer.
+    /// Linux only; Irori-only.
+    #[serde(rename = "iroriLsfg")]
+    pub lsfg: LsfgSettings,
     /// The Lutris install script that installed this game, so it can be
     /// reinstalled or updated later. Per game only. Irori-only.
     #[serde(
@@ -271,6 +289,33 @@ impl SandboxSettings {
     /// Whether the game runs sandboxed at all.
     pub fn is_enabled(&self) -> bool {
         self.no_network || self.no_home
+    }
+}
+
+/// Lossless Scaling frame generation of one game (`iroriLsfg`), handed to
+/// lsfg-vk through its environment variables so its own configuration file
+/// stays the user's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LsfgSettings {
+    pub enabled: bool,
+    /// Frames shown per rendered frame (2 doubles the frame rate).
+    pub multiplier: u8,
+    /// Resolution the motion is estimated at, in percent (25 to 100); lower
+    /// is faster and less accurate.
+    pub flow_scale: u8,
+    /// lsfg-vk's lighter model.
+    pub performance_mode: bool,
+}
+
+impl Default for LsfgSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            multiplier: 2,
+            flow_scale: 100,
+            performance_mode: false,
+        }
     }
 }
 
@@ -345,6 +390,10 @@ impl Default for GameSettings {
             dlss_indicator: false,
             fsr4_upgrade: false,
             xess_upgrade: false,
+            gpu: String::new(),
+            smooth_motion: false,
+            nvidia_reflex: false,
+            lsfg: LsfgSettings::default(),
             enable_quick_saves_menu: false,
             retina_mode: false,
             engine: String::new(),
@@ -860,6 +909,23 @@ mod tests {
             serde_json::from_str(r#"{"emberItchIo": true, "emberEngine": "mgba"}"#).unwrap();
         assert!(app.itch_io);
         assert_eq!(serde_json::to_value(&app).unwrap()["iroriEngine"], "mgba");
+    }
+
+    #[test]
+    fn gpu_and_frame_generation_keys() {
+        let gs: GameSettings = serde_json::from_str(
+            r#"{"iroriGpu": "0000:03:00.0", "iroriSmoothMotion": true,
+                "iroriLsfg": {"enabled": true, "multiplier": 3}}"#,
+        )
+        .unwrap();
+        assert_eq!(gs.gpu, "0000:03:00.0");
+        assert!(gs.smooth_motion && !gs.nvidia_reflex);
+        assert_eq!(gs.lsfg.multiplier, 3);
+        assert_eq!(gs.lsfg.flow_scale, 100, "missing keys keep their defaults");
+        let json = serde_json::to_value(GameSettings::default()).unwrap();
+        assert_eq!(json["iroriGpu"], "");
+        assert_eq!(json["iroriLsfg"]["multiplier"], 2);
+        assert_eq!(json["iroriLsfg"]["performanceMode"], false);
     }
 
     #[test]
