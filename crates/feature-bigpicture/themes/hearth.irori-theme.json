@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Hearth",
+  "author": "Irori",
+  "layout": "spotlight",
+  "colors": {
+    "background": "#16100d",
+    "foreground": "#f6e9df",
+    "accent": "#ff8a3d",
+    "surface": "#241914"
+  },
+  "font": "irori",
+  "background": { "kind": "art" },
+  "covers": { "shape": "portrait", "size": "large", "corners": "rounded" },
+  "shelves": ["continue_playing", "plan_to_play", "favourites", "installed"]
+}

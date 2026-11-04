@@ -65,7 +65,9 @@ pub fn legible(fg: Hsla, on: &[Hsla], min: f32, cx: &App) -> Hsla {
     legible_towards(fg, on, min, towards)
 }
 
-pub(crate) fn legible_towards(fg: Hsla, on: &[Hsla], min: f32, towards: Hsla) -> Hsla {
+/// [`legible`] towards a chosen colour, for surfaces whose lightness is not
+/// the interface theme's (Big Picture's themes bring their own background).
+pub fn legible_towards(fg: Hsla, on: &[Hsla], min: f32, towards: Hsla) -> Hsla {
     let reads = |c: Hsla| on.iter().all(|bg| contrast(c, *bg) >= min);
     let fg = Hsla { a: 1.0, ..fg };
     if reads(fg) {

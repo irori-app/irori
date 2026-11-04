@@ -17,7 +17,9 @@ use irori_ui::i18n::{t, t_args};
 use super::home::SCROLL_SPRING;
 use super::tile::{Cover, CoverSlot};
 use super::{BigPictureView, Colors, LibraryFocus};
-use crate::layout::{CHIPS, GRID_FOCUS_SCALE, GRID_HEADER, Metrics, strip_range, strip_start};
+use crate::layout::{
+    CHIPS, GRID_FOCUS_SCALE, GRID_HEADER, Metrics, TILE_GAP, strip_range, strip_start,
+};
 use crate::model::Chip;
 
 impl BigPictureView {
@@ -142,6 +144,8 @@ impl BigPictureView {
                     id: SharedString::from(format!("bp-grid-{key}")),
                     width: m.grid_tile,
                     scale: GRID_FOCUS_SCALE,
+                    shape: self.look.theme().covers.shape,
+                    gap: TILE_GAP,
                     focused: in_grid && i == ix && self.overlay.is_none(),
                     slot: CoverSlot::Grid(i),
                 };

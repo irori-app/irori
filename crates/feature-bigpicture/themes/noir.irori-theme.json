@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Noir",
+  "author": "Irori",
+  "layout": "cinema",
+  "colors": {
+    "background": "#050505",
+    "foreground": "#f2f0eb",
+    "accent": "#e3b65b",
+    "surface": "#141414"
+  },
+  "font": "serif",
+  "background": { "kind": "solid" },
+  "covers": { "shape": "landscape", "size": "medium", "corners": "sharp" },
+  "shelves": ["continue_playing", "recently_added", "installed", "favourites"]
+}

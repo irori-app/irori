@@ -161,7 +161,7 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_sections(vec![FieldSection::General], cx));
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
-        assert_eq!(app_form.read(cx).visible_count(), 4);
+        assert_eq!(app_form.read(cx).visible_count(), 5);
         assert!(general > 20);
     });
 }
