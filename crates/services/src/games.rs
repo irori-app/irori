@@ -38,6 +38,8 @@ pub struct RunningGame {
     pub stopping: bool,
     /// Follows a game another program started (Steam); stopping goes through it.
     pub watch: Option<Arc<dyn irori_core::GameWatch>>,
+    /// What the game's sandbox keeps from it; `None` when it runs without one.
+    pub sandbox: Option<irori_core::SandboxSettings>,
 }
 
 /// Whether a session counts as a failed start: the game exited with an error
@@ -60,6 +62,11 @@ const FAILED_START_SECONDS: u64 = 10;
 impl Backend {
     pub fn is_running(&self, id: &GameId) -> bool {
         self.running.lock().contains_key(id)
+    }
+
+    /// The sandbox a running game was started in, if it runs sandboxed.
+    pub fn running_sandbox(&self, id: &GameId) -> Option<irori_core::SandboxSettings> {
+        self.running.lock().get(id).and_then(|r| r.sandbox)
     }
 
     pub fn running_games(&self) -> Vec<GameId> {
@@ -218,6 +225,12 @@ impl Backend {
         } else {
             Default::default()
         };
+        // prepare_launch refuses rather than leaving the sandbox out, so a
+        // game set to run sandboxed that got this far is in one.
+        let sandbox = (settings.sandbox.is_enabled()
+            && irori_runtime::sandbox::applies_to(id.runner)
+            && target.platform != InstallPlatform::Browser)
+            .then_some(settings.sandbox);
 
         // "Turn off logs" sends everything to /dev/null; stores and scripts
         // still get a path to write to.
@@ -226,7 +239,7 @@ impl Backend {
         } else {
             Paths::get().game_log_file(id)
         };
-        write_log_header(&log_file, &game, &settings)?;
+        write_log_header(&log_file, &game, &settings, sandbox)?;
 
         if !settings.before_launch_script_path.is_empty() {
             ctx.step.as_ref()("Running script");
@@ -267,6 +280,7 @@ impl Backend {
                 started,
                 stopping: false,
                 watch: plan.watch.clone(),
+                sandbox,
             },
         );
         drop(guard);
@@ -313,7 +327,11 @@ impl Backend {
             if discord.is_some() {
                 b.presence.clear().await;
             }
-            if plan.track_wineserver && Self::target_platform(&game).needs_wine() {
+            // A sandbox ends with everything in it, its wineserver too.
+            if plan.track_wineserver
+                && sandbox.is_none()
+                && Self::target_platform(&game).needs_wine()
+            {
                 let _ = irori_runtime::wait_prefix(&settings).await;
             }
             let seconds = started.elapsed().as_secs();
@@ -788,6 +806,7 @@ fn write_log_header(
     path: &Path,
     game: &GameInfo,
     settings: &irori_core::GameSettings,
+    sandbox: Option<irori_core::SandboxSettings>,
 ) -> Result<()> {
     if path == Path::new(irori_core::platform::null_device()) {
         return Ok(());
@@ -809,6 +828,19 @@ fn write_log_header(
         header.push_str(&format!(
             "Wine: {} ({})\nPrefix: {}\n",
             settings.wine_version.name, settings.wine_version.bin, settings.wine_prefix
+        ));
+    }
+    if let Some(sandbox) = sandbox {
+        let mut blocked = Vec::new();
+        if sandbox.no_network {
+            blocked.push("the network");
+        }
+        if sandbox.no_home {
+            blocked.push("the home folder and other drives");
+        }
+        header.push_str(&format!(
+            "Sandbox: bubblewrap, without {}\n",
+            blocked.join(" or ")
         ));
     }
     header.push_str(&format!("Settings: {}\n\n", loggable_settings(settings)));

@@ -79,6 +79,8 @@ pub struct WineCommand {
     pub initialize_prefix: bool,
     /// Start the process and return immediately.
     pub detach: bool,
+    /// Programs to run it through, outermost first (the sandbox).
+    pub wrappers: Vec<Vec<String>>,
 }
 
 impl WineCommand {
@@ -98,6 +100,7 @@ impl WineCommand {
             skip_prefix_check: false,
             initialize_prefix: false,
             detach: false,
+            wrappers: Vec::new(),
         }
     }
 }
@@ -194,7 +197,7 @@ pub async fn run_wine(
         }
         Box::pin(verify_prefix(app, settings, wc, ctx)).await?;
     }
-    let spec = wine_spec(app, settings, wc, &cmd, &HostEnv::current());
+    let spec = wine_spec(app, settings, wc, &cmd, &HostEnv::current()).wrapped(&cmd.wrappers);
     if cmd.detach {
         let keep = ctx
             .log_file
@@ -470,7 +473,7 @@ pub fn wine_from_proton(wc: &WineContext) -> (WineInstallation, PathBuf) {
 }
 
 /// The wineserver and real prefix to address processes of `prefix`.
-fn server_for(wine: &WineInstallation, prefix: &Path) -> (Option<PathBuf>, PathBuf) {
+pub(crate) fn server_for(wine: &WineInstallation, prefix: &Path) -> (Option<PathBuf>, PathBuf) {
     match wine.kind {
         WineKind::Proton => {
             let server = wine_inside_proton(wine)
