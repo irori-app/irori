@@ -27,6 +27,8 @@ mod epic;
 mod form;
 mod game_view;
 mod i18n;
+mod launch_presets;
+mod launch_programs;
 mod logs;
 pub mod registry;
 mod saves;

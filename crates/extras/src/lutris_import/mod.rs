@@ -64,6 +64,30 @@ pub struct PlannedGame {
     pub last_played: Option<String>,
     /// Cover art or, failing that, the banner.
     pub cover: Option<PathBuf>,
+    /// Lutris's pre-launch and post-exit commands.
+    pub commands: LaunchCommands,
+}
+
+/// Commands Lutris runs around a game (`system.prelaunch_command`,
+/// `prelaunch_wait` and `postexit_command`), as command lines.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaunchCommands {
+    pub prelaunch: Option<String>,
+    /// The game waits until the pre-launch command has finished; otherwise
+    /// it runs alongside the game.
+    pub prelaunch_wait: bool,
+    pub postexit: Option<String>,
+}
+
+impl LaunchCommands {
+    fn from_cascade(cascade: &Cascade) -> Self {
+        let system = |key: &str| cascade.system.get(key).and_then(config::scalar);
+        Self {
+            prelaunch: system("prelaunch_command"),
+            prelaunch_wait: system("prelaunch_wait").is_some_and(|v| v == "true"),
+            postexit: system("postexit_command"),
+        }
+    }
 }
 
 /// What a Lutris game becomes in Irori.
@@ -265,7 +289,19 @@ fn plan_game(
         .cloned()
         .collect();
     let kind = classify(dirs, game, &runner, warnings);
+    // Store games keep their store's own launch; skipped ones aren't added.
+    let commands = match kind {
+        ImportKind::Skipped { .. } | ImportKind::StoreGame { .. } => LaunchCommands::default(),
+        _ => LaunchCommands::from_cascade(&Cascade::load(
+            dirs,
+            &runner,
+            game.configpath.as_deref(),
+            // Reading the same files again; their warnings are already in.
+            &mut Vec::new(),
+        )),
+    };
     PlannedGame {
+        commands,
         lutris_id: game.id,
         name,
         cover: cover(dirs, &slug),

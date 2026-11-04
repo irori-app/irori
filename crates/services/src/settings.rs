@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use irori_core::json_store;
 use irori_core::settings::{AppSettings, GameSettings, GameSettingsOverrides};
-use irori_core::{Event, EventBus, GameId, Paths};
+use irori_core::{Event, EventBus, GameId, HostPlatform, LaunchPreset, Paths};
 use parking_lot::RwLock;
 use serde_json::Value;
 
@@ -113,6 +113,66 @@ impl SettingsService {
             self.bus.emit(Event::GameSettingsChanged(id));
         }
         self.bus.emit(Event::SettingsChanged);
+    }
+
+    /// Launch presets: Irori's own for this system, then the user's.
+    pub fn launch_presets(&self) -> Vec<LaunchPreset> {
+        let mut presets = irori_core::launch_extras::builtin_presets(HostPlatform::current());
+        presets.extend(self.app().launch_presets.iter().cloned());
+        presets
+    }
+
+    /// Save the launch settings one game sets (`Some`), or the defaults that
+    /// differ from Irori's own (`None`), as a new preset named `name`.
+    /// Fails when there is nothing to save.
+    pub fn save_launch_preset(
+        &self,
+        name: &str,
+        from: Option<&GameId>,
+    ) -> anyhow::Result<LaunchPreset> {
+        let name = name.trim();
+        anyhow::ensure!(!name.is_empty(), "Name the preset");
+        let overrides = match from {
+            Some(id) => self.overrides(id),
+            None => GameSettingsOverrides::diff(&GameSettings::default(), &self.app().game),
+        };
+        let id = format!(
+            "user:{:x}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        );
+        let preset = LaunchPreset::capture(id, name.to_string(), &overrides);
+        anyhow::ensure!(
+            !preset.values.is_empty(),
+            "These settings don't change any launch setting a preset can hold yet"
+        );
+        let saved = preset.clone();
+        self.update_app(|a| a.launch_presets.push(saved));
+        Ok(preset)
+    }
+
+    /// Remove one of the user's presets. Games it was applied to keep the
+    /// settings it wrote.
+    pub fn remove_launch_preset(&self, preset: &str) {
+        self.update_app(|a| a.launch_presets.retain(|p| p.id != preset));
+    }
+
+    /// Apply a preset to each game: only the settings it holds become
+    /// overrides, so the rest keeps following the defaults. Reads each
+    /// game's settings file; call off the UI thread.
+    pub fn apply_launch_preset(&self, preset: &LaunchPreset, games: &[GameId]) {
+        let defaults = self.app().game.clone();
+        for id in games {
+            let next = preset.apply_to_game(&defaults, &self.overrides(id));
+            self.store_overrides(id, next);
+        }
+    }
+
+    /// Apply a preset to the defaults every game inherits.
+    pub fn apply_launch_preset_to_defaults(&self, preset: &LaunchPreset) {
+        self.update_app(|a| a.game = preset.apply_to_defaults(&a.game));
     }
 
     fn store_overrides(&self, id: &GameId, o: GameSettingsOverrides) {
