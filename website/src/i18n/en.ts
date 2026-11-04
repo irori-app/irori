@@ -266,9 +266,17 @@ export const en = {
         note: 'Download the .flatpak from the releases page first. Also the way to install on Steam Deck, in Desktop Mode. Irori isn’t on Flathub yet, so install each new version the same way.',
       },
       arch: { label: 'Arch Linux', note: 'Also for Manjaro, EndeavourOS and CachyOS.' },
+      appimage: {
+        label: 'AppImage',
+        note: 'Download Irori-…-x86_64.AppImage from the releases page: one file for any distribution with glibc 2.35 or newer, nothing to install. AppImageUpdate and Gear Lever update it in place.',
+      },
       homebrew: { label: 'Homebrew', note: '' },
       dmg: { label: 'Disk image', note: 'Download the .dmg for Apple silicon or Intel from the releases page and drag Irori to Applications.' },
       installer: { label: 'Installer', note: 'Download Irori-…-windows-setup.exe from the releases page. It installs for your user and never asks for administrator rights.' },
+      portable: {
+        label: 'Portable',
+        note: 'Download Irori-…-windows-portable.zip and unpack it anywhere, a USB drive too. Irori keeps its settings and data in that folder and adds nothing to Windows: no Start menu entry, no registry keys.',
+      },
       scoop: { label: 'Scoop', note: '' },
     },
     copy: 'Copy command',

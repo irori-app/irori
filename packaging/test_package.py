@@ -2,7 +2,10 @@
 import os
 from pathlib import Path
 import struct
+import subprocess
+import sys
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -18,6 +21,140 @@ def write_pe(path: Path, machine: int = 0x8664) -> None:
     struct.pack_into("<H", data, 68, machine)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
+
+
+def write_elf(path: Path, needed: list[str], machine: int = package.ELF_X86_64) -> None:
+    """A minimal x86-64 executable header that links `needed`."""
+    base, phoff, phnum = 0x400000, 64, 2
+    strtab = b"\0" + b"".join(name.encode() + b"\0" for name in needed)
+    strtab_offset = phoff + 56 * phnum
+    dynamic_offset = strtab_offset + len(strtab)
+    names, at = [], 1
+    for name in needed:
+        names.append(at)
+        at += len(name) + 1
+    dynamic = b"".join(struct.pack("<qQ", package.DT_NEEDED, offset) for offset in names)
+    dynamic += struct.pack("<qQ", package.DT_STRTAB, base + strtab_offset) + struct.pack("<qQ", 0, 0)
+    size = dynamic_offset + len(dynamic)
+    header = bytearray(64)
+    header[:6] = b"\x7fELF\x02\x01"
+    struct.pack_into("<H", header, 18, machine)
+    struct.pack_into("<Q", header, 32, phoff)
+    struct.pack_into("<HH", header, 54, 56, phnum)
+    load = struct.pack("<IIQQQQQQ", package.PT_LOAD, 5, 0, base, base, size, size, 0x1000)
+    dyn = struct.pack("<IIQQQQQQ", package.PT_DYNAMIC, 6, dynamic_offset, base + dynamic_offset,
+                      base + dynamic_offset, len(dynamic), len(dynamic), 8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(bytes(header) + load + dyn + strtab + dynamic)
+
+
+class LinuxPackagingTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.binaries = self.root / "built binaries"
+        write_elf(self.binaries / "irori", ["libxkbcommon.so.0", "libc.so.6"])
+        write_elf(self.binaries / "irori-sign-in", ["libwebkit2gtk-4.1.so.0", "libgtk-3.so.0", "libc.so.6"])
+        self.tool = self.root / "appimagetool"
+        self.tool.write_text("")
+        self.runtime = self.root / "runtime-x86_64"
+        self.runtime.write_text("")
+        environment = patch.dict(os.environ, {"IRORI_APPIMAGETOOL": str(self.tool), "IRORI_APPIMAGE_RUNTIME": str(self.runtime)})
+        environment.start()
+        self.addCleanup(environment.stop)
+        self.zsync = True
+
+    def build_appimage(self):
+        """Package with a stand-in appimagetool; returns the AppImage, the
+        command and what the AppDir held when the tool ran."""
+        seen = {}
+
+        def appimagetool(command, check, env, cwd):
+            appdir, appimage = Path(command[-2]), Path(command[-1])
+            seen["command"], seen["env"] = command, env
+            seen["files"] = {str(p.relative_to(appdir)): p for p in appdir.rglob("*")}
+            seen["desktop"] = (appdir / "irori.desktop").read_text()
+            seen["icon"] = (appdir / ".DirIcon").read_bytes()
+            seen["run"] = ((appdir / "AppRun").read_text(), (appdir / "AppRun").stat().st_mode)
+            appimage.write_bytes(b"AppImage")
+            if self.zsync:
+                appimage.with_name(appimage.name + ".zsync").write_text("zsync: 0.6.2\n")
+            return subprocess.CompletedProcess(command, 0)
+
+        with patch.object(package.subprocess, "run", side_effect=appimagetool):
+            tarball = package.package("linux", self.binaries, self.root / "output", appimage=True)
+        return tarball, seen
+
+    def test_elf_needed_reads_the_linked_libraries(self):
+        self.assertEqual(package.elf_needed(self.binaries / "irori"), ["libxkbcommon.so.0", "libc.so.6"])
+
+    @unittest.skipUnless(sys.platform == "linux" and Path("/bin/sh").is_file(), "needs a Linux executable")
+    def test_elf_needed_reads_a_real_executable(self):
+        self.assertIn("libc.so.6", package.elf_needed(Path("/bin/sh").resolve()))
+
+    def test_appimage_holds_both_programs_desktop_entry_icon_and_metainfo(self):
+        tarball, seen = self.build_appimage()
+        output = self.root / "output"
+        self.assertEqual(tarball, output / f"Irori-{self.version()}-linux.tar.gz")
+        appimage = output / f"Irori-{self.version()}-x86_64.AppImage"
+        self.assertTrue(appimage.is_file())
+        self.assertTrue(os.access(appimage, os.X_OK))
+        for name in ("usr/bin/irori", "usr/bin/irori-sign-in", "usr/share/applications/irori.desktop",
+                     "usr/share/icons/hicolor/scalable/apps/irori.svg",
+                     "usr/share/metainfo/app.irori.Irori.metainfo.xml", "usr/share/doc/irori/LICENSE",
+                     "irori.desktop", "irori.svg", ".DirIcon", "AppRun"):
+            self.assertIn(name, seen["files"])
+        self.assertIn("Exec=irori %u", seen["desktop"])
+        self.assertIn(b"<svg", seen["icon"])
+        run, mode = seen["run"]
+        self.assertTrue(run.startswith("#!/bin/sh\n") and 'exec "$here/usr/bin/irori" "$@"' in run)
+        self.assertTrue(mode & 0o111)
+        self.assertNotIn("LD_LIBRARY_PATH", run)
+        self.assertFalse(any(name.endswith(".so") or ".so." in name for name in seen["files"]))
+
+    def test_appimage_carries_update_information_and_the_pinned_runtime(self):
+        _, seen = self.build_appimage()
+        command = seen["command"]
+        self.assertEqual(command[0], str(self.tool))
+        self.assertEqual(command[command.index("--updateinformation") + 1], package.APPIMAGE_UPDATE_INFORMATION)
+        self.assertEqual(command[command.index("--runtime-file") + 1], str(self.runtime))
+        self.assertEqual(seen["env"]["ARCH"], "x86_64")
+        self.assertEqual(seen["env"]["VERSION"], self.version())
+        self.assertTrue(package.APPIMAGE_UPDATE_INFORMATION.startswith("gh-releases-zsync|irori-app|irori|latest|"))
+        self.assertTrue((self.root / f"output/Irori-{self.version()}-x86_64.AppImage.zsync").is_file())
+
+    def test_update_information_needs_its_zsync_file(self):
+        self.zsync = False
+        with self.assertRaisesRegex(RuntimeError, "zsyncmake"):
+            self.build_appimage()
+
+    def test_irori_must_start_without_webkitgtk(self):
+        write_elf(self.binaries / "irori", ["libwebkit2gtk-4.1.so.0", "libc.so.6"])
+        with self.assertRaisesRegex(RuntimeError, "without WebKitGTK"):
+            self.build_appimage()
+        self.assertFalse((self.root / "output").exists())
+
+    def test_other_architectures_are_rejected(self):
+        write_elf(self.binaries / "irori-sign-in", ["libc.so.6"], machine=183)  # aarch64
+        with self.assertRaisesRegex(ValueError, "requires x86-64"):
+            self.build_appimage()
+        (self.binaries / "irori-sign-in").write_text("#!/bin/sh\n")
+        with self.assertRaisesRegex(ValueError, "Not a 64-bit Linux executable"):
+            self.build_appimage()
+
+    def test_missing_appimagetool_is_explained(self):
+        with patch.dict(os.environ, {"IRORI_APPIMAGETOOL": "", "PATH": str(self.root / "absent")}):
+            with self.assertRaisesRegex(FileNotFoundError, "appimagetool"):
+                self.build_appimage()
+
+    def test_options_belong_to_their_platform(self):
+        with self.assertRaisesRegex(ValueError, "--appimage for Linux"):
+            package.package("windows", self.binaries, self.root / "output", appimage=True)
+        self.assertFalse((self.root / "output").exists())
+
+    def version(self):
+        return tomllib.loads((Path(package.__file__).resolve().parent.parent / "Cargo.toml").read_text())["workspace"]["package"]["version"]
 
 
 class WindowsPackagingTests(unittest.TestCase):
@@ -41,6 +178,22 @@ class WindowsPackagingTests(unittest.TestCase):
             for name in ("irori.exe", "irori-sign-in.exe", "vcruntime140.dll", "vcruntime140_1.dll", "install.ps1"):
                 self.assertIn("Irori/" + name, zipped.namelist())
             self.assertEqual(zipped.read("Irori/vcruntime140.dll"), (self.runtime / "vcruntime140.dll").read_bytes())
+
+    def test_portable_zip_keeps_data_beside_irori_and_installs_nothing(self):
+        output = self.root / "output"
+        installable = package.package("windows", self.binaries, output, portable=True)
+        portable = next(output.glob("Irori-*-windows-portable.zip"))
+        with zipfile.ZipFile(portable) as zipped:
+            names = zipped.namelist()
+            for name in ("irori.exe", "irori-sign-in.exe", "vcruntime140.dll", "vcruntime140_1.dll", "LICENSE.txt"):
+                self.assertIn("Irori-portable/" + name, names)
+            self.assertIn("leaves the rest of Windows alone", zipped.read("Irori-portable/portable").decode())
+            self.assertNotIn("Irori-portable/install.ps1", names)
+            self.assertTrue(all(name.startswith("Irori-portable/") for name in names))
+        with zipfile.ZipFile(installable) as zipped:
+            self.assertNotIn("Irori/portable", zipped.namelist())
+        # Inno Setup builds the setup from this folder.
+        self.assertFalse((output / "Irori/portable").exists())
 
     def test_missing_runtime_fails_before_creating_output(self):
         (self.runtime / "vcruntime140_1.dll").unlink()

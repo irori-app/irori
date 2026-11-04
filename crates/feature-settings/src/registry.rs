@@ -405,6 +405,10 @@ impl FieldSpec {
         if mac_only && host != HostPlatform::Mac {
             return false;
         }
+        // A portable Irori never adds itself to the Start menu.
+        if self.path == "addStartMenuShortcuts" && irori_core::paths::is_portable() {
+            return false;
+        }
         if host == HostPlatform::Linux {
             return true;
         }

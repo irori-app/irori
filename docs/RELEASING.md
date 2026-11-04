@@ -27,14 +27,21 @@ with its tag.
 | File | Built on | Signed when |
 | --- | --- | --- |
 | `Irori-X.Y.Z-linux.tar.gz` | Ubuntu 22.04 | — |
+| `Irori-X.Y.Z-x86_64.AppImage` (and `.AppImage.zsync` for AppImageUpdate) | Ubuntu 22.04 | — |
 | `irori_X.Y.Z-1_amd64.deb`, `irori-sign-in_X.Y.Z-1_amd64.deb` | Ubuntu 22.04 | The apt repository is signed |
 | `irori-X.Y.Z-1.x86_64.rpm`, `irori-sign-in-X.Y.Z-1.x86_64.rpm` | Ubuntu 22.04 | Signed when published to the dnf repository |
 | `irori-X.Y.Z-1-x86_64.pkg.tar.zst`, `irori-sign-in-X.Y.Z-1-x86_64.pkg.tar.zst` | Arch Linux | Signed when published to the pacman repository |
 | `Irori-X.Y.Z-linux.flatpak` | GNOME 50 SDK | — |
 | `Irori-X.Y.Z-macos-arm64.dmg` / `-x86_64.dmg` (and `.zip`) | macOS 15 | `MACOS_*` secrets; notarized with the `APPLE_*` secrets too |
-| `Irori-X.Y.Z-windows-setup.exe`, `Irori-X.Y.Z-windows.zip` | Windows Server 2022 | SignPath is configured |
+| `Irori-X.Y.Z-windows-setup.exe`, `Irori-X.Y.Z-windows.zip`, `Irori-X.Y.Z-windows-portable.zip` | Windows Server 2022 | SignPath is configured |
 
-Without signing secrets the workflow still builds every package, unsigned.
+Without signing secrets the workflow still builds every package, unsigned. `SHA256SUMS`
+covers every file, and the release job fails when one of the main packages is missing.
+
+The AppImage's tools are pinned in `release.yml`: appimagetool 1.9.1 and the type 2
+runtime `20251108`, each checked against its SHA-256. To move to newer ones, update the
+URLs and the sums together. The AppImage points AppImageUpdate at the release marked
+*latest*, so publishing a release is what offers it to existing AppImages.
 
 ## One-time setup
 
