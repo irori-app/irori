@@ -16,6 +16,8 @@
   "shell.nav.forward": "앞으로 (Alt+→)",
   "shell.notice.component_update_failed": "{name}을(를) 업데이트할 수 없습니다",
   "shell.notice.component_updated": "{name}을(를) {version}(으)로 업데이트했습니다",
+  "shell.palette.storage": "저장 공간 및 정리",
+  "shell.palette.storage_keywords": "디스크 드라이브 공간 크기 여유 확보 정리 삭제 저장소 storage",
   "shell.search.placeholder": "게임 및 명령 검색…",
   "shell.offline": "오프라인",
   "shell.offline.tooltip": "오프라인 상태입니다. 지원하는 설치된 게임은 계속 실행할 수 있습니다.",

@@ -16,6 +16,8 @@
   "shell.nav.forward": "Suivant (Alt+Droite)",
   "shell.notice.component_update_failed": "Échec de la mise à jour de {name}",
   "shell.notice.component_updated": "{name} mis à jour vers {version}",
+  "shell.palette.storage": "Stockage et nettoyage",
+  "shell.palette.storage_keywords": "disque lecteur espace taille libre libérer nettoyer nettoyage supprimer",
   "shell.search.placeholder": "Rechercher des jeux et des commandes…",
   "shell.offline": "Hors ligne",
   "shell.offline.tooltip": "Vous êtes hors ligne. Les jeux installés qui le permettent se lancent quand même.",

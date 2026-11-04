@@ -16,6 +16,8 @@
   "shell.nav.forward": "Dalej (Alt+Prawo)",
   "shell.notice.component_update_failed": "Nie udało się zaktualizować {name}",
   "shell.notice.component_updated": "Zaktualizowano {name} do {version}",
+  "shell.palette.storage": "Miejsce na dysku i czyszczenie",
+  "shell.palette.storage_keywords": "dysk miejsce rozmiar wolne zwolnij wyczyść czyszczenie usuń pamięć storage disk",
   "shell.search.placeholder": "Szukaj gier i poleceń…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Jesteś offline. Zainstalowane gry, które to obsługują, nadal się uruchomią.",

@@ -16,6 +16,8 @@
   "shell.nav.forward": "Forward (Alt+Right)",
   "shell.notice.component_update_failed": "{name} failed to update",
   "shell.notice.component_updated": "{name} updated to {version}",
+  "shell.palette.storage": "Storage and cleanup",
+  "shell.palette.storage_keywords": "disk drive space size free clean cleanup delete",
   "shell.search.placeholder": "Search games and commands…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "You're offline. Installed games that support it still launch.",

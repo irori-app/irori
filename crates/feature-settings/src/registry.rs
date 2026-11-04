@@ -205,6 +205,12 @@ pub enum CustomKind {
     FontSize,
     /// Library cover size slider.
     TileSize,
+    /// Accent colour picker, with the theme's or system's accent as default.
+    AccentColor,
+    /// Interface typeface from the installed font families.
+    FontFamily,
+    /// A 0 to 100 percent slider.
+    Percent,
 }
 
 /// Rows rendered by a self-contained panel (status plus actions) instead of
@@ -584,6 +590,36 @@ const LIBRARY_LAYOUT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("list"),
         Key("settings.option.library_layout.list"),
+    ),
+];
+
+const DENSITY: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("compact"),
+        Key("settings.option.density.compact"),
+    ),
+    opt(
+        ChoiceValue::Str("comfortable"),
+        Key("settings.option.density.comfortable"),
+    ),
+    opt(
+        ChoiceValue::Str("spacious"),
+        Key("settings.option.density.spacious"),
+    ),
+];
+
+const LIBRARY_BACKGROUND: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("none"),
+        Key("settings.option.library_background.none"),
+    ),
+    opt(
+        ChoiceValue::Str("game_art"),
+        Key("settings.option.library_background.game_art"),
+    ),
+    opt(
+        ChoiceValue::Str("picture"),
+        Key("settings.option.library_background.picture"),
     ),
 ];
 
@@ -1231,6 +1267,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_system_accent.help")
     .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
     app(
+        "iroriUi.accentColor",
+        "settings.field.ui_accent_color.label",
+        Appearance,
+        "settings.group.theme",
+        Custom(CustomKind::AccentColor),
+    )
+    .help("settings.field.ui_accent_color.help")
+    .keywords(&["accent", "colour", "color", "highlight", "tint", "picker"]),
+    app(
         "iroriUi.translucency",
         "settings.field.ui_translucency.label",
         Appearance,
@@ -1265,6 +1310,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_tile_size.help")
     .keywords(&["tile", "grid", "cover", "library"]),
+    app(
+        "iroriUi.density",
+        "settings.field.ui_density.label",
+        Appearance,
+        "settings.group.size",
+        Choice(DENSITY),
+    )
+    .help("settings.field.ui_density.help")
+    .keywords(&[
+        "density", "compact", "spacious", "spacing", "padding", "dense",
+    ]),
     app(
         "iroriUi.bigPictureScale",
         "settings.field.ui_big_picture_scale.label",
@@ -1314,6 +1370,58 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["animation", "accessibility"]),
+    app(
+        "iroriUi.fontFamily",
+        "settings.field.ui_font_family.label",
+        Appearance,
+        "settings.group.font",
+        Custom(CustomKind::FontFamily),
+    )
+    .help("settings.field.ui_font_family.help")
+    .keywords(&["font", "typeface", "manrope", "text", "family"]),
+    app(
+        "iroriUi.libraryBackground",
+        "settings.field.ui_library_background.label",
+        Appearance,
+        "settings.group.background",
+        Choice(LIBRARY_BACKGROUND),
+    )
+    .help("settings.field.ui_library_background.help")
+    .keywords(&[
+        "background",
+        "wallpaper",
+        "backdrop",
+        "art",
+        "picture",
+        "image",
+    ]),
+    app(
+        "iroriUi.libraryBackgroundPicture",
+        "settings.field.ui_library_background_picture.label",
+        Appearance,
+        "settings.group.background",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ui_library_background_picture.help")
+    .keywords(&["background", "wallpaper", "picture", "image"]),
+    app(
+        "iroriUi.libraryBackgroundStrength",
+        "settings.field.ui_library_background_strength.label",
+        Appearance,
+        "settings.group.background",
+        Custom(CustomKind::Percent),
+    )
+    .help("settings.field.ui_library_background_strength.help")
+    .keywords(&["background", "strength", "opacity", "intensity"]),
+    app(
+        "iroriUi.libraryBackgroundDim",
+        "settings.field.ui_library_background_dim.label",
+        Appearance,
+        "settings.group.background",
+        Custom(CustomKind::Percent),
+    )
+    .help("settings.field.ui_library_background_dim.help")
+    .keywords(&["background", "dim", "darken", "fade"]),
     // ---- Advanced ----
     app(
         "steamGridDbApiKey",

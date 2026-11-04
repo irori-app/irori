@@ -16,6 +16,8 @@
   "shell.nav.forward": "下一頁 (Alt+→)",
   "shell.notice.component_update_failed": "無法更新 {name}",
   "shell.notice.component_updated": "{name} 已更新至 {version}",
+  "shell.palette.storage": "儲存空間與清理",
+  "shell.palette.storage_keywords": "磁碟 硬碟 空間 大小 可用 釋放 清理 刪除 儲存 storage",
   "shell.search.placeholder": "搜尋遊戲與指令…",
   "shell.offline": "離線",
   "shell.offline.tooltip": "你目前處於離線狀態。支援離線的已安裝遊戲仍可啟動。",
