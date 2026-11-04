@@ -1,0 +1,17 @@
+{
+  "format": "irori-bigpicture-theme",
+  "version": 1,
+  "name": "Glacier",
+  "author": "Irori",
+  "layout": "shelves",
+  "colors": {
+    "background": "#0b1a23",
+    "foreground": "#e8f6fb",
+    "accent": "#5fdcf2",
+    "surface": "#13283a"
+  },
+  "font": "irori",
+  "background": { "kind": "art" },
+  "covers": { "shape": "portrait", "size": "medium", "corners": "round" },
+  "shelves": ["continue_playing", "favourites", "installed", "systems"]
+}

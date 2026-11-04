@@ -146,6 +146,8 @@
   "settings.field.before_launch_script_path.label": "Script avant le lancement",
   "settings.field.big_picture_in_game_mode.help": "Quand le mode Jeu du Steam Deck ou Steam Big Picture lance Irori, il s’ouvre dans Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Ouvrir Big Picture dans le mode Jeu de Steam",
+  "settings.field.big_picture_on_controller.label": "Ouvrir Big Picture quand une manette se connecte",
+  "settings.field.big_picture_on_controller.help": "Brancher ou appairer une manette pendant qu’Irori tourne le ramène au premier plan en Big Picture. Rien ne change pendant qu’un jeu tourne.",
   "settings.field.check_for_updates_on_startup.label": "Rechercher les mises à jour des jeux au démarrage",
   "settings.field.check_for_app_updates.help": "Une fois par jour, sur GitHub. Flatpak et les paquets de la distribution mettent Irori à jour avec le reste du système.",
   "settings.field.check_for_app_updates.label": "Rechercher les nouvelles versions d’Irori",

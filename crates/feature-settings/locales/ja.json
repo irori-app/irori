@@ -146,6 +146,8 @@
   "settings.field.before_launch_script_path.label": "起動前のスクリプト",
   "settings.field.big_picture_in_game_mode.help": "Steam Deck のゲームモードや Steam Big Picture から Irori を起動すると、Big Picture で開きます。",
   "settings.field.big_picture_in_game_mode.label": "Steam のゲームモードでは Big Picture で開く",
+  "settings.field.big_picture_on_controller.label": "コントローラーを接続したら Big Picture を開く",
+  "settings.field.big_picture_on_controller.help": "Irori の起動中にコントローラーを接続またはペアリングすると、Irori が Big Picture で前面に表示されます。ゲームのプレイ中は何も変わりません。",
   "settings.field.check_for_updates_on_startup.label": "起動時にゲームのアップデートを確認",
   "settings.field.check_for_app_updates.help": "1 日に 1 回、GitHub で確認します。Flatpak とディストリビューションのパッケージは、システムと一緒に Irori を更新します。",
   "settings.field.check_for_app_updates.label": "Irori の新しいバージョンを確認",

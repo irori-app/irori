@@ -605,7 +605,23 @@ it on every platform, and CI's Windows install test runs it.
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
   focus and build only the items near the view, so nothing animates once the focus
-  rests. `layout::HomeLayout` is the seam for other Home layouts.
+  rests.
+- Home has six layouts (`layout::HomeLayout`: Shelves, Spotlight, Cinema, Wall,
+  Carousel, Compact), each with its geometry in `layout/home.rs` and a renderer in
+  `view/`. They share one focus (`FocusGrid`), so switching keeps the focused game;
+  Compact turns the arrows (`grid_move`) and the Wall crosses sections
+  (`wall_step`). The Carousel springs each cover toward its own place on the wheel.
+- Themes (`theme/`) lay colours over the interface theme (held legible in
+  `view/look.rs`), pick a font, a background (game art, gradient, an embedded
+  picture, or plain), cover shape, size and corners, and Home's shelves. The
+  gallery is `themes/*.irori-theme.json`, parsed like shared files; the user's
+  are `<config>/bigpicture/themes/<id>.irori-theme.json`. Theme files are
+  versioned and checked field by field; pictures are embedded PNG/JPEG/WebP of
+  bounded size, never a path or address, and ids are made by Irori, so a file
+  can't name anything outside that folder. The editor (`view/editor.rs`, quick
+  menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
+  close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
+  `bigPictureOnController` (open Big Picture when a controller connects).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
 
