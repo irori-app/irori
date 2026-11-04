@@ -19,28 +19,55 @@ use gpui_kit::{
     AnyElement, Context, InteractiveElement as _, IntoElement, Modifiers, ParentElement as _,
     SharedString, Styled as _, Window, div,
 };
+use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, RemoveArgs};
 use irori_services::{PlayStatus, UserDataService};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use super::LibraryView;
+use crate::layouts::{self, Click};
 
 /// Titles listed in the uninstall confirmation before "and N more".
 const LISTED: usize = 8;
 
 impl LibraryView {
     /// A click on a game: Shift extends the selection, Ctrl (or any click in
-    /// selection mode) picks it, a plain click opens its page.
-    pub(super) fn click_game(&mut self, id: &GameId, modifiers: Modifiers, cx: &mut Context<Self>) {
+    /// selection mode) picks it. Otherwise the list opens its page; the grid
+    /// and Focus select it (the grid opens its drawer) and open the page on
+    /// a double click.
+    pub(super) fn click_game(
+        &mut self,
+        id: &GameId,
+        modifiers: Modifiers,
+        count: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.focused = Some(id.clone());
-        if modifiers.shift {
-            self.selection.extend_to(id, &self.frame.games);
-        } else if modifiers.secondary() || self.selection.is_active() {
-            self.selection.toggle(id);
-        } else {
-            irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx);
-            return;
+        self.focused_ix = self.games.position(id);
+        let click = layouts::click(
+            self.layout,
+            count,
+            modifiers.shift,
+            modifiers.secondary(),
+            self.selection.is_active(),
+        );
+        match click {
+            Click::Extend => self.selection.extend_to(id, &self.frame.games),
+            Click::Pick => self.selection.toggle(id),
+            Click::Open => {
+                irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx);
+                return;
+            }
+            Click::Select => {
+                // Arrow keys go on from the clicked game.
+                self.grid_focus.focus(window, cx);
+                match self.layout {
+                    LibraryLayout::Grid => self.open_drawer(window, cx),
+                    _ => self.show_focused(false, window, cx),
+                }
+            }
         }
         cx.notify();
     }
@@ -60,11 +87,12 @@ impl LibraryView {
         cx.notify();
     }
 
+    /// Escape: leave selection mode, else close the drawer.
     pub(super) fn end_selection(&mut self, cx: &mut Context<Self>) {
         if self.selection.is_active() {
             self.selection.end();
             cx.notify();
-        } else {
+        } else if !self.close_drawer(cx) {
             cx.propagate();
         }
     }

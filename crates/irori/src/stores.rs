@@ -153,6 +153,7 @@ pub fn hooks() -> Hooks {
                 crate::lutris::import_faugus(&backend, SIDELOAD.get().cloned()).await
             })
         })),
+        game_panel: Some(Arc::new(crate::routing::game_panel)),
     }
 }
 

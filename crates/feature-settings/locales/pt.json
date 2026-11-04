@@ -411,6 +411,7 @@
   "settings.logs.upload.title": "Enviar este registo?",
   "settings.option.library_layout.grid": "Grelha",
   "settings.option.library_layout.list": "Lista",
+  "settings.option.library_layout.focus": "Foco",
   "settings.option.sharpness.sharpest": "5 (mais nítido)",
   "settings.option.sharpness.softest": "1 (mais suave)",
   "settings.option.steam_runtime.none": "Nenhum",
