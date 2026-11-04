@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "上传此日志？",
   "settings.option.library_layout.grid": "网格",
   "settings.option.library_layout.list": "列表",
+  "settings.option.library_layout.focus": "聚焦",
   "settings.option.sharpness.sharpest": "5（最锐利）",
   "settings.option.sharpness.softest": "1（最柔和）",
   "settings.option.steam_runtime.none": "无",

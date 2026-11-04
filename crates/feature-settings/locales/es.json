@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "¿Subir este registro?",
   "settings.option.library_layout.grid": "Cuadrícula",
   "settings.option.library_layout.list": "Lista",
+  "settings.option.library_layout.focus": "Enfoque",
   "settings.option.sharpness.sharpest": "5 (más nítido)",
   "settings.option.sharpness.softest": "1 (más suave)",
   "settings.option.steam_runtime.none": "Ninguno",

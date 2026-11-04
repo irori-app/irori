@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "Nahrát tento protokol?",
   "settings.option.library_layout.grid": "Mřížka",
   "settings.option.library_layout.list": "Seznam",
+  "settings.option.library_layout.focus": "Detail",
   "settings.option.sharpness.sharpest": "5 (nejostřejší)",
   "settings.option.sharpness.softest": "1 (nejměkčí)",
   "settings.option.steam_runtime.none": "Žádný",

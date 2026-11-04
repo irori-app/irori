@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "Dit log uploaden?",
   "settings.option.library_layout.grid": "Raster",
   "settings.option.library_layout.list": "Lijst",
+  "settings.option.library_layout.focus": "Focus",
   "settings.option.sharpness.sharpest": "5 (scherpst)",
   "settings.option.sharpness.softest": "1 (zachtst)",
   "settings.option.steam_runtime.none": "Geen",

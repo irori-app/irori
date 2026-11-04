@@ -141,6 +141,7 @@ pub fn hooks() -> Hooks {
                     .await
             })
         })),
+        game_panel: Some(Arc::new(crate::routing::game_panel)),
     }
 }
 

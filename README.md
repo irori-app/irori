@@ -146,6 +146,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
+- **Three views, one click apart** (<kbd>Alt</kbd> <kbd>1</kbd>–<kbd>3</kbd>): the grid,
+  where a click opens a resizable drawer with the game's art, Play, status, rating, play
+  stats and screenshots; the sortable list; and Focus, a column of covers beside the
+  selected game's whole page over its art. Arrow keys move the selection in each.
 - **Add any game** yourself, with its own description, developer, release date, genres
   and art from SteamGridDB.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,

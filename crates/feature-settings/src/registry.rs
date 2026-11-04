@@ -585,6 +585,10 @@ const LIBRARY_LAYOUT: &[ChoiceOption] = &[
         ChoiceValue::Str("list"),
         Key("settings.option.library_layout.list"),
     ),
+    opt(
+        ChoiceValue::Str("focus"),
+        Key("settings.option.library_layout.focus"),
+    ),
 ];
 
 const STEAM_RUNTIME: &[ChoiceOption] = &[
@@ -1288,7 +1292,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.library",
         Choice(LIBRARY_LAYOUT),
     )
-    .keywords(&["grid", "list", "view"]),
+    .keywords(&["grid", "list", "focus", "view"]),
     app(
         "iroriUi.showStoreBadges",
         "settings.field.ui_show_store_badges.label",

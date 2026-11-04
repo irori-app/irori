@@ -1,6 +1,7 @@
 //! The library screen view.
 
 mod bulk;
+mod panel;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -37,8 +38,8 @@ use irori_core::{
 use irori_services::{EffectiveStatus, LibrarySort, StoreFilter};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
-    ArtImage, EmptyState, GameCover, PageHeader, SectionTitle, StoreBadge, art_image, art_img,
-    art_loading, art_missing, physical_width,
+    ArtBackdrop, ArtImage, EmptyState, GameCover, PageHeader, SectionTitle, StoreBadge, art_image,
+    art_img, art_loading, art_missing, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
@@ -53,10 +54,12 @@ use crate::filters_panel::{FilterModel, FiltersPanel, set_active_filters};
 use crate::grid::{self, GridMetrics, Move};
 use crate::launch::{self, LaunchChoice};
 use crate::top::{TopCache, TopKind};
+use crate::views;
 use crate::{
     ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
-    OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft, SelectPageDown,
-    SelectPageUp, SelectRight, SelectUp, ToggleStatusGroups,
+    NextLibraryView, OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft,
+    SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus, ShowGrid, ShowList,
+    ToggleDrawer, ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -96,6 +99,8 @@ struct FrameKey {
     top: Option<(TopKind, usize)>,
     groups: Vec<(EffectiveStatus, usize)>,
     layout: LibraryLayout,
+    /// Width of the region the covers or rows fill, in rem.
+    list_rem: u32,
     metrics: GridMetrics,
     rem: Pixels,
     width: Pixels,
@@ -114,6 +119,8 @@ struct Frame {
     metrics: GridMetrics,
     /// Which of `grid::LIST_COLUMNS` fit the width.
     list_columns: [bool; 6],
+    /// Width of the Focus view's column of covers, in rem.
+    focus_rem: f32,
     items: Rc<Vec<Item>>,
     sizes: Rc<Vec<Size<Pixels>>>,
     key: Option<FrameKey>,
@@ -129,6 +136,7 @@ impl Default for Frame {
             heading: SharedString::default(),
             metrics: grid::grid_metrics(60.0, 11.0),
             list_columns: [true; 6],
+            focus_rem: views::focus_column_rem(2),
             items: Rc::default(),
             sizes: Rc::default(),
             key: None,
@@ -160,7 +168,17 @@ pub struct LibraryView {
     /// Grouping of the last frame: a change reorders every game, so the list
     /// starts again from the top.
     grouping: Grouping,
+    /// The selected game: the keyboard's place in the grid or list, and the
+    /// game the drawer or the Focus view's page shows.
     focused: Option<GameId>,
+    /// Where `focused` was in the shown list, so Focus can stay near it when
+    /// a filter hides it.
+    focused_ix: Option<usize>,
+    /// The grid's drawer and the views of selected games.
+    panels: panel::Panels,
+    /// Scroll the selected game into view once the items are rebuilt (the
+    /// view changed).
+    scroll_pending: bool,
     hovered: Option<GameId>,
     menu_open: Option<GameId>,
     /// Games picked for bulk actions.
@@ -214,7 +232,11 @@ impl LibraryView {
             cx.observe(&filters, |_, _, cx| cx.notify()),
             cx.observe_in(&m.settings, window, |this, settings, window, cx| {
                 let ui = settings.read(cx).app.ui.clone();
-                this.layout = ui.library_layout;
+                if this.layout != ui.library_layout {
+                    // Switched from elsewhere (the palette, Settings).
+                    this.layout = ui.library_layout;
+                    this.scroll_to_focused();
+                }
                 let size = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
                 if (size - this.tile_rem).abs() > f32::EPSILON {
                     this.tile_rem = size;
@@ -271,6 +293,9 @@ impl LibraryView {
             frame: Frame::default(),
             grouping: Grouping::None,
             focused: None,
+            focused_ix: None,
+            panels: panel::Panels::new(ui.library_drawer_width),
+            scroll_pending: false,
             hovered: None,
             menu_open: None,
             selection: crate::selection::Selection::default(),
@@ -325,9 +350,29 @@ impl LibraryView {
         &mut self,
         id: &GameId,
         modifiers: gpui_kit::Modifiers,
+        count: usize,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.click_game(id, modifiers, cx)
+        self.click_game(id, modifiers, count, window, cx)
+    }
+
+    /// Switch views without remembering it (tests share one settings file).
+    #[cfg(test)]
+    pub(crate) fn show_layout_for_test(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
+        self.layout = layout;
+        self.scroll_to_focused();
+        cx.notify();
+    }
+
+    /// The view shown, whether the drawer is open, and its width in rem.
+    #[cfg(test)]
+    pub(crate) fn view_state(&self, window: &Window) -> (LibraryLayout, bool, f32) {
+        (
+            self.layout,
+            self.panels.drawer_open,
+            self.drawer_rem(window),
+        )
     }
 
     #[cfg(test)]
@@ -372,7 +417,11 @@ impl LibraryView {
             }
             self.grouping = filter.group;
         }
-        let top = if filter.query.trim().is_empty() && filter.hidden != HiddenMode::Only {
+        // Focus keeps to the covers; its page says the rest.
+        let top = if filter.query.trim().is_empty()
+            && filter.hidden != HiddenMode::Only
+            && self.layout != LibraryLayout::Focus
+        {
             self.top.get(
                 app.library_top_section,
                 app.max_recent_games as usize,
@@ -395,14 +444,29 @@ impl LibraryView {
         } else {
             window.viewport_size().height
         };
-        let available = f32::from(width) / f32::from(rem) - 2.0 * grid::EDGE_REM;
-        let metrics = grid::grid_metrics(available, self.tile_rem);
+        // The measured width is the library's whole body; the drawer and the
+        // Focus page take their share of it.
+        let body_rem = f32::from(width) / f32::from(rem);
+        let focus_rem = views::focus_column_rem(views::focus_columns(body_rem));
+        let list_rem = match self.layout {
+            LibraryLayout::Grid if self.panels.drawer_open => {
+                body_rem - views::drawer_width(self.panels.drawer_rem, body_rem)
+            }
+            LibraryLayout::Focus => focus_rem,
+            _ => body_rem,
+        };
+        let available = list_rem - 2.0 * grid::EDGE_REM;
+        let metrics = match self.layout {
+            LibraryLayout::Focus => grid::grid_metrics(available, views::FOCUS_TILE_REM),
+            _ => grid::grid_metrics(available, self.tile_rem),
+        };
 
         let key = FrameKey {
             count: games.len(),
             top: top.as_ref().map(|(k, g)| (*k, g.len())),
             groups: groups.iter().map(|g| (g.status, g.range.len())).collect(),
             layout: self.layout,
+            list_rem: (list_rem * 16.0).round() as u32,
             metrics,
             rem,
             width,
@@ -424,7 +488,7 @@ impl LibraryView {
                     items.push(Item::GroupHeading(ix));
                 }
                 match self.layout {
-                    LibraryLayout::Grid => {
+                    LibraryLayout::Grid | LibraryLayout::Focus => {
                         items.extend(range.clone().step_by(metrics.columns.max(1)).map(|start| {
                             Item::GridRow {
                                 start,
@@ -460,6 +524,13 @@ impl LibraryView {
         };
         self.frame.metrics = metrics;
         self.frame.list_columns = grid::list_columns(available);
+        self.frame.focus_rem = focus_rem;
+        self.follow_selection();
+        if std::mem::take(&mut self.scroll_pending)
+            && let Some(item) = self.focused_ix.and_then(|ix| self.item_of_game(ix))
+        {
+            self.scroll.scroll_to_item(item, ScrollStrategy::Center);
+        }
 
         // Continue-playing cards show art and a logo each.
         let top_images = self
@@ -468,7 +539,7 @@ impl LibraryView {
             .as_ref()
             .map_or(0, |(_, games)| 2 * games.len());
         let (per_row, row_rem) = match self.layout {
-            LibraryLayout::Grid => (metrics.columns, metrics.row_rem),
+            LibraryLayout::Grid | LibraryLayout::Focus => (metrics.columns, metrics.row_rem),
             LibraryLayout::List => (1, grid::LIST_ROW_REM),
         };
         let capacity = grid::cached_images(
@@ -486,8 +557,37 @@ impl LibraryView {
 
     fn columns(&self) -> usize {
         match self.layout {
-            LibraryLayout::Grid => self.frame.metrics.columns,
+            LibraryLayout::Grid | LibraryLayout::Focus => self.frame.metrics.columns,
             LibraryLayout::List => 1,
+        }
+    }
+
+    /// Keep the selection on a shown game after the list changed: Focus
+    /// always shows one, the drawer closes when its game went.
+    fn follow_selection(&mut self) {
+        let len = self.frame.games.len();
+        let found = self.focused.as_ref().and_then(|id| self.games.position(id));
+        let always = self.layout == LibraryLayout::Focus;
+        match views::keep_selection(found, self.focused_ix, len, always) {
+            Some(ix) => {
+                self.focused_ix = Some(ix);
+                if found != Some(ix) {
+                    self.focused = Some(self.frame.games[ix].id());
+                }
+            }
+            // The grid's keyboard place is kept for when the game shows again;
+            // its drawer closes.
+            None => self.panels.drawer_open = false,
+        }
+    }
+
+    /// `I` in the grid: open the drawer on the focused game, or close it.
+    fn toggle_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.layout != LibraryLayout::Grid || self.close_drawer(cx) {
+            return;
+        }
+        if self.focused_in_view().is_some() {
+            self.open_drawer(window, cx);
         }
     }
 
@@ -932,7 +1032,7 @@ impl LibraryView {
         let current = self.focused.as_ref().and_then(|id| self.games.position(id));
         let rem = window.rem_size();
         let row_rem = match self.layout {
-            LibraryLayout::Grid => self.frame.metrics.row_rem,
+            LibraryLayout::Grid | LibraryLayout::Focus => self.frame.metrics.row_rem,
             LibraryLayout::List => grid::LIST_ROW_REM,
         };
         let page_rows = (f32::from(self.scroll.bounds().size.height) / f32::from(rem * row_rem))
@@ -947,6 +1047,8 @@ impl LibraryView {
             let id = games[ix].id();
             self.check_shortcut(&id, cx);
             self.focused = Some(id);
+            self.focused_ix = Some(ix);
+            self.show_focused(true, window, cx);
             if let Some(item) = self.item_of_game(ix) {
                 // Going up onto a section's first row shows its heading too.
                 let upward = matches!(step, Move::Up | Move::PageUp(_) | Move::First);
@@ -1047,13 +1149,36 @@ impl LibraryView {
         );
     }
 
+    /// Switch to `layout` and remember it. The selected game stays
+    /// selected and in view; Focus selects the first game when none is.
     fn set_layout(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
         if self.layout == layout {
             return;
         }
         self.layout = layout;
         persist_ui(cx, move |ui| ui.library_layout = layout);
+        self.scroll_to_focused();
         cx.notify();
+    }
+
+    /// Scroll the selected game into view once the next render has laid
+    /// out the new view's rows.
+    fn scroll_to_focused(&mut self) {
+        self.scroll_pending = true;
+    }
+
+    /// The view's keyboard commands: Alt+1…3 and the palette's.
+    fn on_show_layout(
+        &mut self,
+        layout: LibraryLayout,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_layout(layout, cx);
+        // Arrow keys move the selection right away.
+        if !self.search.focus_handle(cx).is_focused(window) {
+            self.grid_focus.focus(window, cx);
+        }
     }
 
     fn set_hovered(&mut self, id: &GameId, hovered: bool, cx: &mut Context<Self>) {
@@ -1078,6 +1203,23 @@ fn section_ranges(groups: &[StatusGroup], len: usize) -> Vec<Range<usize>> {
         vec![whole]
     } else {
         groups.iter().map(|g| g.range.clone()).collect()
+    }
+}
+
+/// The id, icon and name of a view's button in the header's switch.
+fn layout_button(layout: LibraryLayout) -> (&'static str, IconName, SharedString) {
+    match layout {
+        LibraryLayout::Grid => (
+            "layout-grid",
+            IconName::LayoutGrid,
+            t("library.toolbar.grid"),
+        ),
+        LibraryLayout::List => ("layout-list", IconName::List, t("library.toolbar.list")),
+        LibraryLayout::Focus => (
+            "layout-focus",
+            IconName::LayoutPanelLeft,
+            t("library.toolbar.focus"),
+        ),
     }
 }
 
@@ -1581,29 +1723,23 @@ impl LibraryView {
                 ButtonGroup::new("library-layout")
                     .small()
                     .outline()
-                    .child(
-                        Button::new("layout-grid")
-                            .icon(IconName::LayoutGrid)
-                            .tooltip(t("library.toolbar.grid"))
-                            .selected(layout == LibraryLayout::Grid),
-                    )
-                    .child(
-                        Button::new("layout-list")
-                            .icon(IconName::List)
-                            .tooltip(t("library.toolbar.list"))
-                            .selected(layout == LibraryLayout::List),
-                    )
-                    .on_click(cx.listener(
-                        |this, clicked: &Vec<usize>, _, cx| match clicked.first() {
-                            Some(0) => this.set_layout(LibraryLayout::Grid, cx),
-                            Some(1) => this.set_layout(LibraryLayout::List, cx),
-                            _ => {}
-                        },
-                    )),
+                    .children(views::LAYOUTS.into_iter().map(|l| {
+                        let (id, icon, label) = layout_button(l);
+                        Button::new(id)
+                            .icon(icon)
+                            .label(label.clone())
+                            .tooltip(label)
+                            .selected(layout == l)
+                    }))
+                    .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
+                        if let Some(l) = clicked.first().and_then(|ix| views::LAYOUTS.get(*ix)) {
+                            this.on_show_layout(*l, window, cx);
+                        }
+                    })),
             )
     }
 
-    fn render_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let (total, refreshing) = {
             let lib = models(cx).library.read(cx);
             (lib.snapshot.len(), lib.refreshing)
@@ -1744,7 +1880,8 @@ impl LibraryView {
         .track_scroll(&self.scroll)
         .size_full();
 
-        div()
+        let layout = self.layout;
+        let content = div()
             .image_cache(self.images.clone())
             .id("library-content")
             .key_context(GRID_CONTEXT)
@@ -1774,18 +1911,36 @@ impl LibraryView {
                 this.move_focus(Move::PageDown(1), w, cx)
             }))
             .on_action(cx.listener(|this, _: &OpenSelected, w, cx| this.open_focused(w, cx)))
+            .on_action(cx.listener(|this, _: &ToggleDrawer, w, cx| this.toggle_drawer(w, cx)))
             .on_action(cx.listener(|this, _: &SelectAllGames, _, cx| this.select_all(cx)))
             .on_action(cx.listener(|this, _: &EndSelection, _, cx| this.end_selection(cx)))
             .on_action(
                 cx.listener(|this, _: &ActivateSelected, w, cx| this.activate_focused(w, cx)),
             )
             .relative()
+            .h_full()
+            .min_h_0()
+            .map(|el| match layout {
+                LibraryLayout::Focus => el.w(rems(self.frame.focus_rem)).flex_shrink_0(),
+                _ => el.flex_1().min_w_0(),
+            })
+            .child(list)
+            .vertical_scrollbar(&self.scroll);
+        let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
+            .then(|| self.render_drawer(window, cx));
+        let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));
+        h_flex()
+            .id("library-body")
+            .relative()
             .flex_1()
             .min_h_0()
             .w_full()
+            .items_start()
+            .on_drag_move(cx.listener(Self::on_drawer_drag))
             .child(measure)
-            .child(list)
-            .vertical_scrollbar(&self.scroll)
+            .child(content)
+            .children(focus_page)
+            .children(drawer)
             .into_any_element()
     }
 
@@ -1902,6 +2057,10 @@ impl LibraryView {
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
         let active =
             keyboard || self.hovered.as_ref() == Some(&id) || self.menu_open.as_ref() == Some(&id);
+        // The game the drawer or the Focus page shows keeps its ring.
+        let selected =
+            !in_recent && self.panel_kind().is_some() && self.focused.as_ref() == Some(&id);
+        let focus_view = self.layout == LibraryLayout::Focus;
         let busy = status.as_ref().filter(|s| {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
@@ -1997,7 +2156,8 @@ impl LibraryView {
 
         let selecting = self.selection.is_active();
         let picked = self.selection.contains(&id);
-        let actions = (active && busy.is_none() && !selecting).then(|| {
+        // Focus covers are small, and the page beside them has the actions.
+        let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
             let primary = commands::primary(&state).map(|command| {
                 let label = command.label(&state);
                 let id = id.clone();
@@ -2040,7 +2200,7 @@ impl LibraryView {
                     .when(dim, |el| el.opacity(0.45))
                     .child(GameCover::new(game.clone()).width(width)),
             )
-            .when(active, |el| {
+            .when(active || selected, |el| {
                 el.child(
                     div()
                         .absolute()
@@ -2049,10 +2209,10 @@ impl LibraryView {
                         .size_full()
                         .rounded(radius)
                         .border_2()
-                        .border_color(primary_color.opacity(0.85)),
+                        .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
-            .when(show_badges && active && !selecting, |el| {
+            .when(show_badges && active && !selecting && !focus_view, |el| {
                 el.child(
                     div()
                         .absolute()
@@ -2103,8 +2263,8 @@ impl LibraryView {
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 this.set_hovered(&hover_id, *hovered, cx)
             }))
-            .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
-                this.click_game(&click_id, e.modifiers(), cx)
+            .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
+                this.click_game(&click_id, e.modifiers(), e.click_count(), window, cx)
             }))
             // Pointed-at and focused covers rise a little off the grid.
             .child(cover.with_spring(
@@ -2584,8 +2744,8 @@ impl LibraryView {
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 this.set_hovered(&hover_id, *hovered, cx)
             }))
-            .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
-                this.click_game(&click_id, e.modifiers(), cx)
+            .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
+                this.click_game(&click_id, e.modifiers(), e.click_count(), window, cx)
             }))
             .when(picked, |el| el.bg(active_bg))
             .when(selecting, |el| {
@@ -2704,12 +2864,33 @@ fn pick_mark(picked: bool, cx: &App) -> AnyElement {
 impl Render for LibraryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.prepare_frame(window, cx);
+        self.sync_panel(window, cx);
         let bulk_bar = self.render_bulk_bar(cx);
+        // Focus sits over the selected game's art, covers and page alike.
+        let backdrop = (self.layout == LibraryLayout::Focus)
+            .then(|| {
+                let id = self.panels.shown_game().or(self.focused.as_ref())?;
+                let art = self.game(id, cx)?.hero_art().map(str::to_owned);
+                Some(ArtBackdrop::new(art).image_cache(&self.images))
+            })
+            .flatten();
         v_flex()
             .id("library")
             .relative()
             .key_context(LIBRARY_CONTEXT)
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(|this, _: &ShowGrid, w, cx| {
+                this.on_show_layout(LibraryLayout::Grid, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ShowList, w, cx| {
+                this.on_show_layout(LibraryLayout::List, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ShowFocus, w, cx| {
+                this.on_show_layout(LibraryLayout::Focus, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &NextLibraryView, w, cx| {
+                this.on_show_layout(views::next_layout(this.layout), w, cx)
+            }))
             .on_action(
                 cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
             )
@@ -2719,8 +2900,9 @@ impl Render for LibraryView {
             .size_full()
             .min_h_0()
             .text_color(cx.theme().foreground)
+            .children(backdrop)
             .child(self.render_header(cx))
-            .child(self.render_body(cx))
+            .child(self.render_body(window, cx))
             .children(bulk_bar)
     }
 }

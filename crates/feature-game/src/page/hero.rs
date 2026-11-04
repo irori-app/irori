@@ -120,7 +120,11 @@ impl GamePage {
             .pt_4()
             .pb_6()
             .gap_3()
-            .child(h_flex().pb_2().child(back_button(cx)))
+            .child(h_flex().pb_2().child(match self.panel {
+                // Beside the library's covers the way out is the full page.
+                Some(_) => open_page_button(&self.id),
+                None => back_button(cx),
+            }))
             .child(super::caption(store, ink.muted))
             .child(heading)
             .children(meta.map(|m| div().text_color(ink.muted).line_clamp(2).child(m)))
@@ -206,7 +210,7 @@ impl GamePage {
     }
 
     /// "Feb 25, 2022 · Windows, Linux · Role-playing · Adventure".
-    fn render_meta_line(&self, game: &GameInfo) -> Option<String> {
+    pub(super) fn render_meta_line(&self, game: &GameInfo) -> Option<String> {
         let date = self.release_date(game);
         let platforms = match &game.install {
             Some(install) if game.is_installed => {
@@ -356,7 +360,7 @@ impl GamePage {
     }
 
     /// Favourite, settings, cloud saves and more actions, as icon buttons.
-    fn render_tools(&self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_tools(&self, game: &Arc<GameInfo>, cx: &mut Context<Self>) -> AnyElement {
         let fav = models(cx).library.read(cx).is_favourite(&self.id);
         let settings_id = self.id.clone();
         let saves_id = self.id.clone();
@@ -452,7 +456,7 @@ impl GamePage {
 
     /// "Your rating" and five stars. Choosing the current rating again
     /// clears it.
-    fn render_rating(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_rating(&self, cx: &mut Context<Self>) -> AnyElement {
         let current = models(cx).library.read(cx).rating(&self.id).unwrap_or(0);
         let ink = self.ink;
         let lit = legible(cx.theme().warning, &ink.surfaces, ICON_CONTRAST, cx);
@@ -558,7 +562,7 @@ impl GamePage {
 
     /// The primary action and its companions, side by side or, `stacked`,
     /// one above the other at the column's width.
-    fn render_primary(
+    pub(super) fn render_primary(
         &mut self,
         action: PrimaryAction,
         game: &GameInfo,
@@ -881,7 +885,11 @@ impl GamePage {
     }
 
     /// Progress, busy detail or hints below the actions.
-    fn render_status_line(&self, game: &GameInfo, cx: &Context<Self>) -> Option<AnyElement> {
+    pub(super) fn render_status_line(
+        &self,
+        game: &GameInfo,
+        cx: &Context<Self>,
+    ) -> Option<AnyElement> {
         let m = models(cx);
         let status = m.statuses.read(cx).get(&self.id).cloned();
         if let Some(status) = status.filter(|s| {
@@ -931,6 +939,16 @@ impl GamePage {
         }
         None
     }
+}
+
+/// Opens the game's own page, from the library's views of it.
+pub(super) fn open_page_button(id: &irori_core::GameId) -> Button {
+    let id = id.clone();
+    Button::new("game-open-page")
+        .ghost()
+        .icon(IconName::Maximize2)
+        .label(t("game.panel.open_page"))
+        .on_click(move |_, _, cx| irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx))
 }
 
 /// Returns to where the page was opened from: the library when that is where

@@ -409,6 +409,7 @@
   "settings.logs.upload.title": "Bu günlük yüklensin mi?",
   "settings.option.library_layout.grid": "Izgara",
   "settings.option.library_layout.list": "Liste",
+  "settings.option.library_layout.focus": "Odak",
   "settings.option.sharpness.sharpest": "5 (en keskin)",
   "settings.option.sharpness.softest": "1 (en yumuşak)",
   "settings.option.steam_runtime.none": "Yok",
