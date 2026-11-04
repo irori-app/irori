@@ -12,9 +12,10 @@
 //! background, or the focused game's art, behind everything), `chrome` (top
 //! bar and hints), `home` with a module per other Home layout (`spotlight`,
 //! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
-//! page), `overlay` (quick menu and confirmations), `editor` (the theme
-//! editor), `tile` (covers) and `commands` (what the backend runs). `look`
-//! holds the theme and layout in use and the colours they give.
+//! page) and `log` (its log panel), `overlay` (quick menu and
+//! confirmations), `editor` (the theme editor), `tile` (covers) and
+//! `commands` (what the backend runs). `look` holds the theme and layout in
+//! use and the colours they give.
 
 mod backdrop;
 mod carousel;
@@ -25,6 +26,7 @@ mod compact;
 mod editor;
 mod home;
 mod library;
+mod log;
 mod look;
 mod overlay;
 mod page;
@@ -149,6 +151,9 @@ pub struct BigPictureView {
     look: Look,
     tab: Tab,
     page: Option<GamePage>,
+    /// Pages show the game's log in place of its details (Show log).
+    show_log: bool,
+    log: Option<log::LogPanel>,
     overlay: Option<Overlay>,
     rows: Vec<Row>,
     rows_key: Option<(u64, usize, u32, Vec<ShelfKind>)>,
@@ -262,6 +267,8 @@ impl BigPictureView {
             look,
             tab: Tab::Home,
             page: None,
+            show_log: false,
+            log: None,
             overlay: None,
             rows: Vec::new(),
             rows_key: None,
@@ -780,7 +787,7 @@ impl BigPictureView {
     ) {
         match row {
             PageRow::Action(action) => self.activate_action(action, game, window, cx),
-            PageRow::Platform | PageRow::Favourite | PageRow::Hidden => {
+            PageRow::Platform | PageRow::Favourite | PageRow::Log | PageRow::Hidden => {
                 self.change_value(row, &game, true, cx)
             }
             PageRow::Settings => self.open_game_settings(game.id(), cx),
@@ -830,6 +837,7 @@ impl BigPictureView {
         match row {
             PageRow::Favourite => self.set_favourite(game.id(), !state.favourite, cx),
             PageRow::Hidden => self.set_hidden(game.id(), !state.hidden, cx),
+            PageRow::Log => self.show_log = !self.show_log,
             PageRow::Platform => {
                 let platforms = install_platforms(game);
                 let Some(page) = &mut self.page else {
@@ -945,6 +953,9 @@ impl Render for BigPictureView {
         let metrics = self.metrics(window);
         let font = self.look.theme().font.family(&cx.theme().mono_font_family);
         let empty = models(cx).library.read(cx).snapshot.games.is_empty();
+        if empty || self.page.is_none() {
+            self.sync_log(None, cx);
+        }
         let content = if empty {
             self.render_empty(c, cx).into_any_element()
         } else if self.page.is_some() {

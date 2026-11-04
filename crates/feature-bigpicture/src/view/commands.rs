@@ -8,6 +8,7 @@ use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::{App, Context, SharedString, Task, Window};
 use irori_core::{GameId, GameInfo, InstallInfoQuery, InstallPlatform, RemoveArgs, UpdateRequest};
+use irori_services::LaunchParams;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, models, nav};
 
@@ -32,11 +33,30 @@ impl BigPictureView {
         let id = game.id();
         let title = game.title.clone();
         let error = |key: &str| t_args(key, &[("title", title.as_str())]);
+        // What a fix offered for a failed launch starts again.
+        let verbose = LaunchParams {
+            verbose: true,
+            ..Default::default()
+        };
+        let retry = if action == GameAction::PlayWithLog {
+            verbose.clone()
+        } else {
+            LaunchParams::default()
+        };
         let (task, error_title): (Task<Result<()>>, SharedString) = match action {
             GameAction::Play => {
                 let id = id.clone();
                 (
                     irori_ui::run(cx, async move { b.launch(&id, None, Vec::new()).await }),
+                    error("bigpicture.error.launch"),
+                )
+            }
+            GameAction::PlayWithLog => {
+                self.show_log = true;
+                let id = id.clone();
+                let params = verbose.clone();
+                (
+                    irori_ui::run(cx, async move { b.launch_with(&id, params).await }),
                     error("bigpicture.error.launch"),
                 )
             }
@@ -108,7 +128,7 @@ impl BigPictureView {
             // Asks first; see `Overlay::Uninstall`.
             GameAction::Uninstall => return,
         };
-        self.track(id, task, error_title, window, cx);
+        self.track(id, task, error_title, retry, window, cx);
     }
 
     pub(super) fn uninstall(&mut self, id: GameId, window: &mut Window, cx: &mut Context<Self>) {
@@ -129,15 +149,17 @@ impl BigPictureView {
             .await
         });
         let error_title = t_args("bigpicture.error.uninstall", &[("title", title.as_str())]);
-        self.track(id, task, error_title, window, cx);
+        self.track(id, task, error_title, LaunchParams::default(), window, cx);
     }
 
-    /// Mark `id` busy until `task` finishes, then report a failure.
+    /// Mark `id` busy until `task` finishes, then report a failure (a
+    /// launch's fix starts the game again with `retry`).
     fn track(
         &mut self,
         id: GameId,
         task: Task<Result<()>>,
         error_title: SharedString,
+        retry: LaunchParams,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -152,11 +174,7 @@ impl BigPictureView {
                     // Only Play can hit saves that changed in both places.
                     Err(e)
                         if irori_ui::save_conflict::resolve_launch_error(
-                            &id,
-                            Default::default(),
-                            &e,
-                            window,
-                            cx,
+                            &id, retry, &e, window, cx,
                         ) => {}
                     Err(e) => window.push_notification(
                         Notification::error(format!("{e:#}")).title(error_title),

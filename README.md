@@ -266,11 +266,11 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 ## Big Picture and your play time
 
 - **Big Picture** for the couch: Home's shelves and a filterable Library grid glide over
-  the focused game's art, each game has a page of actions, and the button hints match
-  the controller in hand (Xbox, PlayStation including DualSense, Switch Pro, Steam
-  Deck), with hotplug, battery display and scaling up to 200 % for TVs. A mouse works
-  too. It opens by itself in the Steam Deck's Game Mode and reads each press once
-  alongside Steam Input.
+  the focused game's art, each game has a page of actions (with Play with logs and the
+  game's live log beside them), and the button hints match the controller in hand
+  (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
+  display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
+  Steam Deck's Game Mode and reads each press once alongside Steam Input.
 - **Play status** for every game (plan to play, playing, on hold, beaten, abandoned),
   with the library grouped by it and play time under each cover (<kbd>Ctrl</kbd>
   <kbd>G</kbd>).

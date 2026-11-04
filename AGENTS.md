@@ -698,8 +698,8 @@ it on every platform, and CI's Windows install test runs it.
 - Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
   game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
   controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
-  action list and details), `overlay` (quick menu, uninstall question), `tile`
-  (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  action list and details), `log` (the page's live game log, in place of the details),
+  `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
   focus and build only the items near the view, so nothing animates once the focus
