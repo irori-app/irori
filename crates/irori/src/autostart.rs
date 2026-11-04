@@ -157,13 +157,11 @@ pub fn run_value(launch: &Launch) -> String {
 #[cfg(any(not(windows), test))]
 const LABEL: &str = "app.irori.Irori.autostart";
 
-/// Where the entry lives on this system.
-#[cfg(any(not(windows), test))]
+/// Where the entry lives on this system (Windows uses the registry instead).
+#[cfg(not(windows))]
 fn entry_path() -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
         Some(dirs::home_dir()?.join(format!("Library/LaunchAgents/{LABEL}.plist")))
-    } else if cfg!(windows) {
-        None
     } else {
         Some(dirs::config_dir()?.join("autostart/irori.desktop"))
     }
