@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "{verb} a fost instalat",
   "settings.field.action_import_lutris.label": "Importă din Lutris",
   "settings.field.action_import_lutris.help": "Preia din Lutris jocurile instalate, jocurile emulate, favoritele, categoriile și timpul de joc. Lutris rămâne neschimbat.",
+  "settings.field.achievement_notices.label": "Anunță realizările noi după joc",
+  "settings.field.achievement_notices.help": "Când un joc se închide, Irori îi verifică realizările și îți arată ce ai deblocat.",
   "settings.error.import_lutris": "Importul din Lutris a eșuat"
 }

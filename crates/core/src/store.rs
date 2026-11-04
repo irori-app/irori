@@ -347,9 +347,17 @@ pub trait Store: Send + Sync + 'static {
         Ok(())
     }
 
+    /// The game's achievements in `language`, with the player's unlocks.
+    /// Stores may answer from a short-lived cache; empty for games without
+    /// achievements or stores without them.
     async fn achievements(&self, _app_name: &str, _language: &str) -> Result<Vec<Achievement>> {
         Ok(Vec::new())
     }
+
+    /// Forget cached achievement answers of a game, so the next
+    /// [`Store::achievements`] asks the store (after a session, when
+    /// unlocks are likely).
+    async fn forget_achievements(&self, _app_name: &str) {}
 
     /// Whole minutes played per app name as the store itself recorded them
     /// (its own launcher's sessions included). Empty for stores that keep no

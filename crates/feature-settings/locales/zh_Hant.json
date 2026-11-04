@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "已安裝 {verb}",
   "settings.field.action_import_lutris.label": "從 Lutris 匯入",
   "settings.field.action_import_lutris.help": "從 Lutris 移轉已安裝的遊戲、模擬遊戲、我的最愛、分類和遊玩時間。Lutris 本身不會被變更。",
+  "settings.field.achievement_notices.label": "遊戲結束後通知新成就",
+  "settings.field.achievement_notices.help": "遊戲關閉時，Irori 會檢查其成就並顯示你解鎖的內容。",
   "settings.error.import_lutris": "無法從 Lutris 匯入"
 }

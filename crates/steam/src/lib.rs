@@ -4,6 +4,8 @@
 //! * [`auth`]: sign-in through `IAuthenticationService` (QR code, or
 //!   password and Steam Guard), refresh tokens, and [`TokenClaims`].
 //! * [`library`]: owned games, the Steam Family library and store details.
+//! * [`achievements`]: a game's achievements, the account's unlocks and
+//!   their global unlock rates.
 //! * [`assets`]: store art (covers, heroes, logos) for many apps at once.
 //! * [`SteamError`]: the refusals callers act on.
 //!
@@ -11,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod achievements;
 mod api;
 pub mod assets;
 pub mod auth;
@@ -18,6 +21,7 @@ mod error;
 pub mod library;
 mod proto;
 
+pub use achievements::{GameAchievement, UserAchievement};
 pub use api::{API_BASE, ASSETS_BASE, Client, Endpoints, STORE_BASE};
 pub use assets::AppAssets;
 pub use auth::{

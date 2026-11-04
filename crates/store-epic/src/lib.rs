@@ -131,6 +131,7 @@ pub struct EpicStore {
     extra_info: TimedCache,
     overrides: TimedCache,
     umu: TimedCache,
+    achievement_cache: irori_core::achievement_cache::AchievementCache,
     builds: Mutex<HashMap<String, (Instant, Arc<FetchedBuild>)>>,
     service_status: Mutex<Option<(Instant, bool)>>,
     list_lock: tokio::sync::Mutex<()>,
@@ -190,6 +191,10 @@ impl EpicStore {
             extra_info: TimedCache::new(layout.extra_info_cache(), Some(SIX_HOURS)),
             overrides: TimedCache::new(layout.overrides_cache(), Some(SEVEN_DAYS)),
             umu: TimedCache::new(layout.umu_cache(), Some(SIX_HOURS)),
+            achievement_cache: irori_core::achievement_cache::AchievementCache::new(
+                layout.cache.join("achievements.json"),
+                achievements::MAX_AGE_SECS,
+            ),
             layout,
             weak: weak.clone(),
             endpoints,
@@ -1060,6 +1065,10 @@ impl Store for EpicStore {
 
     async fn achievements(&self, app_name: &str, language: &str) -> Result<Vec<Achievement>> {
         self.game_achievements(app_name, language).await
+    }
+
+    async fn forget_achievements(&self, app_name: &str) {
+        self.achievement_cache.forget(app_name).await
     }
 
     fn games(&self) -> Vec<Arc<GameInfo>> {

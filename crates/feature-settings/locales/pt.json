@@ -587,5 +587,7 @@
   "settings.winetricks.verb_installed": "{verb} instalado",
   "settings.field.action_import_lutris.label": "Importar do Lutris",
   "settings.field.action_import_lutris.help": "Traz do Lutris os jogos instalados, os jogos emulados, os favoritos, as categorias e o tempo de jogo. O próprio Lutris não é alterado.",
+  "settings.field.achievement_notices.label": "Anunciar novas conquistas depois de jogar",
+  "settings.field.achievement_notices.help": "Quando um jogo fecha, o Irori verifica as suas conquistas e mostra o que desbloqueou.",
   "settings.error.import_lutris": "Não foi possível importar do Lutris"
 }

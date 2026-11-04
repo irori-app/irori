@@ -8,12 +8,16 @@
 //!   yearly goal and its pace, and the library grouped by play status.
 //! - **Album**: the screenshots the user took in the period, by game.
 //!
+//! The overview ends with the library's achievements: completion, perfect
+//! games, points, the rarest and the latest unlocks.
+//!
 //! Below both, the storage section shows the installed games by drive.
 //!
 //! The session history and the screenshots are read off the UI thread when a
 //! session ends; the numbers are derived from them when they, the library or
 //! the chosen period change, never while drawing.
 
+mod achievements_view;
 pub(crate) mod album;
 mod album_view;
 pub(crate) mod backlog;
@@ -90,6 +94,10 @@ pub struct StatsView {
     album_scroll: VirtualListScrollHandle,
     /// Installed games by drive; `None` until first read.
     storage: Option<Vec<DriveUsage>>,
+    /// Every game's achievements, summed up; `None` until first read.
+    achievements: Option<Arc<irori_services::AchievementIndex>>,
+    /// "Check played games" is asking the stores.
+    achievements_scanning: bool,
     /// Library revision and user data the numbers were derived from.
     seen: Option<(u64, Arc<UserData>)>,
     images: Entity<LruImageCache>,
@@ -135,6 +143,8 @@ impl StatsView {
             album_width: px(0.),
             album_scroll: VirtualListScrollHandle::new(),
             storage: None,
+            achievements: None,
+            achievements_scanning: false,
             seen: None,
             images: LruImageCache::new(48, cx),
             _subscriptions: subscriptions,
@@ -163,6 +173,7 @@ impl StatsView {
     /// Read the history and the screenshots (off the UI thread), then derive
     /// the numbers.
     fn reload(&mut self, cx: &mut Context<Self>) {
+        self.reload_achievements(cx);
         let b = backend(cx);
         let shots = irori_ui::state::run_infallible(cx, {
             let b = b.clone();

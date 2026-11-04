@@ -1,0 +1,22 @@
+[package]
+name = "irori-retroachievements-api"
+description = "RetroAchievements client: Web API sign-in and game progress, emulator login tokens, and the ROM hashes RetroAchievements matches games by"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+md-5.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }
+tokio.workspace = true
+tempfile = "3"
