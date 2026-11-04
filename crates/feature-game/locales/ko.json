@@ -556,6 +556,8 @@
   "game.timeline.title": "플레이 기록",
   "game.timeline.view_days": "타임라인",
   "game.timeline.view_sessions": "세션",
+  "game.timeline.view_journal": "일지",
+  "game.journal.write": "이날의 메모 쓰기",
   "game.sandbox.title": "샌드박스",
   "game.sandbox.running": "샌드박스에서 실행 중",
   "game.sandbox.no_network": "네트워크 없음",

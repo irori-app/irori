@@ -278,6 +278,11 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Stats** over your games' art: play time by week, month, year or all time against
   the period before, a day-by-day chart per game, streaks, comebacks and new games, and
   a backlog with a yearly goal, its pace and a timeline of what you beat.
+- **Year in review**: any year you played, told as full-window stories over your
+  games' art (top games, month by month, records, when you play, comebacks, what you
+  started and beat), ending on a card you can save as an image.
+- **A play journal**: a note for each day you played a game, with that day's
+  screenshots, written from the game's play history and gathered in Stats.
 - **An album of your screenshots** per game and period: the ones Steam keeps, and the
   ones your desktop saves (Spectacle, GNOME, Game Bar, macOS) while a game you started
   from Irori runs. Irori only reads them.

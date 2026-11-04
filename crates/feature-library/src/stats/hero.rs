@@ -141,6 +141,11 @@ impl StatsView {
                 ),
                 (Tab::Backlog, IconName::Flag, t("library.stats.tab.backlog")),
                 (Tab::Album, IconName::Images, t("library.stats.tab.album")),
+                (
+                    Tab::Journal,
+                    IconName::NotebookPen,
+                    t("library.stats.tab.journal"),
+                ),
             ]
             .into_iter()
             .map(|(tab, icon, label)| (Some(icon), label, tab == self.tab, tab))
@@ -160,7 +165,7 @@ impl StatsView {
             )
         });
         let label = match self.tab {
-            Tab::Overview | Tab::Album => text::period(&self.period()),
+            Tab::Overview | Tab::Album | Tab::Journal => text::period(&self.period()),
             Tab::Backlog => self.year().to_string().into(),
         };
         let stepper = (self.tab == Tab::Backlog || self.span != Span::All).then(|| {
@@ -202,12 +207,23 @@ impl StatsView {
                         .on_click(cx.listener(|this, _, _, cx| this.step(1, cx))),
                 )
         });
+        let review = (!self.years.is_empty()).then(|| {
+            Button::new("stats-year-review")
+                .ghost()
+                .small()
+                .rounded_full()
+                .icon(Icon::new(IconName::Sparkles))
+                .label(t("library.stats.year_in_review"))
+                .tooltip(t("library.stats.year_in_review_tooltip"))
+                .bg(cx.theme().background.opacity(0.6))
+                .on_click(|_, _, cx| irori_ui::navigate(irori_ui::Route::YearInReview(None), cx))
+        });
         h_flex()
             .w_full()
             .flex_wrap()
             .gap_3()
             .justify_between()
-            .child(tabs)
+            .child(h_flex().flex_wrap().gap_3().child(tabs).children(review))
             .child(
                 h_flex()
                     .flex_wrap()
@@ -216,6 +232,65 @@ impl StatsView {
                     .children(stepper),
             )
             .into_any_element()
+    }
+
+    /// Through December and January, the year's review as a card above the
+    /// overview.
+    pub(super) fn render_year_offer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let today = chrono::Local::now().date_naive();
+        let year = super::year::offered_year(today, &self.years)?;
+        let theme = cx.theme();
+        let year_text = year.to_string();
+        Some(
+            h_flex()
+                .w_full()
+                .gap_4()
+                .items_center()
+                .p_4()
+                .rounded(theme.radius_lg)
+                .border_1()
+                .border_color(theme.border)
+                .bg(linear_gradient(
+                    90.,
+                    linear_color_stop(theme.primary.opacity(0.16), 0.),
+                    linear_color_stop(theme.secondary.opacity(0.4), 1.),
+                ))
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .p_2p5()
+                        .rounded_full()
+                        .bg(theme.primary.opacity(0.18))
+                        .text_color(theme.primary)
+                        .child(Icon::new(IconName::Sparkles)),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(div().font_semibold().child(t_args(
+                            "library.stats.year_offer.title",
+                            &[("year", &year_text)],
+                        )))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(t("library.stats.year_offer.description")),
+                        ),
+                )
+                .child(
+                    Button::new("stats-year-offer")
+                        .primary()
+                        .icon(Icon::new(IconName::Play))
+                        .label(t("library.stats.year_offer.watch"))
+                        .on_click(move |_, _, cx| {
+                            irori_ui::navigate(irori_ui::Route::YearInReview(Some(year)), cx)
+                        }),
+                )
+                .into_any_element(),
+        )
     }
 
     /// The overview's headline: the period's play time in huge type, then

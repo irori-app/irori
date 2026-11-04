@@ -556,6 +556,8 @@
   "game.timeline.title": "Historia gry",
   "game.timeline.view_days": "Oś czasu",
   "game.timeline.view_sessions": "Sesje",
+  "game.timeline.view_journal": "Dziennik",
+  "game.journal.write": "Napisz notatkę o tym dniu",
   "game.sandbox.title": "W piaskownicy",
   "game.sandbox.running": "Działa w piaskownicy",
   "game.sandbox.no_network": "Bez sieci",

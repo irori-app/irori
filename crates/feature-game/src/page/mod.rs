@@ -16,6 +16,7 @@ mod drawer;
 mod extras;
 mod hero;
 mod info;
+mod journal;
 mod menu;
 mod overlay;
 mod related;

@@ -84,6 +84,8 @@
   "shell.app_update.copy_command": "Kopiuj polecenie",
   "shell.app_update.updated": "Zaktualizowano Irori do wersji {version}",
   "shell.app_update.release_notes": "Informacje o wydaniu",
+  "shell.palette.year_in_review": "Otwórz Podsumowanie roku",
+  "shell.palette.year_in_review_keywords": "podsumowanie rok recap",
   "shell.nav.views": "Widoki",
   "shell.palette.show_view": "Pokaż widok: {name}",
   "shell.palette.views_keywords": "widok zapisany filtr",

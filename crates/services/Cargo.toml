@@ -30,7 +30,7 @@ fuzzy-matcher.workspace = true
 fs4.workspace = true
 dirs.workspace = true
 plist.workspace = true
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # The desktop portal's Inhibit, with the features GPUI already builds ashpd with.

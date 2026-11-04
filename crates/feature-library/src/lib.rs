@@ -58,6 +58,7 @@ pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
 pub use random::open_random_game;
 pub use stats::StatsView;
+pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 

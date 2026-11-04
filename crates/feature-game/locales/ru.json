@@ -556,6 +556,8 @@
   "game.timeline.title": "История игры",
   "game.timeline.view_days": "Хронология",
   "game.timeline.view_sessions": "Сеансы",
+  "game.timeline.view_journal": "Дневник",
+  "game.journal.write": "Написать заметку об этом дне",
   "game.sandbox.title": "В песочнице",
   "game.sandbox.running": "Запущена в песочнице",
   "game.sandbox.no_network": "Без сети",

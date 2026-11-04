@@ -556,6 +556,8 @@
   "game.timeline.title": "Historie hraní",
   "game.timeline.view_days": "Časová osa",
   "game.timeline.view_sessions": "Relace",
+  "game.timeline.view_journal": "Deník",
+  "game.journal.write": "Napsat poznámku k tomuto dni",
   "game.sandbox.title": "V sandboxu",
   "game.sandbox.running": "Běží v sandboxu",
   "game.sandbox.no_network": "Bez sítě",
