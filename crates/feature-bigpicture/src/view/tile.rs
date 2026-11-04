@@ -2,9 +2,8 @@
 //! focused cover grows, lifts and glows on a spring; uninstalled games are
 //! dimmed; running operations show their progress across the bottom.
 //!
-//! With the mouse, a click focuses a cover and a click on the focused one
-//! opens its page; the cover under the pointer offers Play or Install across
-//! its bottom (the same command as Alt).
+//! With the mouse, a click opens a cover's page; the cover under the pointer
+//! offers Play or Install across its bottom (the same command as Alt).
 
 use std::sync::Arc;
 
@@ -25,8 +24,8 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 use irori_ui::motion::{HOVER_SPRING, fade_in};
 
-use super::{BigPictureView, Colors, LibraryFocus, Tab};
-use crate::model::{CoverClick, cover_action, cover_click};
+use super::{BigPictureView, Colors, LibraryFocus};
+use crate::model::{click_acts, cover_action};
 use crate::text::status_with_percent;
 use crate::theme::CoverShape;
 
@@ -59,23 +58,6 @@ pub(super) enum CoverSlot {
 }
 
 impl BigPictureView {
-    /// Whether the cover at `slot` has the focus now.
-    fn is_cover_focused(&self, slot: CoverSlot) -> bool {
-        if self.page.is_some() || self.overlay.is_some() {
-            return false;
-        }
-        match slot {
-            CoverSlot::Shelf { row, col } => {
-                self.tab == Tab::Home && self.grid.focused(&self.lens()) == Some((row, col))
-            }
-            CoverSlot::Grid(ix) => {
-                self.tab == Tab::Library
-                    && self.library.focus == LibraryFocus::Grid
-                    && self.library.ix == ix
-            }
-        }
-    }
-
     /// Move the focus to the cover at `slot`, as the controller would.
     fn focus_cover(&mut self, slot: CoverSlot, cx: &mut Context<Self>) {
         match slot {
@@ -94,18 +76,18 @@ impl BigPictureView {
         self.after_focus_change(cx);
     }
 
-    /// A click on a cover: see [`cover_click`].
+    /// A click on a cover focuses it and opens its game page, as Enter does.
     pub(super) fn click_cover(
         &mut self,
         slot: CoverSlot,
         click_count: usize,
         cx: &mut Context<Self>,
     ) {
-        let click = cover_click(self.is_cover_focused(slot), click_count);
+        if !click_acts(click_count) {
+            return;
+        }
         self.focus_cover(slot, cx);
-        if click == CoverClick::Open
-            && let Some(id) = self.tab_game().map(|g| g.id())
-        {
+        if let Some(id) = self.tab_game().map(|g| g.id()) {
             self.open_page(id, cx);
         }
     }

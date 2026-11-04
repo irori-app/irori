@@ -8,9 +8,9 @@ use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    Animation, AnimationExt as _, AnyElement, Context, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Role, SharedString, SpringAnimation, StatefulInteractiveElement as _,
-    Styled as _, Window, div, rems,
+    Animation, AnimationExt as _, AnyElement, ClickEvent, Context, Hsla, InteractiveElement as _,
+    IntoElement, ParentElement as _, Role, SharedString, SpringAnimation,
+    StatefulInteractiveElement as _, Styled as _, Window, div, rems,
 };
 use irori_core::GameInfo;
 use irori_ui::components::GameCover;
@@ -22,7 +22,8 @@ use super::home::SCROLL_SPRING;
 use super::{BigPictureView, Colors};
 use crate::layout::{Metrics, list_scroll};
 use crate::model::{
-    GameAction, GameState, PageRow, default_platform, disabled_reason, install_platforms, page_rows,
+    GameAction, GameState, PageRow, click_acts, default_platform, disabled_reason,
+    install_platforms, page_rows,
 };
 use crate::text::{self, store_name};
 
@@ -48,7 +49,7 @@ impl BigPictureView {
         &mut self,
         c: Colors,
         m: Metrics,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let Some(game) = self.page_game(cx) else {
@@ -57,6 +58,8 @@ impl BigPictureView {
         let state = Self::game_state(&game, cx);
         let platforms = install_platforms(&game);
         let rows = page_rows(state, platforms.len());
+        let show_log = self.show_log && rows.contains(&PageRow::Log);
+        self.sync_log(show_log.then(|| game.id()).as_ref(), cx);
         let focused = self
             .page
             .as_ref()
@@ -153,7 +156,12 @@ impl BigPictureView {
                     }),
             );
 
-        let details = (m.width >= DETAILS_FROM).then(|| self.render_details(&game, c, m, cx));
+        // The log shows on narrow pages too: it is what the user asked for.
+        let details = if show_log {
+            Some(self.render_log(c, window, cx))
+        } else {
+            (m.width >= DETAILS_FROM).then(|| self.render_details(&game, c, m, cx))
+        };
         let body = h_flex()
             .flex_1()
             .min_h_0()
@@ -227,6 +235,7 @@ impl BigPictureView {
                 t("bigpicture.page.favourite"),
             ),
             PageRow::Settings => (IconName::SlidersHorizontal, t("bigpicture.page.settings")),
+            PageRow::Log => (IconName::ScrollText, t("bigpicture.page.log")),
             PageRow::Playtime => (IconName::Clock, t("bigpicture.page.playtime")),
             PageRow::Hidden => (IconName::EyeOff, t("bigpicture.page.hidden")),
         };
@@ -287,6 +296,7 @@ impl BigPictureView {
             }
             PageRow::Favourite => Some(toggle(state.favourite)),
             PageRow::Hidden => Some(toggle(state.hidden)),
+            PageRow::Log => Some(toggle(self.show_log)),
             PageRow::Playtime => {
                 let library = models(cx).library.read(cx);
                 let minutes = library.playtime_minutes(&game.id());
@@ -322,7 +332,10 @@ impl BigPictureView {
             .child(Icon::new(icon))
             .child(div().flex_1().min_w_0().truncate().child(label))
             .when_some(trailing, |d, t| d.child(t))
-            .on_click(cx.listener(move |this, _, window, cx| {
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                if !click_acts(event.click_count()) {
+                    return;
+                }
                 if let Some(page) = &mut this.page {
                     page.ix = ix;
                 }

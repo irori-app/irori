@@ -413,6 +413,8 @@ pub struct GameState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameAction {
     Play,
+    /// Play with verbose Wine/Proton logs for this session, showing the log.
+    PlayWithLog,
     Stop,
     Install,
     CancelDownload,
@@ -425,6 +427,7 @@ impl GameAction {
     pub fn label(self) -> SharedString {
         t(match self {
             GameAction::Play => "bigpicture.action.play",
+            GameAction::PlayWithLog => "bigpicture.action.play_with_log",
             GameAction::Stop => "bigpicture.action.stop",
             GameAction::Install => "bigpicture.action.install",
             GameAction::CancelDownload => "bigpicture.action.cancel_download",
@@ -436,6 +439,7 @@ impl GameAction {
     pub fn icon(self) -> IconName {
         match self {
             GameAction::Play => IconName::Play,
+            GameAction::PlayWithLog => IconName::ScrollText,
             GameAction::Stop => IconName::CircleStop,
             GameAction::Install => IconName::Download,
             GameAction::CancelDownload => IconName::X,
@@ -467,6 +471,8 @@ pub enum PageRow {
     Platform,
     Favourite,
     Settings,
+    /// Show the game's log beside the rows, in place of its details.
+    Log,
     Playtime,
     Hidden,
 }
@@ -476,6 +482,7 @@ impl PageRow {
     pub fn id(self) -> &'static str {
         match self {
             PageRow::Action(GameAction::Play) => "bp-row-play",
+            PageRow::Action(GameAction::PlayWithLog) => "bp-row-play-with-log",
             PageRow::Action(GameAction::Stop) => "bp-row-stop",
             PageRow::Action(GameAction::Install) => "bp-row-install",
             PageRow::Action(GameAction::CancelDownload) => "bp-row-cancel-download",
@@ -484,6 +491,7 @@ impl PageRow {
             PageRow::Platform => "bp-row-platform",
             PageRow::Favourite => "bp-row-favourite",
             PageRow::Settings => "bp-row-settings",
+            PageRow::Log => "bp-row-log",
             PageRow::Playtime => "bp-row-playtime",
             PageRow::Hidden => "bp-row-hidden",
         }
@@ -501,18 +509,22 @@ impl PageRow {
     pub fn has_value(self) -> bool {
         matches!(
             self,
-            PageRow::Platform | PageRow::Favourite | PageRow::Hidden
+            PageRow::Platform | PageRow::Favourite | PageRow::Log | PageRow::Hidden
         )
     }
 }
 
-/// The game page's rows: the main command, Update and Cancel download when
-/// they apply, the install platform, Favourite, Game settings and Playtime,
-/// then the "Manage" group (Uninstall, Hidden). `platforms` is how many
+/// The game page's rows: the main command (with Play, Play with logs),
+/// Update and Cancel download when they apply, the install platform, Favourite, Game settings, Show log
+/// (for installed games, which have run or can), Playtime, then the
+/// "Manage" group (Uninstall, Hidden). `platforms` is how many
 /// platforms the game installs for.
 pub fn page_rows(state: GameState, platforms: usize) -> Vec<PageRow> {
     let main = main_action(state);
     let mut out = vec![PageRow::Action(main)];
+    if main == GameAction::Play {
+        out.push(PageRow::Action(GameAction::PlayWithLog));
+    }
     if state.installed && !state.playing && state.has_update && !state.in_queue {
         out.push(PageRow::Action(GameAction::Update));
     }
@@ -522,7 +534,11 @@ pub fn page_rows(state: GameState, platforms: usize) -> Vec<PageRow> {
     if main == GameAction::Install && platforms > 1 {
         out.push(PageRow::Platform);
     }
-    out.extend([PageRow::Favourite, PageRow::Settings, PageRow::Playtime]);
+    out.extend([PageRow::Favourite, PageRow::Settings]);
+    if state.installed || state.playing {
+        out.push(PageRow::Log);
+    }
+    out.push(PageRow::Playtime);
     if state.installed && !state.playing && !state.external {
         out.push(PageRow::Action(GameAction::Uninstall));
     }
@@ -536,7 +552,9 @@ pub fn disabled_reason(action: GameAction, state: GameState) -> Option<SharedStr
         .busy
         .filter(|k| *k != StatusKind::Queued && *k != StatusKind::Playing);
     match action {
-        GameAction::Play | GameAction::Update | GameAction::Uninstall if busy.is_some() => {
+        GameAction::Play | GameAction::PlayWithLog | GameAction::Update | GameAction::Uninstall
+            if busy.is_some() =>
+        {
             Some(t("bigpicture.action.busy"))
         }
         GameAction::Install if !state.installable => Some(t("bigpicture.action.not_installable")),
@@ -546,24 +564,11 @@ pub fn disabled_reason(action: GameAction, state: GameState) -> Option<SharedStr
 
 // ---- covers -------------------------------------------------------------
 
-/// What a click on a cover does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CoverClick {
-    /// Move the focus there, as the controller would; the backdrop follows.
-    Focus,
-    /// Open the game's page.
-    Open,
-}
-
-/// A click focuses a cover, as in the main library; a click on the cover
-/// already focused, or the second click of a double click, opens its page.
-/// `focused` is read when the click lands, not when the cover was drawn.
-pub fn cover_click(focused: bool, click_count: usize) -> CoverClick {
-    if focused || click_count >= 2 {
-        CoverClick::Open
-    } else {
-        CoverClick::Focus
-    }
+/// Whether a click acts: a click on a cover opens its game page at once,
+/// so the second click of a double click lands on the page that opened and
+/// must not run the row under the pointer (Play, Uninstall).
+pub fn click_acts(click_count: usize) -> bool {
+    click_count <= 1
 }
 
 /// The command a cover runs without opening the game's page (its button
@@ -930,9 +935,11 @@ mod tests {
             page_rows(installed, 2),
             vec![
                 PageRow::Action(GameAction::Play),
+                PageRow::Action(GameAction::PlayWithLog),
                 PageRow::Action(GameAction::Update),
                 PageRow::Favourite,
                 PageRow::Settings,
+                PageRow::Log,
                 PageRow::Playtime,
                 PageRow::Action(GameAction::Uninstall),
                 PageRow::Hidden,
@@ -943,6 +950,8 @@ mod tests {
             ..installed
         };
         assert_eq!(page_rows(playing, 1)[0], PageRow::Action(GameAction::Stop));
+        assert!(!page_rows(playing, 1).contains(&PageRow::Action(GameAction::PlayWithLog)));
+        assert!(page_rows(playing, 1).contains(&PageRow::Log));
         assert!(!page_rows(playing, 1).contains(&PageRow::Action(GameAction::Uninstall)));
         let not_installed = GameState {
             installable: true,
@@ -953,6 +962,7 @@ mod tests {
             &[PageRow::Action(GameAction::Install), PageRow::Platform]
         );
         assert!(!page_rows(not_installed, 1).contains(&PageRow::Platform));
+        assert!(!page_rows(not_installed, 1).contains(&PageRow::Log));
         let queued = GameState {
             in_queue: true,
             installable: true,
@@ -971,9 +981,10 @@ mod tests {
             ..installed
         };
         assert_eq!(
-            &page_rows(updating, 1)[..2],
+            &page_rows(updating, 1)[..3],
             &[
                 PageRow::Action(GameAction::Play),
+                PageRow::Action(GameAction::PlayWithLog),
                 PageRow::Action(GameAction::CancelDownload)
             ]
         );
@@ -988,18 +999,18 @@ mod tests {
             ..installed
         };
         assert!(disabled_reason(GameAction::Play, verifying).is_some());
+        assert!(disabled_reason(GameAction::PlayWithLog, verifying).is_some());
         assert!(disabled_reason(GameAction::Stop, verifying).is_none());
         assert!(disabled_reason(GameAction::Install, GameState::default()).is_some());
     }
 
     #[test]
-    fn a_click_focuses_a_cover_and_a_second_opens_it() {
-        assert_eq!(cover_click(false, 1), CoverClick::Focus);
-        assert_eq!(cover_click(true, 1), CoverClick::Open);
-        // A double click opens even when the first click's redraw hasn't
-        // happened yet.
-        assert_eq!(cover_click(false, 2), CoverClick::Open);
-        assert_eq!(cover_click(true, 3), CoverClick::Open);
+    fn only_the_first_click_of_a_double_click_acts() {
+        assert!(click_acts(1));
+        assert!(!click_acts(2));
+        assert!(!click_acts(3));
+        // Clicks synthesized by assistive tools may carry no count.
+        assert!(click_acts(0));
     }
 
     #[test]
