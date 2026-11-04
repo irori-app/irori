@@ -753,6 +753,9 @@ C 00  Unclassified device
         assert_eq!(env["LSFGVK_FLOW_SCALE"], "1");
     }
 
+    // The folders are the Linux loader's, read only on Linux; elsewhere
+    // `Path::join` would write them with another separator.
+    #[cfg(target_os = "linux")]
     #[test]
     fn layer_folders_follow_the_loader() {
         let host = HostEnv::from_pairs([
