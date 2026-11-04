@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "{date} tarihinden beri {count} oturum",
   "game.timeline.title": "Oynama geçmişi",
   "game.timeline.view_days": "Zaman çizelgesi",
-  "game.timeline.view_sessions": "Oturumlar"
+  "game.timeline.view_sessions": "Oturumlar",
+  "game.sandbox.title": "Korumalı alanda",
+  "game.sandbox.running": "Korumalı alanda çalışıyor",
+  "game.sandbox.no_network": "Ağ yok",
+  "game.sandbox.no_home": "Ev klasörü yok",
+  "game.sandbox.details": "Korumalı alanın oyundan gizledikleri",
+  "game.sandbox.cant_reach": "Erişemez",
+  "game.sandbox.cant_network": "İnternet, yerel ağınız ve bu bilgisayarda dinleyen programlar",
+  "game.sandbox.cant_home": "Ev klasörünüz ve diğer sürücüler",
+  "game.sandbox.cant_session": "Masaüstünüzün oturum hizmetleri ve diğer programlarınız",
+  "game.sandbox.can_reach": "Erişebilir",
+  "game.sandbox.can_game": "Kurulum klasörü ve Wine öneki",
+  "game.sandbox.can_home": "Kayıtlarını ve ayarlarını tutan kendine ait bir ev klasörü",
+  "game.sandbox.can_devices": "Ekran, ses, ekran kartı ve oyun kumandaları",
+  "game.sandbox.x11": "X11 masaüstünde oyun, görüntü sunucusunu diğer pencerelerinizle paylaşır; bu yüzden onları ve girdilerini yine de görebilir.",
+  "game.sandbox.open_home": "Ev klasörünü aç",
+  "game.sandbox.change": "Korumalı alan ayarları"
 }

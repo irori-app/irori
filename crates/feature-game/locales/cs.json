@@ -552,5 +552,21 @@
   "game.timeline.summary_other": "Relací od {date}: {count}",
   "game.timeline.title": "Historie hraní",
   "game.timeline.view_days": "Časová osa",
-  "game.timeline.view_sessions": "Relace"
+  "game.timeline.view_sessions": "Relace",
+  "game.sandbox.title": "V sandboxu",
+  "game.sandbox.running": "Běží v sandboxu",
+  "game.sandbox.no_network": "Bez sítě",
+  "game.sandbox.no_home": "Bez domovské složky",
+  "game.sandbox.details": "Co sandbox před hrou skrývá",
+  "game.sandbox.cant_reach": "Nemá přístup k",
+  "game.sandbox.cant_network": "Internet, místní síť a programy, které na tomto počítači naslouchají",
+  "game.sandbox.cant_home": "Vaše domovská složka a další disky",
+  "game.sandbox.cant_session": "Služby relace vašeho prostředí a vaše další programy",
+  "game.sandbox.can_reach": "Má přístup k",
+  "game.sandbox.can_game": "Svou instalační složku a prefix Wine",
+  "game.sandbox.can_home": "Vlastní domovskou složku, ve které zůstávají její uložené pozice a nastavení",
+  "game.sandbox.can_devices": "Displej, zvuk, grafickou kartu a ovladače",
+  "game.sandbox.x11": "Na ploše X11 sdílí hra zobrazovací server s ostatními okny, takže je i jejich vstup může dál vidět.",
+  "game.sandbox.open_home": "Otevřít její domovskou složku",
+  "game.sandbox.change": "Nastavení sandboxu"
 }
