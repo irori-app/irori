@@ -270,6 +270,7 @@ async fn apply_game(
         }
     };
     let Some(id) = id else { return };
+    apply_commands(backend, &id, &game.commands);
     if !matches!(
         game.kind,
         ImportKind::Steam { .. } | ImportKind::StoreGame { .. }
@@ -306,6 +307,66 @@ async fn add_app(
             ..Default::default()
         })
         .await
+}
+
+/// Lutris's pre-launch and post-exit commands: one Irori runs alongside the
+/// game becomes a program started with it, and one the game waits for, or
+/// one run after it, the game's script when it is a bare file (Irori's
+/// scripts take no arguments). What the game already has in Irori wins.
+fn apply_commands(backend: &Backend, id: &GameId, commands: &lutris_import::LaunchCommands) {
+    let settings = backend.settings.game(id);
+    let bare = |command: &str| irori_core::process::split_args(command).len() == 1;
+    let mut programs = settings.launch_programs.clone();
+    if let Some(command) = &commands.prelaunch {
+        if commands.prelaunch_wait && bare(command) {
+            if settings.before_launch_script_path.is_empty() {
+                backend.settings.set_game_value(
+                    id,
+                    "beforeLaunchScriptPath",
+                    Some(Value::String(command.trim().to_string())),
+                );
+            }
+        } else if let Some(program) = program_of(command)
+            && !programs.iter().any(|p| p.path == program.path)
+        {
+            programs.push(program);
+        }
+    }
+    if programs != settings.launch_programs {
+        backend.settings.set_game_value(
+            id,
+            "iroriLaunchPrograms",
+            serde_json::to_value(&programs).ok(),
+        );
+    }
+    if let Some(command) = &commands.postexit
+        && bare(command)
+        && settings.after_launch_script_path.is_empty()
+    {
+        backend.settings.set_game_value(
+            id,
+            "afterLaunchScriptPath",
+            Some(Value::String(command.trim().to_string())),
+        );
+    }
+}
+
+/// A Lutris command line as a program started with the game.
+fn program_of(command: &str) -> Option<irori_core::LaunchProgram> {
+    let mut parts = irori_core::process::split_args(command);
+    if parts.is_empty() {
+        return None;
+    }
+    let path = parts.remove(0);
+    Some(irori_core::LaunchProgram {
+        path,
+        args: parts
+            .iter()
+            .map(|a| irori_core::process::shell_quote(a))
+            .collect::<Vec<_>>()
+            .join(" "),
+        ..Default::default()
+    })
 }
 
 fn set_env(backend: &Backend, id: &GameId, env: &std::collections::BTreeMap<String, String>) {
@@ -375,6 +436,15 @@ fn apply_user_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lutris_commands_become_programs_alongside() {
+        let p = program_of("/opt/trainer --speed '2 x'").unwrap();
+        assert_eq!(p.path, "/opt/trainer");
+        assert_eq!(irori_core::process::split_args(&p.args), ["--speed", "2 x"]);
+        assert!(p.enabled && p.stop_with_game && !p.in_prefix);
+        assert!(program_of("  ").is_none());
+    }
 
     #[test]
     fn wine_builds_match_by_their_shared_name() {

@@ -322,6 +322,10 @@ and `launch.rs` before changing anything below the UI.
 - Per-game overrides are sparse (`GameSettingsOverrides`, a JSON map): the effective
   settings are the defaults with the overridden keys applied. Reset a field with
   `SettingsService::set_game_value(id, key, None)`.
+- Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
+  from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
+  as overrides (variables, wrappers and programs merge by key into the current list),
+  so everything else keeps following the defaults.
 
 **Processes** (`process.rs`):
 
@@ -399,8 +403,15 @@ commands without a window.
   3. `irori_runtime::prepare_launch`.
   4. Before-launch script.
   5. `store.launch` builds the `LaunchPlan`.
-  6. `process::spawn`, with a capped game log.
-  7. Sleep inhibition, then session tracking, ending in `GameExited`.
+  6. `process::spawn`, with a capped game log, then the programs started
+     alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
+     Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
+     a Steam game's Proton prefix is reached only through `protontricks-launch`.
+  7. Sleep inhibition, then session tracking. At the end the programs that stop
+     with the game are stopped (not-yet-started ones never start) before the
+     after-launch script, then `GameExited`. While programs run in the prefix,
+     a game whose launcher exits early is followed by its folder, not
+     `wineserver -w`, which would wait for them too.
 
 ### 4.3 Stores
 

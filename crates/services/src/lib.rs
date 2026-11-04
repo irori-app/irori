@@ -22,6 +22,7 @@ mod inhibit;
 mod library;
 mod network;
 pub mod play_status;
+mod programs;
 pub mod screenshots;
 pub mod scripts;
 pub mod sessions;
