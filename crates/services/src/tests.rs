@@ -286,11 +286,13 @@ fn unanswered_script_questions_cancel_and_roll_back() {
 }
 
 /// An added Linux game that runs a shell command.
+#[cfg(target_os = "linux")]
 struct PlayStore {
     game: Arc<GameInfo>,
     command: irori_core::process::CommandSpec,
 }
 
+#[cfg(target_os = "linux")]
 #[async_trait]
 impl Store for PlayStore {
     fn runner(&self) -> Runner {
