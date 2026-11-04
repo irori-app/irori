@@ -10,7 +10,7 @@ use irori_core::log_cap;
 use irori_core::process::{self, CancellationToken, CommandSpec, ExecResult, RunOptions};
 use irori_core::{
     Event, GameId, GameInfo, InstallPlatform, InstallProgress, LaunchOption, LaunchRequest, Notice,
-    NoticeLevel, Outcome, Paths, RemoveArgs, SaveConflict, StatusKind, SyncDirection, util,
+    NoticeLevel, Outcome, Paths, RemoveArgs, Runner, SaveConflict, StatusKind, SyncDirection, util,
 };
 use irori_runtime::Target;
 use serde_json::Value;
@@ -469,7 +469,14 @@ impl Backend {
 
     pub async fn uninstall(&self, id: &GameId, args: RemoveArgs) -> Result<()> {
         Self::ensure_managed(id)?;
-        let game = self.installed_game(id)?;
+        // An added game whose program is gone is not installed, yet removing
+        // it from the library must still work.
+        let game = match id.runner {
+            Runner::Sideload => self
+                .game(id)
+                .with_context(|| format!("{} is not in the library", id.app_name))?,
+            _ => self.installed_game(id)?,
+        };
         let store = self.store(id.runner).context("store not available")?;
         let _guard = self.statuses.guard(id, StatusKind::Uninstalling);
         let app = self.settings.app();

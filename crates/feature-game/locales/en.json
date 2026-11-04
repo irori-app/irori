@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{count} sessions since {date}",
   "game.timeline.title": "Play history",
   "game.timeline.view_days": "Timeline",
-  "game.timeline.view_sessions": "Sessions"
+  "game.timeline.view_sessions": "Sessions",
+  "game.ops.pick_program": "Choose the program",
+  "game.ops.locate_failed": "Couldn’t point “{title}” at the program",
+  "game.hero.program_missing": "The program wasn’t found at {path}. Locate it, or remove the game from the library. Its details, playtime and settings are kept.",
+  "game.menu.locate_program": "Locate program…",
+  "game.related.title": "More like this",
+  "game.related.series": "Same series",
+  "game.related.developer": "Also by {name}",
+  "game.related.publisher": "Also from {name}",
+  "game.related.genres": "Shared genres: {genres}",
+  "game.related.separator": ", "
 }

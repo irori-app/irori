@@ -13,6 +13,7 @@ pub fn library_event(event: &LibraryEvent, window: &mut Window, cx: &mut App) {
             irori_game::open_uninstall_dialog(id.clone(), window, cx)
         }
         LibraryEvent::RequestLogs(id) => irori_game::open_log_sheet(id.clone(), window, cx),
+        LibraryEvent::RequestLocate(id) => irori_game::ops::locate_program(id, window, cx),
         LibraryEvent::RequestImportInstallers => {
             irori_game::open_import_installers_dialog(window, cx)
         }

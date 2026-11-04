@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Wstrzymane",
   "ui.play_status.beaten": "Ukończone",
   "ui.play_status.abandoned": "Porzucone",
-  "ui.play_status.played": "Grane"
+  "ui.play_status.played": "Grane",
+  "ui.import.summary.title": "Zaimportowano z {launcher}",
+  "ui.import.summary.games": "Gry w {launcher}: {found}. Dodano do Irori: {imported}.",
+  "ui.import.summary.wine_build": "{launcher} używał {build}, którego tu nie zainstalowano. Jeśli gra się nie uruchomi, wybierz inną wersję w jej ustawieniach.",
+  "ui.import.summary.warnings": "Pliki {launcher}, których Irori nie mógł odczytać"
 }

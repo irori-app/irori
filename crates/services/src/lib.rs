@@ -22,8 +22,10 @@ mod inhibit;
 mod library;
 mod network;
 pub mod play_status;
+pub mod related;
 pub mod screenshots;
 pub mod scripts;
+pub mod search;
 pub mod sessions;
 pub mod settings;
 pub mod status;
@@ -57,7 +59,7 @@ pub use sessions::Session;
 pub use settings::SettingsService;
 pub use status::StatusRegistry;
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
-pub use userdata::{UserData, UserDataService};
+pub use userdata::{BulkSnapshot, UserData, UserDataService};
 
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);

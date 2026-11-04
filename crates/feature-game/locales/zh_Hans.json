@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "自 {date} 起 {count} 次游玩",
   "game.timeline.title": "游玩记录",
   "game.timeline.view_days": "时间线",
-  "game.timeline.view_sessions": "游玩记录"
+  "game.timeline.view_sessions": "游玩记录",
+  "game.ops.pick_program": "选择程序",
+  "game.ops.locate_failed": "无法为“{title}”指定程序",
+  "game.hero.program_missing": "在 {path} 找不到程序。请定位它，或从游戏库中移除该游戏。其信息、游玩时间和设置都会保留。",
+  "game.menu.locate_program": "定位程序…",
+  "game.related.title": "类似游戏",
+  "game.related.series": "同一系列",
+  "game.related.developer": "同为 {name} 开发",
+  "game.related.publisher": "同为 {name} 发行",
+  "game.related.genres": "相同类型：{genres}",
+  "game.related.separator": "、"
 }

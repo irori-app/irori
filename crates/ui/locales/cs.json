@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "Odloženo",
   "ui.play_status.beaten": "Dohráno",
   "ui.play_status.abandoned": "Opuštěno",
-  "ui.play_status.played": "Hráno"
+  "ui.play_status.played": "Hráno",
+  "ui.import.summary.title": "Importováno z {launcher}",
+  "ui.import.summary.games": "Her v {launcher}: {found}. Přidáno do Irori: {imported}.",
+  "ui.import.summary.wine_build": "{launcher} používal {build}, který tu není nainstalovaný. Pokud se hra nespustí, zvolte v jejím nastavení jinou verzi.",
+  "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst"
 }

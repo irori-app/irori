@@ -663,6 +663,18 @@ impl Render for SideloadDialog {
                         .flex_wrap()
                         .gap_2()
                         .child(
+                            Button::new("sideload-folder")
+                                .small()
+                                .ghost()
+                                .icon(IconName::FolderPlus)
+                                .label(t("library.folder.open"))
+                                .tooltip(t("library.folder.open_tooltip"))
+                                .on_click(|_, window, cx| {
+                                    window.close_dialog(cx);
+                                    super::folder::open_add_folder_dialog(window, cx);
+                                }),
+                        )
+                        .child(
                             Button::new("sideload-lutris")
                                 .small()
                                 .ghost()

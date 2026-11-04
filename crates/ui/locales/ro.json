@@ -102,5 +102,9 @@
   "ui.play_status.on_hold": "În pauză",
   "ui.play_status.beaten": "Terminat",
   "ui.play_status.abandoned": "Abandonat",
-  "ui.play_status.played": "Jucat"
+  "ui.play_status.played": "Jucat",
+  "ui.import.summary.title": "Importat din {launcher}",
+  "ui.import.summary.games": "Jocuri în {launcher}: {found}. Adăugate în Irori: {imported}.",
+  "ui.import.summary.wine_build": "{launcher} folosea {build}, care nu este instalat aici. Dacă jocul nu pornește, alege altă versiune în setările lui.",
+  "ui.import.summary.warnings": "Fișiere {launcher} pe care Irori nu le-a putut citi"
 }

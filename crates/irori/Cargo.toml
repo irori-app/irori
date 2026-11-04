@@ -12,6 +12,7 @@ name = "irori"
 path = "src/main.rs"
 
 [dependencies]
+dirs.workspace = true
 irori-core.workspace = true
 irori-secrets.workspace = true
 irori-services.workspace = true
@@ -60,6 +61,11 @@ resvg = "0.45"
 # Irori runs the sign-in window itself when the helper is missing: these
 # systems ship their web engines, so it adds no runtime dependency.
 irori-sign-in.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The `Run` value that starts Irori with Windows; already in the lockfile
+# through another dependency.
+windows-registry = "0.6"
 
 [target.'cfg(windows)'.build-dependencies]
 winresource.workspace = true

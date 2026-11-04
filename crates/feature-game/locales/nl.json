@@ -552,5 +552,15 @@
   "game.timeline.summary_other": "{count} sessies sinds {date}",
   "game.timeline.title": "Speelgeschiedenis",
   "game.timeline.view_days": "Tijdlijn",
-  "game.timeline.view_sessions": "Sessies"
+  "game.timeline.view_sessions": "Sessies",
+  "game.ops.pick_program": "Kies het programma",
+  "game.ops.locate_failed": "‘{title}’ kon niet naar het programma worden verwezen",
+  "game.hero.program_missing": "Het programma is niet gevonden in {path}. Zoek het of verwijder de game uit de bibliotheek. De gegevens, speeltijd en instellingen blijven bewaard.",
+  "game.menu.locate_program": "Programma zoeken…",
+  "game.related.title": "Meer zoals deze",
+  "game.related.series": "Zelfde serie",
+  "game.related.developer": "Ook van {name}",
+  "game.related.publisher": "Ook uitgegeven door {name}",
+  "game.related.genres": "Zelfde genres: {genres}",
+  "game.related.separator": ", "
 }

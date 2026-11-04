@@ -79,5 +79,11 @@
   "shell.app_update.download": "Stáhnout",
   "shell.app_update.copy_command": "Kopírovat příkaz",
   "shell.app_update.updated": "Irori aktualizováno na verzi {version}",
-  "shell.app_update.release_notes": "Poznámky k vydání"
+  "shell.app_update.release_notes": "Poznámky k vydání",
+  "shell.nav.views": "Zobrazení",
+  "shell.palette.show_view": "Zobrazit: {name}",
+  "shell.palette.views_keywords": "zobrazení uložené filtr",
+  "shell.palette.save_view": "Uložit aktuální zobrazení knihovny…",
+  "shell.palette.add_folder": "Přidat hry ze složky…",
+  "shell.palette.add_folder_keywords": "složka prohledat import přidat programy"
 }
