@@ -406,6 +406,11 @@ impl Backend {
                     );
                 }
             }
+            // After the cloud upload, so Ludusavi copies the saves the
+            // cloud now holds too.
+            if settings.ludusavi_auto_backup {
+                b.back_up_after_session(&id, &game.title).await;
+            }
             // After the saves synced, which may live among the mods' files.
             if mods {
                 b.restore_mods(&id, &game.title).await;

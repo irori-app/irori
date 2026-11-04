@@ -23,6 +23,7 @@ pub mod nav;
 mod omarchy;
 pub mod play_status;
 mod sandbox_problem;
+pub mod save_backups;
 pub mod save_conflict;
 pub mod state;
 pub mod style;
