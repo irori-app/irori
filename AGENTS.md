@@ -106,7 +106,7 @@ Environment variables:
 | `IRORI_SIGN_IDENTITY` | macOS signing identity for `package.py` (default `-`, ad-hoc). |
 | `IRORI_WINDOWS_CRT_DIR` | Windows: explicit `Microsoft.VC*.CRT` directory for packaging. |
 | `IRORI_UPDATE_EXPLANATION` | For packagers, at build or run time: Irori never looks for its own new versions and shows this text instead (`irori-services::app_update`). |
-| `IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE`, `IRORI_KEYRING_SMOKE` | Opt-in, `#[ignore]`d runtime tests (see [8](#8-tests)). |
+| `IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE`, `IRORI_KEYRING_SMOKE`, `IRORI_SANDBOX_SMOKE`, `IRORI_SANDBOX_PROTON` | Opt-in, `#[ignore]`d runtime tests (see [8](#8-tests)). |
 
 Build profiles (root `Cargo.toml`):
 
@@ -124,7 +124,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | --- | --- | --- |
 | `crates/core` | `irori-core` | Domain types, settings schema, the `Store` trait, events, paths, process/HTTP/JSON utilities |
 | `crates/secrets` | `irori-secrets` | Files holding store logins, encrypted with a key kept in the system keyring |
-| `crates/runtime` | `irori-runtime` | Wine/Proton/CrossOver/GPTK discovery and downloads, prefixes, DXVK/VKD3D, umu, launch environment |
+| `crates/runtime` | `irori-runtime` | Wine/Proton/CrossOver/GPTK discovery and downloads, prefixes, DXVK/VKD3D, umu, launch environment, the bubblewrap sandbox (`sandbox.rs`) |
 | `crates/engines` | `irori-engines` | Emulators ("engines"): manifests, discovery, managed versions, RetroArch cores, BIOS index, launch commands |
 | `crates/scripts` | `irori-scripts` | Lutris install scripts: typed parser, validation, variables, consent plan, confined executor with rollback, the `ScriptHost` trait, the lutris.net client, Wine build matching |
 | `crates/depot` | `irori-depot` | Download engine: parallel chunked downloads, resume, verification, delta updates; a `test-server` feature |
@@ -408,7 +408,9 @@ commands without a window.
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
-  3. `irori_runtime::prepare_launch`.
+  3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
+     game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
+     start it without (`docs/PLATFORMS.md`, "Sandboxed games").
   4. Before-launch script.
   5. `store.launch` builds the `LaunchPlan`.
   6. `process::spawn`, with a capped game log.
@@ -1047,6 +1049,9 @@ dev-dependency instead.
   downloads a real runtime.
 - `irori-secrets`' keyring test needs `IRORI_KEYRING_SMOKE=1` and writes a real key, so
   on Linux run it in `dbus-run-session` with a throwaway `gnome-keyring-daemon`.
+- `irori-runtime`'s sandbox tests start real bubblewrap sandboxes with
+  `IRORI_SANDBOX_SMOKE=1`; the umu one also needs `IRORI_SANDBOX_PROTON` naming a
+  Proton folder (`docs/PLATFORMS.md`, "Sandboxed games").
 
 Run ignored tests only when you're changing that code.
 

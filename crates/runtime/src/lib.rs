@@ -16,6 +16,7 @@ pub mod manager;
 pub mod prefix;
 pub mod protontricks;
 pub mod runtimes;
+pub mod sandbox;
 pub mod sysinfo;
 pub mod tools;
 pub mod vdf;
@@ -323,6 +324,7 @@ pub async fn prepare_launch(
             env::generic_env(settings, install_path.as_deref(), runtime.as_deref(), &host),
         );
         env::layer(&mut vars, fixes);
+        parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
         return Ok(LaunchEnvironment {
             env: vars,
             wrappers: wrappers::setup_wrappers(settings, &parts),
@@ -414,6 +416,7 @@ pub async fn prepare_launch(
     {
         vars.insert("GAMEID".into(), id);
     }
+    parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
 
     Ok(LaunchEnvironment {
         env: vars,
@@ -427,6 +430,112 @@ pub async fn prepare_launch(
             proton_verb: "waitforexitandrun",
         }),
     })
+}
+
+/// The sandbox wrapper for a launch of a game set to run sandboxed; empty
+/// otherwise. Collects the folders the game needs (its install folder and
+/// prefix writable; the Wine or Proton build, umu and the anticheat runtimes
+/// read-only) and refuses when bubblewrap can't run.
+async fn sandbox_wrapper(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+    wc: Option<&WineContext>,
+    parts: &WrapperParts,
+    vars: &env::EnvMap,
+) -> Result<Vec<String>> {
+    if !settings.sandbox.is_enabled() {
+        return Ok(Vec::new());
+    }
+    anyhow::ensure!(
+        target.id.runner != irori_core::Runner::Emulation,
+        "Emulated games can't run in a sandbox yet. Turn the sandbox off in the game's settings."
+    );
+    let mut game_dirs: Vec<PathBuf> = target.game.install_path().into_iter().collect();
+    let exe = Path::new(settings.target_exe.trim());
+    if exe.is_absolute() {
+        game_dirs.extend(exe.parent().map(Path::to_path_buf));
+    }
+    let mut tool_dirs: Vec<PathBuf> = Vec::new();
+    let mut overlay_dirs: Vec<PathBuf> = Vec::new();
+    let uses_umu = !parts.steam_runtime.is_empty() || wc.is_some_and(|w| w.uses_umu);
+    let kind = match wc {
+        None if uses_umu => sandbox::SandboxKind::PressureVessel,
+        None => sandbox::SandboxKind::Native,
+        Some(wc) => {
+            let (kind, tools) = sandbox_wine_parts(app, wc).await?;
+            game_dirs.push(wc.prefix.clone());
+            tool_dirs.extend(tools);
+            kind
+        }
+    };
+    if uses_umu {
+        let umu = parts
+            .steam_runtime
+            .first()
+            .map(PathBuf::from)
+            .or_else(|| wc.map(|w| w.umu.clone()))
+            .unwrap_or_else(runtimes::umu_path);
+        tool_dirs.extend(umu.parent().map(Path::to_path_buf));
+        overlay_dirs.extend(umu_data_dir());
+    }
+    for key in [
+        "PROTONPATH",
+        "PROTON_EAC_RUNTIME",
+        "PROTON_BATTLEYE_RUNTIME",
+    ] {
+        if let Some(p) = vars.get(key).map(PathBuf::from).filter(|p| p.is_absolute()) {
+            tool_dirs.push(p);
+        }
+    }
+    let plan = sandbox::SandboxPlan {
+        settings: settings.sandbox,
+        kind,
+        game_dirs,
+        tool_dirs,
+        overlay_dirs,
+        home: sandbox::sandbox_home(target.id),
+        gamescope: !parts.gamescope.is_empty(),
+    };
+    sandbox::wrapper(target.id, plan).await
+}
+
+/// How a Wine context runs in the sandbox and the read-only folders its
+/// build needs. Creates the prefix folder, which umu would otherwise create
+/// in the sandbox's empty root rather than on disk.
+pub async fn sandbox_wine_parts(
+    app: &AppSettings,
+    wc: &WineContext,
+) -> Result<(sandbox::SandboxKind, Vec<PathBuf>)> {
+    tokio::fs::create_dir_all(&wc.prefix)
+        .await
+        .with_context(|| format!("Could not create {}", wc.prefix.display()))?;
+    let bin = Path::new(&wc.wine.bin);
+    let mut tools: Vec<PathBuf> = Vec::new();
+    if wc.wine.kind == WineKind::Proton {
+        tools.extend(bin.parent().map(Path::to_path_buf));
+        // Proton copies Steam's client libraries from here; the rest of
+        // Steam's folder (its logins among it) stays hidden.
+        tools.push(locations::steam_client_install_path(app).join("legacycompat"));
+    } else {
+        tools.extend(bin.parent().and_then(Path::parent).map(Path::to_path_buf));
+    }
+    let kind = if wc.uses_umu {
+        tools.extend(wc.umu.parent().map(Path::to_path_buf));
+        sandbox::SandboxKind::PressureVessel
+    } else if wc.wine.kind == WineKind::Proton {
+        sandbox::SandboxKind::Proton
+    } else {
+        sandbox::SandboxKind::Wine {
+            wineserver: prefix::server_for(&wc.wine, &wc.prefix).0,
+        }
+    };
+    Ok((kind, tools))
+}
+
+/// Where umu keeps the Steam runtime it runs Proton in.
+pub fn umu_data_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("umu"))
 }
 
 /// Run a Windows command inside the game's prefix (winecfg, regedit, an exe).

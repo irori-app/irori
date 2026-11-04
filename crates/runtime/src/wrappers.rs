@@ -1,6 +1,6 @@
 //! The wrapper chain placed in front of a game: gamescope, the user's
-//! wrappers, MangoHud, GameMode and (for native games on the Steam runtime)
-//! umu-run.
+//! wrappers, MangoHud, GameMode, the sandbox and (for native games on the
+//! Steam runtime) umu-run.
 
 use irori_core::GameSettings;
 use irori_core::GamescopeSettings;
@@ -81,15 +81,27 @@ pub struct WrapperParts {
     pub gamemode: Option<String>,
     /// `[umu-run]` for native games on the Steam runtime.
     pub steam_runtime: Vec<String>,
+    /// `[bwrap, options…, --]` when the game runs sandboxed
+    /// ([`crate::sandbox`]).
+    pub sandbox: Vec<String>,
 }
 
 /// The wrapper chain, outermost first, in Heroic's order: gamescope, user
 /// wrappers, MangoHud (only without gamescope, which uses `--mangoapp`
 /// instead), gamemoderun, then umu-run. Empty arguments are dropped.
+///
+/// A sandboxed game has gamescope and gamemoderun outside the sandbox, as
+/// they need the compositor and D-Bus (gamemoderun then registers the
+/// sandbox, which lives as long as the game), and the rest inside it.
 pub fn setup_wrappers(gs: &GameSettings, parts: &WrapperParts) -> Vec<Vec<String>> {
     let mut chain: Vec<Vec<String>> = Vec::new();
     if !parts.gamescope.is_empty() {
         chain.push(parts.gamescope.clone());
+    }
+    let sandboxed = !parts.sandbox.is_empty();
+    if sandboxed {
+        chain.extend(parts.gamemode.iter().map(|gm| vec![gm.clone()]));
+        chain.push(parts.sandbox.clone());
     }
     for w in &gs.wrapper_options {
         let exe = w.exe.trim();
@@ -103,7 +115,7 @@ pub fn setup_wrappers(gs: &GameSettings, parts: &WrapperParts) -> Vec<Vec<String
     if parts.gamescope.is_empty() && !parts.mangohud.is_empty() {
         chain.push(parts.mangohud.clone());
     }
-    if let Some(gm) = &parts.gamemode {
+    if let Some(gm) = parts.gamemode.as_ref().filter(|_| !sandboxed) {
         chain.push(vec![gm.clone()]);
     }
     if !parts.steam_runtime.is_empty() {
@@ -278,6 +290,7 @@ mod tests {
             mangohud: vec!["/usr/bin/mangohud".into(), "--dlsym".into()],
             gamemode: Some("/usr/bin/gamemoderun".into()),
             steam_runtime: vec!["/usr/bin/umu-run".into()],
+            sandbox: Vec::new(),
         };
         assert_eq!(
             setup_wrappers(&gs, &parts),
@@ -299,6 +312,34 @@ mod tests {
             ]
         );
         assert!(setup_wrappers(&GameSettings::default(), &WrapperParts::default()).is_empty());
+    }
+
+    #[test]
+    fn the_sandbox_holds_everything_but_gamescope_and_gamemode() {
+        let gs = GameSettings {
+            wrapper_options: vec![Wrapper {
+                exe: "strace".into(),
+                args: "-f".into(),
+            }],
+            ..Default::default()
+        };
+        let parts = WrapperParts {
+            gamescope: vec!["/usr/bin/gamescope".into(), "--".into()],
+            mangohud: vec!["/usr/bin/mangohud".into()],
+            gamemode: Some("/usr/bin/gamemoderun".into()),
+            steam_runtime: vec!["/usr/bin/umu-run".into()],
+            sandbox: vec!["/usr/bin/bwrap".into(), "--unshare-net".into(), "--".into()],
+        };
+        assert_eq!(
+            setup_wrappers(&gs, &parts),
+            vec![
+                vec!["/usr/bin/gamescope", "--"],
+                vec!["/usr/bin/gamemoderun"],
+                vec!["/usr/bin/bwrap", "--unshare-net", "--"],
+                vec!["strace", "-f"],
+                vec!["/usr/bin/umu-run"],
+            ]
+        );
     }
 
     #[test]
