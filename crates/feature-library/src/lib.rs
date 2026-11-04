@@ -46,6 +46,7 @@ pub use dialogs::categories::open_categories_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
+pub use dialogs::steamgrid::open_art_picker_dialog;
 pub use filter::{CategoryFilter, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use i18n::CATALOGS;
 pub use random::open_random_game;

@@ -17,12 +17,13 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, ElementId, Entity, EventEmitter, Focusable as _,
+    AnyElement, App, AppContext as _, Context, ElementId, Entity, EventEmitter, Focusable as _,
     InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _, Rems, Render,
     SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
     Task, Window, div, rems,
 };
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
+use irori_ui::art_picker::{ArtSlot, OnPicked};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, models, navigate};
@@ -489,6 +490,39 @@ impl Render for ArtPicker {
                     ),
             )
     }
+}
+
+/// Open the picker in a dialog of its own (a game's settings, through
+/// `irori_ui::art_picker`); `on_picked` gets the chosen image.
+pub fn open_art_picker_dialog(
+    slot: ArtSlot,
+    title: &str,
+    on_picked: OnPicked,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let kind = match slot {
+        ArtSlot::Cover => ArtKind::Cover,
+        ArtSlot::Background => ArtKind::Background,
+        ArtSlot::Logo => ArtKind::Logo,
+    };
+    let picker = cx.new(|cx| ArtPicker::new(kind, title, window, cx));
+    window
+        .subscribe(&picker, cx, move |_, event: &ArtPickerEvent, window, cx| {
+            if let ArtPickerEvent::Picked(url) = event {
+                on_picked(url.clone(), window, cx);
+            }
+            window.close_dialog(cx);
+        })
+        .detach();
+    let width = super::dialog_width(window, 40.);
+    let focus = std::cell::Cell::new(true);
+    window.open_dialog(cx, move |dialog, window, cx| {
+        if focus.replace(false) {
+            picker.update(cx, |p, cx| p.focus(window, cx));
+        }
+        dialog.title(kind.title()).w(width).child(picker.clone())
+    });
 }
 
 #[cfg(test)]

@@ -146,6 +146,30 @@ game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE
 NVIDIA and `MESA_SHADER_CACHE_MAX_SIZE` for Mesa. A value already set in Irori's own
 environment or in the game's variables wins.
 
+The Graphics settings of a game are Linux only; on macOS and Windows they show why.
+Variables a game's own settings set always win over them; the host environment's
+don't, since these are chosen per game.
+
+- **Graphics card** (`iroriGpu`, a PCI address): cards come from `/sys/class/drm`,
+  named from `pci.ids`. A Mesa card gets `DRI_PRIME=pci-…` and
+  `MESA_VK_DEVICE_SELECT=<vendor>:<device>!` (left out when two cards are the same
+  model), which also hides the other cards from DXVK; with an NVIDIA card present,
+  `__VK_LAYER_NV_optimus=non_NVIDIA_only`. An NVIDIA card that doesn't drive the desktop
+  gets PRIME render offload (`__NV_PRIME_RENDER_OFFLOAD`, `__VK_LAYER_NV_optimus=NVIDIA_only`,
+  `__GLX_VENDOR_LIBRARY_NAME=nvidia`). A chosen card replaces "Use the discrete GPU".
+- **NVIDIA Smooth Motion** (`iroriSmoothMotion`): `NVPRESENT_ENABLE_SMOOTH_MOTION=1`.
+  Needs a GeForce RTX 40 series card or newer and a driver with the `VK_LAYER_NV_present`
+  layer (575 and later).
+- **NVIDIA Reflex in Vulkan games** (`iroriNvidiaReflex`): `DXVK_NVAPI_VKREFLEX=1` for
+  Wine and Proton games while DXVK-NVAPI is on. DirectX 11 and 12 games get Reflex from
+  DXVK and VKD3D-Proton without it.
+- **Lossless Scaling frame generation** (`iroriLsfg`): needs lsfg-vk 2
+  (`VkLayer_LSFGVK_frame_generation.json` in a Vulkan implicit layer folder) and
+  Lossless Scaling in a Steam library (`lsfg-vk.dll` from its "lsfg-vk" branch, or
+  `Lossless.dll`). Irori passes the game's choice as an environment profile
+  (`LSFGVK_ENV=1`, `LSFGVK_MULTIPLIER`, `LSFGVK_FLOW_SCALE`, `LSFGVK_PERFORMANCE_MODE`,
+  `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file.
+
 The Steam library scans that Steam folder and every library in its
 `steamapps/libraryfolders.vdf` for `appmanifest_*.acf` files, skipping Proton, the
 Steam Linux Runtime and other tools, and watches those `steamapps` folders so installs

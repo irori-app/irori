@@ -20,6 +20,7 @@
 //! never per keystroke.
 
 mod app_update;
+mod artwork;
 mod backup;
 mod controllers;
 mod epic;
