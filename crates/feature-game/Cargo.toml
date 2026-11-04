@@ -13,6 +13,7 @@ once_cell.workspace = true
 fs4.workspace = true
 irori-core.workspace = true
 irori-services.workspace = true
+irori-mods.workspace = true
 irori-engines.workspace = true
 irori-ui.workspace = true
 irori-runtime.workspace = true

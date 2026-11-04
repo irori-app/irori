@@ -16,6 +16,7 @@ irori-engines.workspace = true
 sysinfo.workspace = true
 irori-extras.workspace = true
 irori-scripts.workspace = true
+irori-mods.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
