@@ -11,6 +11,7 @@ pub mod accounts;
 pub mod achievements;
 pub mod app_update;
 pub mod backup;
+pub mod backup_schedule;
 mod discord;
 mod downloads;
 mod engines;
@@ -35,6 +36,7 @@ pub mod sessions;
 pub mod settings;
 pub mod status;
 pub mod storage;
+pub mod sync;
 pub mod updates;
 pub mod userdata;
 
@@ -54,6 +56,7 @@ pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
 pub use achievements::{AchievementIndex, AchievementTotals, GameAchievements, Unlock};
 pub use app_update::{AppUpdateStatus, InstallKind, Release};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
+pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
@@ -69,6 +72,7 @@ pub use sessions::Session;
 pub use settings::SettingsService;
 pub use status::StatusRegistry;
 pub use storage::{CleanupKind, StorageReport};
+pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 
@@ -112,6 +116,10 @@ pub struct Inner {
     app_update: app_update::AppUpdater,
     /// Every game's achievements, summed up.
     achievement_store: achievements::AchievementStore,
+    /// Scheduled backups.
+    backups: backup_schedule::BackupScheduler,
+    /// Library sync between computers.
+    sync: sync::SyncService,
 }
 
 impl Deref for Backend {
@@ -184,6 +192,8 @@ impl Backend {
             stores_ready: AtomicBool::new(false),
             app_update: app_update::AppUpdater::load(interactive),
             achievement_store: achievements::AchievementStore::default(),
+            backups: backup_schedule::BackupScheduler::load(),
+            sync: sync::SyncService::load(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {
@@ -244,6 +254,13 @@ impl Backend {
             let b = self.clone();
             self.spawn(async move { b.recover_mods().await });
         }
+
+        // A new version of Irori backs up what the old one wrote first.
+        if interactive {
+            let b = self.clone();
+            self.spawn(async move { b.back_up_before_update().await });
+        }
+
         // Initialise stores from disk, then build the library.
         let b = self.clone();
         self.spawn(async move {
@@ -285,6 +302,8 @@ impl Backend {
                         ),
                 );
             }
+            b.sync_when_due().await;
+            b.back_up_when_due().await;
             b.check_app_update_when_due().await;
             b.refresh_compat_data().await;
             if b.settings.app().check_for_updates_on_startup {
@@ -365,6 +384,8 @@ impl Backend {
             let was_online = self.is_online();
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
+            self.sync_when_due().await;
+            self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;
             let interval =

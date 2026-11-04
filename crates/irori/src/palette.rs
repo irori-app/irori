@@ -1,7 +1,8 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
 //! library by play status, show or save a library view, switch its view
-//! (grid, list, Focus), and run window commands, all from the keyboard.
+//! (grid, list, Focus), back up, sync, and run window commands, all from the
+//! keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -9,6 +10,7 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _};
 use gpui_kit::{
     App, AppContext as _, Entity, ParentElement as _, SharedString, Styled as _, Window, px,
@@ -45,6 +47,8 @@ enum PaletteTarget {
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
     SaveBackups(GameId),
+    BackUp,
+    Sync,
 }
 
 /// Retained palette state, owned by the shell.
@@ -67,12 +71,14 @@ impl Palette {
     /// play status: its status commands come first. `grouped` is whether the
     /// library groups by play status, while a library view exists. `layout`
     /// is how the library shows games; the other views are offered.
+    /// `sync` is whether library sync is on.
     fn items(
         games: &[Arc<GameInfo>],
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
         grouped: Option<bool>,
         views: &[(u64, gpui_kit::SharedString)],
         layout: LibraryLayout,
+        sync: bool,
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
@@ -295,6 +301,24 @@ impl Palette {
         );
         push(
             CommandItem::new()
+                .label(t("shell.palette.back_up"))
+                .keywords([t("shell.palette.back_up_keywords")])
+                .icon(IconName::Save),
+            PaletteTarget::BackUp,
+            targets,
+        );
+        if sync {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.sync"))
+                    .keywords([t("shell.palette.sync_keywords")])
+                    .icon(IconName::RefreshCw),
+                PaletteTarget::Sync,
+                targets,
+            );
+        }
+        push(
+            CommandItem::new()
                 .label(t("shell.palette.random"))
                 .keywords([t("shell.palette.random_keywords")])
                 .icon(IconName::Dices),
@@ -346,12 +370,14 @@ impl Palette {
         let grouped = irori_library::groups_by_status(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
+        let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
         let items = Rc::new(Self::items(
             &games,
             open,
             grouped,
             &views,
             layout,
+            sync,
             &mut targets,
         ));
         *self.targets.borrow_mut() = targets;
@@ -428,5 +454,49 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::BackUp => {
+            let b = irori_ui::backend(cx);
+            let task = irori_ui::run(cx, async move { b.back_up_now().await.map(|_| ()) });
+            report(
+                task,
+                "shell.palette.backed_up",
+                "shell.notice.backup_failed",
+                window,
+                cx,
+            );
+        }
+        PaletteTarget::Sync => {
+            let b = irori_ui::backend(cx);
+            let task = irori_ui::run(cx, async move { b.sync_now().await.map(|_| ()) });
+            report(
+                task,
+                "shell.palette.synced",
+                "shell.notice.sync_failed",
+                window,
+                cx,
+            );
+        }
     }
+}
+
+/// Tell how a command run in the background went.
+fn report(
+    task: gpui_kit::Task<anyhow::Result<()>>,
+    done: &'static str,
+    failed: &'static str,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    window
+        .spawn(cx, async move |cx| {
+            let result = task.await;
+            let _ = cx.update(|window, cx| {
+                let note = match result {
+                    Ok(()) => Notification::success(t(done)),
+                    Err(e) => Notification::error(format!("{e:#}")).title(t(failed)),
+                };
+                window.push_notification(note, cx);
+            });
+        })
+        .detach();
 }

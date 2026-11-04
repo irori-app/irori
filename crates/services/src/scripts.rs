@@ -1479,6 +1479,8 @@ mod tests {
 
     #[test]
     fn emulator_games_join_the_rom_library_with_their_engine() {
+        // Engine manifests may be overridden in Irori's config folder.
+        crate::tests::isolate_paths();
         let dir = Path::new("/games/quake");
         let out = outcome("dosbox", |g| g.main_file = Some(dir.join("dosbox.conf")));
         let game = script_game(&out, dir, None, None, Default::default()).unwrap();
