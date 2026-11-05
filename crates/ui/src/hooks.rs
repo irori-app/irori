@@ -2,6 +2,7 @@
 //! on (the concrete store crates, or another feature). The shell installs them
 //! at startup; feature crates call them.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -63,8 +64,12 @@ pub enum GamePanel {
     Drawer,
 }
 
+/// What a view shown inside another screen calls to close itself.
+pub type CloseFn = Rc<dyn Fn(&mut Window, &mut App)>;
+
 type ImportFn = Arc<dyn Fn(&mut App) -> Task<Result<ImportSummary>>>;
 type GamePanelFn = Arc<dyn Fn(GameId, GamePanel, &mut Window, &mut App) -> AnyView>;
+type GameSettingsFn = Arc<dyn Fn(GameId, CloseFn, &mut Window, &mut App) -> AnyView>;
 type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 
@@ -81,6 +86,10 @@ pub struct Hooks {
     /// game page lives in the game feature, which the library doesn't
     /// depend on).
     pub game_panel: Option<GamePanelFn>,
+    /// Make the settings of one game for a screen that shows them in place
+    /// (Big Picture, which the settings feature doesn't depend on): its
+    /// Back calls the given function instead of leaving the screen.
+    pub game_settings: Option<GameSettingsFn>,
 }
 
 impl Global for Hooks {}
@@ -187,6 +196,20 @@ pub fn game_panel(
         .try_global::<Hooks>()
         .and_then(|h| h.game_panel.clone())?;
     Some(hook(id, panel, window, cx))
+}
+
+/// The settings of `id` for a screen that shows them in place, closed with
+/// `on_close`; `None` without the hook (tests).
+pub fn game_settings(
+    id: GameId,
+    on_close: CloseFn,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.game_settings.clone())?;
+    Some(hook(id, on_close, window, cx))
 }
 
 /// Whether a Lutris library exists on this computer (native or Flatpak).

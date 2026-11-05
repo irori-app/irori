@@ -154,6 +154,7 @@ pub fn hooks() -> Hooks {
             })
         })),
         game_panel: Some(Arc::new(crate::routing::game_panel)),
+        game_settings: Some(Arc::new(crate::routing::game_settings)),
     }
 }
 

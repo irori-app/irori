@@ -145,6 +145,10 @@ impl BigPictureView {
                             .icon(IconName::ArrowLeft)
                             .label(t("bigpicture.hint.back"))
                             .on_click(cx.listener(|this, _, window, cx| {
+                                if this.settings.is_some() {
+                                    this.close_settings(window, cx);
+                                    return;
+                                }
                                 this.overlay = None;
                                 this.page = None;
                                 this.after_focus_change(cx);
@@ -267,6 +271,13 @@ impl BigPictureView {
         };
         if self.library.searching {
             return vec![one(Confirm, "bigpicture.hint.done")];
+        }
+        if self.settings.is_some() {
+            return vec![
+                (vec![Up, Down], t("bigpicture.hint.choose")),
+                one(Confirm, "bigpicture.hint.select"),
+                one(Back, "bigpicture.hint.back"),
+            ];
         }
         match &self.overlay {
             Some(Overlay::Uninstall { .. } | Overlay::DeleteTheme { .. }) => {

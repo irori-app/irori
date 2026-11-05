@@ -12,10 +12,10 @@
 //! background, or the focused game's art, behind everything), `chrome` (top
 //! bar and hints), `home` with a module per other Home layout (`spotlight`,
 //! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
-//! page) and `log` (its log panel), `overlay` (quick menu and
-//! confirmations), `editor` (the theme editor), `tile` (covers) and
-//! `commands` (what the backend runs). `look` holds the theme and layout in
-//! use and the colours they give.
+//! page), `log` (its log panel) and `settings` (its settings), `overlay`
+//! (quick menu and confirmations), `editor` (the theme editor), `tile`
+//! (covers) and `commands` (what the backend runs). `look` holds the theme
+//! and layout in use and the colours they give.
 
 mod backdrop;
 mod carousel;
@@ -30,6 +30,7 @@ mod log;
 mod look;
 mod overlay;
 mod page;
+mod settings;
 mod spotlight;
 mod tile;
 mod wall;
@@ -154,6 +155,8 @@ pub struct BigPictureView {
     /// Pages show the game's log in place of its details (Show log).
     show_log: bool,
     log: Option<log::LogPanel>,
+    /// The page's game settings, open over it.
+    settings: Option<settings::SettingsPanel>,
     overlay: Option<Overlay>,
     rows: Vec<Row>,
     rows_key: Option<(u64, usize, u32, Vec<ShelfKind>)>,
@@ -208,7 +211,7 @@ impl BigPictureView {
             cx.observe_global::<crate::ShowGame>(|this, cx| this.show_requested_game(cx)),
             cx.on_focus_lost(window, |this, window, cx| {
                 let naming = this.look.editor.as_ref().is_some_and(|e| e.naming);
-                if !this.library.searching && !naming {
+                if !this.library.searching && !naming && this.settings.is_none() {
                     this.focus.focus(window, cx);
                 }
             }),
@@ -269,6 +272,7 @@ impl BigPictureView {
             page: None,
             show_log: false,
             log: None,
+            settings: None,
             overlay: None,
             rows: Vec::new(),
             rows_key: None,
@@ -460,7 +464,15 @@ impl BigPictureView {
             crate::exit_big_picture(cx);
             return;
         }
-        if let Some(overlay) = self.overlay.clone() {
+        if self.settings.is_some() {
+            // The settings have the keyboard; an input reaching the root
+            // (after a click on the top bar) goes back to them.
+            if input == GamepadInput::Back {
+                self.close_settings(window, cx);
+            } else {
+                self.focus_settings(window, cx);
+            }
+        } else if let Some(overlay) = self.overlay.clone() {
             self.overlay_input(overlay, input, window, cx);
         } else if self.look.editor.is_some() {
             self.editor_input(input, window, cx);
@@ -790,7 +802,7 @@ impl BigPictureView {
             PageRow::Platform | PageRow::Favourite | PageRow::Log | PageRow::Hidden => {
                 self.change_value(row, &game, true, cx)
             }
-            PageRow::Settings => self.open_game_settings(game.id(), cx),
+            PageRow::Settings => self.open_game_settings(game.id(), window, cx),
             PageRow::Playtime => {}
         }
     }
@@ -956,6 +968,14 @@ impl Render for BigPictureView {
         if empty || self.page.is_none() {
             self.sync_log(None, cx);
         }
+        if self
+            .settings
+            .as_ref()
+            .is_some_and(|s| self.page.as_ref().is_none_or(|p| p.id != s.id))
+        {
+            // The page under them closed (its game went away).
+            self.settings = None;
+        }
         let content = if empty {
             self.render_empty(c, cx).into_any_element()
         } else if self.page.is_some() {
@@ -1055,6 +1075,9 @@ impl Render for BigPictureView {
             )
             .when(self.library.searching, |d| {
                 d.child(self.render_search(c, metrics, cx))
+            })
+            .when_some(self.render_settings(c, metrics, cx), |d, settings| {
+                d.child(settings)
             })
     }
 }
