@@ -265,7 +265,7 @@ impl BigPictureView {
                 }
             }
         };
-        if self.library.searching {
+        if self.library.searching || self.log_filter.editing {
             return vec![one(Confirm, "bigpicture.hint.done")];
         }
         match &self.overlay {
@@ -303,12 +303,19 @@ impl BigPictureView {
             out.push(one(Confirm, "bigpicture.hint.select"));
             if let Some(game) = self.page_game(cx) {
                 let state = Self::game_state(&game, cx);
-                let rows = page_rows(state, crate::model::install_platforms(&game).len());
+                let rows = page_rows(
+                    state,
+                    crate::model::install_platforms(&game).len(),
+                    self.show_log,
+                );
                 let row = rows.get(page.ix.min(rows.len().saturating_sub(1)));
                 if row.is_some_and(|r| r.has_value()) {
                     out.push((vec![Left, Right], t("bigpicture.hint.change")));
                 }
                 main_hint(&mut out, Some(&game));
+            }
+            if self.log.is_some() {
+                out.push((vec![PrevPage, NextPage], t("bigpicture.hint.scroll_log")));
             }
             out.push(one(Back, "bigpicture.hint.back"));
             out.push(one(Menu, "bigpicture.hint.menu"));
@@ -376,6 +383,8 @@ impl BigPictureView {
                     .on_click(cx.listener(move |this, _, window, cx| {
                         if this.library.searching {
                             this.close_search(window, cx);
+                        } else if this.log_filter.editing {
+                            this.close_log_filter(window, cx);
                         } else {
                             this.on_input(first, window, cx);
                         }

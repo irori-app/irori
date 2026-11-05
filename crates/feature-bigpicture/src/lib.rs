@@ -79,8 +79,9 @@ pub fn init(cx: &mut App) {
 
 /// Keyboard equivalents of the controller inputs inside Big Picture: arrows
 /// move, Enter opens, Space or Ctrl+Enter plays, Escape or Backspace goes back,
-/// M or Shift+F10 opens the menu, Page Up/Down switch tabs. In the search
-/// field, Escape, Enter and Down return to the results.
+/// M or Shift+F10 opens the menu, Page Up/Down switch tabs (on a game's page,
+/// they page through its log). In the search and log filter fields, Escape,
+/// Enter and Down return to the results.
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some(CONTEXT);
     cx.bind_keys([
