@@ -393,8 +393,10 @@ pub(super) fn build_menu(
         );
     }
     if let Some(url) = store_url.filter(|u| !u.is_empty()) {
-        menu = menu
-            .item(PopupMenuItem::link(t("game.menu.store_page"), url).icon(IconName::ExternalLink));
+        let runner = id.runner;
+        menu = menu.item(item("game.menu.store_page", IconName::Store).on_click(
+            move |_, window, cx| irori_ui::hooks::open_store_page(runner, url.clone(), window, cx),
+        ));
     }
     if game.is_installed && client {
         menu = menu.separator();

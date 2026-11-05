@@ -10,7 +10,7 @@
 
 mod capture;
 mod steam;
-mod window;
+pub(crate) mod window;
 
 use std::time::Duration;
 

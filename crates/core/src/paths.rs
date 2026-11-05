@@ -117,6 +117,12 @@ impl Paths {
         self.cache.join("stores").join(runner.id())
     }
 
+    /// The store window's cookies and site data for a store's website, kept
+    /// apart from Irori's own store login.
+    pub fn store_window_dir(&self, runner: Runner) -> PathBuf {
+        self.data.join("store-window").join(runner.id())
+    }
+
     /// Credentials and installs of a store account other than the first
     /// (see `irori_services::accounts`).
     pub fn account_config_dir(&self, runner: Runner, slot: &str) -> PathBuf {

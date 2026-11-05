@@ -431,6 +431,8 @@ setting came out larger (34 MB), and larger blocks start slower.
   and reads the code from the clipboard, as with any install without the window.
   WebKitGTK isn't bundled: it needs its own helper processes, GPU drivers and the
   system's TLS certificates, and a partial copy breaks in ways the fallback doesn't.
+  The store window (Stores → Open store) is the same program and falls back to the
+  browser the same way.
 - **Updates.** The AppImage carries update information
   (`gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync`), so
   AppImageUpdate, Gear Lever and AppImageLauncher download only the changed blocks
