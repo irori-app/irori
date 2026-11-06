@@ -355,6 +355,13 @@ and `launch.rs` before changing anything below the UI.
   10 s connect and 60 s total timeout. It must run inside the Tokio runtime.
 - Large downloads use `download_client()` (no total timeout) or `irori-depot`.
 
+**Host programs** (`host.rs`): inside Irori's Flatpak the host's `/usr`, processes
+and other apps' `~/.var/app` folders are hidden. A program the user installed on the
+host (Steam, Ludusavi, another Flatpak) is found with `host::find_program` /
+`has_flatpak_app` and started through `host::command` (`flatpak-spawn --host`), or
+`tied_command` when it should stop with its command; `host::processes` and `signal`
+list and stop host processes. Outside a Flatpak they act on this system.
+
 **Deleting files:** call `fs_guard::ensure_deletable(dir, app)` before any recursive
 delete of a game or prefix directory.
 
@@ -431,7 +438,9 @@ commands without a window.
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
-  The UI is `irori_ui::save_backups`.
+  The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
+  the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
+  backup folder with `--filesystem`.
 - **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and

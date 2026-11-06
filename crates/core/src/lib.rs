@@ -6,6 +6,7 @@ pub mod archive_guard;
 pub mod events;
 pub mod fs_guard;
 pub mod game;
+pub mod host;
 pub mod http;
 pub mod install;
 pub mod json_store;

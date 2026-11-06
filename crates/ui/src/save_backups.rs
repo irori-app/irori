@@ -277,7 +277,7 @@ impl SaveBackupsPanel {
         let b = backend(cx);
         let id = self.id.clone();
         let task = run(cx, async move {
-            if b.ludusavi().is_none() {
+            if b.ludusavi().await.is_none() {
                 return Ok(None);
             }
             b.ludusavi_backups(&id).await.map(Some)
