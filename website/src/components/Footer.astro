@@ -1,6 +1,6 @@
 ---
 import BrandLockup from './BrandLockup.vue'
-import { REPO } from '../data/site'
+import { ALTERNATIVETO, REPO } from '../data/site'
 import { usesGameCovers } from '../lib/wall'
 import { dictionary, localePath, type Locale } from '../i18n/config'
 
@@ -47,6 +47,15 @@ const columns = [
       <a href={p('/')} class="self-start text-paper" aria-label={t.nav.home}><BrandLockup id="footer" /></a>
       <p class="max-w-sm text-smoke">{t.site.tagline}</p>
       <p class="font-mono text-sm text-smoke" lang="ja">囲炉裏 <span lang="en">· i·ro·ri</span></p>
+      <a
+        href={ALTERNATIVETO}
+        target="_blank"
+        rel="noopener"
+        class="self-start rounded-xl transition-opacity hover:opacity-85"
+      >
+        <img src="/badges/alternativeto-light.svg" alt={t.footer.alternativeTo} width="183" height="62" loading="lazy" class="dark:hidden" />
+        <img src="/badges/alternativeto-dark.svg" alt={t.footer.alternativeTo} width="183" height="62" loading="lazy" class="hidden dark:block" />
+      </a>
     </div>
     <div class="grid min-w-0 grid-cols-2 gap-8 sm:grid-cols-3">
       {

@@ -54,6 +54,7 @@ export const en = {
     licence: 'MIT licence',
     signing: 'Code signing policy',
     faq: 'FAQ',
+    alternativeTo: 'Irori on AlternativeTo',
     disclaimer:
       'Irori is free software, made independently. It is not affiliated with or endorsed by Epic Games, GOG, Amazon, ZOOM Platform, itch.io, Valve, Blizzard, Electronic Arts, Ubisoft or Rockstar Games; their names belong to their owners.',
     demoGames: 'The app’s screenshots show a demo library: real games with their store art, and invented play time and accounts.',
