@@ -44,6 +44,7 @@ use crate::registry::{
 };
 use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
+use crate::sunshine::SunshinePanel;
 use crate::value::{
     bool_at, effective_overrides, get_path, override_key, plan_game_write, remove_row,
     split_assignment, text_to_value, upsert_row, validate_discord_client_id, validate_env_key,
@@ -640,6 +641,7 @@ impl SettingsForm {
                 };
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
+            PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);

@@ -37,6 +37,7 @@ pub mod sessions;
 pub mod settings;
 pub mod status;
 pub mod storage;
+pub mod sunshine;
 pub mod sync;
 pub mod updates;
 pub mod userdata;
@@ -74,6 +75,7 @@ pub use sessions::Session;
 pub use settings::SettingsService;
 pub use status::StatusRegistry;
 pub use storage::{CleanupKind, StorageReport};
+pub use sunshine::{SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus};
 pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
@@ -124,6 +126,8 @@ pub struct Inner {
     backups: backup_schedule::BackupScheduler,
     /// Library sync between computers.
     sync: sync::SyncService,
+    /// Irori's games in Sunshine.
+    sunshine: sunshine::SunshineService,
 }
 
 impl Deref for Backend {
@@ -199,6 +203,7 @@ impl Backend {
             achievement_store: achievements::AchievementStore::default(),
             backups: backup_schedule::BackupScheduler::load(),
             sync: sync::SyncService::load(),
+            sunshine: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {
@@ -381,6 +386,7 @@ impl Backend {
         if interactive {
             let b = self.clone();
             self.spawn(async move { b.periodic_tasks().await });
+            self.watch_for_sunshine();
         }
     }
 
@@ -395,6 +401,7 @@ impl Backend {
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
+            self.sync_sunshine_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;

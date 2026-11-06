@@ -10,9 +10,12 @@ use tokio::net::TcpListener;
 
 #[derive(Debug, Clone)]
 pub struct Req {
+    pub method: String,
     /// Path including the query string.
     pub path: String,
     pub headers: Vec<(String, String)>,
+    /// The body a `Content-Length` announced.
+    pub body: Vec<u8>,
 }
 
 impl Req {
@@ -105,7 +108,8 @@ async fn serve(
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     reader.read_line(&mut line).await?;
-    let mut parts = line.split_whitespace().skip(1);
+    let mut parts = line.split_whitespace();
+    let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or_default().to_string();
     let mut headers = Vec::new();
     loop {
@@ -121,7 +125,19 @@ async fn serve(
             headers.push((k.trim().to_string(), v.trim().to_string()));
         }
     }
-    let req = Req { path, headers };
+    let length = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, v)| v.parse::<usize>().ok())
+        .unwrap_or(0);
+    let mut body = vec![0; length];
+    tokio::io::AsyncReadExt::read_exact(&mut reader, &mut body).await?;
+    let req = Req {
+        method,
+        path,
+        headers,
+        body,
+    };
     reqs.lock().push(req.clone());
     let resp = handler(&req);
 

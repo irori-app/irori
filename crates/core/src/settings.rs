@@ -711,6 +711,10 @@ pub struct AppSettings {
     /// Library sync between computers. Irori-only; stays on this computer.
     #[serde(rename = "iroriSync")]
     pub sync: SyncPrefs,
+    /// Irori's games in Sunshine, the game-streaming host. Irori-only; stays
+    /// on this computer.
+    #[serde(rename = "iroriSunshine")]
+    pub sunshine: SunshinePrefs,
 }
 
 impl Default for AppSettings {
@@ -740,6 +744,7 @@ impl Default for AppSettings {
             ludusavi_backup_path: String::new(),
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
+            sunshine: SunshinePrefs::default(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
@@ -944,6 +949,42 @@ pub struct SyncPrefs {
     pub webdav_url: String,
     /// What other computers call this one ("" = its host name).
     pub device_name: String,
+}
+
+/// Which of Irori's games Sunshine lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SunshineGames {
+    /// Every installed game the library shows.
+    #[default]
+    Installed,
+    /// Installed favourites only.
+    Favourites,
+}
+
+/// Irori's games in Sunshine (`iroriSunshine`). Sunshine's own login is
+/// kept with `irori_secrets`, not here.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SunshinePrefs {
+    /// Keep Irori's games among Sunshine's applications.
+    pub enabled: bool,
+    pub games: SunshineGames,
+    /// Add an application that opens Big Picture.
+    pub big_picture: bool,
+    /// Sunshine's web UI port; 0 reads it from Sunshine's configuration.
+    pub port: u16,
+}
+
+impl Default for SunshinePrefs {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            games: SunshineGames::Installed,
+            big_picture: true,
+            port: 0,
+        }
+    }
 }
 
 /// Irori-only presentation preferences.

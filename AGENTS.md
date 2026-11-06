@@ -83,12 +83,18 @@ irori info <runner>/<app> [--platform P]
 irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C stops; rerun resumes
 irori uninstall <runner>/<app> [--keep-files]
+irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `-V/--version` and `-h/--help`.
+- `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
+  invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
+  the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
+  Irori first when none runs, in a process group of its own and, on Windows, outside the
+  caller's job, so Irori outlives a stream. Sunshine's applications use it.
 - Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture`,
   `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
   `irori://lutris/<slug>` (the Lutris script installer at
@@ -279,7 +285,8 @@ and `launch.rs` before changing anything below the UI.
 
 - Variants: `LibraryChanged(Runner)`, `LibraryUpdated(rev)`, `GameChanged`, `Status`,
   `StatusCleared`, `AccountChanged`, `DownloadQueueChanged`, `WineVersionsChanged`,
-  `SettingsChanged`, `GameSettingsChanged`, `Connectivity`, `Notice`, `GameExited`.
+  `SettingsChanged`, `GameSettingsChanged`, `Connectivity`, `Notice`, `GameExited`,
+  `SunshineChanged`.
 - Events carry *identities, not data*: receivers re-read state from the service that
   owns it.
 - Emit `LibraryChanged(runner)` after a store's catalogue or install state changes,
@@ -436,7 +443,7 @@ commands without a window.
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
   before a new version first runs, and prune only their own files. Store sign-ins and the
-  `iroriBackups`/`iroriSync` settings never go in.
+  `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
   WebDAV (`sync/target.rs`) and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
@@ -445,6 +452,20 @@ commands without a window.
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
   `SyncService::playtime_guard`.
+- **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
+  through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
+  Picture" application, kept among Sunshine's applications through its web API on
+  `127.0.0.1` (self-signed HTTPS, Basic auth, no `Origin` header so no CSRF token; the
+  port is `sunshine.conf`'s `port` plus one). Each has the command `irori --launch
+  <runner>/<app> --wait`, `wait-all` on, `auto-detach` off, and a 600 × 800 PNG cover
+  uploaded through `/api/covers/upload`. Irori's applications carry an `irori-id` key
+  (Sunshine keeps unknown keys) and are found by their command when an edit dropped it;
+  only those are touched, and only Irori's own fields: what the user set there stays, a
+  picture they chose too. Sunshine sorts its list after every change, so each step
+  re-reads it (`plan.rs` is pure and tested; `tests.rs` runs against a stand-in). Syncs
+  follow `LibraryUpdated`/`SettingsChanged` after 3 s of quiet, and talk to Sunshine only
+  when what Irori wants differs from `state/sunshine.json`; a failure waits 10 minutes.
+  Turning the setting off takes Irori's applications out.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other
@@ -636,7 +657,10 @@ in `motion.rs`.
 2. Parse arguments. A command such as `list` runs without a window and exits; an
    unknown bare word exits 2.
 3. `instance::acquire`. A second instance forwards its arguments over authenticated
-   loopback TCP (`instance.json` holds the port and token, mode 0600) and exits.
+   loopback TCP (`instance.json` holds the port and token, mode 0600) and exits. A
+   waiting one (`--wait`, before this step) ends its message with a newline and keeps
+   the connection: the running instance answers on it when the session ends, and its
+   closing means the waiter went away.
 4. Logging, `Backend::start(stores::build)`, the GPUI application, URL and reopen
    handlers.
 5. Inside `run`: `gpui_kit::init`, `irori_ui::init`, every feature `init`, hooks,

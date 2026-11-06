@@ -21,6 +21,9 @@ pub struct Cli {
     /// A Nexus Mods "Mod manager download" link (`nxm://…`) to install.
     pub nxm: Option<String>,
     pub big_picture: bool,
+    /// Stay until the launched game's session (or Big Picture) ends, and
+    /// end it when this invocation is ended (`--wait`, for Sunshine).
+    pub wait: bool,
     /// Start hidden in the tray.
     pub minimized: bool,
     pub version: bool,
@@ -36,6 +39,7 @@ impl Cli {
                 "--launch" | "-l" => cli.launch = it.next().as_deref().and_then(parse_game_ref),
                 "--big-picture" | "--console" => cli.big_picture = true,
                 "--minimized" | "--tray" => cli.minimized = true,
+                "--wait" => cli.wait = true,
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
@@ -184,6 +188,8 @@ Usage: irori [options] [url]
 Options:
   -l, --launch <runner>/<app>   Launch a game (runners: legendary, gog, nile, zoom, sideload)
       --big-picture             Start in Big Picture mode
+      --wait                    With --launch or --big-picture: stay until the game
+                                (or Big Picture) ends, and end it when stopped (Sunshine)
       --minimized               Start in the tray
   -V, --version                 Print the version
   -h, --help                    Print this help
