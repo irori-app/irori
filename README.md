@@ -378,6 +378,10 @@ packaging/install.sh
   and Windows, Irori shows the window itself when the helper isn't built (as after
   `cargo run -p irori`). On Linux without the helper, or with "Use the browser instead",
   the page opens in your browser and Irori watches the clipboard for the code or redirect URL.
+- Stores → Open store shows a store's website in a window of its own, run by the same
+  helper, with back, forward, reload, the address and "Open in browser". Each store keeps
+  its cookies there, and the library refreshes when the window closes, so a game you
+  bought appears. Without the helper the store opens in your browser.
 - Discord Rich Presence needs a Discord application ID (Settings → General → Integrations).
 - Data uses each operating system’s application-data and cache directories;
   `IRORI_HOME` relocates all of it. See [platform paths](docs/PLATFORMS.md#paths-and-desktop-behavior).

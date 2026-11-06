@@ -80,6 +80,7 @@
   "shell.notice.mods_not_restored": "Módy hry {title} jsou stále v její složce",
   "shell.palette.set_up_emulation": "Nastavit emulaci",
   "shell.palette.set_up_emulation_keywords": "emulátor ROM konzole retro BIOS RetroArch",
+  "shell.palette.open_store": "Otevřít obchod {store}",
   "shell.palette.lutris_script": "Instalovat pomocí skriptu Lutris",
   "shell.palette.lutris_script_keywords": "Lutris skript instalátor lutris.net komunita",
   "shell.palette.play_status": "{title}: nastavit stav hraní na {status}",

@@ -1,5 +1,6 @@
 //! The sign-in window: the store's page in a process of its own, which reports
 //! what the store's login returned. Irori's window never embeds a web engine.
+//! The store window (`crate::store_window`) runs in the same program.
 //! The process is the `irori-sign-in` helper or, on macOS and Windows, Irori
 //! started in its sign-in mode; on Linux without the helper the dialog uses the
 //! browser.
@@ -34,16 +35,16 @@ const SIGN_IN_FLAG: &str = "--sign-in-window";
 
 /// The program that shows the sign-in window.
 #[derive(Debug, Clone)]
-pub(super) struct Helper {
-    program: PathBuf,
+pub(crate) struct Helper {
+    pub(crate) program: PathBuf,
     /// Arguments before the window's own.
-    args: &'static [&'static str],
+    pub(crate) args: &'static [&'static str],
 }
 
 /// The helper installed next to Irori or on `PATH`; otherwise, on macOS and
 /// Windows, Irori itself (which a plain `cargo run -p irori` leaves without the
 /// helper).
-pub(super) fn helper() -> Option<Helper> {
+pub(crate) fn helper() -> Option<Helper> {
     let exe = std::env::current_exe().ok();
     let beside = exe
         .as_ref()

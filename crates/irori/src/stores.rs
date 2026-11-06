@@ -154,6 +154,9 @@ pub fn hooks() -> Hooks {
             })
         })),
         game_panel: Some(Arc::new(crate::routing::game_panel)),
+        open_store_page: Some(Arc::new(|runner, url, window, cx| {
+            irori_manage::open_store_window(runner, Some(url), window, cx)
+        })),
     }
 }
 
