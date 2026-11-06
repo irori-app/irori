@@ -28,7 +28,7 @@ use irori_core::GameId;
 use irori_extras::logs::{self as log_uploads, UploadedLog};
 use irori_ui::backend;
 use irori_ui::game_log;
-pub use irori_ui::game_log::{LineLevel, LogTail, parse_tail};
+pub use irori_ui::game_log::{LineLevel, LogTail, parse_tail, visible_lines};
 use irori_ui::i18n::{t, t_args};
 
 use crate::load::Load;
@@ -37,27 +37,6 @@ use crate::ops::{notify_error, notify_success, open_path};
 /// Lines kept for display.
 const MAX_LINES: usize = 5000;
 const REFRESH_EVERY: Duration = Duration::from_secs(2);
-
-/// Indices of the lines to show: warnings and errors only when
-/// `errors_only`, then those containing `query` (ignoring case), or with
-/// `hide_matching` those that don't. An empty query keeps every line.
-pub fn visible_lines(
-    lines: &[(LineLevel, SharedString)],
-    errors_only: bool,
-    query: &str,
-    hide_matching: bool,
-) -> Vec<usize> {
-    let query = query.trim().to_lowercase();
-    lines
-        .iter()
-        .enumerate()
-        .filter(|(_, (level, _))| !errors_only || *level != LineLevel::Info)
-        .filter(|(_, (_, text))| {
-            query.is_empty() || text.to_lowercase().contains(&query) != hide_matching
-        })
-        .map(|(ix, _)| ix)
-        .collect()
-}
 
 /// "Uploaded 5 minutes ago" for an upload at `uploaded_at` (unix seconds).
 pub(crate) fn uploaded_ago(uploaded_at: u64, now: u64) -> SharedString {
@@ -661,25 +640,6 @@ impl Render for LogViewer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn filters_lines_by_text() {
-        let lines = parse_tail(
-            "Descriptor heap\nerr: descriptor lost\nStarted\nwarn: slow",
-            false,
-            10,
-        )
-        .lines;
-        assert_eq!(visible_lines(&lines, false, "", false), vec![0, 1, 2, 3]);
-        assert_eq!(
-            visible_lines(&lines, false, "DESCRIPTOR", false),
-            vec![0, 1]
-        );
-        assert_eq!(visible_lines(&lines, false, "descriptor", true), vec![2, 3]);
-        assert_eq!(visible_lines(&lines, true, "descriptor", false), vec![1]);
-        assert_eq!(visible_lines(&lines, true, "descriptor", true), vec![3]);
-        assert_eq!(visible_lines(&lines, false, "  ", true), vec![0, 1, 2, 3]);
-    }
 
     #[test]
     fn upload_ages() {

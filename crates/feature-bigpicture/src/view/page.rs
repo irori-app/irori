@@ -14,7 +14,7 @@ use gpui_kit::{
 };
 use irori_core::GameInfo;
 use irori_ui::components::GameCover;
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 use irori_ui::motion::{QUICK, rise_in};
 
@@ -57,7 +57,7 @@ impl BigPictureView {
         };
         let state = Self::game_state(&game, cx);
         let platforms = install_platforms(&game);
-        let rows = page_rows(state, platforms.len());
+        let rows = page_rows(state, platforms.len(), self.show_log);
         let show_log = self.show_log && rows.contains(&PageRow::Log);
         self.sync_log(show_log.then(|| game.id()).as_ref(), cx);
         let focused = self
@@ -236,6 +236,8 @@ impl BigPictureView {
             ),
             PageRow::Settings => (IconName::SlidersHorizontal, t("bigpicture.page.settings")),
             PageRow::Log => (IconName::ScrollText, t("bigpicture.page.log")),
+            PageRow::LogErrors => (IconName::TriangleAlert, t("bigpicture.page.log_errors")),
+            PageRow::LogFilter => (IconName::ListFilter, t("bigpicture.page.log_filter")),
             PageRow::Playtime => (IconName::Clock, t("bigpicture.page.playtime")),
             PageRow::Hidden => (IconName::EyeOff, t("bigpicture.page.hidden")),
         };
@@ -297,6 +299,21 @@ impl BigPictureView {
             PageRow::Favourite => Some(toggle(state.favourite)),
             PageRow::Hidden => Some(toggle(state.hidden)),
             PageRow::Log => Some(toggle(self.show_log)),
+            PageRow::LogErrors => Some(toggle(self.log_filter.errors_only)),
+            PageRow::LogFilter => {
+                let query = self.log_filter.query(cx);
+                Some(if query.is_empty() {
+                    Icon::new(IconName::ChevronRight).into_any_element()
+                } else {
+                    div()
+                        .min_w_0()
+                        .max_w(rems(12.))
+                        .truncate()
+                        .font_bold()
+                        .child(t_args("bigpicture.log.filter_value", &[("text", &query)]))
+                        .into_any_element()
+                })
+            }
             PageRow::Playtime => {
                 let library = models(cx).library.read(cx);
                 let minutes = library.playtime_minutes(&game.id());

@@ -473,6 +473,10 @@ pub enum PageRow {
     Settings,
     /// Show the game's log beside the rows, in place of its details.
     Log,
+    /// Under Show log while the log shows: only its errors and warnings.
+    LogErrors,
+    /// Under Show log while the log shows: keep the lines with some text.
+    LogFilter,
     Playtime,
     Hidden,
 }
@@ -492,6 +496,8 @@ impl PageRow {
             PageRow::Favourite => "bp-row-favourite",
             PageRow::Settings => "bp-row-settings",
             PageRow::Log => "bp-row-log",
+            PageRow::LogErrors => "bp-row-log-errors",
+            PageRow::LogFilter => "bp-row-log-filter",
             PageRow::Playtime => "bp-row-playtime",
             PageRow::Hidden => "bp-row-hidden",
         }
@@ -509,17 +515,22 @@ impl PageRow {
     pub fn has_value(self) -> bool {
         matches!(
             self,
-            PageRow::Platform | PageRow::Favourite | PageRow::Log | PageRow::Hidden
+            PageRow::Platform
+                | PageRow::Favourite
+                | PageRow::Log
+                | PageRow::LogErrors
+                | PageRow::Hidden
         )
     }
 }
 
 /// The game page's rows: the main command (with Play, Play with logs),
-/// Update and Cancel download when they apply, the install platform, Favourite, Game settings, Show log
-/// (for installed games, which have run or can), Playtime, then the
-/// "Manage" group (Uninstall, Hidden). `platforms` is how many
+/// Update and Cancel download when they apply, the install platform,
+/// Favourite, Game settings, Show log (for installed games, which have run
+/// or can) with the log's filters under it while `log_shown`, Playtime,
+/// then the "Manage" group (Uninstall, Hidden). `platforms` is how many
 /// platforms the game installs for.
-pub fn page_rows(state: GameState, platforms: usize) -> Vec<PageRow> {
+pub fn page_rows(state: GameState, platforms: usize, log_shown: bool) -> Vec<PageRow> {
     let main = main_action(state);
     let mut out = vec![PageRow::Action(main)];
     if main == GameAction::Play {
@@ -537,6 +548,9 @@ pub fn page_rows(state: GameState, platforms: usize) -> Vec<PageRow> {
     out.extend([PageRow::Favourite, PageRow::Settings]);
     if state.installed || state.playing {
         out.push(PageRow::Log);
+        if log_shown {
+            out.extend([PageRow::LogErrors, PageRow::LogFilter]);
+        }
     }
     out.push(PageRow::Playtime);
     if state.installed && !state.playing && !state.external {
@@ -932,7 +946,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            page_rows(installed, 2),
+            page_rows(installed, 2, false),
             vec![
                 PageRow::Action(GameAction::Play),
                 PageRow::Action(GameAction::PlayWithLog),
@@ -949,20 +963,23 @@ mod tests {
             playing: true,
             ..installed
         };
-        assert_eq!(page_rows(playing, 1)[0], PageRow::Action(GameAction::Stop));
-        assert!(!page_rows(playing, 1).contains(&PageRow::Action(GameAction::PlayWithLog)));
-        assert!(page_rows(playing, 1).contains(&PageRow::Log));
-        assert!(!page_rows(playing, 1).contains(&PageRow::Action(GameAction::Uninstall)));
+        assert_eq!(
+            page_rows(playing, 1, false)[0],
+            PageRow::Action(GameAction::Stop)
+        );
+        assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::PlayWithLog)));
+        assert!(page_rows(playing, 1, false).contains(&PageRow::Log));
+        assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::Uninstall)));
         let not_installed = GameState {
             installable: true,
             ..Default::default()
         };
         assert_eq!(
-            &page_rows(not_installed, 2)[..2],
+            &page_rows(not_installed, 2, false)[..2],
             &[PageRow::Action(GameAction::Install), PageRow::Platform]
         );
-        assert!(!page_rows(not_installed, 1).contains(&PageRow::Platform));
-        assert!(!page_rows(not_installed, 1).contains(&PageRow::Log));
+        assert!(!page_rows(not_installed, 1, false).contains(&PageRow::Platform));
+        assert!(!page_rows(not_installed, 1, false).contains(&PageRow::Log));
         let queued = GameState {
             in_queue: true,
             installable: true,
@@ -970,7 +987,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            &page_rows(queued, 2)[..2],
+            &page_rows(queued, 2, false)[..2],
             &[
                 PageRow::Action(GameAction::CancelDownload),
                 PageRow::Favourite
@@ -981,18 +998,27 @@ mod tests {
             ..installed
         };
         assert_eq!(
-            &page_rows(updating, 1)[..3],
+            &page_rows(updating, 1, false)[..3],
             &[
                 PageRow::Action(GameAction::Play),
                 PageRow::Action(GameAction::PlayWithLog),
                 PageRow::Action(GameAction::CancelDownload)
             ]
         );
+        // The log's filters follow Show log, which a game without a log
+        // doesn't have.
+        let shown = page_rows(installed, 1, true);
+        let log = shown.iter().position(|r| *r == PageRow::Log).unwrap();
+        assert_eq!(
+            &shown[log..log + 3],
+            &[PageRow::Log, PageRow::LogErrors, PageRow::LogFilter]
+        );
+        assert!(!page_rows(not_installed, 1, true).contains(&PageRow::LogErrors));
         let steam = GameState {
             external: true,
             ..installed
         };
-        assert!(!page_rows(steam, 1).contains(&PageRow::Action(GameAction::Uninstall)));
+        assert!(!page_rows(steam, 1, false).contains(&PageRow::Action(GameAction::Uninstall)));
 
         let verifying = GameState {
             busy: Some(StatusKind::Repairing),
