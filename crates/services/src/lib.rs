@@ -75,7 +75,9 @@ pub use sessions::Session;
 pub use settings::SettingsService;
 pub use status::StatusRegistry;
 pub use storage::{CleanupKind, StorageReport};
-pub use sunshine::{SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus};
+pub use sunshine::{
+    StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
+};
 pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};

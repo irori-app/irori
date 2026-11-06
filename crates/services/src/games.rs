@@ -27,6 +27,8 @@ pub struct LaunchParams {
     pub skip_version_check: bool,
     /// Verbose Wine/Proton logging for this session only.
     pub verbose: bool,
+    /// The streaming client the session is for (Sunshine's Moonlight).
+    pub stream: Option<crate::sunshine::StreamClient>,
 }
 
 /// A game process Irori started and is tracking.
@@ -174,6 +176,7 @@ impl Backend {
             extra_args,
             skip_version_check,
             verbose,
+            stream,
         } = params;
         if self.is_running(id) {
             bail!("already running");
@@ -208,6 +211,9 @@ impl Backend {
         let mut settings = self.settings.game(id);
         if verbose {
             settings.verbose_logs = true;
+        }
+        if let Some(client) = &stream {
+            client.apply(&mut settings, app.sunshine.match_client);
         }
         let ctx = self.op_context(id, CancellationToken::new());
         let target = Target {

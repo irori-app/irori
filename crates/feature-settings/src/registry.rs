@@ -1447,6 +1447,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["sunshine", "moonlight", "big picture", "couch"])
     .requires(NEEDS_SUNSHINE),
     app(
+        "iroriSunshine.matchClient",
+        "settings.field.sunshine_match_client.label",
+        General,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.sunshine_match_client.help")
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "resolution",
+        "refresh rate",
+        "fps",
+        "hdr",
+        "gamescope",
+    ])
+    .requires(NEEDS_SUNSHINE),
+    app(
         "panel.sunshine",
         "settings.field.panel_sunshine.label",
         General,
@@ -2590,6 +2608,22 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.language.help")
     .placeholder(Key("settings.field.language.placeholder"))
     .keywords(&["language", "locale", "translation"]),
+    game_only(
+        "iroriInSunshine",
+        "settings.field.in_sunshine.label",
+        Launch,
+        "settings.group.streaming",
+        Toggle,
+    )
+    .help("settings.field.in_sunshine.help")
+    .keywords(&[
+        "sunshine",
+        "apollo",
+        "moonlight",
+        "stream",
+        "hide",
+        "exclude",
+    ]),
     game_only(
         "steamRuntime",
         "settings.field.steam_runtime.label",

@@ -14,6 +14,8 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use irori_services::StreamClient;
+
 pub struct Instance {
     listener: TcpListener,
     token: String,
@@ -31,6 +33,9 @@ struct Invocation {
     /// The sender stays connected until the session ends.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     wait: bool,
+    /// The streaming client a waiting sender was started for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stream: Option<StreamClient>,
 }
 
 /// What a second instance's arguments reached.
@@ -44,6 +49,7 @@ pub enum Forwarded {
 /// The connection of a waiting second instance, held by the running one.
 pub struct Waiter {
     stream: TcpStream,
+    client: Option<StreamClient>,
 }
 
 impl std::fmt::Debug for Waiter {
@@ -53,6 +59,11 @@ impl std::fmt::Debug for Waiter {
 }
 
 impl Waiter {
+    /// The streaming client the waiting instance was started for.
+    pub fn client(&self) -> Option<&StreamClient> {
+        self.client.as_ref()
+    }
+
     /// Block until the waiting instance goes away or closes its side.
     pub fn wait_for_hangup(&self) {
         let Ok(mut stream) = self.stream.try_clone() else {
@@ -89,26 +100,28 @@ pub fn read_outcome(stream: TcpStream) -> std::result::Result<(), String> {
 }
 
 pub fn acquire(args: &[String]) -> Result<Option<Instance>> {
-    Ok(
-        match acquire_in(&irori_core::Paths::get().config, args, false)? {
-            Acquired::Primary(instance) => Some(instance),
-            Acquired::Forwarded(_) => None,
-        },
-    )
+    let dir = &irori_core::Paths::get().config;
+    Ok(match acquire_in(dir, args, None)? {
+        Acquired::Primary(instance) => Some(instance),
+        Acquired::Forwarded(_) => None,
+    })
 }
 
-/// Hand `args` to the running instance and stay connected, or become the
-/// running instance when there is none.
-pub fn acquire_waiting(args: &[String]) -> Result<std::result::Result<TcpStream, Instance>> {
-    Ok(
-        match acquire_in(&irori_core::Paths::get().config, args, true)? {
-            Acquired::Primary(instance) => Err(instance),
-            Acquired::Forwarded(Forwarded::Waiting(stream)) => Ok(stream),
-            Acquired::Forwarded(Forwarded::Sent) => {
-                bail!("The running Irori is older and can't wait for a game; restart it")
-            }
-        },
-    )
+/// Hand `args` (and the streaming `client` the caller was started for) to
+/// the running instance and stay connected, or become the running instance
+/// when there is none.
+pub fn acquire_waiting(
+    args: &[String],
+    client: Option<StreamClient>,
+) -> Result<std::result::Result<TcpStream, Instance>> {
+    let dir = &irori_core::Paths::get().config;
+    Ok(match acquire_in(dir, args, Some(client))? {
+        Acquired::Primary(instance) => Err(instance),
+        Acquired::Forwarded(Forwarded::Waiting(stream)) => Ok(stream),
+        Acquired::Forwarded(Forwarded::Sent) => {
+            bail!("The running Irori is older and can't wait for a game; restart it")
+        }
+    })
 }
 
 enum Acquired {
@@ -116,7 +129,13 @@ enum Acquired {
     Forwarded(Forwarded),
 }
 
-fn acquire_in(dir: &Path, args: &[String], wait: bool) -> Result<Acquired> {
+/// `waiting` is `Some` for a waiting instance, with its streaming client.
+fn acquire_in(
+    dir: &Path,
+    args: &[String],
+    waiting: Option<Option<StreamClient>>,
+) -> Result<Acquired> {
+    let wait = waiting.is_some();
     std::fs::create_dir_all(dir)?;
     let mut options = OpenOptions::new();
     options.read(true).write(true).create(true).truncate(false);
@@ -167,6 +186,7 @@ fn acquire_in(dir: &Path, args: &[String], wait: bool) -> Result<Acquired> {
                             token: endpoint.token,
                             args: args.to_vec(),
                             wait,
+                            stream: waiting.clone().flatten(),
                         };
                         stream.write_all(&serde_json::to_vec(&invocation)?)?;
                         if wait {
@@ -224,7 +244,10 @@ fn receive(mut stream: TcpStream, token: &str) -> Option<(Vec<String>, Option<Wa
         return None;
     }
     stream.write_all(&[1]).ok()?;
-    let waiter = invocation.wait.then(|| Waiter { stream });
+    let waiter = invocation.wait.then(|| Waiter {
+        stream,
+        client: invocation.stream,
+    });
     Some((invocation.args, waiter))
 }
 
@@ -264,20 +287,29 @@ mod tests {
         });
         let args = vec!["--launch".into(), "gog/game with spaces".into(), "".into()];
         assert!(matches!(
-            acquire_in(dir.path(), &args, false).unwrap(),
+            acquire_in(dir.path(), &args, None).unwrap(),
             Acquired::Forwarded(Forwarded::Sent)
         ));
         let (received, waiter) = worker.join().unwrap();
         assert_eq!(received, args);
         assert!(waiter.is_none());
         assert!(matches!(
-            acquire_in(dir.path(), &[], false).unwrap(),
+            acquire_in(dir.path(), &[], None).unwrap(),
             Acquired::Primary(_)
         ));
     }
 
+    fn deck() -> StreamClient {
+        StreamClient {
+            width: 1280,
+            height: 800,
+            fps: "60".into(),
+            hdr: false,
+        }
+    }
+
     fn primary(dir: &Path) -> Instance {
-        match acquire_in(dir, &[], false).unwrap() {
+        match acquire_in(dir, &[], None).unwrap() {
             Acquired::Primary(instance) => instance,
             Acquired::Forwarded(_) => panic!("no instance should be running"),
         }
@@ -292,12 +324,13 @@ mod tests {
             let (stream, _) = primary.listener.accept().unwrap();
             let (args, waiter) = receive(stream, &primary.token).unwrap();
             let waiter = waiter.unwrap();
+            assert_eq!(waiter.client(), Some(&deck()));
             waiter.finish(Some("Hades isn't installed"));
             args
         });
         let args = vec!["--launch".into(), "gog/1".into(), "--wait".into()];
         let Acquired::Forwarded(Forwarded::Waiting(stream)) =
-            acquire_in(dir.path(), &args, true).unwrap()
+            acquire_in(dir.path(), &args, Some(Some(deck()))).unwrap()
         else {
             panic!("the waiting instance should stay connected");
         };
@@ -317,7 +350,7 @@ mod tests {
             waiter.unwrap().wait_for_hangup();
         });
         let Acquired::Forwarded(Forwarded::Waiting(stream)) =
-            acquire_in(dir.path(), &["--big-picture".into()], true).unwrap()
+            acquire_in(dir.path(), &["--big-picture".into()], Some(None)).unwrap()
         else {
             panic!("the waiting instance should stay connected");
         };

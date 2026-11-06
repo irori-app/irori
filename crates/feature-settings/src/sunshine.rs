@@ -15,7 +15,7 @@ use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
     SharedString, Styled as _, Subscription, Window, div,
 };
-use irori_services::{SunshineLogin, SunshineReport, SunshineStatus};
+use irori_services::{StreamHost, SunshineLogin, SunshineReport, SunshineStatus};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -173,7 +173,12 @@ impl SunshinePanel {
             Some(install) => (
                 IconName::CircleCheck,
                 theme.success,
-                if install.flatpak {
+                if status.host() == StreamHost::Apollo {
+                    t_args(
+                        "settings.sunshine.found_apollo",
+                        &[("port", &status.port.to_string())],
+                    )
+                } else if install.flatpak {
                     t_args(
                         "settings.sunshine.found_flatpak",
                         &[("port", &status.port.to_string())],
@@ -321,8 +326,12 @@ impl Render for SunshinePanel {
             .p_4()
             .gap_3()
             .child(muted(t("settings.sunshine.description"), cx))
+            .child(muted(t("settings.sunshine.apollo_works"), cx))
             .child(self.render_found(&status, cx))
             .child(self.render_login(&status, cx))
+            .when(status.host() == StreamHost::Apollo, |body| {
+                body.child(muted(t("settings.sunshine.apollo_session"), cx))
+            })
             .child(
                 h_flex()
                     .gap_2()

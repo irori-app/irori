@@ -157,6 +157,10 @@ pub struct GameSettings {
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
+    /// List this game among Sunshine's applications while Irori keeps its
+    /// games there. Irori-only; set per game.
+    #[serde(rename = "iroriInSunshine")]
+    pub in_sunshine: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -407,6 +411,7 @@ impl Default for GameSettings {
             enable_wow64: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
+            in_sunshine: true,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),
@@ -974,6 +979,9 @@ pub struct SunshinePrefs {
     pub big_picture: bool,
     /// Sunshine's web UI port; 0 reads it from Sunshine's configuration.
     pub port: u16,
+    /// Games in gamescope take the Moonlight client's resolution, frame rate
+    /// and HDR when a stream starts them, unless the game sets its own.
+    pub match_client: bool,
 }
 
 impl Default for SunshinePrefs {
@@ -983,6 +991,7 @@ impl Default for SunshinePrefs {
             games: SunshineGames::Installed,
             big_picture: true,
             port: 0,
+            match_client: true,
         }
     }
 }

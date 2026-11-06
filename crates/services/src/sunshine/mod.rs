@@ -18,6 +18,7 @@ mod client;
 mod cover;
 mod detect;
 pub(crate) mod plan;
+mod stream;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -28,10 +29,11 @@ use irori_core::{Event, GameId, Paths, json_store};
 use serde::{Deserialize, Serialize};
 
 pub use client::SunshineLogin;
-pub use detect::SunshineInstall;
+pub use detect::{StreamHost, SunshineInstall};
+pub use stream::StreamClient;
 
 use crate::Backend;
-use client::Client;
+use client::{Client, Place};
 use plan::{Step, Wanted};
 
 /// Changes are gathered this long before a sync.
@@ -52,6 +54,8 @@ pub struct SunshineReport {
     pub failed: Vec<String>,
     /// Why the sync couldn't run at all.
     pub error: Option<String>,
+    /// The host the sync talked to.
+    pub host: Option<StreamHost>,
 }
 
 impl SunshineReport {
@@ -82,6 +86,18 @@ pub struct SunshineStatus {
     pub applications: usize,
     pub last: Option<SunshineReport>,
     pub syncing: bool,
+}
+
+impl SunshineStatus {
+    /// The host as far as Irori knows: what the last sync found, else what
+    /// the configuration folder suggests.
+    pub fn host(&self) -> StreamHost {
+        self.last
+            .as_ref()
+            .and_then(|l| l.host)
+            .or(self.install.as_ref().map(|i| i.host))
+            .unwrap_or_default()
+    }
 }
 
 /// A cover Irori gave Sunshine.
@@ -129,6 +145,9 @@ pub(crate) struct SunshineService {
     /// One sync at a time.
     lock: tokio::sync::Mutex<()>,
     syncing: std::sync::atomic::AtomicBool,
+    /// Apollo's session from the last sync, so the next doesn't sign in
+    /// again (which signs a browser out of Apollo's web UI).
+    session: parking_lot::Mutex<Option<String>>,
     /// The last automatic sync that failed, and when.
     failed: parking_lot::Mutex<Option<(Vec<Wanted>, std::time::Instant)>>,
 }
@@ -187,7 +206,7 @@ impl Backend {
     /// ("Sync now"), or take Irori's out of it while the setting is off.
     pub async fn sync_sunshine(&self) -> Result<SunshineReport> {
         let wanted = if self.settings.app().sunshine.enabled {
-            self.sunshine_wanted()
+            self.sunshine_wanted_now().await
         } else {
             Vec::new()
         };
@@ -199,7 +218,7 @@ impl Backend {
         self.apply_to_sunshine(Vec::new()).await
     }
 
-    /// What Irori wants in Sunshine now.
+    /// What Irori wants in Sunshine now. Blocking.
     fn sunshine_wanted(&self) -> Vec<Wanted> {
         let prefs = self.settings.app().sunshine.clone();
         let Some(program) = program() else {
@@ -218,10 +237,23 @@ impl Backend {
             prefs.games,
             big_picture,
             |id: &GameId| {
+                // A game the user left out of Sunshine gets no application.
+                if !self.settings.game(id).in_sunshine {
+                    return None;
+                }
                 let target = format!("{}/{}", id.runner.id(), id.app_name);
                 plan::command_line(&program, &["--launch", &target, "--wait"])
             },
         )
+    }
+
+    /// [`Self::sunshine_wanted`] off the async workers: it reads each game's
+    /// settings file the first time.
+    async fn sunshine_wanted_now(&self) -> Vec<Wanted> {
+        let b = self.clone();
+        tokio::task::spawn_blocking(move || b.sunshine_wanted())
+            .await
+            .unwrap_or_default()
     }
 
     /// Sync when what Irori wants in Sunshine differs from what it last put
@@ -230,7 +262,7 @@ impl Backend {
     pub(crate) async fn sync_sunshine_if_changed(&self) {
         let enabled = self.settings.app().sunshine.enabled;
         let wanted = if enabled {
-            self.sunshine_wanted()
+            self.sunshine_wanted_now().await
         } else {
             Vec::new()
         };
@@ -281,7 +313,11 @@ impl Backend {
                     Some(rx.recv().await)
                 };
                 match event {
-                    Some(Ok(Event::LibraryUpdated(_) | Event::SettingsChanged)) => pending = true,
+                    Some(Ok(
+                        Event::LibraryUpdated(_)
+                        | Event::SettingsChanged
+                        | Event::GameSettingsChanged(_),
+                    )) => pending = true,
                     Some(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
                     Some(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
                         pending = true
@@ -324,9 +360,16 @@ impl Backend {
             let install = tokio::task::spawn_blocking(detect::detect)
                 .await
                 .unwrap_or_default();
-            let client = Client::new(port(prefs.port, install.as_ref()), login)?;
+            let remembered = self.sunshine.session.lock().clone();
+            let client =
+                Client::connect(port(prefs.port, install.as_ref()), login, remembered).await?;
+            *self.sunshine.session.lock() = client.session();
             let program = program().context("Irori couldn't find its own program")?;
-            sync(&client, &wanted, &program, &mut state).await
+            let report = sync(&client, &wanted, &program, &mut state).await?;
+            anyhow::Ok(SunshineReport {
+                host: Some(client.host()),
+                ..report
+            })
         }
         .await;
         let report = match result {
@@ -403,21 +446,28 @@ async fn sync(
                     .await
             }
             Step::Update(w) => match plan::index_of(&current, &w.id, program) {
-                Some(ix) => {
-                    let image = give_cover(client, Some(&current[ix]), w, state).await;
+                Some(index) => {
+                    let app = &current[index];
+                    let image = give_cover(client, Some(app), w, state).await;
                     client
                         .save(
-                            plan::merged(Some(&current[ix]), w, image.as_deref()),
-                            Some(ix),
+                            plan::merged(Some(app), w, image.as_deref()),
+                            Some(Place { index, app }),
                         )
                         .await
                 }
                 None => Ok(()),
             },
             Step::Remove(mark) => match plan::index_of(&current, mark, program) {
-                Some(ix) => client.delete(ix).await.map(|()| {
-                    state.covers.remove(mark);
-                }),
+                Some(index) => client
+                    .delete(Place {
+                        index,
+                        app: &current[index],
+                    })
+                    .await
+                    .map(|()| {
+                        state.covers.remove(mark);
+                    }),
                 None => Ok(()),
             },
         };
