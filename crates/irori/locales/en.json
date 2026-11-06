@@ -80,6 +80,7 @@
   "shell.notice.mods_not_restored": "The mods of {title} are still in its folder",
   "shell.palette.set_up_emulation": "Set up emulation",
   "shell.palette.set_up_emulation_keywords": "emulator ROM console retro BIOS RetroArch",
+  "shell.palette.open_store": "Open the {store} store",
   "shell.palette.lutris_script": "Install with a Lutris script",
   "shell.palette.lutris_script_keywords": "Lutris script installer lutris.net community",
   "shell.palette.play_status": "{title}: set play status to {status}",

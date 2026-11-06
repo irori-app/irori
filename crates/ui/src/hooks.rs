@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use gpui_kit::{AnyView, App, Global, Task, Window};
-use irori_core::GameId;
+use irori_core::{GameId, Runner};
 
 /// What a Heroic import brought over, for the confirmation message.
 #[derive(Debug, Clone, Default)]
@@ -72,6 +72,7 @@ type GamePanelFn = Arc<dyn Fn(GameId, GamePanel, &mut Window, &mut App) -> AnyVi
 type GameSettingsFn = Arc<dyn Fn(GameId, CloseFn, &mut Window, &mut App) -> AnyView>;
 type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
+type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
 
 #[derive(Clone, Default)]
 pub struct Hooks {
@@ -90,6 +91,9 @@ pub struct Hooks {
     /// (Big Picture, which the settings feature doesn't depend on): its
     /// Back calls the given function instead of leaving the screen.
     pub game_settings: Option<GameSettingsFn>,
+    /// Show a page of a store's website in the store window (it lives in
+    /// the management screens).
+    pub open_store_page: Option<StorePageFn>,
 }
 
 impl Global for Hooks {}
@@ -210,6 +214,22 @@ pub fn game_settings(
         .try_global::<Hooks>()
         .and_then(|h| h.game_settings.clone())?;
     Some(hook(id, on_close, window, cx))
+}
+
+/// Show `url`, a page of `runner`'s website, in the store window; without
+/// the hook, in the browser.
+pub fn open_store_page(runner: Runner, url: String, window: &mut Window, cx: &mut App) {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.open_store_page.clone())
+    {
+        Some(open) => open(runner, url, window, cx),
+        None => {
+            if let Some(url) = crate::web_url(&url) {
+                cx.open_url(&url);
+            }
+        }
+    }
 }
 
 /// Whether a Lutris library exists on this computer (native or Flatpak).

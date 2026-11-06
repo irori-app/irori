@@ -10,6 +10,9 @@
 //! exits with status 2.
 //!
 //! Usage: irori-sign-in --url <url> --capture <regex> [--title <window title>]
+//!
+//! With [`store::STORE_FLAG`] first it shows a store's website instead; see
+//! [`store`].
 
 use std::io::Write as _;
 use std::time::{Duration, Instant};
@@ -21,6 +24,8 @@ use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
 use tao::window::WindowBuilder;
 use wry::{PageLoadEvent, WebViewBuilder};
+
+pub mod store;
 
 /// Reads the visible text of the page.
 const PAGE_TEXT: &str = "document.body ? document.body.innerText : ''";
@@ -85,6 +90,11 @@ fn matches(re: &Regex, text: &str) -> bool {
 /// and return the exit status. Signing in or closing the window exits the
 /// process directly.
 pub fn main(args: impl IntoIterator<Item = String>) -> u8 {
+    let mut args = args.into_iter().peekable();
+    if args.peek().is_some_and(|a| a == store::STORE_FLAG) {
+        args.next();
+        return store::main(args);
+    }
     let args = match parse_args(args) {
         Ok(args) => args,
         Err(e) => {
@@ -216,6 +226,47 @@ mod popups {
     #[cfg(not(target_os = "linux"))]
     pub fn handler() -> impl Fn(String, NewWindowFeatures) -> NewWindowResponse + Send + Sync {
         |_, _| NewWindowResponse::Allow
+    }
+}
+
+/// The menu bar: on macOS a page only gets Cut, Copy, Paste and the other
+/// editing keys through menu items that carry them.
+#[cfg(target_os = "macos")]
+mod menu {
+    use muda::{Menu, PredefinedMenuItem, Submenu};
+    use serde_json::{Map, Value};
+
+    /// Install the menu bar, with item names from `labels` where given.
+    /// Keep the menu alive while the window is.
+    pub fn install(labels: &Map<String, Value>) -> Option<Menu> {
+        let label = |key: &str| labels.get(key).and_then(Value::as_str);
+        let menu = Menu::new();
+        let app = Submenu::with_items(
+            "Irori",
+            true,
+            &[
+                &PredefinedMenuItem::close_window(label("close_window")),
+                &PredefinedMenuItem::quit(label("quit")),
+            ],
+        )
+        .ok()?;
+        let edit = Submenu::with_items(
+            label("edit").unwrap_or("Edit"),
+            true,
+            &[
+                &PredefinedMenuItem::undo(label("undo")),
+                &PredefinedMenuItem::redo(label("redo")),
+                &PredefinedMenuItem::separator(),
+                &PredefinedMenuItem::cut(label("cut")),
+                &PredefinedMenuItem::copy(label("copy")),
+                &PredefinedMenuItem::paste(label("paste")),
+                &PredefinedMenuItem::select_all(label("select_all")),
+            ],
+        )
+        .ok()?;
+        menu.append_items(&[&app, &edit]).ok()?;
+        menu.init_for_nsapp();
+        Some(menu)
     }
 }
 

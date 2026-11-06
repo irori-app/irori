@@ -331,7 +331,7 @@ fn page_rows_and_quick_actions(cx: &mut TestAppContext) {
         let v = view.read(cx);
         let game = v.page_game(cx).expect("page game");
         let state = BigPictureView::game_state(&game, cx);
-        let rows = crate::model::page_rows(state, 1);
+        let rows = crate::model::page_rows(state, 1, false);
         assert_eq!(rows[0], PageRow::Action(GameAction::Install));
         assert!(!rows.contains(&PageRow::Action(GameAction::Uninstall)));
         assert!(!v.hints(cx).is_empty());
@@ -367,7 +367,7 @@ fn show_log_puts_the_game_log_beside_the_rows(cx: &mut TestAppContext) {
     cx.read(|cx| {
         let v = view.read(cx);
         let game = v.page_game(cx).expect("page game");
-        let rows = crate::model::page_rows(BigPictureView::game_state(&game, cx), 1);
+        let rows = crate::model::page_rows(BigPictureView::game_state(&game, cx), 1, false);
         assert_eq!(rows[1], PageRow::Action(GameAction::PlayWithLog));
         assert_eq!(rows[v.page.as_ref().unwrap().ix], PageRow::Log);
         assert!(v.log.is_none());
@@ -390,6 +390,102 @@ fn show_log_puts_the_game_log_beside_the_rows(cx: &mut TestAppContext) {
     });
     draw(cx);
     cx.read(|cx| assert!(view.read(cx).log.is_none()));
+}
+
+#[gpui_kit::test]
+fn the_log_pages_with_the_shoulders_and_filters_from_the_page(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx);
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    };
+    // Alpha's own log: the other log test writes Charlie's.
+    let alpha = GameId::new(Runner::Gog, "a");
+    let lines: Vec<String> = (0..150)
+        .map(|i| {
+            if i % 10 == 0 {
+                format!("err: failure {i}")
+            } else {
+                format!("frame {i}")
+            }
+        })
+        .collect();
+    let path = Paths::get().game_log_file(&alpha);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, lines.join("\n")).unwrap();
+
+    // Alpha's page: Play, Play with logs, Favourite, Settings, Show log.
+    view.update(cx, |v, cx| v.open_page(alpha.clone(), cx));
+    for _ in 0..4 {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.dispatch_action(handle, gamepad::Right);
+    draw(cx);
+    wait_for(cx, |cx| view.read(cx).log_lines() == Some(150));
+    // The log follows its newest line; drawing again applies the scroll.
+    draw(cx);
+    draw(cx);
+    let offset = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).log_offset().unwrap());
+    let bottom = offset(cx);
+    assert!(bottom > 0.0, "the log starts at its newest line");
+
+    // The shoulders (and Page Up / Page Down) page through it, not the tabs.
+    cx.dispatch_action(handle, gamepad::PrevPage);
+    let up = offset(cx);
+    assert!(up < bottom, "a page up: {up} < {bottom}");
+    cx.simulate_keystrokes(handle, "pageup");
+    assert!(offset(cx) < up);
+    cx.dispatch_action(handle, gamepad::NextPage);
+    cx.dispatch_action(handle, gamepad::NextPage);
+    cx.dispatch_action(handle, gamepad::NextPage);
+    assert_eq!(offset(cx), bottom, "paging stops at the newest line");
+    cx.read(|cx| assert!(view.read(cx).is_page_open()));
+
+    // Under Show log: errors and warnings only, then the text filter.
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let game = v.page_game(cx).expect("page game");
+        let rows = crate::model::page_rows(BigPictureView::game_state(&game, cx), 1, true);
+        assert_eq!(rows[5], PageRow::LogErrors);
+        assert_eq!(rows[6], PageRow::LogFilter);
+        assert!(
+            v.hints(cx)
+                .iter()
+                .any(|(inputs, _)| inputs.contains(&gamepad::GamepadInput::NextPage)),
+            "a hint says the shoulders scroll the log"
+        );
+    });
+    cx.dispatch_action(handle, gamepad::Down);
+    cx.dispatch_action(handle, gamepad::Right);
+    draw(cx);
+    cx.read(|cx| assert_eq!(view.read(cx).log_lines(), Some(15)));
+
+    // The filter field takes letters (M doesn't open the menu); Enter
+    // returns to the page with the filter kept.
+    cx.dispatch_action(handle, gamepad::Down);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| assert!(view.read(cx).log_filter.editing));
+    cx.simulate_input(handle, "failure 14");
+    draw(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.is_overlay_open());
+        assert_eq!(v.log_lines(), Some(1));
+    });
+    cx.simulate_keystrokes(handle, "enter");
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.log_filter.editing);
+        assert!(v.is_page_open());
+    });
+    // Errors off again: the text alone filters.
+    cx.dispatch_action(handle, gamepad::Up);
+    cx.dispatch_action(handle, gamepad::Left);
+    draw(cx);
+    cx.read(|cx| assert_eq!(view.read(cx).log_lines(), Some(1)));
 }
 
 #[gpui_kit::test]

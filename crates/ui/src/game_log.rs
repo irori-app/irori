@@ -1,5 +1,6 @@
 //! The tail of a game's log, read for the log viewer, the launch-problem
-//! sheet and Big Picture's log panel: lines with their severity.
+//! sheet and Big Picture's log panel: lines with their severity, and the
+//! filter both log views apply.
 
 use std::path::Path;
 use std::time::SystemTime;
@@ -59,6 +60,27 @@ pub fn parse_tail(text: &str, started_mid_file: bool, max: usize) -> LogTail {
     }
 }
 
+/// Indices of the lines to show: warnings and errors only when
+/// `errors_only`, then those containing `query` (ignoring case), or with
+/// `hide_matching` those that don't. An empty query keeps every line.
+pub fn visible_lines(
+    lines: &[(LineLevel, SharedString)],
+    errors_only: bool,
+    query: &str,
+    hide_matching: bool,
+) -> Vec<usize> {
+    let query = query.trim().to_lowercase();
+    lines
+        .iter()
+        .enumerate()
+        .filter(|(_, (level, _))| !errors_only || *level != LineLevel::Info)
+        .filter(|(_, (_, text))| {
+            query.is_empty() || text.to_lowercase().contains(&query) != hide_matching
+        })
+        .map(|(ix, _)| ix)
+        .collect()
+}
+
 /// The last [`TAIL_BYTES`] of the log at `path`, as at most `max` lines;
 /// `None` when there is no log yet. Runs on the backend runtime.
 pub async fn read_tail(path: &Path, max: usize) -> std::io::Result<Option<LogTail>> {
@@ -113,6 +135,26 @@ mod tests {
         );
         let t = parse_tail("a\nb", false, 10);
         assert!(!t.truncated);
+    }
+
+    #[test]
+    fn filters_lines_by_level_and_text() {
+        let lines = parse_tail(
+            "Descriptor heap\nerr: descriptor lost\nStarted\nwarn: slow",
+            false,
+            10,
+        )
+        .lines;
+        assert_eq!(visible_lines(&lines, false, "", false), vec![0, 1, 2, 3]);
+        assert_eq!(
+            visible_lines(&lines, false, "DESCRIPTOR", false),
+            vec![0, 1]
+        );
+        assert_eq!(visible_lines(&lines, false, "descriptor", true), vec![2, 3]);
+        assert_eq!(visible_lines(&lines, true, "", false), vec![1, 3]);
+        assert_eq!(visible_lines(&lines, true, "descriptor", false), vec![1]);
+        assert_eq!(visible_lines(&lines, true, "descriptor", true), vec![3]);
+        assert_eq!(visible_lines(&lines, false, "  ", true), vec![0, 1, 2, 3]);
     }
 
     #[tokio::test(flavor = "current_thread")]

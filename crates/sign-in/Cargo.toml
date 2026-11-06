@@ -1,6 +1,6 @@
 [package]
 name = "irori-sign-in"
-description = "Irori's sign-in window: a store's login page in a window of its own, finished automatically"
+description = "Irori's sign-in and store windows: a store's login page or website in a window of its own"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -21,6 +21,10 @@ serde_json.workspace = true
 tao = "0.34"
 wry = "0.53"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The version tray-icon already brings in, for the store window's Edit menu.
+muda = { version = "0.17", default-features = false }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
 # The version Wry pins, so pop-ups share its WebKitGTK types.
@@ -36,8 +40,8 @@ maintainer = "Diaconu Radu-Mihai <52667211+countradooku@users.noreply.github.com
 copyright = "Irori developers"
 license-file = ["../../LICENSE", "0"]
 extended-description = """\
-The window Irori shows a store's sign-in page in. Without it, Irori opens \
-sign-in pages in the browser."""
+The window Irori shows a store's sign-in page or website in. Without it, \
+Irori opens those pages in the browser."""
 section = "games"
 priority = "optional"
 depends = "$auto"

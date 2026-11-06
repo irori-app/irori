@@ -1,5 +1,6 @@
 //! Management screens of Irori: the download queue, the Wine/Proton manager,
-//! store accounts (with the browser login flow), store links and deals, and the
+//! store accounts (with the browser login flow), store websites (in the store
+//! window or the browser) and deals, and the
 //! first-run onboarding.
 //!
 //! The shell owns routing and mounts these views for [`irori_ui::Route::Downloads`],
@@ -19,6 +20,7 @@ mod i18n;
 mod launchers;
 mod login;
 mod onboarding;
+mod store_window;
 mod stores;
 mod updates;
 mod wine;
@@ -34,6 +36,7 @@ pub use login::{open_account_login_dialog, open_login_dialog};
 pub use onboarding::{
     OnboardingEvent, OnboardingView, mark_onboarding_done, should_show_onboarding,
 };
+pub use store_window::{open_store_window, store_window_stores};
 pub use stores::StoresView;
 pub use updates::UpdatesView;
 pub use wine::WineManagerView;

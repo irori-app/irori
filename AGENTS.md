@@ -158,7 +158,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/feature-settings` | `irori-settings` | App settings, game defaults, per-game overrides, logs, system info |
 | `crates/feature-bigpicture` | `irori-bigpicture` | Big Picture mode and controller input for the whole app |
 | `crates/irori` | `irori` | The application shell and binary: window, sidebar, routing, palette, tray, single instance, CLI |
-| `crates/sign-in` | `irori-sign-in` | Store sign-in window (Wry/Tao): library and the `irori-sign-in` program |
+| `crates/sign-in` | `irori-sign-in` | Store sign-in and store windows (Wry/Tao): library and the `irori-sign-in` program |
 | `crates/webview` | `gpui-webview` | Vendored GPUI WebView, **excluded from the workspace and unused** |
 
 Other top-level paths:
@@ -680,6 +680,21 @@ So never make `irori` link WebKitGTK on Linux.
 `irori-sign-in` stays a standalone program with a stable command line. Packages ship
 it on every platform, and CI's Windows install test runs it.
 
+**Store window** (`crates/sign-in/src/store.rs`, `irori_manage::store_window`):
+
+- The same program shows a store's website when its first argument is `--store`
+  (`--url`, `--title`, `--profile`, `--labels`). It is the sign-in window's sibling, not
+  part of it: the sign-in command line stays as it is.
+- A toolbar (a page of Irori's own) sits above the store's page. The store's cookies stay in
+  `<data>/store-window/<runner>` (on macOS a data store named after that folder), apart
+  from Irori's own store login.
+- JSON lines: Irori writes `{"open": url}` to show a page in the open window; the window
+  writes `{"external": url}` for "Open in browser". Irori opens only web addresses
+  (`irori_ui::web_url`), and the page can't ask for the browser itself.
+- One window per store. When it closes, a signed-in store's library refreshes. Stores →
+  Open store, the palette's "Open the … store" and the game menu's Store page
+  (`irori_ui::hooks::open_store_page`) open it; without the helper they open the browser.
+
 **A new store's login flow:**
 
 - Prefer a capture pattern the sign-in window can find without user help: a redirect
@@ -700,7 +715,9 @@ it on every platform, and CI's Windows install test runs it.
 - Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
   game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
   controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
-  action list and details), `log` (the page's live game log, in place of the details),
+  action list and details), `log` (the page's live game log, in place of the details;
+  the shoulders page through it, and rows under Show log filter it with
+  `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
   `settings` (the game's settings over its page, outside the `BigPicture` key context so
   keys reach their controls; Escape returns to the page),
   `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and

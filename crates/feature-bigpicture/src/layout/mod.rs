@@ -209,6 +209,19 @@ pub fn list_scroll(
         .unwrap_or_else(|| top(focus))
 }
 
+/// Share of a scrolled view one page moves, so the line at its edge stays
+/// in sight.
+const PAGE_OVERLAP: f32 = 0.9;
+
+/// The scroll offset (`0` at the top, `-max` at the bottom, as GPUI keeps
+/// it) one page from `offset` in a view `height` tall, toward the bottom
+/// when `down`, kept inside the content.
+pub fn page_offset(offset: f32, height: f32, max: f32, down: bool) -> f32 {
+    let step = height * PAGE_OVERLAP;
+    let next = if down { offset - step } else { offset + step };
+    next.clamp(-max.max(0.0), 0.0)
+}
+
 /// A move in the grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GridStep {
@@ -239,6 +252,16 @@ pub fn grid_step(ix: usize, len: usize, cols: usize, step: GridStep) -> Option<u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_page_moves_most_of_the_view_and_stays_inside() {
+        assert_eq!(page_offset(0.0, 100.0, 1000.0, true), -90.0);
+        assert_eq!(page_offset(-90.0, 100.0, 1000.0, false), 0.0);
+        assert_eq!(page_offset(-950.0, 100.0, 1000.0, true), -1000.0);
+        assert_eq!(page_offset(-40.0, 100.0, 1000.0, false), 0.0);
+        // Content shorter than the view doesn't scroll.
+        assert_eq!(page_offset(0.0, 100.0, 0.0, true), 0.0);
+    }
 
     #[test]
     fn a_whole_shelf_fits_at_every_interface_size() {

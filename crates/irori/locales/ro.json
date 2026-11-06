@@ -80,6 +80,7 @@
   "shell.notice.mods_not_restored": "Modurile pentru {title} sunt încă în folderul jocului",
   "shell.palette.set_up_emulation": "Configurează emularea",
   "shell.palette.set_up_emulation_keywords": "emulator ROM consolă retro BIOS RetroArch",
+  "shell.palette.open_store": "Deschide magazinul {store}",
   "shell.palette.lutris_script": "Instalează cu un script Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script instalare lutris.net comunitate",
   "shell.palette.play_status": "{title}: setează starea de joc la {status}",

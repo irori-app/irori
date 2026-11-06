@@ -157,6 +157,7 @@ pub struct BigPictureView {
     log: Option<log::LogPanel>,
     /// The page's game settings, open over it.
     settings: Option<settings::SettingsPanel>,
+    log_filter: log::LogFilter,
     overlay: Option<Overlay>,
     rows: Vec<Row>,
     rows_key: Option<(u64, usize, u32, Vec<ShelfKind>)>,
@@ -211,7 +212,11 @@ impl BigPictureView {
             cx.observe_global::<crate::ShowGame>(|this, cx| this.show_requested_game(cx)),
             cx.on_focus_lost(window, |this, window, cx| {
                 let naming = this.look.editor.as_ref().is_some_and(|e| e.naming);
-                if !this.library.searching && !naming && this.settings.is_none() {
+                if !this.library.searching
+                    && !naming
+                    && this.settings.is_none()
+                    && !this.log_filter.editing
+                {
                     this.focus.focus(window, cx);
                 }
             }),
@@ -233,6 +238,8 @@ impl BigPictureView {
         if let Some(pad) = gamepad::model(cx) {
             subscriptions.push(cx.observe(&pad, |_, _, cx| cx.notify()));
         }
+        let (log_filter, log_filter_subscription) = log::LogFilter::new(window, cx);
+        subscriptions.push(log_filter_subscription);
 
         // Big Picture's own interface size, for TVs, while it shows.
         irori_ui::theme::set_zoom(m.settings.read(cx).app.ui.big_picture_zoom(), cx);
@@ -273,6 +280,7 @@ impl BigPictureView {
             show_log: false,
             log: None,
             settings: None,
+            log_filter,
             overlay: None,
             rows: Vec::new(),
             rows_key: None,
@@ -660,8 +668,13 @@ impl BigPictureView {
             cx.notify();
             return;
         };
+        if matches!(input, GamepadInput::PrevPage | GamepadInput::NextPage) {
+            // The shoulders (Page Up and Down) page through the log.
+            self.scroll_log_page(input == GamepadInput::NextPage, cx);
+            return;
+        }
         let state = Self::game_state(&game, cx);
-        let rows = page_rows(state, install_platforms(&game).len());
+        let rows = page_rows(state, install_platforms(&game).len(), self.show_log);
         let Some(page) = &mut self.page else {
             return;
         };
@@ -799,9 +812,12 @@ impl BigPictureView {
     ) {
         match row {
             PageRow::Action(action) => self.activate_action(action, game, window, cx),
-            PageRow::Platform | PageRow::Favourite | PageRow::Log | PageRow::Hidden => {
-                self.change_value(row, &game, true, cx)
-            }
+            PageRow::Platform
+            | PageRow::Favourite
+            | PageRow::Log
+            | PageRow::LogErrors
+            | PageRow::Hidden => self.change_value(row, &game, true, cx),
+            PageRow::LogFilter => self.open_log_filter(window, cx),
             PageRow::Settings => self.open_game_settings(game.id(), window, cx),
             PageRow::Playtime => {}
         }
@@ -850,6 +866,7 @@ impl BigPictureView {
             PageRow::Favourite => self.set_favourite(game.id(), !state.favourite, cx),
             PageRow::Hidden => self.set_hidden(game.id(), !state.hidden, cx),
             PageRow::Log => self.show_log = !self.show_log,
+            PageRow::LogErrors => self.log_filter.errors_only = !self.log_filter.errors_only,
             PageRow::Platform => {
                 let platforms = install_platforms(game);
                 let Some(page) = &mut self.page else {
@@ -1075,6 +1092,9 @@ impl Render for BigPictureView {
             )
             .when(self.library.searching, |d| {
                 d.child(self.render_search(c, metrics, cx))
+            })
+            .when(self.log_filter.editing, |d| {
+                d.child(self.render_log_filter(c, metrics, cx))
             })
             .when_some(self.render_settings(c, metrics, cx), |d, settings| {
                 d.child(settings)
