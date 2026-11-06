@@ -80,6 +80,7 @@
   "shell.notice.mods_not_restored": "{title} 的模组仍在其文件夹中",
   "shell.palette.set_up_emulation": "设置模拟游戏",
   "shell.palette.set_up_emulation_keywords": "模拟器 ROM 主机 复古 BIOS RetroArch",
+  "shell.palette.open_store": "打开 {store} 商店",
   "shell.palette.lutris_script": "使用 Lutris 脚本安装",
   "shell.palette.lutris_script_keywords": "Lutris 脚本 安装程序 lutris.net 社区",
   "shell.palette.play_status": "{title}：将游玩状态设为“{status}”",

@@ -16,7 +16,7 @@ use gpui_kit::{
     App, AppContext as _, Entity, ParentElement as _, SharedString, Styled as _, Window, px,
 };
 use irori_core::settings::LibraryLayout;
-use irori_core::{GameId, GameInfo};
+use irori_core::{GameId, GameInfo, Runner};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, models};
@@ -30,6 +30,8 @@ enum PaletteTarget {
     Refresh,
     Random,
     SetUpEmulation,
+    /// Show a store's website in the store window.
+    OpenStore(Runner),
     LutrisScript,
     /// Set (or with `None` clear) a game's play status.
     PlayStatus(GameId, Option<PlayStatus>),
@@ -84,13 +86,14 @@ impl Palette {
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
-    /// on.
+    /// on. `stores` have a store window.
     fn items(
         games: &[Arc<GameInfo>],
         replay: Option<&str>,
         open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
         library: LibraryCommands<'_>,
         sync: bool,
+        stores: &[Runner],
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let LibraryCommands {
@@ -231,6 +234,19 @@ impl Palette {
             PaletteTarget::Route(Route::Settings("storage".into())),
             targets,
         );
+        for &runner in stores {
+            push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.open_store",
+                        &[("store", runner.store_name())],
+                    ))
+                    .keywords([t("shell.nav.stores")])
+                    .icon(IconName::Store),
+                PaletteTarget::OpenStore(runner),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.set_up_emulation"))
@@ -410,6 +426,7 @@ impl Palette {
             open,
             library,
             sync,
+            &irori_manage::store_window_stores(cx),
             &mut targets,
         ));
         *self.targets.borrow_mut() = targets;
@@ -464,6 +481,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Refresh => irori_ui::models::refresh_library(false, cx),
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
+        PaletteTarget::OpenStore(runner) => {
+            irori_manage::open_store_window(runner, None, window, cx)
+        }
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),

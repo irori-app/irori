@@ -1,6 +1,6 @@
-//! Store websites ([`Route::Stores`](irori_ui::Route::Stores)): links that
-//! open each store in the browser, and deals on games the user owns or
-//! wishes for.
+//! Store websites ([`Route::Stores`](irori_ui::Route::Stores)): each store
+//! opens in the store window (see `crate::store_window`) or the browser, and
+//! deals on games the user owns or wishes for.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -24,6 +24,7 @@ use crate::accounts::{ACCOUNT_STORES, StoreCard, store_cards, store_icon};
 use crate::common::{card, card_grid};
 use crate::deals::DealsSection;
 use crate::login::open_login_dialog;
+use crate::store_window::open_store_window;
 
 /// A store's website.
 pub(crate) struct StoreSite {
@@ -132,13 +133,28 @@ impl StoresView {
                                 .child(site.blurb),
                         )
                         .child(
-                            Link::new("site").href(site.url).child(
-                                h_flex()
-                                    .gap_1()
-                                    .text_sm()
-                                    .child(site.host)
-                                    .child(Icon::new(IconName::ExternalLink).xsmall()),
-                            ),
+                            v_flex()
+                                .items_start()
+                                .gap_2()
+                                .child(
+                                    Button::new("open-store")
+                                        .small()
+                                        .icon(IconName::Store)
+                                        .label(t("manage.stores.open_store"))
+                                        .on_click(move |_, window, cx| {
+                                            open_store_window(runner, None, window, cx)
+                                        }),
+                                )
+                                .child(
+                                    Link::new("site").href(site.url).child(
+                                        h_flex()
+                                            .gap_1()
+                                            .min_w_0()
+                                            .text_sm()
+                                            .child(site.host)
+                                            .child(Icon::new(IconName::ExternalLink).xsmall()),
+                                    ),
+                                ),
                         ),
                 )
                 .when(data.user.is_none() && !data.disabled, |this| {
