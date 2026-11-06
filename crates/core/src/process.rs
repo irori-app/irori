@@ -553,6 +553,18 @@ pub async fn terminate(child: &mut Child) {
     }
 }
 
+/// Whether any process still runs in the process group whose leader was
+/// `pid`, after the leader itself has exited. Processes that started a
+/// session of their own (daemons, wineserver) are not counted.
+#[cfg(unix)]
+pub fn group_alive(pid: u32) -> bool {
+    // Signal 0 only checks; EPERM means a member exists that changed user.
+    matches!(
+        killpg(Pid::from_raw(pid as i32), None),
+        Ok(()) | Err(nix::errno::Errno::EPERM)
+    )
+}
+
 /// Signal a process group by its leader pid (used for games tracked by pid).
 #[cfg(unix)]
 pub fn kill_group(pid: u32, force: bool) {

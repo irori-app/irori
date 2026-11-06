@@ -486,11 +486,18 @@ commands without a window.
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
      a Steam game's Proton prefix is reached only through `protontricks-launch`.
-  7. Sleep inhibition, the replay buffer, then session tracking. At the end the programs that stop
-     with the game are stopped (not-yet-started ones never start) before the
-     after-launch script, then `GameExited`. While programs run in the prefix,
-     a game whose launcher exits early is followed by its folder, not
-     `wineserver -w`, which would wait for them too.
+  7. Sleep inhibition, the replay buffer, then session tracking. When the started
+     program exits but left processes running (a crack's or publisher's launcher
+     handing over to the game), the session follows them (`follow::Handoff`): on Unix
+     whatever is still in its process group, checked every 3 s (daemons and
+     wineserver start a session of their own and don't count); on Windows its
+     descendants by parent process started after it, found with sysinfo every 3 s.
+     Stopping ends them too. Games another program owns (`LaunchPlan::watch`,
+     third-party launchers) and browser apps aren't followed this way. At the end
+     the programs that stop with the game are stopped (not-yet-started ones never
+     start) before the after-launch script, then `GameExited`. While programs run
+     in the prefix, a game whose launcher exits early is followed by its folder,
+     not `wineserver -w`, which would wait for them too.
 
 ### 4.3 Stores
 
@@ -878,7 +885,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Sessions follow the game, not the launcher** (`crates/services/src/follow.rs`):
   while such a game runs, services look every 3 s for processes running from its
   install folder; the session ends when they are gone, or when the launcher exits
-  without starting the game. Nothing polls when no launcher game runs.
+  without starting the game. Nothing polls when no launcher game runs. Every other
+  game whose started program hands over and exits is followed through its process
+  group or descendants instead (see Launching, step 7).
 - **Rockstar** (`irori_launchers_data::rockstar`): `TITLES` names every Rockstar PC
   title with its Steam app id (art comes from Steam's CDN) and whether store copies
   need the launcher. The launcher keeps no readable list of owned titles (its
