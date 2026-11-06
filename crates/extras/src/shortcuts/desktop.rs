@@ -1,5 +1,6 @@
 //! freedesktop `.desktop` entries: per-game launchers on the desktop and in
-//! the application menu, and the `x-scheme-handler/irori` URL handler.
+//! the application menu, the `x-scheme-handler/irori` URL handler, and the
+//! handler that opens Windows programs with Irori.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,20 @@ use crate::util;
 const GAME_KEY: &str = "X-Irori-Game";
 /// File name of the URL handler entry.
 pub const URL_HANDLER_FILE: &str = "irori-url-handler.desktop";
+/// File name of the entry that opens Windows programs.
+pub const WINDOWS_FILES_HANDLER_FILE: &str = "irori-windows-files.desktop";
+/// The MIME types of the files in `irori_runtime::windows_file::EXTENSIONS`.
+/// shared-mime-info names `.exe` files `application/x-msdownload` (older
+/// releases `application/x-ms-dos-executable`) by their name, and
+/// `application/vnd.microsoft.portable-executable` by their content.
+pub const WINDOWS_FILE_TYPES: &[&str] = &[
+    "application/x-msdownload",
+    "application/x-ms-dos-executable",
+    "application/vnd.microsoft.portable-executable",
+    "application/x-msi",
+    "application/x-bat",
+    "text/x-ms-regedit",
+];
 
 /// `~/.local/share/applications`.
 pub fn applications_dir() -> PathBuf {
@@ -113,6 +128,20 @@ pub fn url_handler_entry(launcher: &LauncherCommand) -> String {
     format!(
         "[Desktop Entry]\nType=Application\nName=Irori\nExec={}\nTerminal=false\nNoDisplay=true\nMimeType=x-scheme-handler/irori;\n",
         exec.join(" ")
+    )
+}
+
+/// Content of the entry that opens Windows programs with Irori.
+pub fn windows_files_entry(launcher: &LauncherCommand) -> String {
+    let mut exec: Vec<String> = std::iter::once(launcher.program.as_str())
+        .chain(launcher.prefix_args.iter().map(String::as_str))
+        .map(exec_arg)
+        .collect();
+    exec.push("%f".into());
+    format!(
+        "[Desktop Entry]\nType=Application\nName=Irori\nExec={}\nIcon=irori\nTerminal=false\nNoDisplay=true\nMimeType={};\n",
+        exec.join(" "),
+        WINDOWS_FILE_TYPES.join(";")
     )
 }
 
@@ -290,10 +319,72 @@ pub async fn register_url_scheme(launcher: &LauncherCommand) -> Result<()> {
     Ok(())
 }
 
+/// Install `irori-windows-files.desktop` and make Irori the default program
+/// for Windows programs, installers, batch and registry files, so a double
+/// click in the file manager opens them in Irori. Replaces the user's
+/// current choice (often Wine's own entry), so only on request.
+pub async fn register_windows_files(launcher: &LauncherCommand) -> Result<()> {
+    let dir = applications_dir();
+    let path = dir.join(WINDOWS_FILES_HANDLER_FILE);
+    write_entry(&path, &windows_files_entry(launcher), false).await?;
+    let default = CommandSpec::new("xdg-mime")
+        .args(["default", WINDOWS_FILES_HANDLER_FILE])
+        .args(WINDOWS_FILE_TYPES.iter().copied());
+    irori_core::process::run(&default, RunOptions::default())
+        .await
+        .context("xdg-mime was not found")?
+        .check()
+        .context("the desktop did not accept Irori as the program for Windows files")?;
+    let database = CommandSpec::new("update-desktop-database").arg(dir.as_os_str());
+    match irori_core::process::run(&database, RunOptions::default()).await {
+        Ok(r) if r.success() => {}
+        Ok(r) => tracing::debug!("{database} failed: {}", r.error_summary()),
+        Err(e) => tracing::debug!("{database} unavailable: {e:#}"),
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use irori_core::Runner;
+
+    #[test]
+    fn windows_files_entry_takes_a_file_path() {
+        let launcher = LauncherCommand {
+            program: "/opt/My Apps/irori".into(),
+            prefix_args: vec![],
+            working_dir: PathBuf::from("/"),
+        };
+        let entry = windows_files_entry(&launcher);
+        assert!(
+            entry.contains("Exec=\"/opt/My Apps/irori\" %f\n"),
+            "{entry}"
+        );
+        assert!(entry.contains("NoDisplay=true\n"));
+        assert!(entry.contains(
+            "MimeType=application/x-msdownload;application/x-ms-dos-executable;\
+             application/vnd.microsoft.portable-executable;application/x-msi;\
+             application/x-bat;text/x-ms-regedit;\n"
+        ));
+    }
+
+    /// The packaged entry (tarball, AppImage, `install.sh`) offers Irori for
+    /// the same files, so it is listed under "Open with" there too.
+    #[test]
+    fn packaged_entry_lists_the_windows_file_types() {
+        let packaged = include_str!("../../../../packaging/irori.desktop");
+        let types = packaged
+            .lines()
+            .find_map(|l| l.strip_prefix("MimeType="))
+            .expect("MimeType line");
+        for t in WINDOWS_FILE_TYPES {
+            assert!(
+                types.split(';').any(|p| p == *t),
+                "{t} missing from {types}"
+            );
+        }
+    }
 
     #[test]
     fn exec_quoting() {

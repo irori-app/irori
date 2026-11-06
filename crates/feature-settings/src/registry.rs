@@ -263,6 +263,8 @@ pub enum ActionKind {
     ImportLutris,
     ImportBottles,
     ImportFaugus,
+    /// Make Irori the program that opens Windows files (Linux).
+    OpenWindowsFiles,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -532,7 +534,11 @@ impl FieldSpec {
             return false;
         }
         // gpu-screen-recorder, which the replay buffer runs, is Linux only.
-        if (self.path == "panel.replay" || self.path.starts_with("iroriReplay."))
+        // Only Linux desktops let Irori make itself the program for Windows
+        // files (`irori_services::can_open_windows_files_by_default`).
+        if (self.path == "panel.replay"
+            || self.path.starts_with("iroriReplay.")
+            || self.path == "action.open-windows-files")
             && host != HostPlatform::Linux
         {
             return false;
@@ -1440,6 +1446,25 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.itch_io.help")
     .keywords(&["itch", "itch.io", "store", "indie"]),
+    app(
+        "action.open-windows-files",
+        "settings.field.action_open_windows_files.label",
+        General,
+        "settings.group.integrations",
+        Action(ActionKind::OpenWindowsFiles),
+    )
+    .help("settings.field.action_open_windows_files.help")
+    .keywords(&[
+        "exe",
+        "msi",
+        "bat",
+        "reg",
+        "double click",
+        "open with",
+        "file",
+        "wine",
+        "default",
+    ]),
     app(
         "maxWorkers",
         "settings.field.max_workers.label",

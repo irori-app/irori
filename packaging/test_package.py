@@ -1,6 +1,7 @@
 """Packaging regressions that can run on every build host."""
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -162,6 +163,22 @@ class LinuxPackagingTests(unittest.TestCase):
 
     def version(self):
         return tomllib.loads((Path(package.__file__).resolve().parent.parent / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+
+
+class MacPackagingTests(unittest.TestCase):
+    def test_info_plist_offers_irori_for_windows_files_without_taking_them_over(self):
+        info = package.macos_info("1.2.3")
+        self.assertEqual(info["CFBundleURLTypes"][0]["CFBundleURLSchemes"], ["irori"])
+        documents = info["CFBundleDocumentTypes"]
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]["LSHandlerRank"], "Alternate")
+        self.assertEqual(documents[0]["CFBundleTypeRole"], "Viewer")
+        self.assertEqual(documents[0]["CFBundleTypeExtensions"], ["exe", "msi", "bat", "cmd", "reg"])
+
+    def test_windows_file_extensions_match_the_runtime(self):
+        source = (Path(package.__file__).resolve().parent.parent / "crates/runtime/src/windows_file.rs").read_text()
+        line = next(l for l in source.splitlines() if l.startswith("pub const EXTENSIONS"))
+        self.assertEqual(re.findall(r'"([a-z]+)"', line), package.WINDOWS_FILE_EXTENSIONS)
 
 
 class WindowsPackagingTests(unittest.TestCase):

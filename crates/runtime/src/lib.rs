@@ -21,6 +21,7 @@ pub mod sandbox;
 pub mod sysinfo;
 pub mod tools;
 pub mod vdf;
+pub mod windows_file;
 pub mod wrappers;
 
 use std::collections::HashMap;

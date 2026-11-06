@@ -64,6 +64,10 @@ fn main() -> Result<()> {
         std::process::exit(i32::from(irori_sign_in::main(args.into_iter().skip(1))));
     }
     irori_secrets::use_os_keyring();
+    let args = match std::env::current_dir() {
+        Ok(cwd) => cli::absolute_file_args(args, &cwd),
+        Err(_) => args,
+    };
     let cli = Cli::parse(args.clone());
     if cli.help {
         println!("{}\n\n{}", cli::HELP, headless::HELP);
@@ -73,7 +77,7 @@ fn main() -> Result<()> {
     // for a mistyped one.
     if let Some(first) = args
         .first()
-        .filter(|a| !a.starts_with('-') && !a.contains("://"))
+        .filter(|a| !a.starts_with('-') && !a.contains("://") && !cli::is_windows_file_arg(a))
         && !headless::COMMANDS.contains(&first.as_str())
     {
         eprintln!("irori: unknown command '{first}'\n\n{}", headless::HELP);
@@ -348,6 +352,18 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             let _ = handle.update(cx, |_, window, cx| {
                 window.defer(cx, move |window, cx| {
                     irori_game::open_nxm_dialog(&link, window, cx)
+                })
+            });
+        }
+    }
+    if let Some(file) = &cli.windows_file {
+        open_main_window(app, cx);
+        let window = app.lock().window;
+        if let Some(handle) = window {
+            let file = file.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    irori_game::open_windows_file_dialog(file, window, cx)
                 })
             });
         }

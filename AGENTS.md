@@ -96,6 +96,9 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   Heroic's `heroic://launch/...`, and Nexus Mods' `nxm://<game>/mods/<mod>/files/<file>`
   (installs the file after asking which game it is for). Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
+- A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
+  Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
+  `Backend::open_windows_file`; `docs/PLATFORMS.md`, "Windows files").
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 

@@ -1,5 +1,7 @@
 //! Command line and launch-URL handling.
 
+use std::path::{Path, PathBuf};
+
 use irori_core::{GameId, Runner};
 use irori_ui::Route;
 
@@ -20,6 +22,10 @@ pub struct Cli {
     pub lutris: Option<String>,
     /// A Nexus Mods "Mod manager download" link (`nxm://…`) to install.
     pub nxm: Option<String>,
+    /// A Windows file opened with Irori (`.exe`, `.msi`, `.bat`, `.cmd`,
+    /// `.reg`, as an absolute path or a `file://` URL) to open in a game's
+    /// Wine prefix. Not on Windows, which opens them itself.
+    pub windows_file: Option<PathBuf>,
     pub big_picture: bool,
     /// Start hidden in the tray.
     pub minimized: bool,
@@ -39,8 +45,15 @@ impl Cli {
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
+                s if s.starts_with("file://") => {
+                    cli.windows_file = url::Url::parse(s)
+                        .ok()
+                        .and_then(|u| u.to_file_path().ok())
+                        .filter(|p| opens_windows_file(p));
+                }
                 s if s.contains("://") => cli.apply_url(s),
                 s if s.starts_with("lutris:") => cli.lutris = lutris_slug(&s["lutris:".len()..]),
+                s if opens_windows_file(Path::new(s)) => cli.windows_file = Some(s.into()),
                 _ => {}
             }
         }
@@ -134,8 +147,38 @@ impl Cli {
             || self.route.is_some()
             || self.lutris.is_some()
             || self.nxm.is_some()
+            || self.windows_file.is_some()
             || self.big_picture
     }
+}
+
+/// Whether Irori opens this file in a game's Wine prefix. Relative paths
+/// were made absolute by [`absolute_file_args`] before parsing.
+fn opens_windows_file(path: &Path) -> bool {
+    cfg!(not(windows)) && path.is_absolute() && irori_runtime::windows_file::is_windows_file(path)
+}
+
+/// Whether a bare argument names a Windows file to open, not a command.
+pub fn is_windows_file_arg(arg: &str) -> bool {
+    cfg!(not(windows))
+        && !arg.starts_with('-')
+        && !arg.contains("://")
+        && irori_runtime::windows_file::is_windows_file(Path::new(arg))
+}
+
+/// Make a Windows file given by a relative path absolute, against `cwd`: a
+/// running instance gets the arguments with its own working folder.
+pub fn absolute_file_args(args: Vec<String>, cwd: &Path) -> Vec<String> {
+    args.into_iter()
+        .map(|arg| {
+            let path = Path::new(&arg);
+            if is_windows_file_arg(&arg) && path.is_relative() {
+                cwd.join(path).to_string_lossy().into_owned()
+            } else {
+                arg
+            }
+        })
+        .collect()
 }
 
 /// The game slug of a Lutris link body: `<slug>`, `install/<slug>` or
@@ -179,7 +222,7 @@ fn decode(s: &str) -> String {
 
 pub const HELP: &str = "Irori — a fast game launcher for Epic, GOG, Amazon and ZOOM games
 
-Usage: irori [options] [url]
+Usage: irori [options] [url | file]
 
 Options:
   -l, --launch <runner>/<app>   Launch a game (runners: legendary, gog, nile, zoom, sideload)
@@ -191,7 +234,10 @@ Options:
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
       irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
-      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)";
+      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)
+
+Files: a Windows program, installer, batch or registry file (.exe, .msi, .bat, .cmd, .reg)
+       opens in the Wine prefix of a game you choose (Linux and macOS)";
 
 #[cfg(test)]
 mod tests {
@@ -260,6 +306,45 @@ mod tests {
         );
         assert!(cli.has_request());
         assert_eq!(cli.launch, None);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn windows_files_open_in_a_game_prefix() {
+        let file = |args: &[&str]| parse(args).windows_file;
+        assert_eq!(
+            file(&["/home/me/Downloads/Setup.EXE"]),
+            Some(PathBuf::from("/home/me/Downloads/Setup.EXE"))
+        );
+        // File managers may pass a `file://` URL for `%u`.
+        assert_eq!(
+            file(&["file:///home/me/My%20Games/patch.msi"]),
+            Some(PathBuf::from("/home/me/My Games/patch.msi"))
+        );
+        assert!(parse(&["/tmp/fix.reg"]).has_request());
+        assert_eq!(file(&["/home/me/notes.txt"]), None);
+        assert_eq!(file(&["file:///home/me/notes.txt"]), None);
+        // Relative paths are made absolute before parsing, never guessed.
+        assert_eq!(file(&["setup.exe"]), None);
+        assert_eq!(
+            absolute_file_args(
+                vec![
+                    "setup.exe".into(),
+                    "--minimized".into(),
+                    "/abs/x.bat".into(),
+                    "file:///abs/y.msi".into(),
+                ],
+                Path::new("/home/me/Downloads"),
+            ),
+            [
+                "/home/me/Downloads/setup.exe",
+                "--minimized",
+                "/abs/x.bat",
+                "file:///abs/y.msi"
+            ]
+        );
+        assert!(is_windows_file_arg("setup.exe"));
+        assert!(!is_windows_file_arg("refresh"));
     }
 
     #[test]
