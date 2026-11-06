@@ -59,6 +59,8 @@ pub(crate) fn folder_probe(folder: String) -> Probe {
 /// is the program's descendants by parent process, started after it.
 #[derive(Debug)]
 pub(crate) struct Handoff {
+    /// The process group's leader; Windows seeds `known` with it instead.
+    #[cfg(unix)]
     pid: u32,
     /// Unix time a second before the program started; descendants started
     /// earlier are other programs that reused a pid.
@@ -78,6 +80,7 @@ impl Handoff {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs().saturating_sub(1));
         Arc::new(Self {
+            #[cfg(unix)]
             pid,
             since,
             #[cfg(windows)]
