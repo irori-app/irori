@@ -1,6 +1,6 @@
 ---
 import BrandLockup from './BrandLockup.vue'
-import { ALTERNATIVETO, REPO } from '../data/site'
+import { ALTERNATIVETO, REPO, X_ACCOUNT } from '../data/site'
 import { usesGameCovers } from '../lib/wall'
 import { dictionary, localePath, type Locale } from '../i18n/config'
 
@@ -34,6 +34,7 @@ const columns = [
       { href: REPO, label: t.footer.source },
       { href: `${REPO}/releases`, label: t.footer.releases },
       { href: `${REPO}/issues`, label: t.footer.issues },
+      { href: X_ACCOUNT, label: t.footer.x },
       { href: `${REPO}/blob/main/LICENSE`, label: t.footer.licence },
       { href: p('/code-signing/'), label: t.footer.signing },
     ],

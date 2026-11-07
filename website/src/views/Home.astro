@@ -10,7 +10,7 @@ import Hotspots from '../components/Hotspots.astro'
 import InstallTabs from '../components/InstallTabs.vue'
 import StatsCard from '../components/StatsCard.astro'
 import Base from '../layouts/Base.astro'
-import { BIG_PICTURE_SHOTS, MEASURED, REPO, SITE, STORES } from '../data/site'
+import { BIG_PICTURE_SHOTS, MEASURED, REPO, SITE, STORES, X_ACCOUNT } from '../data/site'
 import { dictionary, format, localePath, type Locale } from '../i18n/config'
 import { getLatestRelease } from '../lib/github'
 import { entries, slugOf } from '../lib/pages'
@@ -59,7 +59,7 @@ const software = {
   license: 'https://opensource.org/licenses/MIT',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   ...(latest ? { softwareVersion: latest.version, downloadUrl: `${REPO}/releases/latest` } : {}),
-  sameAs: [REPO],
+  sameAs: [REPO, X_ACCOUNT],
 }
 const faqSchema = {
   '@context': 'https://schema.org',

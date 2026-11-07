@@ -3,6 +3,9 @@
 export const SITE = 'https://irori.app'
 export const REPO = 'https://github.com/irori-app/irori'
 export const REPO_API = 'https://api.github.com/repos/irori-app/irori'
+/** Irori's account on X. */
+export const X_HANDLE = '@irorilauncher'
+export const X_ACCOUNT = 'https://x.com/irorilauncher'
 /** Irori's AlternativeTo listing; the query string is the one their badge code uses. */
 export const ALTERNATIVETO = 'https://alternativeto.net/software/irori/about/?utm_source=badge&utm_medium=referral'
 
