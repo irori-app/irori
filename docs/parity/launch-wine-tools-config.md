@@ -309,6 +309,12 @@ Rows are applied in source order:
 Heroic **never** sets `WINEDEBUG=-all` and never sets `PROTON_LOG`. (`ignoreLogging` in
 `runWineCommand` only deletes an inherited `PROTON_LOG`.)
 
+Irori deviation: game launches (not installers or winetricks) get
+`WINEDEBUG=-all,err+module,err+mscoree` when neither the user's variables nor
+Irori's environment set `WINEDEBUG` and `verboseLogs` is off, so a game that
+closes at once still logs the DLL Wine couldn't load (Proton's own default is
+`-all`). See `irori_runtime::env::game_debug_env`.
+
 #### 1.4.4 Known-fixes env
 
 `getKnownFixesEnvVariables(appName, runner)` returns `knownFixes.envVariables || {}` (`launcher.ts:1018-1022`; see A.6).
