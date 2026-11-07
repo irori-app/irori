@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Sıradakiler",
   "game.achievements.cover_hidden": "Yeniden gizle",
   "game.achievements.complete": "Tüm başarımlar açıldı",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Diğer başarımlar",
   "game.achievements.worth_one": "{points} puan",
   "game.achievements.worth_other": "{points} puan",
   "game.action.install": "Yükle",

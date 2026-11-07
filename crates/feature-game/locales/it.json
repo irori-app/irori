@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Prossimi",
   "game.achievements.cover_hidden": "Nascondi di nuovo",
   "game.achievements.complete": "Tutti gli obiettivi sbloccati",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Altri obiettivi",
   "game.achievements.worth_one": "{points} punto",
   "game.achievements.worth_other": "{points} punti",
   "game.action.install": "Installa",

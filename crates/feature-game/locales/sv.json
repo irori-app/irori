@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Härnäst",
   "game.achievements.cover_hidden": "Dölj igen",
   "game.achievements.complete": "Alla prestationer upplåsta",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Övriga prestationer",
   "game.achievements.worth_one": "{points} poäng",
   "game.achievements.worth_other": "{points} poäng",
   "game.action.install": "Installera",

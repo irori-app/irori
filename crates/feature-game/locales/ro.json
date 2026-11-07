@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Urmează",
   "game.achievements.cover_hidden": "Ascunde din nou",
   "game.achievements.complete": "Toate realizările deblocate",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Alte realizări",
   "game.achievements.worth_one": "{points} punct",
   "game.achievements.worth_other": "Puncte: {points}",
   "game.action.install": "Instalează",

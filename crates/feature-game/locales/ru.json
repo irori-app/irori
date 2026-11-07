@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Следующие",
   "game.achievements.cover_hidden": "Снова скрыть",
   "game.achievements.complete": "Все достижения получены",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Другие достижения",
   "game.achievements.worth_one": "Очки: {points}",
   "game.achievements.worth_other": "Очки: {points}",
   "game.action.install": "Установить",

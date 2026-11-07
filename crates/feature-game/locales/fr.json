@@ -17,6 +17,8 @@
   "game.achievements.up_next": "À suivre",
   "game.achievements.cover_hidden": "Masquer à nouveau",
   "game.achievements.complete": "Tous les succès débloqués",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Autres succès",
   "game.achievements.worth_one": "{points} point",
   "game.achievements.worth_other": "{points} points",
   "game.action.install": "Installer",

@@ -17,6 +17,8 @@
   "game.achievements.up_next": "下一個目標",
   "game.achievements.cover_hidden": "重新隱藏",
   "game.achievements.complete": "已解鎖全部成就",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "其他成就",
   "game.achievements.worth_one": "{points} 點",
   "game.achievements.worth_other": "{points} 點",
   "game.action.install": "安裝",
