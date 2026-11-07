@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Затримка повтору",
   "settings.field.gamepad_repeat_delay.help": "Інтервал у мілісекундах між повторами під час утримання кнопки (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Інтервал повтору",
+  "settings.field.overlay.label": "Ігровий оверлей (бета)",
+  "settings.field.overlay.help": "Кнопка Guide на контролері під час гри, запущеної з Irori, відкриває поверх гри гучність, знімки екрана, досягнення й нотатку за сьогодні, а поки оверлей відкритий, гра не отримує натискань контролера. Guide + RB робить знімок екрана, Guide + вгору чи вниз змінює гучність. Найкраще працює в середовищах Wayland з layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Додаткові параметри gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Утримувати курсор у вікні",
   "settings.field.gamescope_enable_limiter.label": "Обмежувач кадрів",

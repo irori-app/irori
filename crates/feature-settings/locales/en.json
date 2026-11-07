@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Repeat delay",
   "settings.field.gamepad_repeat_delay.help": "Milliseconds between repeats while a button is held (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Repeat interval",
+  "settings.field.overlay.label": "In-game overlay (beta)",
+  "settings.field.overlay.help": "The controller’s Guide button over a game Irori started opens volume, screenshots, achievements and today’s note above the game, and holds the controller from the game while it is open. Guide + RB takes a screenshot and Guide + Up or Down changes the volume. Works best on Wayland desktops with layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Extra gamescope options",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Keep the cursor in the window",
   "settings.field.gamescope_enable_limiter.label": "Frame limiter",

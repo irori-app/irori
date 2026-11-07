@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Délai de répétition",
   "settings.field.gamepad_repeat_delay.help": "Millisecondes entre deux répétitions tant qu’un bouton est maintenu (5 à 150).",
   "settings.field.gamepad_repeat_delay.label": "Intervalle de répétition",
+  "settings.field.overlay.label": "Overlay en jeu (bêta)",
+  "settings.field.overlay.help": "Le bouton Guide de la manette, pendant un jeu lancé par Irori, ouvre par-dessus le jeu le volume, les captures, les succès et la note du jour, et soustrait la manette au jeu tant qu’il est ouvert. Guide + RB fait une capture et Guide + haut ou bas change le volume. Fonctionne au mieux sur les bureaux Wayland avec layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Options supplémentaires de gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Garder le curseur dans la fenêtre",
   "settings.field.gamescope_enable_limiter.label": "Limiteur d’images",

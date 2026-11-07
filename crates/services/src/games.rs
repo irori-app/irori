@@ -99,10 +99,37 @@ impl Backend {
         self.running.lock().get(id).map(|r| r.started.elapsed())
     }
 
+    /// The process (and process group) Irori started for a running game.
+    /// For a game another program owns, the command that handed it over.
+    pub fn running_pid(&self, id: &GameId) -> Option<u32> {
+        self.running.lock().get(id).map(|r| r.pid)
+    }
+
     /// Every recorded play session, oldest first. Reads the history file;
     /// call off the UI thread.
     pub fn sessions(&self) -> Vec<crate::sessions::Session> {
         crate::sessions::read_all()
+    }
+
+    /// The sessions still going on, as they would be recorded if they ended
+    /// now, so what is taken during them can be matched to them.
+    fn running_sessions(&self) -> Vec<crate::sessions::Session> {
+        let now = chrono::Local::now();
+        self.running
+            .lock()
+            .iter()
+            .map(|(id, r)| {
+                let elapsed = r.started.elapsed();
+                let started = now - chrono::Duration::from_std(elapsed).unwrap_or_default();
+                crate::sessions::Session {
+                    game: id.key(),
+                    started: started.to_rfc3339(),
+                    seconds: elapsed.as_secs(),
+                    crashed: false,
+                    exit_code: None,
+                }
+            })
+            .collect()
     }
 
     /// Screenshots the user took and clips the replay buffer saved while
@@ -121,11 +148,11 @@ impl Backend {
         }
         let folders =
             crate::screenshots::folders(&self.settings.app(), |name| titles.get(name).cloned());
-        crate::screenshots::build(
-            &folders,
-            &self.sessions(),
-            &Paths::get().screenshot_index_file(),
-        )
+        // A session is recorded when it ends; what is taken during the
+        // running ones belongs to them already.
+        let mut sessions = self.sessions();
+        sessions.extend(self.running_sessions());
+        crate::screenshots::build(&folders, &sessions, &Paths::get().screenshot_index_file())
     }
 
     /// Refuse to touch the files of a game another launcher manages (Steam),

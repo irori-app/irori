@@ -168,7 +168,7 @@ pub fn clip_name(title: &str, at: NaiveDateTime, ext: &str) -> String {
 }
 
 /// `name` in `dir`, numbered when a file of that name is already there.
-fn free_path(dir: &Path, name: &str) -> PathBuf {
+pub(crate) fn free_path(dir: &Path, name: &str) -> PathBuf {
     let first = dir.join(name);
     if !first.exists() {
         return first;

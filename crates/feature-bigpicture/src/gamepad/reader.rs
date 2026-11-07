@@ -3,18 +3,22 @@
 //! an idle controller costs no CPU.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedSender;
+#[cfg(target_os = "linux")]
+use gilrs::LinuxGamepadExt as _;
 use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
-    AxisChange, ControllerKind, Deduper, GamepadInput, GuideTap, PadButton, Repeater,
+    AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, PadButton, Repeater,
     SteamIgnoreList, StickAxis, is_ignored_device, map_button,
 };
 use super::{Battery, ControllerInfo};
+use parking_lot::Mutex;
 
 /// How often battery levels are re-read while a controller is connected.
 const BATTERY_REFRESH: Duration = Duration::from_secs(30);
@@ -24,18 +28,25 @@ pub(crate) struct SharedConfig {
     pub disabled: AtomicBool,
     pub initial_ms: AtomicU32,
     pub repeat_ms: AtomicU32,
+    /// The in-game overlay is on, and with it Guide + RB / Up / Down.
+    pub overlay: AtomicBool,
+    /// The event devices of the controllers read (Linux), which the overlay
+    /// holds from the game while it is open.
+    pub devices: Mutex<Vec<(PathBuf, ControllerKind)>>,
 }
 
 impl SharedConfig {
-    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32) -> Self {
+    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32, overlay: bool) -> Self {
         Self {
             disabled: AtomicBool::new(disabled),
             initial_ms: AtomicU32::new(initial_ms),
             repeat_ms: AtomicU32::new(repeat_ms),
+            overlay: AtomicBool::new(overlay),
+            devices: Mutex::new(Vec::new()),
         }
     }
 
-    fn timing(&self) -> (Duration, Duration) {
+    pub(crate) fn timing(&self) -> (Duration, Duration) {
         (
             Duration::from_millis(self.initial_ms.load(Ordering::Relaxed) as u64),
             Duration::from_millis(self.repeat_ms.load(Ordering::Relaxed) as u64),
@@ -50,8 +61,8 @@ pub(crate) enum Message {
         kind: ControllerKind,
     },
     Controllers(Vec<ControllerInfo>),
-    /// Guide + X: save a clip of the replay buffer.
-    SaveClip,
+    /// A button pressed with Guide held.
+    Chord(Chord),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,6 +221,7 @@ impl Reader {
             );
         }
         self.devices = devices;
+        self.publish_paths(gilrs);
         let devices = &self.devices;
         self.held.retain(|(id, ..)| devices.contains_key(id));
         if self.held.is_empty() {
@@ -217,6 +229,22 @@ impl Reader {
         }
         self.publish_controllers(gilrs);
     }
+
+    /// Tell the overlay which event devices to hold from the game.
+    #[cfg(target_os = "linux")]
+    fn publish_paths(&self, gilrs: &Gilrs) {
+        let paths = gilrs
+            .gamepads()
+            .filter_map(|(id, pad)| {
+                let device = self.devices.get(&id).filter(|d| !d.ignored)?;
+                Some((pad.devpath().to_path_buf(), device.kind))
+            })
+            .collect();
+        *self.shared.devices.lock() = paths;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn publish_paths(&self, _gilrs: &Gilrs) {}
 
     fn publish_controllers(&mut self, gilrs: &Gilrs) {
         let controllers: Vec<ControllerInfo> = gilrs
@@ -255,11 +283,15 @@ impl Reader {
                     self.guide.press(usize::from(id), Instant::now());
                     return;
                 }
-                // X (Square on PlayStation) with Guide held: a clip, even
+                // A chord with Guide held (X: a clip; with the overlay's
+                // shortcuts RB: a screenshot, Up/Down: the volume), even
                 // while a game has the window.
-                if input == GamepadInput::Alt && self.guide.chord(usize::from(id)) {
+                let overlay = self.shared.overlay.load(Ordering::Relaxed);
+                if let Some(chord) = Chord::of(input, overlay)
+                    && self.guide.chord(usize::from(id))
+                {
                     if self.enabled() {
-                        let _ = self.tx.unbounded_send(Message::SaveClip);
+                        let _ = self.tx.unbounded_send(Message::Chord(chord));
                     }
                     return;
                 }

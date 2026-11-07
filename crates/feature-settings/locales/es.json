@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Retardo de repetición",
   "settings.field.gamepad_repeat_delay.help": "Milisegundos entre repeticiones mientras se mantiene pulsado un botón (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Intervalo de repetición",
+  "settings.field.overlay.label": "Superposición en el juego (beta)",
+  "settings.field.overlay.help": "El botón Guide del mando, sobre un juego iniciado con Irori, abre encima del juego el volumen, las capturas, los logros y la nota de hoy, y aparta el mando del juego mientras está abierta. Guide + RB hace una captura y Guide + arriba o abajo cambia el volumen. Funciona mejor en escritorios Wayland con layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Opciones adicionales de gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Mantener el cursor en la ventana",
   "settings.field.gamescope_enable_limiter.label": "Limitador de FPS",

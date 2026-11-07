@@ -4373,12 +4373,14 @@ dependencies = [
  "irori-engines",
  "irori-services",
  "irori-ui",
+ "libc",
  "once_cell",
  "parking_lot",
  "regex",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 

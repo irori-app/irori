@@ -33,8 +33,8 @@ use futures::channel::mpsc;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::{Root, TitleBar};
 use gpui_kit::{
-    App, AppContext as _, Bounds, Focusable as _, QuitMode, WindowBounds, WindowDecorations,
-    WindowHandle, WindowOptions, px, size,
+    AnyWindowHandle, App, AppContext as _, Bounds, Focusable as _, QuitMode, WindowBounds,
+    WindowDecorations, WindowHandle, WindowOptions, px, size,
 };
 use irori_core::{GameId, Paths};
 use irori_services::Backend;
@@ -167,6 +167,11 @@ fn main() -> Result<()> {
 
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
+        {
+            // The in-game overlay's "Back to Irori".
+            let app = app.clone();
+            irori_bigpicture::overlay::install_show_irori(move |cx| open_main_window(&app, cx), cx);
+        }
         {
             let app = app.clone();
             irori_ui::system_notify::install(
@@ -606,8 +611,16 @@ fn watch_recent_for_tray(handle: tray::TrayHandle, cx: &mut App) {
 }
 
 /// Quit when the main window closes, unless the user keeps Irori in the tray.
+/// Other windows (the in-game overlay) come and go without either.
 fn install_quit_on_close(app: Arc<Mutex<AppHandles>>, cx: &mut App) {
-    cx.on_window_closed(move |cx, _| {
+    cx.on_window_closed(move |cx, closed| {
+        let main = app
+            .lock()
+            .window
+            .map(|w| AnyWindowHandle::from(w).window_id());
+        if main.is_some_and(|id| id != closed) {
+            return;
+        }
         let keep = {
             let handles = app.lock();
             handles.tray.is_some() && irori_ui::backend(cx).settings.app().exit_to_tray

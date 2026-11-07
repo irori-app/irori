@@ -4,12 +4,14 @@
 //! The shell calls [`init`] once after `irori_ui::init`, renders
 //! [`BigPictureView`] for [`irori_ui::Route::BigPicture`] (hiding its own
 //! chrome), and may show [`gamepad::connected_controllers`] on the settings
-//! page.
+//! page. The in-game overlay ([`overlay`]) lives here too, since it is
+//! driven by the controller input this crate owns.
 
 pub mod gamepad;
 mod grid;
 mod layout;
 mod model;
+pub mod overlay;
 mod text;
 mod theme;
 mod view;
@@ -108,6 +110,22 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", CloseSearch, Some(SEARCH_CONTEXT)),
         KeyBinding::new("down", CloseSearch, Some(SEARCH_CONTEXT)),
         KeyBinding::new("escape", CloseSettings, Some(SETTINGS_CONTEXT)),
+    ]);
+    // The in-game overlay, which takes the keyboard only after a click.
+    let ctx = Some(overlay::OVERLAY_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", gamepad::Up, ctx),
+        KeyBinding::new("down", gamepad::Down, ctx),
+        KeyBinding::new("left", gamepad::Left, ctx),
+        KeyBinding::new("right", gamepad::Right, ctx),
+        KeyBinding::new("enter", gamepad::Confirm, ctx),
+        KeyBinding::new("space", gamepad::Confirm, ctx),
+        KeyBinding::new("escape", gamepad::Back, ctx),
+        KeyBinding::new("backspace", gamepad::Back, ctx),
+        KeyBinding::new("pageup", gamepad::PrevPage, ctx),
+        KeyBinding::new("pagedown", gamepad::NextPage, ctx),
+        KeyBinding::new("ctrl-shift-tab", gamepad::PrevPage, ctx),
+        KeyBinding::new("ctrl-tab", gamepad::NextPage, ctx),
     ]);
 }
 

@@ -36,7 +36,7 @@ mod tile;
 mod wall;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::collections::HashSet;
 use std::sync::Arc;

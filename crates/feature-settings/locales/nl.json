@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Herhaalvertraging",
   "settings.field.gamepad_repeat_delay.help": "Milliseconden tussen herhalingen terwijl een knop ingedrukt blijft (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Herhaalinterval",
+  "settings.field.overlay.label": "In-game-overlay (bèta)",
+  "settings.field.overlay.help": "De Guide-knop van de controller opent boven een spel dat Irori startte het volume, schermafbeeldingen, prestaties en de notitie van vandaag, en houdt de controller bij het spel weg zolang de overlay open is. Guide + RB maakt een schermafbeelding en Guide + omhoog of omlaag wijzigt het volume. Werkt het best op Wayland-desktops met layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Extra gamescope-opties",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Cursor in het venster houden",
   "settings.field.gamescope_enable_limiter.label": "Framebegrenzer",

@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "반복 지연",
   "settings.field.gamepad_repeat_delay.help": "버튼을 누르고 있는 동안 반복되는 간격입니다(밀리초, 5–150).",
   "settings.field.gamepad_repeat_delay.label": "반복 간격",
+  "settings.field.overlay.label": "게임 내 오버레이(베타)",
+  "settings.field.overlay.help": "Irori로 시작한 게임 중에 컨트롤러의 Guide 버튼을 누르면 게임 위에 음량, 스크린샷, 업적, 오늘의 메모가 열리고, 열려 있는 동안에는 컨트롤러 입력이 게임에 전달되지 않습니다. Guide + RB는 스크린샷을 찍고 Guide + 위/아래는 음량을 바꿉니다. layer-shell을 지원하는 Wayland 데스크톱(KDE Plasma, sway, Hyprland, COSMIC)에서 가장 잘 동작합니다.",
   "settings.field.gamescope_additional_options.label": "gamescope 추가 옵션",
   "settings.field.gamescope_enable_force_grab_cursor.label": "커서를 창 안에 고정",
   "settings.field.gamescope_enable_limiter.label": "프레임 제한기",

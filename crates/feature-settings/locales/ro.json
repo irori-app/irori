@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Întârziere până la repetare",
   "settings.field.gamepad_repeat_delay.help": "Milisecunde între repetări cât timp un buton este ținut apăsat (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Interval de repetare",
+  "settings.field.overlay.label": "Suprapunere în joc (beta)",
+  "settings.field.overlay.help": "Butonul Guide al controlerului, peste un joc pornit de Irori, deschide deasupra jocului volumul, capturile de ecran, realizările și nota de azi și ține controlerul departe de joc cât timp e deschisă. Guide + RB face o captură de ecran, iar Guide + sus sau jos schimbă volumul. Funcționează cel mai bine pe desktopuri Wayland cu layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Opțiuni suplimentare gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Păstrează cursorul în fereastră",
   "settings.field.gamescope_enable_limiter.label": "Limitator de cadre",

@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Atraso da repetição",
   "settings.field.gamepad_repeat_delay.help": "Milissegundos entre repetições enquanto um botão está premido (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Intervalo de repetição",
+  "settings.field.overlay.label": "Sobreposição no jogo (beta)",
+  "settings.field.overlay.help": "O botão Guide do comando, sobre um jogo iniciado pelo Irori, abre por cima do jogo o volume, as capturas, as conquistas e a nota de hoje, e retira o comando ao jogo enquanto estiver aberta. Guide + RB faz uma captura e Guide + cima ou baixo muda o volume. Funciona melhor em ambientes Wayland com layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Opções extra do gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Manter o cursor na janela",
   "settings.field.gamescope_enable_limiter.label": "Limitador de fotogramas",

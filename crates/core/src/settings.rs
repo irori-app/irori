@@ -720,6 +720,10 @@ pub struct AppSettings {
     /// on this computer.
     #[serde(rename = "iroriSunshine")]
     pub sunshine: SunshinePrefs,
+    /// The in-game overlay on the controller's Guide button. Irori-only;
+    /// Linux only for now.
+    #[serde(rename = "iroriOverlay")]
+    pub overlay: OverlayPrefs,
 }
 
 impl Default for AppSettings {
@@ -750,6 +754,7 @@ impl Default for AppSettings {
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
+            overlay: OverlayPrefs::default(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
@@ -965,6 +970,14 @@ pub enum SunshineGames {
     Installed,
     /// Installed favourites only.
     Favourites,
+}
+
+/// The in-game overlay (`iroriOverlay`): Guide over a game Irori started
+/// opens it instead of Big Picture. Off by default while it is in beta.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OverlayPrefs {
+    pub enabled: bool,
 }
 
 /// Irori's games in Sunshine (`iroriSunshine`). Sunshine's own login is
