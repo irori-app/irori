@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use irori_core::{
-    Achievement, AgeRating, ExtraInfo, InstallPlatform, RatingSystem, Requirement, util,
+    Achievement, AgeRating, ExtraInfo, GameMode, InstallPlatform, RatingSystem, Requirement, util,
 };
 
 use crate::api;
@@ -116,6 +116,31 @@ pub fn age_ratings_from_v2(v: &Value) -> Vec<AgeRating> {
         .collect();
     out.sort_by_key(|r| r.system);
     out
+}
+
+/// Game modes from `api.gog.com/v2/games`' features
+/// (`_embedded.product.features`; `_embedded.features` and a top-level
+/// `features` are read too): `single`, `coop` and `multi`. GOG doesn't say
+/// where multiplayer happens, so `multi` is taken as network play.
+pub fn game_modes_from_v2(v: &Value) -> Vec<GameMode> {
+    let features = [
+        "/_embedded/product/features",
+        "/_embedded/features",
+        "/features",
+    ]
+    .into_iter()
+    .filter_map(|path| v.pointer(path).and_then(Value::as_array))
+    .flatten()
+    .filter_map(|f| f.get("id").and_then(Value::as_str));
+    let modes = features
+        .filter_map(|id| match id {
+            "single" => Some(GameMode::Single),
+            "coop" => Some(GameMode::Coop),
+            "multi" => Some(GameMode::Online),
+            _ => None,
+        })
+        .collect();
+    irori_core::game_mode::normalized(modes)
 }
 
 /// Map a raw GOG achievement.
@@ -233,6 +258,7 @@ impl GogStore {
             genres: base.genres,
             screenshots: product.as_ref().map(screenshots).unwrap_or_default(),
             age_ratings: v2.as_ref().map(age_ratings_from_v2).unwrap_or_default(),
+            game_modes: v2.as_ref().map(game_modes_from_v2).unwrap_or_default(),
         };
         if v2.is_some() || product.is_some() {
             cache.insert(
@@ -352,6 +378,28 @@ impl GogStore {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn maps_v2_features_to_game_modes() {
+        use irori_core::GameMode;
+        // Divinity: Original Sin 2's features, as v2/games lists them.
+        let v2 = serde_json::json!({"_embedded": {"product": {"features": [
+            {"name": "Achievements", "id": "achievements"},
+            {"name": "Cloud saves", "id": "cloud_saves"},
+            {"name": "Controller support", "id": "controller_support"},
+            {"name": "Co-op", "id": "coop"},
+            {"name": "Multi-player", "id": "multi"},
+            {"name": "Overlay", "id": "overlay"},
+            {"name": "Single-player", "id": "single"}
+        ]}}});
+        assert_eq!(
+            super::game_modes_from_v2(&v2),
+            [GameMode::Single, GameMode::Coop, GameMode::Online]
+        );
+        let flat = serde_json::json!({"features": [{"id": "single"}, {"id": "cloud_saves"}]});
+        assert_eq!(super::game_modes_from_v2(&flat), [GameMode::Single]);
+        assert!(super::game_modes_from_v2(&serde_json::json!({})).is_empty());
+    }
 
     #[test]
     fn maps_v2_age_ratings() {

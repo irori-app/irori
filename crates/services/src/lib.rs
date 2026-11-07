@@ -9,7 +9,6 @@
 
 pub mod accounts;
 pub mod achievements;
-mod age_ratings;
 pub mod app_update;
 pub mod backup;
 pub mod backup_schedule;
@@ -39,6 +38,7 @@ pub mod sessions;
 pub mod settings;
 pub mod status;
 pub mod storage;
+mod store_facts;
 pub mod sunshine;
 pub mod sync;
 pub mod updates;
@@ -99,7 +99,7 @@ pub struct Inner {
     pub settings: Arc<SettingsService>,
     pub userdata: UserDataService,
     facts: facts::FactsService,
-    age_ratings: age_ratings::AgeRatingsService,
+    store_facts: store_facts::StoreFactsService,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
     library: RwLock<Arc<LibrarySnapshot>>,
@@ -188,7 +188,7 @@ impl Backend {
             settings,
             userdata: UserDataService::load(bus.clone()),
             facts: facts::FactsService::load(),
-            age_ratings: age_ratings::AgeRatingsService::load(),
+            store_facts: store_facts::StoreFactsService::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
             library: RwLock::new(Arc::new(LibrarySnapshot::default())),

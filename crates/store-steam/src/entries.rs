@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use irori_core::age_rating;
 use irori_core::util::format_bytes;
 use irori_core::{
-    AgeRating, ExtraInfo, GameInfo, HostPlatform, InstallPlatform, InstalledInfo, RatingSystem,
-    Requirement, Runner,
+    AgeRating, ExtraInfo, GameInfo, GameMode, HostPlatform, InstallPlatform, InstalledInfo,
+    RatingSystem, Requirement, Runner,
 };
 use irori_steam_api::{AppAssets, AppDetails};
 
@@ -227,7 +227,44 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
             .filter(|p| !p.is_empty())
             .collect(),
         age_ratings: age_ratings(details),
+        game_modes: game_modes(details.categories.iter().map(|c| c.id)),
     }
+}
+
+/// Game modes from the store page's categories. Steam marks the venue
+/// (online, LAN, shared or split screen) and the kind (PvP, co-op)
+/// separately; "Multi-player" and "PvP" alone, without a venue, are taken
+/// as network play, which they are on the pages that predate the venues.
+/// LAN play counts as online: both are network multiplayer.
+pub(crate) fn game_modes(categories: impl IntoIterator<Item = u64>) -> Vec<GameMode> {
+    let mut modes = Vec::new();
+    let mut unplaced = false;
+    for id in categories {
+        match id {
+            2 => modes.push(GameMode::Single),
+            // Multi-player, PvP.
+            1 | 49 => unplaced = true,
+            // Online PvP, LAN PvP.
+            36 | 47 => modes.push(GameMode::Online),
+            // Shared/split screen PvP, shared/split screen.
+            37 | 24 => modes.push(GameMode::Local),
+            9 => modes.push(GameMode::Coop),
+            // Online co-op, LAN co-op.
+            38 | 48 => modes.extend([GameMode::Coop, GameMode::Online]),
+            // Shared/split screen co-op.
+            39 => modes.extend([GameMode::Coop, GameMode::Local]),
+            20 => modes.extend([GameMode::Mmo, GameMode::Online]),
+            _ => {}
+        }
+    }
+    if unplaced
+        && !modes
+            .iter()
+            .any(|m| matches!(m, GameMode::Local | GameMode::Online))
+    {
+        modes.push(GameMode::Online);
+    }
+    irori_core::game_mode::normalized(modes)
 }
 
 /// The store page's ratings by board. Steam's `steam_germany` entry
@@ -296,6 +333,38 @@ fn plain_text(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_store_page_categories_to_game_modes() {
+        // Portal 2's categories, as its store page lists them.
+        let portal2: AppDetails = serde_json::from_value(serde_json::json!({
+            "categories": [
+                {"id": 2, "description": "Single-player"}, {"id": 1, "description": "Multi-player"},
+                {"id": 9, "description": "Co-op"}, {"id": 38, "description": "Online Co-op"},
+                {"id": 39, "description": "Shared/Split Screen Co-op"},
+                {"id": 24, "description": "Shared/Split Screen"},
+                {"id": 22, "description": "Steam Achievements"}, {"id": 23, "description": "Steam Cloud"},
+                {"id": 44, "description": "Remote Play Together"}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            extra_info("620", &portal2).game_modes,
+            [
+                GameMode::Single,
+                GameMode::Coop,
+                GameMode::Local,
+                GameMode::Online
+            ]
+        );
+        // An older page: "Multi-player" alone is network play.
+        assert_eq!(game_modes([2, 1]), [GameMode::Single, GameMode::Online]);
+        // Split screen PvP only: no online play is claimed.
+        assert_eq!(game_modes([1, 49, 37]), [GameMode::Local]);
+        assert_eq!(game_modes([20]), [GameMode::Online, GameMode::Mmo]);
+        assert_eq!(game_modes([47, 48]), [GameMode::Coop, GameMode::Online]);
+        assert!(game_modes([22, 23, 44]).is_empty());
+    }
 
     #[test]
     fn maps_store_page_ratings() {

@@ -440,17 +440,38 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
-- **Age ratings** (`irori_core::age_rating`, `age_ratings.rs`): `AgeRating {system,
+- **Age ratings** (`irori_core::age_rating`, `store_facts.rs`): `AgeRating {system,
   rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
   E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
   Epic (`ageGatings`) carry them in `GameInfo::age_ratings`; Steam (`appdetails`
   `ratings`) and GOG (`v2/games` `_embedded.*Rating`) in `ExtraInfo::age_ratings`. UI code
   reads a game's store page through `Backend::extra_info`, which keeps those ratings in
-  `<cache>/age-ratings.json` and adds them to the library entry, so no request is made
-  for ratings alone. The game page shows the board of the user's region
+  `<cache>/store-facts.json` (one cache of facts learned from store pages, read from the
+  older `age-ratings.json` when it is missing) and adds them to the library entry, so no
+  request is made for ratings alone. The game page shows the board of the user's region
   (`irori_ui::age_rating`: interface language, then the system locale's region) as a
   text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
   goes by the strictest board.
+- **Game modes** (`irori_core::game_mode`, `store_facts.rs`): `GameMode` is single,
+  co-op, local (split screen, couch), online (LAN included) or MMO; `GameInfo::game_modes`
+  holds a normalized list. Sources, none of them asked in the background: Steam's
+  `appdetails` `categories` (`irori_steam::entries::game_modes`) and GOG's `v2/games`
+  features (`game_modes_from_v2`) in `ExtraInfo::game_modes`, learned through
+  `Backend::extra_info`; PCGamingWiki's infobox modes and `{{Network/Multiplayer}}` table
+  (`PcGamingWikiInfo::game_modes`, from the wikitext the game page already reads),
+  learned through `Backend::wiki_info` and used only when the store says nothing. Epic's
+  catalog and store pages carry no modes. The user's choice in the Modify dialog
+  (`GameOverrides::game_modes`, kept only when it differs from what is known) wins over
+  everything and travels with sync like the custom title. Lists are read with
+  `game_mode::lenient`, so a mode a newer Irori writes never breaks reading user data.
+  The library filters (`ViewFilter::modes`, any of), groups (`Grouping::Mode`, one
+  section per game by `filter::mode_section`) and searches (`mode:coop`,
+  `search::ParsedQuery`) by them; the game page shows them as chips that open the
+  library filtered by one mode (`GamePageEvent::ShowGameMode`).
+- **Saved views and the persisted library view** keep criteria a newer Irori wrote
+  (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
+  new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is
+  shown unfiltered there, never lost.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that

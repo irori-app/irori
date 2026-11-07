@@ -14,7 +14,7 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
     Styled as _, Subscription, Task, WeakEntity, Window, div,
 };
-use irori_core::InstallPlatform;
+use irori_core::{GameMode, InstallPlatform};
 use irori_services::EffectiveStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{models, play_status};
@@ -269,6 +269,44 @@ impl FiltersPanel {
             )
             .into_any_element()
     }
+
+    /// Game modes: games with any of the chosen ones are shown.
+    fn render_modes(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        v_flex()
+            .gap_2()
+            .child(section(irori_ui::game_mode::title()))
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .children(GameMode::ALL.into_iter().map(|mode| {
+                        Button::new(SharedString::from(format!("game-mode-{}", mode.id())))
+                            .xsmall()
+                            .outline()
+                            .icon(Icon::new(irori_ui::game_mode::icon(mode)))
+                            .label(irori_ui::game_mode::label(mode))
+                            .selected(f.modes.contains(&mode))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.set(
+                                    move |f| {
+                                        if !f.modes.remove(&mode) {
+                                            f.modes.insert(mode);
+                                        }
+                                    },
+                                    cx,
+                                )
+                            }))
+                    })),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("library.filters.modes.hint")),
+            )
+            .into_any_element()
+    }
 }
 
 impl FiltersPanel {
@@ -472,6 +510,7 @@ impl Render for FiltersPanel {
                             })),
                     ),
             )
+            .child(self.render_modes(&f, cx))
             .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))

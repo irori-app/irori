@@ -717,6 +717,8 @@
   "game.age_rating.title": "Klasyfikacja wiekowa",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Inne klasyfikacje: {ratings}",
+  "game.modes.show": "Pokaż w bibliotece gry z trybem „{mode}”",
+  "game.modes.edit": "Edytuj tryby gry",
   "game.sandbox.running": "Działa w piaskownicy",
   "game.sandbox.no_network": "Bez sieci",
   "game.sandbox.no_home": "Bez folderu domowego",

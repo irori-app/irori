@@ -138,7 +138,8 @@ impl LibraryFilter {
     ) -> Vec<Arc<GameInfo>> {
         let category = self.category.as_ref().and_then(|c| user.categories.get(c));
         let mut out: Vec<(i64, Arc<GameInfo>)> = Vec::with_capacity(library.games.len());
-        let query = Query::new(&self.query);
+        let parsed = crate::search::ParsedQuery::new(&self.query);
+        let query = Query::new(&parsed.text);
         let index = query.as_ref().map(|_| library.search());
         for (ix, g) in library.games.iter().enumerate() {
             let key = g.id().key();
@@ -190,6 +191,9 @@ impl LibraryFilter {
                 continue;
             }
             if self.updates_only && !updates.contains(&g.id()) {
+                continue;
+            }
+            if !parsed.modes_match(&g.game_modes) {
                 continue;
             }
             let score = match (&query, index) {
@@ -339,13 +343,16 @@ impl Backend {
                         g.art_logo = Some(l.clone());
                     }
                     self.facts.complete(&mut g);
-                    self.age_ratings.complete(&mut g);
+                    self.store_facts.complete(&mut g);
+                    if let Some(modes) = &o.game_modes {
+                        g.game_modes = irori_core::game_mode::normalized(modes.clone());
+                    }
                     Arc::new(g.finalize())
                 }
                 None => {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
-                    self.age_ratings.complete(&mut g);
+                    self.store_facts.complete(&mut g);
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {
@@ -468,6 +475,51 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(f.apply(&lib, &user, &none).len(), 1);
+    }
+
+    #[test]
+    fn mode_terms_narrow_a_search() {
+        use irori_core::GameMode;
+        let with = |app: &str, title: &str, modes: &[GameMode]| {
+            Arc::new(
+                GameInfo {
+                    runner: Some(Runner::Steam),
+                    app_name: app.into(),
+                    title: title.into(),
+                    game_modes: modes.to_vec(),
+                    ..Default::default()
+                }
+                .finalize(),
+            )
+        };
+        let lib = snapshot(vec![
+            with("1", "Portal", &[GameMode::Single]),
+            with(
+                "2",
+                "Portal 2",
+                &[GameMode::Single, GameMode::Coop, GameMode::Local],
+            ),
+            with("3", "Rocket League", &[GameMode::Local, GameMode::Online]),
+            with("4", "Unknown", &[]),
+        ]);
+        let user = UserData::default();
+        let none = HashSet::new();
+        let found = |query: &str| -> Vec<String> {
+            LibraryFilter {
+                query: query.into(),
+                ..Default::default()
+            }
+            .apply(&lib, &user, &none)
+            .iter()
+            .map(|g| g.title.clone())
+            .collect()
+        };
+        assert_eq!(found("mode:coop"), ["Portal 2"]);
+        assert_eq!(found("mode:split-screen"), ["Portal 2", "Rocket League"]);
+        assert_eq!(found("portal mode:single"), ["Portal", "Portal 2"]);
+        assert_eq!(found("mode:local mode:online"), ["Rocket League"]);
+        assert_eq!(found("mode:multiplayer").len(), 2);
+        assert!(found("mode:mmo").is_empty());
     }
 
     #[test]

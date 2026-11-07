@@ -717,6 +717,8 @@
   "game.age_rating.title": "Leeftijdsclassificatie",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Ook geclassificeerd: {ratings}",
+  "game.modes.show": "Games met ‘{mode}’ in de bibliotheek tonen",
+  "game.modes.edit": "Spelmodi bewerken",
   "game.sandbox.running": "Draait in een sandbox",
   "game.sandbox.no_network": "Geen netwerk",
   "game.sandbox.no_home": "Geen thuismap",

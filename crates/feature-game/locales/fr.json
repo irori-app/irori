@@ -717,6 +717,8 @@
   "game.age_rating.title": "Classification par âge",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Également classé : {ratings}",
+  "game.modes.show": "Afficher les jeux « {mode} » dans la bibliothèque",
+  "game.modes.edit": "Modifier les modes de jeu",
   "game.sandbox.running": "En cours, dans le bac à sable",
   "game.sandbox.no_network": "Sans réseau",
   "game.sandbox.no_home": "Sans dossier personnel",

@@ -717,6 +717,8 @@
   "game.age_rating.title": "Classificação etária",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Também classificado: {ratings}",
+  "game.modes.show": "Mostrar na biblioteca os jogos com «{mode}»",
+  "game.modes.edit": "Editar modos de jogo",
   "game.sandbox.running": "Em execução na sandbox",
   "game.sandbox.no_network": "Sem rede",
   "game.sandbox.no_home": "Sem pasta pessoal",

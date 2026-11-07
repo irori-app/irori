@@ -276,6 +276,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
   Steam Deck's Game Mode and reads each press once alongside Steam Input.
+- **Game modes** (single player, co-op, split screen and local, online, MMO) from
+  Steam, GOG and PCGamingWiki, as chips on each game's page and as a library filter,
+  grouping (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>G</kbd>), saved views and search
+  (`mode:coop`, `mode:local`); edit them per game.
 - **Age ratings** (ESRB, PEGI, USK, CERO, ClassInd, GRAC, ACB…) on each game's page, in
   the board of your region, with their content descriptors, and a library filter by
   age that a saved view keeps, for a view of the games that suit your children.

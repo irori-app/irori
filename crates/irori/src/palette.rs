@@ -45,6 +45,8 @@ enum PaletteTarget {
     FavouritesOnly(bool),
     /// Show the library header's quick controls (`true`) or stop.
     QuickControls(bool),
+    /// Group the library by game mode (`true`) or stop, and show it.
+    GroupByMode(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -70,6 +72,9 @@ struct LibraryCommands<'a> {
     /// Whether the library groups by play status, while a library view
     /// exists.
     grouped: Option<bool>,
+    /// Whether the library groups by game mode, while a library view
+    /// exists.
+    grouped_by_mode: Option<bool>,
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -114,6 +119,7 @@ impl Palette {
     ) -> Vec<CommandItem> {
         let LibraryCommands {
             grouped,
+            grouped_by_mode,
             views,
             layout,
             install,
@@ -363,6 +369,24 @@ impl Palette {
             PaletteTarget::QuickControls(!quick_controls),
             targets,
         );
+        if let Some(grouped) = grouped_by_mode {
+            let label = if grouped {
+                "shell.palette.ungroup_by_mode"
+            } else {
+                "shell.palette.group_by_mode"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([
+                        irori_ui::game_mode::title(),
+                        t("shell.palette.game_mode_keywords"),
+                    ])
+                    .icon(IconName::Users),
+                PaletteTarget::GroupByMode(!grouped),
+                targets,
+            );
+        }
         for (id, name) in views {
             push(
                 CommandItem::new()
@@ -488,6 +512,7 @@ impl Palette {
         };
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
+        let grouped_by_mode = irori_library::groups_by_mode(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -497,6 +522,7 @@ impl Palette {
         let replay = irori_ui::backend(cx).replay().map(|r| r.title);
         let library = LibraryCommands {
             grouped,
+            grouped_by_mode,
             views: &views,
             layout,
             install,
@@ -599,6 +625,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_quick_controls(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::GroupByMode(on) => {
+            irori_library::set_groups_by_mode(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -662,6 +692,7 @@ mod tests {
         let mut targets = Vec::new();
         let library = LibraryCommands {
             grouped: install.map(|_| false),
+            grouped_by_mode: install.map(|_| true),
             views: &[],
             layout: LibraryLayout::Grid,
             install,
@@ -675,6 +706,7 @@ mod tests {
                 PaletteTarget::Install(f) => Some(format!("install {f:?}")),
                 PaletteTarget::FavouritesOnly(on) => Some(format!("favourites {on}")),
                 PaletteTarget::QuickControls(on) => Some(format!("quick {on}")),
+                PaletteTarget::GroupByMode(on) => Some(format!("modes {on}")),
                 _ => None,
             })
             .collect()
@@ -684,11 +716,21 @@ mod tests {
     fn library_filters_and_quick_controls_are_offered_as_toggles() {
         assert_eq!(
             targets(Some(InstallFilter::Any), Some(false), true),
-            ["install Installed", "favourites true", "quick false"]
+            [
+                "install Installed",
+                "favourites true",
+                "quick false",
+                "modes false"
+            ]
         );
         assert_eq!(
             targets(Some(InstallFilter::Installed), Some(true), false),
-            ["install Any", "favourites false", "quick true"]
+            [
+                "install Any",
+                "favourites false",
+                "quick true",
+                "modes false"
+            ]
         );
         assert_eq!(
             targets(Some(InstallFilter::NotInstalled), Some(false), true),
@@ -696,7 +738,8 @@ mod tests {
                 "install Installed",
                 "install Any",
                 "favourites true",
-                "quick false"
+                "quick false",
+                "modes false"
             ]
         );
         // Without a library view only the setting can change.
