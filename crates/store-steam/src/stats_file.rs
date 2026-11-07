@@ -108,30 +108,7 @@ fn take<const N: usize>(data: &[u8], at: &mut usize) -> Option<[u8; N]> {
     Some(bytes)
 }
 
-/// Steam's name for a UI language (`english`, `german`, `schinese`…).
-pub(crate) fn steam_language(ui: &str) -> &'static str {
-    match ui {
-        "cs" => "czech",
-        "de" => "german",
-        "es" => "spanish",
-        "fr" => "french",
-        "it" => "italian",
-        "nl" => "dutch",
-        "pl" => "polish",
-        "pt" => "portuguese",
-        "pt_BR" => "brazilian",
-        "ro" => "romanian",
-        "sv" => "swedish",
-        "tr" => "turkish",
-        "ru" => "russian",
-        "uk" => "ukrainian",
-        "ja" => "japanese",
-        "ko" => "koreana",
-        "zh_Hans" => "schinese",
-        "zh_Hant" => "tchinese",
-        _ => "english",
-    }
-}
+pub(crate) use irori_steam_api::achievements::steam_language;
 
 /// A localized text: `language`, else English, else any.
 fn localized(v: Option<&Kv>, language: &str) -> String {

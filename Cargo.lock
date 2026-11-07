@@ -4965,6 +4965,7 @@ dependencies = [
  "irori-runtime",
  "irori-scripts",
  "irori-secrets",
+ "irori-steam-api",
  "once_cell",
  "parking_lot",
  "plist",

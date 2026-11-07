@@ -442,13 +442,14 @@ impl GamePage {
     }
 
     fn load_achievements(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.id.runner == irori_core::Runner::Sideload {
+        let b = backend(cx);
+        // Added games have achievements only in their files.
+        if self.id.runner == irori_core::Runner::Sideload && !b.settings.app().file_achievements {
             return;
         }
         if !matches!(self.achievements, Load::Ready(_)) {
             self.achievements = Load::Loading;
         }
-        let b = backend(cx);
         let id = self.id.clone();
         let language = b.settings.app().ui_language.clone();
         let task = irori_ui::run(cx, async move {

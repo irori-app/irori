@@ -213,7 +213,8 @@ irori-core                        (depends on nothing internal)
   │                   irori-steam, irori-sideload, irori-emulation (+ engines,
   │                   irori-retroachievements-api),
   │                   irori-launchers (+ runtime, irori-launchers-data)
-  └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade; stores reach it as `DynStore`)
+  └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
+                      for Steam's public achievement schema; stores reach it as `DynStore`)
 irori-ui          (services, core)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
@@ -465,6 +466,23 @@ commands without a window.
   each achievement's `groupid`) become `Achievement::group` (name, DLC app id, order;
   `None` elsewhere and offline); the game page lists a game with two or more sets
   under a heading per set with its progress, while totals stay per game.
+  - **Game files** (`file_achievements/`, `iroriFileAchievements`, off by default):
+    the unlocks Steam API emulators keep for DRM-free copies, read only, for
+    sideloaded, GOG, itch.io, Epic, Amazon and ZOOM games (never Steam's, the ROM
+    library's or launchers'). When on, `Backend::achievements` asks it before the
+    store; it answers when the game's files give a Steam app id and hold an
+    emulator's saves or `steam_settings/achievements.json` (or the user chose the
+    id, per-game `iroriSteamAppId`). App id order: chosen,
+    `steam_settings/steam_appid.txt`, `steam_appid.txt` beside the program, in the
+    install folder or beside the library, then `SteamAppId`/`SteamGameId` in the
+    game's variables. Saves: Goldberg's and gbe_fork's `<appid>/achievements.json`
+    in the portable folder (`local_save_path` in `configs.user.ini`,
+    `local_save.txt`) and in `GSE Saves`/`Goldberg SteamEmu Saves` under
+    `%APPDATA%` (every user of the game's Wine prefix) or `$XDG_DATA_HOME`
+    (`~/.local/share`) for native builds; CODEX's and RUNE's
+    `<appid>/achievements.ini` under Public Documents and `%APPDATA%` for Windows
+    builds. Names, icons and rarity come from Steam's public schema (cached a day
+    in `<cache>/file-achievements.json`), else the game's `steam_settings`.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
