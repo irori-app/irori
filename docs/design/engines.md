@@ -150,7 +150,17 @@ matches them by a name pattern and links them under their own names), Nintendo 3
 Arcade, Wii U, PlayStation 3, Xbox and PlayStation 4. Arcade sets (`.zip`/`.7z`), Xbox
 images and PS3/PS4 games count as games only inside a folder of their system
 (`folderOnly`), so a loose zip is never taken for an arcade game. PS3 and PS4 games are
-folders; the catalog names the file inside that engines open (`folderMain`).
+folders; the catalog names the file inside that engines open (`folderMain`). A folder
+of the system's folder without that file is searched up to three levels down for games
+(`PS3/Collection/BLUS30443/PS3_GAME/…`), never inside a game. Dumps are often named by
+serial (`BLUS30443`, `CUSA00572`), so the title comes from the game's `PARAM.SFO`
+(`folderTitle`: `PS3_GAME/PARAM.SFO` or `PARAM.SFO` on PS3, `sce_sys/param.sfo` on PS4;
+read by `irori_engines::sfo`, at most 1 MB), else from the nearest folder that isn't
+part of the game's layout (`layoutFolders`: `PS3_GAME`, `USRDIR`, `sce_sys`), never the
+system's folder or the ROM folder. Box art is looked up by the folder's name when it
+names the same game (and so may carry the region), else by the title. Titles are read
+on every scan, so games already in the library are renamed under the same app name; a
+title the user set still wins.
 
 ### 3.2.2 AnyPS5
 
@@ -170,7 +180,7 @@ AnyPS5's own system libraries. Its `kind` is `relinker`.
   manifest needs no change once a macOS release appears; Irori offers it then.
 - **Games.** PS5 games are folders inside a `PS5` folder, holding `eboot.bin`; the
   title comes from `sce_sys/param.json` (`folderTitle`), since dumps are usually named
-  by title id.
+  by title id, and `sce_sys` never names a game (`layoutFolders`).
 - **Converting.** On Play, Irori checks the processor (AVX2, FMA, F16C, BMI1/2, LZCNT,
   MOVBE, from `cpuFeatures`) and that `eboot.bin` is a plain ELF file, then runs the
   relinker into `<data>/engines/relinked/anyps5/<key>/`: `app.elf` or `app.exe`, with

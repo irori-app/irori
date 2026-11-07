@@ -27,5 +27,6 @@ hex.workspace = true
 notify.workspace = true
 
 [dev-dependencies]
+irori-engines = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }

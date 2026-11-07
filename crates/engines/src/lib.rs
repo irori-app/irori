@@ -13,7 +13,8 @@
 //! - the BIOS index and per-system BIOS status ([`bios`]);
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
-//! - turning a game file into a command ([`launch`]).
+//! - turning a game file into a command ([`launch`]);
+//! - reading the titles PlayStation games give themselves ([`sfo`]).
 //!
 //! Nothing here has a UI or blocks a Tokio worker: discovery and hashing run
 //! on the blocking pool.
@@ -29,6 +30,7 @@ pub mod manifest;
 pub mod releases;
 pub mod relink;
 pub mod retroarch;
+pub mod sfo;
 pub mod state;
 pub mod systems;
 

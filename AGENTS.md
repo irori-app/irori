@@ -817,8 +817,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, MAME (detected only), and the
   experimental Cemu, RPCS3, xemu, shadPS4 and AnyPS5 (never a system's default while
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
-  folder games may name the file engines open (`folderMain`) and the file naming them
-  (`folderTitle`); BIOS files with many names match a `pattern`.
+  folder games may name the file engines open (`folderMain`), the files naming them
+  (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
+  and the folders of their own layout that never name them (`layoutFolders`); BIOS
+  files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
   game into a program of this computer before it plays, in Irori's data folder with the
   game's files linked into `app0/`; it never writes the game folder. Its releases are a
