@@ -152,6 +152,23 @@ images and PS3/PS4 games count as games only inside a folder of their system
 (`folderOnly`), so a loose zip is never taken for an arcade game. PS3 and PS4 games are
 folders; the catalog names the file inside that engines open (`folderMain`).
 
+### 3.2.1.1 More N64, DS and PlayStation emulators
+
+For people who already use a standalone emulator. Only Gopher64 is downloaded; the rest
+are found where their projects or distributions install them.
+
+| Engine | Systems | Managed download | Detected | Launch | Licence |
+| --- | --- | --- | --- | --- | --- |
+| Gopher64 | N64 (second recommendation) | GitHub releases (bare Linux and Windows programs for x86-64 and arm64, macOS arm64 zip with `Gopher64.app`) | Flatpak `io.github.gopher64.gopher64`, `PATH`, `Gopher64.app` | `[--fullscreen] [--widescreen] <rom>` | GPL-3.0 |
+| Mupen64Plus | N64 | none: its bundles need installing with their plugins | `PATH` (`mupen64plus`, `mupen64plus-ui-console`), `mupen64plus.app`, Windows location | `--fullscreen\|--windowed --osd\|--noosd <rom>` | GPL-2.0-or-later |
+| M64Py | N64 | none | Flatpak `net.sourceforge.m64py.M64Py`, `PATH`, `M64Py.app`, Windows location | `<rom>`; it takes no other flag | GPL-3.0-or-later |
+| DeSmuME | DS | none | Flatpak `org.desmume.DeSmuME`, `PATH` | `[--windowed-fullscreen] <rom>`; the flag exists only on Windows, so the option shows and applies only there | GPL-2.0-or-later |
+| ePSXe | PS1 | never: closed source | `PATH` (`epsxe`, `epsxe_x64`), Windows locations; BIOS linked into `~/.epsxe/bios` on Linux | `-nogui [-slowboot] -loadbin <rom>`; full screen is its own setting | Freeware |
+
+DeSmuME's macOS app ignores a game on its command line, and ePSXe has no current macOS
+build, so neither is detected there. The Lutris import maps the `mupen64plus` and
+`desmume` runners to these engines; their libretro cores stay RetroArch cores.
+
 ### 3.2.2 AnyPS5
 
 [AnyPS5](https://github.com/boykopovar/AnyPS5) (GPL-2.0-only, experimental) plays

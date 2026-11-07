@@ -809,12 +809,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Manifests are data.** Each engine is `assets/engines/<id>.json`: sources per OS
   (GitHub release regexes, the libretro buildbot, a download page, Flatpak id, `PATH`
   names, app bundle, Windows paths), the launch template, options with **one** visibility
-  rule (`visibleWhen`), BIOS folder, exit hotkey and licence. Never pin a download URL;
-  describe where versions are listed. The only per-engine code is the `kind` match in
+  rule (`visibleWhen`; an option limited to other hosts adds nothing to the launch),
+  BIOS folder, exit hotkey and licence. Never pin a download URL; describe where
+  versions are listed. The only per-engine code is the `kind` match in
   `crates/engines/src/launch.rs` (RetroArch cores, DOSBox, ScummVM, MAME, relinkers). Users may
   override a manifest with `<config>/engines/<id>.json` (merge patch).
 - **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
-  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, MAME (detected only), and the
+  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
+  DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
   experimental Cemu, RPCS3, xemu, shadPS4 and AnyPS5 (never a system's default while
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`) and the file naming them
