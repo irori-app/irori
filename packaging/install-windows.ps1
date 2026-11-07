@@ -4,6 +4,8 @@ $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 foreach ($name in @('irori.exe', 'irori-sign-in.exe', 'irori.ico', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
     $source = Join-Path $PSScriptRoot $name
+    # Arm64 packages have no vcruntime140_1.dll: only x64 programs import it.
+    if ($name -eq 'vcruntime140_1.dll' -and !(Test-Path -LiteralPath $source)) { continue }
     if (!(Test-Path -LiteralPath $source)) { throw "Missing package file: $name" }
     Copy-Item -LiteralPath $source -Destination (Join-Path $Destination $name) -Force
 }
