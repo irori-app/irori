@@ -213,7 +213,9 @@ irori-sign-in     (standalone; Irori links it only on macOS/Windows)
   import, the GOG branch password), the shell installs a hook (`irori_ui::hooks`,
   `irori_game::install_hooks`) instead of the feature depending on the store. The
   same goes for another feature's views: the library's Focus view and grid drawer show
-  the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`).
+  the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`), and
+  Big Picture shows a game's settings in place through `irori_ui::hooks::game_settings`
+  (`GameSettingsView::embedded`), so they never take the user out of it.
 
 ## 4. Architecture
 
@@ -716,6 +718,8 @@ it on every platform, and CI's Windows install test runs it.
   action list and details), `log` (the page's live game log, in place of the details;
   the shoulders page through it, and rows under Show log filter it with
   `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
+  `settings` (the game's settings over its page, outside the `BigPicture` key context so
+  keys reach their controls; Escape returns to the page),
   `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the

@@ -19,6 +19,7 @@ use gpui_kit::{
 use irori_core::{GameId, InstallPlatform, OpContext};
 use irori_runtime::{DxTool, Target};
 use irori_ui::components::{EmptyState, PageHeader};
+use irori_ui::hooks::CloseFn;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models};
 
@@ -146,6 +147,9 @@ pub struct GameSettingsView {
     winetricks: Entity<WinetricksPanel>,
     running: HashSet<Tool>,
     language: LanguageStamp,
+    /// Set when another screen shows the view in place: Back calls it, and
+    /// nothing leads off that screen.
+    on_close: Option<CloseFn>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -195,10 +199,25 @@ impl GameSettingsView {
             winetricks,
             running: HashSet::new(),
             language: LanguageStamp::new(),
+            on_close: None,
             _subscriptions: vec![sub, observe],
         };
         let initial = GameSection::from_id(&section).unwrap_or_else(|| this.default_section(cx));
         this.open(initial, window, cx);
+        this
+    }
+
+    /// Settings of `id` shown in place by another screen (Big Picture), on
+    /// the game's first section: Back calls `on_close`, and the link to the
+    /// game defaults, which would leave that screen, is left out.
+    pub fn embedded(
+        id: GameId,
+        on_close: CloseFn,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut this = Self::new(id, SharedString::default(), window, cx);
+        this.on_close = Some(on_close);
         this
     }
 
@@ -552,16 +571,19 @@ impl Render for GameSettingsView {
                 &[("count", &n.to_string())],
             ),
         };
+        let on_close = self.on_close.clone();
         let header = PageHeader::new(title)
             .description(description)
-            .action(
-                Button::new("game-settings-defaults")
-                    .ghost()
-                    .label(t("settings.game.open_defaults"))
-                    .on_click(|_, _, cx| {
-                        irori_ui::navigate(Route::Settings("game-defaults".into()), cx)
-                    }),
-            )
+            .when(on_close.is_none(), |header| {
+                header.action(
+                    Button::new("game-settings-defaults")
+                        .ghost()
+                        .label(t("settings.game.open_defaults"))
+                        .on_click(|_, _, cx| {
+                            irori_ui::navigate(Route::Settings("game-defaults".into()), cx)
+                        }),
+                )
+            })
             .action(
                 Button::new("game-settings-reset-all")
                     .outline()
@@ -577,7 +599,10 @@ impl Render for GameSettingsView {
                     .outline()
                     .icon(IconName::ArrowLeft)
                     .label(t("settings.game.back"))
-                    .on_click(move |_, _, cx| irori_ui::navigate(Route::Game(id.clone()), cx)),
+                    .on_click(move |_, window, cx| match &on_close {
+                        Some(close) => close(window, cx),
+                        None => irori_ui::navigate(Route::Game(id.clone()), cx),
+                    }),
             );
 
         if !known {
