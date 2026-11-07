@@ -637,3 +637,60 @@ fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     let changed = cx.read(|cx| dialog.read(cx).collect(cx));
     assert_eq!(changed.description.as_deref(), Some("A louder story."));
 }
+
+#[gpui_kit::test]
+fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
+    use crate::quick::QuickControl;
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(2400.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    // Measuring takes a frame or two: the room first, then the controls.
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..4 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let resize = |cx: &mut TestAppContext, width: f32| {
+        cx.simulate_window_resize(window, size(px(width), px(800.)));
+    };
+    let shown = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).quick_controls_shown());
+    settle(cx);
+    assert_eq!(shown(cx), &QuickControl::ORDER, "a wide window has room");
+
+    // Narrower windows drop controls from the end, never the title.
+    resize(cx, 1100.);
+    settle(cx);
+    let narrow = shown(cx);
+    assert!(narrow.len() < 4, "{narrow:?}");
+    assert_eq!(narrow, &QuickControl::ORDER[..narrow.len()]);
+    resize(cx, 500.);
+    settle(cx);
+    assert!(shown(cx).len() <= narrow.len());
+
+    resize(cx, 2400.);
+    settle(cx);
+    assert_eq!(shown(cx), &QuickControl::ORDER, "they come back with room");
+
+    cx.update(|cx| view.update(cx, |v, cx| v.set_quick_controls_for_test(false, cx)));
+    settle(cx);
+    assert!(shown(cx).is_empty(), "the setting turns them off");
+}

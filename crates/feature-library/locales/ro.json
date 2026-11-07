@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sortare: Cea mai bună potrivire",
   "library.toolbar.sort_reversed": "Sortare: {order}, invers",
   "library.toolbar.tile_size": "Mărimea dalelor",
+  "library.quick.sort_tooltip": "Sortează după",
+  "library.quick.favourites_tooltip": "Arată doar favoritele",
   "library.top.continue_playing": "Continuă jocul",
   "library.top.favourites": "Favorite",
   "library.update_first.description": "Este disponibilă o actualizare. Dacă joci acum, pornește versiunea instalată.",

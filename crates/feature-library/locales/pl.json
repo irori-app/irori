@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sortowanie: Najlepsze dopasowanie",
   "library.toolbar.sort_reversed": "Sortowanie: {order}, odwrotnie",
   "library.toolbar.tile_size": "Rozmiar kafelków",
+  "library.quick.sort_tooltip": "Sortuj według",
+  "library.quick.favourites_tooltip": "Pokaż tylko ulubione",
   "library.top.continue_playing": "Kontynuuj grę",
   "library.top.favourites": "Ulubione",
   "library.update_first.description": "Dostępna jest aktualizacja. Gra teraz uruchomi zainstalowaną wersję.",

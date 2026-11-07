@@ -19,9 +19,11 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use irori_core::achievement_cache::AchievementCache;
 use irori_core::util::rfc3339_from_unix;
-use irori_core::{Achievement, GameId, HostPlatform, InstallPlatform, Paths, Runner};
+use irori_core::{
+    Achievement, AchievementGroup, GameId, HostPlatform, InstallPlatform, Paths, Runner,
+};
 use irori_steam_api::achievements::{icon_url, steam_language};
-use irori_steam_api::{Client, GameAchievement};
+use irori_steam_api::{AchievementSchema, Client};
 use once_cell::sync::Lazy;
 
 use crate::Backend;
@@ -64,8 +66,10 @@ pub fn applies_to(runner: Runner) -> bool {
 }
 
 /// Steam's definitions as achievements without unlocks.
-pub fn from_schema(app_id: u32, defs: &[GameAchievement]) -> Vec<Achievement> {
-    defs.iter()
+pub fn from_schema(app_id: u32, schema: &AchievementSchema) -> Vec<Achievement> {
+    schema
+        .achievements
+        .iter()
         .map(|d| Achievement {
             id: d.internal_name.clone(),
             key: d.internal_name.clone(),
@@ -75,6 +79,12 @@ pub fn from_schema(app_id: u32, defs: &[GameAchievement]) -> Vec<Achievement> {
             image_unlocked: icon_url(app_id, &d.icon),
             image_locked: icon_url(app_id, &d.icon_gray),
             rarity: d.player_percent_unlocked,
+            group: schema.group_of(d).map(|g| AchievementGroup {
+                id: g.groupid.to_string(),
+                name: g.localized_name.clone(),
+                dlc_app_id: (g.dlcappid > 0).then(|| g.dlcappid.to_string()),
+                order: g.order,
+            }),
             ..Default::default()
         })
         .collect()
@@ -232,6 +242,7 @@ impl Backend {
 mod tests {
     use super::*;
     use formats::LocalUnlock;
+    use irori_steam_api::GameAchievement;
 
     #[test]
     fn only_games_irori_starts_itself() {
@@ -297,7 +308,11 @@ mod tests {
                 },
             ),
         ]);
-        let list = apply_unlocks(from_schema(480, &defs), &unlocks);
+        let schema = AchievementSchema {
+            achievements: defs,
+            groups: Vec::new(),
+        };
+        let list = apply_unlocks(from_schema(480, &schema), &unlocks);
         assert_eq!(list.len(), 3);
         assert_eq!(
             list[0].unlocked_at.as_deref(),

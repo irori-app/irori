@@ -32,6 +32,7 @@ mod grid;
 mod i18n;
 mod launch;
 mod layouts;
+mod quick;
 mod random;
 mod selection;
 mod stats;
@@ -197,6 +198,60 @@ pub fn set_groups_by_status(on: bool, cx: &mut App) {
         let group = if on { Grouping::Status } else { Grouping::None };
         model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
     }
+}
+
+/// Which games the library shows by install state; `None` until a library
+/// view exists.
+pub fn install_filter(cx: &App) -> Option<InstallFilter> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().install)
+}
+
+/// Show all games, only installed or only not installed ones, as the
+/// header's quick controls and the Filters popover do. Does nothing until a
+/// library view exists.
+pub fn set_install_filter(install: InstallFilter, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        model.update(cx, |m, cx| m.update(|f| f.install = install, cx));
+    }
+}
+
+/// Whether the library shows only favourites; `None` until a library view
+/// exists.
+pub fn favourites_only(cx: &App) -> Option<bool> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().favourites_only)
+}
+
+/// Show only favourites, or every game. Does nothing until a library view
+/// exists.
+pub fn set_favourites_only(on: bool, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        model.update(cx, |m, cx| m.update(|f| f.favourites_only = on, cx));
+    }
+}
+
+/// Whether the library's header shows its quick sort and filter controls
+/// (`iroriUi.libraryQuickControls`).
+pub fn quick_controls(cx: &App) -> bool {
+    irori_ui::models(cx)
+        .settings
+        .read(cx)
+        .app
+        .ui
+        .library_quick_controls
+}
+
+/// Show the header's quick controls, or stop. An open library view follows
+/// the setting.
+pub fn set_quick_controls(on: bool, cx: &mut App) {
+    let backend = irori_ui::backend(cx);
+    irori_ui::state::run_infallible(cx, async move {
+        backend
+            .settings
+            .update_app(|s| s.ui.library_quick_controls = on)
+    })
+    .detach();
 }
 
 /// How the library shows games: grid, list or Focus (`iroriUi.libraryLayout`).

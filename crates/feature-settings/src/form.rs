@@ -2070,6 +2070,7 @@ fn theme_items(cx: &App) -> Vec<ChoiceItem> {
         Some(Desktop::Omarchy) => "settings.theme.omarchy",
         Some(Desktop::Cosmic) => "settings.theme.cosmic",
         Some(Desktop::Kde) => "settings.theme.kde",
+        Some(Desktop::Wallpaper) => "settings.theme.wallpaper",
         None => "settings.theme.default",
     };
     let mut items = vec![ChoiceItem::new("", t(default))];
