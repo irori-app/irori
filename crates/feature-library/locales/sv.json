@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sortering: Bästa träff",
   "library.toolbar.sort_reversed": "Sortering: {order}, omvänd",
   "library.toolbar.tile_size": "Rutstorlek",
+  "library.quick.sort_tooltip": "Sortera efter",
+  "library.quick.favourites_tooltip": "Visa bara favoriter",
   "library.top.continue_playing": "Fortsätt spela",
   "library.top.favourites": "Favoriter",
   "library.update_first.description": "En uppdatering finns. Om du spelar nu startar den installerade versionen.",

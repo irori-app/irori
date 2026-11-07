@@ -151,6 +151,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
+  On a wide window the header adds one-click sort, installed, favourites and grouping
+  controls, as many as fit (Settings → Appearance turns them off).
 - **Three views, one click apart** (<kbd>Alt</kbd> <kbd>1</kbd>–<kbd>3</kbd>): the grid,
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the

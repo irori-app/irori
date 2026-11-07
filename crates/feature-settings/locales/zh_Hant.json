@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "縮短轉場動畫並避免移動效果。",
   "settings.field.ui_reduce_motion.label": "減少動態效果",
   "settings.field.ui_show_store_badges.label": "顯示商店標誌",
+  "settings.field.ui_library_quick_controls.label": "遊戲庫標題列中的快速控制項",
+  "settings.field.ui_library_quick_controls.help": "在遊戲庫標題旁顯示排序、已安裝遊戲、我的最愛和依遊玩狀態分組，視窗放得下多少就顯示多少。工具列的排序選單和篩選始終保留。",
   "settings.field.ui_system_accent.help": "以系統設定中的強調色為 Irori 內建主題著色，並隨之變化。從清單中選擇的主題會保留自己的顏色。",
   "settings.field.ui_system_accent.label": "使用系統強調色",
   "settings.field.ui_wallpaper_colors.help": "以這些工具從桌布擷取的色彩產生預設主題，並在桌布每次更換時跟著變化。從清單中選擇的主題會保留自己的色彩。",

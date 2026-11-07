@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "Accorcia le transizioni ed evita i movimenti.",
   "settings.field.ui_reduce_motion.label": "Riduci movimento",
   "settings.field.ui_show_store_badges.label": "Mostra i badge degli store",
+  "settings.field.ui_library_quick_controls.label": "Controlli rapidi nell’intestazione della libreria",
+  "settings.field.ui_library_quick_controls.help": "Ordinamento, giochi installati, preferiti e raggruppamento per stato di gioco accanto al titolo della libreria, quanti ne entrano nella finestra. Il menu di ordinamento e i filtri della barra degli strumenti restano comunque.",
   "settings.field.ui_system_accent.help": "Tinge il tema di Irori con il colore d'accento delle impostazioni di sistema e lo segue quando cambia. Un tema scelto dall'elenco mantiene i propri colori.",
   "settings.field.ui_system_accent.label": "Usa il colore d'accento del sistema",
   "settings.field.ui_wallpaper_colors.help": "Crea il tema predefinito dai colori che questi strumenti ricavano dallo sfondo e li segue a ogni cambio. Un tema scelto dall’elenco mantiene i propri colori.",

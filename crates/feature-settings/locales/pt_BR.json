@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "Encurtar transições e evitar movimento.",
   "settings.field.ui_reduce_motion.label": "Reduzir movimento",
   "settings.field.ui_show_store_badges.label": "Mostrar selos das lojas",
+  "settings.field.ui_library_quick_controls.label": "Controles rápidos no cabeçalho da biblioteca",
+  "settings.field.ui_library_quick_controls.help": "Ordenação, jogos instalados, favoritos e agrupamento por status de jogo ao lado do título da biblioteca, quantos couberem na janela. O menu de ordenação e os filtros da barra de ferramentas continuam lá de qualquer forma.",
   "settings.field.ui_system_accent.help": "Tinge o tema próprio do Irori com a cor de destaque das configurações do sistema e a acompanha quando muda. Um tema escolhido na lista mantém as próprias cores.",
   "settings.field.ui_system_accent.label": "Usar a cor de destaque do sistema",
   "settings.field.ui_wallpaper_colors.help": "Cria o tema padrão com as cores que essas ferramentas tiram do seu papel de parede e as acompanha sempre que ele muda. Um tema escolhido na lista mantém as próprias cores.",

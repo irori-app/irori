@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "Scurtează tranzițiile și evită mișcarea.",
   "settings.field.ui_reduce_motion.label": "Reduce mișcarea",
   "settings.field.ui_show_store_badges.label": "Afișează insignele magazinelor",
+  "settings.field.ui_library_quick_controls.label": "Comenzi rapide în antetul bibliotecii",
+  "settings.field.ui_library_quick_controls.help": "Sortare, jocuri instalate, favorite și grupare după starea de joc lângă titlul bibliotecii, câte încap în fereastră. Meniul de sortare și filtrele din bara de instrumente rămân oricum.",
   "settings.field.ui_system_accent.help": "Colorează tema proprie Irori cu culoarea de accent din setările sistemului și o urmează când se schimbă. O temă aleasă din listă își păstrează propriile culori.",
   "settings.field.ui_system_accent.label": "Folosește culoarea de accent a sistemului",
   "settings.field.ui_wallpaper_colors.help": "Creează tema implicită din culorile pe care aceste unelte le iau din imaginea de fundal și le urmează la fiecare schimbare. O temă aleasă din listă își păstrează propriile culori.",
