@@ -741,5 +741,6 @@
   "game.related.developer": "同為 {name} 開發",
   "game.related.publisher": "同為 {name} 發行",
   "game.related.genres": "相同類型：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

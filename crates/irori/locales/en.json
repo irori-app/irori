@@ -128,5 +128,7 @@
   "shell.palette.views_keywords": "view saved filter",
   "shell.palette.save_view": "Save the library’s current view…",
   "shell.palette.add_folder": "Add games from a folder…",
-  "shell.palette.add_folder_keywords": "folder scan import add programs"
+  "shell.palette.add_folder_keywords": "folder scan import add programs",
+  "shell.palette.steam_play": "Steam Play tool for {title}",
+  "shell.palette.steam_play_keywords": "proton compatibility tool steam play ge-proton"
 }

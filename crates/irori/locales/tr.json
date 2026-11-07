@@ -128,5 +128,7 @@
   "shell.palette.views_keywords": "görünüm kayıtlı filtre",
   "shell.palette.save_view": "Kütüphanenin geçerli görünümünü kaydet…",
   "shell.palette.add_folder": "Klasörden oyun ekle…",
-  "shell.palette.add_folder_keywords": "klasör tara içe aktar ekle programlar"
+  "shell.palette.add_folder_keywords": "klasör tara içe aktar ekle programlar",
+  "shell.palette.steam_play": "{title} için Steam Play aracı",
+  "shell.palette.steam_play_keywords": "proton uyumluluk aracı steam play ge-proton"
 }

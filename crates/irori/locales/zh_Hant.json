@@ -128,5 +128,7 @@
   "shell.palette.views_keywords": "檢視 儲存 篩選",
   "shell.palette.save_view": "儲存遊戲庫目前檢視…",
   "shell.palette.add_folder": "從資料夾新增遊戲…",
-  "shell.palette.add_folder_keywords": "資料夾 掃描 匯入 新增 程式"
+  "shell.palette.add_folder_keywords": "資料夾 掃描 匯入 新增 程式",
+  "shell.palette.steam_play": "{title} 的 Steam Play 工具",
+  "shell.palette.steam_play_keywords": "proton 相容性工具 steam play ge-proton"
 }

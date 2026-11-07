@@ -217,6 +217,22 @@ the reaper and the game's processes, never the Steam client. Playtime is the lar
 the minutes Steam keeps in `userdata/<user>/config/localconfig.vdf` (the logged-in
 account's own folder when there is one) and the account's own total.
 
+On Linux a Steam game's settings (Wine & Proton) choose the compatibility tool Steam runs
+it with, next to its ProtonDB rating: Steam's default, Valve's Proton builds installed in
+any Steam library, or the tools in `compatibilitytools.d` (Steam's own folder, plus
+`/usr/share/steam`, `/usr/local/share/steam` and `STEAM_EXTRA_COMPAT_TOOLS_PATHS` for a
+native Steam; Flatpak Steam sees only its own). Proton builds from the Wine manager are
+among them when "Install Proton downloads into Steam" is on. The choice is the game's
+entry of `CompatToolMapping` in `<steam>/config/config.vdf`; Irori changes that entry
+only, keeps the previous file as `config.vdf.irori-backup` and replaces the file
+atomically. Steam rewrites the file when it exits, so Irori writes only while Steam is
+closed and otherwise asks to close it first (`steam -shutdown`); in Steam's Game Mode it
+can't, and the choice stays with the game's properties in Steam. The choice opens from
+the game menu ("Steam Play…"), the command palette and the game page's Settings button.
+A Steam game's settings list only what Irori still does around Steam's launch: the
+launch arguments, scripts, programs started alongside, the replay buffer, Sunshine, save
+backups and art.
+
 itch.io (turned on in Settings › General › Integrations, or from its account card)
 signs in with an API key from `https://itch.io/user/settings/api-keys`, kept owner-only
 in the store's config folder. Installs download the upload that fits the platform into

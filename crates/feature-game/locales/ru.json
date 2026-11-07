@@ -741,5 +741,6 @@
   "game.related.developer": "Тоже от {name}",
   "game.related.publisher": "Тоже издано {name}",
   "game.related.genres": "Общие жанры: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

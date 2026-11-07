@@ -31,7 +31,7 @@ struct FakeStore {
 #[async_trait]
 impl Store for FakeStore {
     fn runner(&self) -> Runner {
-        Runner::Gog
+        self.game.runner()
     }
     async fn init(&self) -> anyhow::Result<()> {
         Ok(())
@@ -139,6 +139,22 @@ fn test_game() -> Arc<GameInfo> {
     )
 }
 
+/// An installed Steam game, as the Steam store lists one.
+fn steam_game() -> Arc<GameInfo> {
+    Arc::new(
+        GameInfo {
+            runner: Some(Runner::Steam),
+            app_name: "620".into(),
+            title: "Portal 2".into(),
+            is_installed: true,
+            is_linux_native: true,
+            platforms: vec![InstallPlatform::Linux],
+            ..Default::default()
+        }
+        .finalize(),
+    )
+}
+
 fn backend() -> Backend {
     static ROOT: OnceLock<std::path::PathBuf> = OnceLock::new();
     ROOT.get_or_init(|| {
@@ -155,8 +171,13 @@ fn backend() -> Backend {
     });
     let game = test_game();
     let id = game.id();
-    let b = Backend::start(move |_, _| vec![Arc::new(FakeStore { game }) as DynStore])
-        .expect("backend");
+    let b = Backend::start(move |_, _| {
+        vec![
+            Arc::new(FakeStore { game }) as DynStore,
+            Arc::new(FakeStore { game: steam_game() }) as DynStore,
+        ]
+    })
+    .expect("backend");
     for _ in 0..400 {
         if b.library().get(&id).is_some() {
             break;
@@ -323,4 +344,47 @@ fn an_emulator_without_a_build_here_is_explained(cx: &mut TestAppContext) {
         .update_window(handle, |_, window, cx| window.has_active_dialog(cx))
         .expect("window");
     assert!(has_dialog);
+}
+
+#[gpui_kit::test]
+fn the_settings_shortcut_reaches_a_steam_games_steam_play_choice(cx: &mut TestAppContext) {
+    let id = steam_game().id();
+    let (_b, handle, page) = open_page(cx, id.clone());
+    cx.update(|cx| assert_eq!(page.read(cx).title().as_deref(), Some("Portal 2")));
+
+    // The Settings button runs the same command as this shortcut.
+    cx.dispatch_keystroke(handle, Keystroke::parse("ctrl-shift-s").expect("keystroke"));
+    cx.run_until_parked();
+    let route = cx.update(|cx| irori_ui::nav::navigator(cx).read(cx).current().clone());
+    // On Linux the Steam Play choice; elsewhere Steam Play doesn't exist and
+    // the settings that still apply (launch options) open.
+    let section = if cfg!(target_os = "linux") {
+        "wine"
+    } else {
+        "launch"
+    };
+    assert_eq!(route, irori_ui::Route::GameSettings(id, section.into()));
+}
+
+#[test]
+fn settings_open_where_they_apply() {
+    use crate::ops::settings_section;
+    assert_eq!(settings_section(&test_game().id()), Some("general"));
+    let steam = steam_game().id();
+    assert_eq!(
+        crate::ops::offers_steam_play(&steam),
+        cfg!(target_os = "linux")
+    );
+    assert_eq!(
+        settings_section(&steam),
+        Some(if cfg!(target_os = "linux") {
+            "wine"
+        } else {
+            "launch"
+        })
+    );
+    assert_eq!(
+        settings_section(&GameId::new(Runner::Launchers, "battlenet:wow")),
+        None
+    );
 }

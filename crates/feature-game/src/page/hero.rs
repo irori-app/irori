@@ -407,8 +407,7 @@ impl GamePage {
                     .selected(fav)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_favourite(cx))),
             )
-            // Steam applies its own launch settings to its games.
-            .when(self.id.runner.manages_installs(), |row| {
+            .when_some(ops::settings_section(&self.id), |row, section| {
                 row.child(
                     Button::new("game-settings")
                         .outline()
@@ -416,7 +415,7 @@ impl GamePage {
                         .icon(IconName::Settings2)
                         .accessibility_label(t("game.hero.settings"))
                         .tooltip(t("game.hero.settings"))
-                        .on_click(move |_, _, cx| ops::open_settings(&settings_id, "general", cx)),
+                        .on_click(move |_, _, cx| ops::open_settings(&settings_id, section, cx)),
                 )
             })
             .when(cloud.offers_sheet(), |row| {
