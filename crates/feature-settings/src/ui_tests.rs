@@ -226,6 +226,89 @@ fn graphics_and_artwork_tabs_draw_and_store_nested_values(cx: &mut TestAppContex
     .unwrap();
 }
 
+/// Runs the app until `done` holds, letting real time pass for the backend's
+/// events and file watches, and the app's clock for its debounces.
+fn wait_for(cx: &mut TestAppContext, mut done: impl FnMut(&mut gpui_kit::App) -> bool) -> bool {
+    for _ in 0..100 {
+        cx.run_until_parked();
+        if cx.update(&mut done) {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        cx.executor()
+            .advance_clock(std::time::Duration::from_millis(300));
+    }
+    false
+}
+
+#[gpui_kit::test]
+fn the_wallpapers_colours_follow_the_switch_and_the_file(cx: &mut TestAppContext) {
+    use gpui_kit::component::ActiveTheme as _;
+    use irori_ui::theme::{Desktop, followed_desktop};
+
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().canonicalize().unwrap();
+    let file = dir.join("colors.json");
+    let pywal = |background: &str| {
+        format!(
+            r##"{{"special": {{"background": "{background}", "foreground": "#c3c5c6"}},
+                "colors": {{"color4": "#5e7f8c", "color8": "#5f6a72"}}}}"##
+        )
+    };
+    std::fs::write(&file, pywal("#0f1418")).unwrap();
+
+    let (handle, form) = open(cx, |window, cx| {
+        SettingsForm::new(FormTarget::App, window, cx)
+    });
+    let write = |cx: &mut TestAppContext, path: &'static str, value: Value| {
+        cx.update_window(handle, |_, window, cx| {
+            form.update(cx, |f, cx| f.write_for_test(path, value, window, cx))
+        })
+        .unwrap();
+    };
+    write(
+        cx,
+        "iroriUi.wallpaperColorsFile",
+        Value::from(file.to_string_lossy().into_owned()),
+    );
+    // The file alone changes nothing while the switch is off.
+    cx.run_until_parked();
+    cx.update(|cx| assert_ne!(followed_desktop(cx), Some(Desktop::Wallpaper)));
+
+    write(cx, "iroriUi.wallpaperColors", Value::Bool(true));
+    // GPUI keeps colours as HSL, which can move a channel by one.
+    let shows = |cx: &mut gpui_kit::App, hex: u32| {
+        let (shown, wanted) = (cx.theme().background.to_rgb(), gpui_kit::rgb(hex));
+        [shown.r - wanted.r, shown.g - wanted.g, shown.b - wanted.b]
+            .iter()
+            .all(|d| d.abs() < 1.5 / 255.0)
+    };
+    assert!(
+        wait_for(cx, |cx| followed_desktop(cx) == Some(Desktop::Wallpaper)),
+        "the wallpaper's colours never showed"
+    );
+    cx.update(|cx| {
+        assert_eq!(cx.theme().theme_name().as_ref(), "Wallpaper Dark");
+        assert!(shows(cx, 0x0f1418));
+    });
+
+    // pywal writes a new file and renames it over the old one.
+    let partial = dir.join("colors.json.tmp");
+    std::fs::write(&partial, pywal("#201010")).unwrap();
+    std::fs::rename(&partial, &file).unwrap();
+    assert!(
+        wait_for(cx, |cx| shows(cx, 0x201010)),
+        "the new wallpaper's colours never showed"
+    );
+
+    write(cx, "iroriUi.wallpaperColors", Value::Bool(false));
+    write(cx, "iroriUi.wallpaperColorsFile", Value::from(""));
+    assert!(
+        wait_for(cx, |cx| followed_desktop(cx) != Some(Desktop::Wallpaper)),
+        "turning the switch off kept the wallpaper's colours"
+    );
+}
+
 #[gpui_kit::test]
 fn steam_compat_panel_shows_the_tools_and_the_games_choice(cx: &mut TestAppContext) {
     let steam = tempfile::tempdir().expect("temp dir").keep();

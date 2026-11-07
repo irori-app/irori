@@ -2,6 +2,7 @@
 
 mod bulk;
 mod panel;
+mod quick;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -35,11 +36,11 @@ use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
-use irori_services::{EffectiveStatus, LibrarySort, StoreFilter};
+use irori_services::{EffectiveStatus, StoreFilter};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
-    ArtBackdrop, ArtImage, EmptyState, GameCover, PageHeader, SectionTitle, StoreBadge, art_image,
-    art_img, art_loading, art_missing, physical_width,
+    ArtBackdrop, ArtImage, EmptyState, GameCover, SectionTitle, StoreBadge, art_image, art_img,
+    art_loading, art_missing, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
@@ -165,6 +166,10 @@ pub struct LibraryView {
     ui_prefs: UiPrefs,
     /// Measured size of the scroll region (zero until the first paint).
     viewport: Size<Pixels>,
+    /// The header's measured room and quick controls.
+    quick: crate::quick::QuickLayout,
+    /// The quick controls drawn last.
+    quick_shown: &'static [crate::quick::QuickControl],
     /// Capacity last given to `images`.
     image_capacity: usize,
     frame: Frame,
@@ -298,6 +303,8 @@ impl LibraryView {
             density: ui.density,
             ui_prefs: ui.clone(),
             viewport: Size::default(),
+            quick: crate::quick::QuickLayout::default(),
+            quick_shown: &[],
             image_capacity: IMAGE_CACHE_CAPACITY,
             frame: Frame::default(),
             grouping: Grouping::None,
@@ -371,6 +378,19 @@ impl LibraryView {
     pub(crate) fn show_layout_for_test(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
         self.layout = layout;
         self.scroll_to_focused();
+        cx.notify();
+    }
+
+    /// The header's quick controls drawn last.
+    #[cfg(test)]
+    pub(crate) fn quick_controls_shown(&self) -> &'static [crate::quick::QuickControl] {
+        self.quick_shown
+    }
+    /// Turn the header's quick controls on or off without saving it (tests
+    /// share one settings file).
+    #[cfg(test)]
+    pub(crate) fn set_quick_controls_for_test(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.ui_prefs.library_quick_controls = on;
         cx.notify();
     }
 
@@ -1427,7 +1447,7 @@ fn command_item(
 // ---- rendering --------------------------------------------------------------
 
 impl LibraryView {
-    fn render_header(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_header(&mut self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (total, refreshing) = {
             let lib = models(cx).library.read(cx);
             (lib.snapshot.len(), lib.refreshing)
@@ -1456,47 +1476,75 @@ impl LibraryView {
             (false, _) => t_args("library.common.games_other", &[("count", &count)]),
         };
 
+        let quick = self.render_quick_controls(&filter, window, cx);
+        let actions = h_flex()
+            .gap_2()
+            .flex_shrink_0()
+            .child(
+                Button::new("library-refresh")
+                    .outline()
+                    .icon(IconName::RefreshCw)
+                    .tooltip(if refreshing {
+                        t("library.header.refreshing")
+                    } else {
+                        t("library.header.refresh")
+                    })
+                    .loading(refreshing)
+                    .on_click(|_, _, cx| irori_ui::models::refresh_library(false, cx)),
+            )
+            .when(gog_signed_in, |header| {
+                header.child(
+                    Button::new("library-import-installers")
+                        .outline()
+                        .icon(IconName::FolderInput)
+                        .label(t("library.header.import_installers"))
+                        .tooltip(t("library.header.import_installers_tooltip"))
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(LibraryEvent::RequestImportInstallers)
+                        })),
+                )
+            })
+            .child(
+                Button::new("library-add-game")
+                    .icon(IconName::Plus)
+                    .label(t("library.header.add_game"))
+                    .on_click(|_, window, cx| dialogs::sideload::open_add_game_dialog(window, cx)),
+            );
+
+        // `PageHeader`'s layout, except that the title keeps its own width
+        // so the quick controls get the room between it and the buttons.
+        let header = h_flex()
+            .w_full()
+            .gap_4()
+            .justify_between()
+            .child(
+                v_flex()
+                    .gap_1()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_3xl()
+                            .font_extrabold()
+                            .truncate()
+                            .child(t("library.header.title")),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .truncate()
+                            .child(description),
+                    ),
+            )
+            .children(quick)
+            .child(actions);
+
         v_flex()
             .gap_4()
             .px(rems(grid::EDGE_REM))
             .pt_5()
             .pb_3()
-            .child(
-                PageHeader::new(t("library.header.title"))
-                    .description(description)
-                    .action(
-                        Button::new("library-refresh")
-                            .outline()
-                            .icon(IconName::RefreshCw)
-                            .tooltip(if refreshing {
-                                t("library.header.refreshing")
-                            } else {
-                                t("library.header.refresh")
-                            })
-                            .loading(refreshing)
-                            .on_click(|_, _, cx| irori_ui::models::refresh_library(false, cx)),
-                    )
-                    .when(gog_signed_in, |header| {
-                        header.action(
-                            Button::new("library-import-installers")
-                                .outline()
-                                .icon(IconName::FolderInput)
-                                .label(t("library.header.import_installers"))
-                                .tooltip(t("library.header.import_installers_tooltip"))
-                                .on_click(cx.listener(|_, _, _, cx| {
-                                    cx.emit(LibraryEvent::RequestImportInstallers)
-                                })),
-                        )
-                    })
-                    .action(
-                        Button::new("library-add-game")
-                            .icon(IconName::Plus)
-                            .label(t("library.header.add_game"))
-                            .on_click(|_, window, cx| {
-                                dialogs::sideload::open_add_game_dialog(window, cx)
-                            }),
-                    ),
-            )
+            .child(header)
             .child(self.render_toolbar(&filter, cx))
     }
 
@@ -1662,27 +1710,7 @@ impl LibraryView {
                     .label(sort_label)
                     .dropdown_caret(true)
                     .dropdown_menu(move |menu, _, _| {
-                        let mut menu = menu;
-                        for option in LibrarySort::ALL {
-                            let model = model.clone();
-                            menu = menu.item(
-                                PopupMenuItem::new(crate::i18n::sort_label(option))
-                                    .checked(option == sort)
-                                    .on_click(move |_, _, cx| {
-                                        model.update(cx, |m, cx| m.update(|f| f.sort = option, cx))
-                                    }),
-                            );
-                        }
-                        let model = model.clone();
-                        menu.separator().item(
-                            PopupMenuItem::new(t("library.toolbar.reverse"))
-                                .checked(descending)
-                                .on_click(move |_, _, cx| {
-                                    model.update(cx, |m, cx| {
-                                        m.update(|f| f.descending = !f.descending, cx)
-                                    })
-                                }),
-                        )
+                        quick::sort_menu(menu, &model, sort, descending)
                     }),
             )
             .child(div().flex_1())
@@ -2956,7 +2984,7 @@ impl Render for LibraryView {
             .min_h_0()
             .text_color(cx.theme().foreground)
             .children(focus_backdrop)
-            .child(self.render_header(cx))
+            .child(self.render_header(window, cx))
             .child(self.render_body(window, cx))
             .children(bulk_bar)
     }

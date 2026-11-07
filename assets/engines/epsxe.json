@@ -1,0 +1,62 @@
+{
+  "id": "epsxe",
+  "name": "ePSXe",
+  "license": "Freeware (closed source)",
+  "homepage": "https://www.epsxe.com",
+  "kind": "standalone",
+  "systems": [
+    "psx"
+  ],
+  "sources": [
+    {
+      "type": "path",
+      "names": [
+        "epsxe",
+        "epsxe_x64",
+        "ePSXe"
+      ]
+    },
+    {
+      "type": "windows",
+      "paths": [
+        "%ProgramFiles%\\ePSXe\\ePSXe.exe",
+        "%ProgramFiles(x86)%\\ePSXe\\ePSXe.exe",
+        "C:\\ePSXe\\ePSXe.exe"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "epsxe_x64",
+      "epsxe"
+    ],
+    "windows": [
+      "ePSXe.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      "-nogui",
+      {
+        "if": "boot_logo",
+        "args": [
+          "-slowboot"
+        ]
+      },
+      "-loadbin",
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "boot_logo",
+      "kind": "toggle",
+      "default": false,
+      "advanced": true
+    }
+  ],
+  "biosDir": {
+    "linux": "{home}/.epsxe/bios"
+  },
+  "exitHotkey": "Esc"
+}

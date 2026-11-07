@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Tri : Meilleure correspondance",
   "library.toolbar.sort_reversed": "Tri : {order}, inversé",
   "library.toolbar.tile_size": "Taille des vignettes",
+  "library.quick.sort_tooltip": "Trier par",
+  "library.quick.favourites_tooltip": "Afficher uniquement les favoris",
   "library.top.continue_playing": "Reprendre",
   "library.top.favourites": "Favoris",
   "library.update_first.description": "Une mise à jour est disponible. Jouer maintenant lance la version installée.",

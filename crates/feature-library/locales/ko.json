@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "정렬: 정확도순",
   "library.toolbar.sort_reversed": "정렬: {order}, 역순",
   "library.toolbar.tile_size": "타일 크기",
+  "library.quick.sort_tooltip": "정렬 기준",
+  "library.quick.favourites_tooltip": "즐겨찾기만 표시",
   "library.top.continue_playing": "계속 플레이",
   "library.top.favourites": "즐겨찾기",
   "library.update_first.description": "업데이트가 있습니다. 지금 플레이하면 설치된 버전이 시작됩니다.",

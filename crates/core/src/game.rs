@@ -277,6 +277,26 @@ pub struct Achievement {
     /// How far towards it the player is, `0.0..=1.0`, for achievements the
     /// store tracks progress of; `None` otherwise.
     pub progress: Option<f32>,
+    /// The set it belongs to, for games whose store groups achievements
+    /// (Steam's Achievement Sets: the base game, each DLC); `None` for the
+    /// rest, and in answers cached before sets were read.
+    pub group: Option<AchievementGroup>,
+}
+
+/// A named group of a game's achievements, such as the base game's or a
+/// DLC's Achievement Set on Steam.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AchievementGroup {
+    /// The store's id of the group, unique within the game.
+    pub id: String,
+    /// Its name in the asked language; may be empty.
+    pub name: String,
+    /// The app name of the DLC the group's achievements need; `None` for
+    /// the base game's group.
+    pub dlc_app_id: Option<String>,
+    /// Where the store shows it among the game's groups, lowest first.
+    pub order: u32,
 }
 
 impl Achievement {

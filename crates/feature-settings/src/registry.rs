@@ -1055,6 +1055,12 @@ const NEEDS_LIMITER: &[Condition] = &[
     ),
 ];
 
+const NEEDS_WALLPAPER_COLORS: &[Condition] = &[when(
+    "iroriUi.wallpaperColors",
+    true,
+    "settings.requires.wallpaper_colors",
+)];
+
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
     false,
@@ -1674,6 +1680,43 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_system_accent.help")
     .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
     app(
+        "iroriUi.wallpaperColors",
+        "settings.field.ui_wallpaper_colors.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_wallpaper_colors.help")
+    .keywords(&[
+        "pywal",
+        "wal",
+        "wallust",
+        "matugen",
+        "material you",
+        "wallpaper",
+        "colour",
+        "color",
+        "palette",
+    ]),
+    app(
+        "iroriUi.wallpaperColorsFile",
+        "settings.field.ui_wallpaper_colors_file.label",
+        Appearance,
+        "settings.group.theme",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ui_wallpaper_colors_file.help")
+    .placeholder(Verbatim("~/.cache/wal/colors.json"))
+    .keywords(&[
+        "pywal",
+        "wallust",
+        "matugen",
+        "colors.json",
+        "template",
+        "file",
+    ])
+    .requires(NEEDS_WALLPAPER_COLORS),
+    app(
         "iroriUi.accentColor",
         "settings.field.ui_accent_color.label",
         Appearance,
@@ -1760,6 +1803,25 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["badge", "store", "label"]),
+    app(
+        "iroriUi.libraryQuickControls",
+        "settings.field.ui_library_quick_controls.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_quick_controls.help")
+    .keywords(&[
+        "quick",
+        "sort",
+        "filter",
+        "installed",
+        "favourites",
+        "favorites",
+        "group",
+        "header",
+        "toolbar",
+    ]),
     app(
         "iroriUi.reduceMotion",
         "settings.field.ui_reduce_motion.label",

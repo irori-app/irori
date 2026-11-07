@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Ordine: Più pertinenti",
   "library.toolbar.sort_reversed": "Ordine: {order}, invertito",
   "library.toolbar.tile_size": "Dimensione dei riquadri",
+  "library.quick.sort_tooltip": "Ordina per",
+  "library.quick.favourites_tooltip": "Mostra solo i preferiti",
   "library.top.continue_playing": "Continua a giocare",
   "library.top.favourites": "Preferiti",
   "library.update_first.description": "È disponibile un aggiornamento. Giocando ora si avvia la versione installata.",
