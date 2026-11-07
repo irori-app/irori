@@ -276,23 +276,15 @@ pub fn set_groups_by_mode(on: bool, cx: &mut App) {
 /// Show the library's games played in `mode` (a game page's mode chip):
 /// the Filters popover's criteria give way to that mode alone, while the
 /// search, store, sort and grouping stay. Without a library view yet, the
-/// view it opens with is changed instead.
+/// view the navigation creates applies it ([`filters_panel::change_filters`]).
 pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
-    let only = move |f: &mut ViewFilter| {
-        f.reset_filters();
-        f.modes = [mode].into();
-    };
-    match filters_panel::active_filters(cx) {
-        Some(model) => model.update(cx, |m, cx| m.update(only, cx)),
-        None => irori_ui::state::run_infallible(cx, async move {
-            let mut f = filter::load();
-            only(&mut f);
-            if let Err(e) = filter::save(&f) {
-                tracing::warn!("saving the library view: {e:#}");
-            }
-        })
-        .detach(),
-    }
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.modes = [mode].into();
+        },
+        cx,
+    );
     irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 

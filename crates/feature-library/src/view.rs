@@ -223,6 +223,9 @@ impl LibraryView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t("library.search.placeholder")));
         let filters = cx.new(|_| FilterModel::new(filter::load()));
         set_active_filters(&filters, cx);
+        // After the saved criteria, so a change asked for before the view
+        // existed (a game page's mode chip) wins over them.
+        crate::filters_panel::apply_pending(&filters, cx);
         let filters_panel = cx.new(|cx| FiltersPanel::new(filters.clone(), cx));
         let tile_rem = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
         let tile_slider = cx.new(|_| {

@@ -80,6 +80,39 @@ pub fn active_filters(cx: &App) -> Option<Entity<FilterModel>> {
     cx.try_global::<ActiveFilters>()?.0.upgrade()
 }
 
+/// A change of the criteria asked for while no library view existed.
+type Change = Box<dyn FnOnce(&mut ViewFilter)>;
+
+/// Changes waiting for the next library view, in the order asked.
+#[derive(Default)]
+struct PendingChanges(Vec<Change>);
+impl Global for PendingChanges {}
+
+/// Change the library's criteria: the open view's at once, else those of the
+/// next view, which applies the change over its saved criteria as it is
+/// created (a game page opened before the library, from a link or at
+/// start, asks this). Either way the change is saved like any other.
+pub fn change_filters(change: impl FnOnce(&mut ViewFilter) + 'static, cx: &mut App) {
+    match active_filters(cx) {
+        Some(model) => model.update(cx, |m, cx| m.update(change, cx)),
+        None => cx
+            .default_global::<PendingChanges>()
+            .0
+            .push(Box::new(change)),
+    }
+}
+
+/// Apply the changes waiting for a library view to its new `model`.
+pub(crate) fn apply_pending(model: &Entity<FilterModel>, cx: &mut App) {
+    if !cx.has_global::<PendingChanges>() {
+        return;
+    }
+    let changes = std::mem::take(&mut cx.global_mut::<PendingChanges>().0);
+    for change in changes {
+        model.update(cx, |m, cx| m.update(change, cx));
+    }
+}
+
 /// Content of the Filters popover. Re-renders when the model changes.
 pub struct FiltersPanel {
     model: Entity<FilterModel>,
