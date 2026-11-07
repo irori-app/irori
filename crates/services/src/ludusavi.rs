@@ -164,20 +164,21 @@ fn query_for(game: &GameInfo) -> TitleQuery {
 
 impl Backend {
     /// The Ludusavi to run: the program chosen in settings, else the one
-    /// installed. Looks at the disk; call off the UI thread.
-    pub fn ludusavi(&self) -> Option<Ludusavi> {
-        Ludusavi::locate(&self.settings.app().ludusavi_path)
+    /// installed. Looks at the disk, or asks the host inside a Flatpak.
+    pub async fn ludusavi(&self) -> Option<Ludusavi> {
+        let chosen = self.settings.app().ludusavi_path.clone();
+        Ludusavi::locate(&chosen).await
     }
 
-    fn require_ludusavi(&self) -> Result<Ludusavi> {
-        self.ludusavi().context(
+    async fn require_ludusavi(&self) -> Result<Ludusavi> {
+        self.ludusavi().await.context(
             "Ludusavi isn’t installed. Install it, or choose its program in Settings → Saves.",
         )
     }
 
     /// The installed Ludusavi and its version; `None` when it isn't found.
     pub async fn ludusavi_info(&self) -> Option<LudusaviInfo> {
-        let ludusavi = self.ludusavi()?;
+        let ludusavi = self.ludusavi().await?;
         let version = match ludusavi.version().await {
             Ok(v) => Some(v),
             Err(e) => {
@@ -245,7 +246,7 @@ impl Backend {
             return Ok(found.clone());
         }
         let game = self.game(id).context("The game is not in the library")?;
-        let ludusavi = self.require_ludusavi()?;
+        let ludusavi = self.require_ludusavi().await?;
         let found = ludusavi
             .find(&query_for(&game))
             .await?
@@ -263,7 +264,8 @@ impl Backend {
             return Ok(Vec::new());
         }
         let mut found = self
-            .require_ludusavi()?
+            .require_ludusavi()
+            .await?
             .find(&TitleQuery {
                 names: vec![text.to_string()],
                 fuzzy: true,
@@ -289,7 +291,7 @@ impl Backend {
     /// The match, prefix and backups of `id`.
     pub async fn ludusavi_backups(&self, id: &GameId) -> Result<GameBackups> {
         let game = self.game(id).context("The game is not in the library")?;
-        let ludusavi = self.require_ludusavi()?;
+        let ludusavi = self.require_ludusavi().await?;
         let chosen = !self.settings.game(id).ludusavi_title.trim().is_empty();
         let wine_prefix = self.ludusavi_wine_prefix(&game);
         let Some(title) = self.ludusavi_title(id).await? else {
@@ -347,7 +349,7 @@ impl Backend {
 
     async fn back_up_saves_inner(&self, id: &GameId) -> Result<SavesDone> {
         let game = self.game(id).context("The game is not in the library")?;
-        let ludusavi = self.require_ludusavi()?;
+        let ludusavi = self.require_ludusavi().await?;
         let title = self
             .ludusavi_title(id)
             .await?
@@ -395,7 +397,7 @@ impl Backend {
     /// What restoring `backup` of `id` would write, and where.
     pub async fn preview_restore(&self, id: &GameId, backup: &str) -> Result<RestorePlan> {
         let game = self.game(id).context("The game is not in the library")?;
-        let ludusavi = self.require_ludusavi()?;
+        let ludusavi = self.require_ludusavi().await?;
         let title = self
             .ludusavi_title(id)
             .await?
@@ -433,7 +435,7 @@ impl Backend {
             bail!("another operation is in progress");
         }
         let _guard = self.statuses.guard(id, StatusKind::SyncingSaves);
-        let ludusavi = self.require_ludusavi()?;
+        let ludusavi = self.require_ludusavi().await?;
         let title = self
             .ludusavi_title(id)
             .await?
