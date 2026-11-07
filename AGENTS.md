@@ -439,6 +439,17 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Age ratings** (`irori_core::age_rating`, `age_ratings.rs`): `AgeRating {system,
+  rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
+  E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
+  Epic (`ageGatings`) carry them in `GameInfo::age_ratings`; Steam (`appdetails`
+  `ratings`) and GOG (`v2/games` `_embedded.*Rating`) in `ExtraInfo::age_ratings`. UI code
+  reads a game's store page through `Backend::extra_info`, which keeps those ratings in
+  `<cache>/age-ratings.json` and adds them to the library entry, so no request is made
+  for ratings alone. The game page shows the board of the user's region
+  (`irori_ui::age_rating`: interface language, then the system locale's region) as a
+  text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
+  goes by the strictest board.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that

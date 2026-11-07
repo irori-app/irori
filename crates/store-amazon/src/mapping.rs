@@ -3,8 +3,12 @@
 //! Everything here is pure (no I/O) so it can be unit-tested with fixtures.
 
 use irori_amazon_api::Entitlement;
+use irori_amazon_api::library::Details;
 use irori_core::util::format_bytes;
-use irori_core::{ExtraInfo, GameInfo, InstallPlatform, InstallProgress, InstalledInfo, Runner};
+use irori_core::{
+    AgeRating, ExtraInfo, GameInfo, InstallPlatform, InstallProgress, InstalledInfo, RatingSystem,
+    Runner,
+};
 
 use crate::state::InstalledGame;
 
@@ -75,6 +79,7 @@ pub fn game_info(ent: &Entitlement, installed: Option<&InstalledGame>) -> GameIn
         platforms: vec![InstallPlatform::Windows],
         genres: d.genres.clone(),
         release_date: release_date.clone(),
+        age_ratings: age_ratings(d),
         extra: Some(ExtraInfo {
             description: description.clone(),
             short_description: description,
@@ -86,6 +91,22 @@ pub fn game_info(ent: &Entitlement, installed: Option<&InstalledGame>) -> GameIn
     };
     set_installed(&mut info, installed);
     info.finalize()
+}
+
+/// The ESRB, PEGI and USK ratings of a product. Values that name no age
+/// ("rating pending", "no rating") are left out.
+pub fn age_ratings(d: &Details) -> Vec<AgeRating> {
+    [
+        (RatingSystem::Esrb, &d.esrb_rating),
+        (RatingSystem::Pegi, &d.pegi_rating),
+        (RatingSystem::Usk, &d.usk_rating),
+    ]
+    .into_iter()
+    .filter_map(|(system, value)| {
+        let rating = AgeRating::new(system, value.as_deref()?, Vec::new(), None)?;
+        rating.age.is_some().then_some(rating)
+    })
+    .collect()
 }
 
 /// Apply (or clear) installed state on a library entry.
@@ -139,7 +160,8 @@ mod tests {
           "backgroundUrl1": "https://img/bg1.jpg", "backgroundUrl2": "https://img/bg2.jpg",
           "developer": "Foo Studio", "publisher": "Foo Pub", "genres": ["Action", "RPG"],
           "logoUrl": "https://img/logo.png", "releaseDate": "2020-01-02T00:00:00Z",
-          "shortDescription": "A game.", "esrbRating": "TEEN", "screenshots": [],
+          "shortDescription": "A game.", "esrbRating": "TEEN", "pegiRating": "PEGI_12",
+          "uskRating": "RATING_PENDING", "screenshots": [],
           "websites": {"official": null}}}}},
       {"id": "ent-2", "product": {"id": "amzn1.adg.product.def",
         "productDetail": {"iconUrl": "", "details": {"backgroundUrl2": "https://img/w.jpg",
@@ -174,6 +196,9 @@ mod tests {
         assert_eq!(inst.version, "v1");
         assert_eq!(inst.install_size, "2.0 GiB");
         assert_eq!(inst.platform, InstallPlatform::Windows);
+        let ratings: Vec<String> = a.age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(ratings, ["ESRB T", "PEGI 12"]);
+        assert_eq!(a.age_ratings[0].age, Some(13));
         let extra = a.extra.as_ref().unwrap();
         assert_eq!(extra.description.as_deref(), Some("A game."));
         assert_eq!(extra.release_date.as_deref(), Some("2020-01-02T00:00:00Z"));

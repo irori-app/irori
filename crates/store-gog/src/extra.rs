@@ -6,7 +6,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use irori_core::{Achievement, ExtraInfo, InstallPlatform, Requirement, util};
+use irori_core::{
+    Achievement, AgeRating, ExtraInfo, InstallPlatform, RatingSystem, Requirement, util,
+};
 
 use crate::api;
 use crate::manifest;
@@ -76,6 +78,44 @@ pub fn requirements_from_v2(v: &Value, os: &str) -> Vec<Requirement> {
             })
         })
         .collect()
+}
+
+/// Age ratings of `api.gog.com/v2/games` (`_embedded.esrbRating`,
+/// `pegiRating`, `uskRating`, `brRating`, `gogRating`…). ESRB is named by
+/// its category ("Mature 17+"); the others by their age, since their
+/// categories are sentences ("Not approved for young persons aged under 18").
+pub fn age_ratings_from_v2(v: &Value) -> Vec<AgeRating> {
+    let Some(embedded) = v.get("_embedded").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut out: Vec<AgeRating> = embedded
+        .iter()
+        .filter(|(key, value)| key.ends_with("Rating") && value.is_object())
+        .filter_map(|(key, value)| {
+            let system = RatingSystem::from_key(key)?;
+            let age = value
+                .get("ageRating")
+                .and_then(Value::as_u64)
+                .and_then(|a| u8::try_from(a).ok());
+            let category = value.pointer("/category/name").and_then(Value::as_str);
+            let rating = match (system, category, age) {
+                (RatingSystem::Esrb, Some(name), _) => name.to_string(),
+                (_, _, Some(age)) => age.to_string(),
+                (_, Some(name), None) => name.to_string(),
+                (_, None, None) => String::new(),
+            };
+            let descriptors = value
+                .get("contentDescriptors")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|d| d.get("descriptor").and_then(Value::as_str))
+                .map(str::to_string);
+            AgeRating::new(system, &rating, descriptors, age)
+        })
+        .collect();
+    out.sort_by_key(|r| r.system);
+    out
 }
 
 /// Map a raw GOG achievement.
@@ -192,6 +232,7 @@ impl GogStore {
                 .map(str::to_string),
             genres: base.genres,
             screenshots: product.as_ref().map(screenshots).unwrap_or_default(),
+            age_ratings: v2.as_ref().map(age_ratings_from_v2).unwrap_or_default(),
         };
         if v2.is_some() || product.is_some() {
             cache.insert(
@@ -311,6 +352,33 @@ impl GogStore {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn maps_v2_age_ratings() {
+        let v2 = serde_json::json!({"_embedded": {
+            "product": {"title": "x"},
+            "esrbRating": {"category": {"name": "Mature 17+", "id": 18},
+                           "contentDescriptors": [{"descriptor": "Violence", "id": 25},
+                                                  {"descriptor": "Blood and Gore", "id": 31}],
+                           "ageRating": 17},
+            "pegiRating": {"ageRating": 18, "contentDescriptors": [{"descriptor": "Bad Language"}]},
+            "uskRating": {"ageRating": 18,
+                          "category": {"name": "Not approved for young persons aged under 18"}},
+            "brRating": {"ageRating": 16, "contentDescriptors": [{"descriptor": "Drogas\r"}]},
+            "gogRating": {"ageRating": 18},
+            "fooRating": {"ageRating": 3}
+        }});
+        let ratings = super::age_ratings_from_v2(&v2);
+        let titles: Vec<String> = ratings.iter().map(irori_core::AgeRating::title).collect();
+        assert_eq!(
+            titles,
+            ["ESRB M", "PEGI 18", "USK 18", "ClassInd 16", "GOG 18"]
+        );
+        assert_eq!(ratings[0].age, Some(17));
+        assert_eq!(ratings[0].descriptors, ["Violence", "Blood and Gore"]);
+        assert_eq!(ratings[3].descriptors, ["Drogas"]);
+        assert!(super::age_ratings_from_v2(&serde_json::json!({})).is_empty());
+    }
 
     #[test]
     fn screenshot_urls() {

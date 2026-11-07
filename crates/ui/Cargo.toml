@@ -30,6 +30,8 @@ libc = "0.2"
 notify.workspace = true
 ron = { version = "0.12", default-features = false }
 toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }
+# The system locale's region, for the age-rating board to show.
+sys-locale = "0.3.2"
 
 [dev-dependencies]
 # gpui-kit/test-support pulls the GPUI Fast crates, which conflict with gpui-pre in the

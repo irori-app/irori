@@ -3,9 +3,11 @@
 
 use std::path::{Path, PathBuf};
 
+use irori_core::age_rating;
 use irori_core::util::format_bytes;
 use irori_core::{
-    ExtraInfo, GameInfo, HostPlatform, InstallPlatform, InstalledInfo, Requirement, Runner,
+    AgeRating, ExtraInfo, GameInfo, HostPlatform, InstallPlatform, InstalledInfo, RatingSystem,
+    Requirement, Runner,
 };
 use irori_steam_api::{AppAssets, AppDetails};
 
@@ -224,7 +226,28 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
             .map(|s| s.path_full.clone())
             .filter(|p| !p.is_empty())
             .collect(),
+        age_ratings: age_ratings(details),
     }
+}
+
+/// The store page's ratings by board. Steam's `steam_germany` entry
+/// repeats the USK's verdict for Germany's store and is left out, as are
+/// boards Irori doesn't know.
+pub(crate) fn age_ratings(details: &AppDetails) -> Vec<AgeRating> {
+    details
+        .ratings
+        .iter()
+        .filter_map(|(board, r)| {
+            let system = RatingSystem::from_key(board)?;
+            let age = u8::try_from(r.required_age).ok().filter(|a| *a > 0);
+            AgeRating::new(
+                system,
+                &r.rating,
+                age_rating::split_descriptors(&r.descriptors, false),
+                age,
+            )
+        })
+        .collect()
 }
 
 /// Text of Steam's requirement HTML, one item per line, with the
@@ -273,6 +296,39 @@ fn plain_text(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_store_page_ratings() {
+        let details: AppDetails = serde_json::from_value(serde_json::json!({
+            "name": "Rated",
+            "ratings": {
+                "esrb": {"rating": "e10", "descriptors": "Fantasy Violence\r\nMild Blood",
+                         "use_age_gate": "true", "required_age": "10"},
+                "pegi": {"rating": "7", "descriptors": "Violence"},
+                "cero": {"rating": "b"},
+                "dejus": {"rating": "l"},
+                "oflc": {"rating": "pg"},
+                "steam_germany": {"rating_generated": "1", "rating": "6", "required_age": "6",
+                                  "banned": "0", "use_age_gate": "0", "descriptors": ""},
+                "unknownboard": {"rating": "x"}
+            }
+        }))
+        .unwrap();
+        let ratings = age_ratings(&details);
+        let titles: Vec<String> = ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(
+            titles,
+            ["CERO B", "ClassInd L", "ESRB E10+", "ACB PG", "PEGI 7"]
+        );
+        let esrb = &ratings[2];
+        assert_eq!(esrb.age, Some(10));
+        assert_eq!(esrb.descriptors, ["Fantasy Violence", "Mild Blood"]);
+        assert_eq!(extra_info("1", &details).age_ratings, ratings);
+        // Pages without ratings have none.
+        let bare: AppDetails =
+            serde_json::from_value(serde_json::json!({"ratings": null})).unwrap();
+        assert!(age_ratings(&bare).is_empty());
+    }
 
     #[test]
     fn art_prefers_the_cache_then_the_store() {

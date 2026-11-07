@@ -223,6 +223,11 @@ pub struct ViewFilter {
     /// Games in any of these play statuses (as stats count them: a game
     /// without one is played or not played); empty shows every game.
     pub statuses: BTreeSet<EffectiveStatus>,
+    /// Only games every board's rating allows at this age (see
+    /// [`passes_age_limit`]); `None` shows every game.
+    pub max_age: Option<u8>,
+    /// With an age limit, also show games no board rated.
+    pub include_unrated: bool,
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -247,6 +252,7 @@ impl ViewFilter {
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
             !self.statuses.is_empty(),
+            self.max_age.is_some(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -351,6 +357,14 @@ impl ViewFilter {
                 .map(|s| irori_ui::play_status::label(*s).to_string())
                 .collect();
             out.push(names.join(&t("library.filter.list_separator")));
+        }
+        if let Some(age) = self.max_age {
+            let key = if self.include_unrated {
+                "library.filter.describe.max_age_unrated"
+            } else {
+                "library.filter.describe.max_age"
+            };
+            out.push(t_args(key, &[("age", &age.to_string())]).to_string());
         }
         let heading = self.category_heading();
         match self.categories.len() {
@@ -478,6 +492,20 @@ pub fn offered_stores(
         .collect()
 }
 
+/// The age limits the Filters popover offers, after "Any": PEGI's steps,
+/// which ESRB's, USK's and the others' ages fall between.
+pub const AGE_LIMITS: [u8; 4] = [3, 7, 12, 16];
+
+/// Whether a game passes an age limit: every board that rated it allows
+/// `limit`, so the strictest rating decides. A game no board rated (or
+/// whose only rating is pending) passes only with `include_unrated`.
+pub fn passes_age_limit(game: &GameInfo, limit: u8, include_unrated: bool) -> bool {
+    match irori_core::age_rating::strictest_age(&game.age_ratings) {
+        Some(age) => age <= limit,
+        None => include_unrated,
+    }
+}
+
 /// Whether `key` passes the category selection (union of the selected
 /// categories; "Uncategorized" matches games in no category).
 fn in_categories(selected: &BTreeSet<CategoryFilter>, user: &UserData, key: &str) -> bool {
@@ -525,6 +553,9 @@ pub fn apply(
     }
     if filter.hide_unavailable && !missing.is_empty() {
         games.retain(|g| !missing.contains(&g.id()));
+    }
+    if let Some(limit) = filter.max_age {
+        games.retain(|g| passes_age_limit(g, limit, filter.include_unrated));
     }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
@@ -675,6 +706,78 @@ pub(crate) mod tests {
         assert_eq!(f.hidden, HiddenMode::Hide);
         f.clear_all();
         assert!(!f.is_narrowed());
+    }
+
+    #[test]
+    fn filters_by_the_strictest_age_rating() {
+        use irori_core::{AgeRating, RatingSystem};
+        let rated = |app: &str, title: &str, ratings: &[(RatingSystem, &str)]| {
+            Arc::new(
+                GameInfo {
+                    runner: Some(Runner::Steam),
+                    app_name: app.into(),
+                    title: title.into(),
+                    age_ratings: ratings
+                        .iter()
+                        .map(|(s, r)| AgeRating::new(*s, r, Vec::new(), None).unwrap())
+                        .collect(),
+                    ..Default::default()
+                }
+                .finalize(),
+            )
+        };
+        let library = snapshot(vec![
+            rated(
+                "1",
+                "Cars",
+                &[(RatingSystem::Pegi, "3"), (RatingSystem::Esrb, "e")],
+            ),
+            rated(
+                "2",
+                "Knights",
+                &[(RatingSystem::Pegi, "7"), (RatingSystem::Esrb, "e10")],
+            ),
+            rated("3", "Shooter", &[(RatingSystem::Esrb, "m")]),
+            rated("4", "Pending", &[(RatingSystem::Esrb, "rp")]),
+            rated("5", "Unrated", &[]),
+        ]);
+        let user = UserData::default();
+        let none = HashSet::new();
+        let shown = |max_age: Option<u8>, include_unrated: bool| {
+            let f = ViewFilter {
+                max_age,
+                include_unrated,
+                ..Default::default()
+            };
+            titles(&apply(&f, &[], &library, &user, &none, &none))
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shown(None, false).len(), 5);
+        // ESRB's E is for ages 6 and up, so PEGI 3 alone doesn't let it in.
+        assert!(shown(Some(3), false).is_empty());
+        assert_eq!(shown(Some(7), false), ["Cars"]);
+        // E10+ asks for 10: the strictest board decides.
+        assert_eq!(shown(Some(12), false), ["Cars", "Knights"]);
+        assert_eq!(
+            shown(Some(16), true),
+            ["Cars", "Knights", "Pending", "Unrated"]
+        );
+
+        let f = ViewFilter {
+            max_age: Some(12),
+            ..Default::default()
+        };
+        assert_eq!(f.active_count(), 1);
+        // Saved views and the persisted view keep the limit.
+        let json = serde_json::to_string(&f).unwrap();
+        assert_eq!(serde_json::from_str::<ViewFilter>(&json).unwrap(), f);
+        let old: ViewFilter = serde_json::from_str(r#"{"favourites_only": true}"#).unwrap();
+        assert_eq!((old.max_age, old.include_unrated), (None, false));
+        let mut f = f;
+        f.reset_filters();
+        assert_eq!(f.max_age, None);
     }
 
     #[test]
