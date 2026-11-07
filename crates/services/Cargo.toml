@@ -17,6 +17,7 @@ sysinfo.workspace = true
 irori-extras.workspace = true
 irori-scripts.workspace = true
 irori-mods.workspace = true
+irori-reshade.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 reqwest.workspace = true

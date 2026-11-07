@@ -33,6 +33,7 @@ mod launch_programs;
 mod logs;
 pub mod registry;
 mod replay;
+mod reshade;
 mod saves;
 mod storage;
 mod stores;

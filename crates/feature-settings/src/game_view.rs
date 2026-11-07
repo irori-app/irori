@@ -27,6 +27,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
+use crate::reshade::ReshadePanel;
 use crate::widgets::{RowState, field_row, muted, nav_button};
 use crate::winetricks::WinetricksPanel;
 
@@ -78,7 +79,7 @@ impl GameSection {
             "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" => GameSection::Tools,
+            "tools" | "reshade" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -145,6 +146,7 @@ pub struct GameSettingsView {
     form: Entity<SettingsForm>,
     log: Entity<LogViewer>,
     winetricks: Entity<WinetricksPanel>,
+    reshade: Entity<ReshadePanel>,
     running: HashSet<Tool>,
     language: LanguageStamp,
     /// Set when another screen shows the view in place: Back calls it, and
@@ -187,6 +189,10 @@ impl GameSettingsView {
             let id = id.clone();
             cx.new(|cx| WinetricksPanel::new(id, window, cx))
         };
+        let reshade = {
+            let id = id.clone();
+            cx.new(|_| ReshadePanel::new(id))
+        };
         let library = models(cx).library.clone();
         let observe = cx.observe(&library, |_, _, cx| cx.notify());
         let mut this = Self {
@@ -197,6 +203,7 @@ impl GameSettingsView {
             form,
             log,
             winetricks,
+            reshade,
             running: HashSet::new(),
             language: LanguageStamp::new(),
             on_close: None,
@@ -269,6 +276,9 @@ impl GameSettingsView {
         }
         if section == GameSection::Tools && self.uses_wine(cx) {
             self.winetricks.update(cx, |w, cx| w.activate(window, cx));
+        }
+        if section == GameSection::Tools {
+            self.reshade.update(cx, |r, cx| r.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -509,6 +519,11 @@ impl GameSettingsView {
                 cx,
             ))
             .children(dx_rows)
+            .child(crate::widgets::group_heading(
+                t("settings.tools.group.reshade"),
+                cx,
+            ))
+            .child(self.reshade.clone())
             .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,

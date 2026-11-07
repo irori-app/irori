@@ -4825,6 +4825,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "irori-reshade"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "irori-core",
+ "irori-runtime",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "zip",
+]
+
+[[package]]
 name = "irori-retroachievements-api"
 version = "0.4.0"
 dependencies = [
@@ -4940,6 +4960,7 @@ dependencies = [
  "irori-engines",
  "irori-extras",
  "irori-mods",
+ "irori-reshade",
  "irori-runtime",
  "irori-scripts",
  "irori-secrets",
@@ -4969,6 +4990,7 @@ dependencies = [
  "irori-core",
  "irori-epic",
  "irori-extras",
+ "irori-reshade",
  "irori-runtime",
  "irori-services",
  "irori-ui",

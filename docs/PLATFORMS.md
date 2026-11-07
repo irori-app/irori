@@ -364,6 +364,30 @@ any file is touched, and a game file a mod replaces is renamed beside itself
 (`<name>.irori-original`), so a crash at any point is undone exactly when
 Irori next starts.
 
+### ReShade
+
+A Windows game Irori installed can get ReShade from its settings (Tools →
+ReShade). Irori reads the game program's imports to pick the DLL, as
+ReShade's installer does (`dxgi.dll` for Direct3D 10/11/12, `d3d9.dll`,
+`opengl32.dll`), follows ReShade's `Compatibility.ini` (refusing games it
+marks banned) and asks first when AreWeAntiCheatYet lists anticheat for the
+game. Downloads come from reshade.me (the DLLs inside the setup program),
+crosire/reshade-shaders (`slim`) and, under Wine, Mozilla's copy of
+`d3dcompiler_47.dll`; they are cached in `<cache>/reshade`. Every file written
+is recorded with its hash in `<data>/reshade/<runner>/<app>.json`.
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Loading the DLL | `WINEDLLOVERRIDES` gets `<dll>=n,b` (and `d3dcompiler_47=n,b`) at launch, merged with the user's | Same, with Wine, CrossOver or Game Porting Toolkit | Windows loads it from the game folder; nothing to set |
+| `d3dcompiler_47.dll` | Installed beside ReShade unless the game ships one | Same | Not needed (part of Windows) |
+
+Turning ReShade off renames its DLL to `<dll>.irori-disabled`. Removing it
+deletes only the files Irori wrote that are unchanged, so `ReShade.ini`
+(which ReShade rewrites), presets and edited shaders stay. Vulkan games (which
+need ReShade's layer registered), Direct3D 8 and DirectDraw games are not
+supported, and neither are games other launchers manage (Steam, third-party
+launchers).
+
 ### Storage
 
 Settings → Storage (`irori://settings/storage`) groups what Irori measures by the disk

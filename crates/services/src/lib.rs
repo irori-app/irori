@@ -30,6 +30,7 @@ pub mod play_status;
 mod programs;
 pub mod related;
 pub mod replay;
+pub mod reshade;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
@@ -70,6 +71,7 @@ pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use replay::{Recorder, ReplayInfo, ShortcutState};
+pub use reshade::{ReshadeStatus, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
