@@ -1,0 +1,78 @@
+{
+  "id": "gopher64",
+  "name": "Gopher64",
+  "license": "GPL-3.0",
+  "homepage": "https://gopher64.com",
+  "kind": "standalone",
+  "systems": [
+    "n64"
+  ],
+  "sources": [
+    {
+      "type": "github",
+      "repo": "gopher64/gopher64",
+      "assets": {
+        "linux-x86_64": "^gopher64-linux-x86_64$",
+        "linux-aarch64": "^gopher64-linux-aarch64$",
+        "macos-aarch64": "^gopher64-macos-aarch64\\.zip$",
+        "windows-x86_64": "^gopher64-windows-x86_64\\.exe$",
+        "windows-aarch64": "^gopher64-windows-aarch64\\.exe$"
+      }
+    },
+    {
+      "type": "flatpak",
+      "id": "io.github.gopher64.gopher64"
+    },
+    {
+      "type": "path",
+      "names": [
+        "gopher64"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "Gopher64.app"
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "gopher64-linux-*"
+    ],
+    "macos": [
+      "Gopher64.app"
+    ],
+    "windows": [
+      "gopher64-windows-*.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "--fullscreen"
+        ]
+      },
+      {
+        "if": "widescreen",
+        "args": [
+          "--widescreen"
+        ]
+      },
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    },
+    {
+      "id": "widescreen",
+      "kind": "toggle",
+      "default": false
+    }
+  ],
+  "exitHotkey": "Esc"
+}
