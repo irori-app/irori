@@ -4,8 +4,9 @@
 //! A file's system comes from the folder it sits in, its extension, or its
 //! header ([`irori_engines::systems::detect`]). Files a `.cue` sheet or an
 //! `.m3u` playlist lists belong to that sheet; discs of one game become one
-//! entry (with a playlist written for engines that switch discs). DOS and
-//! ScummVM games are folders. Detection results are cached by path, size and
+//! entry (with a playlist written for engines that switch discs). DOS,
+//! ScummVM and PlayStation 3, 4 and 5 games are folders, the PlayStation
+//! ones named by their own title files. Detection results are cached by path, size and
 //! modification time, so a rescan of a 10,000-file library only lists
 //! folders. Nothing here touches the network.
 
@@ -147,9 +148,7 @@ fn scan_dir(
     // Folder games: each subfolder of a DOS or ScummVM folder is one game.
     if let Some(system) = hint.filter(|s| s.folder_games) {
         for game in &dirs {
-            if let Some(entry) = folder_game(system, game, root) {
-                out.entries.push(entry);
-            }
+            folder_games(system, game, dir, root, 0, &mut out.entries);
         }
         if system.id == "dos" {
             for (path, size, _) in &files {
@@ -306,13 +305,64 @@ fn is_dos_helper(path: &Path) -> bool {
     .any(|w| stem.starts_with(w))
 }
 
-/// A DOS or ScummVM game folder.
-fn folder_game(system: &System, folder: &Path, root: &Path) -> Option<RomEntry> {
-    let folder_name = folder.file_name()?.to_string_lossy().into_owned();
-    let mut name = names::parse(&folder_name);
-    if let Some(title) = systems::folder_title(system, folder) {
-        name.title = title;
+/// Folder levels searched inside a folder of a system's folder for games
+/// whose program sits deeper (`PS3/Demon's Souls/BLUS30443/PS3_GAME/…`).
+const NESTED_DEPTH: usize = 3;
+
+/// The games in `folder`, a folder inside the system folder `top`: the
+/// folder itself when it is one, else, for systems whose games hold a known
+/// program ([`System::folder_main`]), the games in its subfolders. A game's
+/// insides are never searched.
+fn folder_games(
+    system: &System,
+    folder: &Path,
+    top: &Path,
+    root: &Path,
+    depth: usize,
+    out: &mut Vec<RomEntry>,
+) {
+    if let Some(entry) = folder_game(system, folder, top, root) {
+        out.push(entry);
+        return;
     }
+    if system.folder_main.is_empty() || depth >= NESTED_DEPTH {
+        return;
+    }
+    let Ok(read) = std::fs::read_dir(folder) else {
+        return;
+    };
+    let mut subs: Vec<PathBuf> = read
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| e.path())
+        .collect();
+    subs.sort();
+    for sub in subs {
+        folder_games(system, &sub, top, root, depth + 1, out);
+    }
+}
+
+/// The folder whose name is the game's in the game folder `folder`: the
+/// folder itself, unless it is part of the game's layout (a `PS3_GAME`
+/// folder on its own), then the nearest folder above it that isn't, below
+/// the system folder `top`. When every folder up to `top` is a layout
+/// folder, the game folder's own name is all there is.
+fn naming_folder<'a>(system: &System, folder: &'a Path, top: &Path) -> &'a Path {
+    folder
+        .ancestors()
+        .take_while(|dir| *dir != top && dir.starts_with(top))
+        .find(|dir| {
+            dir.file_name()
+                .is_some_and(|n| !system.is_layout_folder(&n.to_string_lossy()))
+        })
+        .unwrap_or(folder)
+}
+
+/// A game folder (DOS, ScummVM, PlayStation 3, 4 and 5), found inside the
+/// system folder `top`. Its title is the one its own files give it
+/// ([`systems::folder_title`]), else its folder's name.
+fn folder_game(system: &System, folder: &Path, top: &Path, root: &Path) -> Option<RomEntry> {
     let path = if system.id == "dos" {
         dos_program(folder)?
     } else if !system.folder_main.is_empty() {
@@ -327,6 +377,17 @@ fn folder_game(system: &System, folder: &Path, root: &Path) -> Option<RomEntry> 
         std::fs::read_dir(folder).ok()?.next()?.ok()?;
         folder.to_path_buf()
     };
+    let named_by = naming_folder(system, folder, top);
+    let mut stem = named_by.file_name()?.to_string_lossy().into_owned();
+    let mut name = names::parse(&stem);
+    if let Some(title) = systems::folder_title(system, folder) {
+        // Thumbnails are looked up by name: a folder named like the game
+        // (with its region) says more than the title, a title id less.
+        if !name.title.eq_ignore_ascii_case(&title) {
+            stem.clone_from(&title);
+        }
+        name.title = title;
+    }
     Some(RomEntry {
         app_name: app_name_of(&system.id, folder),
         system: system.id.clone(),
@@ -335,7 +396,7 @@ fn folder_game(system: &System, folder: &Path, root: &Path) -> Option<RomEntry> 
         path,
         discs: Vec::new(),
         size: 0,
-        stem: folder_name,
+        stem,
         root: root.to_path_buf(),
     })
 }
@@ -515,6 +576,102 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(ids(&again), ids(&found));
+    }
+
+    #[test]
+    fn names_playstation_folder_games_from_param_sfo() {
+        use irori_engines::sfo;
+        let dir = tempfile::tempdir().unwrap();
+        let roms = dir.path().join("roms");
+        // A disc dump named by its serial, its title in `PS3_GAME`.
+        touch(&roms.join("PS3/BLUS30443/PS3_GAME/USRDIR/EBOOT.BIN"), b"x");
+        touch(
+            &roms.join("PS3/BLUS30443/PS3_GAME/PARAM.SFO"),
+            &sfo::build(&[("TITLE", "Demon's Souls™"), ("TITLE_ID", "BLUS30443")]),
+        );
+        // A folder named like the game keeps its name for thumbnails.
+        touch(&roms.join("PS3/Flower (USA)/USRDIR/EBOOT.BIN"), b"x");
+        touch(
+            &roms.join("PS3/Flower (USA)/PARAM.SFO"),
+            &sfo::build(&[("TITLE", "Flower")]),
+        );
+        // A game one folder deeper than usual.
+        touch(
+            &roms.join("PS3/Collection/BCES00001/PS3_GAME/USRDIR/EBOOT.BIN"),
+            b"x",
+        );
+        touch(
+            &roms.join("PS3/Collection/BCES00001/PS3_GAME/PARAM.SFO"),
+            &sfo::build(&[("TITLE", "Nested\nGame")]),
+        );
+        // A `PS3_GAME` folder on its own without a title file: nothing
+        // better than its own name, never the system's folder.
+        touch(&roms.join("PS3/PS3_GAME/USRDIR/EBOOT.BIN"), b"x");
+        touch(&roms.join("PS4/CUSA00572/eboot.bin"), b"x");
+        touch(
+            &roms.join("PS4/CUSA00572/sce_sys/param.sfo"),
+            &sfo::build(&[("TITLE", "Sample Quest")]),
+        );
+        // A damaged file leaves the folder's name.
+        touch(&roms.join("PS4/CUSA00001/eboot.bin"), b"x");
+        touch(&roms.join("PS4/CUSA00001/sce_sys/param.sfo"), b"\0PSF");
+
+        let playlists = dir.path().join("playlists");
+        let found = scan(
+            std::slice::from_ref(&roms),
+            &ScanCache::new(),
+            &playlists,
+            &|_| {},
+        );
+        let got: Vec<(&str, &str, &str)> = found
+            .entries
+            .iter()
+            .map(|e| (e.system.as_str(), e.title.as_str(), e.stem.as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("ps4", "CUSA00001", "CUSA00001"),
+                ("ps3", "Demon's Souls", "Demon's Souls"),
+                ("ps3", "Flower", "Flower (USA)"),
+                ("ps3", "Nested Game", "Nested Game"),
+                ("ps3", "PS3 GAME", "PS3_GAME"),
+                ("ps4", "Sample Quest", "Sample Quest"),
+            ]
+        );
+        let flower = &found.entries[2];
+        assert_eq!(flower.tags, ["USA"]);
+        let nested = &found.entries[3];
+        assert!(nested.path.ends_with("BCES00001/PS3_GAME/USRDIR/EBOOT.BIN"));
+
+        // A game already in the library takes its title on the next scan,
+        // under the same id.
+        let before = found.entries[0].app_name.clone();
+        touch(
+            &roms.join("PS4/CUSA00001/sce_sys/param.sfo"),
+            &sfo::build(&[("TITLE", "Fixed Title")]),
+        );
+        let again = scan(&[roms], &found.cache, &playlists, &|_| {});
+        let fixed = again.entries.iter().find(|e| e.app_name == before).unwrap();
+        assert_eq!(fixed.title, "Fixed Title");
+    }
+
+    #[test]
+    fn layout_folders_never_name_games() {
+        let ps3 = systems::get("ps3").unwrap();
+        let top = Path::new("/roms/PS3");
+        let at = |p: &str| naming_folder(ps3, Path::new(p), top).to_path_buf();
+        assert_eq!(at("/roms/PS3/BLUS30443"), Path::new("/roms/PS3/BLUS30443"));
+        assert_eq!(
+            at("/roms/PS3/Folklore/PS3_GAME"),
+            Path::new("/roms/PS3/Folklore")
+        );
+        assert_eq!(
+            at("/roms/PS3/Folklore/ps3_game/USRDIR"),
+            Path::new("/roms/PS3/Folklore")
+        );
+        // The system's folder (or the ROM folder) is never a game's name.
+        assert_eq!(at("/roms/PS3/PS3_GAME"), Path::new("/roms/PS3/PS3_GAME"));
     }
 
     #[test]

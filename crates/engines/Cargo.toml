@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Builders other crates' tests use (`sfo::build`).
+test-support = []
+
 [dependencies]
 irori-core.workspace = true
 irori-runtime.workspace = true
