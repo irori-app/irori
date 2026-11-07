@@ -8,7 +8,7 @@ Icon=irori
 Terminal=false
 Categories=Game;
 Keywords=epic;gog;amazon;zoom;launcher;wine;proton;heroic;
-MimeType=x-scheme-handler/irori;
+MimeType=x-scheme-handler/irori;application/x-msdownload;application/x-ms-dos-executable;application/vnd.microsoft.portable-executable;application/x-msi;application/x-bat;text/x-ms-regedit;
 StartupWMClass=irori
 Actions=BigPicture;
 

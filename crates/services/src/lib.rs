@@ -41,6 +41,7 @@ pub mod sunshine;
 pub mod sync;
 pub mod updates;
 pub mod userdata;
+mod windows_files;
 
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -79,6 +80,7 @@ pub use sunshine::{SunshineInstall, SunshineLogin, SunshineReport, SunshineStatu
 pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
+pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);

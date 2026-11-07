@@ -44,6 +44,31 @@ def macos_arch(binary: Path) -> str:
     return "universal" if len(archs) > 1 else archs[0]
 
 
+# Windows files Irori opens in a game's Wine prefix
+# (`irori_runtime::windows_file::EXTENSIONS`).
+WINDOWS_FILE_EXTENSIONS = ["exe", "msi", "bat", "cmd", "reg"]
+
+
+def macos_info(version: str) -> dict:
+    """Info.plist of Irori.app: the `irori://` scheme, and Windows files
+    offered under Finder's "Open With" ("Alternate": Irori never takes them
+    over from the user's current app)."""
+    return {
+        "CFBundleName": "Irori", "CFBundleDisplayName": "Irori",
+        "CFBundleIdentifier": "app.irori.Irori", "CFBundleExecutable": "irori",
+        "CFBundlePackageType": "APPL", "CFBundleVersion": version,
+        "CFBundleShortVersionString": version, "LSMinimumSystemVersion": "12.0",
+        "LSApplicationCategoryType": "public.app-category.games",
+        "NSHighResolutionCapable": True,
+        "NSPrincipalClass": "NSApplication",
+        "CFBundleURLTypes": [{"CFBundleURLName": "Irori game launcher",
+            "CFBundleTypeRole": "Viewer", "CFBundleURLSchemes": ["irori"]}],
+        "CFBundleDocumentTypes": [{"CFBundleTypeName": "Windows program",
+            "CFBundleTypeRole": "Viewer", "LSHandlerRank": "Alternate",
+            "CFBundleTypeExtensions": WINDOWS_FILE_EXTENSIONS}],
+    }
+
+
 def make_dmg(app: Path, dmg: Path, identity: str) -> None:
     """A compressed disk image showing the app beside a link to /Applications."""
     with tempfile.TemporaryDirectory() as temporary:
@@ -274,17 +299,7 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
         resources = staging / "Contents/Resources"
         resources.mkdir()
         shutil.copy2(root / "packaging/irori.svg", resources)
-        info = {
-            "CFBundleName": "Irori", "CFBundleDisplayName": "Irori",
-            "CFBundleIdentifier": "app.irori.Irori", "CFBundleExecutable": "irori",
-            "CFBundlePackageType": "APPL", "CFBundleVersion": version,
-            "CFBundleShortVersionString": version, "LSMinimumSystemVersion": "12.0",
-            "LSApplicationCategoryType": "public.app-category.games",
-            "NSHighResolutionCapable": True,
-            "NSPrincipalClass": "NSApplication",
-            "CFBundleURLTypes": [{"CFBundleURLName": "Irori game launcher",
-                "CFBundleTypeRole": "Viewer", "CFBundleURLSchemes": ["irori"]}],
-        }
+        info = macos_info(version)
         icon = root / "packaging/irori.icns"
         if icon.is_file():
             shutil.copy2(icon, resources)

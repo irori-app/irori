@@ -249,6 +249,24 @@ Xbox app and Microsoft Store games are Windows-only: they start through the shel
 follow the processes running from the package folder. On Linux and macOS the Stores
 page explains this instead of listing them.
 
+### Windows files
+
+A Windows program, installer, batch or registry file (`.exe`, `.msi`, `.bat`, `.cmd`,
+`.reg`) opened with Irori asks which installed Windows game's Wine prefix opens it
+(the most recently played first), then runs it there from its own folder with that
+game's Wine build and settings. Registry files go to `regedit`; everything else goes
+to Wine as it is, whose `start` hands batch files to `cmd` and packages to `msiexec`.
+Steam games, third-party launcher games and ROMs are not offered: their prefixes
+belong to someone else.
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Offered under "Open With" | The packaged `irori.desktop` lists the file types | `Irori.app` declares them (`LSHandlerRank` Alternate) | Not offered: Windows runs them itself |
+| Opened with a double click | On request (Settings → General → "Open Windows programs with Irori"): `irori-windows-files.desktop` in the user's applications folder and `xdg-mime default` for each type, replacing the current choice (often Wine's) | Finder's Get Info → Open with → Irori → Change All | — |
+
+The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
+instance makes a relative path absolute before forwarding it.
+
 ### Screenshots
 
 The stats page's Album reads screenshots from Steam's

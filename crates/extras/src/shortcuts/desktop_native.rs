@@ -248,6 +248,13 @@ pub async fn exists(game: &GameInfo) -> bool {
         .is_some_and(|files| files.iter().any(|p| p.exists()))
 }
 
+/// Only Linux desktops let Irori make itself the program for Windows files:
+/// on macOS the app bundle offers itself (Finder's "Open With"), and on
+/// Windows the files run on their own.
+pub async fn register_windows_files(_launcher: &LauncherCommand) -> Result<()> {
+    anyhow::bail!("Windows files open with Irori only on Linux desktops")
+}
+
 pub async fn register_url_scheme(launcher: &LauncherCommand) -> Result<()> {
     #[cfg(target_os = "macos")]
     {

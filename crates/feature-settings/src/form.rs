@@ -1415,7 +1415,31 @@ impl SettingsForm {
                 window,
                 cx,
             ),
+            ActionKind::OpenWindowsFiles => self.open_windows_files(window, cx),
         }
+    }
+
+    fn open_windows_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let action = ActionKind::OpenWindowsFiles;
+        self.busy.insert(action);
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.open_windows_files_by_default().await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            this.update_in(cx, |this, window, cx| {
+                this.busy.remove(&action);
+                let note = match result {
+                    Ok(()) => Notification::success(t("settings.windows_files.done")),
+                    Err(e) => Notification::error(format!("{e:#}"))
+                        .title(t("settings.windows_files.failed")),
+                };
+                window.push_notification(note, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     fn clear_caches(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1714,6 +1738,7 @@ impl SettingsForm {
                     | ActionKind::ImportLutris
                     | ActionKind::ImportBottles
                     | ActionKind::ImportFaugus => ("settings.action.import", false),
+                    ActionKind::OpenWindowsFiles => ("settings.action.use_irori", false),
                 };
                 Button::new(id("action"))
                     .label(t(key))
