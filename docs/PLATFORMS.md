@@ -769,6 +769,65 @@ as `kdeglobals` holds the colours from first login on. It can't see the host's
 `/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
 Irori's own theme there.
 
+## Wallpaper colours (pywal, wallust, matugen)
+
+Settings → Appearance → “Use colors from pywal, wallust or matugen”
+(`iroriUi.wallpaperColors`, off by default) makes the default theme of the colours
+these tools take from the wallpaper, on every system, and wins over a followed
+desktop's theme while it is on. It is off by default because the files stay behind
+whether or not the user wants Irori themed. “Colors file”
+(`iroriUi.wallpaperColorsFile`) names the file; a leading `~` is the home folder.
+
+- **pywal**: left empty, Irori reads `colors.json` in `$PYWAL_CACHE_DIR`, else
+  `~/.cache/wal`. Its `special` background and foreground make the surfaces and text,
+  `color4` the accent and `color8` the dimmer text. The sixteen colours are hues of the
+  wallpaper rather than a red that means danger, so warnings and errors keep Irori's
+  colours. Whether the theme is dark goes by the background (`wal -l` makes it light).
+- **wallust** writes the same file when its templates include pywal's `colors.json`:
+  `wal = { template = 'wal/', target = '~/.cache/wal/', pywal = true }` in
+  `wallust.toml`. Its own cache is named after each wallpaper and doesn't say which is
+  current, so Irori doesn't read it.
+- **matugen** writes only what its templates say, so pick the file one of them
+  renders. Irori reads Material You roles (`surface`, `on_surface`,
+  `on_surface_variant`, `primary`, `secondary`, `tertiary`, `error` and the
+  `surface_container*` roles), either as flat keys or in `matugen … --json hex`'s own
+  shapes (`colors.primary.dark`, and matugen 2's `colors.dark.primary`), so
+  `matugen image … --json hex > ~/.cache/matugen/irori.json` works too. A file with both
+  modes gives Irori a light and a dark theme, and its `mode` decides which shows. A
+  template, in `~/.config/matugen/config.toml`:
+
+  ```toml
+  [templates.irori]
+  input_path = '~/.config/matugen/templates/irori.json'
+  output_path = '~/.cache/matugen/irori.json'
+  ```
+
+  with `~/.config/matugen/templates/irori.json`:
+
+  ```json
+  {
+    "primary": "{{colors.primary.default.hex}}",
+    "secondary": "{{colors.secondary.default.hex}}",
+    "tertiary": "{{colors.tertiary.default.hex}}",
+    "error": "{{colors.error.default.hex}}",
+    "surface": "{{colors.surface.default.hex}}",
+    "on_surface": "{{colors.on_surface.default.hex}}",
+    "on_surface_variant": "{{colors.on_surface_variant.default.hex}}",
+    "surface_container_low": "{{colors.surface_container_low.default.hex}}",
+    "surface_container": "{{colors.surface_container.default.hex}}",
+    "surface_container_high": "{{colors.surface_container_high.default.hex}}",
+    "surface_container_highest": "{{colors.surface_container_highest.default.hex}}"
+  }
+  ```
+
+  Only `surface`, `on_surface` and `primary` are needed; Irori derives what is missing.
+
+The tools write by renaming, so Irori watches the file's folder (or the one above,
+until the tool first makes it), waits for writes to settle and re-themes only when the
+colours changed. Nothing polls. Text and icons are held to Irori's contrast minimums.
+Settings → Appearance → Theme shows this as “Wallpaper colors (default)”; picking any
+other theme stops following them, and “Follow system” takes its mode from them.
+
 ## System accent colour
 
 Wherever Irori doesn't follow a desktop's whole theme, macOS and Windows included, the

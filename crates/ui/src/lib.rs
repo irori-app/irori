@@ -30,6 +30,7 @@ pub mod state;
 pub mod style;
 pub mod system_notify;
 pub mod theme;
+mod wallpaper;
 
 pub use models::{Models, models};
 pub use nav::{Route, navigate};
@@ -59,4 +60,5 @@ pub fn init(backend: Backend, cx: &mut App) {
     art::install(cx);
     nav::install(cx);
     models::install(cx);
+    theme::follow_wallpaper(cx);
 }
