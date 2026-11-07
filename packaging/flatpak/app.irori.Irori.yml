@@ -30,13 +30,17 @@ finish-args:
   - --filesystem=/mnt
   - --filesystem=/media
   - --filesystem=/run/media
+  # Flatpak Steam's library, playtime and userdata: `home` leaves out other
+  # apps' folders under ~/.var/app.
+  - --filesystem=~/.var/app/com.valvesoftware.Steam
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.kde.StatusNotifierWatcher
   # Sleep inhibition while a game runs.
   - --talk-name=org.freedesktop.ScreenSaver
   - --talk-name=org.freedesktop.PowerManagement.Inhibit
   - --system-talk-name=org.freedesktop.login1
-  # Steam, Lutris and other tools installed on the host.
+  # Steam, Ludusavi, Lutris and other tools installed on the host, started
+  # with `flatpak-spawn --host` (irori_core::host).
   - --talk-name=org.freedesktop.Flatpak
   - --env=PATH=/app/bin:/app/utils/bin:/usr/bin
 

@@ -6,12 +6,17 @@
 //! show in Ludusavi's window. Output follows Ludusavi's `general-output`
 //! schema; a command that fails may still print JSON (an unknown title, a
 //! file that couldn't be copied), so stdout is parsed whatever the exit code.
+//!
+//! When Irori runs as a Flatpak, Ludusavi is looked up and run on the host
+//! (`irori_core::host`): the sandbox sees neither the host's programs nor
+//! other Flatpaks.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
+use irori_core::host;
 use irori_core::process::{self, CancellationToken, CommandSpec, RunOptions};
 use serde::Deserialize;
 use serde_json::Value;
@@ -39,14 +44,29 @@ pub struct Ludusavi {
     /// Program and the arguments before Ludusavi's own (`flatpak run <id>`).
     argv: Vec<String>,
     pub source: Source,
+    /// Run on the host through `flatpak-spawn`, Irori being a Flatpak.
+    on_host: bool,
+}
+
+/// A folder Ludusavi reads or writes, which the Ludusavi Flatpak is given
+/// access to for the command.
+#[derive(Debug, Clone, Copy)]
+struct Shared<'a> {
+    path: &'a Path,
+    /// Create the folder when it doesn't exist (the backup folder).
+    create: bool,
 }
 
 impl Ludusavi {
     /// Find Ludusavi: the program chosen in settings (`chosen`, when not
     /// empty), else on `PATH`, else in the usual install folders, else the
-    /// Flathub app. `None` when none of them is there.
-    pub fn locate(chosen: &str) -> Option<Self> {
+    /// Flathub app. `None` when none of them is there. Inside a Flatpak the
+    /// host is asked, which takes a moment.
+    pub async fn locate(chosen: &str) -> Option<Self> {
         let home = dirs::home_dir().unwrap_or_default();
+        if cfg!(target_os = "linux") && host::is_flatpak() {
+            return locate_on_host(chosen, &known_locations(&home)).await;
+        }
         locate_from(
             chosen,
             &|name| which::which(name).ok(),
@@ -64,22 +84,50 @@ impl Ludusavi {
         self.argv.join(" ")
     }
 
-    fn spec(&self, args: impl IntoIterator<Item = OsString>) -> CommandSpec {
+    /// The program and the arguments before Ludusavi's own. The Ludusavi
+    /// Flatpak gets `shared` with `--filesystem`, since a Wine prefix or
+    /// backup folder may lie where its sandbox can't see, such as Irori's own
+    /// Flatpak data under `~/.var/app`.
+    fn base(&self, shared: &[Shared]) -> CommandSpec {
         let mut argv = self.argv.iter();
         let program = argv.next().cloned().unwrap_or_default();
+        let rest: Vec<&String> = argv.collect();
+        let spec = CommandSpec::new(program);
+        match rest.split_last() {
+            Some((app_id, options)) if self.source == Source::Flatpak => spec
+                .args(options.iter().map(|o| o.as_str()))
+                .args(shared.iter().filter_map(filesystem_option))
+                .arg(app_id.as_str()),
+            _ => spec.args(rest.iter().map(|a| a.as_str())),
+        }
+    }
+
+    /// `spec` as it runs: on the host inside a Flatpak, where cancelling
+    /// it stops Ludusavi too.
+    fn finish(&self, spec: CommandSpec) -> CommandSpec {
+        if self.on_host {
+            host::flatpak_spawn(spec, true)
+        } else {
+            spec
+        }
+    }
+
+    fn spec(&self, args: impl IntoIterator<Item = OsString>, shared: &[Shared]) -> CommandSpec {
         // Offline, a stale manifest still knows the game; an update check
         // that fails must not fail the backup.
-        CommandSpec::new(program)
-            .args(argv.map(OsString::from))
-            .arg("--try-manifest-update")
-            .args(args)
+        self.finish(self.base(shared).arg("--try-manifest-update").args(args))
     }
 
     /// Run with `args` and return the JSON it printed. Ludusavi exits with
     /// an error for unknown titles and failed files but still reports them,
     /// so only a run without JSON counts as a failure.
-    async fn call(&self, args: Vec<OsString>, cancel: Option<CancellationToken>) -> Result<String> {
-        let spec = self.spec(args);
+    async fn call(
+        &self,
+        args: Vec<OsString>,
+        shared: &[Shared<'_>],
+        cancel: Option<CancellationToken>,
+    ) -> Result<String> {
+        let spec = self.spec(args, shared);
         let mut opts = RunOptions::default();
         if let Some(cancel) = cancel {
             opts = opts.cancel(cancel);
@@ -108,8 +156,7 @@ impl Ludusavi {
 
     /// Ludusavi's version ("0.31.0").
     pub async fn version(&self) -> Result<String> {
-        let mut argv = self.argv.clone();
-        let spec = CommandSpec::new(argv.remove(0)).args(argv).arg("--version");
+        let spec = self.finish(self.base(&[]).arg("--version"));
         let out = process::run(&spec, RunOptions::default())
             .await
             .with_context(|| format!("Couldn’t start Ludusavi ({})", self.display()))?;
@@ -124,7 +171,7 @@ impl Ludusavi {
 
     /// Titles in Ludusavi's data set that match `query`, best first.
     pub async fn find(&self, query: &TitleQuery) -> Result<Vec<TitleMatch>> {
-        let json = self.call(query.args(), None).await?;
+        let json = self.call(query.args(), &[], None).await?;
         parse_find(&json)
     }
 
@@ -148,7 +195,9 @@ impl Ludusavi {
         }
         args.push("--".into());
         args.push(title.into());
-        let json = self.call(args, Some(cancel)).await?;
+        let json = self
+            .call(args, &shared(wine_prefix, folder), Some(cancel))
+            .await?;
         parse_operation(&json, title)
     }
 
@@ -162,7 +211,7 @@ impl Ludusavi {
         }
         args.push("--".into());
         args.push(title.into());
-        let json = self.call(args, None).await?;
+        let json = self.call(args, &shared(None, folder), None).await?;
         parse_backups(&json, title)
     }
 
@@ -190,9 +239,30 @@ impl Ludusavi {
         }
         args.push("--".into());
         args.push(title.into());
-        let json = self.call(args, None).await?;
+        let json = self.call(args, &shared(None, folder), None).await?;
         parse_operation(&json, title)
     }
+}
+
+/// The folders a command reads or writes besides Ludusavi's own.
+fn shared<'a>(wine_prefix: Option<&'a Path>, folder: Option<&'a Path>) -> Vec<Shared<'a>> {
+    let prefix = wine_prefix.map(|path| Shared {
+        path,
+        create: false,
+    });
+    let folder = folder.map(|path| Shared { path, create: true });
+    prefix.into_iter().chain(folder).collect()
+}
+
+/// `--filesystem=<path>` for `flatpak run`. A path holding `:` would be read
+/// as an access mode, so it isn't shared; nor is one that isn't UTF-8.
+fn filesystem_option(shared: &Shared) -> Option<String> {
+    let path = shared.path.to_str().filter(|p| !p.contains(':'))?;
+    Some(if shared.create {
+        format!("--filesystem={path}:create")
+    } else {
+        format!("--filesystem={path}")
+    })
 }
 
 fn os(args: &[&str]) -> Vec<OsString> {
@@ -251,6 +321,7 @@ fn locate_from(
     let program = |path: &Path, source| Ludusavi {
         argv: vec![path.to_string_lossy().into_owned()],
         source,
+        on_host: false,
     };
     let chosen = chosen.trim();
     if !chosen.is_empty() {
@@ -274,7 +345,44 @@ fn locate_from(
                 FLATPAK_ID.into(),
             ],
             source: Source::Flatpak,
+            on_host: false,
         })
+}
+
+/// [`locate_from`] for Irori running as a Flatpak: the host looks up the
+/// program and the Flathub app, and runs whichever is found. The usual
+/// install folders are in the home folder, which the sandbox sees.
+async fn locate_on_host(chosen: &str, known: &[PathBuf]) -> Option<Ludusavi> {
+    let program = |path: &Path, source| Ludusavi {
+        argv: vec![path.to_string_lossy().into_owned()],
+        source,
+        on_host: true,
+    };
+    let chosen = chosen.trim();
+    if !chosen.is_empty() {
+        // The chosen program may be in the host's `/usr`, which the sandbox
+        // doesn't see, so the host checks it.
+        let path = irori_core::paths::expand_home(chosen);
+        return host::find_program(&path.to_string_lossy())
+            .await
+            .map(|p| program(&p, Source::Chosen));
+    }
+    if let Some(path) = host::find_program("ludusavi").await {
+        return Some(program(&path, Source::Installed));
+    }
+    if let Some(path) = known.iter().find(|p| p.is_file()) {
+        return Some(program(path, Source::Installed));
+    }
+    let flatpak = host::find_program("flatpak").await?;
+    host::has_flatpak_app(FLATPAK_ID).await.then(|| Ludusavi {
+        argv: vec![
+            flatpak.to_string_lossy().into_owned(),
+            "run".into(),
+            FLATPAK_ID.into(),
+        ],
+        source: Source::Flatpak,
+        on_host: true,
+    })
 }
 
 /// "ludusavi 0.31.0" → "0.31.0".
@@ -680,11 +788,12 @@ mod tests {
 
     #[test]
     fn builds_commands_with_ludusavi_arguments_last() {
-        let flatpak = Ludusavi {
+        let mut flatpak = Ludusavi {
             argv: vec!["/usr/bin/flatpak".into(), "run".into(), FLATPAK_ID.into()],
             source: Source::Flatpak,
+            on_host: false,
         };
-        let spec = flatpak.spec(os(&["backups", "--api"]));
+        let spec = flatpak.spec(os(&["backups", "--api"]), &[]);
         assert_eq!(spec.program, PathBuf::from("/usr/bin/flatpak"));
         assert_eq!(
             spec.args,
@@ -695,6 +804,48 @@ mod tests {
                 "backups",
                 "--api"
             ])
+        );
+
+        // The Flatpak is given the prefix and the backup folder, and inside
+        // Irori's own Flatpak the whole command runs on the host.
+        flatpak.on_host = true;
+        let prefix = Path::new("/home/u/.var/app/app.irori.Irori/data/irori/prefixes/Hades");
+        let folder = Path::new("/home/u/Save backups");
+        let spec = flatpak.spec(
+            os(&["backup", "--api"]),
+            &shared(Some(prefix), Some(folder)),
+        );
+        assert_eq!(spec.program, PathBuf::from("flatpak-spawn"));
+        assert_eq!(
+            spec.args,
+            os(&[
+                "--host",
+                "--watch-bus",
+                "/usr/bin/flatpak",
+                "run",
+                "--filesystem=/home/u/.var/app/app.irori.Irori/data/irori/prefixes/Hades",
+                "--filesystem=/home/u/Save backups:create",
+                FLATPAK_ID,
+                "--try-manifest-update",
+                "backup",
+                "--api",
+            ])
+        );
+
+        // A program isn't a Flatpak: it reads every folder already.
+        let program = Ludusavi {
+            argv: vec!["/usr/bin/ludusavi".into()],
+            source: Source::Installed,
+            on_host: false,
+        };
+        let spec = program.spec(os(&["backup"]), &shared(Some(prefix), Some(folder)));
+        assert_eq!(spec.args, os(&["--try-manifest-update", "backup"]));
+        assert_eq!(
+            filesystem_option(&Shared {
+                path: Path::new("/media/C:/odd"),
+                create: false
+            }),
+            None
         );
 
         let query = TitleQuery {

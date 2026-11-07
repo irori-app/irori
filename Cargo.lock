@@ -4408,6 +4408,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "which 8.0.6",
 ]
 
 [[package]]
@@ -5039,7 +5040,6 @@ dependencies = [
  "tracing",
  "url",
  "uuid 1.28.0",
- "which 8.0.6",
 ]
 
 [[package]]

@@ -8,10 +8,14 @@
 //! Once processes were found, later checks look at those processes only and
 //! fall back to a full scan when they are gone, so a long session costs one
 //! lookup per check rather than a walk over every process on the computer.
+//!
+//! Inside a Flatpak Irori sees only its sandbox's processes, so the game's are
+//! listed and stopped on the host (`irori_core::host`) instead.
 
 use std::path::PathBuf;
 
 use irori_core::GameWatch;
+use irori_core::host::{self, HostProcess};
 use parking_lot::Mutex;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, UpdateKind};
 
@@ -24,6 +28,8 @@ pub(crate) struct SteamGameWatch {
     manifest: PathBuf,
     /// The game's processes found by the last check.
     pids: Mutex<Vec<Pid>>,
+    /// Whether the game's processes are the host's, Irori being a Flatpak.
+    on_host: bool,
 }
 
 impl SteamGameWatch {
@@ -33,6 +39,7 @@ impl SteamGameWatch {
             install_path,
             manifest,
             pids: Mutex::new(Vec::new()),
+            on_host: cfg!(target_os = "linux") && host::is_flatpak(),
         }
     }
 
@@ -43,9 +50,24 @@ impl SteamGameWatch {
             || irori_core::process::runs_from(&self.install_path, exe, cmd)
     }
 
+    /// Whether the host process belongs to the game. `ps` joins the
+    /// arguments with spaces, so the reaper is matched on the split line and
+    /// the install folder, which may hold spaces, on the whole of it.
+    fn is_game_host_process(&self, process: &HostProcess) -> bool {
+        is_reaper_for(&self.app_id, &process.args())
+            || irori_core::process::runs_from(
+                &self.install_path,
+                None,
+                std::slice::from_ref(&process.command_line),
+            )
+    }
+
     /// The game's processes now: the remembered ones when any of them still
     /// is the game's, else whatever a full scan finds.
     fn find(&self) -> Vec<Pid> {
+        if self.on_host {
+            return self.find_on_host();
+        }
         let known = self.pids.lock().clone();
         let refresh = ProcessRefreshKind::nothing()
             .with_cmd(UpdateKind::Always)
@@ -63,6 +85,37 @@ impl SteamGameWatch {
         }
         sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
         let found = self.matching(&sys);
+        *self.pids.lock() = found.clone();
+        found
+    }
+
+    /// [`Self::find`] among the host's processes. Runs on a blocking
+    /// thread of the backend's runtime, as every check of a watch does.
+    fn find_on_host(&self) -> Vec<Pid> {
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return Vec::new();
+        };
+        let list = |pids: Option<Vec<u32>>| match runtime.block_on(host::processes(pids.as_deref()))
+        {
+            Ok(processes) => processes
+                .iter()
+                .filter(|p| self.is_game_host_process(p))
+                .map(|p| Pid::from_u32(p.pid))
+                .collect(),
+            Err(e) => {
+                tracing::warn!("listing the host's processes: {e:#}");
+                Vec::new()
+            }
+        };
+        let known: Vec<u32> = self.pids.lock().iter().map(|p| p.as_u32()).collect();
+        if !known.is_empty() {
+            let alive = list(Some(known));
+            if !alive.is_empty() {
+                *self.pids.lock() = alive.clone();
+                return alive;
+            }
+        }
+        let found = list(None);
         *self.pids.lock() = found.clone();
         found
     }
@@ -97,6 +150,15 @@ impl GameWatch for SteamGameWatch {
     /// never matches, so it keeps running.
     fn stop(&self, force: bool) {
         let pids = self.find();
+        if self.on_host {
+            let pids: Vec<u32> = pids.iter().map(|p| p.as_u32()).collect();
+            if let Ok(runtime) = tokio::runtime::Handle::try_current()
+                && let Err(e) = runtime.block_on(host::signal(&pids, force))
+            {
+                tracing::warn!("stopping the game's host processes: {e:#}");
+            }
+            return;
+        }
         let mut sys = System::new();
         sys.refresh_processes_specifics(
             ProcessesToUpdate::Some(&pids),
@@ -156,6 +218,29 @@ mod tests {
             &args("reaper SteamLaunch AppId=440 -- game AppId=620")
         ));
         assert!(!is_reaper_for("440", &args("steam SteamLaunch AppId=440")));
+    }
+
+    #[test]
+    fn recognises_the_game_among_host_processes() {
+        let watch = SteamGameWatch::new(
+            "440".into(),
+            "/home/u/.local/share/Steam/steamapps/common/Team Fortress 2".into(),
+            PathBuf::from("/nonexistent/appmanifest_440.acf"),
+        );
+        let process = |command_line: &str| HostProcess {
+            pid: 7,
+            command_line: command_line.into(),
+        };
+        assert!(watch.is_game_host_process(&process(
+            "/home/u/.local/share/Steam/ubuntu12_32/reaper SteamLaunch AppId=440 -- hl2.sh"
+        )));
+        // A folder holding spaces matches on the whole command line.
+        assert!(watch.is_game_host_process(&process(
+            "/home/u/.local/share/Steam/steamapps/common/Team Fortress 2/tf_linux64 -game tf"
+        )));
+        assert!(!watch.is_game_host_process(&process(
+            "/home/u/.local/share/Steam/ubuntu12_32/steam -silent"
+        )));
     }
 
     #[test]
