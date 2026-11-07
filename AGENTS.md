@@ -649,6 +649,12 @@ cx.spawn_in(window, async move |this, cx| {
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
   (`glass::resolve`, `Glass::Desktop`).
+- With `iroriUi.wallpaperColors` on (off by default, every OS) the default theme is the
+  wallpaper's instead, over a followed desktop's: `wallpaper.rs` reads pywal's
+  `colors.json` (which wallust writes too) or the matugen JSON the user names in
+  `iroriUi.wallpaperColorsFile`, into a `Palette` per mode. `theme::follow_wallpaper`
+  starts, stops or moves the folder watch as the settings change, and re-themes only
+  when the parsed colours differ (`Desktop::Wallpaper`, `docs/PLATFORMS.md`).
 - Elsewhere the default theme is Irori's own in the system's accent colour: the settings
   portal's on other Linux desktops, `controlAccentColor` and the highlight colour on macOS,
   `UISettings` and its shades on Windows (`desktop_accent.rs` and its `macos.rs` and
