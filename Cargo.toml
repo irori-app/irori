@@ -2,7 +2,9 @@
 resolver = "2"
 members = ["crates/*"]
 # Vendored WebView, unused for now (store logins use the browser); see its README.
-exclude = ["crates/webview"]
+# GPUI's Windows backend is vendored only to patch it (see its PATCHES.md), so it
+# stays out of the workspace and its own lints.
+exclude = ["crates/webview", "crates/gpui-pre-windows"]
 
 [workspace.package]
 version = "0.4.0"
@@ -103,6 +105,11 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 md5 = "0.7"
 sysinfo = { version = "0.39", default-features = false, features = ["system", "disk"] }
+
+# GPUI's Windows backend with Irori's fixes; crates/gpui-pre-windows/PATCHES.md
+# lists them. Keep its version equal to gpui-pre's.
+[patch.crates-io]
+gpui-pre-windows = { path = "crates/gpui-pre-windows" }
 
 [profile.release]
 lto = "fat"
