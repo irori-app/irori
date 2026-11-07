@@ -10,9 +10,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, Window, div, rems,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
 use irori_ui::components::BrandMark;
@@ -316,116 +316,16 @@ impl AppShell {
         cx.notify();
     }
 
-    fn render_title_bar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let nav = navigator(cx).read(cx);
-        let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
-        let downloads = &models(cx).downloads.read(cx).queue;
-        let statuses = models(cx).statuses.read(cx);
-        let current = downloads.current().map(|item| {
-            let pct = statuses
-                .get(&item.id)
-                .and_then(|s| s.progress)
-                .and_then(|p| p.percent)
-                .unwrap_or(0.0);
-            (item.title.clone(), pct)
-        });
-        let queued = downloads.active.len();
-        let online = models(cx).accounts.read(cx).online;
-        let playing = crate::playing::pill(cx);
-        let _ = window;
+    fn render_title_bar(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut title_bar = TitleBar::new();
         if glass::current(cx).is_translucent() {
             // One flat tint, like the sidebar, instead of gpui-kit's gradient.
             title_bar = title_bar.bg(glass::chrome(cx.theme().title_bar, cx));
         }
-
-        title_bar.child(
-            h_flex()
-                .w_full()
-                .pr_2()
-                .gap_1()
-                .justify_between()
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .child(
-                            Button::new("nav-back")
-                                .ghost()
-                                .small()
-                                .icon(IconName::ChevronLeft)
-                                .tooltip(t("shell.nav.back"))
-                                .disabled(!can_back)
-                                .on_click(|_, _, cx| nav::go_back(cx)),
-                        )
-                        .child(
-                            Button::new("nav-forward")
-                                .ghost()
-                                .small()
-                                .icon(IconName::ChevronRight)
-                                .tooltip(t("shell.nav.forward"))
-                                .disabled(!can_forward)
-                                .on_click(|_, _, cx| nav::go_forward(cx)),
-                        ),
-                )
-                .child(
-                    Button::new("open-palette")
-                        .outline()
-                        .small()
-                        .w(rems(22.))
-                        .icon(IconName::Search)
-                        .label(t("shell.search.placeholder"))
-                        .tooltip("Ctrl+K")
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.palette.open(window, cx);
-                        })),
-                )
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .children(playing)
-                        .when(!online, |this| {
-                            this.child(
-                                h_flex()
-                                    .id("offline")
-                                    .gap_1()
-                                    .px_2()
-                                    .text_xs()
-                                    .text_color(cx.theme().warning)
-                                    .child(Icon::new(IconName::WifiOff).xsmall())
-                                    .child(t("shell.offline"))
-                                    .tooltip(|window, cx| {
-                                        gpui_kit::component::tooltip::Tooltip::new(t(
-                                            "shell.offline.tooltip",
-                                        ))
-                                        .build(window, cx)
-                                    }),
-                            )
-                        })
-                        .child(
-                            Button::new("title-downloads")
-                                .ghost()
-                                .small()
-                                .map(|b| match &current {
-                                    Some((title, pct)) => b
-                                        .child(
-                                            ProgressCircle::new("title-download-progress")
-                                                .value(*pct)
-                                                .xsmall(),
-                                        )
-                                        .tooltip(t_args(
-                                            "shell.downloads.progress",
-                                            &[("title", title), ("percent", &format!("{pct:.0}"))],
-                                        )),
-                                    None => b.icon(IconName::Download).tooltip(if queued > 0 {
-                                        t("shell.downloads.paused")
-                                    } else {
-                                        t("shell.nav.downloads")
-                                    }),
-                                })
-                                .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx)),
-                        ),
-                ),
-        )
+        let open_palette = cx.listener(|this, _, window, cx| {
+            this.palette.open(window, cx);
+        });
+        title_bar.child(title_bar_content(cx, open_palette))
     }
 
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -616,6 +516,134 @@ impl AppShell {
     }
 }
 
+/// The title bar's contents: navigation, the search button and the live status
+/// group.
+///
+/// The three tracks grow equally from nothing, and the search button is centred
+/// in the middle one, so its position depends only on the bar's width. A wider
+/// status group (the playing pill, downloads, the offline mark) must not move
+/// it. In a narrow window the tracks give the middle one a third of the bar, and
+/// the button shortens its label rather than pushing the status group under it.
+fn title_bar_content(
+    cx: &mut App,
+    open_palette: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let nav = navigator(cx).read(cx);
+    let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
+    let downloads = &models(cx).downloads.read(cx).queue;
+    let statuses = models(cx).statuses.read(cx);
+    let current = downloads.current().map(|item| {
+        let pct = statuses
+            .get(&item.id)
+            .and_then(|s| s.progress)
+            .and_then(|p| p.percent)
+            .unwrap_or(0.0);
+        (item.title.clone(), pct)
+    });
+    let queued = downloads.active.len();
+    let online = models(cx).accounts.read(cx).online;
+    let playing = crate::playing::pill(cx);
+
+    h_flex()
+        .debug_selector(|| "title-bar-content".into())
+        .w_full()
+        .pr_2()
+        .gap_1()
+        .child(
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_1()
+                .child(
+                    Button::new("nav-back")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ChevronLeft)
+                        .tooltip(t("shell.nav.back"))
+                        .disabled(!can_back)
+                        .on_click(|_, _, cx| nav::go_back(cx)),
+                )
+                .child(
+                    Button::new("nav-forward")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ChevronRight)
+                        .tooltip(t("shell.nav.forward"))
+                        .disabled(!can_forward)
+                        .on_click(|_, _, cx| nav::go_forward(cx)),
+                ),
+        )
+        .child(
+            h_flex().flex_1().min_w_0().justify_center().child(
+                Button::new("open-palette")
+                    .debug_selector(|| "open-palette".into())
+                    .outline()
+                    .small()
+                    .w(rems(22.))
+                    .min_w_0()
+                    .flex_shrink(1.)
+                    .icon(IconName::Search)
+                    .label(t("shell.search.placeholder"))
+                    .tooltip("Ctrl+K")
+                    .on_click(open_palette),
+            ),
+        )
+        .child(
+            h_flex()
+                .id("title-bar-status")
+                .debug_selector(|| "title-bar-status".into())
+                .flex_1()
+                .min_w_0()
+                .gap_1()
+                .justify_end()
+                .children(playing)
+                .when(!online, |this| {
+                    this.child(
+                        h_flex()
+                            .id("offline")
+                            .min_w_0()
+                            .gap_1()
+                            .px_2()
+                            .text_xs()
+                            .text_color(cx.theme().warning)
+                            .child(Icon::new(IconName::WifiOff).xsmall())
+                            .child(div().min_w_0().truncate().child(t("shell.offline")))
+                            .tooltip(|window, cx| {
+                                gpui_kit::component::tooltip::Tooltip::new(t(
+                                    "shell.offline.tooltip",
+                                ))
+                                .build(window, cx)
+                            }),
+                    )
+                })
+                .child(
+                    Button::new("title-downloads")
+                        .debug_selector(|| "title-downloads".into())
+                        .ghost()
+                        .small()
+                        .map(|b| match &current {
+                            Some((title, pct)) => b
+                                .child(
+                                    ProgressCircle::new("title-download-progress")
+                                        .value(*pct)
+                                        .xsmall(),
+                                )
+                                .tooltip(t_args(
+                                    "shell.downloads.progress",
+                                    &[("title", title), ("percent", &format!("{pct:.0}"))],
+                                )),
+                            None => b.icon(IconName::Download).tooltip(if queued > 0 {
+                                t("shell.downloads.paused")
+                            } else {
+                                t("shell.nav.downloads")
+                            }),
+                        })
+                        .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx)),
+                ),
+        )
+        .into_any_element()
+}
+
 impl Focusable for AppShell {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -801,5 +829,226 @@ mod start_tests {
         assert_eq!(route_once_loaded(&Route::Onboarding, true), None);
         assert_eq!(route_once_loaded(&Route::Library, false), None);
         assert_eq!(route_once_loaded(&Route::BigPicture, false), None);
+    }
+}
+
+/// The title bar row laid out in a real window, so a change to the flex tracks
+/// is measured where it ships.
+#[cfg(test)]
+mod title_bar_tests {
+    use std::sync::{Arc, Mutex, Once};
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use gpui_kit::{Bounds, Pixels, TestAppContext, VisualTestContext, px, size};
+    use irori_core::{Paths, StatusKind};
+    use irori_services::Backend;
+    use irori_sideload::{SideloadApp, SideloadPlatform, SideloadStore};
+
+    /// Long enough for the playing pill to reach its own truncation limit.
+    const GAME_TITLE: &str = "A Deliberately Long Game Title, Part Two: The Return";
+
+    /// The title bar's right padding, `pr_2` in rems.
+    const RIGHT_PADDING: f32 = 8.;
+
+    struct TitleBarHarness;
+
+    impl Render for TitleBarHarness {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            title_bar_content(cx, |_, _, _| {})
+        }
+    }
+
+    struct BarLayout {
+        row: Bounds<Pixels>,
+        search: Bounds<Pixels>,
+        status: Bounds<Pixels>,
+        pill: Option<Bounds<Pixels>>,
+        downloads: Bounds<Pixels>,
+    }
+
+    /// Keep every file the backend writes in a private temporary directory.
+    fn isolate_paths() {
+        static ONCE: Once = Once::new();
+        ONCE.call_once(|| {
+            let root = tempfile::tempdir()
+                .expect("a private test directory")
+                .keep();
+            // Another test in this binary must not have touched the real paths
+            // first: this backend would then write to the user's own files.
+            assert!(
+                Paths::init(Paths::under(&root)),
+                "the title bar test claims the paths first"
+            );
+        });
+    }
+
+    /// A real backend over a shelf with one manually added (browser) app.
+    fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
+        isolate_paths();
+        cx.executor().allow_parking();
+        let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
+        let slot = made.clone();
+        let backend = Backend::start(move |bus, settings| {
+            let store = SideloadStore::new(bus, settings);
+            *slot.lock().expect("the store slot") = Some(store.clone());
+            vec![store]
+        })
+        .expect("the backend starts");
+        let store = made
+            .lock()
+            .expect("the store slot")
+            .clone()
+            .expect("the store is built");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            irori_ui::init(backend.clone(), cx);
+            // main.rs does this; without it the shell's keys render as keys.
+            irori_ui::i18n::register(crate::strings::CATALOGS);
+        });
+        (backend, store)
+    }
+
+    /// Add the game whose title the pill shows, and wait for the library model.
+    fn add_game(cx: &mut TestAppContext, backend: &Backend, store: &SideloadStore) -> GameId {
+        let id = backend
+            .runtime()
+            .block_on(store.add_app(SideloadApp {
+                title: GAME_TITLE.into(),
+                platform: SideloadPlatform::Browser,
+                browser_url: Some("https://example.test/a-long-game".into()),
+                ..Default::default()
+            }))
+            .expect("the app is added");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            if cx.read(|cx| models(cx).library.read(cx).snapshot.get(&id).is_some()) {
+                return id;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the library never listed the added app"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// Wait until the status model shows (or stops showing) `id` as playing.
+    fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            if cx.read(|cx| models(cx).statuses.read(cx).is_playing(id)) == playing {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the status model never caught up"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// Draw the production title bar row in a window `width` wide and report
+    /// what the layout engine placed.
+    fn measure(cx: &mut TestAppContext, width: f32) -> BarLayout {
+        let window = cx.open_window(size(px(width), px(34.)), |_, _| TitleBarHarness);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        cx.run_until_parked();
+        let bounds = |cx: &mut VisualTestContext, selector: &'static str| -> Bounds<Pixels> {
+            cx.debug_bounds(selector)
+                .unwrap_or_else(|| panic!("{selector} is drawn"))
+        };
+        let row = bounds(&mut cx, "title-bar-content");
+        let search = bounds(&mut cx, "open-palette");
+        let status = bounds(&mut cx, "title-bar-status");
+        let downloads = bounds(&mut cx, "title-downloads");
+        let pill = cx.debug_bounds("playing-pill");
+        BarLayout {
+            row,
+            search,
+            status,
+            pill,
+            downloads,
+        }
+    }
+
+    fn assert_same_place(before: Bounds<Pixels>, after: Bounds<Pixels>) {
+        assert!(
+            (before.left().as_f32() - after.left().as_f32()).abs() < 0.01
+                && (before.size.width.as_f32() - after.size.width.as_f32()).abs() < 0.01,
+            "the search button moved: {before:?} → {after:?}"
+        );
+    }
+
+    #[gpui_kit::test]
+    fn the_search_button_keeps_its_place_when_the_playing_pill_appears(cx: &mut TestAppContext) {
+        let (backend, store) = start(cx);
+        let id = add_game(cx, &backend, &store);
+
+        // The reported width: adding the pill used to drag the search button
+        // half the pill's width to the left.
+        let wide_before = measure(cx, 2000.);
+        assert!(wide_before.pill.is_none(), "nothing plays yet");
+        assert!(
+            (wide_before.search.center().x.as_f32()
+                - (wide_before.row.left().as_f32()
+                    + (wide_before.row.size.width.as_f32() - RIGHT_PADDING) / 2.))
+                .abs()
+                < 0.5,
+            "the search button is centred in the bar's content box: {:?} in {:?}",
+            wide_before.search,
+            wide_before.row
+        );
+
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        let wide_after = measure(cx, 2000.);
+        assert!(wide_after.pill.is_some(), "the pill names the game");
+        assert_same_place(wide_before.search, wide_after.search);
+
+        // The window's smallest size: the tracks share the bar, so the search
+        // button shortens instead of the groups overlapping each other.
+        backend.statuses.clear(&id);
+        wait_for_status(cx, &id, false);
+        let narrow_before = measure(cx, 800.);
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        let narrow_after = measure(cx, 800.);
+
+        assert_same_place(narrow_before.search, narrow_after.search);
+        let pill = narrow_after
+            .pill
+            .expect("the pill is drawn in a narrow bar");
+        assert!(
+            pill.left() >= narrow_after.search.right(),
+            "the pill stays clear of the search button: {pill:?} vs {:?}",
+            narrow_after.search
+        );
+        let flush = |edge: Pixels| {
+            (narrow_after.row.right().as_f32() - edge.as_f32() - RIGHT_PADDING).abs() < 0.5
+        };
+        assert!(
+            flush(narrow_after.status.right()),
+            "the status group ends at the bar's content edge: {:?} in {:?}",
+            narrow_after.status,
+            narrow_after.row
+        );
+        assert!(
+            flush(narrow_after.downloads.right()),
+            "the downloads button stays inside the bar: {:?} in {:?}",
+            narrow_after.downloads,
+            narrow_after.row
+        );
+        assert!(
+            narrow_after.search.size.width > px(120.),
+            "the search button stays usable: {:?}",
+            narrow_after.search
+        );
     }
 }
