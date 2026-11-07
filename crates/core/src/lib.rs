@@ -2,6 +2,7 @@
 //! No UI dependency; everything here is usable from tests and headless tools.
 
 pub mod achievement_cache;
+pub mod age_rating;
 pub mod archive_guard;
 pub mod events;
 pub mod fs_guard;
@@ -23,6 +24,7 @@ pub mod status;
 pub mod store;
 pub mod util;
 
+pub use age_rating::{AgeRating, RatingSystem};
 pub use events::{Event, EventBus, Notice, NoticeLevel};
 pub use game::*;
 pub use install::*;

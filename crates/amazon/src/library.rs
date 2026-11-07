@@ -42,6 +42,24 @@ pub struct Details {
     pub logo_url: Option<String>,
     pub release_date: Option<String>,
     pub short_description: Option<String>,
+    /// ESRB rating as Amazon names it (`TEEN`, `MATURE`, `EVERYONE_10_PLUS`).
+    #[serde(deserialize_with = "string_or_none")]
+    pub esrb_rating: Option<String>,
+    /// PEGI rating (`PEGI_16`, `16`).
+    #[serde(deserialize_with = "string_or_none")]
+    pub pegi_rating: Option<String>,
+    /// USK rating (`USK_12`, `12`).
+    #[serde(deserialize_with = "string_or_none")]
+    pub usk_rating: Option<String>,
+}
+
+/// A text or a number as text; anything else (`null`, objects) is none.
+fn string_or_none<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::String(s) if !s.trim().is_empty() => Some(s),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    })
 }
 
 fn strings_or_null<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
@@ -72,7 +90,8 @@ mod tests {
         let json = r#"[
           {"id": "ent-1", "product": {"id": "amzn1.adg.product.abc", "title": "Foo", "sku": "SKU1",
             "productDetail": {"iconUrl": "https://img/icon.png", "details": {
-              "backgroundUrl1": "https://img/bg1.jpg", "genres": ["Action"], "esrbRating": "TEEN"}}}},
+              "backgroundUrl1": "https://img/bg1.jpg", "genres": ["Action"], "esrbRating": "TEEN",
+              "pegiRating": 12, "uskRating": null}}}},
           {"id": "ent-2", "product": {"id": "amzn1.adg.product.abc", "title": "Dup"}},
           {"id": "ent-3", "product": {"id": "", "title": "No id"}},
           {"id": "ent-4", "product": {"id": "amzn1.adg.product.def",
@@ -84,6 +103,10 @@ mod tests {
         assert_eq!(list[0].id, "ent-1");
         assert_eq!(list[0].product.sku.as_deref(), Some("SKU1"));
         assert_eq!(list[0].product.product_detail.details.genres, ["Action"]);
+        let details = &list[0].product.product_detail.details;
+        assert_eq!(details.esrb_rating.as_deref(), Some("TEEN"));
+        assert_eq!(details.pegi_rating.as_deref(), Some("12"));
+        assert_eq!(details.usk_rating, None);
         assert!(list[1].product.product_detail.details.genres.is_empty());
         // Round-trips through Irori's library file.
         let again: Vec<Entitlement> =

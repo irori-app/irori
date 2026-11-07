@@ -273,6 +273,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
   Steam Deck's Game Mode and reads each press once alongside Steam Input.
+- **Age ratings** (ESRB, PEGI, USK, CERO, ClassInd, GRAC, ACB…) on each game's page, in
+  the board of your region, with their content descriptors, and a library filter by
+  age that a saved view keeps, for a view of the games that suit your children.
 - **Play status** for every game (plan to play, playing, on hold, beaten, abandoned),
   with the library grouped by it and play time under each cover (<kbd>Ctrl</kbd>
   <kbd>G</kbd>).

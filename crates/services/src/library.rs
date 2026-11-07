@@ -339,11 +339,13 @@ impl Backend {
                         g.art_logo = Some(l.clone());
                     }
                     self.facts.complete(&mut g);
+                    self.age_ratings.complete(&mut g);
                     Arc::new(g.finalize())
                 }
                 None => {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
+                    self.age_ratings.complete(&mut g);
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {

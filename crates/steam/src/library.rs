@@ -97,6 +97,24 @@ pub struct AppDetails {
     pub mac_requirements: Requirements,
     #[serde(deserialize_with = "requirements")]
     pub linux_requirements: Requirements,
+    /// Age ratings by board, as the store names them (`esrb`, `pegi`,
+    /// `usk`, `cero`, `dejus`, `oflc`, `kgrb`, `csrr`, `steam_germany`…).
+    #[serde(deserialize_with = "ratings")]
+    pub ratings: Vec<(String, StoreRating)>,
+}
+
+/// One board's rating on the store page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct StoreRating {
+    /// The board's code in lower case (`m`, `e10`, `16`, `ma15`).
+    #[serde(deserialize_with = "lenient_string")]
+    pub rating: String,
+    /// One descriptor per line.
+    #[serde(deserialize_with = "lenient_string")]
+    pub descriptors: String,
+    #[serde(deserialize_with = "lenient_u64")]
+    pub required_age: u64,
 }
 
 impl AppDetails {
@@ -274,6 +292,30 @@ pub(crate) fn lenient_u64<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Err
         Value::String(s) => s.trim().parse().unwrap_or_default(),
         _ => 0,
     })
+}
+
+/// A text, or a number written as one; anything else is empty.
+fn lenient_string<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::String(s) => s,
+        Value::Number(n) => n.to_string(),
+        _ => String::new(),
+    })
+}
+
+/// Ratings: an object of boards (`null` or missing when the page has none),
+/// sorted by board; entries that aren't objects are left out.
+fn ratings<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<(String, StoreRating)>, D::Error> {
+    let Value::Object(boards) = Value::deserialize(d)? else {
+        return Ok(Vec::new());
+    };
+    let mut out: Vec<(String, StoreRating)> = boards
+        .into_iter()
+        .filter(|(_, v)| v.is_object())
+        .filter_map(|(k, v)| Some((k, serde_json::from_value(v).ok()?)))
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
 }
 
 /// Requirements: an object, or `[]` when the store lists none.
@@ -487,7 +529,14 @@ mod tests {
                     "supported_languages": "English<strong>*</strong>, German",
                     "pc_requirements": {"minimum": "<ul>1.2 GHz</ul>", "recommended": "<ul>2 GHz</ul>"},
                     "mac_requirements": [],
-                    "linux_requirements": {"minimum": "<ul>Ubuntu</ul>"}
+                    "linux_requirements": {"minimum": "<ul>Ubuntu</ul>"},
+                    "ratings": {
+                        "esrb": {"rating": "m", "descriptors": "Blood and Gore\r\nIntense Violence",
+                                 "use_age_gate": "true", "required_age": "17"},
+                        "pegi": {"rating": "16", "descriptors": "Violence"},
+                        "usk": {"rating": 16},
+                        "broken": "x"
+                    }
                 }}}))
             } else if path == "/api/appdetails?appids=4&l=english" {
                 Resp::json(json!({"4": {"success": true, "data": {
@@ -509,6 +558,11 @@ mod tests {
         let d = api.app_details(220, "english").await.unwrap().unwrap();
         assert_eq!(d.name, "Half-Life 2");
         assert_eq!(d.required_age, 16);
+        let boards: Vec<&str> = d.ratings.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(boards, ["esrb", "pegi", "usk"]);
+        assert_eq!(d.ratings[0].1.rating, "m");
+        assert_eq!(d.ratings[0].1.required_age, 17);
+        assert_eq!(d.ratings[2].1.rating, "16");
         assert_eq!(d.developers, ["Valve"]);
         assert_eq!(
             d.platforms,
