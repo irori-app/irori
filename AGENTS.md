@@ -105,6 +105,11 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 - A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
   Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
   `Backend::open_windows_file`; `docs/PLATFORMS.md`, "Windows files").
+- A link of any other scheme (`ddnet:[::1]:8303`; not Irori's, Heroic's, Lutris's or Nexus
+  Mods' links, `file:` or web pages; not on Windows) opens the same way, through Wine's
+  `start` (`irori_runtime::windows_uri`, `Backend::open_windows_uri`,
+  `irori_game::open_windows_uri_dialog`; `docs/PLATFORMS.md`, "Other programs' links").
+  Irori registers no such scheme; the user points one at it (`xdg-mime default`).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 
