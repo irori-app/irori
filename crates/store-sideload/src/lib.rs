@@ -165,7 +165,9 @@ impl SideloadStore {
     /// Remove an app from the library. With `delete_files`, also delete its
     /// install folder, unless that folder is shared with another app or is not
     /// clearly the app's own (home, system and launcher folders are refused);
-    /// a refused deletion fails before anything changes.
+    /// a refused deletion fails before anything changes. The folder of an app
+    /// another launcher starts ([`SideloadApp::launch_link`]) is that
+    /// launcher's to remove and is always kept.
     pub async fn remove_app(&self, app_name: &str, delete_files: bool) -> Result<()> {
         let _write = self.write_lock.lock().await;
         let mut apps = self.state.read().apps.clone();
@@ -174,7 +176,9 @@ impl SideloadStore {
             .position(|a| a.app_name == app_name)
             .with_context(|| format!("{app_name} is not in the library"))?;
         let to_delete = match apps[index].app.install_dir() {
-            Some(dir) if delete_files => self.deletable_dir(&dir, &apps, app_name).await?,
+            Some(dir) if delete_files && apps[index].app.launch_link.is_none() => {
+                self.deletable_dir(&dir, &apps, app_name).await?
+            }
             _ => None,
         };
         let removed = apps.remove(index);
@@ -324,7 +328,7 @@ impl SideloadStore {
             .apps
             .iter()
             .filter(|a| a.app.platform != SideloadPlatform::Browser)
-            .filter_map(|a| a.app.executable.as_deref()?.parent().map(nearest_existing))
+            .filter_map(|a| a.app.presence_path()?.parent().map(nearest_existing))
             .flatten()
             .collect();
         let mut slot = self.watcher.lock();
@@ -439,7 +443,10 @@ async fn missing_programs(apps: &[StoredApp]) -> HashSet<String> {
         if stored.app.platform == SideloadPlatform::Browser {
             continue;
         }
-        let (name, exe) = (stored.app_name.clone(), stored.app.executable.clone());
+        let (name, exe) = (
+            stored.app_name.clone(),
+            stored.app.presence_path().map(Path::to_path_buf),
+        );
         checks.spawn(async move {
             let present = match exe {
                 Some(exe) => matches!(
@@ -723,7 +730,10 @@ impl Store for SideloadStore {
         let Some(stored) = self.stored(app_name) else {
             return false;
         };
-        match (stored.app.platform, stored.app.executable) {
+        match (
+            stored.app.platform,
+            stored.app.presence_path().map(Path::to_path_buf),
+        ) {
             (SideloadPlatform::Browser, _) => stored.app.browser_url.is_some(),
             (_, Some(exe)) => matches!(
                 tokio::time::timeout(AVAILABILITY_TIMEOUT, tokio::fs::try_exists(&exe)).await,
@@ -745,6 +755,13 @@ impl Store for SideloadStore {
         let app = &stored.app;
         if app.platform == SideloadPlatform::Browser {
             return self.browser_plan(app).await;
+        }
+        if let Some(link) = &app.launch_link {
+            let folder = app
+                .install_folder
+                .as_deref()
+                .context("This game has no install folder; edit it and choose one")?;
+            return launch::link_plan(link, folder);
         }
         anyhow::ensure!(
             irori_core::HostPlatform::current().supports(app.platform.install_platform()),
@@ -1055,6 +1072,62 @@ mod tests {
         } else {
             assert!(result.unwrap_err().to_string().contains("Wine or Proton"));
         }
+    }
+
+    #[tokio::test]
+    async fn apps_another_launcher_starts_follow_their_folder() {
+        let f = fixture();
+        f.store.init().await.unwrap();
+        let folder = f.root.join("Playnite games/Hades");
+        let id = f
+            .store
+            .add_app(SideloadApp {
+                title: "Hades".into(),
+                platform: SideloadPlatform::Windows,
+                install_folder: Some(folder.clone()),
+                launch_link: Some("playnite://playnite/start/abc".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        // Installed while its folder is there.
+        assert!(!f.store.game(&id.app_name).unwrap().is_installed);
+        assert!(!f.store.is_available(&id.app_name).await);
+        std::fs::create_dir_all(&folder).unwrap();
+        touch(&folder.join("Hades.exe"));
+        f.store.recheck().await;
+        assert!(f.store.game(&id.app_name).unwrap().is_installed);
+        assert!(f.store.is_available(&id.app_name).await);
+
+        let result = f
+            .store
+            .launch(&id.app_name, &request(), OpContext::detached())
+            .await;
+        if cfg!(windows) {
+            let plan = result.unwrap();
+            assert_eq!(plan.command.program, PathBuf::from("rundll32.exe"));
+            assert_eq!(
+                plan.command.args.last(),
+                Some(&OsString::from("playnite://playnite/start/abc"))
+            );
+            assert!(plan.watch.is_some());
+        } else {
+            assert!(result.unwrap_err().to_string().contains("Windows"));
+        }
+
+        // Its files are the other launcher's.
+        f.store
+            .uninstall(
+                &id.app_name,
+                RemoveArgs {
+                    delete_files: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(f.store.game(&id.app_name).is_none());
+        assert!(folder.join("Hades.exe").is_file());
     }
 
     #[tokio::test]

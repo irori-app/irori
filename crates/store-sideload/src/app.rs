@@ -75,9 +75,29 @@ pub struct SideloadApp {
     /// A date or year, year first (`2024`, `2024-05-30`).
     pub release_date: Option<String>,
     pub genres: Vec<String>,
+    /// A link another launcher starts the game from
+    /// (`playnite://playnite/start/<id>`), Windows only. Such an app needs
+    /// no executable: Irori opens the link, the session follows the
+    /// processes running from `install_folder`, and removing the app never
+    /// deletes that folder, which belongs to the other launcher.
+    pub launch_link: Option<String>,
 }
 
+/// Schemes [`SideloadApp::launch_link`] may use: launchers that start a game
+/// by a link of their own.
+const LAUNCH_LINK_SCHEMES: [&str; 1] = ["playnite"];
+
 impl SideloadApp {
+    /// The file or folder whose presence makes the app installed: the
+    /// install folder of an app another launcher starts, else the program.
+    pub fn presence_path(&self) -> Option<&Path> {
+        if self.launch_link.is_some() {
+            self.install_folder.as_deref()
+        } else {
+            self.executable.as_deref()
+        }
+    }
+
     /// Folder holding the app's files: `install_folder`, else the executable's folder.
     pub fn install_dir(&self) -> Option<PathBuf> {
         self.install_folder.clone().or_else(|| {
@@ -112,6 +132,27 @@ impl SideloadApp {
             .filter_map(|g| non_empty(Some(g)))
             .collect();
         self.launcher_args = self.launcher_args.trim().to_string();
+        self.launch_link = non_empty(self.launch_link);
+        if let Some(link) = &self.launch_link {
+            let valid =
+                url::Url::parse(link).is_ok_and(|u| LAUNCH_LINK_SCHEMES.contains(&u.scheme()));
+            if !valid || self.platform != SideloadPlatform::Windows {
+                bail!("\"{link}\" is not a link Irori can start a game from");
+            }
+            let folder = self
+                .install_folder
+                .filter(|p| !p.as_os_str().is_empty())
+                .context("Choose the folder the game is installed in")?;
+            self.install_folder = Some(absolute(&folder, "install folder")?);
+            self.executable = match self.executable {
+                Some(p) if !p.as_os_str().is_empty() => Some(absolute(&p, "executable")?),
+                _ => None,
+            };
+            self.browser_url = None;
+            self.custom_user_agent = None;
+            self.launch_fullscreen = false;
+            return Ok(self);
+        }
         match self.platform {
             SideloadPlatform::Browser => {
                 let url =
@@ -328,6 +369,49 @@ mod tests {
         let mut untitled = windows_app();
         untitled.title = " ".into();
         assert!(untitled.normalized().is_err());
+    }
+
+    #[test]
+    fn normalizes_apps_another_launcher_starts() {
+        let app = SideloadApp {
+            title: "Hades".into(),
+            platform: SideloadPlatform::Windows,
+            launch_link: Some(" playnite://playnite/start/abc ".into()),
+            install_folder: Some(absolute("/games/Hades").into()),
+            ..Default::default()
+        }
+        .normalized()
+        .unwrap();
+        assert_eq!(
+            app.launch_link.as_deref(),
+            Some("playnite://playnite/start/abc")
+        );
+        assert!(app.executable.is_none());
+        assert_eq!(
+            app.presence_path(),
+            Some(Path::new(&absolute("/games/Hades")))
+        );
+        assert_eq!(
+            StoredApp {
+                app_name: "p".into(),
+                app: app.clone(),
+            }
+            .to_game_info(true)
+            .install
+            .unwrap()
+            .install_path,
+            absolute("/games/Hades")
+        );
+
+        let mut no_folder = app.clone();
+        no_folder.install_folder = None;
+        assert!(no_folder.normalized().is_err());
+        let mut web = app.clone();
+        web.launch_link = Some("https://example.com/".into());
+        assert!(web.normalized().is_err());
+        let mut linux = app;
+        linux.platform = SideloadPlatform::Linux;
+        assert!(linux.normalized().is_err());
     }
 
     #[test]

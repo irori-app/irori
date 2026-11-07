@@ -14,13 +14,17 @@
 //!   makes the browser process live as long as the window, so playtime is
 //!   tracked. If no supported browser is installed, `xdg-open` is used and
 //!   the user agent/full-screen options are ignored.
+//! * Apps another launcher starts (Playnite's games) open that launcher's
+//!   link through the Windows shell, which returns at once; the session
+//!   follows the processes running from the game's folder.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::paths::{expand_home, sanitize};
 use irori_core::process::{CommandSpec, split_args};
-use irori_core::{LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest};
+use irori_core::{GameWatch, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest};
 
 use crate::app::SideloadApp;
 
@@ -287,6 +291,78 @@ pub(crate) fn wine_plan(
         track_wineserver: true,
         watch: None,
     })
+}
+
+/// Launch through another launcher's link (Windows only): the shell hands
+/// `link` to the launcher and returns at once with success, so the session
+/// follows the processes running from `folder`, as the third-party
+/// launchers' games do.
+pub(crate) fn link_plan(link: &str, folder: &Path) -> Result<LaunchPlan> {
+    anyhow::ensure!(
+        cfg!(windows),
+        "This game is started by Playnite, which runs on Windows only"
+    );
+    Ok(LaunchPlan {
+        command: CommandSpec::new("rundll32.exe")
+            .arg("shell32.dll,ShellExec_RunDLL")
+            .arg(link),
+        track_wineserver: false,
+        watch: Some(Arc::new(FolderWatch {
+            folder: folder.to_string_lossy().into_owned(),
+        })),
+    })
+}
+
+/// Follows a game by the processes running from its folder.
+struct FolderWatch {
+    folder: String,
+}
+
+impl FolderWatch {
+    fn processes(&self) -> sysinfo::System {
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing()
+                .with_cmd(UpdateKind::Always)
+                .with_exe(UpdateKind::Always),
+        );
+        sys
+    }
+
+    fn runs_here(&self, p: &sysinfo::Process) -> bool {
+        let cmd: Vec<String> = p
+            .cmd()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        irori_core::process::runs_from(&self.folder, p.exe(), &cmd)
+    }
+}
+
+impl GameWatch for FolderWatch {
+    fn running(&self) -> bool {
+        self.processes()
+            .processes()
+            .values()
+            .any(|p| self.runs_here(p))
+    }
+
+    fn stop(&self, force: bool) {
+        for p in self.processes().processes().values() {
+            if self.runs_here(p) {
+                if force {
+                    p.kill();
+                } else {
+                    // Not supported on Windows; the forced stop that follows
+                    // ends the game there.
+                    let _ = p.kill_with(sysinfo::Signal::Term);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
