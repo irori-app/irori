@@ -444,6 +444,27 @@ setting came out larger (34 MB), and larger blocks start slower.
   beside it (the runtime's `--appimage-portable-home` and `--appimage-portable-config`)
   move Irori's data with it.
 
+### Flatpak
+
+`app.irori.Irori` sees the home folder and other drives, but its sandbox hides the host's
+`/usr`, the host's processes and other apps' folders under `~/.var/app`. Programs the
+user installed on the host therefore run there through `flatpak-spawn --host`
+(`irori_core::host`, allowed by `--talk-name=org.freedesktop.Flatpak`):
+
+- **Steam.** The manifest shares `~/.var/app/com.valvesoftware.Steam`, so a Flatpak
+  Steam's library, playtime and `userdata` are read like a native one's. `steam://`
+  links open with the host's `xdg-open`, and launches with arguments run the host's
+  `steam` or `flatpak run com.valvesoftware.Steam`. The session follows the game on the
+  host: `ps` lists the reaper and the game's processes, and Stop sends them `kill`.
+- **Ludusavi.** The program chosen in settings is checked on the host, then `ludusavi`
+  on the host's `PATH`, `~/.cargo/bin` and `~/.local/bin`, then the Flathub app
+  (`flatpak info com.github.mtkennerly.ludusavi`). Each command runs on the host with
+  `--watch-bus`, so cancelling it stops Ludusavi. The Ludusavi Flatpak gets the game's
+  Wine prefix and the backup folder with `flatpak run --filesystem=…` (`:create` for the
+  backup folder), because Irori's own prefixes live under
+  `~/.var/app/app.irori.Irori`, which its sandbox hides; a path holding `:` can't be
+  passed that way.
+
 ### Backups and sync
 
 Settings › Backup and sync backs up on its own, daily or weekly (weekly unless changed),

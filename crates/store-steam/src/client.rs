@@ -1,16 +1,24 @@
 //! Talking to the Steam client: `steam://` links for what Steam does itself
 //! (install, uninstall, verify, show a game), and its program for launches
-//! with arguments.
+//! with arguments. When Irori runs as a Flatpak both run on the host, where
+//! Steam is (`irori_core::host`).
 
 use std::path::{Path, PathBuf};
 
+use irori_core::host;
 use irori_core::process::CommandSpec;
 
 /// Flatpak Steam's application ID.
 const FLATPAK_ID: &str = "com.valvesoftware.Steam";
 
-/// The command that hands `url` to the program registered for it.
+/// The command that hands `url` to the program registered for it. Inside a
+/// Flatpak the host's `xdg-open` takes it, so Steam gets the link without
+/// the portal asking which program should open it.
 pub(crate) fn open_url(url: &str) -> CommandSpec {
+    host::command(local_open_url(url))
+}
+
+fn local_open_url(url: &str) -> CommandSpec {
     if cfg!(target_os = "macos") {
         CommandSpec::new("/usr/bin/open").arg(url)
     } else if cfg!(windows) {
@@ -24,14 +32,16 @@ pub(crate) fn open_url(url: &str) -> CommandSpec {
 
 /// The Steam program for `steam_dir`, as a command to add arguments to.
 /// `None` when it can't be found; `steam://` links still work then.
-pub(crate) fn steam_program(steam_dir: &Path) -> Option<CommandSpec> {
+pub(crate) async fn steam_program(steam_dir: &Path) -> Option<CommandSpec> {
     if cfg!(target_os = "linux") {
         if steam_dir.components().any(|c| c.as_os_str() == FLATPAK_ID) {
-            return which::which("flatpak")
-                .ok()
-                .map(|flatpak| CommandSpec::new(flatpak).arg("run").arg(FLATPAK_ID));
+            let flatpak = host::find_program("flatpak").await?;
+            return Some(host::command(
+                CommandSpec::new(flatpak).arg("run").arg(FLATPAK_ID),
+            ));
         }
-        return which::which("steam").ok().map(CommandSpec::new);
+        let steam = host::find_program("steam").await?;
+        return Some(host::command(CommandSpec::new(steam)));
     }
     let candidates: Vec<PathBuf> = if cfg!(windows) {
         vec![steam_dir.join("steam.exe")]
@@ -51,11 +61,11 @@ pub(crate) fn steam_program(steam_dir: &Path) -> Option<CommandSpec> {
 /// `rungameid` link is enough. With them, `-applaunch` passes them silently;
 /// the `steam://run` link is the fallback, for which Steam asks the user to
 /// confirm the arguments.
-pub(crate) fn launch_command(steam_dir: &Path, app_id: &str, args: &[String]) -> CommandSpec {
+pub(crate) async fn launch_command(steam_dir: &Path, app_id: &str, args: &[String]) -> CommandSpec {
     if args.is_empty() {
         return open_url(&format!("steam://rungameid/{app_id}"));
     }
-    if let Some(steam) = steam_program(steam_dir) {
+    if let Some(steam) = steam_program(steam_dir).await {
         return steam.arg("-applaunch").arg(app_id).args(args.iter());
     }
     let joined = args.join(" ");
@@ -96,16 +106,16 @@ mod tests {
             .collect()
     }
 
-    #[test]
-    fn launches_through_links_or_the_program() {
+    #[tokio::test]
+    async fn launches_through_links_or_the_program() {
         let dir = tempfile::tempdir().unwrap();
-        let plain = launch_command(dir.path(), "620", &[]);
+        let plain = launch_command(dir.path(), "620", &[]).await;
         assert_eq!(argv(&plain).last().unwrap(), "steam://rungameid/620");
 
         let args = vec!["-novid".to_string(), "+map test".to_string()];
-        let with_args = launch_command(dir.path(), "620", &args);
+        let with_args = launch_command(dir.path(), "620", &args).await;
         let v = argv(&with_args);
-        if steam_program(dir.path()).is_some() {
+        if steam_program(dir.path()).await.is_some() {
             assert_eq!(
                 &v[v.len() - 4..],
                 ["-applaunch", "620", "-novid", "+map test"]

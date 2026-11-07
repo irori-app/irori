@@ -3,6 +3,8 @@
 export const SITE = 'https://irori.app'
 export const REPO = 'https://github.com/irori-app/irori'
 export const REPO_API = 'https://api.github.com/repos/irori-app/irori'
+/** Irori's AlternativeTo listing; the query string is the one their badge code uses. */
+export const ALTERNATIVETO = 'https://alternativeto.net/software/irori/about/?utm_source=badge&utm_medium=referral'
 
 /** Measured on Irori 0.2.0 on Linux with an empty profile and the window open (README, Performance). */
 export const MEASURED = {

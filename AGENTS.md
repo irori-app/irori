@@ -219,7 +219,9 @@ irori-sign-in     (standalone; Irori links it only on macOS/Windows)
   import, the GOG branch password), the shell installs a hook (`irori_ui::hooks`,
   `irori_game::install_hooks`) instead of the feature depending on the store. The
   same goes for another feature's views: the library's Focus view and grid drawer show
-  the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`).
+  the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`), and
+  Big Picture shows a game's settings in place through `irori_ui::hooks::game_settings`
+  (`GameSettingsView::embedded`), so they never take the user out of it.
 
 ## 4. Architecture
 
@@ -362,6 +364,13 @@ and `launch.rs` before changing anything below the UI.
   10 s connect and 60 s total timeout. It must run inside the Tokio runtime.
 - Large downloads use `download_client()` (no total timeout) or `irori-depot`.
 
+**Host programs** (`host.rs`): inside Irori's Flatpak the host's `/usr`, processes
+and other apps' `~/.var/app` folders are hidden. A program the user installed on the
+host (Steam, Ludusavi, another Flatpak) is found with `host::find_program` /
+`has_flatpak_app` and started through `host::command` (`flatpak-spawn --host`), or
+`tied_command` when it should stop with its command; `host::processes` and `signal`
+list and stop host processes. Outside a Flatpak they act on this system.
+
 **Deleting files:** call `fs_guard::ensure_deletable(dir, app)` before any recursive
 delete of a game or prefix directory.
 
@@ -438,7 +447,9 @@ commands without a window.
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
-  The UI is `irori_ui::save_backups`.
+  The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
+  the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
+  backup folder with `--filesystem`.
 - **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
@@ -517,11 +528,18 @@ commands without a window.
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
      a Steam game's Proton prefix is reached only through `protontricks-launch`.
-  7. Sleep inhibition, the replay buffer, then session tracking. At the end the programs that stop
-     with the game are stopped (not-yet-started ones never start) before the
-     after-launch script, then `GameExited`. While programs run in the prefix,
-     a game whose launcher exits early is followed by its folder, not
-     `wineserver -w`, which would wait for them too.
+  7. Sleep inhibition, the replay buffer, then session tracking. When the started
+     program exits but left processes running (a crack's or publisher's launcher
+     handing over to the game), the session follows them (`follow::Handoff`): on Unix
+     whatever is still in its process group, checked every 3 s (daemons and
+     wineserver start a session of their own and don't count); on Windows its
+     descendants by parent process started after it, found with sysinfo every 3 s.
+     Stopping ends them too. Games another program owns (`LaunchPlan::watch`,
+     third-party launchers) and browser apps aren't followed this way. At the end
+     the programs that stop with the game are stopped (not-yet-started ones never
+     start) before the after-launch script, then `GameExited`. While programs run
+     in the prefix, a game whose launcher exits early is followed by its folder,
+     not `wineserver -w`, which would wait for them too.
 
 ### 4.3 Stores
 
@@ -750,6 +768,8 @@ it on every platform, and CI's Windows install test runs it.
   action list and details), `log` (the page's live game log, in place of the details;
   the shoulders page through it, and rows under Show log filter it with
   `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
+  `settings` (the game's settings over its page, outside the `BigPicture` key context so
+  keys reach their controls; Escape returns to the page),
   `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
@@ -912,7 +932,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Sessions follow the game, not the launcher** (`crates/services/src/follow.rs`):
   while such a game runs, services look every 3 s for processes running from its
   install folder; the session ends when they are gone, or when the launcher exits
-  without starting the game. Nothing polls when no launcher game runs.
+  without starting the game. Nothing polls when no launcher game runs. Every other
+  game whose started program hands over and exits is followed through its process
+  group or descendants instead (see Launching, step 7).
 - **Rockstar** (`irori_launchers_data::rockstar`): `TITLES` names every Rockstar PC
   title with its Steam app id (art comes from Steam's CDN) and whether store copies
   need the launcher. The launcher keeps no readable list of owned titles (its

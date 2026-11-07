@@ -10,7 +10,7 @@ use gpui_kit::{App, Context, SharedString, Task, Window};
 use irori_core::{GameId, GameInfo, InstallInfoQuery, InstallPlatform, RemoveArgs, UpdateRequest};
 use irori_services::LaunchParams;
 use irori_ui::i18n::{t, t_args};
-use irori_ui::{Route, models, nav};
+use irori_ui::models;
 
 use super::BigPictureView;
 use crate::model::{
@@ -197,11 +197,6 @@ impl BigPictureView {
     pub(super) fn set_hidden(&mut self, id: GameId, on: bool, cx: &mut Context<Self>) {
         let b = irori_ui::backend(cx);
         irori_ui::state::run_infallible(cx, async move { b.userdata.set_hidden(&id, on) }).detach();
-    }
-
-    /// The game's settings, outside Big Picture; going back returns here.
-    pub(super) fn open_game_settings(&mut self, id: GameId, cx: &mut Context<Self>) {
-        nav::navigate(Route::GameSettings(id, "general".into()), cx);
     }
 
     pub(super) fn menu(&self, cx: &App) -> Vec<MenuItem> {

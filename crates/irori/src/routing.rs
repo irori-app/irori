@@ -6,7 +6,7 @@ use gpui_kit::{AnyView, App, AppContext as _, Entity, Window};
 use irori_core::GameId;
 use irori_game::{GamePage, GamePageEvent};
 use irori_library::LibraryEvent;
-use irori_ui::hooks::GamePanel;
+use irori_ui::hooks::{CloseFn, GamePanel};
 
 pub fn library_event(event: &LibraryEvent, window: &mut Window, cx: &mut App) {
     match event {
@@ -49,4 +49,11 @@ pub fn game_panel(id: GameId, panel: GamePanel, window: &mut Window, cx: &mut Ap
         })
         .detach();
     page.into()
+}
+
+/// A game's settings shown in place by another screen (Big Picture), closed
+/// with `on_close`.
+pub fn game_settings(id: GameId, on_close: CloseFn, window: &mut Window, cx: &mut App) -> AnyView {
+    cx.new(|cx| irori_settings::GameSettingsView::embedded(id, on_close, window, cx))
+        .into()
 }

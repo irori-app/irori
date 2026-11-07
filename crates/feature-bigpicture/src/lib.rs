@@ -29,11 +29,17 @@ pub const CONTEXT: &str = "BigPicture";
 /// [`CONTEXT`] so typed letters are not taken for Big Picture's keys.
 pub const SEARCH_CONTEXT: &str = "BigPictureSearch";
 
+/// Key context of a game's settings shown inside Big Picture, which sit
+/// outside [`CONTEXT`] so the keys reach the settings' own controls.
+pub const SETTINGS_CONTEXT: &str = "BigPictureSettings";
+
 actions!(
     irori_bigpicture,
     [
         /// Leave the Library's search field for the results.
-        CloseSearch
+        CloseSearch,
+        /// Close a game's settings and return to its page.
+        CloseSettings
     ]
 );
 
@@ -81,7 +87,8 @@ pub fn init(cx: &mut App) {
 /// move, Enter opens, Space or Ctrl+Enter plays, Escape or Backspace goes back,
 /// M or Shift+F10 opens the menu, Page Up/Down switch tabs (on a game's page,
 /// they page through its log). In the search and log filter fields, Escape,
-/// Enter and Down return to the results.
+/// Enter and Down return to the results; in a game's settings, Escape (a
+/// controller's Back) returns to its page.
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some(CONTEXT);
     cx.bind_keys([
@@ -100,6 +107,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("pagedown", gamepad::NextPage, ctx),
         KeyBinding::new("escape", CloseSearch, Some(SEARCH_CONTEXT)),
         KeyBinding::new("down", CloseSearch, Some(SEARCH_CONTEXT)),
+        KeyBinding::new("escape", CloseSettings, Some(SETTINGS_CONTEXT)),
     ]);
 }
 

@@ -669,3 +669,122 @@ fn every_layout_draws_and_moves_and_the_editor_changes_them_live(cx: &mut TestAp
     cx.simulate_keystrokes(handle, "escape");
     cx.read(|cx| assert!(view.read(cx).look.editor.is_none()));
 }
+
+/// Stands in for the settings feature's view: one control to reach.
+struct FakeSettings {
+    control: gpui_kit::FocusHandle,
+}
+
+impl gpui_kit::Render for FakeSettings {
+    fn render(
+        &mut self,
+        _: &mut gpui_kit::Window,
+        _: &mut gpui_kit::Context<Self>,
+    ) -> impl gpui_kit::IntoElement {
+        use gpui_kit::{InteractiveElement as _, ParentElement as _};
+        gpui_kit::div().child(
+            gpui_kit::div()
+                .id("fake-control")
+                .track_focus(&self.control)
+                .child("Wine version"),
+        )
+    }
+}
+
+/// The settings the hook made last, and how they close.
+struct OpenedSettings(irori_ui::hooks::CloseFn, Entity<FakeSettings>);
+
+impl gpui_kit::Global for OpenedSettings {}
+
+#[gpui_kit::test]
+fn game_settings_open_inside_big_picture(cx: &mut TestAppContext) {
+    use irori_ui::hooks::Hooks;
+    use irori_ui::{Route, nav};
+
+    let (handle, view) = open(cx);
+    cx.update(|cx| {
+        irori_ui::hooks::install(
+            Hooks {
+                game_settings: Some(Arc::new(|_, close, _, cx| {
+                    let fake = cx.new(|cx| FakeSettings {
+                        control: cx.focus_handle().tab_stop(true),
+                    });
+                    cx.set_global(OpenedSettings(close, fake.clone()));
+                    fake.into()
+                })),
+                ..Default::default()
+            },
+            cx,
+        )
+    });
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    };
+    let route =
+        |cx: &mut TestAppContext| cx.read(|cx| nav::navigator(cx).read(cx).current().clone());
+    let page_ix = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).page.as_ref().unwrap().ix);
+    let before = route(cx);
+
+    // Charlie's page: Play, Play with logs, Favourite, Settings, Show log.
+    let charlie = GameId::new(Runner::Legendary, "c");
+    view.update(cx, |v, cx| v.open_page(charlie.clone(), cx));
+    for _ in 0..3 {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.dispatch_action(handle, gamepad::Confirm);
+    draw(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(v.is_settings_open(), "the settings open in Big Picture");
+        assert!(v.is_page_open());
+    });
+    assert_eq!(route(cx), before, "Big Picture stays");
+    assert!(!matches!(route(cx), Route::GameSettings(..)));
+
+    // A controller's directions move into the settings, not along the page.
+    let route_input = |input: gamepad::GamepadInput, cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            gamepad::route_in_window(input, window, cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    route_input(gamepad::GamepadInput::Down, cx);
+    let fake = cx.read(|cx| cx.global::<OpenedSettings>().1.clone());
+    let in_settings = cx
+        .update_window(handle, |_, window, cx| {
+            fake.read(cx).control.is_focused(window)
+        })
+        .unwrap();
+    assert!(in_settings, "Down reaches the settings' first control");
+    assert_eq!(page_ix(cx), 3, "the page behind keeps its row");
+
+    // Back returns to the page, which has the keys again.
+    route_input(gamepad::GamepadInput::Back, cx);
+    draw(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.is_settings_open());
+        assert!(v.is_page_open(), "Back closes only the settings");
+    });
+    cx.dispatch_action(handle, gamepad::Down);
+    assert_eq!(page_ix(cx), 4);
+
+    // The settings' own Back button closes them the same way.
+    cx.dispatch_action(handle, gamepad::Up);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| assert!(view.read(cx).is_settings_open()));
+    let close = cx.read(|cx| cx.global::<OpenedSettings>().0.clone());
+    cx.update_window(handle, |_, window, cx| close(window, cx))
+        .unwrap();
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.is_settings_open());
+        assert!(v.is_page_open());
+    });
+    assert_eq!(route(cx), before);
+}

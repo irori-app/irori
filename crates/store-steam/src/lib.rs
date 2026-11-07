@@ -684,7 +684,7 @@ impl Store for SteamStore {
             .unwrap_or_default();
         let install_path = game.install.as_ref().map(|i| i.install_path.clone());
         Ok(LaunchPlan {
-            command: client::launch_command(&self.steam_dir(), &game.app_name, &args),
+            command: client::launch_command(&self.steam_dir(), &game.app_name, &args).await,
             track_wineserver: false,
             watch: Some(Arc::new(watch::SteamGameWatch::new(
                 game.app_name.to_string(),

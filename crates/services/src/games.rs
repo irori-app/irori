@@ -42,6 +42,9 @@ pub struct RunningGame {
     pub watch: Option<Arc<dyn irori_core::GameWatch>>,
     /// What the game's sandbox keeps from it; `None` when it runs without one.
     pub sandbox: Option<irori_core::SandboxSettings>,
+    /// What the started program leaves running when it hands over to the
+    /// game and exits; stopping ends that too.
+    pub(crate) handoff: Option<Arc<crate::follow::Handoff>>,
 }
 
 /// Whether a session counts as a failed start: the game exited with an error
@@ -56,6 +59,22 @@ pub(crate) fn failed_start(
         return false;
     }
     status.is_none_or(|s| !s.success() && seconds < FAILED_START_SECONDS)
+}
+
+/// End what a launcher left running. On Unix it is in the launcher's process
+/// group, which stopping already signals; Windows has to find each process.
+async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool) {
+    #[cfg(windows)]
+    if let Some(handoff) = handoff {
+        let pids = tokio::task::spawn_blocking(move || handoff.pids())
+            .await
+            .unwrap_or_default();
+        for pid in pids {
+            process::kill_group(pid, force);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (handoff, force);
 }
 
 /// Sessions shorter than this that end in an error count as failed starts.
@@ -301,6 +320,13 @@ impl Backend {
         });
         let programs = self.start_programs(id, &game, &settings, &request_env, &log_file);
         let awake = self.spawn(Inhibitor::acquire_owned(format!("Playing {}", game.title)));
+        // A game another program owns is followed through it below. A browser
+        // opened through `xdg-open` may start the user's whole browser, which
+        // is no game's to keep.
+        let handoff = (plan.watch.is_none()
+            && id.runner != irori_core::Runner::Launchers
+            && target.platform != InstallPlatform::Browser)
+            .then(|| crate::follow::Handoff::new(pid));
         let started = Instant::now();
         let started_at = util::now_rfc3339();
         self.running.lock().insert(
@@ -311,6 +337,7 @@ impl Backend {
                 stopping: false,
                 watch: plan.watch.clone(),
                 sandbox,
+                handoff: handoff.clone(),
             },
         );
         drop(guard);
@@ -348,7 +375,25 @@ impl Backend {
         self.spawn(async move {
             let status = match probe {
                 Some(probe) => crate::follow::follow(&mut child, probe).await,
-                None => child.wait().await.ok(),
+                None => {
+                    let status = child.wait().await.ok();
+                    // A launcher that handed over: the game it started is
+                    // the session.
+                    if let Some(handoff) = handoff {
+                        let h = handoff.clone();
+                        let left = tokio::task::spawn_blocking(move || h.running())
+                            .await
+                            .unwrap_or(false);
+                        if left {
+                            append_log(
+                                &log_file,
+                                "\nThe started program exited and left the game running; following it.\n",
+                            );
+                            crate::follow::wait_while(handoff.probe()).await;
+                        }
+                    }
+                    status
+                }
             };
             if let Some(bound) = bound {
                 bound.abort();
@@ -529,18 +574,19 @@ impl Backend {
 
     /// Stop a running game and everything in its prefix.
     pub async fn stop(&self, id: &GameId) -> Result<()> {
-        let (pid, watch) = self
+        let (pid, watch, handoff) = self
             .running
             .lock()
             .get_mut(id)
             .map(|r| {
                 r.stopping = true;
-                (Some(r.pid), r.watch.clone())
+                (Some(r.pid), r.watch.clone(), r.handoff.clone())
             })
             .unwrap_or_default();
         if let Some(pid) = pid {
             process::kill_group(pid, false);
         }
+        stop_handoff(handoff.clone(), false).await;
         if let Some(watch) = &watch {
             let w = watch.clone();
             let _ = tokio::task::spawn_blocking(move || w.stop(false)).await;
@@ -555,6 +601,7 @@ impl Backend {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             if self.is_running(id) {
                 process::kill_group(pid, true);
+                stop_handoff(handoff, true).await;
             }
         }
         if let Some(watch) = watch {
