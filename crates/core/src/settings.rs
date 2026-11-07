@@ -287,6 +287,11 @@ pub struct GameSettings {
     /// match; empty for the automatic one. Per game only. Irori-only.
     #[serde(rename = "iroriLudusaviTitle")]
     pub ludusavi_title: String,
+    /// The game's Steam app id for its achievements read from game files,
+    /// when the user chose one; empty finds it in the game's files and
+    /// variables. Per game only. Irori-only.
+    #[serde(rename = "iroriSteamAppId")]
+    pub steam_app_id: String,
     /// Keep the last moments of play ready to save as a clip. Linux only;
     /// Irori-only.
     #[serde(rename = "iroriReplay")]
@@ -459,6 +464,7 @@ impl Default for GameSettings {
             launch_programs: Vec::new(),
             ludusavi_auto_backup: false,
             ludusavi_title: String::new(),
+            steam_app_id: String::new(),
             replay: ReplaySettings::default(),
         }
     }
@@ -698,6 +704,11 @@ pub struct AppSettings {
     /// Irori-only.
     #[serde(rename = "iroriAchievementNotices")]
     pub achievement_notices: bool,
+    /// Read the achievements that Steam API emulators (Goldberg, gbe_fork,
+    /// CODEX-style) keep in a game's own files, for games Irori starts from
+    /// their own executable. Irori-only.
+    #[serde(rename = "iroriFileAchievements")]
+    pub file_achievements: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -744,6 +755,7 @@ impl Default for AppSettings {
             check_for_app_updates: true,
             show_log_on_launch: false,
             achievement_notices: false,
+            file_achievements: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

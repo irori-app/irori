@@ -1393,6 +1393,24 @@ pub static FIELDS: &[FieldSpec] = &[
         "retroachievements",
     ]),
     app(
+        "iroriFileAchievements",
+        "settings.field.file_achievements.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.file_achievements.help")
+    .keywords(&[
+        "achievements",
+        "goldberg",
+        "gbe",
+        "emulator",
+        "steam_api",
+        "codex",
+        "drm-free",
+        "offline",
+    ]),
+    app(
         "discordRPC",
         "settings.field.discord_rpc.label",
         General,
@@ -2633,6 +2651,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.language.help")
     .placeholder(Key("settings.field.language.placeholder"))
     .keywords(&["language", "locale", "translation"]),
+    game_only(
+        "iroriSteamAppId",
+        "settings.field.steam_app_id.label",
+        Launch,
+        "settings.group.achievements",
+        Text(TextKind::Digits { max_len: 10 }),
+    )
+    .help("settings.field.steam_app_id.help")
+    .placeholder(Key("settings.field.steam_app_id.placeholder"))
+    .keywords(&[
+        "achievements",
+        "steam",
+        "app id",
+        "appid",
+        "goldberg",
+        "gbe",
+    ]),
     game_only(
         "iroriInSunshine",
         "settings.field.in_sunshine.label",

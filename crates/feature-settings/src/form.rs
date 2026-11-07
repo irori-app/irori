@@ -213,6 +213,8 @@ impl SettingsForm {
                     f.applies_to_game(true)
                         && (!f.path.starts_with("iroriSandbox.")
                             || irori_runtime::sandbox::applies_to(id.runner))
+                        && (f.path != irori_services::file_achievements::APP_ID_KEY
+                            || irori_services::file_achievements::applies_to(id.runner))
                 }
             })
             .collect();

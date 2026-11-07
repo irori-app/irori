@@ -86,6 +86,32 @@ pub fn icon_url(appid: u32, icon: &str) -> String {
     format!("{ICON_BASE}/{appid}/{icon}")
 }
 
+/// Steam's name for an interface language code (`de`, `pt_BR`,
+/// `zh_Hans`…): `english`, `german`, `schinese`…; English for any other.
+pub fn steam_language(ui: &str) -> &'static str {
+    match ui {
+        "cs" => "czech",
+        "de" => "german",
+        "es" => "spanish",
+        "fr" => "french",
+        "it" => "italian",
+        "nl" => "dutch",
+        "pl" => "polish",
+        "pt" => "portuguese",
+        "pt_BR" => "brazilian",
+        "ro" => "romanian",
+        "sv" => "swedish",
+        "tr" => "turkish",
+        "ru" => "russian",
+        "uk" => "ukrainian",
+        "ja" => "japanese",
+        "ko" => "koreana",
+        "zh_Hans" => "schinese",
+        "zh_Hant" => "tchinese",
+        _ => "english",
+    }
+}
+
 impl Client {
     /// The achievements `appid` offers, in Steam's `language` (`english`,
     /// `german`…). Public; an access token is sent when there is one.

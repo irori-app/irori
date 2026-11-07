@@ -16,6 +16,7 @@ mod discord;
 mod downloads;
 mod engines;
 mod facts;
+pub mod file_achievements;
 mod files;
 mod follow;
 mod games;
