@@ -49,6 +49,8 @@ enum PaletteTarget {
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
     SaveBackups(GameId),
+    /// Check why a game's last run failed.
+    Troubleshoot(GameId),
     BackUp,
     Sync,
     /// Save a clip of the replay buffer.
@@ -146,6 +148,19 @@ impl Palette {
                         .keywords(keywords)
                         .icon(IconName::X),
                     PaletteTarget::PlayStatus(game.id(), None),
+                    targets,
+                );
+            }
+            if game.is_installed && game.runner().manages_installs() {
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.troubleshoot",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords([t("shell.palette.troubleshoot_keywords")])
+                        .icon(IconName::Stethoscope),
+                    PaletteTarget::Troubleshoot(game.id()),
                     targets,
                 );
             }
@@ -498,6 +513,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
         }
+        PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);

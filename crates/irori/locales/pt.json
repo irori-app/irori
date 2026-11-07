@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "A cópia dos jogos guardados de {title} não ficou completa",
   "shell.palette.back_up_saves": "Fazer cópia dos jogos guardados de {title}",
   "shell.palette.save_backups": "Cópias dos jogos guardados de {title}",
+  "shell.palette.troubleshoot": "Resolver problemas de arranque de {title}",
+  "shell.palette.troubleshoot_keywords": "resolver problema falha erro corrigir dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

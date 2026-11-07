@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "Сохранения {title} скопированы не полностью",
   "shell.palette.back_up_saves": "Скопировать сохранения {title}",
   "shell.palette.save_backups": "Копии сохранений {title}",
+  "shell.palette.troubleshoot": "Устранить проблемы запуска {title}",
+  "shell.palette.troubleshoot_keywords": "устранение проблема вылет ошибка исправить dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} мин",
   "shell.duration.hours": "{hours} ч",
   "shell.duration.hours_minutes": "{hours} ч {minutes} мин",

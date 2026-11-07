@@ -431,6 +431,8 @@ impl Backend {
             let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
             let crashed = failed_start(status, seconds, stopped);
             let exit_code = status.and_then(|s| s.code());
+            b.troubleshoot
+                .record_exit(&id, exit_code.filter(|_| crashed));
             b.statuses.clear(&id);
             {
                 // Sync sees both or neither.

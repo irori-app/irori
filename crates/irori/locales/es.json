@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "La copia de las partidas de {title} no se completó",
   "shell.palette.back_up_saves": "Hacer copia de las partidas de {title}",
   "shell.palette.save_backups": "Copias de partidas de {title}",
+  "shell.palette.troubleshoot": "Solucionar problemas de inicio de {title}",
+  "shell.palette.troubleshoot_keywords": "solucionar problema cierre error arreglar dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

@@ -257,6 +257,12 @@ pub(super) fn build_menu(
                 item("game.menu.open_log", IconName::ScrollText)
                     .on_click(move |_, window, cx| crate::open_log_sheet(i.clone(), window, cx)),
             );
+            let i = id.clone();
+            menu = menu.item(
+                item("game.menu.troubleshoot", IconName::Stethoscope).on_click(
+                    move |_, window, cx| crate::open_troubleshooter(i.clone(), window, cx),
+                ),
+            );
         }
         if irori_ui::save_backups::offers_backups(&game) {
             let i = id.clone();

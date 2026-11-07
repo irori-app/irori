@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "{title} 的存档未完全备份",
   "shell.palette.back_up_saves": "备份 {title} 的存档",
   "shell.palette.save_backups": "{title} 的存档备份",
+  "shell.palette.troubleshoot": "排查 {title} 的启动问题",
+  "shell.palette.troubleshoot_keywords": "排查 问题 崩溃 错误 修复 dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} 分钟",
   "shell.duration.hours": "{hours} 小时",
   "shell.duration.hours_minutes": "{hours} 小时 {minutes} 分钟",

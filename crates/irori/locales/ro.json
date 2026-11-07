@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "Salvările {title} nu au fost copiate complet",
   "shell.palette.back_up_saves": "Fă copie salvărilor {title}",
   "shell.palette.save_backups": "Copiile salvărilor {title}",
+  "shell.palette.troubleshoot": "Depanează pornirea pentru {title}",
+  "shell.palette.troubleshoot_keywords": "depanare problemă blocare eroare remediu dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

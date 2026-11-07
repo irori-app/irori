@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "Alla sparfiler för {title} säkerhetskopierades inte",
   "shell.palette.back_up_saves": "Säkerhetskopiera sparfilerna för {title}",
   "shell.palette.save_backups": "Säkerhetskopior av sparfiler för {title}",
+  "shell.palette.troubleshoot": "Felsök start av {title}",
+  "shell.palette.troubleshoot_keywords": "felsök problem krasch fel åtgärda dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

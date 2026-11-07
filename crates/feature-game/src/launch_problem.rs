@@ -1,6 +1,7 @@
-//! Help after a game failed to start: likely causes read from the end of its
-//! log, the community's known fix for it, and ways to try again, including
-//! with another Wine or Proton build.
+//! Help after a game failed to start, or on request ("Troubleshoot
+//! launch"): the likely causes `irori_services::troubleshoot` works out from
+//! the game's last run, one-click fixes, the community's known fix for it,
+//! and ways to try again, including with another Wine or Proton build.
 
 use std::sync::Arc;
 
@@ -13,14 +14,18 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, rems,
+    AnyElement, App, AppContext as _, ClipboardItem, Context, Entity, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Window, div, rems,
 };
-use irori_core::{GameId, HostPlatform, InstallPlatform, Runner, WineInstallation};
+use irori_core::{GameId, HostPlatform, WineInstallation};
+use irori_extras::anticheat::AntiCheatStatus;
 use irori_extras::known_fixes::{self, KnownFix};
-use irori_ui::backend;
+use irori_services::troubleshoot::{
+    Detail, Diagnosis, Finding, Fix, LaunchHint, MAP_COUNT_WANTED, map_count_commands,
+};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::{backend, models};
 
 use crate::choice::{Choice, ChoiceSelect, choice_select, set_choices};
 use crate::load::Load;
@@ -30,258 +35,56 @@ use crate::ops;
 /// Log lines shown in the sheet.
 const SHOWN_LINES: usize = 30;
 
-/// A likely cause of a failed start, recognised from the game's log.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LaunchHint {
-    MissingExecutable,
-    WrongWineBuild,
-    AntiCheat,
-    MissingLibrary,
-    MissingNativeLibrary,
-    DotNet,
-    Vulkan,
-    BrokenPrefix,
-    PermissionDenied,
-    /// A program started alongside the game didn't start.
-    ProgramFailed,
-    /// The game crashed and said so (an unhandled exception, a segfault).
-    Crash,
+fn hint_text(hint: LaunchHint) -> SharedString {
+    t(match hint {
+        LaunchHint::MissingExecutable => "game.launch_problem.hint.missing_executable",
+        LaunchHint::WrongWineBuild => "game.launch_problem.hint.wrong_wine",
+        LaunchHint::AntiCheat => "game.launch_problem.hint.anticheat",
+        LaunchHint::MissingLibrary => "game.launch_problem.hint.missing_library",
+        LaunchHint::MissingNativeLibrary => "game.launch_problem.hint.missing_native_library",
+        LaunchHint::DotNet => "game.launch_problem.hint.dotnet",
+        LaunchHint::Vulkan => "game.launch_problem.hint.vulkan",
+        LaunchHint::BrokenPrefix => "game.launch_problem.hint.broken_prefix",
+        LaunchHint::PermissionDenied => "game.launch_problem.hint.permission",
+        LaunchHint::ProgramFailed => "game.launch_problem.hint.program_failed",
+        LaunchHint::MapCount => "game.launch_problem.hint.map_count_low",
+        LaunchHint::Crash => "game.launch_problem.hint.crash",
+    })
 }
 
-impl LaunchHint {
-    fn text(self) -> SharedString {
-        t(match self {
-            LaunchHint::MissingExecutable => "game.launch_problem.hint.missing_executable",
-            LaunchHint::WrongWineBuild => "game.launch_problem.hint.wrong_wine",
-            LaunchHint::AntiCheat => "game.launch_problem.hint.anticheat",
-            LaunchHint::MissingLibrary => "game.launch_problem.hint.missing_library",
-            LaunchHint::MissingNativeLibrary => "game.launch_problem.hint.missing_native_library",
-            LaunchHint::DotNet => "game.launch_problem.hint.dotnet",
-            LaunchHint::Vulkan => "game.launch_problem.hint.vulkan",
-            LaunchHint::BrokenPrefix => "game.launch_problem.hint.broken_prefix",
-            LaunchHint::PermissionDenied => "game.launch_problem.hint.permission",
-            LaunchHint::ProgramFailed => "game.launch_problem.hint.program_failed",
-            LaunchHint::Crash => "game.launch_problem.hint.crash",
-        })
-    }
-
-    fn matches(self, lower: &str) -> bool {
-        let any = |needles: &[&str]| needles.iter().any(|n| lower.contains(n));
-        match self {
-            LaunchHint::MissingExecutable => {
-                any(&[
-                    "wine: cannot find",
-                    "could not find the program",
-                    "shellexecuteex failed: file not found",
-                    "application could not be started",
-                    ": command not found",
-                ]) || (lower.contains("no such file or directory")
-                    && (lower.starts_with("sh:")
-                        || lower.starts_with("bash:")
-                        || lower.contains("exec")))
-            }
-            LaunchHint::WrongWineBuild => any(&[
-                "cannot support 64-bit applications",
-                "version mismatch",
-                "wrong elf class",
-            ]),
-            LaunchHint::AntiCheat => any(&["easyanticheat", "battleye", "eac_launcher"]),
-            LaunchHint::MissingLibrary => any(&["err:module:import_dll", "err:module:load_dll"]),
-            LaunchHint::MissingNativeLibrary => any(&["error while loading shared libraries"]),
-            LaunchHint::DotNet => any(&["err:mscoree", "mscoree.dll", ".net framework"]),
-            LaunchHint::Vulkan => any(&[
-                "vk_error_incompatible_driver",
-                "vk_error_initialization_failed",
-                "failed to load vulkan",
-                "no vulkan",
-                "dxvk: no adapters",
-            ]),
-            LaunchHint::BrokenPrefix => any(&["could not load kernel32.dll", "wine client error"]),
-            LaunchHint::PermissionDenied => any(&["permission denied"]),
-            // Irori's own line when a program alongside fails to start.
-            LaunchHint::ProgramFailed => lower.starts_with("could not start "),
-            LaunchHint::Crash => any(&[
-                "unhandled exception",
-                "unhandled page fault",
-                "segmentation fault",
-                "core dumped",
-                "fatal error",
-            ]),
+/// What a finding says, with what the checks found filled in.
+fn finding_text(f: &Finding) -> SharedString {
+    match (&f.hint, &f.detail) {
+        (LaunchHint::MissingLibrary, Some(Detail::Libraries { dlls, .. })) if !dlls.is_empty() => {
+            t_args(
+                "game.launch_problem.hint.missing_dlls",
+                &[("dlls", &dlls.join(", "))],
+            )
         }
-    }
-
-    const ALL: [LaunchHint; 11] = [
-        LaunchHint::MissingExecutable,
-        LaunchHint::WrongWineBuild,
-        LaunchHint::AntiCheat,
-        LaunchHint::MissingLibrary,
-        LaunchHint::MissingNativeLibrary,
-        LaunchHint::DotNet,
-        LaunchHint::Vulkan,
-        LaunchHint::BrokenPrefix,
-        LaunchHint::PermissionDenied,
-        LaunchHint::ProgramFailed,
-        LaunchHint::Crash,
-    ];
-}
-
-/// A likely cause and the first log line that shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Finding {
-    pub hint: LaunchHint,
-    /// The line, trimmed; `None` when the cause wasn't read from the log.
-    pub line: Option<String>,
-}
-
-/// The likely causes in what the game wrote, most telling first, each with
-/// the first line showing it. Exit code 127 is the shell's "command not
-/// found" and 126 its "cannot execute".
-pub fn diagnose<'a>(
-    lines: impl IntoIterator<Item = &'a str>,
-    exit_code: Option<i32>,
-) -> Vec<Finding> {
-    let mut found: Vec<Finding> = Vec::new();
-    for line in lines {
-        let lower = line.to_ascii_lowercase();
-        for hint in LaunchHint::ALL {
-            if !found.iter().any(|f| f.hint == hint) && hint.matches(&lower) {
-                found.push(Finding {
-                    hint,
-                    line: Some(line.trim().to_string()),
-                });
-            }
+        (LaunchHint::MissingLibrary, Some(Detail::ProgramLibraries { dlls })) => t_args(
+            "game.launch_problem.hint.program_libraries",
+            &[("dlls", &dlls.join(", "))],
+        ),
+        (LaunchHint::DotNet, Some(Detail::DotNetProgram)) => {
+            t("game.launch_problem.hint.dotnet_program")
         }
-    }
-    let by_code = match exit_code {
-        Some(127) => Some(LaunchHint::MissingExecutable),
-        Some(126) => Some(LaunchHint::PermissionDenied),
-        _ => None,
-    };
-    if let Some(hint) = by_code
-        && !found.iter().any(|f| f.hint == hint)
-    {
-        found.push(Finding { hint, line: None });
-    }
-    found.sort_by_key(|f| f.hint);
-    found
-}
-
-/// The likely causes found in `lines`, most telling first.
-pub fn launch_hints<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<LaunchHint> {
-    diagnose(lines, None).into_iter().map(|f| f.hint).collect()
-}
-
-/// Windows libraries games often lack, with the winetricks verb that
-/// installs them.
-const RUNTIME_VERBS: &[(&str, &str)] = &[
-    ("vcruntime140", "vcrun2022"),
-    ("msvcp140", "vcrun2022"),
-    ("concrt140", "vcrun2022"),
-    ("msvcp120", "vcrun2013"),
-    ("msvcr120", "vcrun2013"),
-    ("msvcp110", "vcrun2012"),
-    ("msvcr110", "vcrun2012"),
-    ("msvcp100", "vcrun2010"),
-    ("msvcr100", "vcrun2010"),
-    ("d3dx9_", "d3dx9"),
-    ("d3dx10_", "d3dx10"),
-    ("d3dx11_", "d3dx11_43"),
-    ("d3dcompiler_43", "d3dcompiler_43"),
-    ("d3dcompiler_47", "d3dcompiler_47"),
-    ("xinput1_3", "xinput"),
-    ("xaudio2_7", "xact"),
-    ("x3daudio1_7", "xact"),
-    ("physxloader", "physx"),
-    ("mscoree", "dotnet48"),
-];
-
-/// Winetricks verbs that install the Windows libraries the log says are
-/// missing, in the order first named.
-pub fn runtime_verbs<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<&'static str> {
-    let mut verbs = Vec::new();
-    for line in lines {
-        let lower = line.to_ascii_lowercase();
-        let missing = lower.contains("err:module:import_dll")
-            || lower.contains("err:module:load_dll")
-            || lower.contains("err:mscoree");
-        if !missing {
-            continue;
+        (LaunchHint::AntiCheat, Some(Detail::AntiCheat { names, status })) if !names.is_empty() => {
+            let key = match status {
+                AntiCheatStatus::Denied => "game.launch_problem.hint.anticheat_denied",
+                AntiCheatStatus::Broken => "game.launch_problem.hint.anticheat_broken",
+                _ => "game.launch_problem.hint.anticheat_runtime",
+            };
+            t_args(key, &[("anticheat", &names.join(", "))])
         }
-        for (dll, verb) in RUNTIME_VERBS {
-            if lower.contains(dll) && !verbs.contains(verb) {
-                verbs.push(*verb);
-            }
-        }
+        (LaunchHint::MapCount, Some(Detail::MapCount { current })) => t_args(
+            "game.launch_problem.hint.map_count",
+            &[
+                ("current", &current.to_string()),
+                ("wanted", &MAP_COUNT_WANTED.to_string()),
+            ],
+        ),
+        _ => hint_text(f.hint),
     }
-    verbs
-}
-
-/// A one-click fix the sheet offers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Fix {
-    /// Install these winetricks verbs in the game's prefix, then try again.
-    Winetricks(Vec<&'static str>),
-    /// Turn on the Easy Anti-Cheat and BattlEye runtimes, then try again.
-    AntiCheatRuntimes,
-    /// Verify the game's files and download broken ones.
-    VerifyFiles,
-    /// Start the game's own executable instead of the alternative one set.
-    ClearTargetExe,
-    /// Run a native game in the Steam Linux Runtime, then try again.
-    SteamRuntime,
-    /// Open the settings with the programs started alongside.
-    ProgramSettings,
-}
-
-/// What the fixes depend on besides the findings.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct FixContext {
-    pub needs_wine: bool,
-    /// Irori installed the game and can verify its files.
-    pub verifiable: bool,
-    /// Both anti-cheat runtimes are already on.
-    pub anticheat_runtimes_on: bool,
-    /// An alternative executable is set and doesn't exist.
-    pub target_exe_missing: bool,
-    /// A native Linux build running without the Steam runtime.
-    pub native_without_runtime: bool,
-}
-
-/// The fixes worth offering for `findings`, most likely first.
-pub fn fixes(findings: &[Finding], verbs: &[&'static str], ctx: FixContext) -> Vec<Fix> {
-    let has = |hint| findings.iter().any(|f| f.hint == hint);
-    let mut out = Vec::new();
-    if ctx.target_exe_missing {
-        out.push(Fix::ClearTargetExe);
-    }
-    if has(LaunchHint::MissingExecutable) && ctx.verifiable {
-        out.push(Fix::VerifyFiles);
-    }
-    if ctx.needs_wine && !verbs.is_empty() {
-        out.push(Fix::Winetricks(verbs.to_vec()));
-    }
-    if ctx.needs_wine && has(LaunchHint::AntiCheat) && !ctx.anticheat_runtimes_on {
-        out.push(Fix::AntiCheatRuntimes);
-    }
-    if has(LaunchHint::MissingNativeLibrary) && ctx.native_without_runtime {
-        out.push(Fix::SteamRuntime);
-    }
-    if has(LaunchHint::ProgramFailed) {
-        out.push(Fix::ProgramSettings);
-    }
-    out
-}
-
-/// Index of the first line the game itself wrote: Irori's log header (game,
-/// paths, the settings as JSON) ends with the launch command. The header
-/// would otherwise feed the hints, e.g. `"battlEyeRuntime":true`.
-pub fn game_output_start<'a>(lines: impl IntoIterator<Item = &'a str>) -> usize {
-    lines
-        .into_iter()
-        .enumerate()
-        .filter(|(_, l)| l.starts_with("Launch command:"))
-        .last()
-        .map_or(0, |(i, _)| i + 1)
 }
 
 /// Open the help for a game that just failed to start.
@@ -291,11 +94,32 @@ pub fn open_launch_problem_sheet(
     window: &mut Window,
     cx: &mut App,
 ) {
+    open_sheet(id, exit_code, false, window, cx);
+}
+
+/// Check a game's last run on request ("Troubleshoot launch"): the same
+/// help, with the exit code of its last session this run.
+pub fn open_troubleshooter(id: GameId, window: &mut Window, cx: &mut App) {
+    open_sheet(id, None, true, window, cx);
+}
+
+fn open_sheet(
+    id: GameId,
+    exit_code: Option<i32>,
+    on_request: bool,
+    window: &mut Window,
+    cx: &mut App,
+) {
     let Some(game) = backend(cx).game(&id) else {
         return;
     };
-    let title = t_args("game.launch_problem.title", &[("title", &game.title)]);
-    let view = cx.new(|cx| LaunchProblem::new(id, exit_code, window, cx));
+    let key = if on_request {
+        "game.launch_problem.troubleshoot_title"
+    } else {
+        "game.launch_problem.title"
+    };
+    let title = t_args(key, &[("title", &game.title)]);
+    let view = cx.new(|cx| LaunchProblem::new(id, exit_code, on_request, window, cx));
     window.open_sheet(cx, move |sheet, _, _| {
         sheet
             .title(title.clone())
@@ -308,14 +132,13 @@ pub fn open_launch_problem_sheet(
 pub struct LaunchProblem {
     id: GameId,
     exit_code: Option<i32>,
+    /// Opened from the menu rather than after a failed start.
+    on_request: bool,
     needs_wine: bool,
     tail: Load<Option<Arc<LogTail>>>,
     /// Where the game's own output starts in `tail`.
     output_start: usize,
-    findings: Vec<Finding>,
-    /// Winetricks verbs for the Windows libraries the log says are missing.
-    verbs: Vec<&'static str>,
-    fix_context: FixContext,
+    diagnosis: Load<Diagnosis>,
     /// The fix being applied.
     fixing: Option<Fix>,
     fix: Option<KnownFix>,
@@ -329,23 +152,13 @@ impl LaunchProblem {
     fn new(
         id: GameId,
         exit_code: Option<i32>,
+        on_request: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let b = backend(cx);
-        let game = b.game(&id);
-        let platform = game.as_ref().and_then(|g| g.installed_platform());
+        let platform = b.game(&id).and_then(|g| g.installed_platform());
         let needs_wine = platform.is_some_and(|p| HostPlatform::current().needs_wine(p));
-        let settings = b.settings.game(&id);
-        let fix_context = FixContext {
-            needs_wine,
-            verifiable: id.runner.manages_installs() && id.runner != Runner::Sideload,
-            anticheat_runtimes_on: settings.eac_runtime && settings.battl_eye_runtime,
-            target_exe_missing: false,
-            native_without_runtime: cfg!(target_os = "linux")
-                && platform == Some(InstallPlatform::Linux)
-                && settings.steam_runtime.is_none(),
-        };
         let wine_select = choice_select(Vec::new(), None, window, cx);
         let subscription = cx.subscribe_in(
             &wine_select,
@@ -358,21 +171,27 @@ impl LaunchProblem {
                 cx.notify();
             },
         );
+        // A running fix reports its steps through the game's status.
+        let status_model = models(cx).statuses.clone();
+        let statuses = cx.observe(&status_model, |this, _, cx| {
+            if this.fixing.is_some() {
+                cx.notify();
+            }
+        });
         let mut this = Self {
             id,
             exit_code,
+            on_request,
             needs_wine,
             tail: Load::Loading,
             output_start: 0,
-            findings: Vec::new(),
-            verbs: Vec::new(),
-            fix_context,
+            diagnosis: Load::Loading,
             fixing: None,
             fix: None,
             wines: Load::Idle,
             wine: None,
             wine_select,
-            _subscriptions: vec![subscription],
+            _subscriptions: vec![subscription, statuses],
         };
         this.load(window, cx);
         this
@@ -386,61 +205,25 @@ impl LaunchProblem {
         let fix = irori_ui::run(cx, async move {
             Ok(known_fixes::lookup(runner, &app_name).await)
         });
-        // Whether the program the launch starts is there at all.
-        let game = b.game(&self.id);
-        let target_exe = b.settings.game(&self.id).target_exe;
-        let files = irori_ui::run(cx, async move {
-            let exists = |p: std::path::PathBuf| async move {
-                tokio::fs::try_exists(&p).await.unwrap_or(true)
-            };
-            let target_missing = !target_exe.trim().is_empty()
-                && !exists(irori_core::paths::expand_home(target_exe.trim())).await;
-            let executable = game.as_ref().and_then(|g| {
-                let install = g.install.as_ref()?;
-                let exe = install.executable.trim();
-                if exe.is_empty() || install.install_path.is_empty() {
-                    return None;
-                }
-                Some(std::path::Path::new(&install.install_path).join(exe))
-            });
-            let exe_missing = match executable {
-                Some(exe) => !exists(exe).await,
-                None => false,
-            };
-            Ok((target_missing, exe_missing))
+        let (diagnose_b, id, exit_code) = (b.clone(), self.id.clone(), self.exit_code);
+        let diagnosis = irori_ui::run(cx, async move {
+            diagnose_b.troubleshoot_launch(&id, exit_code).await
         });
-        let exit_code = self.exit_code;
         cx.spawn_in(window, async move |this, cx| {
             let tail = tail.await;
             let fix = fix.await.ok().flatten();
-            let (target_missing, exe_missing) = files.await.unwrap_or_default();
+            let diagnosis = diagnosis.await;
             let _ = this.update(cx, |this, cx| {
                 this.tail = Load::from_result(tail.map(|t| t.map(Arc::new)));
-                let mut findings = Vec::new();
                 if let Some(Some(tail)) = this.tail.ready() {
-                    let lines = || tail.lines.iter().map(|(_, l)| l.as_ref());
-                    let start = game_output_start(lines());
-                    this.output_start = start;
-                    findings = diagnose(lines().skip(start), exit_code);
-                    this.verbs = runtime_verbs(lines().skip(start));
-                } else if let Some(hint) = diagnose([], exit_code).first() {
-                    findings.push(hint.clone());
-                }
-                if (target_missing || exe_missing)
-                    && !findings
-                        .iter()
-                        .any(|f| f.hint == LaunchHint::MissingExecutable)
-                {
-                    findings.insert(
-                        0,
-                        Finding {
-                            hint: LaunchHint::MissingExecutable,
-                            line: None,
-                        },
+                    this.output_start = irori_services::troubleshoot::game_output_start(
+                        tail.lines.iter().map(|(_, l)| l.as_ref()),
                     );
                 }
-                this.fix_context.target_exe_missing = target_missing;
-                this.findings = findings;
+                if let Ok(d) = &diagnosis {
+                    this.exit_code = d.exit_code;
+                }
+                this.diagnosis = Load::from_result(diagnosis);
                 this.fix = fix;
                 cx.notify();
             });
@@ -508,6 +291,7 @@ impl LaunchProblem {
     fn apply_fix(&mut self, fix: Fix, window: &mut Window, cx: &mut Context<Self>) {
         let b = backend(cx);
         let id = self.id.clone();
+        b.mark_fix_tried(&id, &fix);
         match &fix {
             Fix::ClearTargetExe => {
                 b.settings.set_game_value(&id, "targetExe", None);
@@ -536,14 +320,16 @@ impl LaunchProblem {
                 window.close_sheet(cx);
                 ops::verify(&id, window, cx).detach();
             }
+            Fix::MapCount => {
+                cx.write_to_clipboard(ClipboardItem::new_string(map_count_commands().join("\n")));
+                ops::notify_success(window, cx, t("game.launch_problem.map_count_copied"));
+            }
             Fix::Winetricks(verbs) => {
                 let verbs: Vec<String> = verbs.iter().map(|v| v.to_string()).collect();
                 self.fixing = Some(fix.clone());
                 cx.notify();
-                let task = irori_ui::run(
-                    cx,
-                    async move { b.winetricks(&id, verbs).await.map(|_| ()) },
-                );
+                let task =
+                    irori_ui::run(cx, async move { b.install_prefix_verbs(&id, verbs).await });
                 cx.spawn_in(window, async move |this, cx| {
                     let result = task.await;
                     let _ = this.update_in(cx, |this, window, cx| {
@@ -578,22 +364,23 @@ impl LaunchProblem {
             Fix::ClearTargetExe => t("game.launch_problem.fix.target_exe"),
             Fix::SteamRuntime => t("game.launch_problem.fix.steam_runtime"),
             Fix::ProgramSettings => t("game.launch_problem.fix.programs"),
+            Fix::MapCount => t("game.launch_problem.fix.map_count"),
         }
     }
 
     fn render_fixes(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.tail.is_loading() {
-            return None;
-        }
-        let fixes = fixes(&self.findings, &self.verbs, self.fix_context);
-        if fixes.is_empty() {
+        let diagnosis = self.diagnosis.ready()?;
+        if diagnosis.fixes.is_empty() {
             return None;
         }
         let busy = self.fixing.is_some();
-        let buttons = fixes
-            .into_iter()
+        let any_tried = diagnosis.fixes.iter().any(|o| o.tried);
+        let buttons = diagnosis
+            .fixes
+            .iter()
             .enumerate()
-            .map(|(ix, fix)| {
+            .map(|(ix, offered)| {
+                let fix = offered.fix.clone();
                 let running = self.fixing.as_ref() == Some(&fix);
                 let button = Button::new(("launch-problem-fix", ix))
                     .label(Self::fix_label(&fix))
@@ -602,64 +389,138 @@ impl LaunchProblem {
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.apply_fix(fix.clone(), window, cx)
                     }));
-                if ix == 0 {
+                if ix == 0 && !offered.tried {
                     button.primary()
                 } else {
                     button.outline()
                 }
             })
             .collect::<Vec<_>>();
+        // What the running fix is doing, as winetricks says it.
+        let step = self
+            .fixing
+            .as_ref()
+            .and_then(|_| models(cx).statuses.read(cx).get(&self.id))
+            .and_then(|s| s.context.clone());
+        let muted = cx.theme().muted_foreground;
         Some(
             Self::section(t("game.launch_problem.fixes"), cx)
                 .child(h_flex().gap_2().flex_wrap().children(buttons))
+                .when_some(step, |col, step| {
+                    col.child(
+                        div()
+                            .w_full()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(step),
+                    )
+                })
+                .when(any_tried, |col| {
+                    col.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(t("game.launch_problem.fix.tried_note")),
+                    )
+                })
                 .into_any_element(),
         )
     }
 
-    fn render_hints(&self, cx: &App) -> AnyElement {
+    fn render_finding(f: &Finding, cx: &App) -> AnyElement {
         let theme = cx.theme();
-        let body: Vec<AnyElement> = if self.tail.is_loading() {
-            vec![div().child(t("game.logs.reading")).into_any_element()]
-        } else if self.findings.is_empty() {
+        let mono = |text: SharedString| {
+            div()
+                .w_full()
+                .min_w_0()
+                .truncate()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .font_family(theme.mono_font_family.clone())
+                .child(text)
+        };
+        let mut col = v_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_1()
+            .child(finding_text(f))
+            .children(f.evidence.iter().map(|l| mono(l.clone().into())));
+        match &f.detail {
+            Some(Detail::Libraries { installed, .. }) if !installed.is_empty() => {
+                col = col.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(t_args(
+                            "game.launch_problem.already_installed",
+                            &[("verbs", &installed.join(", "))],
+                        )),
+                );
+            }
+            Some(Detail::MapCount { .. }) => {
+                col = col
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(t("game.launch_problem.map_count_how")),
+                    )
+                    .children(map_count_commands().map(|c| mono(c.into())));
+            }
+            _ => {}
+        }
+        h_flex()
+            .gap_2()
+            .items_start()
+            .child(div().flex_shrink_0().child("•"))
+            .child(col)
+            .into_any_element()
+    }
+
+    fn render_hints(&self, cx: &App) -> AnyElement {
+        let causes = Self::section(t("game.launch_problem.causes"), cx).text_sm();
+        let diagnosis = match &self.diagnosis {
+            Load::Ready(d) => d,
+            Load::Failed(e) => {
+                return causes
+                    .child(
+                        div()
+                            .text_color(cx.theme().danger)
+                            .child(SharedString::from(e.to_string())),
+                    )
+                    .into_any_element();
+            }
+            Load::Loading | Load::Idle => {
+                return causes
+                    .child(div().child(t("game.logs.reading")))
+                    .into_any_element();
+            }
+        };
+        let (confirmed, possible): (Vec<&Finding>, Vec<&Finding>) =
+            diagnosis.findings.iter().partition(|f| f.confirmed);
+        let confirmed_body: Vec<AnyElement> = if confirmed.is_empty() {
             vec![
                 div()
                     .child(t("game.launch_problem.no_hints"))
                     .into_any_element(),
             ]
         } else {
-            self.findings
+            confirmed
                 .iter()
-                .map(|f| {
-                    h_flex()
-                        .gap_2()
-                        .items_start()
-                        .child(div().flex_shrink_0().child("•"))
-                        .child(
-                            v_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap_1()
-                                .child(f.hint.text())
-                                .when_some(f.line.clone(), |col, line| {
-                                    col.child(
-                                        div()
-                                            .w_full()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_xs()
-                                            .text_color(theme.muted_foreground)
-                                            .font_family(theme.mono_font_family.clone())
-                                            .child(line),
-                                    )
-                                }),
-                        )
-                        .into_any_element()
-                })
+                .map(|f| Self::render_finding(f, cx))
                 .collect()
         };
-        Self::section(t("game.launch_problem.causes"), cx)
-            .text_sm()
-            .children(body)
+        let worth_checking = (!possible.is_empty()).then(|| {
+            Self::section(t("game.launch_problem.worth_checking"), cx)
+                .text_sm()
+                .children(possible.iter().map(|f| Self::render_finding(f, cx)))
+        });
+        v_flex()
+            .gap_4()
+            .child(causes.children(confirmed_body))
+            .children(worth_checking)
             .into_any_element()
     }
 
@@ -792,24 +653,30 @@ impl LaunchProblem {
                 .into_any_element(),
         )
     }
+
+    fn summary(&self) -> SharedString {
+        let code = self.exit_code.map(|c| c.to_string());
+        match (self.on_request, code) {
+            (false, Some(code)) => t_args("game.launch_problem.summary_code", &[("code", &code)]),
+            (false, None) => t("game.launch_problem.summary"),
+            (true, Some(code)) => t_args(
+                "game.launch_problem.summary_last_run_code",
+                &[("code", &code)],
+            ),
+            (true, None) => t("game.launch_problem.summary_last_run"),
+        }
+    }
 }
 
 impl Render for LaunchProblem {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let summary = match self.exit_code {
-            Some(code) => t_args(
-                "game.launch_problem.summary_code",
-                &[("code", &code.to_string())],
-            ),
-            None => t("game.launch_problem.summary"),
-        };
         let (log_id, settings_id) = (self.id.clone(), self.id.clone());
         v_flex()
             .id("launch-problem")
             .w_full()
             .gap_4()
             .py_2()
-            .child(div().text_sm().child(summary))
+            .child(div().text_sm().child(self.summary()))
             .child(self.render_hints(cx))
             .children(self.render_fixes(cx))
             .children(self.render_fix(cx))
@@ -824,6 +691,7 @@ impl Render for LaunchProblem {
                             .primary()
                             .icon(IconName::Play)
                             .label(t("game.launch_problem.try_again"))
+                            .disabled(self.fixing.is_some())
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.try_again(window, cx)),
                             ),
@@ -855,150 +723,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recognises_causes_in_logs() {
-        let log = [
-            "wine: Read access denied for device L\"\\\\??\\\\Z:\\\\\"",
-            "0024:err:module:import_dll Library VCRUNTIME140.dll (which is needed by L\"game.exe\") not found",
-            "EasyAntiCheat: launcher error",
-            "err:module:import_dll Library MSVCP140.dll not found",
-        ];
-        assert_eq!(
-            launch_hints(log),
-            vec![LaunchHint::AntiCheat, LaunchHint::MissingLibrary]
-        );
-        assert_eq!(
-            launch_hints(["err:vulkan:wine_vk_init Failed to load Vulkan"]),
-            vec![LaunchHint::Vulkan]
-        );
-        assert_eq!(
-            launch_hints(["sh: ./game.x86_64: Permission denied"]),
-            vec![LaunchHint::PermissionDenied]
-        );
-        assert!(launch_hints(["Started", "fixme:d3d:stub"]).is_empty());
-    }
-
-    #[test]
-    fn finds_missing_programs_wrong_builds_and_crashes_with_their_line() {
-        let log = [
-            "wine: '/home/me/.wine32' is a 32-bit installation, it cannot support 64-bit applications.",
-            "wine: cannot find L\"C:\\Games\\game.exe\"",
-            "Could not start Trainer: failed to start /opt/trainer",
-            "wine: Unhandled page fault on read access to 00000000",
-        ];
-        let found = diagnose(log, Some(53));
-        let hints: Vec<LaunchHint> = found.iter().map(|f| f.hint).collect();
-        assert_eq!(
-            hints,
-            [
-                LaunchHint::MissingExecutable,
-                LaunchHint::WrongWineBuild,
-                LaunchHint::ProgramFailed,
-                LaunchHint::Crash
-            ]
-        );
-        assert_eq!(found[0].line.as_deref(), Some(log[1]));
-        assert!(found[3].line.as_deref().unwrap().contains("page fault"));
-
-        // The shell's own exit codes say what the log may not.
-        assert_eq!(
-            diagnose(["Starting"], Some(127)),
-            [Finding {
-                hint: LaunchHint::MissingExecutable,
-                line: None
-            }]
-        );
-        assert_eq!(
-            diagnose([], Some(126))[0].hint,
-            LaunchHint::PermissionDenied
-        );
-        // Games log missing optional files; only the shell's line counts.
-        assert!(diagnose(["open(config.ini): No such file or directory"], Some(1)).is_empty());
-        assert_eq!(
-            launch_hints(["sh: ./game.x86_64: No such file or directory"]),
-            [LaunchHint::MissingExecutable]
-        );
-        assert_eq!(
-            launch_hints(["./game: error while loading shared libraries: libSDL2-2.0.so.0"]),
-            [LaunchHint::MissingNativeLibrary]
-        );
-    }
-
-    #[test]
-    fn maps_missing_windows_libraries_to_winetricks_verbs() {
-        let log = [
-            "0024:err:module:import_dll Library VCRUNTIME140.dll (which is needed by L\"game.exe\") not found",
-            "0024:err:module:import_dll Library MSVCP140.dll not found",
-            "0024:err:module:import_dll Library d3dx9_43.dll not found",
-            "0024:err:mscoree:LoadLibraryShim error reading registry key for mscoree.dll",
-            "fixme:d3d:stub vcruntime140 mentioned without an error",
-        ];
-        assert_eq!(runtime_verbs(log), ["vcrun2022", "d3dx9", "dotnet48"]);
-        assert!(runtime_verbs(["Started", "msvcp140 loaded"]).is_empty());
-    }
-
-    #[test]
-    fn offers_the_fixes_that_apply() {
-        let finding = |hint| Finding { hint, line: None };
-        let wine = FixContext {
-            needs_wine: true,
-            verifiable: true,
-            ..Default::default()
+    fn findings_say_what_the_checks_found() {
+        crate::i18n::register();
+        let finding = |hint, detail| Finding {
+            hint,
+            evidence: Vec::new(),
+            detail,
+            confirmed: true,
+            fixes: Vec::new(),
         };
-        let found = [
-            finding(LaunchHint::MissingExecutable),
-            finding(LaunchHint::AntiCheat),
-            finding(LaunchHint::MissingLibrary),
-        ];
-        assert_eq!(
-            fixes(&found, &["vcrun2022"], wine),
-            [
-                Fix::VerifyFiles,
-                Fix::Winetricks(vec!["vcrun2022"]),
-                Fix::AntiCheatRuntimes
-            ]
+        let dlls = finding(
+            LaunchHint::MissingLibrary,
+            Some(Detail::Libraries {
+                dlls: vec!["msvcp140.dll".into()],
+                installed: vec![],
+            }),
         );
-        // Runtimes already on, added apps can't be verified, a missing
-        // alternative executable comes first.
-        let ctx = FixContext {
-            verifiable: false,
-            anticheat_runtimes_on: true,
-            target_exe_missing: true,
-            ..wine
-        };
-        assert_eq!(fixes(&found, &[], ctx), [Fix::ClearTargetExe]);
-        // Native games: the Steam runtime for missing libraries; never
-        // winetricks.
-        let native = FixContext {
-            native_without_runtime: true,
-            ..Default::default()
-        };
-        assert_eq!(
-            fixes(
-                &[
-                    finding(LaunchHint::MissingNativeLibrary),
-                    finding(LaunchHint::ProgramFailed)
-                ],
-                &["vcrun2022"],
-                native
-            ),
-            [Fix::SteamRuntime, Fix::ProgramSettings]
+        assert!(finding_text(&dlls).contains("msvcp140.dll"));
+        let maps = finding(
+            LaunchHint::MapCount,
+            Some(Detail::MapCount { current: 65_530 }),
         );
-        assert!(fixes(&[finding(LaunchHint::Crash)], &[], wine).is_empty());
-    }
-
-    #[test]
-    fn reads_only_what_the_game_wrote() {
-        let log = [
-            "Irori 0.1.0 - Game (sideload:game)",
-            r#"Settings: {"battlEyeRuntime":true,"eacRuntime":true}"#,
-            "",
-            "Launch command: /games/start.sh",
-            "",
-            "Starting",
-        ];
-        let start = game_output_start(log);
-        assert_eq!(start, 4);
-        assert!(launch_hints(log[start..].iter().copied()).is_empty());
-        assert_eq!(game_output_start(["no header", "at all"]), 0);
+        assert!(finding_text(&maps).contains("65530"));
+        let denied = finding(
+            LaunchHint::AntiCheat,
+            Some(Detail::AntiCheat {
+                names: vec!["BattlEye".into()],
+                status: AntiCheatStatus::Denied,
+            }),
+        );
+        assert!(finding_text(&denied).contains("BattlEye"));
+        // Without details, the cause's own text.
+        let plain = finding(LaunchHint::MissingLibrary, None);
+        assert_eq!(finding_text(&plain), hint_text(LaunchHint::MissingLibrary));
+        // Every fix the diagnosis can offer has a label.
+        for fix in [
+            Fix::Winetricks(vec!["vcrun2022"]),
+            Fix::AntiCheatRuntimes,
+            Fix::VerifyFiles,
+            Fix::ClearTargetExe,
+            Fix::SteamRuntime,
+            Fix::ProgramSettings,
+            Fix::MapCount,
+        ] {
+            assert!(!LaunchProblem::fix_label(&fix).is_empty());
+        }
     }
 }

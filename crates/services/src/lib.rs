@@ -39,6 +39,7 @@ pub mod status;
 pub mod storage;
 pub mod sunshine;
 pub mod sync;
+pub mod troubleshoot;
 pub mod updates;
 pub mod userdata;
 mod windows_files;
@@ -132,6 +133,8 @@ pub struct Inner {
     sync: sync::SyncService,
     /// Irori's games in Sunshine.
     sunshine: sunshine::SunshineService,
+    /// Fixes tried and exit codes, for launch troubleshooting.
+    troubleshoot: troubleshoot::TroubleshootState,
 }
 
 impl Deref for Backend {
@@ -208,6 +211,7 @@ impl Backend {
             backups: backup_schedule::BackupScheduler::load(),
             sync: sync::SyncService::load(),
             sunshine: Default::default(),
+            troubleshoot: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {

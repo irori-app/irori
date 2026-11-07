@@ -51,8 +51,9 @@ pub use install::{
     InstallFooter, InstallMode, InstallSheet, installable_platforms, open_install_sheet,
     open_modify_sheet,
 };
+pub use irori_services::troubleshoot::{LaunchHint, game_output_start, launch_hints};
 pub use launch_options::open_launch_options_dialog;
-pub use launch_problem::{LaunchHint, game_output_start, launch_hints, open_launch_problem_sheet};
+pub use launch_problem::{open_launch_problem_sheet, open_troubleshooter};
 pub use logs::{LineLevel, LogTail, LogViewer, open_log_sheet, parse_tail};
 pub use manage::{
     ImportForm, UninstallOptions, open_cancel_download_dialog, open_import_dialog,
@@ -77,6 +78,8 @@ gpui_kit::actions!(
         OpenGameLog,
         /// Open the per-game settings.
         OpenGameSettingsAction,
+        /// Check why the last run failed ("Troubleshoot launch").
+        TroubleshootLaunch,
     ]
 );
 
@@ -90,5 +93,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-d", ToggleFavourite, ctx),
         KeyBinding::new("ctrl-shift-l", OpenGameLog, ctx),
         KeyBinding::new("ctrl-shift-s", OpenGameSettingsAction, ctx),
+        KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
     ]);
 }

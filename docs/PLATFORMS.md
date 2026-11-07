@@ -275,6 +275,23 @@ belong to someone else.
 The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
 instance makes a relative path absolute before forwarding it.
 
+### Launch troubleshooting
+
+When a game closes right after starting, or on "Troubleshoot launch" (game menu,
+command palette, Ctrl+Shift+T on its page), Irori lists what it found about the last
+run, each cause with the log lines showing it, and offers fixes. Games through Wine
+or Proton run with `WINEDEBUG=-all,err+module,err+mscoree` unless the game's
+variables or Irori's environment set `WINEDEBUG` or verbose logs are on, so a
+missing DLL is named in the log even under Proton (whose own default is `-all`).
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Missing DLLs (log and the program's imports) | Installs `vcrun2022`, `d3dcompiler_47`, `dotnet48`… with winetricks (umu's when umu runs the game; protontricks for Steam's own prefixes), then starts again | Same, with winetricks | Not offered: no Wine |
+| Anticheat entry | Explains a denied or broken anticheat; offers the EAC/BattlEye runtimes | Explains it | — |
+| `vm.max_map_count` | Below 1048576: explains it and copies the `sysctl` commands. Irori never runs `sudo` | — | — |
+
+A fix tried this session is listed after the others.
+
 ### Screenshots
 
 The stats page's Album reads screenshots from Steam's

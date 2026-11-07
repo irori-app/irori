@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "{title} kayıtları tam olarak yedeklenemedi",
   "shell.palette.back_up_saves": "{title} kayıtlarını yedekle",
   "shell.palette.save_backups": "{title} kayıt yedekleri",
+  "shell.palette.troubleshoot": "{title} başlatma sorunlarını gider",
+  "shell.palette.troubleshoot_keywords": "sorun giderme sorun çökme hata düzelt dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} dk",
   "shell.duration.hours": "{hours} sa",
   "shell.duration.hours_minutes": "{hours} sa {minutes} dk",
