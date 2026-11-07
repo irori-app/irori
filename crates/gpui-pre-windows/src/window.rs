@@ -108,6 +108,9 @@ pub(crate) struct WindowsWindowInner {
     pub(crate) main_receiver: PriorityQueueReceiver<RunnableVariant>,
     pub(crate) platform_window_handle: HWND,
     pub(crate) parent_hwnd: Option<HWND>,
+    /// Set on `WM_DESTROY`: the handle is gone, and Windows may give it to
+    /// another window.
+    destroyed: Cell<bool>,
 }
 
 impl WindowsWindowState {
@@ -298,7 +301,19 @@ impl WindowsWindowInner {
             platform_window_handle: context.platform_window_handle,
             system_settings: WindowsSystemSettings::new(),
             parent_hwnd: context.parent_hwnd,
+            destroyed: Cell::new(false),
         }))
+    }
+
+    /// Runs on `WM_DESTROY`, the last moment the handle is valid. The drop
+    /// target's handler holds this window, and only `RevokeDragDrop` releases
+    /// it: revoked later, on a dead handle, it fails and the whole window
+    /// (renderer and swap chain included) is never freed.
+    pub(crate) fn release_destroyed_handle(&self) {
+        if self.destroyed.replace(true) {
+            return;
+        }
+        unsafe { RevokeDragDrop(self.hwnd).log_err() };
     }
 
     fn toggle_fullscreen(self: &Rc<Self>) {
@@ -611,20 +626,25 @@ impl rwh::HasDisplayHandle for WindowsWindow {
 impl Drop for WindowsWindow {
     fn drop(&mut self) {
         self.0.dialog_owner.close();
-        unsafe { ShowWindowAsync(self.0.hwnd, SW_HIDE).ok().log_err() };
         // `DestroyWindow` below sends `WM_SHOWWINDOW`; without a callback the
         // resulting visibility report has nothing to notify.
         self.0.state.callbacks.visibility_change.take();
+        // A window the user closed is already destroyed: its handle is invalid,
+        // or another window's by now.
+        if self.0.destroyed.get() {
+            return;
+        }
+        unsafe { ShowWindowAsync(self.0.hwnd, SW_HIDE).ok().log_err() };
         // clone this `Rc` to prevent early release of the pointer
         let this = self.0.clone();
         self.0
             .executor
             .spawn(async move {
                 this.dialog_owner.when_idle().await;
-                let handle = this.hwnd;
-                unsafe {
-                    RevokeDragDrop(handle).log_err();
-                    DestroyWindow(handle).log_err();
+                // The window may have been destroyed while the dialog was open.
+                // `WM_DESTROY` revokes drag and drop.
+                if !this.destroyed.get() {
+                    unsafe { DestroyWindow(this.hwnd).log_err() };
                 }
             })
             .detach();
