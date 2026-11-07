@@ -53,9 +53,25 @@
   <screenshots>
     <screenshot type="default">
       <caption>Every store in one library</caption>
-      <image>https://irori.app/screenshots/library.png</image>
+      <image type="source" width="1440" height="900">https://irori.app/screenshots/library.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A game's page, with its store, compatibility and mods</caption>
+      <image type="source" width="1440" height="900">https://irori.app/screenshots/game.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Big Picture mode, made for controllers</caption>
+      <image type="source" width="1440" height="900">https://irori.app/screenshots/bigpicture.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Downloads that pause, resume and verify</caption>
+      <image type="source" width="1440" height="900">https://irori.app/screenshots/downloads.png</image>
     </screenshot>
   </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#f4c7a8</color>
+    <color type="primary" scheme_preference="dark">#4a2a1c</color>
+  </branding>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.4.0" date="2026-11-04"/>
