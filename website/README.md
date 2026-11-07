@@ -68,11 +68,12 @@ screen. Content is in the HTML from the start, so nothing depends on a script to
 ## Screenshots and covers
 
 `public/screenshots/` holds the app's screens, as WebP at 1440 and 2880 pixels wide,
-dark and (`light-` prefix) light. They come from a release build running on a demo
-library of made-up games with covers drawn for the purpose, so no store artwork or
-personal data appears in the app's screenshots. Never replace them with captures of a real
-library or real folder paths. `library.png` is the screenshot Linux software centres show
-(`packaging/linux/*.metainfo.xml`).
+dark and (`light-` prefix) light. They come from the Linux release build running on a demo
+library of real games with their store art, and invented play time and accounts, so no
+personal data appears in them. Never replace them with captures of your own library or
+real folder paths. `library.png`, `game.png`, `bigpicture.png` and `downloads.png` are PNG
+copies of the 1440-pixel screens for Linux software centres, because AppStream expects PNG
+or JPEG (`packaging/linux/*.metainfo.xml`); regenerate them when those screens change.
 
 The cover walls (the home page's hero, and the bands on `/features/` and `/download/`) show
 real game covers, to illustrate the games Irori runs; the footer credits their publishers.
