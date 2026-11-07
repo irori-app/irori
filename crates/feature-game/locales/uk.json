@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Наступні",
   "game.achievements.cover_hidden": "Знову приховати",
   "game.achievements.complete": "Усі досягнення отримано",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Інші досягнення",
   "game.achievements.worth_one": "Бали: {points}",
   "game.achievements.worth_other": "Бали: {points}",
   "game.action.install": "Встановити",

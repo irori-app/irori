@@ -17,6 +17,8 @@
   "game.achievements.up_next": "다음 목표",
   "game.achievements.cover_hidden": "숨긴 업적 다시 가리기",
   "game.achievements.complete": "모든 업적 달성",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "기타 업적",
   "game.achievements.worth_one": "{points}점",
   "game.achievements.worth_other": "{points}점",
   "game.action.install": "설치",

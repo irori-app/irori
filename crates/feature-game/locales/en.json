@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Up next",
   "game.achievements.cover_hidden": "Hide hidden ones again",
   "game.achievements.complete": "Every achievement unlocked",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Other achievements",
   "game.achievements.worth_one": "{points} point",
   "game.achievements.worth_other": "{points} points",
   "game.action.install": "Install",

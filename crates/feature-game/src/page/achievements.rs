@@ -2,11 +2,13 @@
 //! hardcore unlocks and the rarest one), the latest unlocks, the likeliest
 //! next ones, and every achievement in a list filtered by state. Hidden
 //! achievements stay covered until the user reveals one (by clicking it) or
-//! all of them. Rows are virtualized, so games with hundreds of
-//! achievements render only what is visible.
+//! all of them. A game whose store groups its achievements into sets (the
+//! base game, each DLC) lists them under a heading per set with that set's
+//! progress. Rows are virtualized, so games with hundreds of achievements
+//! render only what is visible.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -25,8 +27,8 @@ use gpui_kit::{
     SharedString, Size, StatefulInteractiveElement as _, Styled, StyledImage as _, Window, div, px,
     rems, size,
 };
-use irori_core::Achievement;
 use irori_core::util::{parse_rfc3339, unix_now};
+use irori_core::{Achievement, AchievementGroup};
 use irori_ui::components::art_img;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::KeyboardFocusable as _;
@@ -36,6 +38,8 @@ use crate::load::format_day;
 
 /// Height of one row, in rems.
 const ROW_REMS: f32 = 4.5;
+/// Height of a set's heading, in rems.
+const SET_REMS: f32 = 3.0;
 /// Rows visible before the list scrolls on its own.
 const VISIBLE_ROWS: usize = 8;
 /// Tiles in the "recently unlocked" and "up next" strips.
@@ -100,6 +104,94 @@ pub fn arrange(list: &[Achievement], filter: AchievementFilter) -> Vec<usize> {
             (false, false) => next_first(a, b),
         }
     });
+    out
+}
+
+/// One set of a game's achievements and how much of it is unlocked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SetProgress {
+    /// `None` for the achievements no set holds.
+    pub group: Option<AchievementGroup>,
+    pub unlocked: usize,
+    pub total: usize,
+}
+
+impl SetProgress {
+    pub fn complete(&self) -> bool {
+        self.total > 0 && self.unlocked == self.total
+    }
+}
+
+/// The sets `list` falls into, in the store's order with the achievements
+/// of no set last. Empty when there is at most one set, so a game without
+/// sets (or with only its base game's) keeps one plain list.
+pub fn sets(list: &[Achievement]) -> Vec<SetProgress> {
+    let mut out: Vec<SetProgress> = Vec::new();
+    for a in list {
+        let ix = match out.iter().position(|s| s.group == a.group) {
+            Some(ix) => ix,
+            None => {
+                out.push(SetProgress {
+                    group: a.group.clone(),
+                    unlocked: 0,
+                    total: 0,
+                });
+                out.len() - 1
+            }
+        };
+        out[ix].total += 1;
+        out[ix].unlocked += usize::from(a.is_unlocked());
+    }
+    if out.len() < 2 {
+        return Vec::new();
+    }
+    out.sort_by(|a, b| match (&a.group, &b.group) {
+        (Some(a), Some(b)) => a
+            .order
+            .cmp(&b.order)
+            .then_with(|| a.dlc_app_id.is_some().cmp(&b.dlc_app_id.is_some()))
+            .then_with(|| a.id.cmp(&b.id)),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    });
+    out
+}
+
+/// One line of the list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Row {
+    /// The heading of a set: an index into [`sets`].
+    Set(usize),
+    /// An achievement: an index into the list.
+    Item(usize),
+}
+
+/// The list's lines: [`arrange`]d achievements, under a heading per set
+/// when there are `sets`. A set the filter empties is left out.
+pub fn rows(list: &[Achievement], filter: AchievementFilter, sets: &[SetProgress]) -> Vec<Row> {
+    let order = arrange(list, filter);
+    if sets.is_empty() {
+        return order.into_iter().map(Row::Item).collect();
+    }
+    let set_of: HashMap<Option<&AchievementGroup>, usize> = sets
+        .iter()
+        .enumerate()
+        .map(|(ix, s)| (s.group.as_ref(), ix))
+        .collect();
+    let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); sets.len()];
+    for ix in order {
+        if let Some(&set) = set_of.get(&list[ix].group.as_ref()) {
+            buckets[set].push(ix);
+        }
+    }
+    let mut out = Vec::with_capacity(list.len() + sets.len());
+    for (set, items) in buckets.into_iter().enumerate() {
+        if !items.is_empty() {
+            out.push(Row::Set(set));
+            out.extend(items.into_iter().map(Row::Item));
+        }
+    }
     out
 }
 
@@ -189,8 +281,11 @@ fn rarity_text(a: &Achievement) -> Option<String> {
 /// filter or the rem size change.
 pub(crate) struct RowsCache {
     key: Option<(AchievementFilter, usize, Pixels)>,
-    rows: Rc<Vec<usize>>,
+    sets: Rc<Vec<SetProgress>>,
+    rows: Rc<Vec<Row>>,
     sizes: Rc<Vec<Size<Pixels>>>,
+    /// Height of the rows shown before the list scrolls, in rems.
+    visible_rems: f32,
     scroll: VirtualListScrollHandle,
 }
 
@@ -198,22 +293,33 @@ impl Default for RowsCache {
     fn default() -> Self {
         Self {
             key: None,
+            sets: Rc::default(),
             rows: Rc::default(),
             sizes: Rc::default(),
+            visible_rems: 0.0,
             scroll: VirtualListScrollHandle::new(),
         }
     }
 }
 
 impl RowsCache {
-    fn sync(&mut self, list: &Arc<Vec<Achievement>>, filter: AchievementFilter, row_h: Pixels) {
-        let key = (filter, Arc::as_ptr(list) as usize, row_h);
+    fn sync(&mut self, list: &Arc<Vec<Achievement>>, filter: AchievementFilter, rem: Pixels) {
+        let key = (filter, Arc::as_ptr(list) as usize, rem);
         if self.key == Some(key) {
             return;
         }
         let filter_changed = self.key.is_some_and(|k| k.0 != filter);
-        let rows = arrange(list, filter);
-        self.sizes = Rc::new(vec![size(px(0.), row_h); rows.len()]);
+        let list_changed = self.key.is_none_or(|k| k.1 != key.1);
+        if list_changed {
+            self.sets = Rc::new(sets(list));
+        }
+        let rows = rows(list, filter, &self.sets);
+        let height = |row: &Row| match row {
+            Row::Set(_) => SET_REMS,
+            Row::Item(_) => ROW_REMS,
+        };
+        self.visible_rems = rows.iter().take(VISIBLE_ROWS).map(height).sum();
+        self.sizes = Rc::new(rows.iter().map(|r| size(px(0.), rem * height(r))).collect());
         self.rows = Rc::new(rows);
         self.key = Some(key);
         if filter_changed {
@@ -244,10 +350,10 @@ impl GamePage {
         let Some(list) = self.achievements.ready().cloned() else {
             return div().into_any_element();
         };
-        let row_h = window.rem_size() * ROW_REMS;
         self.achievement_view
-            .sync(&list, self.achievement_filter, row_h);
+            .sync(&list, self.achievement_filter, window.rem_size());
         let rows_total = self.achievement_view.rows.len();
+        let list_rems = self.achievement_view.visible_rems;
         let summary = Summary::of(&list, |a| self.achievement_reveal.shows(a));
         let filter_ix = AchievementFilter::ALL
             .iter()
@@ -361,7 +467,7 @@ impl GamePage {
                     div()
                         .id("achievement-list")
                         .w_full()
-                        .h(rems(ROW_REMS * rows_total.min(VISIBLE_ROWS) as f32))
+                        .h(rems(list_rems))
                         .rounded(cx.theme().radius_lg)
                         .border_1()
                         .border_color(cx.theme().border)
@@ -603,12 +709,13 @@ impl GamePage {
             return Vec::new();
         };
         let rows = self.achievement_view.rows.clone();
+        let sets = self.achievement_view.sets.clone();
         let icon_px = icon_px(window, 3.0);
         let now = unix_now() as i64;
         range
-            .filter_map(|row| {
-                let a = list.get(*rows.get(row)?)?;
-                Some(self.render_row(row, a, icon_px, now, cx))
+            .filter_map(|row| match *rows.get(row)? {
+                Row::Set(set) => Some(render_set_heading(row, sets.get(set)?, cx)),
+                Row::Item(ix) => Some(self.render_row(row, list.get(ix)?, icon_px, now, cx)),
             })
             .collect()
     }
@@ -737,6 +844,88 @@ impl GamePage {
     }
 }
 
+/// The heading of a set: its name, whether it is a DLC's, and its progress.
+fn render_set_heading(row: usize, set: &SetProgress, cx: &mut Context<GamePage>) -> AnyElement {
+    let theme = cx.theme();
+    let name: SharedString = match &set.group {
+        Some(g) if !g.name.trim().is_empty() => g.name.clone().into(),
+        _ => t("game.achievements.set_other"),
+    };
+    let is_dlc = set.group.as_ref().is_some_and(|g| g.dlc_app_id.is_some());
+    let complete = set.complete();
+    let percent = if set.total == 0 {
+        0.0
+    } else {
+        set.unlocked as f32 / set.total as f32 * 100.0
+    };
+    let progress = t_args(
+        "game.achievements.progress",
+        &[
+            ("unlocked", &set.unlocked.to_string()),
+            ("total", &set.total.to_string()),
+        ],
+    );
+    let mut bar = Progress::new(("achievement-set-progress", row))
+        .value(percent)
+        .accessibility_label(progress.clone());
+    if complete {
+        bar = bar.color(theme.success);
+    }
+    h_flex()
+        .id(("achievement-set", row))
+        .w_full()
+        .h(rems(SET_REMS))
+        .gap_3()
+        .px_3()
+        .items_center()
+        .bg(theme.secondary)
+        .when(row > 0, |r| r.border_t_1().border_color(theme.border))
+        .child(
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .min_w_0()
+                        .text_sm()
+                        .font_semibold()
+                        .truncate()
+                        .child(name),
+                )
+                .when(is_dlc, |r| {
+                    r.child(
+                        div()
+                            .flex_shrink_0()
+                            .px_1p5()
+                            .rounded(theme.radius)
+                            .border_1()
+                            .border_color(theme.border)
+                            .text_xs()
+                            .font_medium()
+                            .text_color(theme.muted_foreground)
+                            .child(t("game.achievements.set_dlc")),
+                    )
+                }),
+        )
+        .child(
+            div()
+                .flex_shrink_0()
+                .max_w(rems(14.))
+                .truncate()
+                .text_xs()
+                .text_color(if complete {
+                    theme.success
+                } else {
+                    theme.muted_foreground
+                })
+                .child(progress),
+        )
+        .child(div().flex_shrink_0().w(rems(6.)).child(bar))
+        .into_any_element()
+}
+
 /// Device pixels of an icon `rems` wide.
 fn icon_px(window: &Window, rems: f32) -> u32 {
     let px: f32 = (window.rem_size() * rems * window.scale_factor())
@@ -818,5 +1007,112 @@ mod tests {
         assert_eq!(s.next, [3]);
         assert_eq!(Summary::of(&list, |_| true).next, [0, 3]);
         assert_eq!(s.percent(), 50.0);
+    }
+
+    fn in_set(
+        mut a: Achievement,
+        id: &str,
+        name: &str,
+        dlc: Option<&str>,
+        order: u32,
+    ) -> Achievement {
+        a.group = Some(AchievementGroup {
+            id: id.into(),
+            name: name.into(),
+            dlc_app_id: dlc.map(String::from),
+            order,
+        });
+        a
+    }
+
+    #[test]
+    fn groups_rows_by_set_with_progress() {
+        let list = vec![
+            in_set(
+                a("dlc-locked", 5.0, None),
+                "2",
+                "The Island",
+                Some("1500"),
+                1,
+            ),
+            in_set(
+                a("base-old", 50.0, Some("2020-01-01T00:00:00Z")),
+                "1",
+                "Base game",
+                None,
+                0,
+            ),
+            in_set(
+                a("dlc-done", 9.0, Some("2024-01-01T00:00:00Z")),
+                "2",
+                "The Island",
+                Some("1500"),
+                1,
+            ),
+            in_set(a("base-locked", 70.0, None), "1", "Base game", None, 0),
+            a("loose", 1.0, None),
+        ];
+        let sets = sets(&list);
+        let summary: Vec<_> = sets
+            .iter()
+            .map(|s| {
+                (
+                    s.group.as_ref().map(|g| g.name.as_str()),
+                    s.unlocked,
+                    s.total,
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                (Some("Base game"), 1, 2),
+                (Some("The Island"), 1, 2),
+                (None, 0, 1)
+            ]
+        );
+        let ids = |f| {
+            rows(&list, f, &sets)
+                .into_iter()
+                .map(|r| match r {
+                    Row::Set(s) => format!("#{s}"),
+                    Row::Item(ix) => list[ix].id.clone(),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ids(AchievementFilter::All),
+            [
+                "#0",
+                "base-old",
+                "base-locked",
+                "#1",
+                "dlc-done",
+                "dlc-locked",
+                "#2",
+                "loose"
+            ]
+        );
+        // A set the filter empties loses its heading too.
+        assert_eq!(
+            ids(AchievementFilter::Unlocked),
+            ["#0", "base-old", "#1", "dlc-done"]
+        );
+        assert!(!sets[0].complete());
+    }
+
+    #[test]
+    fn one_set_or_none_keeps_a_plain_list() {
+        let plain = vec![a("x", 1.0, None), a("y", 2.0, Some("2024-01-01T00:00:00Z"))];
+        assert!(sets(&plain).is_empty());
+        assert_eq!(
+            rows(&plain, AchievementFilter::All, &[]),
+            [Row::Item(1), Row::Item(0)]
+        );
+        let base_only: Vec<_> = plain
+            .into_iter()
+            .map(|x| in_set(x, "1", "Base game", None, 0))
+            .collect();
+        assert!(sets(&base_only).is_empty());
     }
 }

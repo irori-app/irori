@@ -443,7 +443,10 @@ commands without a window.
   with `irori_core::achievement_cache` (15 minutes; stale answers stand in offline).
   Sources: GOG and Epic web APIs, Steam's `IPlayerService` (definitions are public;
   unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
-  for the ROM library.
+  for the ROM library. Steam's Achievement Sets (`GetGameAchievements`' `groups` and
+  each achievement's `groupid`) become `Achievement::group` (name, DLC app id, order;
+  `None` elsewhere and offline); the game page lists a game with two or more sets
+  under a heading per set with its progress, while totals stay per game.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG

@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Na řadě",
   "game.achievements.cover_hidden": "Znovu skrýt skryté",
   "game.achievements.complete": "Všechny úspěchy získány",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Ostatní úspěchy",
   "game.achievements.worth_one": "Body: {points}",
   "game.achievements.worth_other": "Body: {points}",
   "game.action.install": "Instalovat",

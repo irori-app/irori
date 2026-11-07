@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Hierna",
   "game.achievements.cover_hidden": "Weer verbergen",
   "game.achievements.complete": "Alle prestaties ontgrendeld",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Overige prestaties",
   "game.achievements.worth_one": "{points} punt",
   "game.achievements.worth_other": "{points} punten",
   "game.action.install": "Installeren",

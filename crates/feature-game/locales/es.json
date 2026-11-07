@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Siguientes",
   "game.achievements.cover_hidden": "Volver a ocultar",
   "game.achievements.complete": "Todos los logros desbloqueados",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Otros logros",
   "game.achievements.worth_one": "{points} punto",
   "game.achievements.worth_other": "{points} puntos",
   "game.action.install": "Instalar",

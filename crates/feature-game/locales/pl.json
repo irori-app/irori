@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Następne",
   "game.achievements.cover_hidden": "Ukryj ponownie",
   "game.achievements.complete": "Wszystkie osiągnięcia odblokowane",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Pozostałe osiągnięcia",
   "game.achievements.worth_one": "Punkty: {points}",
   "game.achievements.worth_other": "Punkty: {points}",
   "game.action.install": "Zainstaluj",
