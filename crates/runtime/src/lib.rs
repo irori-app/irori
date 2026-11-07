@@ -22,6 +22,7 @@ pub mod sysinfo;
 pub mod tools;
 pub mod vdf;
 pub mod windows_file;
+pub mod windows_uri;
 pub mod wrappers;
 
 use std::collections::HashMap;
@@ -589,6 +590,31 @@ pub async fn run_in_prefix(
     } else {
         cmd.detach = true;
     }
+    prefix::run_wine(app, &effective, &wc, cmd, &ctx).await
+}
+
+/// Open a link of another program's scheme in the game's prefix with
+/// Wine's `start` ([`windows_uri::wine_command`]), so the Windows program
+/// that registered the scheme there takes it. Returns once it has started.
+pub async fn open_uri_in_prefix(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+    uri: &str,
+    ctx: OpContext,
+) -> Result<ExecResult> {
+    if !windows_uri::is_forwarded_uri(uri) {
+        bail!("Irori doesn't open this kind of link in a Wine prefix");
+    }
+    let wc = wine_context(app, settings, target.game, &ctx, false).await?;
+    let effective = with_wine(settings, &wc.wine);
+    let mut cmd = windows_uri::wine_command(&wc, uri);
+    let mut env = env::wrapper_env(target.id);
+    env.append(&mut cmd.env);
+    cmd.env = env;
+    cmd.install_path = target.game.install_path();
+    cmd.game_id = target.folder_id();
+    cmd.detach = true;
     prefix::run_wine(app, &effective, &wc, cmd, &ctx).await
 }
 

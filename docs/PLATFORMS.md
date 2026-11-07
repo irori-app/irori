@@ -275,6 +275,37 @@ belong to someone else.
 The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
 instance makes a relative path absolute before forwarding it.
 
+#### Other programs' links
+
+A link of a scheme that a Windows program registers in its prefix (a game client's
+`ddnet:[::1]:8303`, `someapp://join/…`) can reach that program the same way: handed to
+Irori, it asks which game's prefix opens it (the same games as for Windows files), then
+runs Wine's `start <link>` there, which passes it to the program the prefix registered
+for the scheme. Proton runs `start /wait <link>` with `PROTON_VERB=runinprefix`, and
+under umu `UMU_CONTAINER_NSENTER=1` sends it into the Steam runtime container of a game
+already running in that prefix. The link is one argument of that command and never goes
+through a shell.
+
+Irori forwards only links it doesn't open itself
+(`irori_runtime::windows_uri::is_forwarded_uri`): never `irori:`, `heroic:`, `lutris:`,
+`nxm:` or `file:`, never web pages (`http:`, `https:`, which belong in the user's own
+browser, not a Wine one) or a browser's internal schemes (`about:`, `blob:`, `data:`,
+`javascript:`), and never a link holding spaces, quotes or control characters, or one
+longer than 4,096 characters. A single letter before the colon is a drive (`C:\…`), not
+a scheme. Since any web page can open a link, the picker opens only when no other
+dialog is showing, and the link starts only when the user picks a game and presses
+Open. Windows hands links to their programs itself, so Irori there forwards none.
+
+Irori registers no scheme besides its own: which schemes a prefix's programs take is
+unknown, and claiming one would take it from a native client. The user points a scheme
+at Irori themselves:
+
+| | How |
+| --- | --- |
+| Linux | `xdg-mime default irori.desktop x-scheme-handler/<scheme>` (the packaged entry's `Exec=irori %u` passes the link); undo it by choosing another default program |
+| macOS | Only from a terminal or script (`/Applications/Irori.app/Contents/MacOS/irori 'ddnet:[::1]:8303'`): macOS hands an app only the schemes its bundle declares, and `Irori.app` declares `irori` alone |
+| Any | `irori <link>` from a terminal, a script or another program; a running Irori gets it from the second instance |
+
 ### Screenshots
 
 The stats page's Album reads screenshots from Steam's
