@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sıralama: En iyi eşleşme",
   "library.toolbar.sort_reversed": "Sıralama: {order}, ters",
   "library.toolbar.tile_size": "Kutucuk boyutu",
+  "library.quick.sort_tooltip": "Sıralama ölçütü",
+  "library.quick.favourites_tooltip": "Yalnızca favorileri göster",
   "library.top.continue_playing": "Oynamaya devam et",
   "library.top.favourites": "Favoriler",
   "library.update_first.description": "Bir güncelleme mevcut. Şimdi oynarsanız yüklü sürüm başlar.",

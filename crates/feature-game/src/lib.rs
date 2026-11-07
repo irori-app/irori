@@ -7,8 +7,9 @@
 //! private-branch passwords, and passes the concrete Epic and GOG stores to
 //! [`install_store_handles`] (EOS overlay, REDmod). A game's mods live in
 //! the Mods tab ([`ModsPanel`]); the shell hands `nxm://` links to
-//! [`open_nxm_dialog`], and Windows files opened with Irori to
-//! [`open_windows_file_dialog`]. It routes
+//! [`open_nxm_dialog`], Windows files opened with Irori to
+//! [`open_windows_file_dialog`], and other programs' links pointed at Irori
+//! to [`open_windows_uri_dialog`]. It routes
 //! [`GamePageEvent::RequestEdit`] and [`GamePageEvent::RequestCategories`]
 //! to the library's dialogs. Other features open
 //! the same workflows through the `open_*` functions and reuse the game
@@ -65,7 +66,7 @@ pub use play_with::open_play_with_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};
 pub use saves::{CloudSavesPanel, CloudSupport, open_cloud_saves_sheet};
 pub use state::PrimaryAction;
-pub use windows_file::open_windows_file_dialog;
+pub use windows_file::{open_windows_file_dialog, open_windows_uri_dialog};
 
 gpui_kit::actions!(
     game_page,

@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Сортировка: По релевантности",
   "library.toolbar.sort_reversed": "Сортировка: {order}, в обратном порядке",
   "library.toolbar.tile_size": "Размер плиток",
+  "library.quick.sort_tooltip": "Сортировать по",
+  "library.quick.favourites_tooltip": "Показывать только избранное",
   "library.top.continue_playing": "Продолжить игру",
   "library.top.favourites": "Избранное",
   "library.update_first.description": "Доступно обновление. Если играть сейчас, запустится установленная версия.",

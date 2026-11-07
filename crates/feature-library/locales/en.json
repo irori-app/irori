@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sort: Best match",
   "library.toolbar.sort_reversed": "Sort: {order}, reversed",
   "library.toolbar.tile_size": "Tile size",
+  "library.quick.sort_tooltip": "Sort by",
+  "library.quick.favourites_tooltip": "Show only favourites",
   "library.top.continue_playing": "Continue playing",
   "library.top.favourites": "Favourites",
   "library.update_first.description": "An update is available. Playing now starts the installed version.",

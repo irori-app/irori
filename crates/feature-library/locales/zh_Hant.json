@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "排序：最符合",
   "library.toolbar.sort_reversed": "排序：{order}，反向",
   "library.toolbar.tile_size": "卡片大小",
+  "library.quick.sort_tooltip": "排序方式",
+  "library.quick.favourites_tooltip": "僅顯示我的最愛",
   "library.top.continue_playing": "繼續遊玩",
   "library.top.favourites": "我的最愛",
   "library.update_first.description": "有可用更新。現在開始遊戲將啟動已安裝的版本。",

@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "並べ替え: 関連度順",
   "library.toolbar.sort_reversed": "並べ替え: {order}（逆順）",
   "library.toolbar.tile_size": "タイルのサイズ",
+  "library.quick.sort_tooltip": "並べ替え",
+  "library.quick.favourites_tooltip": "お気に入りのみ表示",
   "library.top.continue_playing": "続きをプレイ",
   "library.top.favourites": "お気に入り",
   "library.update_first.description": "アップデートがあります。今すぐプレイするとインストール済みのバージョンが起動します。",

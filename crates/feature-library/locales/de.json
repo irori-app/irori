@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sortierung: Beste Übereinstimmung",
   "library.toolbar.sort_reversed": "Sortierung: {order}, umgekehrt",
   "library.toolbar.tile_size": "Kachelgröße",
+  "library.quick.sort_tooltip": "Sortieren nach",
+  "library.quick.favourites_tooltip": "Nur Favoriten anzeigen",
   "library.top.continue_playing": "Weiterspielen",
   "library.top.favourites": "Favoriten",
   "library.update_first.description": "Ein Update ist verfügbar. Wenn du jetzt spielst, startet die installierte Version.",

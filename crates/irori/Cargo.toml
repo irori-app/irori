@@ -51,6 +51,10 @@ libc = "0.2"
 [dev-dependencies]
 tempfile = "3"
 regex.workspace = true
+# `gpui-kit/test-support` cannot be enabled: its weak `gpui-fast?/…` features pull
+# the optional GPUI Fast crates into the lockfile, which conflict with gpui-pre.
+# Enabling GPUI's own test support exposes `TestAppContext` through `gpui_kit::*`.
+gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3", default-features = false, features = ["tokio"] }
