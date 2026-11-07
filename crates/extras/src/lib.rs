@@ -1,7 +1,8 @@
 //! Integrations beyond the stores: desktop/menu/Steam shortcuts, the
 //! `irori://` / `heroic://` URL protocol, extra game information from wikis,
 //! AreWeAntiCheatYet data, Heroic's known fixes, SteamGridDB, store discounts,
-//! log helpers and importing launcher-level data from Heroic and Lutris.
+//! log helpers and importing launcher-level data from Heroic, Lutris,
+//! Bottles, Faugus Launcher and Playnite.
 //!
 //! The function signatures in [`shortcuts`] (`ShortcutTargets`, `add`,
 //! `remove`) are the contract used by `irori-services`; keep them stable.
@@ -16,6 +17,7 @@ pub mod heroic_import;
 pub mod known_fixes;
 pub mod logs;
 pub mod lutris_import;
+pub mod playnite;
 pub mod protocol;
 pub mod releases;
 pub mod shortcuts;

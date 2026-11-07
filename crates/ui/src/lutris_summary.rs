@@ -1,4 +1,4 @@
-//! What a Lutris, Bottles or Faugus Launcher import did: counts, the store
+//! What a Lutris, Bottles, Faugus Launcher or Playnite import did: counts, the store
 //! games to log in for, games that use the default Wine build, and every
 //! game that was not imported with its reason. Shown after the import from
 //! onboarding and Settings.
@@ -32,6 +32,11 @@ pub fn skip_reason(skip: &LutrisSkip) -> SharedString {
             "ui.lutris.reason.store_not_supported",
             &[("store", &detail)],
         ),
+        "playniteNotInstalled" => t("ui.playnite.reason.not_installed"),
+        "playniteHidden" => t("ui.playnite.reason.hidden"),
+        "noInstallFolder" => t("ui.playnite.reason.no_install_folder"),
+        "folderMissing" => t_args("ui.playnite.reason.folder_missing", &[("path", &detail)]),
+        "storeGameMissing" => t_args("ui.import.reason.store_game_missing", &[("store", &detail)]),
         _ => t_args("ui.lutris.reason.failed", &[("error", &detail)]),
     }
 }
@@ -40,6 +45,15 @@ pub fn skip_reason(skip: &LutrisSkip) -> SharedString {
 pub fn summary_lines(s: &LutrisSummary) -> Vec<SharedString> {
     let n = |v: usize| v.to_string();
     let mut lines = vec![match &s.launcher {
+        Some(launcher) if s.matched > 0 => t_args(
+            "ui.import.summary.games_matched",
+            &[
+                ("launcher", launcher),
+                ("found", &n(s.found)),
+                ("imported", &n(s.imported)),
+                ("matched", &n(s.matched)),
+            ],
+        ),
         Some(launcher) => t_args(
             "ui.import.summary.games",
             &[
@@ -202,6 +216,11 @@ mod tests {
             "systemNotSupported",
             "steamNotFound",
             "storeNotSupported",
+            "playniteNotInstalled",
+            "playniteHidden",
+            "noInstallFolder",
+            "folderMissing",
+            "storeGameMissing",
             "failed",
         ] {
             let text = skip_reason(&LutrisSkip {

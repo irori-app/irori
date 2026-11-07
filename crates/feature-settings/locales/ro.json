@@ -1010,6 +1010,8 @@
   "settings.field.action_import_bottles.help": "Adaugă programele fiecărei sticle și jocurile instalate în ele, cu sticla ca prefix. Bottles rămâne neschimbat.",
   "settings.field.action_import_faugus.label": "Importă din Faugus Launcher",
   "settings.field.action_import_faugus.help": "Adaugă jocurile din Faugus Launcher cu prefixul, versiunea Proton, variabilele și argumentele lor. Faugus Launcher rămâne neschimbat.",
+  "settings.field.action_import_playnite.label": "Importă din Playnite",
+  "settings.field.action_import_playnite.help": "Adaugă jocurile instalate din Playnite cu coperte, fundaluri, timp de joc, favorite și categorii; Playnite le pornește. Jocurile de pe Steam, Epic Games, GOG și celelalte magazine afișate de Irori sunt potrivite în loc să fie adăugate de două ori. Închide mai întâi Playnite; rămâne neatins.",
   "settings.field.action_open_windows_files.label": "Deschide programele Windows cu Irori",
   "settings.field.action_open_windows_files.help": "Dă dublu clic pe un fișier .exe, .msi, .bat sau .reg ca să-l deschizi în prefixul Wine al unui joc ales de tine. Irori înlocuiește programul care deschide acum aceste fișiere, de exemplu Wine.",
   "settings.windows_files.done": "Programele Windows se deschid acum cu Irori",

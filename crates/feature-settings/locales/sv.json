@@ -1010,6 +1010,8 @@
   "settings.field.action_import_bottles.help": "Lägger till programmen i varje flaska och spelen som installerats i dem, med flaskan som prefix. Bottles lämnas orört.",
   "settings.field.action_import_faugus.label": "Importera från Faugus Launcher",
   "settings.field.action_import_faugus.help": "Lägger till spelen från Faugus Launcher med prefix, Proton-version, variabler och argument. Faugus Launcher lämnas orört.",
+  "settings.field.action_import_playnite.label": "Importera från Playnite",
+  "settings.field.action_import_playnite.help": "Lägger till Playnites installerade spel med omslag, bakgrunder, speltid, favoriter och kategorier; Playnite startar dem. Spel från Steam, Epic Games, GOG och de andra butikerna som Irori visar matchas i stället för att läggas till två gånger. Stäng Playnite först; det lämnas orört.",
   "settings.field.action_open_windows_files.label": "Öppna Windows-program med Irori",
   "settings.field.action_open_windows_files.help": "Dubbelklicka på en .exe-, .msi-, .bat- eller .reg-fil för att öppna den i Wine-prefixet för ett spel du väljer. Irori ersätter programmet som öppnar filerna nu, till exempel Wine.",
   "settings.windows_files.done": "Windows-program öppnas nu med Irori",

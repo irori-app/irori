@@ -1010,6 +1010,8 @@
   "settings.field.action_import_bottles.help": "Adds the programs of every bottle, and the games installed into them, with the bottle as their prefix. Bottles itself is left untouched.",
   "settings.field.action_import_faugus.label": "Import from Faugus Launcher",
   "settings.field.action_import_faugus.help": "Adds Faugus Launcher’s games with their prefix, Proton build, variables and arguments. Faugus Launcher itself is left untouched.",
+  "settings.field.action_import_playnite.label": "Import from Playnite",
+  "settings.field.action_import_playnite.help": "Adds Playnite’s installed games with their covers, backgrounds, playtime, favourites and categories; Playnite starts them. Games of Steam, Epic Games, GOG and the other stores Irori lists are matched instead of added twice. Close Playnite first; it is left untouched.",
   "settings.field.action_open_windows_files.label": "Open Windows programs with Irori",
   "settings.field.action_open_windows_files.help": "Double-click an .exe, .msi, .bat or .reg file to open it in the Wine prefix of a game you choose. Irori replaces the program that opens these files now, such as Wine.",
   "settings.windows_files.done": "Windows programs now open with Irori",

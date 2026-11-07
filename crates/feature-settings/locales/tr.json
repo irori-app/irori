@@ -1010,6 +1010,8 @@
   "settings.field.action_import_bottles.help": "Her şişenin programlarını ve içine kurulan oyunları, şişeyi önek olarak kullanarak ekler. Bottles’a dokunulmaz.",
   "settings.field.action_import_faugus.label": "Faugus Launcher’dan içe aktar",
   "settings.field.action_import_faugus.help": "Faugus Launcher oyunlarını önekleri, Proton sürümleri, değişkenleri ve argümanlarıyla ekler. Faugus Launcher’a dokunulmaz.",
+  "settings.field.action_import_playnite.label": "Playnite’tan içe aktar",
+  "settings.field.action_import_playnite.help": "Playnite’ın yüklü oyunlarını kapakları, arka planları, oynama süreleri, favorileri ve kategorileriyle ekler; oyunları Playnite başlatır. Steam, Epic Games, GOG ve Irori’nin listelediği diğer mağazaların oyunları iki kez eklenmek yerine eşleştirilir. Önce Playnite’ı kapatın; Playnite’a dokunulmaz.",
   "settings.field.action_open_windows_files.label": "Windows programlarını Irori ile aç",
   "settings.field.action_open_windows_files.help": "Bir .exe, .msi, .bat veya .reg dosyasını seçtiğiniz oyunun Wine prefix’inde açmak için çift tıklayın. Irori, bu dosyaları şu an açan programın (örneğin Wine) yerini alır.",
   "settings.windows_files.done": "Windows programları artık Irori ile açılıyor",

@@ -29,7 +29,8 @@ pub struct LutrisSkip {
     pub detail: Option<String>,
 }
 
-/// What a Lutris, Bottles or Faugus Launcher import did, for its summary.
+/// What a Lutris, Bottles, Faugus Launcher or Playnite import did, for its
+/// summary.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LutrisSummary {
     /// The launcher imported from, when it isn't Lutris ("Bottles").
@@ -83,6 +84,7 @@ pub struct Hooks {
     pub import_from_lutris: Option<LutrisFn>,
     pub import_from_bottles: Option<LutrisFn>,
     pub import_from_faugus: Option<LutrisFn>,
+    pub import_from_playnite: Option<LutrisFn>,
     /// Make a view of one game for the library's Focus view and drawer (the
     /// game page lives in the game feature, which the library doesn't
     /// depend on).
@@ -151,6 +153,17 @@ pub fn import_from_faugus(cx: &mut App) -> Task<Result<LutrisSummary>> {
     match cx
         .try_global::<Hooks>()
         .and_then(|h| h.import_from_faugus.clone())
+    {
+        Some(f) => f(cx),
+        None => Task::ready(Err(anyhow::anyhow!("import is not available"))),
+    }
+}
+
+/// Import the games of Playnite (Windows).
+pub fn import_from_playnite(cx: &mut App) -> Task<Result<LutrisSummary>> {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.import_from_playnite.clone())
     {
         Some(f) => f(cx),
         None => Task::ready(Err(anyhow::anyhow!("import is not available"))),

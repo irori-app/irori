@@ -153,6 +153,12 @@ pub fn hooks() -> Hooks {
                 crate::lutris::import_faugus(&backend, SIDELOAD.get().cloned()).await
             })
         })),
+        import_from_playnite: Some(Arc::new(|cx| {
+            let backend = irori_ui::backend(cx);
+            irori_ui::run(cx, async move {
+                crate::playnite::import(&backend, SIDELOAD.get().cloned()).await
+            })
+        })),
         game_panel: Some(Arc::new(crate::routing::game_panel)),
         game_settings: Some(Arc::new(crate::routing::game_settings)),
         open_store_page: Some(Arc::new(|runner, url, window, cx| {

@@ -193,5 +193,11 @@
   "ui.import.summary.title": "{launcher} kaynağından içe aktarıldı",
   "ui.import.summary.games": "{launcher} içinde {found} oyun: {imported} oyun Irori’ye eklendi.",
   "ui.import.summary.wine_build": "{launcher}, burada kurulu olmayan {build} sürümünü kullanıyordu. Oyun açılmazsa ayarlarından başka bir sürüm seçin.",
+  "ui.import.summary.games_matched": "{launcher} içinde {found} oyun: {imported} oyun Irori’ye eklendi, {matched} oyun zaten vardı.",
+  "ui.import.reason.store_game_missing": "Irori’nin kendisinin listelediği {store} mağazasına ait, ancak {store} bu bilgisayarda göstermiyor.",
+  "ui.playnite.reason.not_installed": "Playnite’ta yüklü değil.",
+  "ui.playnite.reason.hidden": "Playnite’ta gizli.",
+  "ui.playnite.reason.no_install_folder": "Playnite bunun için bir kurulum klasörü bilmiyor, bu yüzden Irori ne zaman çalıştığını anlayamaz.",
+  "ui.playnite.reason.folder_missing": "Kurulum klasörü yok: {path}",
   "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları"
 }

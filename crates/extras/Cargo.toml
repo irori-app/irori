@@ -28,6 +28,12 @@ rusqlite.workspace = true
 serde_yaml_ng.workspace = true
 sysinfo.workspace = true
 image = { workspace = true, features = ["ico"] }
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Playnite's `playnite://` link names its program; the version is already in
+# Cargo.lock (irori-launchers-data reads the registry too).
+windows-registry = "0.6"
 
 [dev-dependencies]
 tempfile = "3"

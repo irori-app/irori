@@ -265,6 +265,8 @@ pub enum ActionKind {
     ImportLutris,
     ImportBottles,
     ImportFaugus,
+    /// Import Playnite's games (Windows).
+    ImportPlaynite,
     /// Make Irori the program that opens Windows files (Linux).
     OpenWindowsFiles,
 }
@@ -1941,6 +1943,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.action_import_faugus.help")
     .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
+    app(
+        "action.import-playnite",
+        "settings.field.action_import_playnite.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportPlaynite),
+    )
+    .help("settings.field.action_import_playnite.help")
+    .keywords(&["playnite", "import", "migrate", "playtime", "windows"]),
     app(
         "action.clear-caches",
         "settings.field.action_clear_caches.label",

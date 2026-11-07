@@ -257,6 +257,21 @@ Xbox app and Microsoft Store games are Windows-only: they start through the shel
 follow the processes running from the package folder. On Linux and macOS the Stores
 page explains this instead of listing them.
 
+### Playnite import (Windows)
+
+Settings → Advanced → "Import from Playnite" (shown when Playnite is installed) and
+`irori import-playnite` read Playnite's library: the Playnite its `playnite://` link
+opens, installed or portable, with the library folder its `config.json` names.
+Playnite keeps its library open for itself while it runs, so close it first; Irori
+only reads it. Installed games become added games that Playnite starts
+(`playnite://playnite/start/<id>`); their sessions and the Stop button follow the
+processes running from the game's folder (an emulated game's ROM folder), as the Xbox
+app's games do. Games of Steam, Epic Games, GOG, Amazon Games, itch.io, the Xbox app,
+Battle.net, the EA app, Ubisoft Connect and Rockstar are matched to Irori's own
+listing instead, so their playtime, favourites and categories join the game Irori
+already has. Removing an imported game from Irori leaves its files: Playnite
+installed them.
+
 ### Windows files
 
 A Windows program, installer, batch or registry file (`.exe`, `.msi`, `.bat`, `.cmd`,

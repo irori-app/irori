@@ -1010,6 +1010,8 @@
   "settings.field.action_import_bottles.help": "すべてのボトルのプログラムと、そこにインストールしたゲームを、ボトルをプレフィックスとして追加します。Bottles 自体は変更しません。",
   "settings.field.action_import_faugus.label": "Faugus Launcher からインポート",
   "settings.field.action_import_faugus.help": "Faugus Launcher のゲームを、プレフィックス、Proton のバージョン、変数、引数ごと追加します。Faugus Launcher 自体は変更しません。",
+  "settings.field.action_import_playnite.label": "Playnite からインポート",
+  "settings.field.action_import_playnite.help": "Playnite にインストール済みのゲームを、カバー、背景、プレイ時間、お気に入り、カテゴリと一緒に追加します。起動は Playnite が行います。Steam、Epic Games、GOG など Irori が表示するストアのゲームは、二重に追加せず照合します。先に Playnite を終了してください。Playnite は変更されません。",
   "settings.field.action_open_windows_files.label": "Windows プログラムを Irori で開く",
   "settings.field.action_open_windows_files.help": ".exe、.msi、.bat、.reg ファイルをダブルクリックすると、選んだゲームの Wine プレフィックスで開きます。これらのファイルを今開いているプログラム（Wine など）は Irori に置き換わります。",
   "settings.windows_files.done": "Windows プログラムが Irori で開くようになりました",

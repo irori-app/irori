@@ -193,5 +193,11 @@
   "ui.import.summary.title": "{launcher} からインポートしました",
   "ui.import.summary.games": "{launcher} のゲーム {found} 本のうち、{imported} 本を Irori に追加しました。",
   "ui.import.summary.wine_build": "{launcher} は {build} を使っていましたが、ここにはインストールされていません。起動しない場合はゲームの設定で別のビルドを選んでください。",
+  "ui.import.summary.games_matched": "{launcher} のゲーム {found} 本のうち、{imported} 本を Irori に追加しました。{matched} 本はすでにあります。",
+  "ui.import.reason.store_game_missing": "Irori が自分で表示する {store} のゲームですが、このコンピューターの {store} には表示されていません。",
+  "ui.playnite.reason.not_installed": "Playnite にインストールされていません。",
+  "ui.playnite.reason.hidden": "Playnite で非表示になっています。",
+  "ui.playnite.reason.no_install_folder": "Playnite がインストール先フォルダーを把握していないため、Irori は実行中かどうかを判断できません。",
+  "ui.playnite.reason.folder_missing": "インストール先フォルダーがありません: {path}",
   "ui.import.summary.warnings": "Irori が読み込めなかった {launcher} のファイル"
 }
