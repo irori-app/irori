@@ -690,7 +690,17 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
     settle(cx);
     assert_eq!(shown(cx), &QuickControl::ORDER, "they come back with room");
 
-    cx.update(|cx| view.update(cx, |v, cx| v.set_quick_controls_for_test(false, cx)));
-    settle(cx);
-    assert!(shown(cx).is_empty(), "the setting turns them off");
+    // The settings Irori loaded at start can still reach the view and put
+    // the saved value back; turn the controls off until the view keeps it.
+    let mut off = false;
+    for _ in 0..50 {
+        cx.update(|cx| view.update(cx, |v, cx| v.set_quick_controls_for_test(false, cx)));
+        settle(cx);
+        if shown(cx).is_empty() {
+            off = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(off, "the setting turns them off");
 }
