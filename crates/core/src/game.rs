@@ -66,6 +66,10 @@ pub struct GameInfo {
     pub release_date: Option<String>,
     /// Aggregated review score, 0–100 (from GOG's GamesDB).
     pub rating: Option<u8>,
+    /// Age ratings the store's library data carries (Amazon, Epic), plus
+    /// those services learned from the game's store page.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub age_ratings: Vec<crate::AgeRating>,
     /// When the account got the game, as RFC 3339, when the store says.
     pub date_added: Option<String>,
     /// The user hid the game on the store's own website.
@@ -210,6 +214,9 @@ pub struct ExtraInfo {
     pub genres: Vec<String>,
     /// Full-size screenshot URLs from the store page.
     pub screenshots: Vec<String>,
+    /// Age ratings from the store page (Steam, GOG).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub age_ratings: Vec<crate::AgeRating>,
 }
 
 /// One row of system requirements.

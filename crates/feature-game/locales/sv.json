@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Dagbok",
   "game.journal.write": "Skriv en anteckning om dagen",
   "game.sandbox.title": "I sandlåda",
+  "game.age_rating.title": "Åldersgräns",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Även klassat: {ratings}",
   "game.sandbox.running": "Körs i sandlåda",
   "game.sandbox.no_network": "Inget nätverk",
   "game.sandbox.no_home": "Ingen hemmapp",
@@ -756,5 +759,6 @@
   "game.related.developer": "Också av {name}",
   "game.related.publisher": "Också utgivet av {name}",
   "game.related.genres": "Samma genrer: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

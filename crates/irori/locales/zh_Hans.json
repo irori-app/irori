@@ -130,5 +130,7 @@
   "shell.palette.views_keywords": "视图 保存 筛选",
   "shell.palette.save_view": "保存游戏库当前视图…",
   "shell.palette.add_folder": "从文件夹添加游戏…",
-  "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序"
+  "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序",
+  "shell.palette.steam_play": "{title} 的 Steam Play 工具",
+  "shell.palette.steam_play_keywords": "proton 兼容性工具 steam play ge-proton"
 }

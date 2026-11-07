@@ -3,6 +3,7 @@
 //! game art ([`art`]), theming ([`theme`]), motion ([`motion`]), desktop
 //! notifications ([`system_notify`]) and domain components.
 
+pub mod age_rating;
 pub mod art;
 pub mod art_picker;
 pub mod components;

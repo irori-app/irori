@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Dagboek",
   "game.journal.write": "Schrijf een notitie over deze dag",
   "game.sandbox.title": "In een sandbox",
+  "game.age_rating.title": "Leeftijdsclassificatie",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Ook geclassificeerd: {ratings}",
   "game.sandbox.running": "Draait in een sandbox",
   "game.sandbox.no_network": "Geen netwerk",
   "game.sandbox.no_home": "Geen thuismap",
@@ -756,5 +759,6 @@
   "game.related.developer": "Ook van {name}",
   "game.related.publisher": "Ook uitgegeven door {name}",
   "game.related.genres": "Zelfde genres: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

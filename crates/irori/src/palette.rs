@@ -59,6 +59,8 @@ enum PaletteTarget {
     SaveBackups(GameId),
     /// Check why a game's last run failed.
     Troubleshoot(GameId),
+    /// Show a Steam game's Steam Play choice (Linux).
+    SteamPlay(GameId),
     BackUp,
     Sync,
     /// Save a clip of the replay buffer.
@@ -178,6 +180,19 @@ impl Palette {
                         .keywords([t("shell.palette.troubleshoot_keywords")])
                         .icon(IconName::Stethoscope),
                     PaletteTarget::Troubleshoot(game.id()),
+                    targets,
+                );
+            }
+            if irori_game::ops::offers_steam_play(&game.id()) {
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.steam_play",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords([t("shell.palette.steam_play_keywords")])
+                        .icon(IconName::Wine),
+                    PaletteTarget::SteamPlay(game.id()),
                     targets,
                 );
             }
@@ -583,6 +598,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

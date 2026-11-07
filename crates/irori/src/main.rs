@@ -149,7 +149,7 @@ fn main() -> Result<()> {
         irori_game::init(cx);
         irori_game::install_hooks(stores::game_hooks(), cx);
         let epic = stores::EPIC.get().map(|epic| epic.main());
-        irori_settings::install_store_handles(epic.clone(), cx);
+        irori_settings::install_store_handles(epic.clone(), stores::STEAM.get().cloned(), cx);
         irori_game::install_store_handles(epic, stores::GOG.get().cloned(), cx);
         if let Some(sideload) = stores::SIDELOAD.get() {
             irori_library::install_sideload_store(sideload.clone(), cx);

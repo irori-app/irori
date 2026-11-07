@@ -31,5 +31,5 @@ pub use auth::{
 pub use error::SteamError;
 pub use library::{
     AppDetails, Genre, Metacritic, OwnedGame, Platforms, ReleaseDate, Requirements, Screenshot,
-    SharedApp,
+    SharedApp, StoreRating,
 };

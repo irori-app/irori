@@ -589,6 +589,27 @@ impl FieldSpec {
                 && !matches!(self.path, "showFps" | "enableDXVKFpsLimit" | "DXVKFpsCap"))
     }
 
+    /// Whether the field still does something for a Steam game. Steam starts
+    /// its games with its own Proton, variables and wrappers, so only what
+    /// Irori does around the launch applies: the arguments it passes, the
+    /// scripts and programs it runs, the replay buffer, Sunshine, save
+    /// backups and art.
+    pub fn applies_to_steam(&self) -> bool {
+        self.path.starts_with("iroriReplay.")
+            || matches!(
+                self.path,
+                "panel.replay"
+                    | "launcherArgs"
+                    | "iroriInSunshine"
+                    | "beforeLaunchScriptPath"
+                    | "afterLaunchScriptPath"
+                    | "panel.launchPrograms"
+                    | "iroriLudusaviAutoBackup"
+                    | "panel.save-backups"
+                    | "panel.artwork"
+            )
+    }
+
     pub fn applies_to_game(&self, per_game: bool) -> bool {
         match self.scope {
             Scope::App => false,
@@ -3301,5 +3322,33 @@ mod tests {
         assert!(ChoiceValue::Str("fsr").matches(&Value::from("fsr")));
         assert!(ChoiceValue::Num(3).matches(&Value::from(3)));
         assert!(!ChoiceValue::Num(3).matches(&Value::from("3")));
+    }
+
+    #[test]
+    fn steam_games_keep_only_what_irori_does_around_the_launch() {
+        let applies = |path: &str| find(path).expect(path).applies_to_steam();
+        for path in [
+            "launcherArgs",
+            "beforeLaunchScriptPath",
+            "panel.launchPrograms",
+            "iroriReplay.enabled",
+            "panel.save-backups",
+            "panel.artwork",
+            "iroriInSunshine",
+        ] {
+            assert!(applies(path), "{path}");
+        }
+        for path in [
+            "wineVersion",
+            "useGameMode",
+            "enviromentOptions",
+            "wrapperOptions",
+            "steamRuntime",
+            "iroriGpu",
+            "autoSyncSaves",
+            "panel.launchPresets",
+        ] {
+            assert!(!applies(path), "{path}");
+        }
     }
 }

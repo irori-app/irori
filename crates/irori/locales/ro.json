@@ -130,5 +130,7 @@
   "shell.palette.views_keywords": "vizualizare salvată filtru",
   "shell.palette.save_view": "Salvează vizualizarea curentă a bibliotecii…",
   "shell.palette.add_folder": "Adaugă jocuri dintr-un dosar…",
-  "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe"
+  "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe",
+  "shell.palette.steam_play": "Instrumentul Steam Play pentru {title}",
+  "shell.palette.steam_play_keywords": "proton instrument compatibilitate steam play ge-proton"
 }

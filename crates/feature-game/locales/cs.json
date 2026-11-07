@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Deník",
   "game.journal.write": "Napsat poznámku k tomuto dni",
   "game.sandbox.title": "V sandboxu",
+  "game.age_rating.title": "Věkové hodnocení",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Další hodnocení: {ratings}",
   "game.sandbox.running": "Běží v sandboxu",
   "game.sandbox.no_network": "Bez sítě",
   "game.sandbox.no_home": "Bez domovské složky",
@@ -756,5 +759,6 @@
   "game.related.developer": "Také od {name}",
   "game.related.publisher": "Také vydal {name}",
   "game.related.genres": "Společné žánry: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

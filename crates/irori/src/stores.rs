@@ -79,7 +79,9 @@ pub fn build(bus: EventBus, settings: SettingsFn) -> Vec<DynStore> {
         &settings,
         irori_itch::ItchStore::for_account,
     ));
-    stores.push(irori_steam::SteamStore::new(bus.clone(), settings.clone()));
+    let steam = irori_steam::SteamStore::new(bus.clone(), settings.clone());
+    let _ = STEAM.set(steam.clone());
+    stores.push(steam);
     // Always present so its switch on the Stores page can turn it on; it
     // lists nothing while `third_party_launchers` is off.
     let launchers = irori_launchers::LaunchersStore::new(bus.clone(), settings.clone());
@@ -100,6 +102,10 @@ pub static EPIC: once_cell::sync::OnceCell<Arc<MultiAccountStore<irori_epic::Epi
 
 /// The concrete GOG store (private-branch passwords, REDmod).
 pub static GOG: once_cell::sync::OnceCell<Arc<MultiAccountStore<irori_gog::GogStore>>> =
+    once_cell::sync::OnceCell::new();
+
+/// The concrete Steam store (the compatibility tool choice of its games).
+pub static STEAM: once_cell::sync::OnceCell<Arc<irori_steam::SteamStore>> =
     once_cell::sync::OnceCell::new();
 
 /// Hooks of the game feature that need concrete store crates.

@@ -308,3 +308,90 @@ fn the_wallpapers_colours_follow_the_switch_and_the_file(cx: &mut TestAppContext
         "turning the switch off kept the wallpaper's colours"
     );
 }
+
+#[gpui_kit::test]
+fn steam_compat_panel_shows_the_tools_and_the_games_choice(cx: &mut TestAppContext) {
+    let steam = tempfile::tempdir().expect("temp dir").keep();
+    std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+    std::fs::write(
+        steam.join("steamapps/appmanifest_2805730.acf"),
+        "\"AppState\" { \"appid\" \"2805730\" \"name\" \"Proton 9.0\" \"StateFlags\" \"4\" \"installdir\" \"Proton 9.0\" }",
+    )
+    .unwrap();
+    let ge = steam.join("compatibilitytools.d/GE-Proton10-4");
+    std::fs::create_dir_all(&ge).unwrap();
+    std::fs::write(
+        ge.join("compatibilitytool.vdf"),
+        "\"compatibilitytools\" { \"compat_tools\" { \"GE-Proton10-4\" { \"display_name\" \"GE-Proton10-4\" } } }",
+    )
+    .unwrap();
+    std::fs::create_dir_all(steam.join("config")).unwrap();
+    let config = "\"InstallConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"CompatToolMapping\" { \"620\" { \"name\" \"GE-Proton10-4\" \"config\" \"\" \"priority\" \"250\" } } } } } }";
+    std::fs::write(steam.join("config/config.vdf"), config).unwrap();
+
+    let id = GameId::new(Runner::Steam, "620");
+    let data = steam.join("irori");
+    let (handle, panel) = open(cx, move |window, cx| {
+        let backend = irori_ui::backend(cx);
+        let settings = backend.settings.clone();
+        let store = irori_steam::SteamStore::with_layout(
+            backend.bus.clone(),
+            std::sync::Arc::new(move || settings.app()),
+            steam,
+            &data,
+            irori_steam_api::Endpoints::default(),
+        );
+        crate::steam_compat::SteamCompatPanel::new(id, store, window, cx)
+    });
+    // The tools are read on the backend's runtime, outside the test executor.
+    for _ in 0..200 {
+        cx.run_until_parked();
+        if cx.update(|cx| panel.read(cx).state_for_test().is_some()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    cx.update(|cx| {
+        let p = panel.read(cx);
+        let state = p.state_for_test().expect("tools read");
+        let names: Vec<&str> = state.tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"proton_9") && names.contains(&"GE-Proton10-4"));
+        assert_eq!(state.current.as_deref(), Some("GE-Proton10-4"));
+        assert_eq!(p.selected_for_test(cx).as_deref(), Some("GE-Proton10-4"));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
+    use crate::game_view::{GameSection, GameSettingsView};
+    let id = GameId::new(Runner::Steam, "620");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "".into(), window, cx)
+    });
+    // Steam Play needs the Steam store (Linux); here no handle is installed,
+    // so the first section shown is Linux's Performance (the replay buffer)
+    // or Launch elsewhere.
+    let first = if cfg!(target_os = "linux") {
+        GameSection::Performance
+    } else {
+        GameSection::Launch
+    };
+    cx.update(|cx| assert_eq!(view.read(cx).section(), first));
+    for hidden in ["gpu", "tools", "log", "wine"] {
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section(hidden, window, cx));
+        })
+        .unwrap();
+        cx.update(|cx| assert_eq!(view.read(cx).section(), first, "{hidden}"));
+    }
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("art", window, cx));
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Artwork));
+}

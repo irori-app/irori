@@ -24,7 +24,7 @@ use gpui_kit::{
     SharedString, Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::settings::{AppSettings, GameSettings, UiPrefs, WineInstallation};
-use irori_core::{GameId, InstallPlatform, Paths};
+use irori_core::{GameId, InstallPlatform, Paths, Runner};
 use irori_runtime::graphics::HostGraphics;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::Desktop;
@@ -449,6 +449,11 @@ impl SettingsForm {
                 return false;
             }
             if f.native_only && !self.native {
+                return false;
+            }
+            if matches!(&self.target, FormTarget::Game(id) if id.runner == Runner::Steam)
+                && !f.applies_to_steam()
+            {
                 return false;
             }
             match &self.filter {

@@ -130,5 +130,7 @@
   "shell.palette.views_keywords": "vue enregistrée filtre",
   "shell.palette.save_view": "Enregistrer la vue actuelle de la bibliothèque…",
   "shell.palette.add_folder": "Ajouter les jeux d’un dossier…",
-  "shell.palette.add_folder_keywords": "dossier analyser importer ajouter programmes"
+  "shell.palette.add_folder_keywords": "dossier analyser importer ajouter programmes",
+  "shell.palette.steam_play": "Outil Steam Play pour {title}",
+  "shell.palette.steam_play_keywords": "proton outil compatibilité steam play ge-proton"
 }

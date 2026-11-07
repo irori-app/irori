@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Tagebuch",
   "game.journal.write": "Notiz zu diesem Tag schreiben",
   "game.sandbox.title": "In der Sandbox",
+  "game.age_rating.title": "Alterseinstufung",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Außerdem eingestuft: {ratings}",
   "game.sandbox.running": "Läuft in der Sandbox",
   "game.sandbox.no_network": "Kein Netzwerk",
   "game.sandbox.no_home": "Kein Home-Ordner",
@@ -756,5 +759,6 @@
   "game.related.developer": "Auch von {name}",
   "game.related.publisher": "Auch von {name} veröffentlicht",
   "game.related.genres": "Gleiche Genres: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

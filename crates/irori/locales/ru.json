@@ -130,5 +130,7 @@
   "shell.palette.views_keywords": "вид сохранённый фильтр",
   "shell.palette.save_view": "Сохранить текущий вид библиотеки…",
   "shell.palette.add_folder": "Добавить игры из папки…",
-  "shell.palette.add_folder_keywords": "папка поиск импорт добавить программы"
+  "shell.palette.add_folder_keywords": "папка поиск импорт добавить программы",
+  "shell.palette.steam_play": "Инструмент Steam Play для {title}",
+  "shell.palette.steam_play_keywords": "proton инструмент совместимости steam play ge-proton"
 }

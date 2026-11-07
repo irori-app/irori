@@ -439,6 +439,17 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Age ratings** (`irori_core::age_rating`, `age_ratings.rs`): `AgeRating {system,
+  rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
+  E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
+  Epic (`ageGatings`) carry them in `GameInfo::age_ratings`; Steam (`appdetails`
+  `ratings`) and GOG (`v2/games` `_embedded.*Rating`) in `ExtraInfo::age_ratings`. UI code
+  reads a game's store page through `Backend::extra_info`, which keeps those ratings in
+  `<cache>/age-ratings.json` and adds them to the library entry, so no request is made
+  for ratings alone. The game page shows the board of the user's region
+  (`irori_ui::age_rating`: interface language, then the system locale's region) as a
+  text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
+  goes by the strictest board.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that
@@ -1023,6 +1034,23 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
   game's `launcherArgs`; a `SteamGameWatch` follows the reaper (Linux), the game folder's
   processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+- **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
+  the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
+  Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as
+  `proton_9`, `proton_experimental`) and every `compatibilitytool.vdf` in
+  `compatibilitytools.d` (Flatpak Steam: its own folder only). The choice is
+  `InstallConfigStore/Software/Valve/Steam/CompatToolMapping/<appid>` in
+  `config/config.vdf`, edited by splicing only that entry's bytes (`compat/mapping.rs`
+  refuses a file it can't parse completely and reads every edit back), written atomically
+  after copying the old file to `config.vdf.irori-backup`, and only while Steam is closed:
+  Steam rewrites the file on exit. A running Steam fails with `SteamRunning`; the UI asks
+  before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
+  game menu's "Steam Play…", the palette and the page's Settings button, all through
+  `irori_game::ops::open_steam_play`/`settings_section`.
+- **Settings that apply**: Steam starts its games with its own Proton, variables and
+  wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
+  (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
+  backups, art) and hide the Graphics, Tools and Log sections.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.

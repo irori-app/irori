@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Щоденник",
   "game.journal.write": "Написати нотатку про цей день",
   "game.sandbox.title": "У пісочниці",
+  "game.age_rating.title": "Віковий рейтинг",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Інші рейтинги: {ratings}",
   "game.sandbox.running": "Запущено в пісочниці",
   "game.sandbox.no_network": "Без мережі",
   "game.sandbox.no_home": "Без домашньої теки",
@@ -756,5 +759,6 @@
   "game.related.developer": "Також від {name}",
   "game.related.publisher": "Також видано {name}",
   "game.related.genres": "Спільні жанри: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

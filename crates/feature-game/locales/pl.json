@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Dziennik",
   "game.journal.write": "Napisz notatkę o tym dniu",
   "game.sandbox.title": "W piaskownicy",
+  "game.age_rating.title": "Klasyfikacja wiekowa",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Inne klasyfikacje: {ratings}",
   "game.sandbox.running": "Działa w piaskownicy",
   "game.sandbox.no_network": "Bez sieci",
   "game.sandbox.no_home": "Bez folderu domowego",
@@ -756,5 +759,6 @@
   "game.related.developer": "Także od {name}",
   "game.related.publisher": "Także wydane przez {name}",
   "game.related.genres": "Wspólne gatunki: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

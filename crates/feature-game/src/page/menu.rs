@@ -242,6 +242,13 @@ pub(super) fn build_menu(
                     move |_, window, cx| crate::open_launch_options_dialog(i.clone(), window, cx),
                 ),
             );
+            if ops::offers_steam_play(id) {
+                let i = id.clone();
+                menu = menu.item(
+                    item("game.menu.steam_play", IconName::Wine)
+                        .on_click(move |_, _, cx| ops::open_steam_play(&i, cx)),
+                );
+            }
             let i = id.clone();
             menu = menu.item(
                 in_client("game.menu.verify_in_client", IconName::ShieldCheck)

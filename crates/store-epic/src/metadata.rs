@@ -7,7 +7,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use irori_core::{DlcInfo, ExtraInfo, GameInfo, InstallPlatform, Runner};
+use irori_core::age_rating;
+use irori_core::{AgeRating, DlcInfo, ExtraInfo, GameInfo, InstallPlatform, RatingSystem, Runner};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,9 @@ pub(crate) struct MetadataInner {
     pub release_info: Vec<ReleaseInfo>,
     pub custom_attributes: HashMap<String, Value>,
     pub main_game_item: Option<Value>,
+    /// Age ratings by board, when the publisher filled them in (most leave
+    /// it `{}`).
+    pub age_gatings: Value,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -93,6 +97,52 @@ fn attr<'a>(attrs: &'a HashMap<String, Value>, name: &str) -> Option<&'a str> {
         .get("value")?
         .as_str()
         .filter(|s| !s.is_empty())
+}
+
+/// The catalog item's `ageGatings`: an object of boards (or a list), each
+/// `{ratingSystem, gameRating, ageControl, descriptor}` with the descriptors
+/// as one comma-separated text or a list.
+pub(crate) fn age_ratings(gatings: &Value) -> Vec<AgeRating> {
+    let entries: Vec<(Option<&str>, &Value)> = match gatings {
+        Value::Object(map) => map.iter().map(|(k, v)| (Some(k.as_str()), v)).collect(),
+        Value::Array(list) => list.iter().map(|v| (None, v)).collect(),
+        _ => Vec::new(),
+    };
+    let text = |v: &Value, key: &str| match v.get(key) {
+        Some(Value::String(s)) => Some(s.trim().to_string()).filter(|s| !s.is_empty()),
+        Some(Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    };
+    let mut out: Vec<AgeRating> = entries
+        .into_iter()
+        .filter(|(_, v)| v.is_object())
+        .filter_map(|(key, v)| {
+            let system = text(v, "ratingSystem")
+                .as_deref()
+                .and_then(RatingSystem::from_key)
+                .or_else(|| key.and_then(RatingSystem::from_key))?;
+            let rating = text(v, "gameRating")
+                .or_else(|| text(v, "rating"))
+                .unwrap_or_default();
+            let age = v
+                .get("ageControl")
+                .and_then(|a| a.as_u64().or_else(|| a.as_str()?.trim().parse().ok()))
+                .and_then(|a| u8::try_from(a).ok());
+            let descriptors = match v.get("descriptor").or_else(|| v.get("descriptors")) {
+                Some(Value::String(s)) => age_rating::split_descriptors(s, true),
+                Some(Value::Array(list)) => list
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect(),
+                _ => Vec::new(),
+            };
+            AgeRating::new(system, &rating, descriptors, age)
+        })
+        .collect();
+    out.sort_by_key(|r| r.system);
+    out.dedup_by_key(|r| r.system);
+    out
 }
 
 /// The install-independent part of a library entry, cached on disk.
@@ -252,6 +302,7 @@ pub(crate) fn build_entry(app_name: &str, meta: &GameMetadata) -> Option<Catalog
         platforms,
         dlcs,
         is_dlc: m.main_game_item.is_some(),
+        age_ratings: age_ratings(&m.age_gatings),
         extra: Some(ExtraInfo {
             description: Some(m.description.clone()),
             short_description: Some(short),
@@ -345,6 +396,38 @@ pub(crate) fn compose(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maps_age_gatings() {
+        let gatings = serde_json::json!({
+            "ESRB": {"ratingSystem": "ESRB", "gameRating": "TEEN", "ageControl": 13,
+                     "descriptor": "Violence, Blood, Mild Language", "title": "TEEN"},
+            "PEGI": {"ratingSystem": "PEGI", "gameRating": "PEGI_16", "ageControl": "16"},
+            "IARC": {"ratingSystem": "IARC", "gameRating": "12"},
+            "broken": "x"
+        });
+        let ratings = age_ratings(&gatings);
+        let titles: Vec<String> = ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(titles, ["ESRB T", "PEGI 16"]);
+        assert_eq!(
+            ratings[0].descriptors,
+            ["Violence", "Blood", "Mild Language"]
+        );
+        assert_eq!(ratings[1].age, Some(16));
+        assert!(age_ratings(&serde_json::json!({})).is_empty());
+        assert!(age_ratings(&Value::Null).is_empty());
+        let list = serde_json::json!([{"ratingSystem": "USK", "ageControl": 12}]);
+        assert_eq!(age_ratings(&list)[0].title(), "USK 12");
+        // A catalog item carries them into its library entry.
+        let meta: GameMetadata = serde_json::from_value(serde_json::json!({
+            "app_name": "Rated", "app_title": "Rated",
+            "metadata": {"title": "Rated", "ageGatings": gatings,
+                         "releaseInfo": [{"appId": "Rated", "platform": ["Windows"]}]}
+        }))
+        .unwrap();
+        let entry = build_entry("Rated", &meta).unwrap();
+        assert_eq!(entry.game.age_ratings, ratings);
+    }
 
     fn parse_installed(text: &str) -> InstalledMap {
         serde_json::from_str(text).unwrap()

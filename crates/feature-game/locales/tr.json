@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Günlük",
   "game.journal.write": "Bu gün hakkında not yaz",
   "game.sandbox.title": "Korumalı alanda",
+  "game.age_rating.title": "Yaş derecelendirmesi",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Diğer derecelendirmeler: {ratings}",
   "game.sandbox.running": "Korumalı alanda çalışıyor",
   "game.sandbox.no_network": "Ağ yok",
   "game.sandbox.no_home": "Ev klasörü yok",
@@ -756,5 +759,6 @@
   "game.related.developer": "Yine {name} yapımı",
   "game.related.publisher": "Yine {name} yayını",
   "game.related.genres": "Ortak türler: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

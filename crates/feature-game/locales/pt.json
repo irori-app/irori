@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Diário",
   "game.journal.write": "Escrever uma nota sobre este dia",
   "game.sandbox.title": "Em sandbox",
+  "game.age_rating.title": "Classificação etária",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Também classificado: {ratings}",
   "game.sandbox.running": "Em execução na sandbox",
   "game.sandbox.no_network": "Sem rede",
   "game.sandbox.no_home": "Sem pasta pessoal",
@@ -756,5 +759,6 @@
   "game.related.developer": "Também de {name}",
   "game.related.publisher": "Também publicado por {name}",
   "game.related.genres": "Mesmos géneros: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

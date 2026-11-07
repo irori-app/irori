@@ -147,7 +147,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Steam:** your installed games come in from Steam's own files with no login, with
   Steam's art. Log in (QR code, or password with Steam Guard) to add every game you own
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
-  open Steam's own dialogs.
+  open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
+  game with, next to its ProtonDB rating.
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
@@ -275,6 +276,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
   Steam Deck's Game Mode and reads each press once alongside Steam Input.
+- **Age ratings** (ESRB, PEGI, USK, CERO, ClassInd, GRAC, ACB…) on each game's page, in
+  the board of your region, with their content descriptors, and a library filter by
+  age that a saved view keeps, for a view of the games that suit your children.
 - **Play status** for every game (plan to play, playing, on hold, beaten, abandoned),
   with the library grouped by it and play time under each cover (<kbd>Ctrl</kbd>
   <kbd>G</kbd>).

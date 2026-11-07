@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Дневник",
   "game.journal.write": "Написать заметку об этом дне",
   "game.sandbox.title": "В песочнице",
+  "game.age_rating.title": "Возрастной рейтинг",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Другие рейтинги: {ratings}",
   "game.sandbox.running": "Запущена в песочнице",
   "game.sandbox.no_network": "Без сети",
   "game.sandbox.no_home": "Без домашней папки",
@@ -756,5 +759,6 @@
   "game.related.developer": "Тоже от {name}",
   "game.related.publisher": "Тоже издано {name}",
   "game.related.genres": "Общие жанры: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

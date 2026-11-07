@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "日記",
   "game.journal.write": "この日のメモを書く",
   "game.sandbox.title": "サンドボックス内",
+  "game.age_rating.title": "年齢レーティング",
+  "game.age_rating.separator": "、",
+  "game.age_rating.also": "その他のレーティング: {ratings}",
   "game.sandbox.running": "サンドボックスで実行中",
   "game.sandbox.no_network": "ネットワークなし",
   "game.sandbox.no_home": "ホームフォルダーなし",
@@ -756,5 +759,6 @@
   "game.related.developer": "{name} の作品",
   "game.related.publisher": "{name} の発売タイトル",
   "game.related.genres": "共通のジャンル：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

@@ -14,11 +14,15 @@
 //! uninstalling and verifying are handed to the Steam client
 //! ([`Runner::manages_installs`] is false). Art comes from Steam's own cache,
 //! else from the store. Playtime is the larger of what Steam recorded on this
-//! computer (`localconfig.vdf`) and what the account reports.
+//! computer (`localconfig.vdf`) and what the account reports. On Linux the
+//! Proton build Steam runs a game with can be chosen ([`compat`]): only that
+//! game's entry of Steam's settings is written, and only while Steam is
+//! closed.
 
 mod account;
 mod achievements;
 mod client;
+mod compat;
 mod entries;
 mod scan;
 pub mod signin;
@@ -42,6 +46,7 @@ use parking_lot::{Mutex, RwLock};
 
 use account::{AccountFiles, LibraryCache, Session};
 use client::ClientLink;
+pub use compat::{CompatTool, CompatToolState, SteamRunning, ToolSource};
 use scan::{InstalledApp, LocalArt};
 
 const NOT_MANAGED: &str =
@@ -411,6 +416,27 @@ impl SteamStore {
     fn display_name(&self, session: &Session) -> String {
         scan::persona_name(&self.steam_dir(), &session.steamid)
             .unwrap_or_else(|| session.account_name.clone())
+    }
+
+    /// The Steam Play compatibility tools installed and the one Steam runs
+    /// `app_name` with. Steam Play is Linux's; elsewhere the list is what
+    /// the folders hold, usually nothing.
+    pub async fn compat_tools(&self, app_name: &str) -> Result<CompatToolState> {
+        compat::state(&self.steam_dir(), app_name).await
+    }
+
+    /// Make Steam run `app_name` with the compatibility tool named `tool`
+    /// (a [`CompatTool::name`]), or with Steam's default for `None`. Only
+    /// that game's entry of Steam's settings changes. Fails with
+    /// [`SteamRunning`] while Steam runs: Steam would overwrite the change.
+    pub async fn set_compat_tool(&self, app_name: &str, tool: Option<&str>) -> Result<()> {
+        compat::set_compat_tool(&self.steam_dir(), app_name, tool).await
+    }
+
+    /// Ask the Steam client to close, and wait until it has. Games Steam
+    /// runs close with it, so ask the user first.
+    pub async fn close_steam(&self) -> Result<()> {
+        compat::close_steam(&self.steam_dir()).await
     }
 }
 

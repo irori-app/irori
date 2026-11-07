@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Journal",
   "game.journal.write": "Écrire une note sur ce jour",
   "game.sandbox.title": "En bac à sable",
+  "game.age_rating.title": "Classification par âge",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Également classé : {ratings}",
   "game.sandbox.running": "En cours, dans le bac à sable",
   "game.sandbox.no_network": "Sans réseau",
   "game.sandbox.no_home": "Sans dossier personnel",
@@ -756,5 +759,6 @@
   "game.related.developer": "Aussi de {name}",
   "game.related.publisher": "Aussi édité par {name}",
   "game.related.genres": "Mêmes genres : {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

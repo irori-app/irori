@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "일지",
   "game.journal.write": "이날의 메모 쓰기",
   "game.sandbox.title": "샌드박스",
+  "game.age_rating.title": "연령 등급",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "다른 등급: {ratings}",
   "game.sandbox.running": "샌드박스에서 실행 중",
   "game.sandbox.no_network": "네트워크 없음",
   "game.sandbox.no_home": "홈 폴더 없음",
@@ -756,5 +759,6 @@
   "game.related.developer": "{name}의 다른 게임",
   "game.related.publisher": "{name}에서 퍼블리싱",
   "game.related.genres": "공통 장르: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

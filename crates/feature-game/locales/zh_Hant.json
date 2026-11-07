@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "日誌",
   "game.journal.write": "為這一天寫筆記",
   "game.sandbox.title": "沙盒中",
+  "game.age_rating.title": "年齡分級",
+  "game.age_rating.separator": "、",
+  "game.age_rating.also": "其他分級：{ratings}",
   "game.sandbox.running": "正在沙盒中執行",
   "game.sandbox.no_network": "無網路",
   "game.sandbox.no_home": "無家目錄",
@@ -756,5 +759,6 @@
   "game.related.developer": "同為 {name} 開發",
   "game.related.publisher": "同為 {name} 發行",
   "game.related.genres": "相同類型：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

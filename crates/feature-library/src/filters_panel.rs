@@ -271,6 +271,59 @@ impl FiltersPanel {
     }
 }
 
+impl FiltersPanel {
+    /// The age limit: "Any" or the youngest age every rating must allow,
+    /// and, with a limit, whether games no board rated are shown.
+    fn render_age(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        let limits: Vec<Option<u8>> = std::iter::once(None)
+            .chain(filter::AGE_LIMITS.into_iter().map(Some))
+            .collect();
+        let values = limits.clone();
+        v_flex()
+            .gap_2()
+            .child(section(t("library.filters.section.age")))
+            .child(
+                ButtonGroup::new("filter-age")
+                    .small()
+                    .outline()
+                    .children(limits.into_iter().enumerate().map(|(ix, limit)| {
+                        let label: SharedString = match limit {
+                            None => t("library.filters.age.any"),
+                            Some(age) => age.to_string().into(),
+                        };
+                        Button::new(SharedString::from(format!("age-{ix}")))
+                            .label(label)
+                            .selected(f.max_age == limit)
+                    }))
+                    .on_click(cx.listener(move |this, clicked: &Vec<usize>, _, cx| {
+                        if let Some(&ix) = clicked.first() {
+                            let limit = values[ix];
+                            this.set(move |f| f.max_age = limit, cx);
+                        }
+                    })),
+            )
+            .when(f.max_age.is_some(), |el| {
+                el.child(
+                    Checkbox::new("filter-age-unrated")
+                        .label(t("library.filters.age.include_unrated"))
+                        .checked(f.include_unrated)
+                        .on_change(cx.listener(|this, v: &bool, _, cx| {
+                            let v = *v;
+                            this.set(move |f| f.include_unrated = v, cx)
+                        })),
+                )
+            })
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("library.filters.age.hint")),
+            )
+            .into_any_element()
+    }
+}
+
 impl Render for FiltersPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let f = self.model.read(cx).filter().clone();
@@ -419,6 +472,7 @@ impl Render for FiltersPanel {
                             })),
                     ),
             )
+            .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))
             .child(

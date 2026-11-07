@@ -732,6 +732,9 @@
   "game.timeline.view_journal": "Jurnal",
   "game.journal.write": "Scrie o notă despre această zi",
   "game.sandbox.title": "În sandbox",
+  "game.age_rating.title": "Clasificare de vârstă",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Alte clasificări: {ratings}",
   "game.sandbox.running": "Rulează în sandbox",
   "game.sandbox.no_network": "Fără rețea",
   "game.sandbox.no_home": "Fără dosar personal",
@@ -756,5 +759,6 @@
   "game.related.developer": "Tot de la {name}",
   "game.related.publisher": "Tot publicat de {name}",
   "game.related.genres": "Aceleași genuri: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }
