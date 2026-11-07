@@ -108,6 +108,8 @@ pub enum Event {
     /// What Irori knows about its own new versions changed (a check
     /// started or answered, a version was dismissed).
     AppUpdateChanged,
+    /// Irori's games in Sunshine changed, or a sync with it started or ended.
+    SunshineChanged,
     /// The update manager's components changed (a check started or answered,
     /// an update started or ended, one was skipped).
     ComponentUpdatesChanged,

@@ -383,6 +383,11 @@ packaging/install.sh
   its cookies there, and the library refreshes when the window closes, so a game you
   bought appears. Without the helper the store opens in your browser.
 - Discord Rich Presence needs a Discord application ID (Settings → General → Integrations).
+- Settings → General → Integrations → Sunshine keeps your installed games (or favourites)
+  among [Sunshine](https://app.lizardbyte.dev/Sunshine/)'s applications, with their covers,
+  so Moonlight can start them from a phone, TV or another computer. Enter the user name and
+  password of Sunshine's web UI once. Quitting in Moonlight stops the game in Irori; an
+  "Irori Big Picture" application opens Big Picture for the couch.
 - Data uses each operating system’s application-data and cache directories;
   `IRORI_HOME` relocates all of it. See [platform paths](docs/PLATFORMS.md#paths-and-desktop-behavior).
 

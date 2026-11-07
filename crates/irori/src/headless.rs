@@ -21,6 +21,7 @@ pub const COMMANDS: &[&str] = &[
     "install",
     "uninstall",
     "accounts",
+    "sunshine-sync",
 ];
 
 pub const HELP: &str = "Commands (run without opening a window):
@@ -37,7 +38,9 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori install <runner>/<app> [--path DIR] [--platform windows|linux]
                                       Install a game (Ctrl+C stops; run again to resume)
   irori uninstall <runner>/<app> [--keep-files]
-                                      Uninstall a game, or discard a stopped install";
+                                      Uninstall a game, or discard a stopped install
+  irori sunshine-sync [--remove]      Bring Irori's games in Sunshine up to date
+                                      (--remove: take them out of Sunshine)";
 
 /// Run a headless command. Returns the process exit code.
 pub fn run(args: &[String]) -> Result<i32> {
@@ -69,6 +72,21 @@ pub fn run(args: &[String]) -> Result<i32> {
                 Ok(0)
             }
             "list" => list(&backend, args.iter().any(|a| a == "--installed")),
+            "sunshine-sync" => {
+                let report = if args.iter().any(|a| a == "--remove") {
+                    backend.remove_from_sunshine().await?
+                } else {
+                    backend.sync_sunshine().await?
+                };
+                println!(
+                    "Sunshine: {} added, {} updated, {} removed",
+                    report.added, report.updated, report.removed
+                );
+                for line in &report.failed {
+                    eprintln!("  {line}");
+                }
+                Ok(i32::from(!report.failed.is_empty()))
+            }
             "info" => info(&backend, &args[1..]).await,
             "playtime" => playtime(&backend, &args[1..]).await,
             "install" => install(&backend, &args[1..]).await,
