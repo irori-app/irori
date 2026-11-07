@@ -241,7 +241,8 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
         Some(ReleaseKind::GeProton) => {
             (url.ends_with(".tar.gz") || url.ends_with(".tar.xz")) && ARM_ASSET.is_match(url) == arm
         }
-        Some(ReleaseKind::WineKron4ek) => !arm,
+        // Both are built for x86-64 only.
+        Some(ReleaseKind::WineKron4ek | ReleaseKind::WineGe) => !arm,
         Some(ReleaseKind::GamePortingToolkit) => arm,
         _ => true,
     }
@@ -278,6 +279,7 @@ fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Opt
         ReleaseKind::GamePortingToolkit => assets.iter().find(|a| {
             is_compatible_download(ty, &a.browser_download_url, arch) && is_tarball(&a.name)
         }),
+        ReleaseKind::WineGe if !is_compatible_download(ty, "", arch) => None,
         ReleaseKind::WineGe => assets
             .iter()
             .filter(|a| is_tarball(&a.name))
@@ -1195,6 +1197,7 @@ mod tests {
                 "wine-lutris-GE-Proton8-26-x86_64.sha512sum",
             ]
         )]));
+        assert!(releases_from_github(ReleaseKind::WineGe, list.clone(), "aarch64").is_empty());
         let rel = releases_from_github(ReleaseKind::WineGe, list, "x86_64");
         assert_eq!(rel[1].version, "Wine-GE-Proton8-26");
         assert!(rel[1].download.ends_with("GE-Proton8-26-x86_64.tar.xz"));
@@ -1244,6 +1247,7 @@ mod tests {
             "x86_64"
         ));
         assert!(is_compatible_download("Wine-Lutris", "anything", "x86_64"));
+        assert!(!is_compatible_download("Wine-GE", "anything", "aarch64"));
     }
 
     #[test]
@@ -1268,9 +1272,10 @@ mod tests {
             download: "https://x/GE-Proton8-1.tar.gz".into(),
             ..Default::default()
         };
+        // A kind listed on every CPU, so the merge is all this tests.
         let other = Release {
-            version: "Wine-GE-Proton8-26".into(),
-            kind: "Wine-GE".into(),
+            version: "Wine-Crossover-23.7.1".into(),
+            kind: "Wine-Crossover".into(),
             date: "2024-01-01".into(),
             download: "https://x/w.tar.xz".into(),
             ..Default::default()
@@ -1299,7 +1304,11 @@ mod tests {
         let versions: Vec<&str> = merged.iter().map(|r| r.version.as_str()).collect();
         assert_eq!(
             versions,
-            vec!["GE-Proton-latest", "GE-Proton10-20", "Wine-GE-Proton8-26"]
+            vec![
+                "GE-Proton-latest",
+                "GE-Proton10-20",
+                "Wine-Crossover-23.7.1"
+            ]
         );
         let latest = &merged[0];
         assert_eq!(latest.is_installed, Some(true));

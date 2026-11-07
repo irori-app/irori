@@ -16,7 +16,8 @@ use crate::state::{backend, run};
 /// When `error` is a save conflict, ask which saves of `id` to keep, then
 /// sync that way and start the game with `params`. A missing emulator, core,
 /// BIOS or launcher gets its fix offered instead, and a sandbox that can't
-/// start its explanation. Returns whether it took care of the
+/// start, or an x86 game on an Arm64 computer without an x86 emulator, its
+/// explanation. Returns whether it took care of the
 /// error; otherwise the caller reports it as usual.
 pub fn resolve_launch_error(
     id: &GameId,
@@ -28,6 +29,7 @@ pub fn resolve_launch_error(
     if crate::engine_problem::resolve(id, &params, error, window, cx)
         || crate::launcher_problem::resolve(id, &params, error, window, cx)
         || crate::sandbox_problem::resolve(id, error, window, cx)
+        || crate::x86_problem::resolve(id, error, window, cx)
     {
         return true;
     }

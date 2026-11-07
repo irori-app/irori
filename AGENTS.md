@@ -526,7 +526,9 @@ commands without a window.
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games").
   4. Before-launch script.
-  5. `store.launch` builds the `LaunchPlan`.
+  5. `store.launch` builds the `LaunchPlan`. On Arm64 Linux a plan that starts
+     an x86 program with no x86 emulator registered stops with
+     `X86EmulatorMissing` (`irori_runtime::cpu`; `docs/PLATFORMS.md`, "Arm64").
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);

@@ -295,6 +295,9 @@ impl Backend {
         };
         let plan = store.launch(&id.app_name, &request, ctx).await?;
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
+        // An x86 game on Arm64 Linux without an x86 emulator would only fail
+        // with "Exec format error"; the UI says how to set one up instead.
+        irori_runtime::cpu::check_command(&plan.command)?;
 
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).

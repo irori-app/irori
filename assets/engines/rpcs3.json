@@ -16,6 +16,13 @@
       }
     },
     {
+      "type": "github",
+      "repo": "RPCS3/rpcs3-binaries-linux-arm64",
+      "assets": {
+        "linux-aarch64": "^rpcs3-v[\\w.-]+_linux_aarch64\\.AppImage$"
+      }
+    },
+    {
       "type": "flatpak",
       "id": "net.rpcs3.RPCS3"
     },

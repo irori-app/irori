@@ -269,9 +269,16 @@ pub fn is_valid(w: &WineInstallation) -> bool {
     }
 }
 
-/// A present build whose runtime family supports the current host.
+/// A present build whose runtime family supports the current host. On Arm64
+/// Linux an x86-64 build counts only while an x86 emulator is registered to
+/// run it (see [`crate::cpu`]); the Arm64 builds of GE-Proton and
+/// Proton-CachyOS need none.
 pub fn is_usable(w: &WineInstallation) -> bool {
     if !irori_core::HostPlatform::current().supports_wine(w.kind) || !is_valid(w) {
+        return false;
+    }
+    if crate::cpu::is_arm64_linux() && !wine_binary(w).is_none_or(|bin| crate::cpu::runs_here(&bin))
+    {
         return false;
     }
     if cfg!(target_os = "macos") {
@@ -291,6 +298,21 @@ pub fn is_usable(w: &WineInstallation) -> bool {
         }
     }
     true
+}
+
+/// The program a build's Wine runs as: `bin/wine` itself, or for Proton the
+/// `wine` of the build's `files` (`dist` in older builds) beside its
+/// `proton` script.
+fn wine_binary(w: &WineInstallation) -> Option<PathBuf> {
+    let bin = PathBuf::from(unquote(&w.bin));
+    if w.kind != WineKind::Proton {
+        return Some(bin);
+    }
+    let dir = bin.parent()?;
+    ["files/bin/wine", "dist/bin/wine"]
+        .iter()
+        .map(|p| dir.join(p))
+        .find(|p| p.is_file())
 }
 
 /// Apple's toolkit requires Apple silicon and macOS Sonoma or later.

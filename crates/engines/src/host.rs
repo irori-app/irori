@@ -56,6 +56,16 @@ impl Host {
     pub fn key(self) -> String {
         format!("{}-{}", self.os.as_str(), self.arch)
     }
+
+    /// The host whose builds this one runs when a project publishes none
+    /// for it: Windows on Arm runs x64 programs through its own emulation,
+    /// and most emulators (and every libretro core) ship for x64 only.
+    pub fn fallback(self) -> Option<Host> {
+        (self.os == Os::Windows && self.arch == "aarch64").then_some(Host {
+            os: Os::Windows,
+            arch: "x86_64",
+        })
+    }
 }
 
 /// A readable name for a manifest host key: `linux-x86_64` is
