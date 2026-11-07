@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "Die Spielstände von {title} wurden nicht vollständig gesichert",
   "shell.palette.back_up_saves": "Spielstände von {title} sichern",
   "shell.palette.save_backups": "Spielstand-Sicherungen von {title}",
+  "shell.palette.troubleshoot": "Startprobleme von {title} beheben",
+  "shell.palette.troubleshoot_keywords": "problem absturz fehler beheben lösung dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} Min.",
   "shell.duration.hours": "{hours} Std.",
   "shell.duration.hours_minutes": "{hours} Std. {minutes} Min.",

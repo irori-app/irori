@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "{title} のセーブデータを完全にはバックアップできませんでした",
   "shell.palette.back_up_saves": "{title} のセーブデータをバックアップ",
   "shell.palette.save_backups": "{title} のセーブデータのバックアップ",
+  "shell.palette.troubleshoot": "{title} の起動トラブルシューティング",
+  "shell.palette.troubleshoot_keywords": "トラブルシューティング 問題 クラッシュ エラー 修正 dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes} 分",
   "shell.duration.hours": "{hours} 時間",
   "shell.duration.hours_minutes": "{hours} 時間 {minutes} 分",

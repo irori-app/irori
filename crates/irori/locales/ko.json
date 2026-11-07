@@ -61,6 +61,8 @@
   "shell.notice.ludusavi_backup_failed": "{title}의 세이브를 모두 백업하지 못했습니다",
   "shell.palette.back_up_saves": "{title}의 세이브 백업",
   "shell.palette.save_backups": "{title}의 세이브 백업 목록",
+  "shell.palette.troubleshoot": "{title} 실행 문제 해결",
+  "shell.palette.troubleshoot_keywords": "문제 해결 문제 충돌 오류 수정 dll wine proton winetricks troubleshoot",
   "shell.duration.minutes": "{minutes}분",
   "shell.duration.hours": "{hours}시간",
   "shell.duration.hours_minutes": "{hours}시간 {minutes}분",

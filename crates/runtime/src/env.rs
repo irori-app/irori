@@ -517,6 +517,27 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
     env
 }
 
+/// Irori's `WINEDEBUG` for games: Wine's loader errors (a missing
+/// `MSVCP140.dll`) and .NET errors only. Proton's own default, `-all`,
+/// leaves nothing in the log when a game closes at once, and Wine's
+/// prints every channel.
+pub const GAME_WINEDEBUG: &str = "-all,err+module,err+mscoree";
+
+/// `WINEDEBUG` for a game started through Wine or Proton, so its log names
+/// the DLL it couldn't load. Left to the user when the game's variables or
+/// Irori's own environment set it, and to [`wine_env`] with verbose logs.
+/// Installers, winetricks and the other Wine tools don't get it.
+pub fn game_debug_env(settings: &GameSettings, host: &HostEnv) -> EnvMap {
+    let user_set = settings
+        .environment_options
+        .iter()
+        .any(|e| e.key.trim() == "WINEDEBUG");
+    if user_set || settings.verbose_logs || host.contains("WINEDEBUG") {
+        return EnvMap::new();
+    }
+    EnvMap::from([("WINEDEBUG".to_string(), GAME_WINEDEBUG.to_string())])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -863,6 +884,36 @@ mod tests {
             with_vkd3d_flag("descriptor_heap", "descriptor_heap"),
             "descriptor_heap"
         );
+    }
+
+    #[test]
+    fn games_log_loader_errors_unless_told_otherwise() {
+        let none = HostEnv::default();
+        // Verbose logs are on by default, as in Heroic.
+        let gs = GameSettings {
+            verbose_logs: false,
+            ..Default::default()
+        };
+        assert_eq!(
+            game_debug_env(&gs, &none)["WINEDEBUG"],
+            "-all,err+module,err+mscoree"
+        );
+        // The user's own value, verbose logs (`+fixme` for Proton) and a
+        // WINEDEBUG Irori was started with all win.
+        let mine = GameSettings {
+            environment_options: vec![user("WINEDEBUG", "+relay")],
+            ..gs.clone()
+        };
+        assert!(game_debug_env(&mine, &none).is_empty());
+        assert!(game_debug_env(&GameSettings::default(), &none).is_empty());
+        let host = HostEnv::from_pairs([("WINEDEBUG", "warn+all")]);
+        assert!(game_debug_env(&gs, &host).is_empty());
+        // Wine tools keep their own: wine_env alone never sets it.
+        let env = wine_env_for(
+            irori_core::HostPlatform::Linux,
+            &input(&gs, &proton(), &none),
+        );
+        assert!(!env.contains_key("WINEDEBUG"));
     }
 
     #[test]

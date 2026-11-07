@@ -53,7 +53,9 @@ use crate::choice::{Choice, ChoiceSelect, choice_select, set_choices};
 use crate::hooks::{self, CompatibilityInfo};
 use crate::load::Load;
 use crate::state::{ActionInputs, PrimaryAction};
-use crate::{OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite, ops};
+use crate::{
+    OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite, TroubleshootLaunch, ops,
+};
 
 pub use achievements::AchievementFilter;
 pub use menu::game_menu;
@@ -664,6 +666,17 @@ impl GamePage {
         }
     }
 
+    fn on_troubleshoot(
+        &mut self,
+        _: &TroubleshootLaunch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.id.runner.manages_installs() {
+            crate::open_troubleshooter(self.id.clone(), window, cx);
+        }
+    }
+
     fn on_open_settings(
         &mut self,
         _: &OpenGameSettingsAction,
@@ -686,6 +699,7 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_toggle_favourite))
             .on_action(cx.listener(Self::on_open_log))
             .on_action(cx.listener(Self::on_open_settings))
+            .on_action(cx.listener(Self::on_troubleshoot))
             .size_full()
             .when(self.panel.is_none(), |d| d.bg(cx.theme().background))
             .text_color(cx.theme().foreground);

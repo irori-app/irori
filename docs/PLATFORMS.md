@@ -322,6 +322,23 @@ at Irori themselves:
 | macOS | Only from a terminal or script (`/Applications/Irori.app/Contents/MacOS/irori 'ddnet:[::1]:8303'`): macOS hands an app only the schemes its bundle declares, and `Irori.app` declares `irori` alone |
 | Any | `irori <link>` from a terminal, a script or another program; a running Irori gets it from the second instance |
 
+### Launch troubleshooting
+
+When a game closes right after starting, or on "Troubleshoot launch" (game menu,
+command palette, Ctrl+Shift+T on its page), Irori lists what it found about the last
+run, each cause with the log lines showing it, and offers fixes. Games through Wine
+or Proton run with `WINEDEBUG=-all,err+module,err+mscoree` unless the game's
+variables or Irori's environment set `WINEDEBUG` or verbose logs are on, so a
+missing DLL is named in the log even under Proton (whose own default is `-all`).
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Missing DLLs (log and the program's imports) | Installs `vcrun2022`, `d3dcompiler_47`, `dotnet48`… with winetricks (umu's when umu runs the game; protontricks for Steam's own prefixes), then starts again | Same, with winetricks | Not offered: no Wine |
+| Anticheat entry | Explains a denied or broken anticheat; offers the EAC/BattlEye runtimes | Explains it | — |
+| `vm.max_map_count` | Below 1048576: explains it and copies the `sysctl` commands. Irori never runs `sudo` | — | — |
+
+A fix tried this session is listed after the others.
+
 ### Screenshots
 
 The stats page's Album reads screenshots from Steam's

@@ -557,6 +557,20 @@ commands without a window.
   `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
+- **Launch troubleshooting** (`troubleshoot/`): `Backend::troubleshoot_launch` reads
+  the game's last log (without Irori's header), its program's imports
+  (`troubleshoot::pe`, a headers-only PE reader under `#![forbid(unsafe_code)]`),
+  the prefix's `winetricks.log` (`pfx/` too, Steam's through protontricks' path),
+  its anticheat entry and, on Linux, `vm.max_map_count`; `analysis.rs` turns that
+  into findings, each with the log lines showing it and its fixes, and is pure and
+  tested. Fixes tried this session (`mark_fix_tried`) come last.
+  `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
+  `sudo`: a low map count is explained with the commands to run. Games through
+  Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`
+  (`irori_runtime::env::game_debug_env`) unless the user set `WINEDEBUG` or verbose
+  logs, so the log names a missing DLL; installers and winetricks keep their own.
+  The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
+  `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
   2. Optional cloud-save sync.
