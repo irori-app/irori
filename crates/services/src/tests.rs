@@ -295,13 +295,13 @@ fn unanswered_script_questions_cancel_and_roll_back() {
 }
 
 /// An added Linux game that runs a shell command.
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 struct PlayStore {
     game: Arc<GameInfo>,
     command: irori_core::process::CommandSpec,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(unix)]
 #[async_trait]
 impl Store for PlayStore {
     fn runner(&self) -> Runner {
@@ -439,6 +439,139 @@ fn programs_alongside_start_and_stop_with_the_game() {
         log.contains("Not starting Trainer: the game ended first"),
         "{log}"
     );
+}
+
+/// A backend with one added game that runs `script` through `sh -c`.
+#[cfg(unix)]
+fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
+    isolate_paths();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: app.into(),
+            title: app.into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: std::env::temp_dir().display().to_string(),
+                platform: if cfg!(target_os = "macos") {
+                    InstallPlatform::Mac
+                } else {
+                    InstallPlatform::Linux
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("sh").args(["-c", script]),
+    });
+    (
+        Backend::start_headless(move |_, _| vec![store]).unwrap(),
+        id,
+    )
+}
+
+/// Wait up to `limit` for `id`'s session to end; how long that took.
+#[cfg(unix)]
+fn session_end(
+    b: &Backend,
+    rx: &mut tokio::sync::broadcast::Receiver<Event>,
+    id: &irori_core::GameId,
+    limit: std::time::Duration,
+) -> Option<std::time::Duration> {
+    let started = std::time::Instant::now();
+    b.runtime().block_on(async {
+        tokio::time::timeout(limit, async {
+            loop {
+                if let Ok(Event::GameExited { id: e, .. }) = rx.recv().await
+                    && e == *id
+                {
+                    return started.elapsed();
+                }
+            }
+        })
+        .await
+        .ok()
+    })
+}
+
+#[cfg(unix)]
+#[test]
+fn a_launcher_that_hands_over_keeps_the_session_until_the_game_ends() {
+    // The launcher starts the "game" and exits at once, as crack and
+    // publisher launchers do.
+    let (b, id) = play("hand-over", "sleep 3 & exit 0");
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    assert!(b.is_running(&id), "the session outlives the launcher");
+    let took = session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15));
+    assert!(took.is_some(), "the session ended with the game");
+    let log = std::fs::read_to_string(b.game_log(&id)).unwrap();
+    assert!(log.contains("left the game running"), "{log}");
+}
+
+#[cfg(unix)]
+#[test]
+fn stopping_ends_the_game_a_launcher_handed_over_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("game.pid");
+    let (b, id) = play(
+        "hand-over-stop",
+        &format!("sleep 60 & echo $! > {}; exit 0", pid_file.display()),
+    );
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    assert!(b.is_running(&id));
+    b.runtime().block_on(b.stop(&id)).unwrap();
+    let took = session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15));
+    assert!(took.is_some(), "stopping ended the session");
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    assert!(!signal(pid.trim(), "-0"), "the handed-over game is gone");
+}
+
+/// Send `kill <flag> <pid>`; whether it reached the process.
+#[cfg(unix)]
+fn signal(pid: &str, flag: &str) -> bool {
+    std::process::Command::new("kill")
+        .args([flag, pid])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_daemon_the_launcher_starts_does_not_hold_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("daemon.pid");
+    // A session of its own, as daemons (and wineserver) start.
+    let script = format!(
+        r#"perl -MPOSIX -e 'POSIX::setsid(); open(F, ">{}"); print F $$; close F; sleep 30' & sleep 1; exit 0"#,
+        pid_file.display()
+    );
+    let (b, id) = play("hand-over-daemon", &script);
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    let took = session_end(&b, &mut rx, &id, std::time::Duration::from_secs(10));
+    let pid = std::fs::read_to_string(&pid_file).ok();
+    if let Some(pid) = &pid {
+        signal(pid.trim(), "-9");
+    }
+    assert!(pid.is_some(), "the daemon started");
+    let took = took.expect("the session ended without the daemon");
+    assert!(took < std::time::Duration::from_secs(6), "{took:?}");
 }
 
 #[test]
