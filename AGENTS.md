@@ -991,6 +991,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
   game's `launcherArgs`; a `SteamGameWatch` follows the reaper (Linux), the game folder's
   processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+- **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
+  the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
+  Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as
+  `proton_9`, `proton_experimental`) and every `compatibilitytool.vdf` in
+  `compatibilitytools.d` (Flatpak Steam: its own folder only). The choice is
+  `InstallConfigStore/Software/Valve/Steam/CompatToolMapping/<appid>` in
+  `config/config.vdf`, edited by splicing only that entry's bytes (`compat/mapping.rs`
+  refuses a file it can't parse completely and reads every edit back), written atomically
+  after copying the old file to `config.vdf.irori-backup`, and only while Steam is closed:
+  Steam rewrites the file on exit. A running Steam fails with `SteamRunning`; the UI asks
+  before `close_steam` (`steam -shutdown`), never in Steam's Game Mode.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.

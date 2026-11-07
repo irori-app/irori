@@ -147,7 +147,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Steam:** your installed games come in from Steam's own files with no login, with
   Steam's art. Log in (QR code, or password with Steam Guard) to add every game you own
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
-  open Steam's own dialogs.
+  open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
+  game with, next to its ProtonDB rating.
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).

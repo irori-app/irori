@@ -16,7 +16,7 @@ use gpui_kit::{
     ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _, Subscription, Window,
     div, rems,
 };
-use irori_core::{GameId, InstallPlatform, OpContext};
+use irori_core::{GameId, InstallPlatform, OpContext, Runner};
 use irori_runtime::{DxTool, Target};
 use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::hooks::CloseFn;
@@ -27,6 +27,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
+use crate::steam_compat::SteamCompatPanel;
 use crate::widgets::{RowState, field_row, muted, nav_button};
 use crate::winetricks::WinetricksPanel;
 
@@ -145,6 +146,9 @@ pub struct GameSettingsView {
     form: Entity<SettingsForm>,
     log: Entity<LogViewer>,
     winetricks: Entity<WinetricksPanel>,
+    /// The compatibility tool choice of a Steam game, on Linux: Steam runs
+    /// it, so Irori's Wine settings don't apply.
+    steam_compat: Option<Entity<SteamCompatPanel>>,
     running: HashSet<Tool>,
     language: LanguageStamp,
     /// Set when another screen shows the view in place: Back calls it, and
@@ -187,6 +191,14 @@ impl GameSettingsView {
             let id = id.clone();
             cx.new(|cx| WinetricksPanel::new(id, window, cx))
         };
+        // Steam Play exists on Linux only.
+        let steam_compat = (cfg!(target_os = "linux") && id.runner == Runner::Steam)
+            .then(|| crate::stores::steam(cx))
+            .flatten()
+            .map(|steam| {
+                let id = id.clone();
+                cx.new(|cx| SteamCompatPanel::new(id, steam, window, cx))
+            });
         let library = models(cx).library.clone();
         let observe = cx.observe(&library, |_, _, cx| cx.notify());
         let mut this = Self {
@@ -197,6 +209,7 @@ impl GameSettingsView {
             form,
             log,
             winetricks,
+            steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
             on_close: None,
@@ -248,7 +261,7 @@ impl GameSettingsView {
     }
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
-        if self.uses_wine(cx) {
+        if self.uses_wine(cx) || self.steam_compat.is_some() {
             GameSection::Wine
         } else {
             GameSection::Performance
@@ -626,10 +639,18 @@ impl Render for GameSettingsView {
                 .child(div().flex_1().min_h_0().child(self.log.clone()))
                 .into_any_element()
         } else {
-            let wine_note =
-                (!searching && self.section == GameSection::Wine && !self.uses_wine(cx))
-                    .then(|| info_alert("native-note", t("settings.game.native_note")));
-            let body: AnyElement = if !searching && self.section == GameSection::Tools {
+            let steam_compat = self
+                .steam_compat
+                .clone()
+                .filter(|_| !searching && self.section == GameSection::Wine);
+            let wine_note = (!searching
+                && self.section == GameSection::Wine
+                && !self.uses_wine(cx)
+                && steam_compat.is_none())
+            .then(|| info_alert("native-note", t("settings.game.native_note")));
+            let body: AnyElement = if let Some(panel) = steam_compat {
+                panel.into_any_element()
+            } else if !searching && self.section == GameSection::Tools {
                 self.render_tools(cx)
             } else if searching && self.form.read(cx).visible_count() == 0 {
                 EmptyState::new(

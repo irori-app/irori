@@ -10,7 +10,8 @@
 //! - [`registry`] describes every editable field (label, keywords, section)
 //!   and provides the search used by the settings search field.
 //! - [`install_store_handles`] hands over the concrete Epic store for the
-//!   EOS overlay and Epic Games Launcher sync panels.
+//!   EOS overlay and Epic Games Launcher sync panels, and the Steam store
+//!   for the compatibility tool choice of Steam games.
 //!
 //! - [`init`] registers the translation catalogs ([`CATALOGS`]); call it
 //!   once at startup, before the settings views are first rendered.
@@ -34,6 +35,7 @@ mod logs;
 pub mod registry;
 mod replay;
 mod saves;
+mod steam_compat;
 mod storage;
 mod stores;
 mod sunshine;

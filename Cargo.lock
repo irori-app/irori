@@ -4971,6 +4971,8 @@ dependencies = [
  "irori-extras",
  "irori-runtime",
  "irori-services",
+ "irori-steam",
+ "irori-steam-api",
  "irori-ui",
  "once_cell",
  "regex",
