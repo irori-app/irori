@@ -1130,6 +1130,10 @@ Match the code around you. In particular:
   `truncate()` where text may overflow. Have one scroll owner per region.
 - Leave room for German and Russian, which run 30–40% longer than English. Never put
   text in a fixed-width box.
+- Controls that come and go with the room (the library header's quick controls,
+  `iroriUi.libraryQuickControls`) are picked from measured widths, never fixed
+  breakpoints: measure the room and each control with a `canvas`, and keep the choice a
+  pure function with tests (`irori-library`'s `quick.rs`).
 
 **Feedback**
 

@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Orden: Mejor coincidencia",
   "library.toolbar.sort_reversed": "Orden: {order}, invertido",
   "library.toolbar.tile_size": "Tamaño de los mosaicos",
+  "library.quick.sort_tooltip": "Ordenar por",
+  "library.quick.favourites_tooltip": "Mostrar solo favoritos",
   "library.top.continue_playing": "Seguir jugando",
   "library.top.favourites": "Favoritos",
   "library.update_first.description": "Hay una actualización disponible. Si juegas ahora, se iniciará la versión instalada.",

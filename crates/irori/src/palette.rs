@@ -1,6 +1,7 @@
 //! Command palette (Ctrl+K): jump to any game, play installed games, pick a
 //! random one, set the play status of the game whose page is open, group the
-//! library by play status, show or save a library view, switch its view
+//! library by play status, show only installed games or favourites, turn the
+//! library header's quick controls on or off, show or save a library view, switch its view
 //! (grid, list, Focus), back up, sync, save a clip while the replay buffer
 //! records, and run window commands, all from the keyboard.
 
@@ -17,6 +18,7 @@ use gpui_kit::{
 };
 use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, Runner};
+use irori_library::InstallFilter;
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, models};
@@ -37,6 +39,12 @@ enum PaletteTarget {
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
     GroupByStatus(bool),
+    /// Show the library's games by install state, and show it.
+    Install(InstallFilter),
+    /// Show only favourites (`true`) or every game, and show the library.
+    FavouritesOnly(bool),
+    /// Show the library header's quick controls (`true`) or stop.
+    QuickControls(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -64,6 +72,12 @@ struct LibraryCommands<'a> {
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
     layout: LibraryLayout,
+    /// Which games it shows by install state, while a library view exists.
+    install: Option<InstallFilter>,
+    /// Whether it shows only favourites, while a library view exists.
+    favourites: Option<bool>,
+    /// Whether its header shows the quick controls.
+    quick_controls: bool,
 }
 
 /// Retained palette state, owned by the shell.
@@ -100,6 +114,9 @@ impl Palette {
             grouped,
             views,
             layout,
+            install,
+            favourites,
+            quick_controls,
         } = library;
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
         let mut push =
@@ -286,6 +303,51 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(install) = install {
+            for (value, label) in [
+                (InstallFilter::Installed, "shell.palette.show_installed"),
+                (InstallFilter::Any, "shell.palette.show_any_install"),
+            ] {
+                if value == install {
+                    continue;
+                }
+                push(
+                    CommandItem::new()
+                        .label(t(label))
+                        .keywords([t("shell.palette.filter_keywords")])
+                        .icon(IconName::HardDrive),
+                    PaletteTarget::Install(value),
+                    targets,
+                );
+            }
+        }
+        if let Some(favourites) = favourites {
+            let label = if favourites {
+                "shell.palette.show_all_favourites"
+            } else {
+                "shell.palette.show_favourites"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.filter_keywords")])
+                    .icon(IconName::Star),
+                PaletteTarget::FavouritesOnly(!favourites),
+                targets,
+            );
+        }
+        push(
+            CommandItem::new()
+                .label(t(if quick_controls {
+                    "shell.palette.hide_quick_controls"
+                } else {
+                    "shell.palette.show_quick_controls"
+                }))
+                .keywords([t("shell.palette.quick_controls_keywords")])
+                .icon(IconName::SlidersHorizontal),
+            PaletteTarget::QuickControls(!quick_controls),
+            targets,
+        );
         for (id, name) in views {
             push(
                 CommandItem::new()
@@ -413,12 +475,18 @@ impl Palette {
         let grouped = irori_library::groups_by_status(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
+        let install = irori_library::install_filter(cx);
+        let favourites = irori_library::favourites_only(cx);
+        let quick_controls = irori_library::quick_controls(cx);
         let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
         let replay = irori_ui::backend(cx).replay().map(|r| r.title);
         let library = LibraryCommands {
             grouped,
             views: &views,
             layout,
+            install,
+            favourites,
+            quick_controls,
         };
         let items = Rc::new(Self::items(
             &games,
@@ -503,6 +571,18 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::Install(install) => {
+            irori_library::set_install_filter(install, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::FavouritesOnly(on) => {
+            irori_library::set_favourites_only(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::QuickControls(on) => {
+            irori_library::set_quick_controls(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -552,4 +632,58 @@ fn report(
             });
         })
         .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn targets(
+        install: Option<InstallFilter>,
+        favourites: Option<bool>,
+        quick: bool,
+    ) -> Vec<String> {
+        let mut targets = Vec::new();
+        let library = LibraryCommands {
+            grouped: install.map(|_| false),
+            views: &[],
+            layout: LibraryLayout::Grid,
+            install,
+            favourites,
+            quick_controls: quick,
+        };
+        Palette::items(&[], None, None, library, false, &[], &mut targets);
+        targets
+            .into_iter()
+            .filter_map(|t| match t {
+                PaletteTarget::Install(f) => Some(format!("install {f:?}")),
+                PaletteTarget::FavouritesOnly(on) => Some(format!("favourites {on}")),
+                PaletteTarget::QuickControls(on) => Some(format!("quick {on}")),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn library_filters_and_quick_controls_are_offered_as_toggles() {
+        assert_eq!(
+            targets(Some(InstallFilter::Any), Some(false), true),
+            ["install Installed", "favourites true", "quick false"]
+        );
+        assert_eq!(
+            targets(Some(InstallFilter::Installed), Some(true), false),
+            ["install Any", "favourites false", "quick true"]
+        );
+        assert_eq!(
+            targets(Some(InstallFilter::NotInstalled), Some(false), true),
+            [
+                "install Installed",
+                "install Any",
+                "favourites true",
+                "quick false"
+            ]
+        );
+        // Without a library view only the setting can change.
+        assert_eq!(targets(None, None, true), ["quick false"]);
+    }
 }

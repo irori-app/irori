@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Sorteren: Beste overeenkomst",
   "library.toolbar.sort_reversed": "Sorteren: {order}, omgekeerd",
   "library.toolbar.tile_size": "Tegelgrootte",
+  "library.quick.sort_tooltip": "Sorteren op",
+  "library.quick.favourites_tooltip": "Alleen favorieten tonen",
   "library.top.continue_playing": "Verder spelen",
   "library.top.favourites": "Favorieten",
   "library.update_first.description": "Er is een update beschikbaar. Nu spelen start de geïnstalleerde versie.",

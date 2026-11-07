@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "Übergänge verkürzen und Bewegung vermeiden.",
   "settings.field.ui_reduce_motion.label": "Bewegung reduzieren",
   "settings.field.ui_show_store_badges.label": "Store-Abzeichen anzeigen",
+  "settings.field.ui_library_quick_controls.label": "Schnellzugriff im Bibliothekskopf",
+  "settings.field.ui_library_quick_controls.help": "Sortierung, installierte Spiele, Favoriten und Gruppierung nach Spielstatus neben dem Titel der Bibliothek, so viele, wie das Fenster Platz hat. Sortiermenü und Filter der Werkzeugleiste bleiben in jedem Fall.",
   "settings.field.ui_system_accent.help": "Färbt Iroris eigenes Design in der Akzentfarbe aus den Systemeinstellungen und folgt ihr, wenn sie sich ändert. Ein aus der Liste gewähltes Design behält seine eigenen Farben.",
   "settings.field.ui_system_accent.label": "Akzentfarbe des Systems verwenden",
   "settings.field.ui_theme.label": "Farbmodus",

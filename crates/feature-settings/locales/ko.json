@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "전환 효과를 짧게 하고 움직임을 줄입니다.",
   "settings.field.ui_reduce_motion.label": "동작 줄이기",
   "settings.field.ui_show_store_badges.label": "스토어 배지 표시",
+  "settings.field.ui_library_quick_controls.label": "라이브러리 헤더의 빠른 컨트롤",
+  "settings.field.ui_library_quick_controls.help": "정렬, 설치된 게임, 즐겨찾기, 플레이 상태별 묶기를 창에 들어가는 만큼 라이브러리 제목 옆에 표시합니다. 도구 모음의 정렬 메뉴와 필터는 그대로 남습니다.",
   "settings.field.ui_system_accent.help": "Irori 기본 테마를 시스템 설정의 강조 색으로 물들이고 바뀔 때마다 따라갑니다. 목록에서 고른 테마는 자체 색을 유지합니다.",
   "settings.field.ui_system_accent.label": "시스템 강조 색 사용",
   "settings.field.ui_theme.label": "색상 모드",

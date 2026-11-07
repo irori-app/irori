@@ -566,6 +566,8 @@
   "settings.field.ui_reduce_motion.help": "Скоротити переходи й уникати руху.",
   "settings.field.ui_reduce_motion.label": "Зменшити рух",
   "settings.field.ui_show_store_badges.label": "Показувати значки крамниць",
+  "settings.field.ui_library_quick_controls.label": "Швидкі перемикачі в заголовку бібліотеки",
+  "settings.field.ui_library_quick_controls.help": "Сортування, встановлені ігри, обране та групування за статусом проходження поруч із заголовком бібліотеки — стільки, скільки вміщується у вікні. Меню сортування та фільтри на панелі інструментів залишаються в будь-якому разі.",
   "settings.field.ui_system_accent.help": "Забарвлює власну тему Irori кольором акценту з налаштувань системи й стежить за його змінами. Тема, вибрана зі списку, зберігає власні кольори.",
   "settings.field.ui_system_accent.label": "Використовувати колір акценту системи",
   "settings.field.ui_theme.label": "Колірний режим",

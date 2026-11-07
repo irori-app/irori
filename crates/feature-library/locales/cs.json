@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Řazení: Nejlepší shoda",
   "library.toolbar.sort_reversed": "Řazení: {order}, obráceně",
   "library.toolbar.tile_size": "Velikost dlaždic",
+  "library.quick.sort_tooltip": "Řadit podle",
+  "library.quick.favourites_tooltip": "Zobrazit jen oblíbené",
   "library.top.continue_playing": "Pokračovat v hraní",
   "library.top.favourites": "Oblíbené",
   "library.update_first.description": "Je k dispozici aktualizace. Hraní teď spustí nainstalovanou verzi.",

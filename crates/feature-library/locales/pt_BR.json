@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Ordenar: Melhor correspondência",
   "library.toolbar.sort_reversed": "Ordenar: {order}, invertido",
   "library.toolbar.tile_size": "Tamanho dos blocos",
+  "library.quick.sort_tooltip": "Ordenar por",
+  "library.quick.favourites_tooltip": "Mostrar só os favoritos",
   "library.top.continue_playing": "Continuar jogando",
   "library.top.favourites": "Favoritos",
   "library.update_first.description": "Há uma atualização disponível. Jogar agora inicia a versão instalada.",

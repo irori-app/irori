@@ -1740,6 +1740,25 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["badge", "store", "label"]),
     app(
+        "iroriUi.libraryQuickControls",
+        "settings.field.ui_library_quick_controls.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_quick_controls.help")
+    .keywords(&[
+        "quick",
+        "sort",
+        "filter",
+        "installed",
+        "favourites",
+        "favorites",
+        "group",
+        "header",
+        "toolbar",
+    ]),
+    app(
         "iroriUi.reduceMotion",
         "settings.field.ui_reduce_motion.label",
         Appearance,

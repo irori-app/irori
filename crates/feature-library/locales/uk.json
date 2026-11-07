@@ -485,6 +485,8 @@
   "library.toolbar.sort_best_match": "Сортування: За релевантністю",
   "library.toolbar.sort_reversed": "Сортування: {order}, у зворотному порядку",
   "library.toolbar.tile_size": "Розмір плиток",
+  "library.quick.sort_tooltip": "Сортувати за",
+  "library.quick.favourites_tooltip": "Показувати лише обране",
   "library.top.continue_playing": "Продовжити гру",
   "library.top.favourites": "Обране",
   "library.update_first.description": "Доступне оновлення. Якщо грати зараз, запуститься встановлена версія.",
