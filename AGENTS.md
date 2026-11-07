@@ -45,8 +45,8 @@ Wine, Proton or umu, and on macOS through Wine, CrossOver or Game Porting Toolki
   process, renders on the GPU, uses no CPU when idle, keeps memory bounded, and
   virtualizes every long list.
 - License: MIT. Bundled themes are from GPUI Kit (Apache-2.0). The
-  vendored `crates/webview` and `crates/comet` are Apache-2.0 and keep their own
-  `LICENSE-APACHE`.
+  vendored `crates/webview`, `crates/comet` and `crates/gpui-pre-windows` are
+  Apache-2.0 and keep their own `LICENSE-APACHE`.
 
 ## 2. Commands
 
@@ -169,6 +169,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/irori` | `irori` | The application shell and binary: window, sidebar, routing, palette, tray, single instance, CLI |
 | `crates/sign-in` | `irori-sign-in` | Store sign-in and store windows (Wry/Tao): library and the `irori-sign-in` program |
 | `crates/webview` | `gpui-webview` | Vendored GPUI WebView, **excluded from the workspace and unused** |
+| `crates/gpui-pre-windows` | `gpui-pre-windows` | GPUI's Windows backend with Irori's fixes, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
 
 Other top-level paths:
 
@@ -1473,6 +1474,13 @@ These are things that have bitten this codebase before:
   it. Dialog callbacks run inside it: reach code that updates the window with `cx.defer`.
 - **The UI thread must never wait on I/O.** Even "quick" file reads go through
   `irori_ui::run` or `backend.spawn_blocking`.
+- **Updating gpui-pre means updating `crates/gpui-pre-windows` too.** Its version
+  must match gpui-pre's, or the patch stops applying and Windows quietly gets the
+  unpatched backend. Copy the new crate in and apply `PATCHES.md` again.
+- **Checking Windows code from a Mac** works for `cargo check` with the rustup
+  toolchain first on `PATH` (Homebrew's Rust has no Windows standard library) and
+  Homebrew LLVM's `llvm-rc` for gpui-pre's resources:
+  `PATH="$(dirname "$(rustup which rustc)"):/opt/homebrew/opt/llvm/bin:$PATH" cargo check --target x86_64-pc-windows-msvc -p <package>`.
 
 ## 14. Notes for coding agents
 
