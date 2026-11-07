@@ -731,5 +731,6 @@
   "game.related.developer": "{name}의 다른 게임",
   "game.related.publisher": "{name}에서 퍼블리싱",
   "game.related.genres": "공통 장르: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

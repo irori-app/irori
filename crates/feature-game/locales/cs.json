@@ -731,5 +731,6 @@
   "game.related.developer": "Také od {name}",
   "game.related.publisher": "Také vydal {name}",
   "game.related.genres": "Společné žánry: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

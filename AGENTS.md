@@ -1001,7 +1001,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   refuses a file it can't parse completely and reads every edit back), written atomically
   after copying the old file to `config.vdf.irori-backup`, and only while Steam is closed:
   Steam rewrites the file on exit. A running Steam fails with `SteamRunning`; the UI asks
-  before `close_steam` (`steam -shutdown`), never in Steam's Game Mode.
+  before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
+  game menu's "Steam Play…", the palette and the page's Settings button, all through
+  `irori_game::ops::open_steam_play`/`settings_section`.
+- **Settings that apply**: Steam starts its games with its own Proton, variables and
+  wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
+  (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
+  backups, art) and hide the Graphics, Tools and Log sections.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.

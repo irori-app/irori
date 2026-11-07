@@ -731,5 +731,6 @@
   "game.related.developer": "Також від {name}",
   "game.related.publisher": "Також видано {name}",
   "game.related.genres": "Спільні жанри: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

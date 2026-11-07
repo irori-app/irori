@@ -731,5 +731,6 @@
   "game.related.developer": "Tot de la {name}",
   "game.related.publisher": "Tot publicat de {name}",
   "game.related.genres": "Aceleași genuri: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

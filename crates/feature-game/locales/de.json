@@ -731,5 +731,6 @@
   "game.related.developer": "Auch von {name}",
   "game.related.publisher": "Auch von {name} veröffentlicht",
   "game.related.genres": "Gleiche Genres: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

@@ -668,8 +668,8 @@ impl GamePage {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.id.runner.manages_installs() {
-            ops::open_settings(&self.id, "general", cx);
+        if let Some(section) = ops::settings_section(&self.id) {
+            ops::open_settings(&self.id, section, cx);
         }
     }
 }

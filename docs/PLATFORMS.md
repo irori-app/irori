@@ -227,7 +227,11 @@ entry of `CompatToolMapping` in `<steam>/config/config.vdf`; Irori changes that 
 only, keeps the previous file as `config.vdf.irori-backup` and replaces the file
 atomically. Steam rewrites the file when it exits, so Irori writes only while Steam is
 closed and otherwise asks to close it first (`steam -shutdown`); in Steam's Game Mode it
-can't, and the choice stays with the game's properties in Steam.
+can't, and the choice stays with the game's properties in Steam. The choice opens from
+the game menu ("Steam Play…"), the command palette and the game page's Settings button.
+A Steam game's settings list only what Irori still does around Steam's launch: the
+launch arguments, scripts, programs started alongside, the replay buffer, Sunshine, save
+backups and art.
 
 itch.io (turned on in Settings › General › Integrations, or from its account card)
 signs in with an API key from `https://itch.io/user/settings/api-keys`, kept owner-only

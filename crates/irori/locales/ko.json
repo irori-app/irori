@@ -120,5 +120,7 @@
   "shell.palette.views_keywords": "보기 저장 필터",
   "shell.palette.save_view": "라이브러리의 현재 보기 저장…",
   "shell.palette.add_folder": "폴더에서 게임 추가…",
-  "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램"
+  "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램",
+  "shell.palette.steam_play": "{title}의 Steam Play 도구",
+  "shell.palette.steam_play_keywords": "proton 호환성 도구 steam play ge-proton"
 }

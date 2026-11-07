@@ -120,5 +120,7 @@
   "shell.palette.views_keywords": "zobrazení uložené filtr",
   "shell.palette.save_view": "Uložit aktuální zobrazení knihovny…",
   "shell.palette.add_folder": "Přidat hry ze složky…",
-  "shell.palette.add_folder_keywords": "složka prohledat import přidat programy"
+  "shell.palette.add_folder_keywords": "složka prohledat import přidat programy",
+  "shell.palette.steam_play": "Nástroj Steam Play pro {title}",
+  "shell.palette.steam_play_keywords": "proton nástroj kompatibility steam play ge-proton"
 }

@@ -190,6 +190,34 @@ pub fn open_settings(id: &GameId, section: &'static str, cx: &mut App) {
     navigate(Route::GameSettings(id.clone(), section.into()), cx);
 }
 
+/// Whether `id` has a Steam Play choice: a Steam game on Linux, where
+/// Steam runs Windows games through Proton.
+pub fn offers_steam_play(id: &GameId) -> bool {
+    cfg!(target_os = "linux") && id.runner == Runner::Steam
+}
+
+/// Open the Steam Play choice of a Steam game, its settings' first section.
+pub fn open_steam_play(id: &GameId, cx: &mut App) {
+    open_settings(id, "wine", cx);
+}
+
+/// The settings section the game page's Settings button and
+/// `OpenGameSettingsAction` open, or `None` when Irori applies no settings
+/// to the game. Steam starts its games with its own settings, but the Steam
+/// Play choice (Linux), launch options, scripts, programs started
+/// alongside, save backups and art still apply.
+pub fn settings_section(id: &GameId) -> Option<&'static str> {
+    if id.runner.manages_installs() {
+        Some("general")
+    } else if offers_steam_play(id) {
+        Some("wine")
+    } else if id.runner == Runner::Steam {
+        Some("launch")
+    } else {
+        None
+    }
+}
+
 /// Open a folder or file with the desktop's default application.
 pub(crate) fn open_path(path: PathBuf, window: &mut Window, cx: &mut App) {
     if let Err(e) = open::that_detached(&path) {

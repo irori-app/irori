@@ -282,3 +282,26 @@ fn steam_compat_panel_shows_the_tools_and_the_games_choice(cx: &mut TestAppConte
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
+    use crate::game_view::{GameSection, GameSettingsView};
+    let id = GameId::new(Runner::Steam, "620");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "".into(), window, cx)
+    });
+    // Steam Play needs the Steam store (Linux); here no handle is installed.
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Launch));
+    for hidden in ["gpu", "tools", "log", "wine"] {
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section(hidden, window, cx));
+        })
+        .unwrap();
+        cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Launch, "{hidden}"));
+    }
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("art", window, cx));
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Artwork));
+}

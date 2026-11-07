@@ -260,15 +260,56 @@ impl GameSettingsView {
         self.platform(cx).is_none_or(InstallPlatform::needs_wine)
     }
 
+    /// The sections that apply to the game. Steam starts its games itself,
+    /// so a Steam game has no Wine, graphics or prefix settings, and no game
+    /// log; Wine & Proton becomes its Steam Play choice (Linux), and
+    /// Performance keeps only the replay buffer (Linux).
+    fn sections(&self) -> Vec<GameSection> {
+        if self.id.runner != Runner::Steam {
+            return GameSection::ALL.to_vec();
+        }
+        let linux = cfg!(target_os = "linux");
+        GameSection::ALL
+            .into_iter()
+            .filter(|s| match s {
+                GameSection::Wine => self.steam_compat.is_some(),
+                GameSection::Performance => linux,
+                GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
+                GameSection::Gpu | GameSection::Tools | GameSection::Log => false,
+            })
+            .collect()
+    }
+
+    fn label_of(&self, section: GameSection) -> SharedString {
+        if section == GameSection::Wine && self.steam_compat.is_some() {
+            t("settings.steam_compat.heading")
+        } else {
+            section.label()
+        }
+    }
+
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
-        if self.uses_wine(cx) || self.steam_compat.is_some() {
+        if self.id.runner == Runner::Steam {
+            return self.sections()[0];
+        }
+        if self.uses_wine(cx) {
             GameSection::Wine
         } else {
             GameSection::Performance
         }
     }
 
+    /// The section shown.
+    pub fn section(&self) -> GameSection {
+        self.section
+    }
+
     fn open(&mut self, section: GameSection, window: &mut Window, cx: &mut Context<Self>) {
+        let section = if self.sections().contains(&section) {
+            section
+        } else {
+            self.default_section(cx)
+        };
         if self.section == GameSection::Log && section != GameSection::Log {
             self.log.update(cx, |l, _| l.stop());
         }
@@ -566,11 +607,11 @@ impl Render for GameSettingsView {
                     .cleanable(true)
                     .mb_2(),
             )
-            .children(GameSection::ALL.map(|s| {
+            .children(self.sections().into_iter().map(|s| {
                 nav_button(
                     ElementId::Name(format!("game-settings-nav-{}", s.id()).into()),
                     s.icon(),
-                    s.label(),
+                    self.label_of(s),
                     !searching && s == self.section,
                     cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
                 )

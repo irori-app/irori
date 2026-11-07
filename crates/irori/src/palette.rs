@@ -49,6 +49,8 @@ enum PaletteTarget {
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
     SaveBackups(GameId),
+    /// Show a Steam game's Steam Play choice (Linux).
+    SteamPlay(GameId),
     BackUp,
     Sync,
     /// Save a clip of the replay buffer.
@@ -146,6 +148,19 @@ impl Palette {
                         .keywords(keywords)
                         .icon(IconName::X),
                     PaletteTarget::PlayStatus(game.id(), None),
+                    targets,
+                );
+            }
+            if irori_game::ops::offers_steam_play(&game.id()) {
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.steam_play",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords([t("shell.palette.steam_play_keywords")])
+                        .icon(IconName::Wine),
+                    PaletteTarget::SteamPlay(game.id()),
                     targets,
                 );
             }
@@ -499,6 +514,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
         }
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

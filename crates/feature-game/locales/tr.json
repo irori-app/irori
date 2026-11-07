@@ -731,5 +731,6 @@
   "game.related.developer": "Yine {name} yapımı",
   "game.related.publisher": "Yine {name} yayını",
   "game.related.genres": "Ortak türler: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

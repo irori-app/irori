@@ -120,5 +120,7 @@
   "shell.palette.views_keywords": "vy sparad filter",
   "shell.palette.save_view": "Spara bibliotekets aktuella vy…",
   "shell.palette.add_folder": "Lägg till spel från en mapp…",
-  "shell.palette.add_folder_keywords": "mapp sök importera lägg till program"
+  "shell.palette.add_folder_keywords": "mapp sök importera lägg till program",
+  "shell.palette.steam_play": "Steam Play-verktyg för {title}",
+  "shell.palette.steam_play_keywords": "proton kompatibilitetsverktyg steam play ge-proton"
 }

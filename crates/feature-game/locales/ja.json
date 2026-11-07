@@ -731,5 +731,6 @@
   "game.related.developer": "{name} の作品",
   "game.related.publisher": "{name} の発売タイトル",
   "game.related.genres": "共通のジャンル：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

@@ -120,5 +120,7 @@
   "shell.palette.views_keywords": "ビュー 保存 フィルター",
   "shell.palette.save_view": "ライブラリの現在のビューを保存…",
   "shell.palette.add_folder": "フォルダーからゲームを追加…",
-  "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム"
+  "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム",
+  "shell.palette.steam_play": "{title} の Steam Play ツール",
+  "shell.palette.steam_play_keywords": "proton 互換性ツール steam play ge-proton"
 }
