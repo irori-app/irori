@@ -3,7 +3,9 @@
 ;
 ;   iscc /DVersion=0.1.0 /DSource=dist\Irori /DOutput=dist packaging\windows\irori.iss
 ;
-; Source is the folder package.py stages for Windows.
+; Source is the folder package.py stages for Windows. /DArch=arm64 builds the
+; arm64 setup from an arm64 folder; the default is x64. Both share one AppId,
+; so either replaces the other in place.
 
 #ifndef Version
   #error Pass the version: /DVersion=x.y.z
@@ -13,6 +15,19 @@
 #endif
 #ifndef Output
   #define Output "..\..\dist"
+#endif
+#ifndef Arch
+  #define Arch "x64"
+#endif
+#if Arch == "x64"
+  ; x64 Windows, and arm64 Windows through its x64 emulation.
+  #define Allowed "x64compatible"
+  #define Suffix ""
+#elif Arch == "arm64"
+  #define Allowed "arm64"
+  #define Suffix "-arm64"
+#else
+  #error Arch is x64 or arm64
 #endif
 
 [Setup]
@@ -27,14 +42,14 @@ DefaultDirName={localappdata}\Programs\Irori
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed={#Allowed}
+ArchitecturesInstallIn64BitMode={#Allowed}
 LicenseFile={#Source}\LICENSE.txt
 SetupIconFile=..\irori.ico
 UninstallDisplayIcon={app}\irori.exe
 UninstallDisplayName=Irori
 OutputDir={#Output}
-OutputBaseFilename=Irori-{#Version}-windows-setup
+OutputBaseFilename=Irori-{#Version}-windows{#Suffix}-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -64,7 +79,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#Source}\irori.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\irori-sign-in.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+; x64 only: arm64 programs never import it.
+#if Arch == "x64"
 Source: "{#Source}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 Source: "{#Source}\irori.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 

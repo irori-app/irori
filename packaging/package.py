@@ -7,6 +7,11 @@
 `--appimage` (Linux) also writes an AppImage with appimagetool, and `--portable`
 (Windows) a zip whose Irori keeps everything in its own folder.
 
+The architecture is read from the binaries: x86-64 or arm64. x86-64 packages
+keep their plain names (`Irori-X.Y.Z-linux.tar.gz`, `Irori-X.Y.Z-windows.zip`),
+so the links and package managers made for them keep working; arm64 ones add
+`-arm64` (`-aarch64` for the AppImage, as AppImages are named).
+
 Signing is deliberately separate: use a Developer ID for public macOS releases
 and Authenticode for Windows. CI packages are unsigned test artifacts.
 """
@@ -82,7 +87,17 @@ def make_dmg(app: Path, dmg: Path, identity: str) -> None:
         subprocess.run(["codesign", "--force", "--sign", identity, "--timestamp", str(dmg)], check=True)
 
 
+# The Visual C++ runtime Irori's executables import. vcruntime140_1.dll
+# holds x64's exception handling only: arm64 programs never import it, and
+# the copy in Visual Studio's arm64 redistributable folder is itself x64
+# (for emulated programs), so arm64 packages ship without it.
 WINDOWS_CRT_FILES = ("vcruntime140.dll", "vcruntime140_1.dll")
+WINDOWS_ARM64_CRT_FILES = ("vcruntime140.dll",)
+
+
+def windows_crt_files(arch: str) -> tuple[str, ...]:
+    """The redistributable DLLs a package for `arch` bundles."""
+    return WINDOWS_ARM64_CRT_FILES if arch == "arm64" else WINDOWS_CRT_FILES
 
 # Read by `irori_core::paths::portable_root`; its text is for whoever opens it.
 PORTABLE_MARKER = "portable"
@@ -97,8 +112,6 @@ Manager, so on another computer you sign in to your stores again.
 Delete this file to use the usual folders in your user profile instead.
 """
 
-# AppImageUpdate finds new versions on the GitHub release marked latest.
-APPIMAGE_UPDATE_INFORMATION = "gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync"
 # The AppImage bundles no libraries, so nothing leaks into the games Irori
 # starts through LD_LIBRARY_PATH. Irori uses the system's GPU and window
 # libraries, as the tarball does, and the sign-in window the system's
@@ -112,19 +125,27 @@ exec "$here/usr/bin/irori" "$@"
 # Libraries Irori must start without (AGENTS.md, "WebKitGTK must stay optional").
 SIGN_IN_ONLY_LIBRARIES = ("libwebkit2gtk", "libjavascriptcoregtk", "libgtk-3", "libsoup")
 
-ELF_X86_64 = 62
+# ELF machine numbers, and the names Linux gives those architectures
+# (`uname -m`, which AppImages and appimagetool's `ARCH` use too).
+ELF_X86_64, ELF_AARCH64 = 62, 183
+LINUX_ARCHES = {ELF_X86_64: "x86_64", ELF_AARCH64: "aarch64"}
 PT_LOAD, PT_DYNAMIC = 1, 2
 DT_NEEDED, DT_STRTAB = 1, 5
 
 
-def elf_needed(binary: Path) -> list[str]:
-    """The libraries a 64-bit little-endian ELF executable links (`DT_NEEDED`).
-    Fails for anything that isn't an x86-64 Linux executable."""
-    data = binary.read_bytes()
-    if data[:4] != b"\x7fELF" or data[4] != 2 or data[5] != 1:
+def elf_machine(binary: Path) -> int:
+    """The machine a 64-bit little-endian ELF executable is built for."""
+    with binary.open("rb") as file:
+        header = file.read(20)
+    if len(header) < 20 or header[:4] != b"\x7fELF" or header[4] != 2 or header[5] != 1:
         raise ValueError(f"Not a 64-bit Linux executable: {binary}")
-    if struct.unpack_from("<H", data, 18)[0] != ELF_X86_64:
-        raise ValueError(f"The AppImage currently requires x86-64 binaries: {binary}")
+    return struct.unpack_from("<H", header, 18)[0]
+
+
+def elf_needed(binary: Path) -> list[str]:
+    """The libraries a 64-bit little-endian ELF executable links (`DT_NEEDED`)."""
+    elf_machine(binary)
+    data = binary.read_bytes()
     phoff, = struct.unpack_from("<Q", data, 32)
     phentsize, phnum = struct.unpack_from("<HH", data, 54)
     loads, dynamic = [], None
@@ -145,19 +166,33 @@ def elf_needed(binary: Path) -> list[str]:
     return [data[base + value:data.index(b"\0", base + value)].decode() for tag, value in entries if tag == DT_NEEDED]
 
 
-def validate_linux_x64(binaries: list[Path]) -> None:
-    """Never put another architecture in the x86-64 AppImage, nor let Irori
-    itself depend on the sign-in window's libraries."""
+def validate_linux(binaries: list[Path]) -> str:
+    """The architecture both programs are built for (`x86_64` or `aarch64`).
+    Never mix two in one package, nor let Irori itself depend on the sign-in
+    window's libraries."""
+    arches = set()
     for binary in binaries:
-        needed = elf_needed(binary)
+        machine = elf_machine(binary)
+        if machine not in LINUX_ARCHES:
+            raise ValueError(f"Linux packages are for x86-64 and arm64 only: {binary}")
+        arches.add(LINUX_ARCHES[machine])
         if binary.name == "irori":
-            for library in needed:
+            for library in elf_needed(binary):
                 if library.startswith(SIGN_IN_ONLY_LIBRARIES):
                     raise RuntimeError(f"irori links {library}, so it would not start without WebKitGTK. "
                                        "Only irori-sign-in may link it.")
+    if len(arches) > 1:
+        raise ValueError(f"irori and irori-sign-in are built for different architectures: {', '.join(sorted(arches))}")
+    return arches.pop()
 
 
-def appimagetool_command(appdir: Path, appimage: Path) -> list[str]:
+def appimage_update_information(arch: str) -> str:
+    """Where AppImageUpdate finds new versions: the GitHub release marked
+    latest, and its AppImage for the same architecture."""
+    return f"gh-releases-zsync|irori-app|irori|latest|Irori-*-{arch}.AppImage.zsync"
+
+
+def appimagetool_command(appdir: Path, appimage: Path, arch: str) -> list[str]:
     """appimagetool's command line. `IRORI_APPIMAGETOOL` names the tool (else
     `appimagetool` on PATH) and `IRORI_APPIMAGE_RUNTIME` a pinned runtime
     (else the tool downloads its own)."""
@@ -166,15 +201,15 @@ def appimagetool_command(appdir: Path, appimage: Path) -> list[str]:
         raise FileNotFoundError("Install appimagetool or set IRORI_APPIMAGETOOL to build the AppImage.")
     # zstd in 128 KiB blocks, appimagetool's default: smaller than its xz and
     # quicker to start than larger blocks (appimagetool issue 64).
-    command = [tool, "--no-appstream", "--comp", "zstd", "--updateinformation", APPIMAGE_UPDATE_INFORMATION]
+    command = [tool, "--no-appstream", "--comp", "zstd", "--updateinformation", appimage_update_information(arch)]
     if runtime := os.environ.get("IRORI_APPIMAGE_RUNTIME"):
         command += ["--runtime-file", runtime]
     return [*command, str(appdir), str(appimage)]
 
 
-def make_appimage(root: Path, binaries: list[Path], output: Path, version: str) -> Path:
-    """`Irori-X.Y.Z-x86_64.AppImage` and, for AppImageUpdate, its `.zsync`."""
-    appimage = output / f"Irori-{version}-x86_64.AppImage"
+def make_appimage(root: Path, binaries: list[Path], output: Path, version: str, arch: str) -> Path:
+    """`Irori-X.Y.Z-<arch>.AppImage` and, for AppImageUpdate, its `.zsync`."""
+    appimage = output / f"Irori-{version}-{arch}.AppImage"
     if appimage.exists():
         raise FileExistsError(f"Never overwriting {appimage}")
     with tempfile.TemporaryDirectory() as temporary:
@@ -195,10 +230,10 @@ def make_appimage(root: Path, binaries: list[Path], output: Path, version: str) 
         run = appdir / "AppRun"
         run.write_text(APPIMAGE_RUN)
         run.chmod(0o755)
-        environment = {**os.environ, "ARCH": "x86_64", "VERSION": version,
+        environment = {**os.environ, "ARCH": arch, "VERSION": version,
                        # The tool is an AppImage itself; containers have no FUSE.
                        "APPIMAGE_EXTRACT_AND_RUN": "1"}
-        subprocess.run(appimagetool_command(appdir, appimage), check=True, env=environment, cwd=output)
+        subprocess.run(appimagetool_command(appdir, appimage, arch), check=True, env=environment, cwd=output)
     if not appimage.is_file():
         raise RuntimeError(f"appimagetool did not write {appimage}")
     if not appimage.with_name(appimage.name + ".zsync").is_file():
@@ -220,20 +255,44 @@ def make_portable_zip(staging: Path, archive: Path) -> None:
         zip_file.writestr(f"{folder}/{PORTABLE_MARKER}", PORTABLE_NOTE)
 
 
-def validate_windows_x64(binary: Path) -> None:
-    """Never mix an ARM/x86 executable with the x64 redistributable."""
+# PE machine numbers, and the names Windows and its toolchain give those
+# architectures (the Visual C++ redistributable's folders, Inno Setup's).
+PE_X64, PE_ARM64 = 0x8664, 0xAA64
+WINDOWS_ARCHES = {PE_X64: "x64", PE_ARM64: "arm64"}
+# The Visual Studio component that installs each architecture's compiler and
+# its redistributable.
+WINDOWS_TOOLS_COMPONENT = {
+    "x64": "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+    "arm64": "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+}
+
+
+def windows_arch(binary: Path) -> str:
+    """`x64` or `arm64`, read from a Windows executable or DLL."""
     with binary.open("rb") as file:
         dos = file.read(64)
         if len(dos) != 64 or dos[:2] != b"MZ":
             raise ValueError(f"Not a Windows executable: {binary}")
         file.seek(struct.unpack_from("<I", dos, 60)[0])
         pe = file.read(6)
-    if len(pe) != 6 or pe[:4] != b"PE\0\0" or struct.unpack_from("<H", pe, 4)[0] != 0x8664:
-        raise ValueError(f"Windows packaging currently requires x64 binaries: {binary}")
+    if len(pe) != 6 or pe[:4] != b"PE\0\0":
+        raise ValueError(f"Not a Windows executable: {binary}")
+    machine = struct.unpack_from("<H", pe, 4)[0]
+    if machine not in WINDOWS_ARCHES:
+        raise ValueError(f"Windows packages are for x64 and arm64 only: {binary}")
+    return WINDOWS_ARCHES[machine]
 
 
-def windows_crt_directory() -> Path:
-    """Find the installed toolchain's redistributable, never arbitrary system DLLs."""
+def validate_windows(binaries: list[Path], arch: str) -> None:
+    """Never mix architectures, as an x64 Irori with an arm64 redistributable."""
+    for binary in binaries:
+        if (found := windows_arch(binary)) != arch:
+            raise ValueError(f"{binary.name} is {found}, but the package is {arch}: {binary}")
+
+
+def windows_crt_directory(arch: str = "x64") -> Path:
+    """Find the installed toolchain's redistributable for `arch`, never
+    arbitrary system DLLs."""
     explicit = os.environ.get("IRORI_WINDOWS_CRT_DIR")
     if explicit:
         candidates = [Path(explicit)]
@@ -245,7 +304,7 @@ def windows_crt_directory() -> Path:
         if vswhere.is_file():
             installation = subprocess.run(
                 [str(vswhere), "-latest", "-products", "*", "-requires",
-                 "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+                 WINDOWS_TOOLS_COMPONENT[arch], "-property", "installationPath"],
                 check=True, capture_output=True, text=True,
             ).stdout.strip()
             if installation:
@@ -253,14 +312,20 @@ def windows_crt_directory() -> Path:
                 versions = [p for p in redist.glob("*") if p.is_dir()]
                 versions.sort(key=lambda p: tuple(int(x) for x in p.name.split(".") if x.isdecimal()), reverse=True)
                 roots.extend(versions)
-        candidates = [candidate for root in roots for candidate in root.glob("x64/Microsoft.VC*.CRT")]
+        candidates = [candidate for root in roots for candidate in root.glob(f"{arch}/Microsoft.VC*.CRT")]
     for candidate in candidates:
-        if all((candidate / name).is_file() for name in WINDOWS_CRT_FILES):
+        if all((candidate / name).is_file() for name in windows_crt_files(arch)):
             return candidate
     raise FileNotFoundError(
-        "Missing x64 Visual C++ redistributable DLLs. Install the Visual Studio C++ tools, "
-        "or set IRORI_WINDOWS_CRT_DIR to their x64 Microsoft.VC*.CRT directory."
+        f"Missing {arch} Visual C++ redistributable DLLs. Install the Visual Studio C++ tools for {arch}, "
+        f"or set IRORI_WINDOWS_CRT_DIR to their {arch} Microsoft.VC*.CRT directory."
     )
+
+
+def name_suffix(arch: str) -> str:
+    """What package names add for an architecture: nothing for x86-64, whose
+    names predate arm64 packages and are what links and manifests point at."""
+    return "" if arch in ("x86_64", "x64") else "-arm64"
 
 
 def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
@@ -280,14 +345,13 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
     if platform == "macos":
         for binary in binaries:
             validate_macos_dependencies(binary)
-    if appimage:
-        validate_linux_x64(binaries)
+    linux_arch = validate_linux(binaries) if platform == "linux" else None
     windows_runtime = []
     if platform == "windows":
-        runtime_directory = windows_crt_directory()
-        windows_runtime = [runtime_directory / name for name in WINDOWS_CRT_FILES]
-        for binary in [*binaries, *windows_runtime]:
-            validate_windows_x64(binary)
+        arch = windows_arch(binaries[0])
+        runtime_directory = windows_crt_directory(arch)
+        windows_runtime = [runtime_directory / name for name in windows_crt_files(arch)]
+        validate_windows([*binaries, *windows_runtime], arch)
     output.mkdir(parents=True, exist_ok=True)
     staging = output / ("Irori.app" if platform == "macos" else "Irori")
     staging.mkdir()  # Never overwrite an existing package or unrelated files.
@@ -329,23 +393,23 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
         shutil.copy2(root / "packaging/irori.svg", staging)
         shutil.copy2(root / "packaging/irori.ico", staging)
         shutil.copy2(root / "LICENSE", staging / "LICENSE.txt")
-        archive = output / f"Irori-{version}-windows.zip"
+        archive = output / f"Irori-{version}-windows{name_suffix(arch)}.zip"
         with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as zip_file:
             for file in staging.rglob("*"):
                 if file.is_file():
                     zip_file.write(file, file.relative_to(output))
         if portable:
-            make_portable_zip(staging, output / f"Irori-{version}-windows-portable.zip")
+            make_portable_zip(staging, output / f"Irori-{version}-windows{name_suffix(arch)}-portable.zip")
     else:
         shutil.copy2(root / "packaging/irori.desktop", staging)
         shutil.copy2(root / "packaging/irori.svg", staging)
         shutil.copy2(root / "packaging/linux/app.irori.Irori.metainfo.xml", staging)
         shutil.copy2(root / "LICENSE", staging)
-        archive = output / f"Irori-{version}-linux.tar.gz"
+        archive = output / f"Irori-{version}-linux{name_suffix(linux_arch)}.tar.gz"
         with tarfile.open(archive, "x:gz") as tar:
             tar.add(staging, arcname="Irori")
         if appimage:
-            make_appimage(root, binaries, output, version)
+            make_appimage(root, binaries, output, version, linux_arch)
     return archive
 
 

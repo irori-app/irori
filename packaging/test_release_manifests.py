@@ -15,7 +15,8 @@ class ReleaseManifestTests(unittest.TestCase):
         self.dist = Path(temporary.name)
         self.sums = {}
         for name in ("Irori-1.2.3-linux.tar.gz", "Irori-1.2.3-macos-arm64.dmg",
-                     "Irori-1.2.3-macos-x86_64.dmg", "Irori-1.2.3-windows.zip"):
+                     "Irori-1.2.3-macos-x86_64.dmg", "Irori-1.2.3-windows.zip",
+                     "Irori-1.2.3-windows-arm64.zip"):
             data = name.encode()
             (self.dist / name).write_bytes(data)
             self.sums[name] = hashlib.sha256(data).hexdigest()
@@ -40,6 +41,9 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertEqual(scoop["homepage"], "https://irori.app")
         self.assertEqual(scoop["architecture"]["64bit"]["hash"], self.sums["Irori-1.2.3-windows.zip"])
         self.assertTrue(scoop["architecture"]["64bit"]["url"].endswith("/v1.2.3/Irori-1.2.3-windows.zip"))
+        self.assertEqual(scoop["architecture"]["arm64"]["hash"], self.sums["Irori-1.2.3-windows-arm64.zip"])
+        self.assertTrue(scoop["architecture"]["arm64"]["url"].endswith("/v1.2.3/Irori-1.2.3-windows-arm64.zip"))
+        self.assertTrue(scoop["autoupdate"]["architecture"]["arm64"]["url"].endswith("Irori-$version-windows-arm64.zip"))
 
     def test_arch_repository_pkgbuild_builds_plain_names_from_the_local_tarball(self):
         text = release_manifests.pkgbuild("1.2.3", "irori-app/irori", "abc123", aur=False)

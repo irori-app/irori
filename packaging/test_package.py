@@ -29,7 +29,7 @@ def write_pe(path: Path, machine: int = 0x8664) -> None:
 
 
 def write_elf(path: Path, needed: list[str], machine: int = package.ELF_X86_64) -> None:
-    """A minimal x86-64 executable header that links `needed`."""
+    """A minimal executable header for `machine` that links `needed`."""
     base, phoff, phnum = 0x400000, 64, 2
     strtab = b"\0" + b"".join(name.encode() + b"\0" for name in needed)
     strtab_offset = phoff + 56 * phnum
@@ -124,12 +124,26 @@ class LinuxPackagingTests(unittest.TestCase):
         _, seen = self.build_appimage()
         command = seen["command"]
         self.assertEqual(command[0], str(self.tool))
-        self.assertEqual(command[command.index("--updateinformation") + 1], package.APPIMAGE_UPDATE_INFORMATION)
+        self.assertEqual(command[command.index("--updateinformation") + 1],
+                         "gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync")
         self.assertEqual(command[command.index("--runtime-file") + 1], str(self.runtime))
         self.assertEqual(seen["env"]["ARCH"], "x86_64")
         self.assertEqual(seen["env"]["VERSION"], self.version())
-        self.assertTrue(package.APPIMAGE_UPDATE_INFORMATION.startswith("gh-releases-zsync|irori-app|irori|latest|"))
         self.assertTrue((self.root / f"output/Irori-{self.version()}-x86_64.AppImage.zsync").is_file())
+
+    @needs_posix_links
+    def test_arm64_packages_are_named_for_their_architecture(self):
+        write_elf(self.binaries / "irori", ["libxkbcommon.so.0", "libc.so.6"], machine=package.ELF_AARCH64)
+        write_elf(self.binaries / "irori-sign-in", ["libc.so.6"], machine=package.ELF_AARCH64)
+        tarball, seen = self.build_appimage()
+        output = self.root / "output"
+        self.assertEqual(tarball, output / f"Irori-{self.version()}-linux-arm64.tar.gz")
+        self.assertTrue((output / f"Irori-{self.version()}-aarch64.AppImage").is_file())
+        self.assertEqual(seen["env"]["ARCH"], "aarch64")
+        # An arm64 AppImage never updates itself to the x86-64 one.
+        command = seen["command"]
+        self.assertEqual(command[command.index("--updateinformation") + 1],
+                         "gh-releases-zsync|irori-app|irori|latest|Irori-*-aarch64.AppImage.zsync")
 
     @needs_posix_links
     def test_update_information_needs_its_zsync_file(self):
@@ -143,9 +157,12 @@ class LinuxPackagingTests(unittest.TestCase):
             self.build_appimage()
         self.assertFalse((self.root / "output").exists())
 
-    def test_other_architectures_are_rejected(self):
-        write_elf(self.binaries / "irori-sign-in", ["libc.so.6"], machine=183)  # aarch64
-        with self.assertRaisesRegex(ValueError, "requires x86-64"):
+    def test_mixed_and_other_architectures_are_rejected(self):
+        write_elf(self.binaries / "irori-sign-in", ["libc.so.6"], machine=package.ELF_AARCH64)
+        with self.assertRaisesRegex(ValueError, "different architectures: aarch64, x86_64"):
+            self.build_appimage()
+        write_elf(self.binaries / "irori-sign-in", ["libc.so.6"], machine=243)  # RISC-V
+        with self.assertRaisesRegex(ValueError, "x86-64 and arm64 only"):
             self.build_appimage()
         (self.binaries / "irori-sign-in").write_text("#!/bin/sh\n")
         with self.assertRaisesRegex(ValueError, "Not a 64-bit Linux executable"):
@@ -226,14 +243,37 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertFalse((self.root / "output").exists())
 
     def test_arm_runtime_cannot_be_bundled_with_x64_application(self):
-        write_pe(self.runtime / "vcruntime140.dll", 0xAA64)
-        with self.assertRaisesRegex(ValueError, "requires x64"):
+        write_pe(self.runtime / "vcruntime140.dll", package.PE_ARM64)
+        with self.assertRaisesRegex(ValueError, "vcruntime140.dll is arm64, but the package is x64"):
             package.package("windows", self.binaries, self.root / "output")
         self.assertFalse((self.root / "output").exists())
 
-    def test_x86_application_cannot_be_bundled_with_x64_runtime(self):
+    def test_x86_application_is_rejected(self):
         write_pe(self.binaries / "irori.exe", 0x014C)
-        with self.assertRaisesRegex(ValueError, "requires x64"):
+        with self.assertRaisesRegex(ValueError, "x64 and arm64 only"):
+            package.package("windows", self.binaries, self.root / "output")
+
+    def test_arm64_packages_are_named_for_their_architecture(self):
+        for file in [*self.binaries.iterdir(), self.runtime / "vcruntime140.dll"]:
+            write_pe(file, package.PE_ARM64)
+        # Visual Studio's arm64 folder holds an x64 vcruntime140_1.dll, for
+        # emulated programs; arm64 ones never import it.
+        output = self.root / "output"
+        archive = package.package("windows", self.binaries, output, portable=True)
+        self.assertEqual(archive.name, f"Irori-{self.version()}-windows-arm64.zip")
+        portable = output / f"Irori-{self.version()}-windows-arm64-portable.zip"
+        self.assertTrue(portable.is_file())
+        for path, folder in ((archive, "Irori"), (portable, "Irori-portable")):
+            with zipfile.ZipFile(path) as zipped:
+                names = zipped.namelist()
+                self.assertIn(f"{folder}/irori.exe", names)
+                self.assertIn(f"{folder}/vcruntime140.dll", names)
+                self.assertNotIn(f"{folder}/vcruntime140_1.dll", names)
+
+    def test_arm64_application_cannot_be_bundled_with_x64_runtime(self):
+        for name in ("irori.exe", "irori-sign-in.exe"):
+            write_pe(self.binaries / name, package.PE_ARM64)
+        with self.assertRaisesRegex(ValueError, "is x64, but the package is arm64"):
             package.package("windows", self.binaries, self.root / "output")
 
     def test_invalid_runtime_binary_is_rejected(self):
@@ -246,8 +286,15 @@ class WindowsPackagingTests(unittest.TestCase):
         expected = root / "x64/Microsoft.VC143.CRT"
         for name in package.WINDOWS_CRT_FILES:
             write_pe(expected / name)
+        arm = root / "arm64/Microsoft.VC143.CRT"
+        for name in package.WINDOWS_ARM64_CRT_FILES:
+            write_pe(arm / name, package.PE_ARM64)
         with patch.dict(os.environ, {"IRORI_WINDOWS_CRT_DIR": "", "VCToolsRedistDir": str(root), "ProgramFiles(x86)": str(self.root / "absent") }):
             self.assertEqual(package.windows_crt_directory(), expected)
+            self.assertEqual(package.windows_crt_directory("arm64"), arm)
+
+    def version(self):
+        return tomllib.loads((Path(package.__file__).resolve().parent.parent / "Cargo.toml").read_text())["workspace"]["package"]["version"]
 
 
 if __name__ == "__main__":

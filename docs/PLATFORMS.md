@@ -7,10 +7,12 @@ different native OS is rejected before launch.
 
 | Host | Native game builds | Windows game builds | Runtime manager |
 | --- | --- | --- | --- |
-| Linux | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wine-GE, Kron4ek |
+| Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wine-GE, Kron4ek |
+| Linux arm64 | Linux, browser | Wine / Proton / umu | The arm64 builds of GE-Proton and CachyOS |
 | macOS Intel | macOS, browser | macOS Wine / CrossOver | Wine-Crossover, Wine-Staging-macOS |
 | macOS Apple silicon | macOS, browser | macOS Wine / CrossOver / Whisky / GPTK | Game-Porting-Toolkit, Wine-Crossover, Wine-Staging-macOS |
 | Windows x64 | Windows, browser | Native execution | No Wine download required |
+| Windows arm64 | Windows, browser | Native execution (x64 games through Windows' own emulation) | No Wine download required |
 
 The GPTK tab is shown on macOS, but its builds are compatible only with Apple
 silicon on macOS 14 or later. Intel Wine on Apple silicon requires Rosetta 2;
@@ -70,7 +72,7 @@ Both binaries are required, so a package never silently omits store sign-in.
 
 - Linux needs the GPUI libraries listed in CI, plus GTK 3 and WebKitGTK 4.1 for
   sign-in. `packaging/install.sh` retains the per-user Linux installation flow.
-  `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` and its `.zsync` (see
+  `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` (`-aarch64` on arm64) and its `.zsync` (see
   [AppImage](#appimage)). It needs [appimagetool](https://github.com/AppImage/appimagetool)
   (`IRORI_APPIMAGETOOL`, else on `PATH`) and `zsyncmake`; `IRORI_APPIMAGE_RUNTIME`
   names the AppImage runtime to use instead of the one appimagetool downloads.
@@ -84,10 +86,10 @@ Both binaries are required, so a package never silently omits store sign-in.
 - Windows needs the MSVC Rust toolchain, Visual Studio C++ Build Tools/Windows
   SDK, and WebView2 Runtime for sign-in. Unzip and run the included `install.ps1`
   to install under LocalAppData and register a Start-menu shortcut and URL
-  handler. Packaging includes the x64 Visual C++ runtime DLLs from the installed
+  handler. Packaging includes the Visual C++ runtime DLLs for the binaries' architecture (x64 or arm64) from the installed
   Visual Studio redistributable directory, so Irori does not depend on build tools
   or an existing VC runtime installation on the user's machine. Set
-  `IRORI_WINDOWS_CRT_DIR` to an explicit x64 `Microsoft.VC*.CRT` directory if
+  `IRORI_WINDOWS_CRT_DIR` to an explicit `x64` or `arm64` `Microsoft.VC*.CRT` directory if
   discovery cannot find it. Keep the build toolchain current and rebuild packages
   to ship runtime security updates; these app-local DLLs are updated with Irori.
   See Microsoft's [deployment guidance](https://learn.microsoft.com/en-us/cpp/windows/deployment-in-visual-cpp).
@@ -96,7 +98,13 @@ Both binaries are required, so a package never silently omits store sign-in.
   Authenticode signing before distribution. `--portable` also writes
   `Irori-X.Y.Z-windows-portable.zip` (see [Portable Windows build](#portable-windows-build)).
 
-CI builds and tests Linux, Windows x64, macOS Intel and Apple silicon and uploads
+Package names follow the binaries' architecture, read from them: x86-64 packages keep
+their plain names (`Irori-X.Y.Z-linux.tar.gz`, `Irori-X.Y.Z-windows.zip`), and arm64 ones
+add `-arm64` (`Irori-X.Y.Z-linux-arm64.tar.gz`, `Irori-X.Y.Z-windows-arm64-setup.exe`),
+or `-aarch64` for the AppImage. `.deb` and `.rpm` names carry their own (`arm64`,
+`aarch64`). Each architecture is built natively; there is no cross-compiling.
+
+CI builds and tests Linux x86-64 and arm64, Windows x64 and arm64, macOS Intel and Apple silicon and uploads
 unsigned validation packages using the small `ci` Cargo profile. It does not publish a release.
 `release.yml` builds the release packages (tarball, AppImage, `.deb`, `.rpm`, Flatpak,
 macOS disk images, the Windows installer, zip and portable zip), tests that they install and start, and
@@ -435,7 +443,7 @@ program called `portable`.
 
 ### AppImage
 
-`Irori-X.Y.Z-x86_64.AppImage` holds `irori`, `irori-sign-in`, the desktop entry, the icon
+`Irori-X.Y.Z-x86_64.AppImage` (and `Irori-X.Y.Z-aarch64.AppImage` for arm64) holds `irori`, `irori-sign-in`, the desktop entry, the icon
 and the AppStream metainfo, and nothing else: no libraries. It is built on Ubuntu 22.04
 from the same binaries as the tarball and the `.deb`, so it runs where they run (glibc
 2.35 or newer) and uses the system's graphics, Vulkan, Wayland, X11 and font libraries.
@@ -452,7 +460,8 @@ setting came out larger (34 MB), and larger blocks start slower.
   The store window (Stores → Open store) is the same program and falls back to the
   browser the same way.
 - **Updates.** The AppImage carries update information
-  (`gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync`), so
+  (`gh-releases-zsync|irori-app|irori|latest|Irori-*-x86_64.AppImage.zsync`, or
+  `-aarch64` on arm64, so an AppImage never turns into the other architecture's):
   AppImageUpdate, Gear Lever and AppImageLauncher download only the changed blocks
   from the latest release's `.zsync`. Irori itself treats it as a manual install
   (below) and links to the release page.

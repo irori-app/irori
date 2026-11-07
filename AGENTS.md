@@ -1280,16 +1280,21 @@ building and the release checklist.
 
 - Requires both `irori` and `irori-sign-in`, so a package never silently loses the
   sign-in window.
-- Linux: a tarball with the desktop entry and icon. `--appimage` adds an x86-64
-  AppImage (appimagetool, zsync update information) that bundles no libraries and
-  refuses an `irori` linking WebKitGTK.
+- Packages are x86-64 or arm64, read from the binaries; x86-64 names have no
+  architecture suffix (they predate arm64 packages), arm64 ones add `-arm64`.
+- Linux: a tarball with the desktop entry and icon. `--appimage` adds an
+  AppImage for the binaries' architecture (appimagetool, zsync update
+  information) that bundles no libraries and refuses an `irori` linking
+  WebKitGTK.
 - macOS: `Irori.app` with the `irori://` scheme.
   - Rejects any dylib outside the system paths.
   - Signs the helper before the bundle (`IRORI_SIGN_IDENTITY`, ad-hoc by default).
   - Notarization is a separate, manual step.
 - Windows: a zip with `install.ps1`.
-  - Checks that every binary is x64.
-  - Bundles `vcruntime140.dll` and `vcruntime140_1.dll`.
+  - Checks that every binary, the redistributable included, has one
+    architecture (x64 or arm64).
+  - Bundles `vcruntime140.dll` and, for x64, `vcruntime140_1.dll` (arm64 programs
+    never import it).
   - The installer installs per user under `%LOCALAPPDATA%\Programs\Irori` and
     registers the URL handler and a Start-menu shortcut.
   - `--portable` adds a zip without `install.ps1` and with the `portable` marker.

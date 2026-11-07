@@ -10,7 +10,7 @@ Reads the release's archives from `--dist` for their checksums and writes:
   with `--arch-repository`, only `arch/PKGBUILD` for Irori's own pacman
   repository (`irori`, `irori-sign-in`);
 - `homebrew/Casks/irori.rb`: the cask, from both macOS disk images;
-- `scoop/bucket/irori.json`: the Scoop manifest, from the Windows zip.
+- `scoop/bucket/irori.json`: the Scoop manifest, from the x64 and arm64 Windows zips.
 """
 import argparse
 import hashlib
@@ -35,6 +35,7 @@ def artifacts(version: str, dist: Path) -> dict[str, Path]:
         "macos-arm64": f"Irori-{version}-macos-arm64.dmg",
         "macos-x86_64": f"Irori-{version}-macos-x86_64.dmg",
         "windows": f"Irori-{version}-windows.zip",
+        "windows-arm64": f"Irori-{version}-windows-arm64.zip",
     }
     found = {key: dist / name for key, name in names.items()}
     missing = [path.name for path in found.values() if not path.is_file()]
@@ -137,25 +138,32 @@ end
 """
 
 
-def scoop(version: str, repo: str, windows_sha: str) -> str:
+def scoop(version: str, repo: str, windows_sha: str, arm64_sha: str) -> str:
     base = f"https://github.com/{repo}/releases/download"
     manifest = {
         "version": version,
         "description": "Every game you own, around one fire: Epic Games, GOG, Amazon Games, itch.io and emulators",
         "homepage": HOMEPAGE,
         "license": "MIT",
-        "architecture": {"64bit": {
-            "url": f"{base}/v{version}/Irori-{version}-windows.zip",
-            "hash": windows_sha,
-            "extract_dir": "Irori",
-        }},
+        "architecture": {
+            "64bit": {
+                "url": f"{base}/v{version}/Irori-{version}-windows.zip",
+                "hash": windows_sha,
+                "extract_dir": "Irori",
+            },
+            "arm64": {
+                "url": f"{base}/v{version}/Irori-{version}-windows-arm64.zip",
+                "hash": arm64_sha,
+                "extract_dir": "Irori",
+            },
+        },
         "bin": "irori.exe",
         "shortcuts": [["irori.exe", "Irori"]],
         "checkver": {"github": f"https://github.com/{repo}"},
-        "autoupdate": {"architecture": {"64bit": {
-            "url": f"{base}/v$version/Irori-$version-windows.zip",
-            "extract_dir": "Irori",
-        }}},
+        "autoupdate": {"architecture": {
+            "64bit": {"url": f"{base}/v$version/Irori-$version-windows.zip", "extract_dir": "Irori"},
+            "arm64": {"url": f"{base}/v$version/Irori-$version-windows-arm64.zip", "extract_dir": "Irori"},
+        }},
     }
     return json.dumps(manifest, indent=4) + "\n"
 
@@ -168,7 +176,7 @@ def render(version: str, dist: Path, repo: str) -> dict[str, str]:
         "homebrew/Casks/irori.rb": CASK.format(
             version=version, repo=repo, homepage=HOMEPAGE,
             arm_sha=sha256(found["macos-arm64"]), intel_sha=sha256(found["macos-x86_64"])),
-        "scoop/bucket/irori.json": scoop(version, repo, sha256(found["windows"])),
+        "scoop/bucket/irori.json": scoop(version, repo, sha256(found["windows"]), sha256(found["windows-arm64"])),
     }
 
 

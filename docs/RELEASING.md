@@ -26,14 +26,22 @@ with its tag.
 
 | File | Built on | Signed when |
 | --- | --- | --- |
-| `Irori-X.Y.Z-linux.tar.gz` | Ubuntu 22.04 | — |
-| `Irori-X.Y.Z-x86_64.AppImage` (and `.AppImage.zsync` for AppImageUpdate) | Ubuntu 22.04 | — |
-| `irori_X.Y.Z-1_amd64.deb`, `irori-sign-in_X.Y.Z-1_amd64.deb` | Ubuntu 22.04 | The apt repository is signed |
-| `irori-X.Y.Z-1.x86_64.rpm`, `irori-sign-in-X.Y.Z-1.x86_64.rpm` | Ubuntu 22.04 | Signed when published to the dnf repository |
-| `irori-X.Y.Z-1-x86_64.pkg.tar.zst`, `irori-sign-in-X.Y.Z-1-x86_64.pkg.tar.zst` | Arch Linux | Signed when published to the pacman repository |
-| `Irori-X.Y.Z-linux.flatpak` | GNOME 50 SDK | — |
+| `Irori-X.Y.Z-linux.tar.gz`, `Irori-X.Y.Z-linux-arm64.tar.gz` | Ubuntu 22.04 (x86-64, arm64) | — |
+| `Irori-X.Y.Z-x86_64.AppImage`, `Irori-X.Y.Z-aarch64.AppImage` (and `.AppImage.zsync` for AppImageUpdate) | Ubuntu 22.04 (x86-64, arm64) | — |
+| `irori_X.Y.Z-1_amd64.deb`, `irori-sign-in_X.Y.Z-1_amd64.deb` (and `_arm64.deb`) | Ubuntu 22.04 (x86-64, arm64) | The apt repository is signed |
+| `irori-X.Y.Z-1.x86_64.rpm`, `irori-sign-in-X.Y.Z-1.x86_64.rpm` (and `.aarch64.rpm`) | Ubuntu 22.04 (x86-64, arm64) | Signed when published to the dnf repository |
+| `irori-X.Y.Z-1-x86_64.pkg.tar.zst`, `irori-sign-in-X.Y.Z-1-x86_64.pkg.tar.zst` | Arch Linux (x86-64 only, as Arch is) | Signed when published to the pacman repository |
+| `Irori-X.Y.Z-linux.flatpak`, `Irori-X.Y.Z-linux-arm64.flatpak` | GNOME 50 SDK (x86-64, arm64) | — |
 | `Irori-X.Y.Z-macos-arm64.dmg` / `-x86_64.dmg` (and `.zip`) | macOS 15 | `MACOS_*` secrets; notarized with the `APPLE_*` secrets too |
-| `Irori-X.Y.Z-windows-setup.exe`, `Irori-X.Y.Z-windows.zip`, `Irori-X.Y.Z-windows-portable.zip` | Windows Server 2022 | SignPath is configured |
+| `Irori-X.Y.Z-windows-setup.exe`, `Irori-X.Y.Z-windows.zip`, `Irori-X.Y.Z-windows-portable.zip` | Windows Server 2022 (x64) | SignPath is configured |
+| `Irori-X.Y.Z-windows-arm64-setup.exe`, `Irori-X.Y.Z-windows-arm64.zip`, `Irori-X.Y.Z-windows-arm64-portable.zip` | Windows 11 (arm64) | SignPath is configured |
+
+Every architecture builds natively on GitHub's runners (`ubuntu-22.04-arm`,
+`windows-11-arm` for arm64). x86-64 files keep the names they had before arm64
+builds existed, so AppImageUpdate, the package managers and existing links keep
+finding them. The apt and dnf repositories serve both architectures; Scoop and
+winget get both Windows builds; the x64 setup also installs on arm64 Windows,
+where it runs emulated.
 
 Without signing secrets the workflow still builds every package, unsigned. `SHA256SUMS`
 covers every file, and the release job fails when one of the main packages is missing.

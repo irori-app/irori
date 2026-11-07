@@ -44,8 +44,9 @@ jobs:
           name: manifests
           path: manifests
 
-  # The pacman repository, signed with the packaging key. repo-add needs Arch's
-  # own tools, so it is built here and served with the others below.
+  # The pacman repository (x86-64 only, as Arch Linux is), signed with the
+  # packaging key. repo-add needs Arch's own tools, so it is built here and
+  # served with the others below.
   arch-repository:
     if: vars.PUBLISH_PACKAGE_REPOSITORIES == 'true'
     needs: assets
@@ -119,18 +120,23 @@ jobs:
       - name: Build the repositories
         run: |
           base="$PACKAGES_URL"
-          mkdir -p site/apt/pool/main site/apt/dists/stable/main/binary-amd64 site/rpm/x86_64
+          mkdir -p site/apt/pool/main site/rpm/x86_64 site/rpm/aarch64
           cp dist/*.deb site/apt/pool/main/
-          cp dist/*.rpm site/rpm/x86_64/
-          rpm --addsign site/rpm/x86_64/*.rpm
+          cp dist/*.x86_64.rpm site/rpm/x86_64/
+          cp dist/*.aarch64.rpm site/rpm/aarch64/
+          rpm --addsign site/rpm/*/*.rpm
 
           cd site/apt
-          apt-ftparchive packages pool > dists/stable/main/binary-amd64/Packages
-          gzip -k9 dists/stable/main/binary-amd64/Packages
+          # One pool, and a package list per architecture.
+          for arch in amd64 arm64; do
+            mkdir -p "dists/stable/main/binary-$arch"
+            apt-ftparchive --arch "$arch" packages pool > "dists/stable/main/binary-$arch/Packages"
+            gzip -k9 "dists/stable/main/binary-$arch/Packages"
+          done
           apt-ftparchive \
             -o APT::FTPArchive::Release::Origin=Irori -o APT::FTPArchive::Release::Label=Irori \
             -o APT::FTPArchive::Release::Suite=stable -o APT::FTPArchive::Release::Codename=stable \
-            -o APT::FTPArchive::Release::Architectures=amd64 -o APT::FTPArchive::Release::Components=main \
+            -o "APT::FTPArchive::Release::Architectures=amd64 arm64" -o APT::FTPArchive::Release::Components=main \
             release dists/stable > Release.tmp
           mv Release.tmp dists/stable/Release
           gpg --batch --yes --local-user "$FINGERPRINT" --clearsign -o dists/stable/InRelease dists/stable/Release
@@ -254,6 +260,6 @@ jobs:
       - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: Irori.Irori
-          installers-regex: '-windows-setup\.exe$'
+          installers-regex: '-windows(-arm64)?-setup\.exe$'
           release-tag: ${{ env.TAG }}
           token: ${{ secrets.WINGET_TOKEN }}
