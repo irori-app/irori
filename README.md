@@ -14,12 +14,14 @@
   <img alt="Linux, macOS and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-ff6b2c">
   <img alt="19 languages" src="https://img.shields.io/badge/languages-19-ff6b2c">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff6b2c"></a>
+  <a href="https://x.com/irorilauncher"><img alt="Follow @irorilauncher on X" src="https://img.shields.io/badge/follow-%40irorilauncher-ff6b2c?logo=x"></a>
 </p>
 
 <p align="center">
   <a href="https://irori.app"><b>Website</b></a> ·
   <a href="#install"><b>Install</b></a> ·
-  <a href="https://github.com/irori-app/irori/releases/latest"><b>Latest release</b></a>
+  <a href="https://github.com/irori-app/irori/releases/latest"><b>Latest release</b></a> ·
+  <a href="https://x.com/irorilauncher"><b>X (@irorilauncher)</b></a>
 </p>
 
 <p align="center">

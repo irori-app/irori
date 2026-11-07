@@ -17,6 +17,7 @@ import bodyFont from '@fontsource/zen-kaku-gothic-new/files/zen-kaku-gothic-new-
 import Footer from '../components/Footer.astro'
 import Nav from '../components/Nav.astro'
 import { dictionary, LANG_TAGS, LOCALES, localePath, type Locale } from '../i18n/config'
+import { X_HANDLE } from '../data/site'
 import { keyOf } from '../lib/pages'
 
 export interface Crumb {
@@ -83,6 +84,7 @@ const jsonLd = [breadcrumbSchema, ...schema].filter(Boolean)
     <meta property="og:image:height" content="630" />
     <meta property="og:locale" content={LANG_TAGS[locale].og} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content={X_HANDLE} />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
