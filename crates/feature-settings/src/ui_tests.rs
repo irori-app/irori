@@ -373,14 +373,21 @@ fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
     let (handle, view) = open(cx, move |window, cx| {
         GameSettingsView::new(id, "".into(), window, cx)
     });
-    // Steam Play needs the Steam store (Linux); here no handle is installed.
-    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Launch));
+    // Steam Play needs the Steam store (Linux); here no handle is installed,
+    // so the first section shown is Linux's Performance (the replay buffer)
+    // or Launch elsewhere.
+    let first = if cfg!(target_os = "linux") {
+        GameSection::Performance
+    } else {
+        GameSection::Launch
+    };
+    cx.update(|cx| assert_eq!(view.read(cx).section(), first));
     for hidden in ["gpu", "tools", "log", "wine"] {
         cx.update_window(handle, |_, window, cx| {
             view.update(cx, |v, cx| v.set_section(hidden, window, cx));
         })
         .unwrap();
-        cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Launch, "{hidden}"));
+        cx.update(|cx| assert_eq!(view.read(cx).section(), first, "{hidden}"));
     }
     cx.update_window(handle, |_, window, cx| {
         view.update(cx, |v, cx| v.set_section("art", window, cx));
