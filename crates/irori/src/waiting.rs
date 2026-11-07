@@ -49,9 +49,11 @@ pub fn run(args: &[String]) -> i32 {
     }
 }
 
-/// Hand `args` to the running Irori, starting it when none runs.
+/// Hand `args` to the running Irori, starting it when none runs, with the
+/// Moonlight client Sunshine started this for.
 fn forward(args: &[String]) -> Result<std::net::TcpStream> {
-    match instance::acquire_waiting(args)? {
+    let client = irori_services::StreamClient::from_env(|name| std::env::var(name).ok());
+    match instance::acquire_waiting(args, client.clone())? {
         Ok(stream) => return Ok(stream),
         // Let go at once: the Irori started next takes the lock.
         Err(primary) => drop(primary),
@@ -60,7 +62,7 @@ fn forward(args: &[String]) -> Result<std::net::TcpStream> {
     let deadline = Instant::now() + STARTUP;
     loop {
         std::thread::sleep(Duration::from_millis(500));
-        match instance::acquire_waiting(args)? {
+        match instance::acquire_waiting(args, client.clone())? {
             Ok(stream) => return Ok(stream),
             Err(primary) => drop(primary),
         }
@@ -213,9 +215,13 @@ fn game(id: GameId, wait: Arc<Wait>, app: &Arc<Mutex<AppHandles>>, cx: &mut App)
         return;
     }
     let window = app.lock().window;
+    let params = irori_services::LaunchParams {
+        stream: wait.waiter.client().cloned(),
+        ..Default::default()
+    };
     let task = irori_ui::run(cx, {
         let (b, id) = (b.clone(), id.clone());
-        async move { b.launch(&id, None, Vec::new()).await }
+        async move { b.launch_with(&id, params).await }
     });
     cx.spawn(async move |cx| {
         let Err(e) = task.await else { return };

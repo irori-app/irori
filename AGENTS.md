@@ -479,7 +479,17 @@ commands without a window.
   re-reads it (`plan.rs` is pure and tested; `tests.rs` runs against a stand-in). Syncs
   follow `LibraryUpdated`/`SettingsChanged` after 3 s of quiet, and talk to Sunshine only
   when what Irori wants differs from `state/sunshine.json`; a failure waits 10 minutes.
-  Turning the setting off takes Irori's applications out.
+  Turning the setting off takes Irori's applications out. A game with `iroriInSunshine` off
+  (per game) gets none.
+  - **Apollo** (Sunshine's fork) is told apart by its API: Basic auth is refused, so the
+    client signs in at `/api/login` (one session cookie for the whole web UI: signing in
+    signs a browser out, so the session is kept between syncs) and names applications by
+    `uuid` instead of their place.
+  - **The client** (`sunshine/stream.rs`): the waiting invocation reads Sunshine's
+    `SUNSHINE_CLIENT_WIDTH`/`_HEIGHT`/`_FPS`/`_HDR` and passes them through the instance
+    channel to `LaunchParams::stream`. The game gets the same variables; with
+    `iroriSunshine.matchClient`, a game in gamescope takes the client's output size,
+    frame limit and HDR where its own settings leave them empty.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other

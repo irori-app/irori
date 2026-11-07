@@ -524,7 +524,9 @@ installed; `--launch` then shows the install options instead of failing.
 Irori finds Sunshine by its configuration folder: `~/.config/sunshine` on Linux and
 macOS (`$XDG_CONFIG_HOME/sunshine` when set), the Flatpak's
 `~/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine`, and
-`%ProgramFiles%\Sunshine\config` on Windows. Its web UI listens on `sunshine.conf`'s
+`%ProgramFiles%\Sunshine\config` on Windows; Apollo, Sunshine's fork, keeps
+`%ProgramFiles%\Apollo\config` on Windows and Sunshine's folder elsewhere. Irori tells the
+two apart by their web API. Its web UI listens on `sunshine.conf`'s
 `port` plus one (47990 by default); `iroriSunshine.port` overrides it. Irori talks to it on
 `127.0.0.1` only.
 
