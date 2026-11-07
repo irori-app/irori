@@ -469,7 +469,10 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'portable'
           Expand-Archive $zip.FullName -DestinationPath $root
           $app = Join-Path $root 'Irori-portable'
-          foreach ($name in @('irori.exe', 'irori-sign-in.exe', 'vcruntime140.dll', 'vcruntime140_1.dll', 'portable')) {
+          $files = @('irori.exe', 'irori-sign-in.exe', 'vcruntime140.dll', 'portable')
+          # Only x64 programs import vcruntime140_1.dll.
+          if ('${{ matrix.arch }}' -eq 'x64') { $files += 'vcruntime140_1.dll' }
+          foreach ($name in $files) {
             if (!(Test-Path (Join-Path $app $name))) { throw "Missing portable file: $name" }
           }
           if (Test-Path (Join-Path $app 'install.ps1')) { throw 'The portable zip has the installer script' }
@@ -518,7 +521,9 @@ jobs:
           $process = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Setup exited with $($process.ExitCode)" }
           $app = Join-Path $env:LOCALAPPDATA 'Programs\Irori'
-          foreach ($name in @('irori.exe', 'irori-sign-in.exe', 'vcruntime140.dll', 'vcruntime140_1.dll', 'irori.ico')) {
+          $files = @('irori.exe', 'irori-sign-in.exe', 'vcruntime140.dll', 'irori.ico')
+          if ('${{ matrix.arch }}' -eq 'x64') { $files += 'vcruntime140_1.dll' }
+          foreach ($name in $files) {
             if (!(Test-Path (Join-Path $app $name))) { throw "Missing installed file: $name" }
           }
           if ((Get-Content (Join-Path $app 'install.ini') -Raw) -notmatch 'Channel=setup') { throw 'install.ini does not name the setup' }

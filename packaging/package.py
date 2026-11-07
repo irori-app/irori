@@ -87,7 +87,17 @@ def make_dmg(app: Path, dmg: Path, identity: str) -> None:
         subprocess.run(["codesign", "--force", "--sign", identity, "--timestamp", str(dmg)], check=True)
 
 
+# The Visual C++ runtime Irori's executables import. vcruntime140_1.dll
+# holds x64's exception handling only: arm64 programs never import it, and
+# the copy in Visual Studio's arm64 redistributable folder is itself x64
+# (for emulated programs), so arm64 packages ship without it.
 WINDOWS_CRT_FILES = ("vcruntime140.dll", "vcruntime140_1.dll")
+WINDOWS_ARM64_CRT_FILES = ("vcruntime140.dll",)
+
+
+def windows_crt_files(arch: str) -> tuple[str, ...]:
+    """The redistributable DLLs a package for `arch` bundles."""
+    return WINDOWS_ARM64_CRT_FILES if arch == "arm64" else WINDOWS_CRT_FILES
 
 # Read by `irori_core::paths::portable_root`; its text is for whoever opens it.
 PORTABLE_MARKER = "portable"
@@ -304,7 +314,7 @@ def windows_crt_directory(arch: str = "x64") -> Path:
                 roots.extend(versions)
         candidates = [candidate for root in roots for candidate in root.glob(f"{arch}/Microsoft.VC*.CRT")]
     for candidate in candidates:
-        if all((candidate / name).is_file() for name in WINDOWS_CRT_FILES):
+        if all((candidate / name).is_file() for name in windows_crt_files(arch)):
             return candidate
     raise FileNotFoundError(
         f"Missing {arch} Visual C++ redistributable DLLs. Install the Visual Studio C++ tools for {arch}, "
@@ -340,7 +350,7 @@ def package(platform: str, binary_dir: Path, output: Path, dmg: bool = False,
     if platform == "windows":
         arch = windows_arch(binaries[0])
         runtime_directory = windows_crt_directory(arch)
-        windows_runtime = [runtime_directory / name for name in WINDOWS_CRT_FILES]
+        windows_runtime = [runtime_directory / name for name in windows_crt_files(arch)]
         validate_windows([*binaries, *windows_runtime], arch)
     output.mkdir(parents=True, exist_ok=True)
     staging = output / ("Irori.app" if platform == "macos" else "Irori")

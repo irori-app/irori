@@ -1293,7 +1293,8 @@ building and the release checklist.
 - Windows: a zip with `install.ps1`.
   - Checks that every binary, the redistributable included, has one
     architecture (x64 or arm64).
-  - Bundles `vcruntime140.dll` and `vcruntime140_1.dll`.
+  - Bundles `vcruntime140.dll` and, for x64, `vcruntime140_1.dll` (arm64 programs
+    never import it).
   - The installer installs per user under `%LOCALAPPDATA%\Programs\Irori` and
     registers the URL handler and a Start-menu shortcut.
   - `--portable` adds a zip without `install.ps1` and with the `portable` marker.

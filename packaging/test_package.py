@@ -254,14 +254,21 @@ class WindowsPackagingTests(unittest.TestCase):
             package.package("windows", self.binaries, self.root / "output")
 
     def test_arm64_packages_are_named_for_their_architecture(self):
-        for file in [*self.binaries.iterdir(), *self.runtime.iterdir()]:
+        for file in [*self.binaries.iterdir(), self.runtime / "vcruntime140.dll"]:
             write_pe(file, package.PE_ARM64)
+        # Visual Studio's arm64 folder holds an x64 vcruntime140_1.dll, for
+        # emulated programs; arm64 ones never import it.
         output = self.root / "output"
         archive = package.package("windows", self.binaries, output, portable=True)
         self.assertEqual(archive.name, f"Irori-{self.version()}-windows-arm64.zip")
-        self.assertTrue((output / f"Irori-{self.version()}-windows-arm64-portable.zip").is_file())
-        with zipfile.ZipFile(archive) as zipped:
-            self.assertIn("Irori/irori.exe", zipped.namelist())
+        portable = output / f"Irori-{self.version()}-windows-arm64-portable.zip"
+        self.assertTrue(portable.is_file())
+        for path, folder in ((archive, "Irori"), (portable, "Irori-portable")):
+            with zipfile.ZipFile(path) as zipped:
+                names = zipped.namelist()
+                self.assertIn(f"{folder}/irori.exe", names)
+                self.assertIn(f"{folder}/vcruntime140.dll", names)
+                self.assertNotIn(f"{folder}/vcruntime140_1.dll", names)
 
     def test_arm64_application_cannot_be_bundled_with_x64_runtime(self):
         for name in ("irori.exe", "irori-sign-in.exe"):
@@ -280,7 +287,7 @@ class WindowsPackagingTests(unittest.TestCase):
         for name in package.WINDOWS_CRT_FILES:
             write_pe(expected / name)
         arm = root / "arm64/Microsoft.VC143.CRT"
-        for name in package.WINDOWS_CRT_FILES:
+        for name in package.WINDOWS_ARM64_CRT_FILES:
             write_pe(arm / name, package.PE_ARM64)
         with patch.dict(os.environ, {"IRORI_WINDOWS_CRT_DIR": "", "VCToolsRedistDir": str(root), "ProgramFiles(x86)": str(self.root / "absent") }):
             self.assertEqual(package.windows_crt_directory(), expected)

@@ -79,7 +79,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#Source}\irori.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\irori-sign-in.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+; x64 only: arm64 programs never import it.
+#if Arch == "x64"
 Source: "{#Source}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 Source: "{#Source}\irori.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
