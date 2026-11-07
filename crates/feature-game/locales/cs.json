@@ -710,6 +710,8 @@
   "game.age_rating.title": "Věkové hodnocení",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Další hodnocení: {ratings}",
+  "game.modes.show": "Zobrazit v knihovně hry s režimem {mode}",
+  "game.modes.edit": "Upravit herní režimy",
   "game.sandbox.running": "Běží v sandboxu",
   "game.sandbox.no_network": "Bez sítě",
   "game.sandbox.no_home": "Bez domovské složky",

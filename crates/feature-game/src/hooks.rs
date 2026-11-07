@@ -281,7 +281,8 @@ pub(crate) fn fetch_compatibility(
     {
         return Some(f(game, cx));
     }
-    Some(irori_ui::run(cx, crate::compat_source::load(game)))
+    let backend = irori_ui::backend(cx);
+    Some(irori_ui::run(cx, crate::compat_source::load(backend, game)))
 }
 
 /// Whether private-branch passwords can be set.

@@ -35,7 +35,7 @@ use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
-use irori_services::{EffectiveStatus, LibrarySort, StoreFilter};
+use irori_services::{LibrarySort, StoreFilter};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
     ArtBackdrop, ArtImage, EmptyState, GameCover, PageHeader, SectionTitle, StoreBadge, art_image,
@@ -49,7 +49,9 @@ use irori_ui::{Route, backend, models, navigate, play_status};
 use crate::availability::{self, Availability};
 use crate::commands::{self, GameCommand, GameState};
 use crate::dialogs;
-use crate::filter::{self, FilteredGames, Grouping, HiddenMode, StatusGroup, ViewFilter};
+use crate::filter::{
+    self, FilteredGames, GroupKind, Grouping, HiddenMode, StatusGroup, ViewFilter,
+};
 use crate::filters_panel::{FilterModel, FiltersPanel, set_active_filters};
 use crate::grid::{self, GridMetrics, Move};
 use crate::launch::{self, LaunchChoice};
@@ -59,7 +61,7 @@ use crate::{
     ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
     NextLibraryView, OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft,
     SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus, ShowGrid, ShowList,
-    ToggleDrawer, ToggleStatusGroups,
+    ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -97,7 +99,7 @@ enum Item {
 struct FrameKey {
     count: usize,
     top: Option<(TopKind, usize)>,
-    groups: Vec<(EffectiveStatus, usize)>,
+    groups: Vec<(GroupKind, usize)>,
     layout: LibraryLayout,
     /// Width of the region the covers or rows fill, in rem.
     list_rem: u32,
@@ -110,7 +112,7 @@ struct FrameKey {
 /// change (the game list itself is cached in [`FilteredGames`]).
 struct Frame {
     games: Arc<[Arc<GameInfo>]>,
-    /// Play-status sections of `games`; empty when the list is not grouped.
+    /// Sections of `games`; empty when the list is not grouped.
     groups: Arc<[StatusGroup]>,
     top: Option<(TopKind, Arc<[Arc<GameInfo>]>)>,
     stores: Vec<Runner>,
@@ -333,10 +335,18 @@ impl LibraryView {
         self.frame.games.clone()
     }
 
-    /// Play statuses of the shown sections, in order; empty when not grouped.
+    /// Play statuses of the shown sections, in order; empty when not
+    /// grouped by play status.
     #[cfg(test)]
-    pub(crate) fn status_groups(&self) -> Vec<EffectiveStatus> {
-        self.frame.groups.iter().map(|g| g.status).collect()
+    pub(crate) fn status_groups(&self) -> Vec<irori_services::EffectiveStatus> {
+        self.frame
+            .groups
+            .iter()
+            .filter_map(|g| match g.kind {
+                GroupKind::Status(s) => Some(s),
+                GroupKind::Mode(_) => None,
+            })
+            .collect()
     }
 
     /// The game with keyboard focus in the grid or list.
@@ -473,7 +483,7 @@ impl LibraryView {
         let key = FrameKey {
             count: games.len(),
             top: top.as_ref().map(|(k, g)| (*k, g.len())),
-            groups: groups.iter().map(|g| (g.status, g.range.len())).collect(),
+            groups: groups.iter().map(|g| (g.kind, g.range.len())).collect(),
             layout: self.layout,
             list_rem: (list_rem * 16.0).round() as u32,
             metrics,
@@ -1146,13 +1156,26 @@ impl LibraryView {
             .update(cx, |m, cx| m.update(ViewFilter::clear_all, cx));
     }
 
-    /// Turn grouping by play status on or off.
+    /// Turn grouping by play status on or off (from game modes too).
     fn toggle_status_groups(&mut self, cx: &mut Context<Self>) {
         self.update_filter(
             |f| {
                 f.group = match f.group {
-                    Grouping::None => Grouping::Status,
                     Grouping::Status => Grouping::None,
+                    Grouping::None | Grouping::Mode => Grouping::Status,
+                }
+            },
+            cx,
+        );
+    }
+
+    /// Turn grouping by game mode on or off (from play status too).
+    fn toggle_mode_groups(&mut self, cx: &mut Context<Self>) {
+        self.update_filter(
+            |f| {
+                f.group = match f.group {
+                    Grouping::Mode => Grouping::None,
+                    Grouping::None | Grouping::Status => Grouping::Mode,
                 }
             },
             cx,
@@ -1205,8 +1228,8 @@ impl LibraryView {
     }
 }
 
-/// The play-status sections of a list of `len` games, or the whole list when
-/// it is not grouped.
+/// The sections of a list of `len` games, or the whole list when it is not
+/// grouped.
 fn section_ranges(groups: &[StatusGroup], len: usize) -> Vec<Range<usize>> {
     if groups.is_empty() {
         let whole = 0..len;
@@ -1513,7 +1536,7 @@ impl LibraryView {
         let searching = !filter.query.trim().is_empty();
         let panel = self.filters_panel.clone();
         let layout = self.layout;
-        let grouped = filter.group == Grouping::Status;
+        let group = filter.group;
 
         let store_switcher = (stores.len() > 1).then(|| {
             let options: Vec<Option<Runner>> = std::iter::once(None)
@@ -1715,9 +1738,30 @@ impl LibraryView {
                     .small()
                     .outline()
                     .icon(IconName::Rows3)
-                    .selected(grouped)
-                    .tooltip(t("library.toolbar.group_by_status"))
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_status_groups(cx))),
+                    .selected(group != Grouping::None)
+                    .tooltip(t("library.toolbar.group_by"))
+                    .dropdown_menu({
+                        let model = self.filters.clone();
+                        move |menu, _, _| {
+                            let options = [
+                                (Grouping::None, "library.toolbar.group.none"),
+                                (Grouping::Status, "library.toolbar.group.status"),
+                                (Grouping::Mode, "library.toolbar.group.mode"),
+                            ];
+                            options.into_iter().fold(menu, |menu, (option, key)| {
+                                let model = model.clone();
+                                menu.item(
+                                    PopupMenuItem::new(t(key))
+                                        .checked(option == group)
+                                        .on_click(move |_, _, cx| {
+                                            model.update(cx, |m, cx| {
+                                                m.update(|f| f.group = option, cx)
+                                            })
+                                        }),
+                                )
+                            })
+                        }
+                    }),
             )
             .child(
                 Button::new("library-select")
@@ -1985,12 +2029,36 @@ impl LibraryView {
             .collect()
     }
 
-    /// A play-status section's heading: its colour, name and game count.
+    /// A section's heading: its play status's colour or its game mode's
+    /// icon, its name and its game count.
     fn render_group_heading(&self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
         let Some(group) = self.frame.groups.get(ix) else {
             return div().into_any_element();
         };
         let theme = cx.theme();
+        let (mark, name): (AnyElement, SharedString) = match group.kind {
+            GroupKind::Status(status) => (
+                div()
+                    .flex_none()
+                    .size_2()
+                    .rounded_full()
+                    .bg(play_status::color(status, cx))
+                    .into_any_element(),
+                play_status::label(status),
+            ),
+            GroupKind::Mode(mode) => (
+                Icon::new(
+                    mode.map_or_else(irori_ui::game_mode::unknown_icon, irori_ui::game_mode::icon),
+                )
+                .small()
+                .text_color(theme.muted_foreground)
+                .into_any_element(),
+                mode.map_or_else(
+                    irori_ui::game_mode::unknown_label,
+                    irori_ui::game_mode::label,
+                ),
+            ),
+        };
         h_flex()
             .h(rems(grid::HEADING_REM))
             .px(rems(grid::EDGE_REM))
@@ -2000,20 +2068,14 @@ impl LibraryView {
                 h_flex()
                     .min_w_0()
                     .gap_2()
-                    .child(
-                        div()
-                            .flex_none()
-                            .size_2()
-                            .rounded_full()
-                            .bg(play_status::color(group.status, cx)),
-                    )
+                    .child(mark)
                     .child(
                         div()
                             .min_w_0()
                             .truncate()
                             .text_sm()
                             .font_semibold()
-                            .child(play_status::label(group.status)),
+                            .child(name),
                     )
                     .child(
                         div()
@@ -2263,7 +2325,11 @@ impl LibraryView {
         let caption_text = caption(game, &state, status.as_ref());
         // Sections by play status read as a backlog: each cover says how long
         // it has been played.
-        let played = (!self.frame.groups.is_empty())
+        let played = self
+            .frame
+            .groups
+            .first()
+            .is_some_and(|g| matches!(g.kind, GroupKind::Status(_)))
             .then(|| {
                 let lib = models(cx).library.read(cx);
                 lib.user.playtime.get(&key).map(|r| r.total_minutes)
@@ -2952,6 +3018,7 @@ impl Render for LibraryView {
             .on_action(
                 cx.listener(|this, _: &ToggleStatusGroups, _, cx| this.toggle_status_groups(cx)),
             )
+            .on_action(cx.listener(|this, _: &ToggleModeGroups, _, cx| this.toggle_mode_groups(cx)))
             .size_full()
             .min_h_0()
             .text_color(cx.theme().foreground)

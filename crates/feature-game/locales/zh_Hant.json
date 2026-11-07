@@ -710,6 +710,8 @@
   "game.age_rating.title": "年齡分級",
   "game.age_rating.separator": "、",
   "game.age_rating.also": "其他分級：{ratings}",
+  "game.modes.show": "在遊戲庫中顯示「{mode}」遊戲",
+  "game.modes.edit": "編輯遊戲模式",
   "game.sandbox.running": "正在沙盒中執行",
   "game.sandbox.no_network": "無網路",
   "game.sandbox.no_home": "無家目錄",

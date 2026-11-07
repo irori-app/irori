@@ -1,7 +1,9 @@
-//! Custom title and art for a store game (kept by Irori, never sent to the
-//! store). Sideloaded apps are edited in their own dialog instead.
+//! Custom title, art and game modes for a store game (kept by Irori, never
+//! sent to the store). Sideloaded apps are edited in their own dialog
+//! instead.
 
 use std::cell::Cell;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
@@ -16,7 +18,7 @@ use gpui_kit::{
     ObjectFit, ParentElement as _, Render, SharedString, Styled as _, StyledImage as _,
     Subscription, Window, div, rems,
 };
-use irori_core::{GameId, GameInfo, GameOverrides, Runner};
+use irori_core::{GameId, GameInfo, GameMode, GameOverrides, Runner};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
@@ -36,8 +38,16 @@ const ART_KINDS: [ArtKind; 4] = [
 pub type ArtValues<'a> = [&'a str; 4];
 
 /// Overrides that turn `original` into what the user entered: unchanged or
-/// empty fields are left out, so the store's value keeps applying.
-pub fn overrides_for(original: &GameInfo, title: &str, art: ArtValues<'_>) -> GameOverrides {
+/// empty fields are left out, so the store's value keeps applying. Game
+/// modes are kept only when they differ from the `known` ones (what stores
+/// and PCGamingWiki say), so a store that learns more still counts.
+pub fn overrides_for(
+    original: &GameInfo,
+    title: &str,
+    art: ArtValues<'_>,
+    known: &[GameMode],
+    modes: &BTreeSet<GameMode>,
+) -> GameOverrides {
     let title = title.trim();
     let keep = |s: &str, orig: &Option<String>| {
         let s = s.trim();
@@ -50,6 +60,7 @@ pub fn overrides_for(original: &GameInfo, title: &str, art: ArtValues<'_>) -> Ga
         art_square: keep(square, &original.art_square),
         art_background: keep(background, &original.art_background),
         art_logo: keep(logo, &original.art_logo),
+        game_modes: super::chosen_modes(known, modes),
     }
 }
 
@@ -104,6 +115,10 @@ pub struct EditGameDialog {
     title: Entity<InputState>,
     /// One field per kind of art, in [`ART_KINDS`] order.
     art: [Entity<InputState>; 4],
+    /// The game's modes as stores and PCGamingWiki say.
+    known_modes: Vec<GameMode>,
+    /// The game's modes as ticked.
+    modes: BTreeSet<GameMode>,
     /// The SteamGridDB picker, shown instead of the form while open.
     picker: Option<Entity<ArtPicker>>,
     _picker_subscription: Option<Subscription>,
@@ -126,6 +141,13 @@ impl EditGameDialog {
             .cloned()
             .unwrap_or_default();
         let has_overrides = !current.is_empty();
+        let known_modes = backend(cx).known_game_modes(&id);
+        let modes = current
+            .game_modes
+            .clone()
+            .unwrap_or_else(|| known_modes.clone())
+            .into_iter()
+            .collect();
         let art = ART_KINDS.map(|kind| {
             let value = override_of(&current, kind).unwrap_or_default();
             cx.new(|cx| {
@@ -157,6 +179,8 @@ impl EditGameDialog {
             has_overrides,
             title,
             art,
+            known_modes,
+            modes,
             picker: None,
             _picker_subscription: None,
             _subscriptions: subscriptions,
@@ -176,6 +200,8 @@ impl EditGameDialog {
             &self.original,
             &text(&self.title, cx),
             art.each_ref().map(String::as_str),
+            &self.known_modes,
+            &self.modes,
         )
     }
 
@@ -232,6 +258,7 @@ impl EditGameDialog {
         for input in &self.art {
             input.update(cx, |s, cx| s.set_value(SharedString::default(), window, cx));
         }
+        self.modes = self.known_modes.iter().copied().collect();
         cx.notify();
     }
 
@@ -341,7 +368,17 @@ impl Render for EditGameDialog {
                                         .label(label)
                                         .description(hint)
                                         .child(self.art_row(kind, cx))
-                                })),
+                                }))
+                                .child(
+                                    field()
+                                        .label(irori_ui::game_mode::title())
+                                        .description(t("library.edit.modes_hint"))
+                                        .child(super::mode_boxes(
+                                            &self.modes,
+                                            |this: &mut Self| &mut this.modes,
+                                            cx,
+                                        )),
+                                ),
                         ),
                     ),
             )
@@ -430,13 +467,29 @@ mod tests {
             art_cover: Some("https://cdn/cover.jpg".into()),
             ..Default::default()
         };
-        let o = overrides_for(&original, " Hades ", ["https://cdn/cover.jpg", "", "", ""]);
+        let none = BTreeSet::new();
+        let o = overrides_for(
+            &original,
+            " Hades ",
+            ["https://cdn/cover.jpg", "", "", ""],
+            &[],
+            &none,
+        );
         assert!(o.is_empty());
-        let o = overrides_for(&original, "Hades II", [" /home/me/cover.png ", "", "", ""]);
+        let o = overrides_for(
+            &original,
+            "Hades II",
+            [" /home/me/cover.png ", "", "", ""],
+            &[],
+            &none,
+        );
         assert_eq!(o.title.as_deref(), Some("Hades II"));
         assert_eq!(o.art_cover.as_deref(), Some("/home/me/cover.png"));
         // An emptied title falls back to the store title.
-        assert_eq!(overrides_for(&original, "  ", ["", "", "", ""]).title, None);
+        assert_eq!(
+            overrides_for(&original, "  ", ["", "", "", ""], &[], &none).title,
+            None
+        );
     }
 
     #[test]
@@ -447,9 +500,30 @@ mod tests {
             ..Default::default()
         };
         let art = ["", "", "/home/me/hero.jpg", "https://cdn/logo.png"];
-        let o = overrides_for(&original, "Hades", art);
+        let o = overrides_for(&original, "Hades", art, &[], &BTreeSet::new());
         assert_eq!(o.art_background.as_deref(), Some("/home/me/hero.jpg"));
         // The store's own logo is not an override.
         assert_eq!(o.art_logo, None);
+    }
+
+    #[test]
+    fn game_modes_are_kept_only_when_they_differ() {
+        use GameMode::*;
+        let original = GameInfo {
+            title: "Portal 2".into(),
+            ..Default::default()
+        };
+        let known = [Single, Coop];
+        let entered = |modes: &[GameMode]| {
+            let modes = modes.iter().copied().collect();
+            overrides_for(&original, "Portal 2", ["", "", "", ""], &known, &modes).game_modes
+        };
+        assert_eq!(entered(&[Coop, Single]), None);
+        assert_eq!(
+            entered(&[Single, Coop, Local]),
+            Some(vec![Single, Coop, Local])
+        );
+        // Unticking everything says the game has none of them.
+        assert_eq!(entered(&[]), Some(Vec::new()));
     }
 }

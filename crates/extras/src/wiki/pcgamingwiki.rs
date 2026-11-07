@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use irori_core::GameMode;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,13 @@ pub struct PcGamingWikiInfo {
     pub genres: Vec<String>,
     /// `"<platform>: <date>"` entries.
     pub release_dates: Vec<String>,
+    /// From the infobox's modes and the multiplayer table (see
+    /// [`game_modes`]).
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "irori_core::game_mode::lenient"
+    )]
+    pub game_modes: Vec<GameMode>,
 }
 
 impl PcGamingWikiInfo {
@@ -54,6 +62,55 @@ static HLTB_ID: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)hltb {9}= ([0-9]+)")
 static D3D: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)direct3d versions {6}= (.+)").unwrap());
 static GENRES: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"game/row/taxonomy/genres\s*\|\s*(.*?)\s*\}\}").unwrap());
+static MODES: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"game/row/taxonomy/modes\s*\|\s*(.*?)\s*\}\}").unwrap());
+/// One field of the `{{Network/Multiplayer}}` table (`|online play modes = Co-op, Versus`).
+static NETWORK_FIELD: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?m)^\|\s*(local play|lan play|online play)( modes)?\s*=[ \t]*(.*?)\s*$").unwrap()
+});
+
+/// Game modes of a page: "Singleplayer" in the infobox's modes, local,
+/// LAN and online play from the multiplayer table (`true` or `limited`;
+/// `false`, `unknown`, `hackable` and `n/a` don't count), co-op when one of
+/// those plays has a "Co-op" mode, and MMO genres. LAN play counts as
+/// online: both are network multiplayer.
+pub fn game_modes(text: &str) -> Vec<GameMode> {
+    let mut modes = Vec::new();
+    if list(&MODES, text)
+        .iter()
+        .any(|m| m.eq_ignore_ascii_case("singleplayer"))
+    {
+        modes.push(GameMode::Single);
+    }
+    let mut played = Vec::new();
+    let mut coop = Vec::new();
+    for c in NETWORK_FIELD.captures_iter(text) {
+        let venue = match &c[1] {
+            "local play" => GameMode::Local,
+            _ => GameMode::Online,
+        };
+        let value = c[3].to_ascii_lowercase();
+        if c.get(2).is_some() {
+            if value.split(',').any(|m| m.trim() == "co-op") {
+                coop.push(venue);
+            }
+        } else if matches!(value.as_str(), "true" | "limited") {
+            played.push(venue);
+        }
+    }
+    modes.extend(played.iter().copied());
+    if coop.iter().any(|v| played.contains(v)) {
+        modes.push(GameMode::Coop);
+    }
+    if list(&GENRES, text)
+        .iter()
+        .any(|g| g.to_ascii_uppercase().starts_with("MMO"))
+    {
+        modes.extend([GameMode::Mmo, GameMode::Online]);
+    }
+    irori_core::game_mode::normalized(modes)
+}
+
 static RELEASE: Lazy<Regex> = Lazy::new(|| Regex::new(r"game/row/date\|([^|]+)\|([^}]*)").unwrap());
 
 fn score(re: &Regex, text: &str) -> GameScore {
@@ -97,6 +154,7 @@ pub fn parse_wikitext(page_id: u64, text: &str) -> PcGamingWikiInfo {
             .captures_iter(text)
             .map(|c| format!("{}: {}", &c[1], &c[2]))
             .collect(),
+        game_modes: game_modes(text),
     }
 }
 
@@ -210,6 +268,43 @@ mod tests {
             ["Windows: December 10, 2020", "OS X: TBA"]
         );
         assert!(info.page_url().ends_with("curid=7"));
+    }
+
+    /// Portal 2's infobox modes and multiplayer table, as its page has them.
+    const PORTAL_2: &str = "{{Infobox game/row/taxonomy/modes             | Singleplayer, Multiplayer}}\n\
+{{Infobox game/row/taxonomy/genres            | Platform, Puzzle}}\n\
+{{Network/Multiplayer\n\
+|local play           = true\n\
+|local play players   = 2\n\
+|local play modes     = Co-op\n\
+|local play notes     = Split-screen.\n\
+|lan play             = limited\n\
+|lan play players     = 2\n\
+|lan play modes       = Co-op\n\
+|online play          = true\n\
+|online play players  = 2\n\
+|online play modes    = Co-op\n\
+|asynchronous         = false\n\
+}}\n";
+
+    #[test]
+    fn reads_game_modes() {
+        assert_eq!(
+            parse_wikitext(1, PORTAL_2).game_modes,
+            [
+                GameMode::Single,
+                GameMode::Coop,
+                GameMode::Local,
+                GameMode::Online
+            ]
+        );
+        // Versus over the network only; local play is false.
+        let versus = "{{Network/Multiplayer\n|local play           = false\n\
+|local play modes     = Co-op\n|online play          = true\n|online play modes    = Versus\n}}";
+        assert_eq!(game_modes(versus), [GameMode::Online]);
+        let mmo = "{{Infobox game/row/taxonomy/genres | MMORPG, Fantasy }}";
+        assert_eq!(game_modes(mmo), [GameMode::Online, GameMode::Mmo]);
+        assert!(game_modes(WIKITEXT).is_empty());
     }
 
     #[test]

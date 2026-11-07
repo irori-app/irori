@@ -35,6 +35,7 @@ pub fn game_event(
             let id = page.read(cx).game_id().clone();
             irori_library::open_categories_dialog(Some(&id), window, cx);
         }
+        GamePageEvent::ShowGameMode(mode) => irori_library::show_game_mode(*mode, cx),
     }
 }
 

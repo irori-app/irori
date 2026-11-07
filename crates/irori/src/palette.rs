@@ -37,6 +37,8 @@ enum PaletteTarget {
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
     GroupByStatus(bool),
+    /// Group the library by game mode (`true`) or stop, and show it.
+    GroupByMode(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -60,6 +62,9 @@ struct LibraryCommands<'a> {
     /// Whether the library groups by play status, while a library view
     /// exists.
     grouped: Option<bool>,
+    /// Whether the library groups by game mode, while a library view
+    /// exists.
+    grouped_by_mode: Option<bool>,
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -98,6 +103,7 @@ impl Palette {
     ) -> Vec<CommandItem> {
         let LibraryCommands {
             grouped,
+            grouped_by_mode,
             views,
             layout,
         } = library;
@@ -286,6 +292,24 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(grouped) = grouped_by_mode {
+            let label = if grouped {
+                "shell.palette.ungroup_by_mode"
+            } else {
+                "shell.palette.group_by_mode"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([
+                        irori_ui::game_mode::title(),
+                        t("shell.palette.game_mode_keywords"),
+                    ])
+                    .icon(IconName::Users),
+                PaletteTarget::GroupByMode(!grouped),
+                targets,
+            );
+        }
         for (id, name) in views {
             push(
                 CommandItem::new()
@@ -411,12 +435,14 @@ impl Palette {
         };
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
+        let grouped_by_mode = irori_library::groups_by_mode(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
         let replay = irori_ui::backend(cx).replay().map(|r| r.title);
         let library = LibraryCommands {
             grouped,
+            grouped_by_mode,
             views: &views,
             layout,
         };
@@ -501,6 +527,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupByMode(on) => {
+            irori_library::set_groups_by_mode(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
         PaletteTarget::LibraryView(layout) => {

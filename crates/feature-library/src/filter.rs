@@ -7,14 +7,20 @@
 //! missing). The result
 //! is cached by library revision, user-data identity, update-set identity,
 //! availability identity and filter, so rendering never refilters an
-//! unchanged library. Grouping by play status reorders that result into
-//! sections ([`StatusGroup`]) in the same pass.
+//! unchanged library. Grouping by play status or game mode reorders that
+//! result into sections ([`StatusGroup`]) in the same pass.
+//!
+//! Saved views and the persisted view keep criteria this version doesn't
+//! know ([`ViewFilter::unknown`]), so a view a newer Irori saved keeps its
+//! filters when an older one rewrites the file.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use irori_core::{GameId, GameInfo, InstallPlatform, Paths, Runner, ShownStores, json_store};
+use irori_core::{
+    GameId, GameInfo, GameMode, InstallPlatform, Paths, Runner, ShownStores, json_store,
+};
 use irori_services::{
     EffectiveStatus, LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData,
 };
@@ -79,6 +85,38 @@ pub enum Grouping {
     /// A section per play status, in [`GROUP_ORDER`]; the chosen order holds
     /// within each.
     Status,
+    /// A section per game mode, in [`MODE_GROUP_ORDER`]: each game in the
+    /// section of its most specific mode ([`mode_section`]).
+    Mode,
+}
+
+/// Order of the game-mode sections: playing together on one screen first,
+/// then co-op, network play and MMOs, single player only, and games whose
+/// modes nobody knows (`None`) last.
+pub const MODE_GROUP_ORDER: [Option<GameMode>; 6] = [
+    Some(GameMode::Local),
+    Some(GameMode::Coop),
+    Some(GameMode::Online),
+    Some(GameMode::Mmo),
+    Some(GameMode::Single),
+    None,
+];
+
+/// The section a game with `modes` goes in when grouped by game mode. A
+/// game plays several ways, but sits in one section, so the list keeps each
+/// game once: an MMO is an MMO before it is online, a split-screen game is
+/// couch play before co-op, co-op is named before network play, and single
+/// player is what's left.
+pub fn mode_section(modes: &[GameMode]) -> Option<GameMode> {
+    [
+        GameMode::Mmo,
+        GameMode::Local,
+        GameMode::Coop,
+        GameMode::Online,
+        GameMode::Single,
+    ]
+    .into_iter()
+    .find(|m| modes.contains(m))
 }
 
 /// Order of the play-status sections: what to pick up next first (games
@@ -95,11 +133,50 @@ pub const GROUP_ORDER: [EffectiveStatus; 7] = [
     EffectiveStatus::Abandoned,
 ];
 
+/// What a section of a grouped list holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupKind {
+    Status(EffectiveStatus),
+    /// Games of this [`mode_section`]; `None` for modes unknown.
+    Mode(Option<GameMode>),
+}
+
 /// One section of a grouped list: the games at `range` of the shown list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusGroup {
-    pub status: EffectiveStatus,
+    pub kind: GroupKind,
     pub range: std::ops::Range<usize>,
+}
+
+/// Split `games`, already ordered so equal kinds sit together, into
+/// sections.
+fn sections(games: &[Arc<GameInfo>], kind: impl Fn(&GameInfo) -> GroupKind) -> Vec<StatusGroup> {
+    let mut groups: Vec<StatusGroup> = Vec::new();
+    for (ix, game) in games.iter().enumerate() {
+        let kind = kind(game);
+        match groups.last_mut() {
+            Some(group) if group.kind == kind => group.range.end = ix + 1,
+            _ => groups.push(StatusGroup {
+                kind,
+                range: ix..ix + 1,
+            }),
+        }
+    }
+    groups
+}
+
+/// Reorder `games` into game-mode sections (stable, so the chosen order
+/// holds within each) and return the non-empty sections.
+pub fn group_by_mode(games: &mut [Arc<GameInfo>]) -> Vec<StatusGroup> {
+    let rank = |g: &Arc<GameInfo>| {
+        let section = mode_section(&g.game_modes);
+        MODE_GROUP_ORDER
+            .iter()
+            .position(|s| *s == section)
+            .unwrap_or(MODE_GROUP_ORDER.len())
+    };
+    games.sort_by_cached_key(rank);
+    sections(games, |g| GroupKind::Mode(mode_section(&g.game_modes)))
 }
 
 /// Reorder `games` into play-status sections (stable, so the chosen order
@@ -112,18 +189,9 @@ pub fn group_by_status(games: &mut [Arc<GameInfo>], user: &UserData) -> Vec<Stat
             .unwrap_or(GROUP_ORDER.len())
     };
     games.sort_by_cached_key(|g| rank(user.effective_status(&g.id().key())));
-    let mut groups: Vec<StatusGroup> = Vec::new();
-    for (ix, game) in games.iter().enumerate() {
-        let status = user.effective_status(&game.id().key());
-        match groups.last_mut() {
-            Some(group) if group.status == status => group.range.end = ix + 1,
-            _ => groups.push(StatusGroup {
-                status,
-                range: ix..ix + 1,
-            }),
-        }
-    }
-    groups
+    sections(games, |g| {
+        GroupKind::Status(user.effective_status(&g.id().key()))
+    })
 }
 
 /// How hidden games are treated.
@@ -228,11 +296,44 @@ pub struct ViewFilter {
     pub max_age: Option<u8>,
     /// With an age limit, also show games no board rated.
     pub include_unrated: bool,
+    /// Games with any of these modes; empty shows every game.
+    #[serde(deserialize_with = "deserialize_modes")]
+    pub modes: BTreeSet<GameMode>,
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
     /// narrows, so filter resets keep it.
+    #[serde(deserialize_with = "deserialize_grouping")]
     pub group: Grouping,
+    /// Criteria a newer Irori saved that this one doesn't know, kept as
+    /// they were so rewriting the file doesn't drop them.
+    #[serde(flatten)]
+    pub unknown: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Selected game modes; modes this version doesn't know are left out.
+fn deserialize_modes<'de, D>(d: D) -> Result<BTreeSet<GameMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(irori_core::game_mode::lenient(d)?.into_iter().collect())
+}
+
+/// A grouping; one this version doesn't know shows one list.
+fn deserialize_grouping<'de, D>(d: D) -> Result<Grouping, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Known(Grouping),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Repr::deserialize(d)? {
+        Repr::Known(g) => g,
+        Repr::Other(_) => Grouping::None,
+    })
 }
 
 impl ViewFilter {
@@ -253,6 +354,7 @@ impl ViewFilter {
             !self.systems.is_empty(),
             !self.statuses.is_empty(),
             self.max_age.is_some(),
+            !self.modes.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -365,6 +467,14 @@ impl ViewFilter {
                 "library.filter.describe.max_age"
             };
             out.push(t_args(key, &[("age", &age.to_string())]).to_string());
+        }
+        if !self.modes.is_empty() {
+            let names: Vec<String> = self
+                .modes
+                .iter()
+                .map(|m| irori_ui::game_mode::label(*m).to_string())
+                .collect();
+            out.push(names.join(&t("library.filter.list_separator")));
         }
         let heading = self.category_heading();
         match self.categories.len() {
@@ -557,6 +667,9 @@ pub fn apply(
     if let Some(limit) = filter.max_age {
         games.retain(|g| passes_age_limit(g, limit, filter.include_unrated));
     }
+    if !filter.modes.is_empty() {
+        games.retain(|g| g.game_modes.iter().any(|m| filter.modes.contains(m)));
+    }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
         games.retain(|g| filter.released.contains(g.release_date.as_deref(), year));
@@ -612,6 +725,7 @@ impl FilteredGames {
             self.groups = match filter.group {
                 Grouping::None => Arc::from(Vec::new()),
                 Grouping::Status => group_by_status(&mut games, user).into(),
+                Grouping::Mode => group_by_mode(&mut games).into(),
             };
             let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
@@ -622,8 +736,7 @@ impl FilteredGames {
         self.games.clone()
     }
 
-    /// Play-status sections of the last computed list; empty when it is not
-    /// grouped.
+    /// Sections of the last computed list; empty when it is not grouped.
     pub fn groups(&self) -> Arc<[StatusGroup]> {
         self.groups.clone()
     }
@@ -706,6 +819,105 @@ pub(crate) mod tests {
         assert_eq!(f.hidden, HiddenMode::Hide);
         f.clear_all();
         assert!(!f.is_narrowed());
+    }
+
+    fn played(app: &str, title: &str, modes: &[GameMode]) -> Arc<GameInfo> {
+        Arc::new(
+            GameInfo {
+                runner: Some(Runner::Steam),
+                app_name: app.into(),
+                title: title.into(),
+                game_modes: modes.to_vec(),
+                ..Default::default()
+            }
+            .finalize(),
+        )
+    }
+
+    #[test]
+    fn filters_and_groups_by_game_mode() {
+        use GameMode::*;
+        let library = snapshot(vec![
+            played("1", "Celeste", &[Single]),
+            played("2", "Portal 2", &[Single, Coop, Local, Online]),
+            played("3", "Deep Rock Galactic", &[Single, Coop, Online]),
+            played("4", "Guild Wars 2", &[Online, Mmo, Coop]),
+            played("5", "Mystery", &[]),
+            played("6", "Rocket League", &[Local, Online]),
+        ]);
+        let user = Arc::new(UserData::default());
+        let none = Arc::new(HashSet::new());
+        let f = ViewFilter {
+            modes: [Local, Mmo].into(),
+            ..Default::default()
+        };
+        // Any of the chosen modes.
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        let mut shown = titles(&shown);
+        shown.sort_unstable();
+        assert_eq!(shown, ["Guild Wars 2", "Portal 2", "Rocket League"]);
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(f.describe().len(), 1);
+        let mut reset = f.clone();
+        reset.reset_filters();
+        assert!(reset.modes.is_empty());
+
+        let mut cache = FilteredGames::default();
+        let f = ViewFilter {
+            group: Grouping::Mode,
+            ..Default::default()
+        };
+        let games = cache.get(&f, &[], &library, &user, &none, &none);
+        assert_eq!(
+            titles(&games),
+            [
+                "Portal 2",
+                "Rocket League",
+                "Deep Rock Galactic",
+                "Guild Wars 2",
+                "Celeste",
+                "Mystery"
+            ]
+        );
+        let sections: Vec<_> = cache
+            .groups()
+            .iter()
+            .map(|g| (g.kind, g.range.clone()))
+            .collect();
+        assert_eq!(
+            sections,
+            [
+                (GroupKind::Mode(Some(Local)), 0..2),
+                (GroupKind::Mode(Some(Coop)), 2..3),
+                (GroupKind::Mode(Some(Mmo)), 3..4),
+                (GroupKind::Mode(Some(Single)), 4..5),
+                (GroupKind::Mode(None), 5..6),
+            ]
+        );
+    }
+
+    #[test]
+    fn keeps_criteria_it_does_not_know() {
+        // A view a newer Irori saved: a facet and a mode this one doesn't
+        // know, and a grouping it doesn't have.
+        let json = r#"{"favourites_only": true, "modes": ["coop", "vr"],
+            "group": "genre", "price": {"max": 10}, "tags": ["roguelike"]}"#;
+        let f: ViewFilter = serde_json::from_str(json).unwrap();
+        assert!(f.favourites_only);
+        assert_eq!(f.modes, [GameMode::Coop].into());
+        assert_eq!(f.group, Grouping::None);
+        assert_eq!(f.unknown.len(), 2);
+        // Writing it again keeps the unknown facets as they were.
+        let written = serde_json::to_value(&f).unwrap();
+        assert_eq!(written["price"], serde_json::json!({"max": 10}));
+        assert_eq!(written["tags"], serde_json::json!(["roguelike"]));
+        assert_eq!(written["modes"], serde_json::json!(["coop"]));
+        let back: ViewFilter = serde_json::from_value(written).unwrap();
+        assert_eq!(back, f);
+        // Files without them read as before.
+        let plain: ViewFilter = serde_json::from_str(r#"{"group": "mode"}"#).unwrap();
+        assert_eq!(plain.group, Grouping::Mode);
+        assert!(plain.unknown.is_empty() && plain.modes.is_empty());
     }
 
     #[test]
@@ -1118,16 +1330,17 @@ pub(crate) mod tests {
         let sections: Vec<_> = cache
             .groups()
             .iter()
-            .map(|g| (g.status, g.range.clone()))
+            .map(|g| (g.kind, g.range.clone()))
             .collect();
+        let status = GroupKind::Status;
         assert_eq!(
             sections,
             [
-                (EffectiveStatus::Playing, 0..2),
-                (EffectiveStatus::PlanToPlay, 2..3),
-                (EffectiveStatus::Played, 3..4),
-                (EffectiveStatus::NotPlayed, 4..5),
-                (EffectiveStatus::Beaten, 5..6),
+                (status(EffectiveStatus::Playing), 0..2),
+                (status(EffectiveStatus::PlanToPlay), 2..3),
+                (status(EffectiveStatus::Played), 3..4),
+                (status(EffectiveStatus::NotPlayed), 4..5),
+                (status(EffectiveStatus::Beaten), 5..6),
             ]
         );
         // Focus follows the grouped order.
