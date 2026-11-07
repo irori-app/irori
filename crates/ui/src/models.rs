@@ -360,6 +360,8 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
                 app_update = true;
             }
             Event::AppUpdateChanged => app_update = true,
+            // The Sunshine panel follows the settings model.
+            Event::SunshineChanged => settings = true,
             Event::ComponentUpdatesChanged => components = true,
             Event::GameSettingsChanged(id) => changed_game = Some(id),
             Event::Connectivity(online) => {

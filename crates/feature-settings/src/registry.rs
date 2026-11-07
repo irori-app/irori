@@ -251,6 +251,8 @@ pub enum PanelKind {
     SaveBackups,
     /// The replay buffer's recorder, ways to save a clip and memory use.
     Replay,
+    /// Sunshine: found or not, its login, syncing now, the last sync.
+    Sunshine,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -976,6 +978,21 @@ const NEEDS_NVAPI: &[Condition] = &[when(
 )];
 const NEEDS_LSFG: &[Condition] = &[when("iroriLsfg.enabled", true, "settings.requires.lsfg")];
 const NEEDS_VKD3D: &[Condition] = &[when("autoInstallVkd3d", true, "settings.requires.vkd3d")];
+const NEEDS_SUNSHINE: &[Condition] = &[when(
+    "iroriSunshine.enabled",
+    true,
+    "settings.requires.sunshine",
+)];
+const SUNSHINE_GAMES: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("installed"),
+        Key("settings.option.sunshine_games.installed"),
+    ),
+    opt(
+        ChoiceValue::Str("favourites"),
+        Key("settings.option.sunshine_games.favourites"),
+    ),
+];
 const NEEDS_REPLAY: &[Condition] = &[when(
     "iroriReplay.enabled",
     true,
@@ -1395,6 +1412,48 @@ pub static FIELDS: &[FieldSpec] = &[
         "application",
         "developers",
     ]),
+    app(
+        "iroriSunshine.enabled",
+        "settings.field.sunshine_enabled.label",
+        General,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.sunshine_enabled.help")
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "stream",
+        "streaming",
+        "remote play",
+    ]),
+    app(
+        "iroriSunshine.games",
+        "settings.field.sunshine_games.label",
+        General,
+        "settings.group.integrations",
+        Choice(SUNSHINE_GAMES),
+    )
+    .keywords(&["sunshine", "moonlight", "stream", "favourites"])
+    .requires(NEEDS_SUNSHINE),
+    app(
+        "iroriSunshine.bigPicture",
+        "settings.field.sunshine_big_picture.label",
+        General,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.sunshine_big_picture.help")
+    .keywords(&["sunshine", "moonlight", "big picture", "couch"])
+    .requires(NEEDS_SUNSHINE),
+    app(
+        "panel.sunshine",
+        "settings.field.panel_sunshine.label",
+        General,
+        "settings.group.integrations",
+        Panel(PanelKind::Sunshine),
+    )
+    .keywords(&["sunshine", "moonlight", "stream", "password", "login"]),
     app(
         "disablePlaytimeSync",
         "settings.field.disable_playtime_sync.label",

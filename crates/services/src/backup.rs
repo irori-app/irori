@@ -203,11 +203,16 @@ impl Backend {
     }
 
     /// The app settings for a backup, which travels: without the API key,
-    /// and without where this computer backs up and syncs.
+    /// and without where this computer backs up, syncs and streams from.
     fn backup_settings(&self) -> Result<Value> {
         let mut settings = serde_json::to_value(&*self.settings.app())?;
         if let Some(map) = settings.as_object_mut() {
-            for key in ["steamGridDbApiKey", "iroriBackups", "iroriSync"] {
+            for key in [
+                "steamGridDbApiKey",
+                "iroriBackups",
+                "iroriSync",
+                "iroriSunshine",
+            ] {
                 map.remove(key);
             }
         }
@@ -252,6 +257,7 @@ impl Backend {
             }
             settings.backups = current.backups.clone();
             settings.sync = current.sync.clone();
+            settings.sunshine = current.sunshine.clone();
             self.settings.replace_app(settings);
             summary.settings = true;
         }

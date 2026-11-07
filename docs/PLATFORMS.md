@@ -501,6 +501,22 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+## Streaming with Sunshine
+
+Irori finds Sunshine by its configuration folder: `~/.config/sunshine` on Linux and
+macOS (`$XDG_CONFIG_HOME/sunshine` when set), the Flatpak's
+`~/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine`, and
+`%ProgramFiles%\Sunshine\config` on Windows. Its web UI listens on `sunshine.conf`'s
+`port` plus one (47990 by default); `iroriSunshine.port` overrides it. Irori talks to it on
+`127.0.0.1` only.
+
+Sunshine follows the whole process group (on Windows, the job object) of the command it
+starts and ends it when the stream quits. `irori --launch … --wait` hands the game to the
+running Irori and waits; when no Irori runs it starts one with `--minimized` in a process
+group of its own and, on Windows, with `CREATE_BREAKAWAY_FROM_JOB`, so ending the stream
+doesn't end Irori. Where a job forbids leaving it, that Irori ends with the stream. An
+AppImage gives Sunshine `$APPIMAGE`, not its temporary mount.
+
 ## Sandboxed games (Linux)
 
 A game, an added app or a Lutris script install can run in a

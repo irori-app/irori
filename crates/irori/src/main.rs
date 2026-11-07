@@ -23,6 +23,7 @@ mod tray;
 #[cfg(not(target_os = "linux"))]
 #[path = "tray_native.rs"]
 mod tray;
+mod waiting;
 
 use std::sync::Arc;
 
@@ -52,6 +53,10 @@ pub enum ShellCommand {
     Launch(GameId),
     BigPicture,
     Args(Vec<String>),
+    /// Arguments of an invocation that waits for the session it asks for.
+    Wait(Vec<String>, Arc<instance::Waiter>),
+    /// The program waiting for Big Picture went away.
+    LeaveBigPicture,
     /// Save a clip of the replay buffer.
     SaveClip,
 }
@@ -91,6 +96,9 @@ fn main() -> Result<()> {
         println!("irori {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    if cli.wait {
+        std::process::exit(waiting::run(&args));
+    }
 
     let Some(listener) = instance::acquire(&args)? else {
         // Forwarded to the running instance.
@@ -106,8 +114,12 @@ fn main() -> Result<()> {
     let (tx, rx) = mpsc::unbounded::<ShellCommand>();
     {
         let tx = tx.clone();
-        instance::serve(listener, move |args| {
-            let _ = tx.unbounded_send(ShellCommand::Args(args));
+        instance::serve(listener, move |args, waiter| {
+            let command = match waiter {
+                Some(waiter) => ShellCommand::Wait(args, Arc::new(waiter)),
+                None => ShellCommand::Args(args),
+            };
+            let _ = tx.unbounded_send(command);
         })?;
     }
 
@@ -180,7 +192,7 @@ fn main() -> Result<()> {
             }
         }
         handle_cli(&cli, &app, cx);
-        listen(rx, app.clone(), cx);
+        listen(rx, tx.clone(), app.clone(), cx);
         install_quit_on_close(app, cx);
     });
     instance::release();
@@ -453,6 +465,7 @@ fn offer_install(id: GameId, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
 
 fn listen(
     mut rx: mpsc::UnboundedReceiver<ShellCommand>,
+    tx: mpsc::UnboundedSender<ShellCommand>,
     app: Arc<Mutex<AppHandles>>,
     cx: &mut App,
 ) {
@@ -468,6 +481,14 @@ fn listen(
                     nav::navigate(Route::BigPicture, cx);
                 }
                 ShellCommand::SaveClip => irori_ui::backend(cx).save_clip(),
+                ShellCommand::Wait(args, waiter) => {
+                    waiting::serve(&Cli::parse(args), waiter, &app, tx.clone(), cx)
+                }
+                ShellCommand::LeaveBigPicture => {
+                    if nav::navigator(cx).read(cx).current() == &Route::BigPicture {
+                        irori_bigpicture::exit_big_picture(cx);
+                    }
+                }
                 ShellCommand::Args(args) => {
                     let cli = Cli::parse(args);
                     if !cli.has_request() {

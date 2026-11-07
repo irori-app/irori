@@ -36,6 +36,7 @@ mod replay;
 mod saves;
 mod storage;
 mod stores;
+mod sunshine;
 mod sync;
 mod treemap;
 pub mod value;
