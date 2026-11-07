@@ -1,6 +1,6 @@
 //! The page's header (back link, title or logo, and a date · platform ·
 //! genres line) and its cover column: the cover with the primary action
-//! under it at its width, the sandbox card, the game's tools, the user's
+//! under it at its width, the age rating, the sandbox card, the game's tools, the user's
 //! rating and a card of quick facts. The sticky bar keeps the primary action in reach once it
 //! scrolls away.
 
@@ -183,6 +183,7 @@ impl GamePage {
         .w_full()
         .h(px(0.));
         let status = self.render_status_line(game, cx);
+        let age_rating = self.render_age_rating(game, cx);
         let sandbox = self.render_sandbox(cx);
         let tools = self.render_tools(game, cx);
         let rating = self.render_rating(cx);
@@ -204,6 +205,7 @@ impl GamePage {
             .child(primary)
             .child(marker)
             .children(status)
+            .children(age_rating)
             .children(sandbox)
             .child(tools)
             .child(rating)
@@ -405,8 +407,7 @@ impl GamePage {
                     .selected(fav)
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_favourite(cx))),
             )
-            // Steam applies its own launch settings to its games.
-            .when(self.id.runner.manages_installs(), |row| {
+            .when_some(ops::settings_section(&self.id), |row, section| {
                 row.child(
                     Button::new("game-settings")
                         .outline()
@@ -414,7 +415,7 @@ impl GamePage {
                         .icon(IconName::Settings2)
                         .accessibility_label(t("game.hero.settings"))
                         .tooltip(t("game.hero.settings"))
-                        .on_click(move |_, _, cx| ops::open_settings(&settings_id, "general", cx)),
+                        .on_click(move |_, _, cx| ops::open_settings(&settings_id, section, cx)),
                 )
             })
             .when(cloud.offers_sheet(), |row| {

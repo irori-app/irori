@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Sıradakiler",
   "game.achievements.cover_hidden": "Yeniden gizle",
   "game.achievements.complete": "Tüm başarımlar açıldı",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Diğer başarımlar",
   "game.achievements.worth_one": "{points} puan",
   "game.achievements.worth_other": "{points} puan",
   "game.action.install": "Yükle",
@@ -543,6 +545,11 @@
   "game.windows_file.no_matches": "Eşleşen oyun yok",
   "game.windows_file.open": "Aç",
   "game.windows_file.started": "“{file}”, {game} prefix’inde açıldı",
+  "game.windows_file.uri_title": "Bağlantı aç",
+  "game.windows_file.uri_body": "“{link}”, seçtiğiniz oyunun Wine prefix’inde, oradaki bu tür bağlantıları açan Windows programıyla açılır.",
+  "game.windows_file.uri_no_games": "Wine ile çalışan yüklü bir Windows oyunu yok. Bağlantıları bir oyunun prefix’inde açmak için bir oyun yükleyin veya Oyun ekle ile ekleyin.",
+  "game.windows_file.uri_started": "“{link}”, {game} prefix’inde açıldı",
+  "game.windows_file.uri_failed": "“{link}” açılamadı",
   "game.ops.shortcuts_add_failed": "{title} için kısayollar eklenemedi",
   "game.ops.shortcuts_added": "{title} için kısayollar eklendi",
   "game.ops.shortcuts_remove_failed": "{title} kısayolları kaldırılamadı",
@@ -707,6 +714,9 @@
   "game.timeline.view_journal": "Günlük",
   "game.journal.write": "Bu gün hakkında not yaz",
   "game.sandbox.title": "Korumalı alanda",
+  "game.age_rating.title": "Yaş derecelendirmesi",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Diğer derecelendirmeler: {ratings}",
   "game.sandbox.running": "Korumalı alanda çalışıyor",
   "game.sandbox.no_network": "Ağ yok",
   "game.sandbox.no_home": "Ev klasörü yok",
@@ -731,5 +741,6 @@
   "game.related.developer": "Yine {name} yapımı",
   "game.related.publisher": "Yine {name} yayını",
   "game.related.genres": "Ortak türler: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

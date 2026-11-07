@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: clear play status",
   "shell.palette.group_by_status": "Group the library by play status",
   "shell.palette.ungroup_by_status": "Stop grouping the library by play status",
+  "shell.palette.show_quick_controls": "Show quick controls in the library header",
+  "shell.palette.hide_quick_controls": "Hide quick controls in the library header",
+  "shell.palette.quick_controls_keywords": "quick sort filter header toolbar",
+  "shell.palette.show_installed": "Show only installed games",
+  "shell.palette.show_any_install": "Show installed and not installed games",
+  "shell.palette.show_favourites": "Show only favourites",
+  "shell.palette.show_all_favourites": "Show every game, not only favourites",
+  "shell.palette.filter_keywords": "filter installed favourites favorites library",
   "shell.palette.back_up": "Back up now",
   "shell.palette.back_up_keywords": "backup save copy restore",
   "shell.palette.backed_up": "Backed up",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "view saved filter",
   "shell.palette.save_view": "Save the library’s current view…",
   "shell.palette.add_folder": "Add games from a folder…",
-  "shell.palette.add_folder_keywords": "folder scan import add programs"
+  "shell.palette.add_folder_keywords": "folder scan import add programs",
+  "shell.palette.steam_play": "Steam Play tool for {title}",
+  "shell.palette.steam_play_keywords": "proton compatibility tool steam play ge-proton"
 }

@@ -589,6 +589,27 @@ impl FieldSpec {
                 && !matches!(self.path, "showFps" | "enableDXVKFpsLimit" | "DXVKFpsCap"))
     }
 
+    /// Whether the field still does something for a Steam game. Steam starts
+    /// its games with its own Proton, variables and wrappers, so only what
+    /// Irori does around the launch applies: the arguments it passes, the
+    /// scripts and programs it runs, the replay buffer, Sunshine, save
+    /// backups and art.
+    pub fn applies_to_steam(&self) -> bool {
+        self.path.starts_with("iroriReplay.")
+            || matches!(
+                self.path,
+                "panel.replay"
+                    | "launcherArgs"
+                    | "iroriInSunshine"
+                    | "beforeLaunchScriptPath"
+                    | "afterLaunchScriptPath"
+                    | "panel.launchPrograms"
+                    | "iroriLudusaviAutoBackup"
+                    | "panel.save-backups"
+                    | "panel.artwork"
+            )
+    }
+
     pub fn applies_to_game(&self, per_game: bool) -> bool {
         match self.scope {
             Scope::App => false,
@@ -1033,6 +1054,12 @@ const NEEDS_LIMITER: &[Condition] = &[
         "settings.requires.gamescope_limiter",
     ),
 ];
+
+const NEEDS_WALLPAPER_COLORS: &[Condition] = &[when(
+    "iroriUi.wallpaperColors",
+    true,
+    "settings.requires.wallpaper_colors",
+)];
 
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
@@ -1653,6 +1680,43 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_system_accent.help")
     .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
     app(
+        "iroriUi.wallpaperColors",
+        "settings.field.ui_wallpaper_colors.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_wallpaper_colors.help")
+    .keywords(&[
+        "pywal",
+        "wal",
+        "wallust",
+        "matugen",
+        "material you",
+        "wallpaper",
+        "colour",
+        "color",
+        "palette",
+    ]),
+    app(
+        "iroriUi.wallpaperColorsFile",
+        "settings.field.ui_wallpaper_colors_file.label",
+        Appearance,
+        "settings.group.theme",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ui_wallpaper_colors_file.help")
+    .placeholder(Verbatim("~/.cache/wal/colors.json"))
+    .keywords(&[
+        "pywal",
+        "wallust",
+        "matugen",
+        "colors.json",
+        "template",
+        "file",
+    ])
+    .requires(NEEDS_WALLPAPER_COLORS),
+    app(
         "iroriUi.accentColor",
         "settings.field.ui_accent_color.label",
         Appearance,
@@ -1739,6 +1803,25 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["badge", "store", "label"]),
+    app(
+        "iroriUi.libraryQuickControls",
+        "settings.field.ui_library_quick_controls.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_quick_controls.help")
+    .keywords(&[
+        "quick",
+        "sort",
+        "filter",
+        "installed",
+        "favourites",
+        "favorites",
+        "group",
+        "header",
+        "toolbar",
+    ]),
     app(
         "iroriUi.reduceMotion",
         "settings.field.ui_reduce_motion.label",
@@ -3239,5 +3322,33 @@ mod tests {
         assert!(ChoiceValue::Str("fsr").matches(&Value::from("fsr")));
         assert!(ChoiceValue::Num(3).matches(&Value::from(3)));
         assert!(!ChoiceValue::Num(3).matches(&Value::from("3")));
+    }
+
+    #[test]
+    fn steam_games_keep_only_what_irori_does_around_the_launch() {
+        let applies = |path: &str| find(path).expect(path).applies_to_steam();
+        for path in [
+            "launcherArgs",
+            "beforeLaunchScriptPath",
+            "panel.launchPrograms",
+            "iroriReplay.enabled",
+            "panel.save-backups",
+            "panel.artwork",
+            "iroriInSunshine",
+        ] {
+            assert!(applies(path), "{path}");
+        }
+        for path in [
+            "wineVersion",
+            "useGameMode",
+            "enviromentOptions",
+            "wrapperOptions",
+            "steamRuntime",
+            "iroriGpu",
+            "autoSyncSaves",
+            "panel.launchPresets",
+        ] {
+            assert!(!applies(path), "{path}");
+        }
     }
 }

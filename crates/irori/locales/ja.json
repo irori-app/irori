@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}：プレイ状況を解除",
   "shell.palette.group_by_status": "ライブラリをプレイ状況でグループ化",
   "shell.palette.ungroup_by_status": "ライブラリのプレイ状況別グループ化を解除",
+  "shell.palette.show_quick_controls": "ライブラリのヘッダーにクイック操作を表示",
+  "shell.palette.hide_quick_controls": "ライブラリのヘッダーのクイック操作を非表示",
+  "shell.palette.quick_controls_keywords": "クイック 並べ替え フィルター ヘッダー ツールバー",
+  "shell.palette.show_installed": "インストール済みのゲームのみ表示",
+  "shell.palette.show_any_install": "インストール済みと未インストールのゲームを表示",
+  "shell.palette.show_favourites": "お気に入りのみ表示",
+  "shell.palette.show_all_favourites": "お気に入りだけでなくすべてのゲームを表示",
+  "shell.palette.filter_keywords": "フィルター インストール済み お気に入り ライブラリ",
   "shell.palette.back_up": "今すぐバックアップ",
   "shell.palette.back_up_keywords": "バックアップ 保存 復元",
   "shell.palette.backed_up": "バックアップしました",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "ビュー 保存 フィルター",
   "shell.palette.save_view": "ライブラリの現在のビューを保存…",
   "shell.palette.add_folder": "フォルダーからゲームを追加…",
-  "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム"
+  "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム",
+  "shell.palette.steam_play": "{title} の Steam Play ツール",
+  "shell.palette.steam_play_keywords": "proton 互換性ツール steam play ge-proton"
 }

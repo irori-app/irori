@@ -15,6 +15,7 @@ irori-runtime.workspace = true
 irori-reshade.workspace = true
 irori-extras.workspace = true
 irori-epic.workspace = true
+irori-steam.workspace = true
 irori-bigpicture.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true
@@ -30,3 +31,4 @@ once_cell.workspace = true
 gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
 tempfile = "3"
 regex.workspace = true
+irori-steam-api.workspace = true

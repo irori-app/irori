@@ -1,0 +1,49 @@
+{
+  "id": "m64py",
+  "name": "M64Py",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/mupen64plus/mupen64plus-ui-python",
+  "kind": "standalone",
+  "systems": [
+    "n64"
+  ],
+  "sources": [
+    {
+      "type": "flatpak",
+      "id": "net.sourceforge.m64py.M64Py"
+    },
+    {
+      "type": "path",
+      "names": [
+        "m64py"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "M64Py.app"
+    },
+    {
+      "type": "windows",
+      "paths": [
+        "%ProgramFiles%\\M64Py\\m64py.exe"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "m64py"
+    ],
+    "macos": [
+      "M64Py.app"
+    ],
+    "windows": [
+      "m64py.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      "{rom}"
+    ]
+  },
+  "exitHotkey": "Esc"
+}

@@ -13,6 +13,8 @@ use anyhow::{Context as _, Result};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
+use crate::sfo;
+
 /// Bytes a header check may look at: enough for every rule in the catalog.
 const HEADER_LEN: usize = 512;
 
@@ -117,11 +119,16 @@ pub struct System {
     /// match wins (`PS3_GAME/USRDIR/EBOOT.BIN`). Empty opens the folder.
     #[serde(default)]
     pub folder_main: Vec<String>,
-    /// For folder games: a file inside the folder naming the game
-    /// (`sce_sys/param.json` of PlayStation 5 games), read instead of the
+    /// For folder games: files inside the folder naming the game, the first
+    /// that names one wins (`sce_sys/param.json` of PlayStation 5 games,
+    /// `PARAM.SFO` of PlayStation 3 and 4 games), read instead of the
     /// folder's name, which is often only a title id.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub folder_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folder_title: Vec<String>,
+    /// For folder games: folder names that belong to the game's own layout
+    /// (`PS3_GAME`, `USRDIR`, `sce_sys`) and so never name the game.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layout_folders: Vec<String>,
     /// Files count as this system's games only inside one of its folders
     /// (arcade `.zip` sets, Xbox `.iso` images), never by extension alone.
     #[serde(default)]
@@ -131,6 +138,13 @@ pub struct System {
 impl System {
     pub fn has_extension(&self, ext: &str) -> bool {
         self.extensions.iter().any(|e| e.eq_ignore_ascii_case(ext))
+    }
+
+    /// Whether a folder called `name` belongs to a game's own layout.
+    pub fn is_layout_folder(&self, name: &str) -> bool {
+        self.layout_folders
+            .iter()
+            .any(|f| f.eq_ignore_ascii_case(name))
     }
 
     pub fn needs_bios(&self) -> bool {
@@ -237,18 +251,21 @@ fn read_header(path: &Path) -> Result<Vec<u8>> {
 const TITLE_FILE_MAX: u64 = 1 << 20;
 
 /// The title the game folder `folder` gives itself through the system's
-/// [`System::folder_title`] file, if it has one. Blocking.
+/// [`System::folder_title`] files, the first that names one. Files bigger
+/// than [`TITLE_FILE_MAX`] are skipped unread. Blocking.
 pub fn folder_title(system: &System, folder: &Path) -> Option<String> {
-    let rel = system.folder_title.as_deref()?;
-    let path = folder.join(rel);
-    if std::fs::metadata(&path).ok()?.len() > TITLE_FILE_MAX {
-        return None;
-    }
-    let text = std::fs::read_to_string(&path).ok()?;
-    match Path::new(rel).file_name()?.to_str()? {
-        "param.json" => title_of_param_json(&text),
-        _ => None,
-    }
+    system.folder_title.iter().find_map(|rel| {
+        let path = folder.join(rel);
+        if std::fs::metadata(&path).ok()?.len() > TITLE_FILE_MAX {
+            return None;
+        }
+        let name = Path::new(rel).file_name()?.to_str()?.to_ascii_lowercase();
+        match name.as_str() {
+            "param.json" => title_of_param_json(&std::fs::read_to_string(&path).ok()?),
+            "param.sfo" => sfo::title(&std::fs::read(&path).ok()?),
+            _ => None,
+        }
+    })
 }
 
 /// The title in a PlayStation 5 `param.json`: the entry of
@@ -303,6 +320,55 @@ mod tests {
             Some("Jeu d'exemple")
         );
         assert!(folder_title(get("ps4").unwrap(), dir.path()).is_none());
+    }
+
+    #[test]
+    fn reads_ps3_and_ps4_titles_from_param_sfo() {
+        let dir = tempfile::tempdir().unwrap();
+        let ps3 = get("ps3").unwrap();
+        let ps4 = get("ps4").unwrap();
+
+        // A disc dump keeps the file in `PS3_GAME`.
+        let disc = dir.path().join("BLUS30443");
+        std::fs::create_dir_all(disc.join("PS3_GAME")).unwrap();
+        std::fs::write(
+            disc.join("PS3_GAME/PARAM.SFO"),
+            sfo::build(&[("TITLE", "Demon's Souls")]),
+        )
+        .unwrap();
+        assert_eq!(folder_title(ps3, &disc).as_deref(), Some("Demon's Souls"));
+
+        // A `PS3_GAME` folder or a PSN game has it at the top.
+        let psn = dir.path().join("NPUB30001");
+        std::fs::create_dir_all(&psn).unwrap();
+        std::fs::write(psn.join("PARAM.SFO"), sfo::build(&[("TITLE", "Flower")])).unwrap();
+        assert_eq!(folder_title(ps3, &psn).as_deref(), Some("Flower"));
+
+        let ps4_game = dir.path().join("CUSA00572");
+        std::fs::create_dir_all(ps4_game.join("sce_sys")).unwrap();
+        std::fs::write(
+            ps4_game.join("sce_sys/param.sfo"),
+            sfo::build(&[("TITLE", "Sample Quest"), ("TITLE_ID", "CUSA00572")]),
+        )
+        .unwrap();
+        assert_eq!(
+            folder_title(ps4, &ps4_game).as_deref(),
+            Some("Sample Quest")
+        );
+        assert!(folder_title(ps3, &ps4_game).is_none());
+
+        // Damaged and oversized files name nothing.
+        let broken = dir.path().join("CUSA00001");
+        std::fs::create_dir_all(broken.join("sce_sys")).unwrap();
+        std::fs::write(broken.join("sce_sys/param.sfo"), b"\0PSF garbage").unwrap();
+        assert!(folder_title(ps4, &broken).is_none());
+        let mut huge = sfo::build(&[("TITLE", "Too Big")]);
+        huge.resize(TITLE_FILE_MAX as usize + 1, 0);
+        std::fs::write(broken.join("sce_sys/param.sfo"), huge).unwrap();
+        assert!(folder_title(ps4, &broken).is_none());
+
+        assert!(ps3.is_layout_folder("ps3_game") && ps3.is_layout_folder("USRDIR"));
+        assert!(ps4.is_layout_folder("sce_sys") && !ps4.is_layout_folder("CUSA00572"));
     }
 
     #[test]

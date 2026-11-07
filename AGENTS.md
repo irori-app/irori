@@ -105,6 +105,11 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 - A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
   Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
   `Backend::open_windows_file`; `docs/PLATFORMS.md`, "Windows files").
+- A link of any other scheme (`ddnet:[::1]:8303`; not Irori's, Heroic's, Lutris's or Nexus
+  Mods' links, `file:` or web pages; not on Windows) opens the same way, through Wine's
+  `start` (`irori_runtime::windows_uri`, `Backend::open_windows_uri`,
+  `irori_game::open_windows_uri_dialog`; `docs/PLATFORMS.md`, "Other programs' links").
+  Irori registers no such scheme; the user points one at it (`xdg-mime default`).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 
@@ -436,6 +441,17 @@ commands without a window.
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
   through `irori_ui::play_status` (names, colours, icons, menu, button).
+- **Age ratings** (`irori_core::age_rating`, `age_ratings.rs`): `AgeRating {system,
+  rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
+  E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
+  Epic (`ageGatings`) carry them in `GameInfo::age_ratings`; Steam (`appdetails`
+  `ratings`) and GOG (`v2/games` `_embedded.*Rating`) in `ExtraInfo::age_ratings`. UI code
+  reads a game's store page through `Backend::extra_info`, which keeps those ratings in
+  `<cache>/age-ratings.json` and adds them to the library entry, so no request is made
+  for ratings alone. The game page shows the board of the user's region
+  (`irori_ui::age_rating`: interface language, then the system locale's region) as a
+  text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
+  goes by the strictest board.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that
@@ -445,7 +461,10 @@ commands without a window.
   with `irori_core::achievement_cache` (15 minutes; stale answers stand in offline).
   Sources: GOG and Epic web APIs, Steam's `IPlayerService` (definitions are public;
   unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
-  for the ROM library.
+  for the ROM library. Steam's Achievement Sets (`GetGameAchievements`' `groups` and
+  each achievement's `groupid`) become `Achievement::group` (name, DLC app id, order;
+  `None` elsewhere and offline); the game page lists a game with two or more sets
+  under a heading per set with its progress, while totals stay per game.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
@@ -643,6 +662,12 @@ cx.spawn_in(window, async move |this, cx| {
   themes stay out of the theme registry, which never replaces a theme it already has.
   COSMIC's `frosted_windows` and window opacity also decide Automatic translucency
   (`glass::resolve`, `Glass::Desktop`).
+- With `iroriUi.wallpaperColors` on (off by default, every OS) the default theme is the
+  wallpaper's instead, over a followed desktop's: `wallpaper.rs` reads pywal's
+  `colors.json` (which wallust writes too) or the matugen JSON the user names in
+  `iroriUi.wallpaperColorsFile`, into a `Palette` per mode. `theme::follow_wallpaper`
+  starts, stops or moves the folder watch as the settings change, and re-themes only
+  when the parsed colours differ (`Desktop::Wallpaper`, `docs/PLATFORMS.md`).
 - Elsewhere the default theme is Irori's own in the system's accent colour: the settings
   portal's on other Linux desktops, `controlAccentColor` and the highlight colour on macOS,
   `UISettings` and its shades on Windows (`desktop_accent.rs` and its `macos.rs` and
@@ -811,16 +836,20 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Manifests are data.** Each engine is `assets/engines/<id>.json`: sources per OS
   (GitHub release regexes, the libretro buildbot, a download page, Flatpak id, `PATH`
   names, app bundle, Windows paths), the launch template, options with **one** visibility
-  rule (`visibleWhen`), BIOS folder, exit hotkey and licence. Never pin a download URL;
-  describe where versions are listed. The only per-engine code is the `kind` match in
+  rule (`visibleWhen`; an option limited to other hosts adds nothing to the launch),
+  BIOS folder, exit hotkey and licence. Never pin a download URL; describe where
+  versions are listed. The only per-engine code is the `kind` match in
   `crates/engines/src/launch.rs` (RetroArch cores, DOSBox, ScummVM, MAME, relinkers). Users may
   override a manifest with `<config>/engines/<id>.json` (merge patch).
 - **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
-  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, MAME (detected only), and the
+  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
+  DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
   experimental Cemu, RPCS3, xemu, shadPS4 and AnyPS5 (never a system's default while
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
-  folder games may name the file engines open (`folderMain`) and the file naming them
-  (`folderTitle`); BIOS files with many names match a `pattern`.
+  folder games may name the file engines open (`folderMain`), the files naming them
+  (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
+  and the folders of their own layout that never name them (`layoutFolders`); BIOS
+  files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
   game into a program of this computer before it plays, in Irori's data folder with the
   game's files linked into `app0/`; it never writes the game folder. Its releases are a
@@ -993,6 +1022,23 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
   game's `launcherArgs`; a `SteamGameWatch` follows the reaper (Linux), the game folder's
   processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+- **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
+  the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
+  Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as
+  `proton_9`, `proton_experimental`) and every `compatibilitytool.vdf` in
+  `compatibilitytools.d` (Flatpak Steam: its own folder only). The choice is
+  `InstallConfigStore/Software/Valve/Steam/CompatToolMapping/<appid>` in
+  `config/config.vdf`, edited by splicing only that entry's bytes (`compat/mapping.rs`
+  refuses a file it can't parse completely and reads every edit back), written atomically
+  after copying the old file to `config.vdf.irori-backup`, and only while Steam is closed:
+  Steam rewrites the file on exit. A running Steam fails with `SteamRunning`; the UI asks
+  before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
+  game menu's "Steam Play…", the palette and the page's Settings button, all through
+  `irori_game::ops::open_steam_play`/`settings_section`.
+- **Settings that apply**: Steam starts its games with its own Proton, variables and
+  wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
+  (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
+  backups, art) and hide the Graphics, Tools and Log sections.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
@@ -1166,6 +1212,10 @@ Match the code around you. In particular:
   `truncate()` where text may overflow. Have one scroll owner per region.
 - Leave room for German and Russian, which run 30–40% longer than English. Never put
   text in a fixed-width box.
+- Controls that come and go with the room (the library header's quick controls,
+  `iroriUi.libraryQuickControls`) are picked from measured widths, never fixed
+  breakpoints: measure the room and each control with a `canvas`, and keep the choice a
+  pure function with tests (`irori-library`'s `quick.rs`).
 
 **Feedback**
 

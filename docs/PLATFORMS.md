@@ -217,6 +217,22 @@ the reaper and the game's processes, never the Steam client. Playtime is the lar
 the minutes Steam keeps in `userdata/<user>/config/localconfig.vdf` (the logged-in
 account's own folder when there is one) and the account's own total.
 
+On Linux a Steam game's settings (Wine & Proton) choose the compatibility tool Steam runs
+it with, next to its ProtonDB rating: Steam's default, Valve's Proton builds installed in
+any Steam library, or the tools in `compatibilitytools.d` (Steam's own folder, plus
+`/usr/share/steam`, `/usr/local/share/steam` and `STEAM_EXTRA_COMPAT_TOOLS_PATHS` for a
+native Steam; Flatpak Steam sees only its own). Proton builds from the Wine manager are
+among them when "Install Proton downloads into Steam" is on. The choice is the game's
+entry of `CompatToolMapping` in `<steam>/config/config.vdf`; Irori changes that entry
+only, keeps the previous file as `config.vdf.irori-backup` and replaces the file
+atomically. Steam rewrites the file when it exits, so Irori writes only while Steam is
+closed and otherwise asks to close it first (`steam -shutdown`); in Steam's Game Mode it
+can't, and the choice stays with the game's properties in Steam. The choice opens from
+the game menu ("Steam Play…"), the command palette and the game page's Settings button.
+A Steam game's settings list only what Irori still does around Steam's launch: the
+launch arguments, scripts, programs started alongside, the replay buffer, Sunshine, save
+backups and art.
+
 itch.io (turned on in Settings › General › Integrations, or from its account card)
 signs in with an API key from `https://itch.io/user/settings/api-keys`, kept owner-only
 in the store's config folder. Installs download the upload that fits the platform into
@@ -274,6 +290,37 @@ belong to someone else.
 
 The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
 instance makes a relative path absolute before forwarding it.
+
+#### Other programs' links
+
+A link of a scheme that a Windows program registers in its prefix (a game client's
+`ddnet:[::1]:8303`, `someapp://join/…`) can reach that program the same way: handed to
+Irori, it asks which game's prefix opens it (the same games as for Windows files), then
+runs Wine's `start <link>` there, which passes it to the program the prefix registered
+for the scheme. Proton runs `start /wait <link>` with `PROTON_VERB=runinprefix`, and
+under umu `UMU_CONTAINER_NSENTER=1` sends it into the Steam runtime container of a game
+already running in that prefix. The link is one argument of that command and never goes
+through a shell.
+
+Irori forwards only links it doesn't open itself
+(`irori_runtime::windows_uri::is_forwarded_uri`): never `irori:`, `heroic:`, `lutris:`,
+`nxm:` or `file:`, never web pages (`http:`, `https:`, which belong in the user's own
+browser, not a Wine one) or a browser's internal schemes (`about:`, `blob:`, `data:`,
+`javascript:`), and never a link holding spaces, quotes or control characters, or one
+longer than 4,096 characters. A single letter before the colon is a drive (`C:\…`), not
+a scheme. Since any web page can open a link, the picker opens only when no other
+dialog is showing, and the link starts only when the user picks a game and presses
+Open. Windows hands links to their programs itself, so Irori there forwards none.
+
+Irori registers no scheme besides its own: which schemes a prefix's programs take is
+unknown, and claiming one would take it from a native client. The user points a scheme
+at Irori themselves:
+
+| | How |
+| --- | --- |
+| Linux | `xdg-mime default irori.desktop x-scheme-handler/<scheme>` (the packaged entry's `Exec=irori %u` passes the link); undo it by choosing another default program |
+| macOS | Only from a terminal or script (`/Applications/Irori.app/Contents/MacOS/irori 'ddnet:[::1]:8303'`): macOS hands an app only the schemes its bundle declares, and `Irori.app` declares `irori` alone |
+| Any | `irori <link>` from a terminal, a script or another program; a running Irori gets it from the second instance |
 
 ### Screenshots
 
@@ -792,6 +839,65 @@ The Flatpak has a config folder of its own, so it reads `~/.config/kdeglobals` a
 as `kdeglobals` holds the colours from first login on. It can't see the host's
 `/usr/share/color-schemes`, so a `kdeglobals` that only names a system scheme gets
 Irori's own theme there.
+
+## Wallpaper colours (pywal, wallust, matugen)
+
+Settings → Appearance → “Use colors from pywal, wallust or matugen”
+(`iroriUi.wallpaperColors`, off by default) makes the default theme of the colours
+these tools take from the wallpaper, on every system, and wins over a followed
+desktop's theme while it is on. It is off by default because the files stay behind
+whether or not the user wants Irori themed. “Colors file”
+(`iroriUi.wallpaperColorsFile`) names the file; a leading `~` is the home folder.
+
+- **pywal**: left empty, Irori reads `colors.json` in `$PYWAL_CACHE_DIR`, else
+  `~/.cache/wal`. Its `special` background and foreground make the surfaces and text,
+  `color4` the accent and `color8` the dimmer text. The sixteen colours are hues of the
+  wallpaper rather than a red that means danger, so warnings and errors keep Irori's
+  colours. Whether the theme is dark goes by the background (`wal -l` makes it light).
+- **wallust** writes the same file when its templates include pywal's `colors.json`:
+  `wal = { template = 'wal/', target = '~/.cache/wal/', pywal = true }` in
+  `wallust.toml`. Its own cache is named after each wallpaper and doesn't say which is
+  current, so Irori doesn't read it.
+- **matugen** writes only what its templates say, so pick the file one of them
+  renders. Irori reads Material You roles (`surface`, `on_surface`,
+  `on_surface_variant`, `primary`, `secondary`, `tertiary`, `error` and the
+  `surface_container*` roles), either as flat keys or in `matugen … --json hex`'s own
+  shapes (`colors.primary.dark`, and matugen 2's `colors.dark.primary`), so
+  `matugen image … --json hex > ~/.cache/matugen/irori.json` works too. A file with both
+  modes gives Irori a light and a dark theme, and its `mode` decides which shows. A
+  template, in `~/.config/matugen/config.toml`:
+
+  ```toml
+  [templates.irori]
+  input_path = '~/.config/matugen/templates/irori.json'
+  output_path = '~/.cache/matugen/irori.json'
+  ```
+
+  with `~/.config/matugen/templates/irori.json`:
+
+  ```json
+  {
+    "primary": "{{colors.primary.default.hex}}",
+    "secondary": "{{colors.secondary.default.hex}}",
+    "tertiary": "{{colors.tertiary.default.hex}}",
+    "error": "{{colors.error.default.hex}}",
+    "surface": "{{colors.surface.default.hex}}",
+    "on_surface": "{{colors.on_surface.default.hex}}",
+    "on_surface_variant": "{{colors.on_surface_variant.default.hex}}",
+    "surface_container_low": "{{colors.surface_container_low.default.hex}}",
+    "surface_container": "{{colors.surface_container.default.hex}}",
+    "surface_container_high": "{{colors.surface_container_high.default.hex}}",
+    "surface_container_highest": "{{colors.surface_container_highest.default.hex}}"
+  }
+  ```
+
+  Only `surface`, `on_surface` and `primary` are needed; Irori derives what is missing.
+
+The tools write by renaming, so Irori watches the file's folder (or the one above,
+until the tool first makes it), waits for writes to settle and re-themes only when the
+colours changed. Nothing polls. Text and icons are held to Irori's contrast minimums.
+Settings → Appearance → Theme shows this as “Wallpaper colors (default)”; picking any
+other theme stops following them, and “Follow system” takes its mode from them.
 
 ## System accent colour
 

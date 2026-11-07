@@ -10,6 +10,7 @@
 //! summary in the grid's drawer (`drawer`).
 
 mod achievements;
+mod age_rating;
 mod compat;
 mod details;
 mod drawer;
@@ -425,10 +426,10 @@ impl GamePage {
         let b = backend(cx);
         let id = self.id.clone();
         let task = irori_ui::run(cx, async move {
-            let store = b
-                .store(id.runner)
-                .ok_or_else(|| crate::i18n::store_unavailable(id.runner))?;
-            store.extra_info(&id.app_name).await
+            if b.store(id.runner).is_none() {
+                return Err(crate::i18n::store_unavailable(id.runner));
+            }
+            b.extra_info(&id).await
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
@@ -668,8 +669,8 @@ impl GamePage {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.id.runner.manages_installs() {
-            ops::open_settings(&self.id, "general", cx);
+        if let Some(section) = ops::settings_section(&self.id) {
+            ops::open_settings(&self.id, section, cx);
         }
     }
 }

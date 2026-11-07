@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: 플레이 상태 지우기",
   "shell.palette.group_by_status": "라이브러리를 플레이 상태별로 묶기",
   "shell.palette.ungroup_by_status": "라이브러리를 플레이 상태별로 묶지 않기",
+  "shell.palette.show_quick_controls": "라이브러리 헤더에 빠른 컨트롤 표시",
+  "shell.palette.hide_quick_controls": "라이브러리 헤더의 빠른 컨트롤 숨기기",
+  "shell.palette.quick_controls_keywords": "빠른 정렬 필터 헤더 도구 모음",
+  "shell.palette.show_installed": "설치된 게임만 표시",
+  "shell.palette.show_any_install": "설치된 게임과 설치되지 않은 게임 모두 표시",
+  "shell.palette.show_favourites": "즐겨찾기만 표시",
+  "shell.palette.show_all_favourites": "즐겨찾기뿐 아니라 모든 게임 표시",
+  "shell.palette.filter_keywords": "필터 설치됨 즐겨찾기 라이브러리",
   "shell.palette.back_up": "지금 백업",
   "shell.palette.back_up_keywords": "백업 저장 복원",
   "shell.palette.backed_up": "백업 완료",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "보기 저장 필터",
   "shell.palette.save_view": "라이브러리의 현재 보기 저장…",
   "shell.palette.add_folder": "폴더에서 게임 추가…",
-  "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램"
+  "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램",
+  "shell.palette.steam_play": "{title}의 Steam Play 도구",
+  "shell.palette.steam_play_keywords": "proton 호환성 도구 steam play ge-proton"
 }

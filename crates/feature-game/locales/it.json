@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Prossimi",
   "game.achievements.cover_hidden": "Nascondi di nuovo",
   "game.achievements.complete": "Tutti gli obiettivi sbloccati",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Altri obiettivi",
   "game.achievements.worth_one": "{points} punto",
   "game.achievements.worth_other": "{points} punti",
   "game.action.install": "Installa",
@@ -543,6 +545,11 @@
   "game.windows_file.no_matches": "Nessun gioco corrisponde",
   "game.windows_file.open": "Apri",
   "game.windows_file.started": "«{file}» aperto nel prefisso di {game}",
+  "game.windows_file.uri_title": "Apri un link",
+  "game.windows_file.uri_body": "«{link}» si apre nel prefisso Wine del gioco che scegli, con il programma Windows che lì gestisce questo tipo di link.",
+  "game.windows_file.uri_no_games": "Nessun gioco Windows installato funziona con Wine. Installane uno, o aggiungilo con Aggiungi gioco, per aprire i link nel suo prefisso.",
+  "game.windows_file.uri_started": "«{link}» aperto nel prefisso di {game}",
+  "game.windows_file.uri_failed": "Impossibile aprire «{link}»",
   "game.ops.shortcuts_add_failed": "Impossibile aggiungere i collegamenti per {title}",
   "game.ops.shortcuts_added": "Collegamenti aggiunti per {title}",
   "game.ops.shortcuts_remove_failed": "Impossibile rimuovere i collegamenti di {title}",
@@ -707,6 +714,9 @@
   "game.timeline.view_journal": "Diario",
   "game.journal.write": "Scrivi una nota su questo giorno",
   "game.sandbox.title": "In sandbox",
+  "game.age_rating.title": "Classificazione per età",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Classificato anche: {ratings}",
   "game.sandbox.running": "In esecuzione in sandbox",
   "game.sandbox.no_network": "Senza rete",
   "game.sandbox.no_home": "Senza cartella home",
@@ -731,5 +741,6 @@
   "game.related.developer": "Anche di {name}",
   "game.related.publisher": "Anche pubblicato da {name}",
   "game.related.genres": "Stessi generi: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

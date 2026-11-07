@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}：清除游玩状态",
   "shell.palette.group_by_status": "按游玩状态为游戏库分组",
   "shell.palette.ungroup_by_status": "取消按游玩状态为游戏库分组",
+  "shell.palette.show_quick_controls": "在游戏库标题栏中显示快捷控件",
+  "shell.palette.hide_quick_controls": "隐藏游戏库标题栏中的快捷控件",
+  "shell.palette.quick_controls_keywords": "快捷 排序 筛选 标题栏 工具栏",
+  "shell.palette.show_installed": "仅显示已安装的游戏",
+  "shell.palette.show_any_install": "显示已安装和未安装的游戏",
+  "shell.palette.show_favourites": "仅显示收藏",
+  "shell.palette.show_all_favourites": "显示所有游戏，而不只是收藏",
+  "shell.palette.filter_keywords": "筛选 已安装 收藏 游戏库",
   "shell.palette.back_up": "立即备份",
   "shell.palette.back_up_keywords": "备份 保存 恢复",
   "shell.palette.backed_up": "已备份",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "视图 保存 筛选",
   "shell.palette.save_view": "保存游戏库当前视图…",
   "shell.palette.add_folder": "从文件夹添加游戏…",
-  "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序"
+  "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序",
+  "shell.palette.steam_play": "{title} 的 Steam Play 工具",
+  "shell.palette.steam_play_keywords": "proton 兼容性工具 steam play ge-proton"
 }

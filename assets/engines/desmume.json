@@ -1,0 +1,54 @@
+{
+  "id": "desmume",
+  "name": "DeSmuME",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://desmume.org",
+  "kind": "standalone",
+  "systems": [
+    "nds"
+  ],
+  "sources": [
+    {
+      "type": "flatpak",
+      "id": "org.desmume.DeSmuME"
+    },
+    {
+      "type": "path",
+      "names": [
+        "desmume"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "desmume"
+    ],
+    "windows": [
+      "DeSmuME*.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "--windowed-fullscreen"
+        ]
+      },
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true,
+      "visibleWhen": {
+        "hosts": [
+          "windows"
+        ]
+      }
+    }
+  ],
+  "exitHotkey": "Ctrl+Q"
+}

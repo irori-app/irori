@@ -3,6 +3,7 @@
 //! game art ([`art`]), theming ([`theme`]), motion ([`motion`]), desktop
 //! notifications ([`system_notify`]) and domain components.
 
+pub mod age_rating;
 pub mod art;
 pub mod art_picker;
 pub mod components;
@@ -30,6 +31,7 @@ pub mod state;
 pub mod style;
 pub mod system_notify;
 pub mod theme;
+mod wallpaper;
 
 pub use models::{Models, models};
 pub use nav::{Route, navigate};
@@ -59,4 +61,5 @@ pub fn init(backend: Backend, cx: &mut App) {
     art::install(cx);
     nav::install(cx);
     models::install(cx);
+    theme::follow_wallpaper(cx);
 }

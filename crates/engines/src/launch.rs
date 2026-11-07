@@ -315,7 +315,19 @@ pub fn command(input: &LaunchInput) -> Result<CommandSpec> {
         }
     }
 
-    expand_args(&manifest.launch.args, values, &vars, &mut args);
+    // An option limited to other hosts doesn't apply here: neither branch of
+    // its condition is taken (DeSmuME's full-screen flag exists on Windows
+    // only, and its Linux build refuses unknown flags).
+    let applicable: BTreeMap<String, Value> = values
+        .iter()
+        .filter(|(id, _)| {
+            manifest.option(id).is_none_or(|o| {
+                o.visible_when.hosts.is_empty() || o.visible_when.hosts.contains(&os)
+            })
+        })
+        .map(|(id, v)| (id.clone(), v.clone()))
+        .collect();
+    expand_args(&manifest.launch.args, &applicable, &vars, &mut args);
     let has_rom = manifest
         .launch
         .args
@@ -456,7 +468,9 @@ fn expand_args(
                 out.push(text.into());
             }
             Arg::When { when, args } if flag(values, when) => expand_args(args, values, vars, out),
-            Arg::Unless { unless, args } if !flag(values, unless) => {
+            Arg::Unless { unless, args }
+                if values.contains_key(unless) && !flag(values, unless) =>
+            {
                 expand_args(args, values, vars, out)
             }
             _ => {}
@@ -695,5 +709,125 @@ mod tests {
         assert_eq!(args.last().unwrap(), "--auto-detect");
         assert_eq!(args[args.len() - 2], format!("--path={}", game.display()));
         assert_eq!(spec.cwd.as_deref(), Some(game.as_path()));
+    }
+
+    /// The arguments `engine` gets for `rom` with the options in `set`.
+    fn args_of(engine: &str, system: &str, rom: &Path, set: &[(&str, Value)]) -> Vec<String> {
+        let m = crate::engine(engine).unwrap();
+        let inst = installation(engine, Origin::System, Path::new("/usr/bin/emu"));
+        let set: BTreeMap<String, Value> = set
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+        let values = m.option_values(&set);
+        command(&LaunchInput {
+            manifest: &m,
+            installation: &inst,
+            game: &GameFile {
+                path: rom.to_path_buf(),
+                system: system.into(),
+            },
+            core: None,
+            values: &values,
+            bios: &BiosIndex::default(),
+            own_settings: false,
+        })
+        .unwrap()
+        .args
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
+    }
+
+    #[test]
+    fn n64_ds_and_ps1_engines_follow_their_templates() {
+        let root = crate::test_root("launch-more-engines");
+        let n64 = root.join("n64/Game (USA).z64");
+        let nds = root.join("nds/Game.nds");
+        let psx = root.join("psx/Game.cue");
+        for rom in [&n64, &nds, &psx] {
+            std::fs::create_dir_all(rom.parent().unwrap()).unwrap();
+            std::fs::write(rom, b"x").unwrap();
+        }
+        let n64s = n64.to_str().unwrap();
+
+        assert_eq!(
+            args_of("gopher64", "n64", &n64, &[]),
+            ["--fullscreen", n64s]
+        );
+        assert_eq!(
+            args_of(
+                "gopher64",
+                "n64",
+                &n64,
+                &[
+                    ("fullscreen", Value::Bool(false)),
+                    ("widescreen", Value::Bool(true))
+                ]
+            ),
+            ["--widescreen", n64s]
+        );
+
+        assert_eq!(
+            args_of("mupen64plus", "n64", &n64, &[]),
+            ["--fullscreen", "--noosd", n64s]
+        );
+        assert_eq!(
+            args_of(
+                "mupen64plus",
+                "n64",
+                &n64,
+                &[
+                    ("fullscreen", Value::Bool(false)),
+                    ("onscreen_messages", Value::Bool(true))
+                ]
+            ),
+            ["--windowed", "--osd", n64s]
+        );
+
+        assert_eq!(args_of("m64py", "n64", &n64, &[]), [n64s]);
+
+        assert_eq!(
+            args_of("epsxe", "psx", &psx, &[]),
+            ["-nogui", "-loadbin", psx.to_str().unwrap()]
+        );
+        assert_eq!(
+            args_of("epsxe", "psx", &psx, &[("boot_logo", Value::Bool(true))]),
+            ["-nogui", "-slowboot", "-loadbin", psx.to_str().unwrap()]
+        );
+    }
+
+    #[test]
+    fn options_of_other_hosts_add_nothing() {
+        let root = crate::test_root("launch-host-options");
+        let nds = root.join("nds/Game.nds");
+        std::fs::create_dir_all(nds.parent().unwrap()).unwrap();
+        std::fs::write(&nds, b"x").unwrap();
+        let ndss = nds.to_str().unwrap().to_string();
+        // DeSmuME's full-screen flag exists only in its Windows build; the
+        // Linux build refuses flags it doesn't know.
+        let expected: Vec<String> = if Os::current() == Os::Windows {
+            vec!["--windowed-fullscreen".into(), ndss]
+        } else {
+            vec![ndss]
+        };
+        assert_eq!(args_of("desmume", "nds", &nds, &[]), expected);
+
+        // Neither branch of a condition on an option that doesn't apply.
+        let template: Vec<Arg> = serde_json::from_str(
+            r#"[{"if": "x", "args": ["--on"]}, {"unless": "x", "args": ["--off"]}, "{rom}"]"#,
+        )
+        .unwrap();
+        let vars = Vars {
+            rom: "r".into(),
+            rom_dir: String::new(),
+            home: String::new(),
+            engine_home: String::new(),
+            engine_dir: String::new(),
+            xdg_data: String::new(),
+        };
+        let mut out = Vec::new();
+        expand_args(&template, &BTreeMap::new(), &vars, &mut out);
+        assert_eq!(out, [OsString::from("r")]);
     }
 }

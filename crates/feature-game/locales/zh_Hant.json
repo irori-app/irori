@@ -17,6 +17,8 @@
   "game.achievements.up_next": "下一個目標",
   "game.achievements.cover_hidden": "重新隱藏",
   "game.achievements.complete": "已解鎖全部成就",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "其他成就",
   "game.achievements.worth_one": "{points} 點",
   "game.achievements.worth_other": "{points} 點",
   "game.action.install": "安裝",
@@ -543,6 +545,11 @@
   "game.windows_file.no_matches": "沒有相符的遊戲",
   "game.windows_file.open": "開啟",
   "game.windows_file.started": "已在 {game} 的前綴中開啟「{file}」",
+  "game.windows_file.uri_title": "開啟連結",
+  "game.windows_file.uri_body": "「{link}」將在你所選遊戲的 Wine 前綴中，由其中處理此類連結的 Windows 程式開啟。",
+  "game.windows_file.uri_no_games": "沒有透過 Wine 執行的已安裝 Windows 遊戲。安裝一款遊戲，或透過「新增遊戲」新增一款，即可在其前綴中開啟連結。",
+  "game.windows_file.uri_started": "已在 {game} 的前綴中開啟「{link}」",
+  "game.windows_file.uri_failed": "無法開啟「{link}」",
   "game.ops.shortcuts_add_failed": "無法為 {title} 新增捷徑",
   "game.ops.shortcuts_added": "已為 {title} 新增捷徑",
   "game.ops.shortcuts_remove_failed": "無法移除 {title} 的捷徑",
@@ -707,6 +714,9 @@
   "game.timeline.view_journal": "日誌",
   "game.journal.write": "為這一天寫筆記",
   "game.sandbox.title": "沙盒中",
+  "game.age_rating.title": "年齡分級",
+  "game.age_rating.separator": "、",
+  "game.age_rating.also": "其他分級：{ratings}",
   "game.sandbox.running": "正在沙盒中執行",
   "game.sandbox.no_network": "無網路",
   "game.sandbox.no_home": "無家目錄",
@@ -731,5 +741,6 @@
   "game.related.developer": "同為 {name} 開發",
   "game.related.publisher": "同為 {name} 發行",
   "game.related.genres": "相同類型：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

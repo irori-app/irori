@@ -82,7 +82,7 @@ fn main() -> Result<()> {
     // for a mistyped one.
     if let Some(first) = args
         .first()
-        .filter(|a| !a.starts_with('-') && !a.contains("://") && !cli::is_windows_file_arg(a))
+        .filter(|a| !a.starts_with('-') && !cli::is_link_arg(a) && !cli::is_windows_file_arg(a))
         && !headless::COMMANDS.contains(&first.as_str())
     {
         eprintln!("irori: unknown command '{first}'\n\n{}", headless::HELP);
@@ -149,7 +149,7 @@ fn main() -> Result<()> {
         irori_game::init(cx);
         irori_game::install_hooks(stores::game_hooks(), cx);
         let epic = stores::EPIC.get().map(|epic| epic.main());
-        irori_settings::install_store_handles(epic.clone(), cx);
+        irori_settings::install_store_handles(epic.clone(), stores::STEAM.get().cloned(), cx);
         irori_game::install_store_handles(epic, stores::GOG.get().cloned(), cx);
         if let Some(sideload) = stores::SIDELOAD.get() {
             irori_library::install_sideload_store(sideload.clone(), cx);
@@ -376,6 +376,23 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             let _ = handle.update(cx, |_, window, cx| {
                 window.defer(cx, move |window, cx| {
                     irori_game::open_windows_file_dialog(file, window, cx)
+                })
+            });
+        }
+    }
+    if let Some(uri) = &cli.windows_uri {
+        open_main_window(app, cx);
+        let window = app.lock().window;
+        if let Some(handle) = window {
+            let uri = uri.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    // Any web page can open a link: one opening links in a
+                    // loop must not pile up pickers, or cover a question the
+                    // user is already answering.
+                    if !window.has_active_dialog(cx) {
+                        irori_game::open_windows_uri_dialog(uri, window, cx)
+                    }
                 })
             });
         }

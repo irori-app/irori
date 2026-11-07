@@ -26,6 +26,11 @@ pub struct Cli {
     /// `.reg`, as an absolute path or a `file://` URL) to open in a game's
     /// Wine prefix. Not on Windows, which opens them itself.
     pub windows_file: Option<PathBuf>,
+    /// A link of another program's scheme (`ddnet:…`) pointed at Irori, to
+    /// open in a game's Wine prefix, where the program that registered the
+    /// scheme takes it. Not on Windows, which hands links to that program
+    /// itself.
+    pub windows_uri: Option<String>,
     pub big_picture: bool,
     /// Stay until the launched game's session (or Big Picture) ends, and
     /// end it when this invocation is ended (`--wait`, for Sunshine).
@@ -55,6 +60,7 @@ impl Cli {
                         .and_then(|u| u.to_file_path().ok())
                         .filter(|p| opens_windows_file(p));
                 }
+                s if forwards_uri(s) => cli.windows_uri = Some(s.to_string()),
                 s if s.contains("://") => cli.apply_url(s),
                 s if s.starts_with("lutris:") => cli.lutris = lutris_slug(&s["lutris:".len()..]),
                 s if opens_windows_file(Path::new(s)) => cli.windows_file = Some(s.into()),
@@ -152,6 +158,7 @@ impl Cli {
             || self.lutris.is_some()
             || self.nxm.is_some()
             || self.windows_file.is_some()
+            || self.windows_uri.is_some()
             || self.big_picture
     }
 }
@@ -160,6 +167,17 @@ impl Cli {
 /// were made absolute by [`absolute_file_args`] before parsing.
 fn opens_windows_file(path: &Path) -> bool {
     cfg!(not(windows)) && path.is_absolute() && irori_runtime::windows_file::is_windows_file(path)
+}
+
+/// Whether Irori opens this link in a game's Wine prefix.
+fn forwards_uri(arg: &str) -> bool {
+    cfg!(not(windows)) && irori_runtime::windows_uri::is_forwarded_uri(arg)
+}
+
+/// Whether an argument is a link of any scheme (`irori://…`, `lutris:…`,
+/// `ddnet:…`), not a command. Drive letters and paths are not links.
+pub fn is_link_arg(arg: &str) -> bool {
+    irori_runtime::windows_uri::scheme(arg).is_some()
 }
 
 /// Whether a bare argument names a Windows file to open, not a command.
@@ -226,7 +244,7 @@ fn decode(s: &str) -> String {
 
 pub const HELP: &str = "Irori — a fast game launcher for Epic, GOG, Amazon and ZOOM games
 
-Usage: irori [options] [url | file]
+Usage: irori [options] [url | file | link]
 
 Options:
   -l, --launch <runner>/<app>   Launch a game (runners: legendary, gog, nile, zoom, sideload)
@@ -243,7 +261,11 @@ URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launc
       nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)
 
 Files: a Windows program, installer, batch or registry file (.exe, .msi, .bat, .cmd, .reg)
-       opens in the Wine prefix of a game you choose (Linux and macOS)";
+       opens in the Wine prefix of a game you choose (Linux and macOS)
+
+Links: a link of another program's scheme (ddnet:…, someapp://…; not web pages)
+       opens in the Wine prefix of a game you choose, where the Windows program that
+       registered the scheme takes it (Linux and macOS)";
 
 #[cfg(test)]
 mod tests {
@@ -351,6 +373,43 @@ mod tests {
         );
         assert!(is_windows_file_arg("setup.exe"));
         assert!(!is_windows_file_arg("refresh"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn other_programs_links_open_in_a_game_prefix() {
+        let uri = |args: &[&str]| parse(args).windows_uri;
+        assert_eq!(uri(&["ddnet:[::1]:8303"]), Some("ddnet:[::1]:8303".into()));
+        assert_eq!(
+            uri(&["someapp://join/12?pass=x"]),
+            Some("someapp://join/12?pass=x".into())
+        );
+        assert!(parse(&["ddnet:[::1]:8303"]).has_request());
+        // Irori's own links, files and web pages are never forwarded.
+        let irori = parse(&["irori://launch/gog/1"]);
+        assert_eq!(irori.windows_uri, None);
+        assert_eq!(irori.launch, Some(GameId::new(Runner::Gog, "1")));
+        let heroic = parse(&["heroic://launch?appName=abc&runner=nile"]);
+        assert_eq!(heroic.windows_uri, None);
+        assert!(heroic.launch.is_some());
+        assert_eq!(uri(&["lutris:quake"]), None);
+        assert_eq!(parse(&["lutris:quake"]).lutris, Some("quake".into()));
+        assert_eq!(uri(&["nxm://skyrim/mods/1/files/2"]), None);
+        assert_eq!(uri(&["file:///home/me/setup.exe"]), None);
+        assert_eq!(uri(&["https://example.com"]), None);
+        assert_eq!(uri(&["C:\\Games\\setup.exe"]), None);
+        assert_eq!(uri(&["/home/me/setup.exe"]), None);
+        assert_eq!(uri(&["--launch", "gog/1"]), None);
+    }
+
+    #[test]
+    fn links_are_not_commands() {
+        assert!(is_link_arg("lutris:quake"));
+        assert!(is_link_arg("ddnet:[::1]:8303"));
+        assert!(is_link_arg("irori://library"));
+        assert!(!is_link_arg("refresh"));
+        assert!(!is_link_arg("C:\\setup.exe"));
+        assert!(!is_link_arg("/home/me/setup.exe"));
     }
 
     #[test]

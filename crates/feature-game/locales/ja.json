@@ -17,6 +17,8 @@
   "game.achievements.up_next": "次の目標",
   "game.achievements.cover_hidden": "隠し実績を再び隠す",
   "game.achievements.complete": "すべての実績を解除",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "その他の実績",
   "game.achievements.worth_one": "{points} ポイント",
   "game.achievements.worth_other": "{points} ポイント",
   "game.action.install": "インストール",
@@ -543,6 +545,11 @@
   "game.windows_file.no_matches": "一致するゲームはありません",
   "game.windows_file.open": "開く",
   "game.windows_file.started": "「{file}」を {game} のプレフィックスで開きました",
+  "game.windows_file.uri_title": "リンクを開く",
+  "game.windows_file.uri_body": "「{link}」は、選んだゲームの Wine プレフィックスで、そこでこの種類のリンクを扱う Windows プログラムによって開かれます。",
+  "game.windows_file.uri_no_games": "Wine で動くインストール済みの Windows ゲームがありません。ゲームをインストールするか「ゲームを追加」で追加すると、そのプレフィックスでリンクを開けます。",
+  "game.windows_file.uri_started": "「{link}」を {game} のプレフィックスで開きました",
+  "game.windows_file.uri_failed": "「{link}」を開けませんでした",
   "game.ops.shortcuts_add_failed": "{title} のショートカットを追加できませんでした",
   "game.ops.shortcuts_added": "{title} のショートカットを追加しました",
   "game.ops.shortcuts_remove_failed": "{title} のショートカットを削除できませんでした",
@@ -707,6 +714,9 @@
   "game.timeline.view_journal": "日記",
   "game.journal.write": "この日のメモを書く",
   "game.sandbox.title": "サンドボックス内",
+  "game.age_rating.title": "年齢レーティング",
+  "game.age_rating.separator": "、",
+  "game.age_rating.also": "その他のレーティング: {ratings}",
   "game.sandbox.running": "サンドボックスで実行中",
   "game.sandbox.no_network": "ネットワークなし",
   "game.sandbox.no_home": "ホームフォルダーなし",
@@ -731,5 +741,6 @@
   "game.related.developer": "{name} の作品",
   "game.related.publisher": "{name} の発売タイトル",
   "game.related.genres": "共通のジャンル：{genres}",
-  "game.related.separator": "、"
+  "game.related.separator": "、",
+  "game.menu.steam_play": "Steam Play…"
 }

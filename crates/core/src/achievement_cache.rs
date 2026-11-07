@@ -124,4 +124,23 @@ mod tests {
         assert!(!cache.get("620", "en").await.unwrap().fresh);
         assert!(cache.get("6200", "en").await.unwrap().fresh);
     }
+
+    #[test]
+    fn reads_achievements_cached_before_groups() {
+        let old: Achievement =
+            serde_json::from_str(r#"{"id": "a", "name": "First", "visible": true}"#).unwrap();
+        assert_eq!(old.group, None);
+        let grouped = Achievement {
+            id: "b".into(),
+            group: Some(crate::AchievementGroup {
+                id: "2".into(),
+                name: "The Island".into(),
+                dlc_app_id: Some("1500".into()),
+                order: 1,
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&grouped).unwrap();
+        assert_eq!(serde_json::from_str::<Achievement>(&json).unwrap(), grouped);
+    }
 }

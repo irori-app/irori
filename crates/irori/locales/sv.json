@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: rensa spelstatus",
   "shell.palette.group_by_status": "Gruppera biblioteket efter spelstatus",
   "shell.palette.ungroup_by_status": "Sluta gruppera biblioteket efter spelstatus",
+  "shell.palette.show_quick_controls": "Visa snabbval i bibliotekets sidhuvud",
+  "shell.palette.hide_quick_controls": "Dölj snabbval i bibliotekets sidhuvud",
+  "shell.palette.quick_controls_keywords": "snabb sortera filter sidhuvud verktygsfält",
+  "shell.palette.show_installed": "Visa bara installerade spel",
+  "shell.palette.show_any_install": "Visa installerade och ej installerade spel",
+  "shell.palette.show_favourites": "Visa bara favoriter",
+  "shell.palette.show_all_favourites": "Visa alla spel, inte bara favoriter",
+  "shell.palette.filter_keywords": "filter installerade favoriter bibliotek",
   "shell.palette.back_up": "Säkerhetskopiera nu",
   "shell.palette.back_up_keywords": "säkerhetskopia spara återställ",
   "shell.palette.backed_up": "Säkerhetskopierat",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "vy sparad filter",
   "shell.palette.save_view": "Spara bibliotekets aktuella vy…",
   "shell.palette.add_folder": "Lägg till spel från en mapp…",
-  "shell.palette.add_folder_keywords": "mapp sök importera lägg till program"
+  "shell.palette.add_folder_keywords": "mapp sök importera lägg till program",
+  "shell.palette.steam_play": "Steam Play-verktyg för {title}",
+  "shell.palette.steam_play_keywords": "proton kompatibilitetsverktyg steam play ge-proton"
 }

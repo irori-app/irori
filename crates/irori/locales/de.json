@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: Spielstatus entfernen",
   "shell.palette.group_by_status": "Bibliothek nach Spielstatus gruppieren",
   "shell.palette.ungroup_by_status": "Bibliothek nicht mehr nach Spielstatus gruppieren",
+  "shell.palette.show_quick_controls": "Schnellzugriff im Bibliothekskopf anzeigen",
+  "shell.palette.hide_quick_controls": "Schnellzugriff im Bibliothekskopf ausblenden",
+  "shell.palette.quick_controls_keywords": "schnell sortieren filter kopfzeile leiste",
+  "shell.palette.show_installed": "Nur installierte Spiele anzeigen",
+  "shell.palette.show_any_install": "Installierte und nicht installierte Spiele anzeigen",
+  "shell.palette.show_favourites": "Nur Favoriten anzeigen",
+  "shell.palette.show_all_favourites": "Alle Spiele anzeigen, nicht nur Favoriten",
+  "shell.palette.filter_keywords": "filter installiert favoriten bibliothek",
   "shell.palette.back_up": "Jetzt sichern",
   "shell.palette.back_up_keywords": "sicherung backup kopie wiederherstellen",
   "shell.palette.backed_up": "Gesichert",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "Ansicht gespeichert Filter",
   "shell.palette.save_view": "Aktuelle Ansicht der Bibliothek speichern…",
   "shell.palette.add_folder": "Spiele aus einem Ordner hinzufügen…",
-  "shell.palette.add_folder_keywords": "Ordner durchsuchen importieren hinzufügen Programme"
+  "shell.palette.add_folder_keywords": "Ordner durchsuchen importieren hinzufügen Programme",
+  "shell.palette.steam_play": "Steam-Play-Tool für {title}",
+  "shell.palette.steam_play_keywords": "proton kompatibilitätstool steam play ge-proton"
 }

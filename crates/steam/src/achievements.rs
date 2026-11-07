@@ -3,6 +3,10 @@
 //! the account's unlocks and progress (`IPlayerService/GetUserAchievements`,
 //! with the account's access token). `ISteamUserStats/GetPlayerAchievements`
 //! is not used: it takes only a publisher's Web API key.
+//!
+//! Games may split their achievements into Achievement Sets (the base game,
+//! each DLC, seasonal content). `GetGameAchievements` lists the sets in
+//! `groups` and names each achievement's set by `groupid`; both are kept.
 
 use anyhow::Result;
 use serde::{Deserialize, Deserializer};
@@ -40,6 +44,47 @@ pub struct GameAchievement {
     pub min_progress_int: f32,
     #[serde(deserialize_with = "lenient_f32")]
     pub max_progress_int: f32,
+    /// The Achievement Set it belongs to ([`AchievementGroup::groupid`]);
+    /// 0 for a game without sets.
+    pub groupid: u32,
+}
+
+/// An Achievement Set of a game: the base game's, a DLC's, or another
+/// group the developer made.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct AchievementGroup {
+    pub groupid: u32,
+    /// Its name in the asked language.
+    pub localized_name: String,
+    /// The DLC whose achievements these are; 0 for the base game's set.
+    pub dlcappid: u32,
+    /// Where Steam shows it among the game's sets.
+    pub order: u32,
+    /// A set only its developers see; never shown to players.
+    pub developeronly: bool,
+    /// Achievements in the set, and how many of them complete it.
+    pub total_achievements: u32,
+    pub completion_achievements: u32,
+}
+
+/// What `GetGameAchievements` tells about a game: its achievements and the
+/// sets they are grouped in (empty for a game without sets).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct AchievementSchema {
+    pub achievements: Vec<GameAchievement>,
+    pub groups: Vec<AchievementGroup>,
+}
+
+impl AchievementSchema {
+    /// The set `achievement` belongs to, when the game has sets and it is
+    /// one players may see.
+    pub fn group_of(&self, achievement: &GameAchievement) -> Option<&AchievementGroup> {
+        self.groups
+            .iter()
+            .find(|g| g.groupid == achievement.groupid && !g.developeronly)
+    }
 }
 
 impl GameAchievement {
@@ -95,17 +140,7 @@ impl Client {
         access_token: Option<&str>,
         appid: u32,
         language: &str,
-    ) -> Result<Vec<GameAchievement>> {
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Answer {
-            achievements: Vec<GameAchievement>,
-        }
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Envelope {
-            response: Answer,
-        }
+    ) -> Result<AchievementSchema> {
         let url = format!(
             "{}/IPlayerService/GetGameAchievements/v1/",
             self.endpoints().api
@@ -117,10 +152,10 @@ impl Client {
         if let Some(token) = access_token {
             query.push(("access_token", token.to_string()));
         }
-        let answer: Envelope = self
+        let answer: Value = self
             .get_json(url, &query, "the game's achievements")
             .await?;
-        Ok(answer.response.achievements)
+        Ok(parse_game(&answer))
     }
 
     /// The account's unlocks and progress in `appid`. `None` when Steam
@@ -145,6 +180,14 @@ impl Client {
             .await?;
         Ok(answer.as_ref().and_then(parse_user))
     }
+}
+
+/// The achievements and sets of a `GetGameAchievements` answer; empty when
+/// it has none.
+pub fn parse_game(v: &Value) -> AchievementSchema {
+    v.get("response")
+        .and_then(|r| serde_json::from_value(r.clone()).ok())
+        .unwrap_or_default()
 }
 
 /// The unlocks of a `GetUserAchievements` answer.
@@ -213,7 +256,9 @@ mod tests {
             }
         });
         let c = client(&server);
-        let defs = c.game_achievements(None, 620, "german").await.unwrap();
+        let schema = c.game_achievements(None, 620, "german").await.unwrap();
+        assert!(schema.groups.is_empty());
+        let defs = schema.achievements;
         assert_eq!(defs.len(), 2);
         assert_eq!(defs[0].localized_name, "Weckruf");
         assert!((defs[0].player_percent_unlocked - 71.2).abs() < 0.01);
@@ -230,5 +275,51 @@ mod tests {
             Some(&SteamError::SessionRejected)
         );
         assert_eq!(icon_url(620, "a.jpg"), format!("{ICON_BASE}/620/a.jpg"));
+    }
+
+    #[test]
+    fn keeps_achievement_sets() {
+        // Shaped like Steam's answer for a game with a base set and a DLC set.
+        let answer = json!({"response": {
+            "achievements": [
+                {"internal_name": "BASE_1", "internal_key": 1, "localized_name": "First",
+                 "player_percent_unlocked": "60.0", "groupid": 1},
+                {"internal_name": "DLC_1", "internal_key": 2, "localized_name": "Island",
+                 "player_percent_unlocked": "4.0", "groupid": 2},
+                {"internal_name": "DEV_1", "internal_key": 3, "groupid": 3},
+                {"internal_name": "LOOSE", "internal_key": 4, "groupid": 9}
+            ],
+            "schema_version": 3,
+            "groups": [
+                {"groupid": 2, "localized_name": "The Island", "dlcappid": 1500,
+                 "order": 1, "ispublic": true, "total_achievements": 1,
+                 "completion_achievements": 1},
+                {"groupid": 1, "localized_name": "Base game", "dlcappid": 0,
+                 "order": 0, "ispublic": true, "total_achievements": 1,
+                 "completion_achievements": 1},
+                {"groupid": 3, "localized_name": "Debug", "developeronly": true}
+            ]
+        }});
+        let schema = parse_game(&answer);
+        assert_eq!(schema.achievements.len(), 4);
+        assert_eq!(schema.groups.len(), 3);
+        let set = |i: usize| schema.group_of(&schema.achievements[i]);
+        let base = set(0).unwrap();
+        assert_eq!(
+            (base.localized_name.as_str(), base.dlcappid),
+            ("Base game", 0)
+        );
+        let dlc = set(1).unwrap();
+        assert_eq!(
+            (dlc.localized_name.as_str(), dlc.dlcappid, dlc.order),
+            ("The Island", 1500, 1)
+        );
+        assert_eq!(dlc.total_achievements, 1);
+        assert!(set(2).is_none(), "developer-only sets stay out");
+        assert!(set(3).is_none(), "an unknown set is no set");
+        assert_eq!(
+            parse_game(&json!({"response": {}})),
+            AchievementSchema::default()
+        );
     }
 }

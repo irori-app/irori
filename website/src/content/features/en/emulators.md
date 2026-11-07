@@ -35,9 +35,9 @@ never deletes ROMs.
 ## Emulators Irori can install
 
 RetroArch with twelve cores, **DuckStation**, **PPSSPP**, **Dolphin**, **ScummVM**,
-**DOSBox Staging**, **PCSX2**, **melonDS**, **mGBA** and **Azahar**. **MAME** is detected when you
-have it. **Cemu**, **RPCS3**, **xemu**, **shadPS4** and **AnyPS5** are there too, marked
-experimental, and never become a system’s default while another emulator plays it.
+**DOSBox Staging**, **PCSX2**, **melonDS**, **mGBA**, **Azahar** and **Gopher64**. **MAME**,
+**Mupen64Plus**, **M64Py**, **DeSmuME** and **ePSXe** are detected when you have them. **Cemu**,
+**RPCS3**, **xemu**, **shadPS4** and **AnyPS5** are there too, marked experimental, and never become a system’s default while another emulator plays it.
 
 Irori downloads emulators from the projects’ own servers when you ask, and never redistributes
 them. Versions sit side by side, so installing a new one changes nothing until you choose Update,

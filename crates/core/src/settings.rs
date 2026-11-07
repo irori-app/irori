@@ -1002,11 +1002,19 @@ impl Default for SunshinePrefs {
 pub struct UiPrefs {
     pub theme: ThemePreference,
     /// Theme name from the bundled/user theme registry ("" = default: the
-    /// desktop's theme on COSMIC, KDE Plasma and Omarchy, Irori's own
-    /// elsewhere, in the system's accent colour where it has one).
+    /// wallpaper's colours with `wallpaperColors` on, else the desktop's
+    /// theme on COSMIC, KDE Plasma and Omarchy, Irori's own elsewhere, in the
+    /// system's accent colour where it has one).
     pub theme_name: String,
     /// Tint the default theme with the system's accent colour (`systemAccent`).
     pub system_accent: bool,
+    /// Make the default theme of the colours pywal, wallust or matugen made
+    /// from the wallpaper (`wallpaperColors`), and follow them as they change.
+    pub wallpaper_colors: bool,
+    /// The colours file to follow (`wallpaperColorsFile`): pywal's
+    /// `colors.json`, or JSON matugen rendered. "" = pywal's, in
+    /// `$PYWAL_CACHE_DIR` or `~/.cache/wal`, which wallust writes too.
+    pub wallpaper_colors_file: String,
     pub translucency: Translucency,
     /// Base font size in px; drives the rem scale (application zoom).
     pub font_size: f32,
@@ -1017,6 +1025,10 @@ pub struct UiPrefs {
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
     pub show_store_badges: bool,
+    /// Quick sort, install, favourites and grouping controls in the
+    /// library's header, shown as far as its width allows
+    /// (`libraryQuickControls`, on unless turned off).
+    pub library_quick_controls: bool,
     pub sidebar_collapsed: bool,
     pub window_width: f32,
     pub window_height: f32,
@@ -1145,6 +1157,8 @@ impl Default for UiPrefs {
             theme: ThemePreference::System,
             theme_name: String::new(),
             system_accent: true,
+            wallpaper_colors: false,
+            wallpaper_colors_file: String::new(),
             translucency: Translucency::Auto,
             font_size: 16.0,
             library_layout: LibraryLayout::Grid,
@@ -1152,6 +1166,7 @@ impl Default for UiPrefs {
             library_drawer_width: 26.0,
             reduce_motion: false,
             show_store_badges: true,
+            library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
             window_height: 900.0,
@@ -1183,10 +1198,22 @@ mod tests {
         assert_eq!(ui.density, Density::Comfortable);
         assert_eq!(ui.library_background, LibraryBackground::None);
         assert_eq!(ui.accent_rgb(), None);
+        assert!(ui.library_quick_controls);
+        assert!(!ui.wallpaper_colors);
+        assert!(ui.wallpaper_colors_file.is_empty());
+        let json = serde_json::to_value(UiPrefs {
+            wallpaper_colors: true,
+            wallpaper_colors_file: "~/.cache/matugen/irori.json".into(),
+            ..UiPrefs::default()
+        })
+        .unwrap();
+        assert_eq!(json["wallpaperColors"], true);
+        assert_eq!(json["wallpaperColorsFile"], "~/.cache/matugen/irori.json");
         let ui: UiPrefs = serde_json::from_str(
-            r##"{"accentColor":"#3a7BFF","density":"compact","libraryBackground":"game_art"}"##,
+            r##"{"accentColor":"#3a7BFF","density":"compact","libraryBackground":"game_art","libraryQuickControls":false}"##,
         )
         .unwrap();
+        assert!(!ui.library_quick_controls);
         assert_eq!(ui.accent_rgb(), Some(0x3a7bff));
         assert_eq!(ui.density, Density::Compact);
         assert_eq!(ui.library_background, LibraryBackground::GameArt);

@@ -116,7 +116,8 @@
         }
       ],
       "engines": [
-        "retroarch:mupen64plus_next"
+        "retroarch:mupen64plus_next",
+        "gopher64"
       ]
     },
     {
@@ -780,6 +781,14 @@
         "PS3_GAME/USRDIR/EBOOT.BIN",
         "USRDIR/EBOOT.BIN"
       ],
+      "folderTitle": [
+        "PS3_GAME/PARAM.SFO",
+        "PARAM.SFO"
+      ],
+      "layoutFolders": [
+        "PS3_GAME",
+        "USRDIR"
+      ],
       "engines": [
         "rpcs3"
       ]
@@ -831,6 +840,12 @@
       "folderMain": [
         "eboot.bin"
       ],
+      "folderTitle": [
+        "sce_sys/param.sfo"
+      ],
+      "layoutFolders": [
+        "sce_sys"
+      ],
       "engines": [
         "shadps4"
       ]
@@ -858,7 +873,12 @@
       "folderMain": [
         "eboot.bin"
       ],
-      "folderTitle": "sce_sys/param.json",
+      "folderTitle": [
+        "sce_sys/param.json"
+      ],
+      "layoutFolders": [
+        "sce_sys"
+      ],
       "engines": [
         "anyps5"
       ]

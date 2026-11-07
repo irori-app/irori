@@ -17,6 +17,8 @@
   "game.achievements.up_next": "Up next",
   "game.achievements.cover_hidden": "Hide hidden ones again",
   "game.achievements.complete": "Every achievement unlocked",
+  "game.achievements.set_dlc": "DLC",
+  "game.achievements.set_other": "Other achievements",
   "game.achievements.worth_one": "{points} point",
   "game.achievements.worth_other": "{points} points",
   "game.action.install": "Install",
@@ -543,6 +545,11 @@
   "game.windows_file.no_matches": "No game matches",
   "game.windows_file.open": "Open",
   "game.windows_file.started": "Opened “{file}” in the prefix of {game}",
+  "game.windows_file.uri_title": "Open a link",
+  "game.windows_file.uri_body": "“{link}” opens in the Wine prefix of the game you choose, in the Windows program that handles such links there.",
+  "game.windows_file.uri_no_games": "No installed Windows game runs through Wine. Install one, or add one with Add game, to open links in its prefix.",
+  "game.windows_file.uri_started": "Opened “{link}” in the prefix of {game}",
+  "game.windows_file.uri_failed": "Couldn't open “{link}”",
   "game.ops.shortcuts_add_failed": "Couldn't add shortcuts for {title}",
   "game.ops.shortcuts_added": "Shortcuts added for {title}",
   "game.ops.shortcuts_remove_failed": "Couldn't remove shortcuts of {title}",
@@ -707,6 +714,9 @@
   "game.timeline.view_journal": "Journal",
   "game.journal.write": "Write a note about this day",
   "game.sandbox.title": "Sandboxed",
+  "game.age_rating.title": "Age rating",
+  "game.age_rating.separator": ", ",
+  "game.age_rating.also": "Also rated {ratings}",
   "game.sandbox.running": "Running sandboxed",
   "game.sandbox.no_network": "No network",
   "game.sandbox.no_home": "No home folder",
@@ -731,5 +741,6 @@
   "game.related.developer": "Also by {name}",
   "game.related.publisher": "Also from {name}",
   "game.related.genres": "Shared genres: {genres}",
-  "game.related.separator": ", "
+  "game.related.separator": ", ",
+  "game.menu.steam_play": "Steam Play…"
 }

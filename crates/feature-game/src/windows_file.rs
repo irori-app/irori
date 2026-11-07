@@ -1,6 +1,7 @@
 //! A Windows file opened with Irori from the file manager (a double-clicked
-//! `.exe`, `.msi`, `.bat`, `.cmd` or `.reg`): ask which game's Wine prefix
-//! opens it, then open it there.
+//! `.exe`, `.msi`, `.bat`, `.cmd` or `.reg`), or a link of another program's
+//! scheme pointed at Irori (`ddnet:…`): ask which game's Wine prefix opens
+//! it, then open it there.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -25,16 +26,62 @@ use crate::ops::{notify_error, notify_success};
 
 /// Ask which game's Wine prefix opens `file`, then open it there.
 pub fn open_windows_file_dialog(file: PathBuf, window: &mut Window, cx: &mut gpui_kit::App) {
-    let picker = cx.new(|cx| WindowsFilePicker::new(file, window, cx));
+    open_picker(Opened::File(file), window, cx);
+}
+
+/// Ask which game's Wine prefix opens the link `uri` (a scheme another
+/// program registered there), then open it there.
+pub fn open_windows_uri_dialog(uri: String, window: &mut Window, cx: &mut gpui_kit::App) {
+    open_picker(Opened::Uri(uri), window, cx);
+}
+
+fn open_picker(opened: Opened, window: &mut Window, cx: &mut gpui_kit::App) {
+    let title = match &opened {
+        Opened::File(_) => t("game.windows_file.title"),
+        Opened::Uri(_) => t("game.windows_file.uri_title"),
+    };
+    let picker = cx.new(|cx| WindowsFilePicker::new(opened, window, cx));
     window.open_dialog(cx, move |d, window, _| {
-        d.title(t("game.windows_file.title"))
+        d.title(title.clone())
             .w(window.rem_size() * 30.)
             .child(picker.clone())
     });
 }
 
+/// What the picker opens in the chosen game's prefix.
+#[derive(Clone)]
+enum Opened {
+    File(PathBuf),
+    Uri(String),
+}
+
+impl Opened {
+    /// How the picker and its notices name it: a file by its name, a link
+    /// as it is (the user should see what a page or program handed over),
+    /// shortened past [`LINK_SHOWN_CHARS`].
+    fn name(&self) -> String {
+        match self {
+            Opened::File(file) => file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| file.display().to_string()),
+            Opened::Uri(uri) => shown_link(uri),
+        }
+    }
+}
+
+/// Characters of a link the picker shows; links may run to thousands.
+const LINK_SHOWN_CHARS: usize = 160;
+
+fn shown_link(uri: &str) -> String {
+    match uri.char_indices().nth(LINK_SHOWN_CHARS) {
+        Some((end, _)) => format!("{}…", &uri[..end]),
+        None => uri.to_string(),
+    }
+}
+
 struct WindowsFilePicker {
-    file: PathBuf,
+    opened: Opened,
     /// Games whose prefix can open the file, the most recently played first.
     games: Vec<Arc<GameInfo>>,
     /// Indices into `games` that match the search.
@@ -46,7 +93,7 @@ struct WindowsFilePicker {
 }
 
 impl WindowsFilePicker {
-    fn new(file: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(opened: Opened, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let library = irori_ui::models(cx).library.read(cx).snapshot.clone();
         let recent = backend(cx).userdata.snapshot().recent.clone();
         let mut games: Vec<Arc<GameInfo>> = library
@@ -78,7 +125,7 @@ impl WindowsFilePicker {
         )];
         let chosen = games.first().map(|g| g.id());
         Self {
-            file,
+            opened,
             shown: (0..games.len()).collect(),
             games,
             chosen,
@@ -104,13 +151,6 @@ impl WindowsFilePicker {
         }
     }
 
-    fn file_name(&self) -> String {
-        self.file
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.file.display().to_string())
-    }
-
     fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(id) = self.chosen.clone().filter(|_| !self.starting) else {
             return;
@@ -124,31 +164,43 @@ impl WindowsFilePicker {
         self.starting = true;
         cx.notify();
         let b = backend(cx);
-        let file = self.file.clone();
-        let task = irori_ui::run(cx, async move { b.open_windows_file(&id, &file).await });
+        let opened = self.opened.clone();
+        let task = irori_ui::run(cx, async move {
+            match &opened {
+                Opened::File(file) => b.open_windows_file(&id, file).await,
+                Opened::Uri(uri) => b.open_windows_uri(&id, uri).await,
+            }
+        });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
                 this.starting = false;
-                let name = this.file_name();
+                let name = this.opened.name();
+                let is_uri = matches!(this.opened, Opened::Uri(_));
                 match result {
                     Ok(()) => {
                         window.close_dialog(cx);
-                        notify_success(
-                            window,
-                            cx,
+                        let message = if is_uri {
+                            t_args(
+                                "game.windows_file.uri_started",
+                                &[("link", &name), ("game", &title)],
+                            )
+                        } else {
                             t_args(
                                 "game.windows_file.started",
                                 &[("file", &name), ("game", &title)],
-                            ),
-                        );
+                            )
+                        };
+                        notify_success(window, cx, message);
                     }
-                    Err(e) => notify_error(
-                        window,
-                        cx,
-                        t_args("game.ops.run_failed", &[("path", &name)]),
-                        &e,
-                    ),
+                    Err(e) => {
+                        let heading = if is_uri {
+                            t_args("game.windows_file.uri_failed", &[("link", &name)])
+                        } else {
+                            t_args("game.ops.run_failed", &[("path", &name)])
+                        };
+                        notify_error(window, cx, heading, &e)
+                    }
                 }
                 cx.notify();
             });
@@ -203,10 +255,15 @@ impl Render for WindowsFilePicker {
         )
         .w_full()
         .h(rems(GAME_ROW_REMS * count.clamp(1, 8) as f32));
+        let is_uri = matches!(self.opened, Opened::Uri(_));
         let body = if self.games.is_empty() {
             div()
                 .text_sm()
-                .child(t("game.windows_file.no_games"))
+                .child(if is_uri {
+                    t("game.windows_file.uri_no_games")
+                } else {
+                    t("game.windows_file.no_games")
+                })
                 .into_any_element()
         } else if self.shown.is_empty() {
             div()
@@ -225,10 +282,15 @@ impl Render for WindowsFilePicker {
                     .min_w_0()
                     .text_sm()
                     .text_color(theme.muted_foreground)
-                    .child(t_args(
-                        "game.windows_file.body",
-                        &[("file", &self.file_name())],
-                    )),
+                    .child(match &self.opened {
+                        Opened::File(_) => {
+                            t_args("game.windows_file.body", &[("file", &self.opened.name())])
+                        }
+                        Opened::Uri(_) => t_args(
+                            "game.windows_file.uri_body",
+                            &[("link", &self.opened.name())],
+                        ),
+                    }),
             )
             .when(!self.games.is_empty(), |col| {
                 col.child(Input::new(&self.query).prefix(Icon::new(IconName::Search).small()))
@@ -245,5 +307,20 @@ impl Render for WindowsFilePicker {
                         .on_click(cx.listener(|this, _, window, cx| this.open(window, cx))),
                 ),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_links_are_shortened_for_the_picker() {
+        assert_eq!(shown_link("ddnet:[::1]:8303"), "ddnet:[::1]:8303");
+        let long = format!("someapp:{}", "é".repeat(400));
+        let shown = shown_link(&long);
+        assert_eq!(shown.chars().count(), LINK_SHOWN_CHARS + 1);
+        assert!(shown.ends_with('…'));
+        assert!(long.starts_with(shown.trim_end_matches('…')));
     }
 }

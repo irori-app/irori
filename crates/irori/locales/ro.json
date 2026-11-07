@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: șterge starea de joc",
   "shell.palette.group_by_status": "Grupează biblioteca după starea de joc",
   "shell.palette.ungroup_by_status": "Nu mai grupa biblioteca după starea de joc",
+  "shell.palette.show_quick_controls": "Arată comenzile rapide în antetul bibliotecii",
+  "shell.palette.hide_quick_controls": "Ascunde comenzile rapide din antetul bibliotecii",
+  "shell.palette.quick_controls_keywords": "rapid sortare filtru antet bară",
+  "shell.palette.show_installed": "Arată doar jocurile instalate",
+  "shell.palette.show_any_install": "Arată jocurile instalate și neinstalate",
+  "shell.palette.show_favourites": "Arată doar favoritele",
+  "shell.palette.show_all_favourites": "Arată toate jocurile, nu doar favoritele",
+  "shell.palette.filter_keywords": "filtru instalate favorite bibliotecă",
   "shell.palette.back_up": "Fă o copie acum",
   "shell.palette.back_up_keywords": "copie rezervă salvare restaurare",
   "shell.palette.backed_up": "Copie făcută",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "vizualizare salvată filtru",
   "shell.palette.save_view": "Salvează vizualizarea curentă a bibliotecii…",
   "shell.palette.add_folder": "Adaugă jocuri dintr-un dosar…",
-  "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe"
+  "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe",
+  "shell.palette.steam_play": "Instrumentul Steam Play pentru {title}",
+  "shell.palette.steam_play_keywords": "proton instrument compatibilitate steam play ge-proton"
 }

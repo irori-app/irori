@@ -87,6 +87,14 @@
   "shell.palette.clear_play_status": "{title}: wyczyść status gry",
   "shell.palette.group_by_status": "Grupuj bibliotekę według statusu gry",
   "shell.palette.ungroup_by_status": "Przestań grupować bibliotekę według statusu gry",
+  "shell.palette.show_quick_controls": "Pokaż szybkie przełączniki w nagłówku biblioteki",
+  "shell.palette.hide_quick_controls": "Ukryj szybkie przełączniki w nagłówku biblioteki",
+  "shell.palette.quick_controls_keywords": "szybkie sortowanie filtr nagłówek pasek",
+  "shell.palette.show_installed": "Pokaż tylko zainstalowane gry",
+  "shell.palette.show_any_install": "Pokaż gry zainstalowane i niezainstalowane",
+  "shell.palette.show_favourites": "Pokaż tylko ulubione",
+  "shell.palette.show_all_favourites": "Pokaż wszystkie gry, nie tylko ulubione",
+  "shell.palette.filter_keywords": "filtr zainstalowane ulubione biblioteka",
   "shell.palette.back_up": "Utwórz kopię teraz",
   "shell.palette.back_up_keywords": "kopia zapasowa zapisz przywróć",
   "shell.palette.backed_up": "Kopia utworzona",
@@ -120,5 +128,7 @@
   "shell.palette.views_keywords": "widok zapisany filtr",
   "shell.palette.save_view": "Zapisz bieżący widok biblioteki…",
   "shell.palette.add_folder": "Dodaj gry z folderu…",
-  "shell.palette.add_folder_keywords": "folder skanuj importuj dodaj programy"
+  "shell.palette.add_folder_keywords": "folder skanuj importuj dodaj programy",
+  "shell.palette.steam_play": "Narzędzie Steam Play dla {title}",
+  "shell.palette.steam_play_keywords": "proton narzędzie zgodności steam play ge-proton"
 }

@@ -147,10 +147,13 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Steam:** your installed games come in from Steam's own files with no login, with
   Steam's art. Log in (QR code, or password with Steam Guard) to add every game you own
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
-  open Steam's own dialogs.
+  open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
+  game with, next to its ProtonDB rating.
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
+  On a wide window the header adds one-click sort, installed, favourites and grouping
+  controls, as many as fit (Settings → Appearance turns them off).
 - **Three views, one click apart** (<kbd>Alt</kbd> <kbd>1</kbd>–<kbd>3</kbd>): the grid,
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the
@@ -273,6 +276,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
   Steam Deck's Game Mode and reads each press once alongside Steam Input.
+- **Age ratings** (ESRB, PEGI, USK, CERO, ClassInd, GRAC, ACB…) on each game's page, in
+  the board of your region, with their content descriptors, and a library filter by
+  age that a saved view keeps, for a view of the games that suit your children.
 - **Play status** for every game (plan to play, playing, on hold, beaten, abandoned),
   with the library grouped by it and play time under each cover (<kbd>Ctrl</kbd>
   <kbd>G</kbd>).
@@ -312,7 +318,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Themes**, light and dark, with translucent windows over macOS vibrancy, Windows 11
   Mica or the Linux compositor's blur. On KDE Plasma, COSMIC and Omarchy Irori follows
   your desktop's theme; elsewhere it takes the system's accent colour (GNOME and other
-  Linux desktops, macOS, Windows), live as you change it, and honours Increase contrast,
+  Linux desktops, macOS, Windows), live as you change it. Turn it on and it follows the
+  colours pywal, wallust or matugen take from your wallpaper. It honours Increase contrast,
   Reduce transparency and Windows high contrast.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload
   in one click.

@@ -21,7 +21,7 @@ mod error;
 pub mod library;
 mod proto;
 
-pub use achievements::{GameAchievement, UserAchievement};
+pub use achievements::{AchievementGroup, AchievementSchema, GameAchievement, UserAchievement};
 pub use api::{API_BASE, ASSETS_BASE, Client, Endpoints, STORE_BASE};
 pub use assets::AppAssets;
 pub use auth::{
@@ -31,5 +31,5 @@ pub use auth::{
 pub use error::SteamError;
 pub use library::{
     AppDetails, Genre, Metacritic, OwnedGame, Platforms, ReleaseDate, Requirements, Screenshot,
-    SharedApp,
+    SharedApp, StoreRating,
 };

@@ -100,6 +100,9 @@ pub(crate) fn pill(cx: &mut App) -> Option<AnyElement> {
         h_flex()
             .id("playing-now")
             .keyboard_focusable(cx)
+            // A narrow title bar gives the pill less room than its contents
+            // want; the title truncates instead of hiding the stop button.
+            .min_w_0()
             .h(rems(1.75))
             .pl_1()
             .pr_0p5()
@@ -110,6 +113,7 @@ pub(crate) fn pill(cx: &mut App) -> Option<AnyElement> {
             .border_color(accent.opacity(0.45))
             .text_xs()
             .cursor_pointer()
+            .debug_selector(|| "playing-pill".into())
             .child(
                 GameCover::new(game.clone())
                     .width(rems(0.95))
@@ -119,11 +123,19 @@ pub(crate) fn pill(cx: &mut App) -> Option<AnyElement> {
             .child(
                 div()
                     .max_w(rems(12.))
+                    .min_w_0()
                     .truncate()
                     .font_semibold()
                     .child(game.title.clone()),
             )
-            .child(div().text_color(muted).child(duration_text(minutes)))
+            // The title gives way first when the title bar narrows; the time
+            // keeps its line rather than wrapping inside the pill.
+            .child(
+                div()
+                    .whitespace_nowrap()
+                    .text_color(muted)
+                    .child(duration_text(minutes)),
+            )
             .when(others > 0, |d| {
                 d.child(div().text_color(muted).child(format!("+{others}")))
             })
