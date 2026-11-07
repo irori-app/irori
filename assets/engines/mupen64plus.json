@@ -1,0 +1,83 @@
+{
+  "id": "mupen64plus",
+  "name": "Mupen64Plus",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://mupen64plus.org",
+  "kind": "standalone",
+  "systems": [
+    "n64"
+  ],
+  "sources": [
+    {
+      "type": "path",
+      "names": [
+        "mupen64plus",
+        "mupen64plus-ui-console"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "mupen64plus.app"
+    },
+    {
+      "type": "windows",
+      "paths": [
+        "%ProgramFiles%\\Mupen64Plus\\mupen64plus-ui-console.exe"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "mupen64plus"
+    ],
+    "macos": [
+      "mupen64plus.app"
+    ],
+    "windows": [
+      "mupen64plus-ui-console.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "--fullscreen"
+        ]
+      },
+      {
+        "unless": "fullscreen",
+        "args": [
+          "--windowed"
+        ]
+      },
+      {
+        "if": "onscreen_messages",
+        "args": [
+          "--osd"
+        ]
+      },
+      {
+        "unless": "onscreen_messages",
+        "args": [
+          "--noosd"
+        ]
+      },
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    },
+    {
+      "id": "onscreen_messages",
+      "kind": "toggle",
+      "default": false,
+      "advanced": true
+    }
+  ],
+  "exitHotkey": "Esc"
+}

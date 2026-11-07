@@ -13,7 +13,8 @@
 //! - the BIOS index and per-system BIOS status ([`bios`]);
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
-//! - turning a game file into a command ([`launch`]).
+//! - turning a game file into a command ([`launch`]);
+//! - reading the titles PlayStation games give themselves ([`sfo`]).
 //!
 //! Nothing here has a UI or blocks a Tokio worker: discovery and hashing run
 //! on the blocking pool.
@@ -29,6 +30,7 @@ pub mod manifest;
 pub mod releases;
 pub mod relink;
 pub mod retroarch;
+pub mod sfo;
 pub mod state;
 pub mod systems;
 
@@ -84,6 +86,20 @@ pub const BUILT_IN: &[(&str, &str)] = &[
         include_str!("../../../assets/engines/azahar.json"),
     ),
     ("mame", include_str!("../../../assets/engines/mame.json")),
+    (
+        "gopher64",
+        include_str!("../../../assets/engines/gopher64.json"),
+    ),
+    (
+        "mupen64plus",
+        include_str!("../../../assets/engines/mupen64plus.json"),
+    ),
+    ("m64py", include_str!("../../../assets/engines/m64py.json")),
+    (
+        "desmume",
+        include_str!("../../../assets/engines/desmume.json"),
+    ),
+    ("epsxe", include_str!("../../../assets/engines/epsxe.json")),
     ("cemu", include_str!("../../../assets/engines/cemu.json")),
     ("rpcs3", include_str!("../../../assets/engines/rpcs3.json")),
     ("xemu", include_str!("../../../assets/engines/xemu.json")),
@@ -395,5 +411,55 @@ mod tests {
         assert_eq!(gb[0].to_string(), "retroarch:gambatte");
         assert_eq!(gb.len(), 3);
         assert_eq!(gb[2].to_string(), "mgba");
+
+        let n64: Vec<String> = choices_for("n64").iter().map(|r| r.to_string()).collect();
+        assert_eq!(
+            n64,
+            [
+                "retroarch:mupen64plus_next",
+                "gopher64",
+                "mupen64plus",
+                "m64py"
+            ]
+        );
+        assert!(choices_for("nds").iter().any(|r| r.engine == "desmume"));
+        assert!(choices_for("psx").iter().any(|r| r.engine == "epsxe"));
+    }
+
+    #[test]
+    fn closed_and_detected_engines_are_never_downloaded() {
+        let _ = test_root("detected-only");
+        for id in ["epsxe", "mupen64plus", "m64py", "desmume"] {
+            let m = engine(id).unwrap_or_else(|| panic!("no {id}"));
+            assert!(
+                m.sources.iter().all(|s| !s.is_managed()),
+                "{id} must only be detected"
+            );
+        }
+        let gopher = engine("gopher64").unwrap();
+        for (os, arch) in [
+            (Os::Linux, "x86_64"),
+            (Os::Linux, "aarch64"),
+            (Os::Macos, "aarch64"),
+            (Os::Windows, "x86_64"),
+            (Os::Windows, "aarch64"),
+        ] {
+            let host = Host { os, arch };
+            let pattern = gopher
+                .sources
+                .iter()
+                .find_map(|s| s.asset_for(host))
+                .unwrap_or_else(|| panic!("no gopher64 build for {os:?} {arch}"));
+            // Gopher64's release assets, as published.
+            let asset = match (os, arch) {
+                (Os::Linux, a) => format!("gopher64-linux-{a}"),
+                (Os::Macos, a) => format!("gopher64-macos-{a}.zip"),
+                (Os::Windows, a) => format!("gopher64-windows-{a}.exe"),
+            };
+            assert!(
+                regex::Regex::new(pattern).unwrap().is_match(&asset),
+                "{asset}"
+            );
+        }
     }
 }

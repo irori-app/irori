@@ -662,6 +662,17 @@ fn maps_emulators_to_systems_and_engines() {
     assert_eq!(target("azahar", "a.3ds", None, None), ok("3ds", "azahar"));
     assert_eq!(target("citra", "a.cia", None, None), ok("3ds", "azahar"));
     assert_eq!(target("mame", "pacman", None, None), ok("arcade", "mame"));
+    // Lutris' own Mupen64Plus and DeSmuME runners play with the standalone
+    // emulators; their libretro cores stay RetroArch cores.
+    assert_eq!(
+        target("mupen64plus", "a.z64", None, None),
+        ok("n64", "mupen64plus")
+    );
+    assert_eq!(target("desmume", "a.nds", None, None), ok("nds", "desmume"));
+    assert_eq!(
+        target("libretro", "a.nds", Some("desmume"), None),
+        ok("nds", "retroarch:desmume")
+    );
 
     let dolphin_wii = map(
         "dolphin",

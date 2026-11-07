@@ -10,7 +10,9 @@
 //! [`crate::cosmic`], [`crate::kde`] and [`crate::omarchy`]), and Irori follows
 //! it as the user switches. Elsewhere, macOS and Windows included, the default
 //! is Irori's own in the system's accent colour, where the system has one (see
-//! [`crate::desktop_accent`]). A theme the user picked wins.
+//! [`crate::desktop_accent`]). With `iroriUi.wallpaperColors` on, the colours
+//! pywal, wallust or matugen made from the wallpaper (see [`crate::wallpaper`])
+//! are the default instead, on any system. A theme the user picked wins.
 //!
 //! What the system asks for accessibility applies to every theme, a picked one
 //! included: stronger borders for more contrast, a solid window for less
@@ -21,13 +23,14 @@
 //! system's accent is. The interface typeface is Manrope unless the user picks
 //! another installed family.
 
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
-use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, px};
+use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Task, Window, WindowAppearance, px};
 use irori_core::settings::{ThemePreference, UiPrefs};
 use tokio::runtime::Runtime;
 
@@ -35,7 +38,7 @@ use crate::desktop_accent::{Accent, ContrastColors, SystemColors};
 pub use crate::desktop_theme::Desktop;
 use crate::desktop_theme::{DesktopThemes, Frost, accented, high_contrast, system_accented};
 use crate::style::{ICON_CONTRAST, TEXT_CONTRAST, contrast, legible_towards};
-use crate::{cosmic, desktop_accent, kde, omarchy};
+use crate::{cosmic, desktop_accent, kde, omarchy, wallpaper};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
 pub const DEFAULT_LIGHT: &str = "Irori Day";
@@ -91,6 +94,26 @@ struct DesktopTheme {
 
 impl Global for DesktopTheme {}
 
+/// The wallpaper's colours, while the user has them on and the file has
+/// them. They win over a desktop's theme, which stays for when they are off.
+struct WallpaperTheme(DesktopTheme);
+
+impl Global for WallpaperTheme {}
+
+/// The colours file being followed, and the task following it, which stops
+/// when dropped.
+struct WallpaperFollow {
+    file: Option<PathBuf>,
+    _task: Option<Task<()>>,
+}
+
+impl Global for WallpaperFollow {}
+
+/// The last revision the wallpaper's colours had.
+struct WallpaperRevision(u64);
+
+impl Global for WallpaperRevision {}
+
 /// Irori's own themes in the system's accent colour. Like [`DesktopTheme`] they
 /// stay out of the registry, and they keep their names: to the user they are
 /// the default theme, and "Irori Night" in the list is the untinted one.
@@ -126,6 +149,8 @@ struct Applied {
     font_size: u32,
     /// The desktop's theme keeps its name when its colours change.
     desktop: u64,
+    /// So do the wallpaper's. Zero while they aren't there.
+    wallpaper: u64,
     /// So does Irori's own when the accent changes, and tinted or not. Zero
     /// while the accent isn't showing, so a picked theme ignores its changes.
     accent: u64,
@@ -445,9 +470,145 @@ pub(crate) fn desktop_frost(cx: &App) -> Option<Frost> {
     Some(Frost { on, opacity: None })
 }
 
-/// The desktop whose theme is the default one, if Irori follows one here.
+/// The desktop whose theme is the default one, if Irori follows one here:
+/// [`Desktop::Wallpaper`] while the wallpaper's colours are.
 pub fn followed_desktop(cx: &App) -> Option<Desktop> {
-    cx.try_global::<DesktopTheme>().map(|d| d.desktop)
+    shown_desktop(cx).map(|d| d.desktop)
+}
+
+/// The theme that is the default one in place of Irori's: the wallpaper's,
+/// else the desktop's.
+fn shown_desktop(cx: &App) -> Option<&DesktopTheme> {
+    cx.try_global::<WallpaperTheme>()
+        .map(|w| &w.0)
+        .or_else(|| cx.try_global::<DesktopTheme>())
+}
+
+/// Use the wallpaper's colours as the default theme while
+/// `iroriUi.wallpaperColors` is on, and follow the file it names as the tool
+/// rewrites it and as the settings change. Call once models exist.
+pub(crate) fn follow_wallpaper(cx: &mut App) {
+    let prefs = crate::backend(cx).settings.app().ui.clone();
+    sync_wallpaper(&prefs, true, cx);
+    let settings = crate::models(cx).settings.clone();
+    cx.observe(&settings, |settings, cx| {
+        let prefs = settings.read(cx).app.ui.clone();
+        sync_wallpaper(&prefs, false, cx);
+    })
+    .detach();
+}
+
+/// The colours file `prefs` ask to follow, if any.
+fn wallpaper_file(prefs: &UiPrefs) -> Option<PathBuf> {
+    prefs
+        .wallpaper_colors
+        .then(|| wallpaper::resolve(&prefs.wallpaper_colors_file))
+        .flatten()
+}
+
+/// Start or stop following the colours file, or follow another, as `prefs`
+/// say. Only Irori's start reads on the UI thread, for the reason [`follow`]'s
+/// first read is; a switch in the settings reads in the background.
+fn sync_wallpaper(prefs: &UiPrefs, first: bool, cx: &mut App) {
+    let file = wallpaper_file(prefs);
+    if cx
+        .try_global::<WallpaperFollow>()
+        .is_some_and(|f| f.file == file)
+    {
+        return;
+    }
+    // Dropping the old task stops its watch.
+    if cx.has_global::<WallpaperFollow>() {
+        cx.remove_global::<WallpaperFollow>();
+    }
+    let had = cx.has_global::<WallpaperTheme>();
+    if had {
+        cx.remove_global::<WallpaperTheme>();
+    }
+    let Some(path) = file.clone() else {
+        cx.set_global(WallpaperFollow {
+            file: None,
+            _task: None,
+        });
+        if had {
+            reapply(cx);
+        }
+        return;
+    };
+    let mut shown = None;
+    if first {
+        shown = wallpaper::read(&path).as_deref().and_then(wallpaper::parse);
+        if let Some(themes) = shown.as_ref().and_then(wallpaper::Colors::themes) {
+            set_wallpaper(themes, cx);
+        }
+    }
+    let task = cx.spawn(async move |cx| {
+        let load = |path: PathBuf| async move {
+            wallpaper::read(&path).as_deref().and_then(wallpaper::parse)
+        };
+        if !first {
+            let found = cx.background_executor().spawn(load(path.clone())).await;
+            let themes = found.as_ref().and_then(wallpaper::Colors::themes);
+            shown = found;
+            cx.update(|cx| {
+                if let Some(themes) = themes {
+                    set_wallpaper(themes, cx);
+                }
+                if had || cx.has_global::<WallpaperTheme>() {
+                    reapply(cx);
+                }
+            });
+        }
+        let Some((mut watch, mut changes)) = wallpaper::Watch::new(&path) else {
+            return;
+        };
+        while changes.next().await.is_some() {
+            cx.background_executor().timer(DESKTOP_SETTLE).await;
+            while changes.try_recv().is_ok() {}
+            watch.rewatch();
+            let found = cx.background_executor().spawn(load(path.clone())).await;
+            // A tool may remove the file before writing the next one; the
+            // write wakes this up again. The same colours again need nothing.
+            if found.is_none() || found == shown {
+                continue;
+            }
+            let Some(themes) = found.as_ref().and_then(wallpaper::Colors::themes) else {
+                tracing::warn!("the wallpaper's colours have no usable theme");
+                continue;
+            };
+            shown = found;
+            cx.update(|cx| {
+                set_wallpaper(themes, cx);
+                reapply(cx);
+            });
+        }
+    });
+    cx.set_global(WallpaperFollow {
+        file,
+        _task: Some(task),
+    });
+}
+
+fn set_wallpaper(themes: DesktopThemes, cx: &mut App) {
+    // Counted across files and switches, so another file's colours of the
+    // same theme name are never taken for the ones applied.
+    let revision = cx.try_global::<WallpaperRevision>().map_or(0, |r| r.0) + 1;
+    cx.set_global(WallpaperRevision(revision));
+    cx.set_global(WallpaperTheme(DesktopTheme {
+        desktop: Desktop::Wallpaper,
+        light: themes.light.map(Rc::new),
+        dark: themes.dark.map(Rc::new),
+        is_dark: themes.is_dark,
+        frost: None,
+        revision,
+    }));
+}
+
+/// Apply the user's preferences again, after a theme they decide between
+/// changed.
+fn reapply(cx: &mut App) {
+    let prefs = crate::backend(cx).settings.app().ui.clone();
+    apply(&prefs, None, cx);
 }
 
 /// Names and modes of the themes in one bundled file.
@@ -515,9 +676,7 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
         return (Some(theme.clone()), Some(theme));
     }
     let find = |name: &str| registered(name, cx);
-    let desktop = cx
-        .try_global::<DesktopTheme>()
-        .filter(|_| prefs.theme_name.is_empty());
+    let desktop = shown_desktop(cx).filter(|_| prefs.theme_name.is_empty());
     let accent = showing_accent(prefs, cx);
     let chosen = find(&prefs.theme_name);
     let for_mode = |dark: bool| {
@@ -553,7 +712,10 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
 /// Irori's themes in the system's accent, while they are the ones to show.
 fn showing_accent<'a>(prefs: &UiPrefs, cx: &'a App) -> Option<&'a DesktopAccent> {
     cx.try_global::<DesktopAccent>().filter(|_| {
-        prefs.theme_name.is_empty() && prefs.system_accent && prefs.accent_rgb().is_none()
+        prefs.theme_name.is_empty()
+            && prefs.system_accent
+            && prefs.accent_rgb().is_none()
+            && !cx.has_global::<WallpaperTheme>()
     })
 }
 
@@ -570,10 +732,8 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         ThemePreference::Light => false,
         // The desktop's theme is what decides, and it can be set more quickly
         // than the portal reports the change.
-        ThemePreference::System
-            if prefs.theme_name.is_empty() && cx.has_global::<DesktopTheme>() =>
-        {
-            cx.global::<DesktopTheme>().is_dark
+        ThemePreference::System if prefs.theme_name.is_empty() && shown_desktop(cx).is_some() => {
+            shown_desktop(cx).is_some_and(|d| d.is_dark)
         }
         ThemePreference::System => {
             let appearance = window
@@ -596,6 +756,9 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         is_dark,
         font_size: font_size.to_bits(),
         desktop: cx.try_global::<DesktopTheme>().map_or(0, |d| d.revision),
+        wallpaper: cx
+            .try_global::<WallpaperTheme>()
+            .map_or(0, |w| w.0.revision),
         accent: showing_accent(prefs, cx).map_or(0, |a| a.revision),
         system: cx.try_global::<SystemLook>().map_or(0, |s| s.revision),
         // The system's high-contrast theme keeps its own colours.
@@ -1057,6 +1220,91 @@ mod tests {
                 assert!(contrast(p.selected_text, theme.sidebar_accent) >= TEXT_CONTRAST - 0.01);
             });
         }
+    }
+
+    fn use_wallpaper(file: &str, cx: &mut TestAppContext) {
+        let themes = wallpaper::parse(file).unwrap().themes().unwrap();
+        cx.update(|cx| set_wallpaper(themes, cx));
+    }
+
+    #[gpui_kit::test]
+    fn the_wallpapers_colours_beat_the_desktops(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::System, "");
+        use_omarchy(omarchy::tests::LIGHT, cx);
+        use_wallpaper(wallpaper::tests::PYWAL_DARK, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "Wallpaper Dark");
+            assert!(cx.theme().mode.is_dark());
+            assert_eq!(followed_desktop(cx), Some(Desktop::Wallpaper));
+        });
+
+        // Turned off, Omarchy's theme is back.
+        cx.update(|cx| {
+            cx.remove_global::<WallpaperTheme>();
+            apply(&p, None, cx);
+        });
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "Omarchy");
+            assert_eq!(followed_desktop(cx), Some(Desktop::Omarchy));
+        });
+    }
+
+    #[gpui_kit::test]
+    fn new_wallpaper_colours_show_at_once(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::System, "");
+        use_wallpaper(wallpaper::tests::PYWAL_DARK, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        let before = cx.read(|cx| cx.theme().background);
+        let recoloured = wallpaper::tests::PYWAL_DARK.replace("#0f1418", "#201010");
+        use_wallpaper(&recoloured, cx);
+        cx.update(|cx| apply(&p, None, cx));
+        cx.read(|cx| assert_ne!(cx.theme().background, before));
+    }
+
+    #[gpui_kit::test]
+    fn a_theme_the_user_picked_beats_the_wallpaper(cx: &mut TestAppContext) {
+        setup(cx);
+        use_wallpaper(wallpaper::tests::PYWAL_DARK, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, "Tokyo Storm"), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm"));
+    }
+
+    #[gpui_kit::test]
+    fn a_template_in_one_mode_leaves_the_other_to_irori(cx: &mut TestAppContext) {
+        setup(cx);
+        use_wallpaper(wallpaper::tests::MATUGEN_TEMPLATE, cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::System, ""), None, cx));
+        cx.read(|cx| {
+            assert_eq!(cx.theme().theme_name().as_ref(), "Wallpaper Light");
+            assert!(!cx.theme().mode.is_dark());
+        });
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, ""), None, cx));
+        cx.read(|cx| assert_eq!(cx.theme().theme_name().as_ref(), DEFAULT_DARK));
+    }
+
+    #[test]
+    fn the_wallpaper_is_followed_only_when_turned_on() {
+        let off = UiPrefs {
+            wallpaper_colors_file: "~/colours.json".into(),
+            ..UiPrefs::default()
+        };
+        assert_eq!(wallpaper_file(&off), None);
+        let on = UiPrefs {
+            wallpaper_colors: true,
+            ..UiPrefs::default()
+        };
+        assert_eq!(wallpaper_file(&on), wallpaper::default_file());
+        let picked = UiPrefs {
+            wallpaper_colors: true,
+            ..off
+        };
+        assert_eq!(
+            wallpaper_file(&picked),
+            dirs::home_dir().map(|h| h.join("colours.json"))
+        );
     }
 
     /// GNOME's accent colours, as libadwaita gives them to the portal.

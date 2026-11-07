@@ -42,6 +42,8 @@ pub(crate) fn is_emulator(runner: &str) -> bool {
             | "azahar"
             | "citra"
             | "mame"
+            | "mupen64plus"
+            | "desmume"
     )
 }
 
@@ -72,6 +74,8 @@ pub(crate) fn map(runner: &str, hints: &Hints<'_>) -> Result<EmulatorTarget, Ski
         "melonds" => standalone("nds", "melonds"),
         "azahar" | "citra" => standalone("3ds", "azahar"),
         "mame" => standalone("arcade", "mame"),
+        "mupen64plus" => standalone("n64", "mupen64plus"),
+        "desmume" => standalone("nds", "desmume"),
         other => return Err(SkipReason::UnknownRunner(other.to_string())),
     })
 }

@@ -119,7 +119,10 @@ impl AccentPicker {
 impl Render for AccentPicker {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let picked = ui_prefs(cx).accent_rgb().is_some();
-        let default_label = if irori_ui::theme::followed_desktop(cx).is_some() {
+        // The wallpaper's colours are a theme like any other, not a desktop's.
+        let desktop = irori_ui::theme::followed_desktop(cx)
+            .filter(|d| *d != irori_ui::theme::Desktop::Wallpaper);
+        let default_label = if desktop.is_some() {
             t("settings.accent.use_desktop")
         } else {
             t("settings.accent.use_theme")

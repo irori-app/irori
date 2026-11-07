@@ -1,12 +1,14 @@
 //! Windows files opened with Irori from the file manager (a double-clicked
-//! `.exe`, `.msi`, `.bat`, `.cmd` or `.reg`): which games can open them,
-//! opening one in a game's Wine prefix, and making Irori the program that
-//! opens them.
+//! `.exe`, `.msi`, `.bat`, `.cmd` or `.reg`) and links of other programs'
+//! schemes pointed at Irori: which games can open them, opening one in a
+//! game's Wine prefix, and making Irori the program that opens the files.
 
 use std::path::Path;
 
 use anyhow::{Context as _, Result, ensure};
+use irori_core::process::CancellationToken;
 use irori_core::{GameId, GameInfo, HostPlatform, InstallPlatform, Runner};
+use irori_runtime::Target;
 
 use crate::Backend;
 
@@ -56,6 +58,39 @@ impl Backend {
             game.title
         );
         self.run_in_prefix(id, argv).await.map(|_| ())
+    }
+
+    /// Open a link of another program's scheme (`ddnet:…`) in the game's Wine
+    /// prefix, where the Windows program that registered the scheme takes
+    /// it. Links Irori opens itself, web pages and files are refused
+    /// ([`irori_runtime::windows_uri::is_forwarded_uri`]). Returns once it
+    /// has started.
+    pub async fn open_windows_uri(&self, id: &GameId, uri: &str) -> Result<()> {
+        ensure!(
+            irori_runtime::windows_uri::is_forwarded_uri(uri),
+            "Irori doesn't open this kind of link in a Wine prefix"
+        );
+        let game = self.game(id).context("unknown game")?;
+        ensure!(
+            opens_windows_files(&game),
+            "{} doesn't run through Wine",
+            game.title
+        );
+        let target = Target {
+            id,
+            game: &game,
+            platform: InstallPlatform::Windows,
+        };
+        let ctx = self.op_context(id, CancellationToken::new());
+        irori_runtime::open_uri_in_prefix(
+            &self.settings.app(),
+            &self.settings.game(id),
+            target,
+            uri,
+            ctx,
+        )
+        .await
+        .map(|_| ())
     }
 
     /// Make Irori the program that opens Windows programs, installers, batch
