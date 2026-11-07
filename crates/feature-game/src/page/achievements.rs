@@ -4,8 +4,12 @@
 //! achievements stay covered until the user reveals one (by clicking it) or
 //! all of them. A game whose store groups its achievements into sets (the
 //! base game, each DLC) lists them under a heading per set with that set's
-//! progress. Rows are virtualized, so games with hundreds of achievements
-//! render only what is visible.
+//! progress. A set the store says the player can't earn (a DLC they don't
+//! own) is marked so, its achievements say they need the DLC and stay out
+//! of "up next"; they still count in the game's total, as the store counts
+//! them. A set the store says was completed shows when. Rows are
+//! virtualized, so games with hundreds of achievements render only what is
+//! visible.
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -117,8 +121,25 @@ pub struct SetProgress {
 }
 
 impl SetProgress {
+    /// Whether every achievement is unlocked, or the store says the set
+    /// was completed (a set may need fewer than all of them).
     pub fn complete(&self) -> bool {
-        self.total > 0 && self.unlocked == self.total
+        (self.total > 0 && self.unlocked == self.total) || self.completed_at().is_some()
+    }
+
+    /// Whether the store says the player can't earn this set.
+    pub fn unearnable(&self) -> bool {
+        self.group
+            .as_ref()
+            .is_some_and(AchievementGroup::unearnable)
+    }
+
+    /// When the store says the player completed the set.
+    pub fn completed_at(&self) -> Option<&str> {
+        self.group
+            .as_ref()
+            .and_then(|g| g.completed_at.as_deref())
+            .filter(|d| !d.is_empty())
     }
 }
 
@@ -205,6 +226,9 @@ pub struct Summary {
     pub points_unlocked: u64,
     /// Locked achievements whose names are covered.
     pub hidden: usize,
+    /// Locked achievements of sets the player can't earn; they count in
+    /// `total`, as the store counts them.
+    pub unearnable: usize,
     /// Index of the rarest unlock.
     pub rarest: Option<usize>,
     /// The latest unlocks, newest first.
@@ -234,6 +258,7 @@ impl Summary {
                 .iter()
                 .filter(|a| !a.is_unlocked() && !a.visible)
                 .count(),
+            unearnable: list.iter().filter(|a| a.is_unearnable()).count(),
             rarest: unlocked
                 .iter()
                 .copied()
@@ -245,7 +270,7 @@ impl Summary {
                 .copied()
                 .filter(|&i| {
                     let a = &list[i];
-                    !a.is_unlocked() && (a.visible || revealed(a))
+                    !a.is_unlocked() && !a.is_unearnable() && (a.visible || revealed(a))
                 })
                 .take(STRIP)
                 .collect(),
@@ -535,6 +560,16 @@ impl GamePage {
                 muted,
             ));
         }
+        if s.unearnable > 0 {
+            lines.push(fact(
+                IconName::Lock,
+                t_args(
+                    "game.achievements.unearnable",
+                    &[("count", &s.unearnable.to_string())],
+                ),
+                muted,
+            ));
+        }
         if let Some(a) = s.rarest.and_then(|i| list.get(i)) {
             lines.push(fact(
                 IconName::Gem,
@@ -714,7 +749,7 @@ impl GamePage {
         let now = unix_now() as i64;
         range
             .filter_map(|row| match *rows.get(row)? {
-                Row::Set(set) => Some(render_set_heading(row, sets.get(set)?, cx)),
+                Row::Set(set) => Some(render_set_heading(row, sets.get(set)?, now, cx)),
                 Row::Item(ix) => Some(self.render_row(row, list.get(ix)?, icon_px, now, cx)),
             })
             .collect()
@@ -756,7 +791,9 @@ impl GamePage {
                 &[("points", &a.points.to_string())],
             )
         });
-        let progress = a.progress.filter(|_| !unlocked && !covered);
+        let unearnable = a.is_unearnable();
+        let progress = a.progress.filter(|_| !unlocked && !covered && !unearnable);
+        let needs_dlc = unearnable.then(|| t("game.achievements.needs_dlc"));
         let hardcore = a.hardcore_unlocked_at.is_some();
         let (success, hover) = (theme.success, theme.list_hover);
         let id = a.id.clone();
@@ -836,6 +873,7 @@ impl GamePage {
                     .gap_0p5()
                     .text_xs()
                     .text_color(theme.muted_foreground)
+                    .children(needs_dlc.map(|n| div().truncate().font_medium().child(n)))
                     .children(points.map(|p| div().truncate().font_medium().child(p)))
                     .children(rarity_text(a).map(|r| div().truncate().child(r)))
                     .children(when.map(|w| div().truncate().child(w))),
@@ -845,13 +883,23 @@ impl GamePage {
 }
 
 /// The heading of a set: its name, whether it is a DLC's, and its progress.
-fn render_set_heading(row: usize, set: &SetProgress, cx: &mut Context<GamePage>) -> AnyElement {
+fn render_set_heading(
+    row: usize,
+    set: &SetProgress,
+    now: i64,
+    cx: &mut Context<GamePage>,
+) -> AnyElement {
     let theme = cx.theme();
     let name: SharedString = match &set.group {
         Some(g) if !g.name.trim().is_empty() => g.name.clone().into(),
         _ => t("game.achievements.set_other"),
     };
     let is_dlc = set.group.as_ref().is_some_and(|g| g.dlc_app_id.is_some());
+    let badge = if set.unearnable() {
+        Some(t("game.achievements.set_not_owned"))
+    } else {
+        is_dlc.then(|| t("game.achievements.set_dlc"))
+    };
     let complete = set.complete();
     let percent = if set.total == 0 {
         0.0
@@ -870,7 +918,16 @@ fn render_set_heading(row: usize, set: &SetProgress, cx: &mut Context<GamePage>)
         .accessibility_label(progress.clone());
     if complete {
         bar = bar.color(theme.success);
+    } else if set.unearnable() {
+        bar = bar.color(theme.muted_foreground);
     }
+    let status = match set.completed_at() {
+        Some(at) => t_args(
+            "game.achievements.set_completed_at",
+            &[("date", &format_day(at, now))],
+        ),
+        None => progress,
+    };
     h_flex()
         .id(("achievement-set", row))
         .w_full()
@@ -894,20 +951,18 @@ fn render_set_heading(row: usize, set: &SetProgress, cx: &mut Context<GamePage>)
                         .truncate()
                         .child(name),
                 )
-                .when(is_dlc, |r| {
-                    r.child(
-                        div()
-                            .flex_shrink_0()
-                            .px_1p5()
-                            .rounded(theme.radius)
-                            .border_1()
-                            .border_color(theme.border)
-                            .text_xs()
-                            .font_medium()
-                            .text_color(theme.muted_foreground)
-                            .child(t("game.achievements.set_dlc")),
-                    )
-                }),
+                .children(badge.map(|badge| {
+                    div()
+                        .flex_shrink_0()
+                        .px_1p5()
+                        .rounded(theme.radius)
+                        .border_1()
+                        .border_color(theme.border)
+                        .text_xs()
+                        .font_medium()
+                        .text_color(theme.muted_foreground)
+                        .child(badge)
+                })),
         )
         .child(
             div()
@@ -920,7 +975,7 @@ fn render_set_heading(row: usize, set: &SetProgress, cx: &mut Context<GamePage>)
                 } else {
                     theme.muted_foreground
                 })
-                .child(progress),
+                .child(status),
         )
         .child(div().flex_shrink_0().w(rems(6.)).child(bar))
         .into_any_element()
@@ -1021,6 +1076,7 @@ mod tests {
             name: name.into(),
             dlc_app_id: dlc.map(String::from),
             order,
+            ..Default::default()
         });
         a
     }
@@ -1099,6 +1155,53 @@ mod tests {
             ["#0", "base-old", "#1", "dlc-done"]
         );
         assert!(!sets[0].complete());
+    }
+
+    #[test]
+    fn marks_sets_the_player_cant_earn_or_completed() {
+        let owned = |a: Achievement, completed_at: Option<&str>| {
+            let mut a = in_set(a, "1", "Base game", None, 0);
+            let g = a.group.as_mut().unwrap();
+            g.achievable = Some(true);
+            g.completed_at = completed_at.map(String::from);
+            a
+        };
+        let not_owned = |a: Achievement| {
+            let mut a = in_set(a, "2", "The Island", Some("1500"), 1);
+            a.group.as_mut().unwrap().achievable = Some(false);
+            a
+        };
+        let mut close = a("dlc-close", 80.0, None);
+        close.progress = Some(0.9);
+        let list = vec![
+            owned(
+                a("base", 50.0, Some("2024-01-01T00:00:00Z")),
+                Some("2024-01-01T00:00:00Z"),
+            ),
+            owned(a("base-left", 1.0, None), Some("2024-01-01T00:00:00Z")),
+            not_owned(close),
+            not_owned(a("dlc-old", 9.0, Some("2020-01-01T00:00:00Z"))),
+        ];
+        let sets = sets(&list);
+        assert_eq!(sets.len(), 2);
+        // Steam completed the base set though one achievement is left.
+        assert!(sets[0].complete() && !sets[0].unearnable());
+        assert_eq!(sets[0].completed_at(), Some("2024-01-01T00:00:00Z"));
+        assert!(sets[1].unearnable() && !sets[1].complete());
+        assert_eq!((sets[1].unlocked, sets[1].total), (1, 2));
+        // An unlock earned before still counts; only the locked one can't
+        // be earned.
+        assert!(list[2].is_unearnable() && !list[3].is_unearnable());
+
+        let s = Summary::of(&list, |_| true);
+        assert_eq!((s.total, s.unlocked, s.unearnable), (4, 2, 1));
+        // The locked DLC achievement is closest but can't be next.
+        assert_eq!(s.next, [1]);
+        // Its row stays in the list, under its set.
+        assert_eq!(
+            rows(&list, AchievementFilter::Locked, &sets),
+            [Row::Set(0), Row::Item(1), Row::Set(1), Row::Item(2)]
+        );
     }
 
     #[test]

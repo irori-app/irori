@@ -304,12 +304,37 @@ pub struct AchievementGroup {
     pub dlc_app_id: Option<String>,
     /// Where the store shows it among the game's groups, lowest first.
     pub order: u32,
+    /// Whether the player can earn it: false for a DLC's set they don't
+    /// own. `None` when the store doesn't say (offline, local files, a
+    /// signed-out Steam, every other store).
+    pub achievable: Option<bool>,
+    /// RFC 3339 timestamp of when the player completed it, when the store
+    /// says so.
+    pub completed_at: Option<String>,
+}
+
+impl AchievementGroup {
+    /// Whether the store said the player can't earn it (a DLC they don't
+    /// own).
+    pub fn unearnable(&self) -> bool {
+        self.achievable == Some(false)
+    }
 }
 
 impl Achievement {
     /// Whether the player has it, in any mode.
     pub fn is_unlocked(&self) -> bool {
         self.unlocked_at.is_some() || self.hardcore_unlocked_at.is_some()
+    }
+
+    /// Whether it is locked in a set the player can't earn
+    /// ([`AchievementGroup::unearnable`]).
+    pub fn is_unearnable(&self) -> bool {
+        !self.is_unlocked()
+            && self
+                .group
+                .as_ref()
+                .is_some_and(AchievementGroup::unearnable)
     }
 
     /// When it was unlocked: the earlier of the two modes.

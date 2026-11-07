@@ -137,10 +137,23 @@ mod tests {
                 name: "The Island".into(),
                 dlc_app_id: Some("1500".into()),
                 order: 1,
+                achievable: Some(false),
+                completed_at: None,
             }),
             ..Default::default()
         };
         let json = serde_json::to_string(&grouped).unwrap();
         assert_eq!(serde_json::from_str::<Achievement>(&json).unwrap(), grouped);
+        // Sets cached before the account's state of them was read.
+        let old: Achievement = serde_json::from_str(
+            r#"{"id": "c", "group": {"id": "2", "name": "The Island", "dlc_app_id": "1500", "order": 1}}"#,
+        )
+        .unwrap();
+        let group = old.group.unwrap();
+        assert_eq!(
+            (group.achievable, group.completed_at.as_deref()),
+            (None, None)
+        );
+        assert!(!group.unearnable());
     }
 }

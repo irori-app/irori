@@ -462,8 +462,14 @@ commands without a window.
   unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
   for the ROM library. Steam's Achievement Sets (`GetGameAchievements`' `groups` and
   each achievement's `groupid`) become `Achievement::group` (name, DLC app id, order;
-  `None` elsewhere and offline); the game page lists a game with two or more sets
-  under a heading per set with its progress, while totals stay per game.
+  `None` elsewhere and offline). Signed in, `GetUserAchievements`' `groups` add the
+  account's state of each set: `achievable` (`is_achievable`, false for a DLC it
+  doesn't own) and `completed_at` (`time_completed` of a completed set); both stay
+  `None` offline and from local files. The game page lists a game with two or more
+  sets under a heading per set with its progress, marks a set the player can't earn
+  "DLC not owned" (its locked achievements say they need the DLC and never show as
+  up next) and a completed one with its date. Totals stay per game and still count a
+  set the player can't earn, as Steam's own do.
   - **Game files** (`file_achievements/`, `iroriFileAchievements`, off by default):
     the unlocks Steam API emulators keep for DRM-free copies, read only, for
     sideloaded, GOG, itch.io, Epic, Amazon and ZOOM games (never Steam's, the ROM

@@ -7,6 +7,8 @@
 //! Games may split their achievements into Achievement Sets (the base game,
 //! each DLC, seasonal content). `GetGameAchievements` lists the sets in
 //! `groups` and names each achievement's set by `groupid`; both are kept.
+//! `GetUserAchievements` answers per set too (`groups`): whether the
+//! account can earn it (owns its DLC) and when it completed it.
 
 use anyhow::Result;
 use serde::{Deserialize, Deserializer};
@@ -123,6 +125,39 @@ pub struct UserAchievement {
     pub progress_float: f32,
 }
 
+/// The account's state of one Achievement Set
+/// (`CPlayer_GetUserAchievements_Response_Group`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct UserAchievementGroup {
+    pub groupid: u32,
+    /// Whether the account can earn it: false for a DLC's set it doesn't
+    /// own; `None` when Steam doesn't say.
+    pub is_achievable: Option<bool>,
+    /// How many of the set's achievements the account has.
+    pub completed_achievements: u32,
+    pub is_completed: bool,
+    /// Unix time the set was completed, 0 when unknown.
+    pub time_completed: u64,
+}
+
+/// What `GetUserAchievements` tells about the account in a game: its
+/// unlocks and its state of each Achievement Set (empty for a game without
+/// sets).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct UserAchievements {
+    pub achievements: Vec<UserAchievement>,
+    pub groups: Vec<UserAchievementGroup>,
+}
+
+impl UserAchievements {
+    /// The account's state of the set `groupid`, when Steam sent one.
+    pub fn group(&self, groupid: u32) -> Option<&UserAchievementGroup> {
+        self.groups.iter().find(|g| g.groupid == groupid)
+    }
+}
+
 /// The address of an achievement icon file of `appid`.
 pub fn icon_url(appid: u32, icon: &str) -> String {
     if icon.is_empty() || icon.starts_with("http") {
@@ -184,14 +219,14 @@ impl Client {
         Ok(parse_game(&answer))
     }
 
-    /// The account's unlocks and progress in `appid`. `None` when Steam
-    /// shares none (it answers `{"response": {}}`).
+    /// The account's unlocks, progress and Achievement Sets in `appid`.
+    /// `None` when Steam shares none (it answers `{"response": {}}`).
     pub async fn user_achievements(
         &self,
         access_token: &str,
         steamid: u64,
         appid: u32,
-    ) -> Result<Option<Vec<UserAchievement>>> {
+    ) -> Result<Option<UserAchievements>> {
         let url = format!(
             "{}/IPlayerService/GetUserAchievements/v1/",
             self.endpoints().api
@@ -216,10 +251,12 @@ pub fn parse_game(v: &Value) -> AchievementSchema {
         .unwrap_or_default()
 }
 
-/// The unlocks of a `GetUserAchievements` answer.
-pub fn parse_user(v: &Value) -> Option<Vec<UserAchievement>> {
-    let list = v.pointer("/response/achievements")?;
-    serde_json::from_value(list.clone()).ok()
+/// The unlocks and sets of a `GetUserAchievements` answer; `None` when it
+/// lists no achievements.
+pub fn parse_user(v: &Value) -> Option<UserAchievements> {
+    let response = v.get("response")?;
+    response.get("achievements")?;
+    serde_json::from_value(response.clone()).ok()
 }
 
 fn lenient_f32<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
@@ -290,6 +327,8 @@ mod tests {
         assert!((defs[0].player_percent_unlocked - 71.2).abs() < 0.01);
         assert!(defs[1].hidden);
         let mine = c.user_achievements("token", 1, 620).await.unwrap().unwrap();
+        assert!(mine.groups.is_empty());
+        let mine = mine.achievements;
         assert!(mine[0].unlocked && !mine[1].unlocked);
         assert_eq!(mine[0].unlock_time, 1_700_000_000);
         assert_eq!(defs[1].progress(&mine[1]), Some(0.4));
@@ -347,5 +386,42 @@ mod tests {
             parse_game(&json!({"response": {}})),
             AchievementSchema::default()
         );
+    }
+
+    #[test]
+    fn reads_the_accounts_sets() {
+        // Shaped like `CPlayer_GetUserAchievements_Response`: a completed
+        // base set, a DLC set the account doesn't own, and one Steam says
+        // nothing about.
+        let answer = json!({"response": {
+            "achievements": [
+                {"internal_key": 1, "unlocked": true, "unlock_time": 1700000000},
+                {"internal_key": 2, "unlocked": false}
+            ],
+            "schema_version": 3,
+            "schema_hash": 12345,
+            "groups": [
+                {"groupid": 1, "is_achievable": true, "completed_achievements": 1,
+                 "is_completed": true, "time_completed": 1700000000},
+                {"groupid": 2, "is_achievable": false, "completed_achievements": 0,
+                 "is_completed": false},
+                {"groupid": 3}
+            ]
+        }});
+        let mine = parse_user(&answer).unwrap();
+        assert_eq!(mine.achievements.len(), 2);
+        let base = mine.group(1).unwrap();
+        assert_eq!(base.is_achievable, Some(true));
+        assert!(base.is_completed);
+        assert_eq!(
+            (base.completed_achievements, base.time_completed),
+            (1, 1_700_000_000)
+        );
+        let dlc = mine.group(2).unwrap();
+        assert_eq!(dlc.is_achievable, Some(false));
+        assert!(!dlc.is_completed && dlc.time_completed == 0);
+        assert_eq!(mine.group(3).unwrap().is_achievable, None);
+        assert!(mine.group(9).is_none());
+        assert!(parse_user(&json!({"response": {}})).is_none());
     }
 }

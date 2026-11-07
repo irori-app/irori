@@ -3,8 +3,9 @@
 //! the signed-in account, else from Steam's own files on this computer
 //! ([`stats_file`]), which also stand in for the definitions offline.
 //! A game's Achievement Sets (base game, each DLC) carry over as each
-//! achievement's group; Steam's local files don't name them, so offline
-//! answers have none.
+//! achievement's group, with the account's state of each (whether it can
+//! earn the set, when it completed it) when signed in; Steam's local files
+//! don't name sets, so offline answers have none.
 //! Answers are cached for a quarter of an hour.
 
 use std::collections::HashMap;
@@ -13,7 +14,7 @@ use anyhow::Result;
 use irori_core::util::rfc3339_from_unix;
 use irori_core::{Achievement, AchievementGroup};
 use irori_steam_api::achievements::icon_url;
-use irori_steam_api::{AchievementSchema, UserAchievement};
+use irori_steam_api::{AchievementSchema, UserAchievement, UserAchievements};
 
 use crate::SteamStore;
 use crate::stats_file::{self, steam_language};
@@ -28,10 +29,11 @@ const STEAMID64_BASE: u64 = 76_561_197_960_265_728;
 pub(crate) fn merge(
     appid: u32,
     schema: &AchievementSchema,
-    unlocks: Option<&[UserAchievement]>,
+    unlocks: Option<&UserAchievements>,
     local: &HashMap<String, Option<String>>,
 ) -> Vec<Achievement> {
     let by_key: HashMap<u32, &UserAchievement> = unlocks
+        .map(|u| u.achievements.as_slice())
         .unwrap_or_default()
         .iter()
         .map(|u| (u.internal_key, u))
@@ -49,11 +51,18 @@ pub(crate) fn merge(
                 image_unlocked: icon_url(appid, &d.icon),
                 image_locked: icon_url(appid, &d.icon_gray),
                 rarity: d.player_percent_unlocked,
-                group: schema.group_of(d).map(|g| AchievementGroup {
-                    id: g.groupid.to_string(),
-                    name: g.localized_name.clone(),
-                    dlc_app_id: (g.dlcappid > 0).then(|| g.dlcappid.to_string()),
-                    order: g.order,
+                group: schema.group_of(d).map(|g| {
+                    let mine = unlocks.and_then(|u| u.group(g.groupid));
+                    AchievementGroup {
+                        id: g.groupid.to_string(),
+                        name: g.localized_name.clone(),
+                        dlc_app_id: (g.dlcappid > 0).then(|| g.dlcappid.to_string()),
+                        order: g.order,
+                        achievable: mine.and_then(|m| m.is_achievable),
+                        completed_at: mine
+                            .filter(|m| m.is_completed && m.time_completed > 0)
+                            .and_then(|m| rfc3339_from_unix(m.time_completed as i64)),
+                    }
                 }),
                 ..Default::default()
             };
@@ -151,7 +160,7 @@ impl SteamStore {
                 )
             })
             .collect();
-        let list = merge(appid, &schema, unlocks.as_deref(), &local_unlocks);
+        let list = merge(appid, &schema, unlocks.as_ref(), &local_unlocks);
         self.achievement_cache.put(app_name, language, &list).await;
         Ok(list)
     }
@@ -179,12 +188,15 @@ mod tests {
             achievements: vec![def("A", 1, 50.0), def("B", 2, 5.0)],
             groups: Vec::new(),
         };
-        let unlocks = vec![UserAchievement {
-            internal_key: 1,
-            unlocked: true,
-            unlock_time: 1_700_000_000,
-            ..Default::default()
-        }];
+        let unlocks = UserAchievements {
+            achievements: vec![UserAchievement {
+                internal_key: 1,
+                unlocked: true,
+                unlock_time: 1_700_000_000,
+                ..Default::default()
+            }],
+            groups: Vec::new(),
+        };
         let list = merge(620, &defs, Some(&unlocks), &HashMap::new());
         assert_eq!(list[0].unlocked_at.as_deref(), Some("2023-11-14T22:13:20Z"));
         assert!(list[1].unlocked_at.is_none());
@@ -219,6 +231,8 @@ mod tests {
                 name: "Base game".into(),
                 dlc_app_id: None,
                 order: 0,
+                achievable: None,
+                completed_at: None,
             })
         );
         let dlc = list[1].group.as_ref().unwrap();
@@ -226,5 +240,27 @@ mod tests {
             (dlc.name.as_str(), dlc.dlc_app_id.as_deref(), dlc.order),
             ("The Island", Some("1500"), 1)
         );
+
+        // Signed in: the account completed the base set and doesn't own
+        // the DLC.
+        let mine = irori_steam_api::achievements::parse_user(&serde_json::json!({"response": {
+            "achievements": [
+                {"internal_key": 1, "unlocked": true, "unlock_time": 1700000000},
+                {"internal_key": 2, "unlocked": false}
+            ],
+            "groups": [
+                {"groupid": 1, "is_achievable": true, "completed_achievements": 1,
+                 "is_completed": true, "time_completed": 1700000000},
+                {"groupid": 2, "is_achievable": false}
+            ]
+        }}))
+        .unwrap();
+        let list = merge(620, &schema, Some(&mine), &HashMap::new());
+        let base = list[0].group.as_ref().unwrap();
+        assert_eq!(base.achievable, Some(true));
+        assert_eq!(base.completed_at.as_deref(), Some("2023-11-14T22:13:20Z"));
+        let dlc = list[1].group.as_ref().unwrap();
+        assert!(dlc.unearnable() && dlc.completed_at.is_none());
+        assert!(list[1].is_unearnable() && !list[0].is_unearnable());
     }
 }
