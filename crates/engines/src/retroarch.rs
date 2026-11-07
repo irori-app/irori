@@ -29,7 +29,9 @@ fn platform_dir(host: Host) -> Option<(&'static str, &'static str)> {
         (Os::Linux, "aarch64") => ("linux/aarch64/latest", "so"),
         (Os::Macos, "aarch64") => ("apple/osx/arm64/latest", "dylib"),
         (Os::Macos, "x86_64") => ("apple/osx/x86_64/latest", "dylib"),
-        (Os::Windows, "x86_64") => ("windows/x86_64/latest", "dll"),
+        // Windows on Arm plays the x64 RetroArch (libretro builds no other),
+        // and a core must match the program loading it.
+        (Os::Windows, "x86_64" | "aarch64") => ("windows/x86_64/latest", "dll"),
         _ => return None,
     })
 }

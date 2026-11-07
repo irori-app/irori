@@ -6,6 +6,7 @@
 //! modules expose the building blocks (Wine manager, tools, system info) for
 //! the settings UI.
 
+pub mod cpu;
 pub mod discovery;
 pub mod download;
 pub mod env;

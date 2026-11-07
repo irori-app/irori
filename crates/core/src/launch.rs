@@ -141,6 +141,23 @@ impl SandboxUnavailable {
     }
 }
 
+/// A program the game's command starts is built for x86 (x86-64 or 32-bit
+/// x86), this computer is Arm64, and no x86 emulator (FEX, Box64) is
+/// registered to run it. Irori refuses before starting it, as it would only
+/// fail with "Exec format error"; the UI explains how to set one up.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{} is an x86 program, and this Arm64 computer has no x86 emulator such as FEX set up to run it.", program.display())]
+pub struct X86EmulatorMissing {
+    pub program: PathBuf,
+}
+
+impl X86EmulatorMissing {
+    /// The missing x86 emulator behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&X86EmulatorMissing> {
+        error.downcast_ref()
+    }
+}
+
 impl fmt::Debug for dyn GameWatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("GameWatch")

@@ -8,7 +8,7 @@ different native OS is rejected before launch.
 | Host | Native game builds | Windows game builds | Runtime manager |
 | --- | --- | --- | --- |
 | Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wine-GE, Kron4ek |
-| Linux arm64 | Linux, browser | Wine / Proton / umu | The arm64 builds of GE-Proton and CachyOS |
+| Linux arm64 | Linux (x86 ones through FEX or Box64), browser | The arm64 builds of GE-Proton and Proton-CachyOS, which carry FEX / umu | The arm64 builds of GE-Proton and CachyOS |
 | macOS Intel | macOS, browser | macOS Wine / CrossOver | Wine-Crossover, Wine-Staging-macOS |
 | macOS Apple silicon | macOS, browser | macOS Wine / CrossOver / Whisky / GPTK | Game-Porting-Toolkit, Wine-Crossover, Wine-Staging-macOS |
 | Windows x64 | Windows, browser | Native execution | No Wine download required |
@@ -19,6 +19,29 @@ silicon on macOS 14 or later. Intel Wine on Apple silicon requires Rosetta 2;
 Irori checks it before initializing a prefix and reports a missing prerequisite.
 Runtime availability does not guarantee game compatibility. DRM, anticheat,
 graphics APIs, CPU instructions, and the selected runtime still matter.
+
+### Arm64
+
+- **Windows on Arm** runs x64 games and programs through its own emulation,
+  so games run as on any Windows. Emulators download their Windows on Arm
+  build where the project publishes one, else the x64 build (`Host::fallback`
+  in `irori-engines`); RetroArch is the x64 build there, with x64 cores, as
+  libretro publishes no others.
+- **Linux on Arm** runs Windows games with the arm64 builds of GE-Proton and
+  Proton-CachyOS, which carry FEX inside Wine; the Wine manager lists only those
+  (Wine-GE and Kron4ek build for x86-64 only), and umu 1.4.1 or newer uses
+  Steam's arm64 runtime with them. Native Linux games are nearly all x86-64:
+  they run only through an x86 emulator the kernel hands them to (FEX, Box64,
+  qemu-user register themselves in binfmt_misc). Irori reads those
+  registrations (`irori_runtime::cpu`). Without one it doesn't start an x86
+  program, which would fail with "Exec format error", and explains how to set
+  up FEX instead (`X86EmulatorMissing`); an x86-64 Wine build counts as usable
+  only with one. Where the registrations can't be read (inside a Flatpak),
+  Irori starts the game and leaves the answer to the system.
+- Emulators download their arm64 Linux build where the project publishes one
+  (DuckStation, PPSSPP, mGBA, melonDS, xemu, RPCS3); RetroArch, Dolphin and the
+  others are found as Flatpaks or system packages, and RetroArch's cores come
+  from libretro's arm64 folder.
 
 ## macOS compatibility layers
 

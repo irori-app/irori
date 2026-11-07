@@ -30,6 +30,7 @@ pub mod state;
 pub mod style;
 pub mod system_notify;
 pub mod theme;
+mod x86_problem;
 
 pub use models::{Models, models};
 pub use nav::{Route, navigate};

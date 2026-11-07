@@ -63,6 +63,36 @@ pub struct Runtime {
     pub created_at: String,
     #[serde(default)]
     pub url: Option<String>,
+    /// `x86_64`, `aarch64` or `all`; missing means `all`.
+    #[serde(default)]
+    pub architecture: Option<String>,
+}
+
+impl Runtime {
+    /// Whether this build runs on a computer with `arch` (`x86_64`, `aarch64`).
+    fn runs_on(&self, arch: &str) -> bool {
+        match self.architecture.as_deref() {
+            None | Some("" | "all") => true,
+            Some("arm64") => arch == "aarch64",
+            Some(a) => a == arch,
+        }
+    }
+}
+
+/// The listed build of `name` for this computer: one made for its
+/// architecture before one for every architecture.
+fn listed(list: &[Runtime], name: RuntimeName) -> Option<&Runtime> {
+    listed_for(list, name, std::env::consts::ARCH)
+}
+
+fn listed_for<'a>(list: &'a [Runtime], name: RuntimeName, arch: &str) -> Option<&'a Runtime> {
+    let builds = || {
+        list.iter()
+            .filter(|r| r.name == name.id() && r.runs_on(arch))
+    };
+    builds()
+        .find(|r| r.architecture.as_deref() == Some(arch))
+        .or_else(|| builds().next())
 }
 
 static LIST: Mutex<Option<(Instant, Vec<Runtime>)>> = Mutex::new(None);
@@ -135,7 +165,7 @@ pub async fn is_installed(name: RuntimeName) -> bool {
         return false;
     };
     match runtime_list(false).await {
-        Ok(list) => match list.iter().find(|r| r.name == name.id()) {
+        Ok(list) => match listed(&list, name) {
             Some(remote) => remote.created_at == local,
             None => {
                 tracing::warn!("runtime {} is no longer listed by lutris.net", name.id());
@@ -165,7 +195,7 @@ pub async fn check_updates() -> Result<Vec<(RuntimeName, String, String)>> {
         let Some(local) = installed_version(&effective_runtime_dir(name)) else {
             continue;
         };
-        if let Some(remote) = list.iter().find(|r| r.name == name.id())
+        if let Some(remote) = listed(&list, name)
             && remote.created_at != local
         {
             out.push((name, local, remote.created_at.clone()));
@@ -181,10 +211,12 @@ pub async fn download(name: RuntimeName, ctx: &OpContext) -> Result<()> {
         .await
         .with_context(|| format!("creating {}", base.display()))?;
     let list = runtime_list(true).await?;
-    let runtime = list
-        .iter()
-        .find(|r| r.name == name.id())
-        .with_context(|| format!("lutris.net does not provide the {}", name.label()))?;
+    let runtime = listed(&list, name).with_context(|| {
+        format!(
+            "lutris.net does not provide the {} for this computer",
+            name.label()
+        )
+    })?;
     let url = runtime
         .url
         .as_deref()
@@ -325,6 +357,30 @@ mod tests {
         let list: Vec<Runtime> = serde_json::from_str(json).unwrap();
         assert_eq!(list[0].url.as_deref(), Some("https://x/umu.tar.xz"));
         assert_eq!(list[1].created_at, "");
+    }
+
+    #[test]
+    fn picks_the_build_for_this_architecture() {
+        let json = r#"[
+            {"name":"umu","created_at":"1","architecture":"all","url":"https://x/all"},
+            {"name":"umu","created_at":"2","architecture":"aarch64","url":"https://x/arm"},
+            {"name":"eac_runtime","created_at":"3","architecture":"x86_64","url":"https://x/eac"}
+        ]"#;
+        let list: Vec<Runtime> = serde_json::from_str(json).unwrap();
+        let url = |name, arch| listed_for(&list, name, arch).and_then(|r| r.url.clone());
+        assert_eq!(
+            url(RuntimeName::Umu, "aarch64").as_deref(),
+            Some("https://x/arm")
+        );
+        assert_eq!(
+            url(RuntimeName::Umu, "x86_64").as_deref(),
+            Some("https://x/all")
+        );
+        assert_eq!(
+            url(RuntimeName::EacRuntime, "x86_64").as_deref(),
+            Some("https://x/eac")
+        );
+        assert_eq!(url(RuntimeName::EacRuntime, "aarch64"), None);
     }
 
     #[test]

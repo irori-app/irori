@@ -94,22 +94,36 @@ impl Source {
         )
     }
 
-    /// The host-specific asset pattern of a managed source.
-    pub fn asset_for(&self, host: Host) -> Option<&str> {
+    /// The host whose build of this managed source `host` uses: its own,
+    /// else the one it runs instead ([`Host::fallback`]).
+    pub fn build_host(&self, host: Host) -> Option<Host> {
         let assets = match self {
             Source::Github { assets, .. }
             | Source::Buildbot { assets, .. }
             | Source::Page { assets, .. } => assets,
             _ => return None,
         };
-        assets.get(&host.key()).map(String::as_str)
+        std::iter::once(host)
+            .chain(host.fallback())
+            .find(|h| assets.contains_key(&h.key()))
+    }
+
+    /// The host-specific asset pattern of a managed source.
+    pub fn asset_for(&self, host: Host) -> Option<&str> {
+        let build = self.build_host(host)?;
+        match self {
+            Source::Github { assets, .. }
+            | Source::Buildbot { assets, .. }
+            | Source::Page { assets, .. } => assets.get(&build.key()).map(String::as_str),
+            _ => None,
+        }
     }
 
     /// Patterns of the further assets `host` needs beside the main one.
     pub fn extras_for(&self, host: Host) -> &[String] {
-        match self {
-            Source::Github { extra_assets, .. } => extra_assets
-                .get(&host.key())
+        match (self, self.build_host(host)) {
+            (Source::Github { extra_assets, .. }, Some(build)) => extra_assets
+                .get(&build.key())
                 .map(Vec::as_slice)
                 .unwrap_or_default(),
             _ => &[],
@@ -420,6 +434,51 @@ mod tests {
             assert!(!m.systems.is_empty(), "{id} plays no system");
             assert!(!m.exit_hotkey.is_empty(), "{id} has no exit hotkey");
         }
+    }
+
+    #[test]
+    fn windows_on_arm_downloads_x64_builds_where_no_arm64_one_exists() {
+        let arm = Host {
+            os: crate::host::Os::Windows,
+            arch: "aarch64",
+        };
+        let x64 = Host {
+            os: crate::host::Os::Windows,
+            arch: "x86_64",
+        };
+        for (id, json) in crate::BUILT_IN {
+            let m = EngineManifest::parse(json).unwrap();
+            assert_eq!(m.downloadable_on(arm), m.downloadable_on(x64), "{id}");
+            for source in &m.sources {
+                if let Some(pattern) = source.asset_for(x64) {
+                    assert_eq!(source.asset_for(arm), Some(pattern), "{id}");
+                    assert_eq!(source.extras_for(arm), source.extras_for(x64), "{id}");
+                }
+            }
+        }
+        // Linux on Arm runs no x86-64 emulator builds by itself.
+        let linux_arm = Host {
+            os: crate::host::Os::Linux,
+            arch: "aarch64",
+        };
+        assert_eq!(linux_arm.fallback(), None);
+    }
+
+    #[test]
+    fn windows_on_arm_retroarch_and_its_cores_are_both_x64() {
+        // The cores come from libretro's x64 folder on Windows on Arm
+        // (`retroarch::platform_dir`), which only an x64 RetroArch loads.
+        let (_, json) = crate::BUILT_IN
+            .iter()
+            .find(|(id, _)| *id == "retroarch")
+            .unwrap();
+        let m = EngineManifest::parse(json).unwrap();
+        let arm = Host {
+            os: crate::host::Os::Windows,
+            arch: "aarch64",
+        };
+        let built = m.sources.iter().find_map(|s| s.build_host(arm)).unwrap();
+        assert_eq!(built.arch, "x86_64");
     }
 
     #[test]
