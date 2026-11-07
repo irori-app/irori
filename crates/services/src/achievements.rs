@@ -3,6 +3,9 @@
 //! `state/achievements.json`, which the stats page totals without asking
 //! any store. After a session the game's achievements are asked for again
 //! and, when `iroriAchievementNotices` is on, new unlocks are announced.
+//! With `iroriFileAchievements` on, games whose files hold an emulator's
+//! achievements answer from those files instead of their store
+//! ([`crate::file_achievements`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -220,10 +223,15 @@ pub fn new_unlocks<'a>(before: &GameAchievements, list: &'a [Achievement]) -> Ve
 impl Backend {
     /// A game's achievements from its store, recorded for the totals.
     pub async fn achievements(&self, id: &GameId, language: &str) -> Result<Arc<Vec<Achievement>>> {
-        let store = self
-            .store(id.runner)
-            .with_context(|| format!("{} is not available", id.runner.store_name()))?;
-        let list = store.achievements(&id.app_name, language).await?;
+        let list = match self.file_achievements(id, language).await {
+            Some(answer) => answer?,
+            None => {
+                let store = self
+                    .store(id.runner)
+                    .with_context(|| format!("{} is not available", id.runner.store_name()))?;
+                store.achievements(&id.app_name, language).await?
+            }
+        };
         self.achievement_store.record(id.key(), &list).await;
         Ok(Arc::new(list))
     }
@@ -255,9 +263,6 @@ impl Backend {
     /// After a session: ask again (unlocks happen while playing) and, when
     /// the setting is on, announce what the session unlocked.
     pub(crate) async fn after_session_achievements(&self, id: &GameId, title: &str) {
-        let Some(store) = self.store(id.runner) else {
-            return;
-        };
         let known = self
             .achievement_store
             .current()
@@ -265,9 +270,19 @@ impl Backend {
             .games
             .get(&id.key())
             .cloned();
-        store.forget_achievements(&id.app_name).await;
         let language = self.settings.app().ui_language.clone();
-        let list = match store.achievements(&id.app_name, &language).await {
+        // Game files are read afresh every time; a store is asked past its cache.
+        let answer = match self.file_achievements(id, &language).await {
+            Some(answer) => answer,
+            None => {
+                let Some(store) = self.store(id.runner) else {
+                    return;
+                };
+                store.forget_achievements(&id.app_name).await;
+                store.achievements(&id.app_name, &language).await
+            }
+        };
+        let list = match answer {
             Ok(list) => list,
             Err(e) => {
                 tracing::debug!("achievements of {id} after playing: {e:#}");

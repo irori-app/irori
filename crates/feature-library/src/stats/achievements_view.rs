@@ -68,12 +68,14 @@ impl StatsView {
         if self.achievements_scanning {
             return;
         }
+        // Added games have achievements only in their files.
+        let files = backend(cx).settings.app().file_achievements;
         let l = models(cx).library.read(cx);
         let ids: Vec<GameId> = l
             .snapshot
             .games
             .iter()
-            .filter(|g| g.runner() != irori_core::Runner::Sideload)
+            .filter(|g| files || g.runner() != irori_core::Runner::Sideload)
             .map(|g| g.id())
             .filter(|id| {
                 l.user

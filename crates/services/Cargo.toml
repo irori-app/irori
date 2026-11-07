@@ -17,6 +17,9 @@ sysinfo.workspace = true
 irori-extras.workspace = true
 irori-scripts.workspace = true
 irori-mods.workspace = true
+# Steam's public achievement schema, for achievements games keep in their own
+# files (`file_achievements`).
+irori-steam-api.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
