@@ -98,7 +98,7 @@ impl YearReviewView {
             let job = b.spawn_blocking({
                 let b = b.clone();
                 move || {
-                    let sessions = Arc::new(year::timed(b.sessions(), local_time));
+                    let sessions = Arc::new(year::timed(b.visible_sessions(), local_time));
                     let years = year::years(&sessions);
                     let year = requested
                         .filter(|y| years.contains(y))

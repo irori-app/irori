@@ -215,5 +215,21 @@
   "ui.copies.open": "Exemplaar van {store} openen",
   "ui.copies.make_default": "Dit exemplaar standaard maken",
   "ui.copies.separate": "Dit exemplaar apart tonen",
-  "ui.copies.separate_all": "Elk exemplaar apart tonen"
+  "ui.copies.separate_all": "Elk exemplaar apart tonen",
+  "ui.hidden_lock.change_title": "Pincode voor verborgen games",
+  "ui.hidden_lock.confirm_pin": "Nieuwe pincode nogmaals",
+  "ui.hidden_lock.current_pin": "Pincode",
+  "ui.hidden_lock.description": "Met een pincode blijven verborgen games buiten de bibliotheek, Big Picture, zoeken, statistieken en de opdrachtregel tot je hem invoert. Er wordt niets versleuteld.",
+  "ui.hidden_lock.new_pin": "Nieuwe pincode",
+  "ui.hidden_lock.pin_rule": "Een pincode heeft {count} tot 32 cijfers",
+  "ui.hidden_lock.pins_differ": "De twee pincodes verschillen",
+  "ui.hidden_lock.remove": "Pincode verwijderen",
+  "ui.hidden_lock.removed": "De pincode voor verborgen games is verwijderd",
+  "ui.hidden_lock.save": "Pincode opslaan",
+  "ui.hidden_lock.saved": "Verborgen games zitten nu achter een pincode",
+  "ui.hidden_lock.set_title": "Verborgen games vergrendelen met een pincode",
+  "ui.hidden_lock.unlock": "Ontgrendelen",
+  "ui.hidden_lock.unlock_description": "Voer de pincode in om verborgen games te tonen totdat Irori sluit of je ze weer vergrendelt.",
+  "ui.hidden_lock.unlock_title": "Verborgen games tonen",
+  "ui.hidden_lock.wrong_pin": "Die pincode klopt niet"
 }

@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Dziennik",
   "bigpicture.overlay.system_volume": "Głośność systemu",
   "bigpicture.overlay.game_volume": "Głośność gry",
+  "bigpicture.overlay.output": "Wyjście dźwięku",
+  "bigpicture.overlay.output_unavailable": "Niedostępne",
   "bigpicture.overlay.muted": "Wyciszono",
   "bigpicture.overlay.no_game_sound": "Jeszcze bez dźwięku",
   "bigpicture.overlay.volume_unavailable": "Niedostępne",

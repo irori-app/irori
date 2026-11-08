@@ -15,6 +15,7 @@ mod engine_problem;
 pub mod game_log;
 pub mod game_mode;
 pub mod glass;
+pub mod hidden_lock;
 pub mod hooks;
 pub mod i18n;
 pub mod journal;

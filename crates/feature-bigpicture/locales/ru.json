@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Дневник",
   "bigpicture.overlay.system_volume": "Громкость системы",
   "bigpicture.overlay.game_volume": "Громкость игры",
+  "bigpicture.overlay.output": "Вывод звука",
+  "bigpicture.overlay.output_unavailable": "Недоступно",
   "bigpicture.overlay.muted": "Без звука",
   "bigpicture.overlay.no_game_sound": "Звука пока нет",
   "bigpicture.overlay.volume_unavailable": "Недоступно",

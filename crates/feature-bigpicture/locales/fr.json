@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Journal",
   "bigpicture.overlay.system_volume": "Volume du système",
   "bigpicture.overlay.game_volume": "Volume du jeu",
+  "bigpicture.overlay.output": "Sortie audio",
+  "bigpicture.overlay.output_unavailable": "Indisponible",
   "bigpicture.overlay.muted": "Muet",
   "bigpicture.overlay.no_game_sound": "Pas encore de son",
   "bigpicture.overlay.volume_unavailable": "Indisponible",

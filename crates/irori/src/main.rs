@@ -13,6 +13,7 @@ mod instance;
 mod lutris;
 mod pages;
 mod palette;
+mod placement;
 mod playing;
 mod playnite;
 mod routing;
@@ -35,8 +36,8 @@ use futures::channel::mpsc;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::{Root, TitleBar};
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext as _, Bounds, Focusable as _, QuitMode, WindowBounds,
-    WindowDecorations, WindowHandle, WindowOptions, px, size,
+    AnyWindowHandle, App, AppContext as _, Focusable as _, QuitMode, WindowDecorations,
+    WindowHandle, WindowOptions, px, size,
 };
 use irori_core::{GameId, Paths};
 use irori_services::Backend;
@@ -303,20 +304,10 @@ fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
     }
     let prefs = models(cx).settings.read(cx).app.ui.clone();
     let route = shell::initial_route(cx);
-    let bounds = Bounds::centered(
-        None,
-        size(
-            px(prefs.window_width.max(960.)),
-            px(prefs.window_height.max(600.)),
-        ),
-        cx,
-    );
+    let (bounds, display_id) = placement::open_bounds(&prefs, cx);
     let options = WindowOptions {
-        window_bounds: Some(if prefs.window_maximized {
-            WindowBounds::Maximized(bounds)
-        } else {
-            WindowBounds::Windowed(bounds)
-        }),
+        window_bounds: Some(bounds),
+        display_id,
         window_min_size: Some(size(px(800.), px(540.))),
         app_id: Some("irori".into()),
         // Irori draws its own title bar; ask Wayland compositors not to add one.

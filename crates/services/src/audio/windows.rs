@@ -236,3 +236,128 @@ pub(super) async fn change(
 ) -> Result<()> {
     blocking(move || apply(game.as_ref(), target, change)).await
 }
+
+/// Windows' policy configuration object, which sets the default output
+/// (what Windows' own sound settings call). Microsoft doesn't document it,
+/// but it has kept this layout since Windows 7 and every output switcher
+/// uses it. Only `SetDefaultEndpoint` is called; the methods before it are
+/// declared so it sits in its place in the table (COM goes by place, not name).
+#[windows::core::interface("f8679f50-850a-41cf-9c72-430f290290c8")]
+unsafe trait IPolicyConfig: windows::core::IUnknown {
+    fn get_mix_format(&self) -> windows::core::HRESULT;
+    fn get_device_format(&self) -> windows::core::HRESULT;
+    fn reset_device_format(&self) -> windows::core::HRESULT;
+    fn set_device_format(&self) -> windows::core::HRESULT;
+    fn get_processing_period(&self) -> windows::core::HRESULT;
+    fn set_processing_period(&self) -> windows::core::HRESULT;
+    fn get_share_mode(&self) -> windows::core::HRESULT;
+    fn set_share_mode(&self) -> windows::core::HRESULT;
+    fn get_property_value(&self) -> windows::core::HRESULT;
+    fn set_property_value(&self) -> windows::core::HRESULT;
+    fn set_default_endpoint(
+        &self,
+        device: windows::core::PCWSTR,
+        role: windows::Win32::Media::Audio::ERole,
+    ) -> windows::core::HRESULT;
+}
+
+/// `CPolicyConfigClient`, the class that answers [`IPolicyConfig`].
+const POLICY_CONFIG: windows::core::GUID =
+    windows::core::GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
+
+/// A device's id as text, freeing the string COM gave.
+fn device_id(device: &windows::Win32::Media::Audio::IMMDevice) -> Option<String> {
+    // SAFETY: COM calls on a live interface; the id string COM allocated is
+    // read once and freed with the allocator it came from.
+    unsafe {
+        let id = device.GetId().ok()?;
+        let text = id.to_string().ok();
+        windows::Win32::System::Com::CoTaskMemFree(Some(id.0.cast()));
+        text
+    }
+}
+
+fn list_outputs() -> Result<Vec<AudioOutput>> {
+    use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+    use windows::Win32::System::Com::STGM_READ;
+    let _com = Com::init();
+    let devices = enumerator()?;
+    // SAFETY: COM calls on live interfaces, on the thread that made them.
+    unsafe {
+        let current = devices
+            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .ok()
+            .and_then(|d| device_id(&d));
+        let outputs = devices.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)?;
+        let mut out = Vec::new();
+        for i in 0..outputs.GetCount()? {
+            let Ok(device) = outputs.Item(i) else {
+                continue;
+            };
+            let Some(id) = device_id(&device) else {
+                continue;
+            };
+            let name = device
+                .OpenPropertyStore(STGM_READ)
+                .and_then(|store| store.GetValue(&PKEY_Device_FriendlyName))
+                .map(|value| value.to_string())
+                .ok()
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| id.clone());
+            out.push(AudioOutput {
+                current: current.as_deref() == Some(id.as_str()),
+                id,
+                name,
+            });
+        }
+        Ok(out)
+    }
+}
+
+fn switch_output(id: &str) -> Result<()> {
+    use windows::Win32::Media::Audio::{eCommunications, eMultimedia};
+    let _com = Com::init();
+    let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: COM activation and calls on the thread that made them; `wide`
+    // is a NUL-terminated UTF-16 id that outlives the calls.
+    unsafe {
+        let policy: IPolicyConfig = CoCreateInstance(&POLICY_CONFIG, None, CLSCTX_ALL)
+            .context("Windows' sound settings didn't answer")?;
+        for role in [eConsole, eMultimedia, eCommunications] {
+            policy
+                .set_default_endpoint(windows::core::PCWSTR(wide.as_ptr()), role)
+                .ok()
+                .context("Windows didn't switch the sound output")?;
+        }
+    }
+    Ok(())
+}
+
+pub(super) async fn outputs() -> Result<Vec<AudioOutput>> {
+    blocking(list_outputs).await
+}
+
+pub(super) async fn set_output(_game: Option<GameProcess>, id: String) -> Result<()> {
+    // A program's sound follows the default output unless the user gave it
+    // one in Windows' settings, so the game moves along.
+    blocking(move || switch_output(&id)).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lists_outputs_with_ids_and_at_most_one_current() {
+        // Read only: CI machines may have no outputs, or no audio service.
+        let Ok(outputs) = list_outputs() else {
+            return;
+        };
+        assert!(
+            outputs
+                .iter()
+                .all(|o| !o.id.is_empty() && !o.name.is_empty())
+        );
+        assert!(outputs.iter().filter(|o| o.current).count() <= 1);
+    }
+}

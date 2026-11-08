@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Dagbok",
   "bigpicture.overlay.system_volume": "Systemvolym",
   "bigpicture.overlay.game_volume": "Spelvolym",
+  "bigpicture.overlay.output": "Ljudutgång",
+  "bigpicture.overlay.output_unavailable": "Inte tillgänglig",
   "bigpicture.overlay.muted": "Avstängt",
   "bigpicture.overlay.no_game_sound": "Inget ljud än",
   "bigpicture.overlay.volume_unavailable": "Inte tillgänglig",

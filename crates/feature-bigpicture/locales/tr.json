@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Günlük",
   "bigpicture.overlay.system_volume": "Sistem ses düzeyi",
   "bigpicture.overlay.game_volume": "Oyun ses düzeyi",
+  "bigpicture.overlay.output": "Ses çıkışı",
+  "bigpicture.overlay.output_unavailable": "Kullanılamıyor",
   "bigpicture.overlay.muted": "Sessiz",
   "bigpicture.overlay.no_game_sound": "Henüz ses yok",
   "bigpicture.overlay.volume_unavailable": "Kullanılamıyor",

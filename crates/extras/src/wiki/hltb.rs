@@ -1,5 +1,13 @@
-//! HowLongToBeat times, from the HLTB game page (by PCGamingWiki's HLTB ID)
-//! or, for GOG games, from the GOG store page's HLTB box.
+//! HowLongToBeat times, from the HLTB game page (by PCGamingWiki's HLTB ID
+//! or the one the user chose), for GOG games from the GOG store page's HLTB
+//! box, and otherwise from HLTB's own title search.
+//!
+//! HLTB has no public API. Its site search asks `/api/search/site/init` for
+//! a short-lived token (tied to the caller's address and user agent) and
+//! posts the query with it; that is what [`search`] does, once per lookup.
+//! A search result is only taken when its name is the game's title (folded),
+//! never the nearest guess: a wrong match is worse than none, and the user
+//! can pick one with "Change match".
 
 use std::time::Duration;
 
@@ -20,6 +28,8 @@ pub struct HowLongToBeat {
     pub game_name: Option<String>,
     pub game_image_url: Option<String>,
     pub game_web_link: Option<String>,
+    /// The year HLTB gives for the release, from a search result.
+    pub release_year: Option<u32>,
 }
 
 const BROWSER_UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -90,6 +100,7 @@ pub fn parse_hltb_page(html: &str) -> Option<HowLongToBeat> {
         game_name: text("game_name"),
         game_image_url: text("game_image").map(|i| format!("https://howlongtobeat.com/games/{i}")),
         game_web_link: Some(format!("https://howlongtobeat.com/game/{game_id}")),
+        release_year: None,
     })
 }
 
@@ -125,6 +136,7 @@ pub fn parse_gog_store_page(html: &str, title: &str) -> Option<HowLongToBeat> {
         game_name: Some(title.to_string()),
         game_image_url: None,
         game_web_link: Some(format!("https://howlongtobeat.com/game/{game_id}")),
+        release_year: None,
     })
 }
 
@@ -141,6 +153,147 @@ pub async fn fetch_from_gog_store(store_url: &str, title: &str) -> Result<Option
     Ok(get_page(store_url, None)
         .await?
         .and_then(|html| parse_gog_store_page(&html, title)))
+}
+
+const SITE: &str = "https://howlongtobeat.com";
+/// Results asked for per search.
+const RESULTS: usize = 10;
+
+/// The games of a site search answer.
+pub fn parse_search(json: &serde_json::Value) -> Vec<HowLongToBeat> {
+    let Some(data) = json.get("data").and_then(|d| d.as_array()) else {
+        return Vec::new();
+    };
+    data.iter()
+        .filter_map(|game| {
+            let game_id = game.get("game_id")?.as_u64()?;
+            let num = |k: &str| game.get(k).and_then(serde_json::Value::as_f64);
+            let text = |k: &str| {
+                game.get(k)
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            Some(HowLongToBeat {
+                main_story: hours(num("comp_main")),
+                main_extra: hours(num("comp_plus")),
+                completionist: hours(num("comp_100")),
+                game_id: Some(game_id),
+                game_name: text("game_name"),
+                game_image_url: text("game_image").map(|i| format!("{SITE}/games/{i}")),
+                game_web_link: Some(format!("{SITE}/game/{game_id}")),
+                release_year: game
+                    .get("release_world")
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|y| u32::try_from(y).ok())
+                    .filter(|y| *y > 0),
+            })
+        })
+        .collect()
+}
+
+/// Letters and digits only, lower case, Roman numerals II–X as digits, so
+/// "DOOM II: Hell on Earth" and "Doom 2 - Hell on Earth" compare equal.
+fn fold(title: &str) -> String {
+    let words: Vec<String> = title
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let lower = w.to_lowercase();
+            match lower.as_str() {
+                "ii" => "2".into(),
+                "iii" => "3".into(),
+                "iv" => "4".into(),
+                "v" => "5".into(),
+                "vi" => "6".into(),
+                "vii" => "7".into(),
+                "viii" => "8".into(),
+                "ix" => "9".into(),
+                "x" => "10".into(),
+                _ => lower,
+            }
+        })
+        .collect();
+    words.concat()
+}
+
+/// The result that is `title`, if one is: the same folded name, and of
+/// several (remakes share names), the one released in `year` or else the
+/// first (HLTB ranks by popularity). `None` rather than a near miss.
+pub fn best_match<'a>(
+    results: &'a [HowLongToBeat],
+    title: &str,
+    year: Option<u32>,
+) -> Option<&'a HowLongToBeat> {
+    let wanted = fold(title);
+    if wanted.is_empty() {
+        return None;
+    }
+    let same: Vec<&HowLongToBeat> = results
+        .iter()
+        .filter(|r| r.game_name.as_deref().is_some_and(|n| fold(n) == wanted))
+        .collect();
+    year.and_then(|y| same.iter().find(|r| r.release_year == Some(y)).copied())
+        .or_else(|| same.first().copied())
+}
+
+/// HLTB's site search for `query`, most popular first.
+pub async fn search(query: &str) -> Result<Vec<HowLongToBeat>> {
+    let terms: Vec<&str> = query.split_whitespace().collect();
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let client = irori_core::http::client();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let init: serde_json::Value = client
+        .get(format!("{SITE}/api/search/site/init?t={now}"))
+        .headers(browser_headers(Some("https://howlongtobeat.com/")))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let token = init
+        .get("token")
+        .and_then(|t| t.as_str())
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("HowLongToBeat gave no search token"))?;
+    let body = serde_json::json!({
+        "searchType": "games",
+        "searchTerms": terms,
+        "searchPage": 1,
+        "size": RESULTS,
+        "searchOptions": {
+            "games": {
+                "userId": 0, "platform": "", "sortCategory": "popular",
+                "rangeCategory": "main", "rangeTime": {"min": null, "max": null},
+                "gameplay": {"perspective": "", "flow": "", "genre": "", "difficulty": ""},
+                "rangeYear": {"min": "", "max": ""}, "modifier": ""
+            },
+            "users": {"sortCategory": "postcount"},
+            "lists": {"sortCategory": "follows"},
+            "filter": "", "sort": 0, "randomizer": 0
+        },
+        "useCache": true
+    });
+    let answer: serde_json::Value = client
+        .post(format!("{SITE}/api/search/site"))
+        .headers(browser_headers(Some("https://howlongtobeat.com/")))
+        .header("Origin", SITE)
+        .header("x-auth-token", token)
+        .json(&body)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    Ok(parse_search(&answer))
 }
 
 #[cfg(test)]
@@ -174,5 +327,37 @@ mod tests {
         assert_eq!((h.main_story, h.main_extra, h.completionist), (26, 60, 104));
         assert_eq!(h.game_name.as_deref(), Some("Cyberpunk"));
         assert!(parse_gog_store_page("<span></span>", "x").is_none());
+    }
+
+    #[test]
+    fn search_results_and_safe_matches() {
+        let json = serde_json::json!({"data": [
+            {"game_id": 62941, "game_name": "Hades", "game_image": "62941_Hades.jpg",
+             "comp_main": 84888, "comp_plus": 175294, "comp_100": 343112, "release_world": 2020},
+            {"game_id": 118218, "game_name": "Hades II", "comp_main": 0, "release_world": 2025},
+            {"game_id": 1, "game_name": "DOOM", "release_world": 1993},
+            {"game_id": 2, "game_name": "DOOM", "release_world": 2016},
+            {"game_name": "no id"}
+        ]});
+        let results = parse_search(&json);
+        assert_eq!(results.len(), 4);
+        assert_eq!(results[0].main_story, 24);
+        assert_eq!(results[0].release_year, Some(2020));
+        assert_eq!(
+            results[0].game_web_link.as_deref(),
+            Some("https://howlongtobeat.com/game/62941")
+        );
+        let id = |r: Option<&HowLongToBeat>| r.and_then(|r| r.game_id);
+        assert_eq!(id(best_match(&results, "Hades", None)), Some(62941));
+        assert_eq!(id(best_match(&results, "HADES 2", None)), Some(118218));
+        assert_eq!(id(best_match(&results, "Doom", Some(2016))), Some(2));
+        assert_eq!(id(best_match(&results, "Doom", None)), Some(1));
+        // Near misses are no match.
+        assert_eq!(
+            id(best_match(&results, "Hades: Battle out of Hell", None)),
+            None
+        );
+        assert_eq!(id(best_match(&results, "", None)), None);
+        assert!(parse_search(&serde_json::json!({})).is_empty());
     }
 }

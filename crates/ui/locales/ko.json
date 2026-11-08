@@ -215,5 +215,21 @@
   "ui.copies.open": "{store} 사본 열기",
   "ui.copies.make_default": "이 사본을 기본으로 설정",
   "ui.copies.separate": "이 사본을 따로 표시",
-  "ui.copies.separate_all": "모든 사본을 따로 표시"
+  "ui.copies.separate_all": "모든 사본을 따로 표시",
+  "ui.hidden_lock.change_title": "숨긴 게임 PIN",
+  "ui.hidden_lock.confirm_pin": "새 PIN 다시 입력",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "PIN을 설정하면 입력할 때까지 숨긴 게임이 라이브러리, Big Picture, 검색, 통계, 명령줄에 나타나지 않습니다. 아무것도 암호화하지 않습니다.",
+  "ui.hidden_lock.new_pin": "새 PIN",
+  "ui.hidden_lock.pin_rule": "PIN은 {count}~32자리 숫자입니다",
+  "ui.hidden_lock.pins_differ": "두 PIN이 다릅니다",
+  "ui.hidden_lock.remove": "PIN 제거",
+  "ui.hidden_lock.removed": "숨긴 게임 PIN을 제거했습니다",
+  "ui.hidden_lock.save": "PIN 저장",
+  "ui.hidden_lock.saved": "이제 숨긴 게임이 PIN으로 보호됩니다",
+  "ui.hidden_lock.set_title": "PIN으로 숨긴 게임 잠그기",
+  "ui.hidden_lock.unlock": "잠금 해제",
+  "ui.hidden_lock.unlock_description": "PIN을 입력하면 Irori를 종료하거나 다시 잠글 때까지 숨긴 게임이 표시됩니다.",
+  "ui.hidden_lock.unlock_title": "숨긴 게임 표시",
+  "ui.hidden_lock.wrong_pin": "PIN이 올바르지 않습니다"
 }

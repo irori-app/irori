@@ -56,6 +56,8 @@ pub struct AppShell {
     app_update: crate::app_update::Announced,
     /// The first route was chosen knowing the library and the accounts.
     start_settled: bool,
+    /// Saves the window's place once it has stopped moving.
+    placement_save: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -123,8 +125,11 @@ impl AppShell {
                     );
                 }
             }),
-            // Entering or leaving fullscreen.
-            cx.observe_window_bounds(window, |this, window, cx| this.sync_glass(window, cx)),
+            // Entering or leaving fullscreen; moving or resizing.
+            cx.observe_window_bounds(window, |this, window, cx| {
+                this.sync_glass(window, cx);
+                this.save_placement(window, cx);
+            }),
             // "Follow system" follows the system while Irori runs, too.
             cx.observe_window_appearance(window, |_, window, cx| {
                 let prefs = models(cx).settings.read(cx).app.ui.clone();
@@ -162,6 +167,7 @@ impl AppShell {
             glass: None,
             app_update: Default::default(),
             start_settled: false,
+            placement_save: None,
             _subscriptions: subs,
         }
     }
@@ -310,6 +316,27 @@ impl AppShell {
             let c = !self.sidebar_collapsed;
             self.set_sidebar_collapsed(c, cx);
         }
+    }
+
+    /// Save where the window is, a second after it stopped moving, so it
+    /// reopens there (`crate::placement`).
+    fn save_placement(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(saved) = crate::placement::current(window, cx) else {
+            return;
+        };
+        let backend = irori_ui::backend(cx);
+        let timer = cx
+            .background_executor()
+            .timer(std::time::Duration::from_secs(1));
+        self.placement_save = Some(cx.background_spawn(async move {
+            timer.await;
+            let current = crate::placement::Saved::from_prefs(&backend.settings.app().ui);
+            if current != saved {
+                backend
+                    .settings
+                    .update_app(|s| crate::placement::store(&saved, &mut s.ui));
+            }
+        }));
     }
 
     fn set_sidebar_collapsed(&mut self, collapsed: bool, cx: &mut Context<Self>) {

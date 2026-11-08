@@ -215,5 +215,21 @@
   "ui.copies.open": "Otevřít kopii z {store}",
   "ui.copies.make_default": "Nastavit tuto kopii jako výchozí",
   "ui.copies.separate": "Zobrazovat tuto kopii samostatně",
-  "ui.copies.separate_all": "Zobrazovat každou kopii samostatně"
+  "ui.copies.separate_all": "Zobrazovat každou kopii samostatně",
+  "ui.hidden_lock.change_title": "PIN pro skryté hry",
+  "ui.hidden_lock.confirm_pin": "Nový PIN znovu",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "S PINem zůstanou skryté hry mimo knihovnu, Big Picture, hledání, statistiky a příkazový řádek, dokud ho nezadáte. Nic se nešifruje.",
+  "ui.hidden_lock.new_pin": "Nový PIN",
+  "ui.hidden_lock.pin_rule": "PIN má {count} až 32 číslic",
+  "ui.hidden_lock.pins_differ": "Oba PINy se liší",
+  "ui.hidden_lock.remove": "Odebrat PIN",
+  "ui.hidden_lock.removed": "PIN pro skryté hry byl odebrán",
+  "ui.hidden_lock.save": "Uložit PIN",
+  "ui.hidden_lock.saved": "Skryté hry jsou teď chráněné PINem",
+  "ui.hidden_lock.set_title": "Zamknout skryté hry PINem",
+  "ui.hidden_lock.unlock": "Odemknout",
+  "ui.hidden_lock.unlock_description": "Zadejte PIN, aby se skryté hry zobrazovaly, dokud Irori neukončíte nebo je znovu nezamknete.",
+  "ui.hidden_lock.unlock_title": "Zobrazit skryté hry",
+  "ui.hidden_lock.wrong_pin": "Tento PIN není správný"
 }
