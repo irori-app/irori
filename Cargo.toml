@@ -2,9 +2,9 @@
 resolver = "2"
 members = ["crates/*"]
 # Vendored WebView, unused for now (store logins use the browser); see its README.
-# GPUI's Windows backend is vendored only to patch it (see its PATCHES.md), so it
-# stays out of the workspace and its own lints.
-exclude = ["crates/webview", "crates/gpui-pre-windows"]
+# GPUI's Windows backend and gilrs-core are vendored only to patch them (see their
+# PATCHES.md), so they stay out of the workspace and its own lints.
+exclude = ["crates/webview", "crates/gpui-pre-windows", "crates/gilrs-core"]
 
 [workspace.package]
 version = "0.4.0"
@@ -110,6 +110,7 @@ sysinfo = { version = "0.39", default-features = false, features = ["system", "d
 # lists them. Keep its version equal to gpui-pre's.
 [patch.crates-io]
 gpui-pre-windows = { path = "crates/gpui-pre-windows" }
+gilrs-core = { path = "crates/gilrs-core" }
 
 [profile.release]
 lto = "fat"
