@@ -96,6 +96,14 @@ pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);
 
+/// Whether the third-party launchers' games are due a rescan
+/// (`iroriLaunchersRescan` minutes since the last, while they are listed).
+fn launchers_rescan_due(app: &irori_core::AppSettings, since: Duration) -> bool {
+    app.third_party_launchers
+        && app.launchers_rescan > 0
+        && since >= Duration::from_secs(u64::from(app.launchers_rescan) * 60)
+}
+
 /// Shared handle to the backend. Cheap to clone.
 #[derive(Clone)]
 pub struct Backend(Arc<Inner>);
@@ -412,11 +420,13 @@ impl Backend {
 
     async fn periodic_tasks(&self) {
         let mut since_refresh = Duration::ZERO;
+        let mut since_launchers = Duration::ZERO;
         loop {
             // Connectivity is cheap to probe; library refreshes follow the
             // user's interval.
             tokio::time::sleep(CONNECTIVITY_INTERVAL).await;
             since_refresh += CONNECTIVITY_INTERVAL;
+            since_launchers += CONNECTIVITY_INTERVAL;
             let was_online = self.is_online();
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
@@ -430,8 +440,16 @@ impl Backend {
             let reconnected = online && !was_online;
             if online && (since_refresh >= interval || reconnected) {
                 since_refresh = Duration::ZERO;
+                since_launchers = Duration::ZERO;
                 self.refresh_all(false).await;
                 self.run_automatic_updates().await;
+            } else if launchers_rescan_due(&self.settings.app(), since_launchers) {
+                // The launchers' games are read from local files, so this
+                // runs offline too.
+                since_launchers = Duration::ZERO;
+                if let Err(e) = self.refresh_store(Runner::Launchers, false).await {
+                    tracing::info!("rescanning third-party launchers: {e:#}");
+                }
             }
         }
     }

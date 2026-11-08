@@ -878,3 +878,23 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
     assert!(ids(&b, &a).is_empty());
     b.settings.update_app(|s| s.ui.group_copies = true);
 }
+
+#[test]
+fn third_party_launchers_are_rescanned_on_their_own_timer() {
+    use std::time::Duration;
+    let mut app = irori_core::AppSettings::default();
+    assert_eq!(app.launchers_rescan, 5);
+    let five = Duration::from_secs(5 * 60);
+    assert!(!super::launchers_rescan_due(&app, five), "launchers off");
+    app.third_party_launchers = true;
+    assert!(!super::launchers_rescan_due(
+        &app,
+        Duration::from_secs(4 * 60)
+    ));
+    assert!(super::launchers_rescan_due(&app, five));
+    app.launchers_rescan = 0;
+    assert!(
+        !super::launchers_rescan_due(&app, Duration::from_secs(86_400)),
+        "0 is off"
+    );
+}

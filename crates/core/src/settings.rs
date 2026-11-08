@@ -689,6 +689,11 @@ pub struct AppSettings {
         alias = "emberThirdPartyLaunchers"
     )]
     pub third_party_launchers: bool,
+    /// Minutes between rescans of the third-party launchers' games, so
+    /// games installed in a launcher show up without a refresh; 0 rescans
+    /// only on a refresh. Irori-only.
+    #[serde(rename = "iroriLaunchersRescan")]
+    pub launchers_rescan: u32,
     /// Install new builds of components (DXVK, Wine, emulators) as soon as
     /// the daily check finds them. Irori-only.
     #[serde(rename = "iroriAutoUpdateComponents")]
@@ -762,6 +767,7 @@ impl Default for AppSettings {
             rom_folders: Vec::new(),
             bios_folder: String::new(),
             third_party_launchers: false,
+            launchers_rescan: 5,
             auto_update_components: false,
             auto_update_from: String::new(),
             auto_update_until: String::new(),
@@ -1074,6 +1080,12 @@ pub struct UiPrefs {
     pub window_width: f32,
     pub window_height: f32,
     pub window_maximized: bool,
+    /// The main window's place on its display, in global logical pixels,
+    /// where the system lets Irori place windows (not Wayland).
+    pub window_x: Option<f32>,
+    pub window_y: Option<f32>,
+    /// The UUID of the display the main window was on ("" = unknown).
+    pub window_display: String,
     /// Stores the library, accounts and store pages show.
     pub stores: ShownStores,
     /// Open Big Picture at startup in Steam's Game Mode or Big Picture.
@@ -1240,6 +1252,9 @@ impl Default for UiPrefs {
             window_width: 1440.0,
             window_height: 900.0,
             window_maximized: false,
+            window_x: None,
+            window_y: None,
+            window_display: String::new(),
             stores: ShownStores::default(),
             big_picture_in_game_mode: true,
             big_picture_scale: 100,

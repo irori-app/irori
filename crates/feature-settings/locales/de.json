@@ -258,6 +258,8 @@
   "settings.field.check_for_app_updates.label": "Nach neuen Irori-Versionen suchen",
   "settings.field.check_updates_interval.help": "Minuten zwischen Hintergrundprüfungen auf Spiele-Updates (5–1440).",
   "settings.field.check_updates_interval.label": "Intervall der Update-Prüfung",
+  "settings.field.launchers_rescan.label": "Nach neuen Launcher-Spielen suchen",
+  "settings.field.launchers_rescan.help": "Minuten zwischen den Prüfungen der Spiele von Battle.net, EA app, Ubisoft Connect, Rockstar und der Xbox-App, damit dort installierte Spiele von selbst erscheinen. 0 prüft nur beim Aktualisieren.",
   "settings.field.comet_support.help": "Erfolge und Online-Funktionen über Comet.",
   "settings.field.comet_support.label": "GOG Galaxy-Funktionen (Comet)",
   "settings.field.dark_tray_icon.label": "Dunkles Taskleistensymbol",

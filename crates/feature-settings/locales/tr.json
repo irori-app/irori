@@ -258,6 +258,8 @@
   "settings.field.check_for_app_updates.label": "Irori'nin yeni sürümlerini denetle",
   "settings.field.check_updates_interval.help": "Arka planda yapılan oyun güncellemesi denetimleri arasındaki süre, dakika cinsinden (5–1440).",
   "settings.field.check_updates_interval.label": "Güncelleme denetimi aralığı",
+  "settings.field.launchers_rescan.label": "Yeni başlatıcı oyunlarını ara",
+  "settings.field.launchers_rescan.help": "Battle.net, EA app, Ubisoft Connect, Rockstar ve Xbox uygulaması oyunlarının kontrolleri arasındaki dakika; orada yüklediğiniz oyunlar kendiliğinden görünür. 0 yalnızca yenilediğinizde kontrol eder.",
   "settings.field.comet_support.help": "Comet üzerinden başarımlar ve çevrim içi özellikler.",
   "settings.field.comet_support.label": "GOG Galaxy özellikleri (Comet)",
   "settings.field.dark_tray_icon.label": "Koyu tepsi simgesi",

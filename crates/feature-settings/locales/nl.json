@@ -258,6 +258,8 @@
   "settings.field.check_for_app_updates.label": "Zoeken naar nieuwe versies van Irori",
   "settings.field.check_updates_interval.help": "Minuten tussen controles op game-updates op de achtergrond (5–1440).",
   "settings.field.check_updates_interval.label": "Interval voor updatecontrole",
+  "settings.field.launchers_rescan.label": "Zoeken naar nieuwe launchergames",
+  "settings.field.launchers_rescan.help": "Minuten tussen controles van games van Battle.net, EA app, Ubisoft Connect, Rockstar en de Xbox-app, zodat games die je daar installeert vanzelf verschijnen. 0 controleert alleen bij vernieuwen.",
   "settings.field.comet_support.help": "Prestaties en onlinefuncties via Comet.",
   "settings.field.comet_support.label": "GOG Galaxy-functies (Comet)",
   "settings.field.dark_tray_icon.label": "Donker systeemvakpictogram",
