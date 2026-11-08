@@ -887,6 +887,37 @@ impl<S: Store> Store for MultiAccountStore<S> {
         }
     }
 
+    /// Each game's latest time across the accounts.
+    async fn remote_last_played(&self) -> Result<HashMap<String, String>> {
+        let slots = self.signed_in();
+        let results =
+            futures::future::join_all(slots.iter().map(|s| s.store.remote_last_played())).await;
+        let mut latest: HashMap<String, String> = HashMap::new();
+        let mut first_error = None;
+        for result in results {
+            match result {
+                Ok(found) => {
+                    for (app, at) in found {
+                        let later = latest.get(&app).is_none_or(|known| {
+                            irori_core::util::parse_rfc3339(&at)
+                                > irori_core::util::parse_rfc3339(known)
+                        });
+                        if later {
+                            latest.insert(app, at);
+                        }
+                    }
+                }
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                }
+            }
+        }
+        match first_error {
+            Some(e) if latest.is_empty() => Err(e),
+            _ => Ok(latest),
+        }
+    }
+
     async fn extras(&self, app_name: &str) -> Result<Vec<ExtraFile>> {
         self.store_for(app_name).extras(app_name).await
     }

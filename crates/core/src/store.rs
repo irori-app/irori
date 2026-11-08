@@ -366,6 +366,13 @@ pub trait Store: Send + Sync + 'static {
         Ok(std::collections::HashMap::new())
     }
 
+    /// When the store last saw each game played (RFC 3339), by app name,
+    /// for stores whose account keeps it (sessions outside Irori included).
+    /// Services keep the later of this and Irori's own last session.
+    async fn remote_last_played(&self) -> Result<std::collections::HashMap<String, String>> {
+        Ok(std::collections::HashMap::new())
+    }
+
     /// Files offered beside the game: offline installers, patches and
     /// goodies. Empty for stores without any.
     async fn extras(&self, _app_name: &str) -> Result<Vec<ExtraFile>> {

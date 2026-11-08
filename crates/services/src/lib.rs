@@ -523,8 +523,8 @@ impl Backend {
     }
 
     /// Refresh every logged-in store's catalogue.
-    /// Take stores' own playtime totals (time played in their launchers)
-    /// into Irori's.
+    /// Take stores' own playtime totals and last-played times (time played
+    /// in their launchers) into Irori's.
     async fn sync_store_playtime(&self) {
         for store in self.stores.values().filter(|s| s.is_logged_in()) {
             match store.remote_playtime().await {
@@ -541,6 +541,14 @@ impl Backend {
                 }
                 Ok(_) => {}
                 Err(e) => tracing::warn!("{} playtime: {e:#}", store.runner().store_name()),
+            }
+            match store.remote_last_played().await {
+                Ok(times) if !times.is_empty() => {
+                    self.userdata
+                        .merge_store_last_played(store.runner(), &store.games(), &times);
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("{} last played: {e:#}", store.runner().store_name()),
             }
         }
     }
