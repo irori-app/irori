@@ -878,7 +878,7 @@ it on every platform, and CI's Windows install test runs it.
   `bigPictureOnController` (open Big Picture when a controller connects).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
-- **In-game overlay** (`overlay/`, beta, Linux, `iroriOverlay.enabled`): Guide while a
+- **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
   game Irori started runs opens a panel above the game (`overlay::open`) instead of
   toggling Big Picture, and every controller input goes to it while it is open. It is
   a second GPUI window in Irori's process (`overlay/window.rs`): a wlr layer-shell
@@ -886,12 +886,18 @@ it on every platform, and CI's Windows install test runs it.
   else a pop-up window, and it exists only while open. Its tabs and focus are pure
   logic in `overlay/model.rs`. While it is open the controllers are grabbed
   (`gamepad/grab.rs`, `EVIOCGRAB`) and read raw (`gamepad/evdev.rs`) on a thread that
-  ends with it. Volume is `Backend::audio`/`change_volume` (`services/src/audio.rs`,
+  ends with it. Volume is `Backend::audio`/`change_volume` (`services/src/audio/`,
   `pactl` matched to the game's process group), screenshots `Backend::take_screenshot`
-  (`services/src/capture.rs`, desktop portal, else `grim`). The shell installs "Back to
+  (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume. `docs/PLATFORMS.md`, "In-game overlay".
+  Up/Down change the system volume. What differs per system is one table,
+  `overlay/support.rs`; macOS and Windows use GPUI's pop-up window (a non-activating
+  panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
+  while a game runs), hold no controller, and get volume and screenshots from
+  `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
+  `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
+  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay".
 
 ### 4.8 Engines (emulators)
 

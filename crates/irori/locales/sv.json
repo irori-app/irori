@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Skärmbild från {title} sparad",
   "shell.notice.screenshot_failed": "Skärmbilden togs inte",
   "shell.notice.volume_failed": "Volymen ändrades inte",
+  "shell.notice.overlay_fullscreen": "Överlägget kan inte visas över det här spelet",
+  "shell.notice.overlay_fullscreen_message": "Spelet körs i exklusiv helskärm. Byt till kantlöst fönster eller fönsterläge för att använda överlägget.",
   "shell.palette.year_in_review": "Öppna Året som gått",
   "shell.palette.year_in_review_keywords": "sammanfattning år recap",
   "shell.nav.views": "Vyer",

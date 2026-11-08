@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Screenshot von {title} gespeichert",
   "shell.notice.screenshot_failed": "Der Screenshot wurde nicht aufgenommen",
   "shell.notice.volume_failed": "Die Lautstärke wurde nicht geändert",
+  "shell.notice.overlay_fullscreen": "Das Overlay kann nicht über diesem Spiel erscheinen",
+  "shell.notice.overlay_fullscreen_message": "Das Spiel läuft im exklusiven Vollbild. Stelle es auf randloses Fenster oder Fenstermodus um, um das Overlay zu nutzen.",
   "shell.palette.year_in_review": "Jahresrückblick öffnen",
   "shell.palette.year_in_review_keywords": "rückblick zusammenfassung jahr",
   "shell.nav.views": "Ansichten",

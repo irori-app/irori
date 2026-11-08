@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "{title} 스크린샷을 저장했습니다",
   "shell.notice.screenshot_failed": "스크린샷을 찍지 못했습니다",
   "shell.notice.volume_failed": "음량을 바꾸지 못했습니다",
+  "shell.notice.overlay_fullscreen": "이 게임 위에는 오버레이를 표시할 수 없음",
+  "shell.notice.overlay_fullscreen_message": "게임이 전용 전체 화면으로 실행 중입니다. 오버레이를 쓰려면 테두리 없는 창 또는 창 모드로 바꾸세요.",
   "shell.palette.year_in_review": "연말 결산 열기",
   "shell.palette.year_in_review_keywords": "결산 요약 연간",
   "shell.nav.views": "보기",

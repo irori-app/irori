@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Снимок экрана {title} сохранён",
   "shell.notice.screenshot_failed": "Снимок экрана не сделан",
   "shell.notice.volume_failed": "Громкость не изменена",
+  "shell.notice.overlay_fullscreen": "Оверлей не может появиться поверх этой игры",
+  "shell.notice.overlay_fullscreen_message": "Игра работает в эксклюзивном полноэкранном режиме. Переключите её в окно без рамки или в оконный режим, чтобы пользоваться оверлеем.",
   "shell.palette.year_in_review": "Открыть итоги года",
   "shell.palette.year_in_review_keywords": "итоги год обзор",
   "shell.nav.views": "Виды",

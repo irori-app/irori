@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Screenshot of {title} saved",
   "shell.notice.screenshot_failed": "The screenshot wasn’t taken",
   "shell.notice.volume_failed": "The volume wasn’t changed",
+  "shell.notice.overlay_fullscreen": "The overlay can’t show over this game",
+  "shell.notice.overlay_fullscreen_message": "It runs in exclusive fullscreen. Switch the game to borderless or windowed to use the overlay.",
   "shell.palette.year_in_review": "Open the Year in review",
   "shell.palette.year_in_review_keywords": "recap wrapped annual summary",
   "shell.nav.views": "Views",

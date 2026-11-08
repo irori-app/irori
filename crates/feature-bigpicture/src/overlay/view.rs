@@ -260,6 +260,11 @@ impl OverlayView {
             Action::Moved => {}
             Action::Close => super::close(cx),
             Action::Activate(tab, row) => self.activate(tab, row, window, cx),
+            Action::Adjust(HomeRow::GameVolume, _)
+                if !super::support::Support::current().game_volume =>
+            {
+                return;
+            }
             Action::Adjust(row, step) => {
                 let target = if row == HomeRow::SystemVolume {
                     VolumeTarget::System
@@ -284,9 +289,10 @@ impl OverlayView {
                 Some(HomeRow::SystemVolume) => {
                     self.change_audio(VolumeTarget::System, None, window, cx)
                 }
-                Some(HomeRow::GameVolume) => {
+                Some(HomeRow::GameVolume) if super::support::Support::current().game_volume => {
                     self.change_audio(VolumeTarget::Game, None, window, cx)
                 }
+                Some(HomeRow::GameVolume) => {}
                 Some(HomeRow::Screenshot) => {
                     let backend = irori_ui::backend(cx);
                     let id = self.game.clone();
@@ -649,7 +655,13 @@ impl OverlayView {
             }
         };
         let system_text = volume(system, t("bigpicture.overlay.volume_unavailable"), cx);
-        let game_text = volume(game, t("bigpicture.overlay.no_game_sound"), cx);
+        // macOS has no per-program volume: say so rather than "no sound".
+        let game_volume = super::support::Support::current().game_volume;
+        let game_text = if game_volume {
+            volume(game, t("bigpicture.overlay.no_game_sound"), cx)
+        } else {
+            volume(None, t("bigpicture.overlay.game_volume_unsupported"), cx)
+        };
         let rows = vec![
             self.row(
                 Tab::Home,

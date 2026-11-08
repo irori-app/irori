@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "Interval de repetare",
   "settings.field.overlay.label": "Suprapunere în joc (beta)",
   "settings.field.overlay.help": "Butonul Guide al controlerului, peste un joc pornit de Irori, deschide deasupra jocului volumul, capturile de ecran, realizările și nota de azi și ține controlerul departe de joc cât timp e deschisă. Guide + RB face o captură de ecran, iar Guide + sus sau jos schimbă volumul. Funcționează cel mai bine pe desktopuri Wayland cu layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Butonul Guide al controlerului sau Ctrl+Shift+O, peste un joc pornit de Irori, deschide deasupra jocului volumul, capturile de ecran, realizările și nota de azi. Între timp, jocul primește și apăsările controlerului. Windows păstrează butonul Guide al controlerelor Xbox pentru Xbox Game Bar, așa că folosiți Ctrl+Shift+O cu ele. Jocurile pe ecran complet exclusiv nu pot fi acoperite: treceți-le pe fereastră fără margini.",
+  "settings.field.overlay.help_macos": "Butonul Guide al controlerului sau Control+Shift+O, peste un joc pornit de Irori, deschide deasupra jocului volumul, capturile de ecran, realizările și nota de azi. Între timp, jocul primește și apăsările controlerului și se poate schimba doar volumul sistemului. Capturile de ecran au nevoie de permisiunea de înregistrare a ecranului, cerută prima dată.",
   "settings.field.gamescope_additional_options.label": "Opțiuni suplimentare gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Păstrează cursorul în fereastră",
   "settings.field.gamescope_enable_limiter.label": "Limitator de cadre",

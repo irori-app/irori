@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Capture de {title} enregistrée",
   "shell.notice.screenshot_failed": "La capture n’a pas été faite",
   "shell.notice.volume_failed": "Le volume n’a pas été modifié",
+  "shell.notice.overlay_fullscreen": "L’overlay ne peut pas s’afficher par-dessus ce jeu",
+  "shell.notice.overlay_fullscreen_message": "Il tourne en plein écran exclusif. Passez le jeu en fenêtre sans bordure ou en mode fenêtré pour utiliser l’overlay.",
   "shell.palette.year_in_review": "Ouvrir le Bilan de l’année",
   "shell.palette.year_in_review_keywords": "bilan récap annuel",
   "shell.nav.views": "Vues",

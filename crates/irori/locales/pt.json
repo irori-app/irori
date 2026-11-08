@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Captura de {title} guardada",
   "shell.notice.screenshot_failed": "A captura não foi feita",
   "shell.notice.volume_failed": "O volume não foi alterado",
+  "shell.notice.overlay_fullscreen": "A sobreposição não pode aparecer sobre este jogo",
+  "shell.notice.overlay_fullscreen_message": "O jogo está em ecrã inteiro exclusivo. Mude-o para janela sem margens ou modo janela para usar a sobreposição.",
   "shell.palette.year_in_review": "Abrir o Resumo do ano",
   "shell.palette.year_in_review_keywords": "resumo recap anual",
   "shell.nav.views": "Vistas",

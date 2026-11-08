@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Zapisano zrzut ekranu z {title}",
   "shell.notice.screenshot_failed": "Nie zrobiono zrzutu ekranu",
   "shell.notice.volume_failed": "Nie zmieniono głośności",
+  "shell.notice.overlay_fullscreen": "Nakładka nie może się pojawić nad tą grą",
+  "shell.notice.overlay_fullscreen_message": "Gra działa w wyłącznym trybie pełnoekranowym. Przełącz ją na okno bez ramek lub tryb okienkowy, aby używać nakładki.",
   "shell.palette.year_in_review": "Otwórz Podsumowanie roku",
   "shell.palette.year_in_review_keywords": "podsumowanie rok recap",
   "shell.nav.views": "Widoki",

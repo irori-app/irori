@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "반복 간격",
   "settings.field.overlay.label": "게임 내 오버레이(베타)",
   "settings.field.overlay.help": "Irori로 시작한 게임 중에 컨트롤러의 Guide 버튼을 누르면 게임 위에 음량, 스크린샷, 업적, 오늘의 메모가 열리고, 열려 있는 동안에는 컨트롤러 입력이 게임에 전달되지 않습니다. Guide + RB는 스크린샷을 찍고 Guide + 위/아래는 음량을 바꿉니다. layer-shell을 지원하는 Wayland 데스크톱(KDE Plasma, sway, Hyprland, COSMIC)에서 가장 잘 동작합니다.",
+  "settings.field.overlay.help_windows": "Irori로 시작한 게임 위에서 컨트롤러의 Guide 버튼이나 Ctrl+Shift+O를 누르면 게임 위에 음량, 스크린샷, 업적, 오늘의 메모가 열립니다. 열려 있는 동안 게임도 컨트롤러 입력을 받습니다. Windows는 Xbox 컨트롤러의 Guide 버튼을 Xbox Game Bar용으로 쓰므로 이때는 Ctrl+Shift+O를 사용하세요. 전용 전체 화면 게임 위에는 표시할 수 없으니 테두리 없는 창으로 바꾸세요.",
+  "settings.field.overlay.help_macos": "Irori로 시작한 게임 위에서 컨트롤러의 Guide 버튼이나 Control+Shift+O를 누르면 게임 위에 음량, 스크린샷, 업적, 오늘의 메모가 열립니다. 열려 있는 동안 게임도 컨트롤러 입력을 받으며, 시스템 음량만 바꿀 수 있습니다. 스크린샷에는 처음 요청되는 화면 기록 권한이 필요합니다.",
   "settings.field.gamescope_additional_options.label": "gamescope 추가 옵션",
   "settings.field.gamescope_enable_force_grab_cursor.label": "커서를 창 안에 고정",
   "settings.field.gamescope_enable_limiter.label": "프레임 제한기",

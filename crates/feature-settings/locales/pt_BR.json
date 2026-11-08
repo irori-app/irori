@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "Intervalo de repetição",
   "settings.field.overlay.label": "Sobreposição no jogo (beta)",
   "settings.field.overlay.help": "O botão Guide do controle, sobre um jogo iniciado pelo Irori, abre por cima do jogo o volume, as capturas, as conquistas e a nota de hoje, e tira o controle do jogo enquanto estiver aberta. Guide + RB faz uma captura e Guide + cima ou baixo muda o volume. Funciona melhor em ambientes Wayland com layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "O botão Guide do controle ou Ctrl+Shift+O sobre um jogo iniciado pelo Irori abre por cima do jogo o volume, as capturas de tela, as conquistas e a nota de hoje. O jogo também recebe os toques do controle enquanto ela está aberta. O Windows reserva o botão Guide dos controles Xbox para a Xbox Game Bar, então use Ctrl+Shift+O com eles. Jogos em tela cheia exclusiva não podem ser cobertos: mude-os para janela sem bordas.",
+  "settings.field.overlay.help_macos": "O botão Guide do controle ou Control+Shift+O sobre um jogo iniciado pelo Irori abre por cima do jogo o volume, as capturas de tela, as conquistas e a nota de hoje. O jogo também recebe os toques do controle enquanto ela está aberta, e só o volume do sistema pode ser alterado. As capturas de tela precisam da permissão de gravação de tela, pedida na primeira vez.",
   "settings.field.gamescope_additional_options.label": "Opções extras do gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Manter o cursor na janela",
   "settings.field.gamescope_enable_limiter.label": "Limitador de quadros",

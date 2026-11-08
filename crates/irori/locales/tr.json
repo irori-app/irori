@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "{title} ekran görüntüsü kaydedildi",
   "shell.notice.screenshot_failed": "Ekran görüntüsü alınamadı",
   "shell.notice.volume_failed": "Ses düzeyi değiştirilemedi",
+  "shell.notice.overlay_fullscreen": "Kaplama bu oyunun üzerinde gösterilemiyor",
+  "shell.notice.overlay_fullscreen_message": "Oyun özel tam ekranda çalışıyor. Kaplamayı kullanmak için oyunu kenarlıksız ya da pencere moduna alın.",
   "shell.palette.year_in_review": "Yılın özetini aç",
   "shell.palette.year_in_review_keywords": "özet yıl recap",
   "shell.nav.views": "Görünümler",

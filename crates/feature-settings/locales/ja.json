@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "リピート間隔",
   "settings.field.overlay.label": "ゲーム内オーバーレイ（ベータ）",
   "settings.field.overlay.help": "Irori で起動したゲーム中にコントローラーの Guide ボタンを押すと、ゲームの上に音量、スクリーンショット、実績、今日のメモを開き、開いている間はコントローラーの入力をゲームに渡しません。Guide + RB でスクリーンショット、Guide + 上下で音量を変更します。layer-shell 対応の Wayland デスクトップ（KDE Plasma、sway、Hyprland、COSMIC）で最もよく動作します。",
+  "settings.field.overlay.help_windows": "Irori で起動したゲーム中にコントローラーの Guide ボタンまたは Ctrl+Shift+O を押すと、ゲームの上に音量、スクリーンショット、実績、今日のメモを開きます。開いている間もゲームはコントローラーの入力を受け取ります。Windows は Xbox コントローラーの Guide ボタンを Xbox Game Bar 用に使うため、その場合は Ctrl+Shift+O を使ってください。排他的フルスクリーンのゲームの上には表示できないため、ボーダーレスに切り替えてください。",
+  "settings.field.overlay.help_macos": "Irori で起動したゲーム中にコントローラーの Guide ボタンまたは Control+Shift+O を押すと、ゲームの上に音量、スクリーンショット、実績、今日のメモを開きます。開いている間もゲームはコントローラーの入力を受け取り、変更できるのはシステムの音量だけです。スクリーンショットには画面収録の許可が必要で、初回に確認されます。",
   "settings.field.gamescope_additional_options.label": "gamescopeの追加オプション",
   "settings.field.gamescope_enable_force_grab_cursor.label": "カーソルをウィンドウ内に固定",
   "settings.field.gamescope_enable_limiter.label": "フレームリミッター",

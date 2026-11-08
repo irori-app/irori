@@ -539,11 +539,9 @@ impl FieldSpec {
         }
         // gpu-screen-recorder, which the replay buffer runs, is Linux only.
         // Only Linux desktops let Irori make itself the program for Windows
-        // files (`irori_services::can_open_windows_files_by_default`). The
-        // in-game overlay is Linux only for now.
+        // files (`irori_services::can_open_windows_files_by_default`).
         if (self.path == "panel.replay"
             || self.path.starts_with("iroriReplay.")
-            || self.path.starts_with("iroriOverlay.")
             || self.path == "action.open-windows-files")
             && host != HostPlatform::Linux
         {
@@ -1064,6 +1062,16 @@ const NEEDS_WALLPAPER_COLORS: &[Condition] = &[when(
     true,
     "settings.requires.wallpaper_colors",
 )];
+
+/// The in-game overlay works differently per system (its Windows and macOS
+/// shortcut, the controller grab only Linux has, macOS's system-only volume).
+const OVERLAY_HELP: &str = if cfg!(windows) {
+    "settings.field.overlay.help_windows"
+} else if cfg!(target_os = "macos") {
+    "settings.field.overlay.help_macos"
+} else {
+    "settings.field.overlay.help"
+};
 
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
@@ -1675,7 +1683,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.controller",
         Toggle,
     )
-    .help("settings.field.overlay.help")
+    .help(OVERLAY_HELP)
     .keywords(&[
         "overlay",
         "in-game",

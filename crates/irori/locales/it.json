@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Screenshot di {title} salvato",
   "shell.notice.screenshot_failed": "Lo screenshot non è stato fatto",
   "shell.notice.volume_failed": "Il volume non è stato cambiato",
+  "shell.notice.overlay_fullscreen": "L’overlay non può comparire sopra questo gioco",
+  "shell.notice.overlay_fullscreen_message": "Il gioco è a schermo intero esclusivo. Passa a finestra senza bordi o in finestra per usare l’overlay.",
   "shell.palette.year_in_review": "Apri il Riepilogo dell’anno",
   "shell.palette.year_in_review_keywords": "riepilogo recap annuale",
   "shell.nav.views": "Viste",

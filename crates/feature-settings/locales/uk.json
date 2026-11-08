@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "Інтервал повтору",
   "settings.field.overlay.label": "Ігровий оверлей (бета)",
   "settings.field.overlay.help": "Кнопка Guide на контролері під час гри, запущеної з Irori, відкриває поверх гри гучність, знімки екрана, досягнення й нотатку за сьогодні, а поки оверлей відкритий, гра не отримує натискань контролера. Guide + RB робить знімок екрана, Guide + вгору чи вниз змінює гучність. Найкраще працює в середовищах Wayland з layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Кнопка Guide на контролері або Ctrl+Shift+O над грою, запущеною з Irori, відкриває поверх гри гучність, знімки екрана, досягнення та сьогоднішню нотатку. Гра тим часом теж отримує натискання контролера. Windows залишає кнопку Guide контролерів Xbox за Xbox Game Bar, тож із ними використовуйте Ctrl+Shift+O. Ігри в ексклюзивному повноекранному режимі перекрити не можна: перемкніть їх у вікно без рамки.",
+  "settings.field.overlay.help_macos": "Кнопка Guide на контролері або Control+Shift+O над грою, запущеною з Irori, відкриває поверх гри гучність, знімки екрана, досягнення та сьогоднішню нотатку. Гра тим часом теж отримує натискання контролера, а змінювати можна лише гучність системи. Для знімків екрана потрібен дозвіл на запис екрана, який запитується першого разу.",
   "settings.field.gamescope_additional_options.label": "Додаткові параметри gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Утримувати курсор у вікні",
   "settings.field.gamescope_enable_limiter.label": "Обмежувач кадрів",

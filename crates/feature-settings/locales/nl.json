@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "Herhaalinterval",
   "settings.field.overlay.label": "In-game-overlay (bèta)",
   "settings.field.overlay.help": "De Guide-knop van de controller opent boven een spel dat Irori startte het volume, schermafbeeldingen, prestaties en de notitie van vandaag, en houdt de controller bij het spel weg zolang de overlay open is. Guide + RB maakt een schermafbeelding en Guide + omhoog of omlaag wijzigt het volume. Werkt het best op Wayland-desktops met layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "De Guide-knop van de controller of Ctrl+Shift+O boven een game die Irori startte, opent volume, schermafbeeldingen, prestaties en de notitie van vandaag boven de game. De game ziet de knoppen van de controller dan ook. Windows houdt de Guide-knop van Xbox-controllers voor de Xbox Game Bar, gebruik daar dus Ctrl+Shift+O. Games in exclusief volledig scherm kunnen niet worden bedekt: zet ze op randloos.",
+  "settings.field.overlay.help_macos": "De Guide-knop van de controller of Control+Shift+O boven een game die Irori startte, opent volume, schermafbeeldingen, prestaties en de notitie van vandaag boven de game. De game ziet de knoppen van de controller dan ook, en alleen het systeemvolume kan worden gewijzigd. Schermafbeeldingen hebben de toestemming voor schermopname nodig, die de eerste keer wordt gevraagd.",
   "settings.field.gamescope_additional_options.label": "Extra gamescope-opties",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Cursor in het venster houden",
   "settings.field.gamescope_enable_limiter.label": "Framebegrenzer",

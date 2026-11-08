@@ -361,6 +361,8 @@
   "settings.field.gamepad_repeat_delay.label": "Interwał powtarzania",
   "settings.field.overlay.label": "Nakładka w grze (beta)",
   "settings.field.overlay.help": "Przycisk Guide na kontrolerze w grze uruchomionej przez Irori otwiera nad grą głośność, zrzuty ekranu, osiągnięcia i dzisiejszą notatkę, a gdy nakładka jest otwarta, gra nie dostaje sygnałów z kontrolera. Guide + RB robi zrzut ekranu, a Guide + w górę lub w dół zmienia głośność. Działa najlepiej na pulpitach Wayland z layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Przycisk Guide kontrolera lub Ctrl+Shift+O nad grą uruchomioną przez Irori otwiera nad grą głośność, zrzuty ekranu, osiągnięcia i dzisiejszą notatkę. Gra w tym czasie też odbiera naciśnięcia kontrolera. Windows zostawia przycisk Guide kontrolerów Xbox dla paska gry Xbox, więc z nimi używaj Ctrl+Shift+O. Gier w wyłącznym trybie pełnoekranowym nie da się przykryć: przełącz je na okno bez ramek.",
+  "settings.field.overlay.help_macos": "Przycisk Guide kontrolera lub Control+Shift+O nad grą uruchomioną przez Irori otwiera nad grą głośność, zrzuty ekranu, osiągnięcia i dzisiejszą notatkę. Gra w tym czasie też odbiera naciśnięcia kontrolera, a zmienić można tylko głośność systemu. Zrzuty ekranu wymagają uprawnienia do nagrywania ekranu, o które system zapyta za pierwszym razem.",
   "settings.field.gamescope_additional_options.label": "Dodatkowe opcje gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Zatrzymuj kursor w oknie",
   "settings.field.gamescope_enable_limiter.label": "Ogranicznik klatek",

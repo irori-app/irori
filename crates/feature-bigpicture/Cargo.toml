@@ -31,6 +31,17 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # reads them itself meanwhile.
 libc = "0.2"
 
+[target.'cfg(windows)'.dependencies]
+# The in-game overlay's keyboard shortcut (RegisterHotKey) and its check for
+# a game in exclusive fullscreen; already in the lockfile.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 regex.workspace = true
 tempfile = "3"

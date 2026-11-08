@@ -83,6 +83,7 @@ pub fn init(cx: &mut App) {
     register_catalogs();
     bind_keys(cx);
     gamepad::install(cx);
+    overlay::install(cx);
 }
 
 /// Keyboard equivalents of the controller inputs inside Big Picture: arrows

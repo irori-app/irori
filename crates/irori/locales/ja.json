@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "{title} のスクリーンショットを保存しました",
   "shell.notice.screenshot_failed": "スクリーンショットを撮れませんでした",
   "shell.notice.volume_failed": "音量を変更できませんでした",
+  "shell.notice.overlay_fullscreen": "このゲームの上にはオーバーレイを表示できません",
+  "shell.notice.overlay_fullscreen_message": "ゲームが排他的フルスクリーンで動作しています。オーバーレイを使うには、ボーダーレスまたはウィンドウモードに切り替えてください。",
   "shell.palette.year_in_review": "年間まとめを開く",
   "shell.palette.year_in_review_keywords": "振り返り まとめ 年間",
   "shell.nav.views": "ビュー",

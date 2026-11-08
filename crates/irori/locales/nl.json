@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Schermafbeelding van {title} opgeslagen",
   "shell.notice.screenshot_failed": "De schermafbeelding is niet gemaakt",
   "shell.notice.volume_failed": "Het volume is niet gewijzigd",
+  "shell.notice.overlay_fullscreen": "De overlay kan niet boven deze game verschijnen",
+  "shell.notice.overlay_fullscreen_message": "De game draait in exclusief volledig scherm. Zet hem op randloos of in een venster om de overlay te gebruiken.",
   "shell.palette.year_in_review": "Jaaroverzicht openen",
   "shell.palette.year_in_review_keywords": "overzicht recap jaar",
   "shell.nav.views": "Weergaven",

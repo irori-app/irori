@@ -129,6 +129,8 @@
   "shell.notice.screenshot_saved": "Captura de ecran din {title} a fost salvată",
   "shell.notice.screenshot_failed": "Captura de ecran nu a fost făcută",
   "shell.notice.volume_failed": "Volumul nu a fost schimbat",
+  "shell.notice.overlay_fullscreen": "Suprapunerea nu poate apărea peste acest joc",
+  "shell.notice.overlay_fullscreen_message": "Jocul rulează pe ecran complet exclusiv. Treceți-l pe fereastră fără margini sau în fereastră pentru a folosi suprapunerea.",
   "shell.palette.year_in_review": "Deschide Anul în revistă",
   "shell.palette.year_in_review_keywords": "rezumat recapitulare an",
   "shell.nav.views": "Vizualizări",
