@@ -150,7 +150,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
   game with, next to its ProtonDB rating.
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
-  or a sortable list, virtualized for libraries of any size. "Continue playing", installed
+  or a sortable list, virtualized for libraries of any size; start typing anywhere in
+  the grid or list to search. Filter by genre, and group by play status, game mode or
+  genre. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
   On a wide window the header adds one-click sort, installed, favourites and grouping
   controls, as many as fit (Settings → Appearance turns them off).
@@ -158,8 +160,11 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the
   selected game's whole page over its art. Arrow keys move the selection in each.
+- **One entry per game**, however many stores you own it on: it plays the installed
+  copy, its page switches between the Steam, Epic Games or GOG copies, and you can
+  combine or separate copies yourself. Each keeps its own playtime and achievements.
 - **Add any game** yourself, with its own description, developer, release date, genres
-  and art from SteamGridDB.
+  and art from SteamGridDB, or drop its program, shortcut or folder onto the library.
 - **Your own art for any game:** a cover, background and logo from a file, SteamGridDB
   or one of your screenshots of it, in the game's Artwork settings.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
@@ -326,6 +331,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Linux desktops, macOS, Windows), live as you change it. Turn it on and it follows the
   colours pywal, wallust or matugen take from your wallpaper. It honours Increase contrast,
   Reduce transparency and Windows high contrast.
+- **Any interface size**, with <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>
+  or in Settings, on top of the text size your system asks for.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload
   in one click.
 

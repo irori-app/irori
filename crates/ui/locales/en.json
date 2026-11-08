@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Cloud",
   "ui.saves.conflict_description": "The saves changed on this device and in the cloud since they were last synced. The saves you don’t keep are replaced.",
   "ui.saves.conflict_title": "Which saves of “{title}” do you want to keep?",
+  "ui.saves.download_failed_title": "Couldn’t download the saves of “{title}”",
+  "ui.saves.download_failed_description": "The cloud may hold newer saves than this device. Try again, or play now with this device’s saves.",
+  "ui.saves.try_again": "Try again",
+  "ui.saves.play_anyway": "Play anyway",
   "ui.saves.keep_cloud": "Keep cloud saves",
   "ui.saves.keep_local": "Keep this device’s saves",
   "ui.saves.no_saves": "No saves",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Hidden in Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite knows no install folder for it, so Irori couldn’t tell when it’s running.",
   "ui.playnite.reason.folder_missing": "Its install folder is gone: {path}",
-  "ui.import.summary.warnings": "{launcher} files Irori couldn’t read"
+  "ui.import.summary.warnings": "{launcher} files Irori couldn’t read",
+  "ui.copies.title": "Copies",
+  "ui.copies.open": "Open the {store} copy",
+  "ui.copies.make_default": "Make this the default copy",
+  "ui.copies.separate": "Show this copy on its own",
+  "ui.copies.separate_all": "Show every copy on its own"
 }

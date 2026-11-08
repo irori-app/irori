@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Nuvem",
   "ui.saves.conflict_description": "As gravações mudaram neste dispositivo e na nuvem desde a última sincronização. As que não mantiver serão substituídas.",
   "ui.saves.conflict_title": "Que gravações de «{title}» quer manter?",
+  "ui.saves.download_failed_title": "Não foi possível transferir as gravações de «{title}»",
+  "ui.saves.download_failed_description": "A nuvem pode ter gravações mais recentes do que este dispositivo. Tente novamente ou jogue já com as gravações deste dispositivo.",
+  "ui.saves.try_again": "Tentar novamente",
+  "ui.saves.play_anyway": "Jogar mesmo assim",
   "ui.saves.keep_cloud": "Manter as da nuvem",
   "ui.saves.keep_local": "Manter as deste dispositivo",
   "ui.saves.no_saves": "Sem gravações",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Oculto no Playnite.",
   "ui.playnite.reason.no_install_folder": "O Playnite não conhece a pasta de instalação dele, por isso o Irori não saberia quando está em execução.",
   "ui.playnite.reason.folder_missing": "A pasta de instalação desapareceu: {path}",
-  "ui.import.summary.warnings": "Ficheiros do {launcher} que o Irori não conseguiu ler"
+  "ui.import.summary.warnings": "Ficheiros do {launcher} que o Irori não conseguiu ler",
+  "ui.copies.title": "Cópias",
+  "ui.copies.open": "Abrir a cópia da {store}",
+  "ui.copies.make_default": "Usar esta cópia por predefinição",
+  "ui.copies.separate": "Mostrar esta cópia à parte",
+  "ui.copies.separate_all": "Mostrar cada cópia à parte"
 }

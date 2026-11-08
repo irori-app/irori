@@ -273,6 +273,22 @@ pub fn set_groups_by_mode(on: bool, cx: &mut App) {
     }
 }
 
+/// Whether the library groups its games by genre; `None` until a library
+/// view exists.
+pub fn groups_by_genre(cx: &App) -> Option<bool> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group == Grouping::Genre)
+}
+
+/// Group the library by genre, or stop. Does nothing until a library view
+/// exists.
+pub fn set_groups_by_genre(on: bool, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        let group = if on { Grouping::Genre } else { Grouping::None };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
 /// Show the library's games played in `mode` (a game page's mode chip):
 /// the Filters popover's criteria give way to that mode alone, while the
 /// search, store, sort and grouping stay. Without a library view yet, the

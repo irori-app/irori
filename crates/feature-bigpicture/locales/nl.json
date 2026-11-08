@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Gedempt",
   "bigpicture.overlay.no_game_sound": "Nog geen geluid",
   "bigpicture.overlay.volume_unavailable": "Niet beschikbaar",
+  "bigpicture.overlay.game_volume_unsupported": "Niet beschikbaar op macOS",
   "bigpicture.overlay.volume_hint": "Links en rechts wijzigen het volume; {button} dempt het.",
   "bigpicture.overlay.audio_failed": "Het volume kan niet worden gewijzigd: {error}",
   "bigpicture.overlay.screenshot": "Schermafbeelding maken",

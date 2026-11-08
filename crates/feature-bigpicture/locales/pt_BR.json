@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Mudo",
   "bigpicture.overlay.no_game_sound": "Ainda sem som",
   "bigpicture.overlay.volume_unavailable": "Indisponível",
+  "bigpicture.overlay.game_volume_unsupported": "Indisponível no macOS",
   "bigpicture.overlay.volume_hint": "Esquerda e direita mudam o volume; {button} o silencia.",
   "bigpicture.overlay.audio_failed": "Não é possível mudar o volume: {error}",
   "bigpicture.overlay.screenshot": "Fazer uma captura de tela",

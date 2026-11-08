@@ -1080,7 +1080,17 @@ mod tests {
         assert_eq!(local_when(&iso(now), now).unwrap().0, 0);
         let yesterday = now - chrono::Duration::days(1);
         assert_eq!(local_when(&iso(yesterday), now).unwrap().0, 1);
-        let (days, date, time) = local_when(&iso(now - chrono::Duration::days(30)), now).unwrap();
+        // Thirty calendar days back at noon: subtracting 720 hours lands on
+        // another day when a daylight-saving change sits in between.
+        let month_ago = {
+            use chrono::TimeZone as _;
+            let date = now.date_naive() - chrono::Days::new(30);
+            chrono::Local
+                .from_local_datetime(&date.and_hms_opt(12, 0, 0).unwrap())
+                .earliest()
+                .unwrap()
+        };
+        let (days, date, time) = local_when(&iso(month_ago), now).unwrap();
         assert_eq!(days, 30);
         assert_eq!(date.len(), 10);
         assert_eq!(time.len(), 5);

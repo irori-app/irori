@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 const RENEW_MARGIN: Duration = Duration::from_secs(10 * 60);
 
 /// Apps that are part of Steam rather than games.
-const NOT_GAMES: [u32; 3] = [
+pub(crate) const NOT_GAMES: [u32; 3] = [
     221410,  // Steam for Linux
     228980,  // Steamworks Common Redistributables
     1070560, // Steam Linux Runtime

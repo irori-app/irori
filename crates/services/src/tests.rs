@@ -299,6 +299,8 @@ fn unanswered_script_questions_cancel_and_roll_back() {
 struct PlayStore {
     game: Arc<GameInfo>,
     command: irori_core::process::CommandSpec,
+    /// Has cloud saves, and the cloud can't be reached.
+    saves_fail: bool,
 }
 
 #[cfg(unix)]
@@ -363,6 +365,21 @@ impl Store for PlayStore {
     async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
         Ok(())
     }
+    fn supports_cloud_saves(&self) -> bool {
+        self.saves_fail
+    }
+    async fn default_save_path(&self, _: &str, _: Option<&Path>) -> Result<String> {
+        Ok("/saves".into())
+    }
+    async fn sync_saves(
+        &self,
+        _: &str,
+        _: irori_core::SyncDirection,
+        _: &str,
+        _: OpContext,
+    ) -> Result<String> {
+        bail!("the cloud can't be reached")
+    }
     async fn launch(&self, _: &str, request: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
         Ok(LaunchPlan {
             command: self.command.clone().envs(request.environment.env.clone()),
@@ -397,6 +414,7 @@ fn programs_alongside_start_and_stop_with_the_game() {
     let store: irori_core::DynStore = Arc::new(PlayStore {
         game,
         command: irori_core::process::CommandSpec::new("sh").args(["-c", "sleep 2"]),
+        saves_fail: false,
     });
     let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
     // The first program writes its game's name and then lives on until it is
@@ -444,6 +462,12 @@ fn programs_alongside_start_and_stop_with_the_game() {
 /// A backend with one added game that runs `script` through `sh -c`.
 #[cfg(unix)]
 fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
+    play_with(app, script, false)
+}
+
+/// [`play`], with cloud saves that can't be reached when `saves_fail`.
+#[cfg(unix)]
+fn play_with(app: &str, script: &str, saves_fail: bool) -> (Backend, irori_core::GameId) {
     isolate_paths();
     let game = Arc::new(
         GameInfo {
@@ -460,6 +484,7 @@ fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
                 },
                 ..Default::default()
             }),
+            cloud_save_enabled: saves_fail,
             ..Default::default()
         }
         .finalize(),
@@ -468,11 +493,36 @@ fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
     let store: irori_core::DynStore = Arc::new(PlayStore {
         game,
         command: irori_core::process::CommandSpec::new("sh").args(["-c", script]),
+        saves_fail,
     });
     (
         Backend::start_headless(move |_, _| vec![store]).unwrap(),
         id,
     )
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_save_download_stops_the_launch_until_the_user_plays_anyway() {
+    let (b, id) = play_with("saves-unreachable", "exit 0", true);
+    b.settings
+        .set_game_value(&id, "autoSyncSaves", Some(serde_json::Value::Bool(true)));
+    let e = b
+        .runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap_err();
+    let failed = irori_core::SaveDownloadFailed::of(&e).expect("a failed download");
+    assert!(failed.reason.contains("can't be reached"), "{e:#}");
+    assert!(!b.is_running(&id));
+
+    let mut rx = b.subscribe();
+    let params = crate::LaunchParams {
+        skip_save_download: true,
+        ..Default::default()
+    };
+    b.runtime().block_on(b.launch_with(&id, params)).unwrap();
+    let ended = session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15));
+    assert!(ended.is_some(), "the game ran");
 }
 
 /// Wait up to `limit` for `id`'s session to end; how long that took.
@@ -615,4 +665,216 @@ fn launch_presets_save_apply_and_go() {
             .any(|p| p.id == preset.id)
     );
     assert!(b.settings.game(&to).show_mangohud, "applied settings stay");
+}
+
+#[cfg(unix)]
+#[test]
+fn backups_while_playing_repeat_tell_one_failure_and_stop_with_the_session() {
+    let (b, id) = play_with("backups-while-playing", "exit 0", false);
+    // A chosen Ludusavi that is gone: every backup fails, none runs.
+    b.settings
+        .update_app(|a| a.ludusavi_path = "/nonexistent/irori-test/ludusavi".into());
+    let mut rx = b.subscribe();
+    let stop = irori_core::process::CancellationToken::new();
+    let task = b.spawn({
+        let (b, id, stop) = (b.clone(), id.clone(), stop.clone());
+        async move {
+            b.back_up_while_playing(
+                id,
+                "Backups".into(),
+                std::time::Duration::from_millis(20),
+                stop,
+            )
+            .await
+        }
+    });
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    stop.cancel();
+    let ended = b
+        .runtime()
+        .block_on(async { tokio::time::timeout(std::time::Duration::from_secs(5), task).await });
+    assert!(ended.is_ok(), "the backups end with the session");
+    let mut notices = 0;
+    while let Ok(event) = rx.try_recv() {
+        if let Event::Notice(n) = event
+            && n.title_key == Some("shell.notice.ludusavi_backup_failed")
+            && n.game.as_ref() == Some(&id)
+        {
+            notices += 1;
+        }
+    }
+    assert_eq!(notices, 1, "a failure is told once per session");
+    assert_eq!(
+        crate::ludusavi::backup_interval(0),
+        std::time::Duration::from_secs(60)
+    );
+    assert_eq!(
+        crate::ludusavi::backup_interval(15),
+        std::time::Duration::from_secs(900)
+    );
+}
+
+/// A store of fixed games, for library tests.
+struct ListStore {
+    runner: Runner,
+    games: Vec<Arc<GameInfo>>,
+}
+
+impl ListStore {
+    fn store(runner: Runner, games: &[(&str, &str)]) -> irori_core::DynStore {
+        let games = games
+            .iter()
+            .map(|(app, title)| {
+                Arc::new(
+                    GameInfo {
+                        runner: Some(runner),
+                        app_name: (*app).into(),
+                        title: (*title).into(),
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )
+            })
+            .collect();
+        Arc::new(Self { runner, games })
+    }
+}
+
+#[async_trait]
+impl Store for ListStore {
+    fn runner(&self) -> Runner {
+        self.runner
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        Some(UserInfo::default())
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.games.clone()
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        self.games.iter().find(|g| g.app_name == app).cloned()
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+}
+
+#[test]
+fn copies_combine_separate_and_prefer_as_the_user_says() {
+    use irori_core::GameId;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![
+            ListStore::store(
+                Runner::Steam,
+                &[
+                    ("copies-620", "Copies: Portal 2"),
+                    ("copies-1", "Copies: A"),
+                ],
+            ),
+            ListStore::store(
+                Runner::Gog,
+                &[("copies-p2", "Copies: Portal 2"), ("copies-b", "Copies: B")],
+            ),
+        ]
+    })
+    .unwrap();
+    let ids = |b: &Backend, id: &GameId| -> Vec<String> {
+        b.library().copies_of(id).iter().map(GameId::key).collect()
+    };
+    let (steam, gog) = (
+        GameId::new(Runner::Steam, "copies-620"),
+        GameId::new(Runner::Gog, "copies-p2"),
+    );
+    let (a, other) = (
+        GameId::new(Runner::Steam, "copies-1"),
+        GameId::new(Runner::Gog, "copies-b"),
+    );
+    b.rebuild_library();
+    assert_eq!(ids(&b, &steam), ["gog:copies-p2", "steam:copies-620"]);
+    assert!(ids(&b, &a).is_empty());
+
+    // The user's choice leads.
+    b.userdata
+        .set_default_copy(&steam, &[gog.clone(), steam.clone()]);
+    b.rebuild_library();
+    assert_eq!(ids(&b, &gog), ["steam:copies-620", "gog:copies-p2"]);
+    assert_eq!(b.library().entry_of(&gog).unwrap().id(), steam);
+
+    // Games of other titles combine only when the user says so.
+    b.userdata.combine_copies(&[a.clone(), other.clone()]);
+    b.rebuild_library();
+    assert_eq!(ids(&b, &other), ["steam:copies-1", "gog:copies-b"]);
+
+    // Separated, each stands alone; editing a game's title keeps that.
+    b.userdata
+        .separate_copy(&steam, &[steam.clone(), gog.clone()]);
+    b.userdata.set_overrides(
+        &steam,
+        irori_core::game::GameOverrides {
+            title: Some("Copies: Portal 2".into()),
+            ..Default::default()
+        },
+    );
+    b.rebuild_library();
+    assert!(ids(&b, &steam).is_empty());
+    assert!(ids(&b, &gog).is_empty());
+    b.userdata.separate_copies(&[a.clone(), other.clone()]);
+    b.rebuild_library();
+    assert!(ids(&b, &a).is_empty());
+    assert_eq!(b.library().all_games().count(), 4);
+
+    // Turned off, nothing is grouped.
+    b.userdata.combine_copies(&[a.clone(), other.clone()]);
+    b.settings.update_app(|s| s.ui.group_copies = false);
+    b.rebuild_library();
+    assert!(ids(&b, &a).is_empty());
+    b.settings.update_app(|s| s.ui.group_copies = true);
 }

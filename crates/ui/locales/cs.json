@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Cloud",
   "ui.saves.conflict_description": "Uložené pozice se od poslední synchronizace změnily v tomto zařízení i v cloudu. Ty, které neponecháte, budou nahrazeny.",
   "ui.saves.conflict_title": "Které uložené pozice hry „{title}“ chcete ponechat?",
+  "ui.saves.download_failed_title": "Uložené pozice hry „{title}“ se nepodařilo stáhnout",
+  "ui.saves.download_failed_description": "V cloudu mohou být novější uložené pozice než na tomto zařízení. Zkuste to znovu, nebo hrajte hned s pozicemi z tohoto zařízení.",
+  "ui.saves.try_again": "Zkusit znovu",
+  "ui.saves.play_anyway": "Přesto hrát",
   "ui.saves.keep_cloud": "Ponechat pozice z cloudu",
   "ui.saves.keep_local": "Ponechat pozice z tohoto zařízení",
   "ui.saves.no_saves": "Žádné uložené pozice",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "V Playnite je skrytá.",
   "ui.playnite.reason.no_install_folder": "Playnite pro ni nezná instalační složku, takže Irori nepozná, kdy běží.",
   "ui.playnite.reason.folder_missing": "Její instalační složka zmizela: {path}",
-  "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst"
+  "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst",
+  "ui.copies.title": "Kopie",
+  "ui.copies.open": "Otevřít kopii z {store}",
+  "ui.copies.make_default": "Nastavit tuto kopii jako výchozí",
+  "ui.copies.separate": "Zobrazovat tuto kopii samostatně",
+  "ui.copies.separate_all": "Zobrazovat každou kopii samostatně"
 }

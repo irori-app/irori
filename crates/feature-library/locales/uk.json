@@ -772,5 +772,16 @@
   "library.folder.find_art": "Шукати обкладинки в мережі (PCGamingWiki і Steam)",
   "library.folder.skipped_hint": "Інсталятори, деінсталятори, розповсюджувані пакети й обробники збоїв не показуються. Програму гри можна змінити пізніше через «Редагувати».",
   "library.folder.add_one": "Додати 1 гру",
-  "library.folder.add_other": "Додати ігри: {count}"
+  "library.folder.add_other": "Додати ігри: {count}",
+  "library.toolbar.group.genre": "Жанр",
+  "library.filters.section.genre": "Жанр",
+  "library.group.no_genre": "Без жанру",
+  "library.menu.combine": "Об’єднати з копіями з інших крамниць…",
+  "library.combine.hint": "Виберіть інші копії «{title}», потім «Об’єднати в одну гру».",
+  "library.bulk.combine": "Об’єднати в одну гру",
+  "library.bulk.combine_tooltip": "Показувати вибрані ігри як копії однієї гри з різних крамниць",
+  "library.bulk.done.combined": "Ігри об’єднано в один запис: {count}",
+  "library.steam_hint.text": "Показано лише ігри Steam, установлені на цьому комп’ютері. Irori може прочитати всю вашу бібліотеку Steam із клієнта Steam без входу.",
+  "library.steam_hint.action": "Прочитати бібліотеку Steam",
+  "library.steam_hint.dismiss": "Не зараз"
 }

@@ -23,8 +23,10 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::paths::{expand_home, sanitize};
-use irori_core::process::{CommandSpec, split_args};
-use irori_core::{GameWatch, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest};
+use irori_core::process::{CommandSpec, program_command, split_program_args};
+use irori_core::{
+    GameWatch, InstallPlatform, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest,
+};
 
 use crate::app::SideloadApp;
 
@@ -236,12 +238,15 @@ pub(crate) fn resolve_executable(app: &SideloadApp, target_exe: &str) -> Option<
 }
 
 /// Arguments for a launch: the app's own arguments, the per-game launcher
-/// arguments setting, the chosen launch option, then extra arguments.
+/// arguments setting, the chosen launch option, then extra arguments. A
+/// Windows app's are split with Windows rules, Wine or not.
 pub(crate) fn launch_args(app: &SideloadApp, request: &LaunchRequest) -> Vec<String> {
-    let mut args = split_args(&app.launcher_args);
-    args.extend(split_args(&request.settings.launcher_args));
+    let windows = app.platform.install_platform() == InstallPlatform::Windows;
+    let split = |line: &str| split_program_args(windows, line);
+    let mut args = split(&app.launcher_args);
+    args.extend(split(&request.settings.launcher_args));
     if let Some(LaunchOption::Basic { parameters, .. }) = &request.option {
-        args.extend(split_args(parameters));
+        args.extend(split(parameters));
     }
     args.extend(request.extra_args.iter().cloned());
     args
@@ -253,9 +258,11 @@ fn working_dir(exe: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// Native launch: wrappers + exe + args, environment from the runtime.
+/// Native launch: wrappers + exe + args, environment from the runtime. On
+/// Windows a PowerShell or Windows Script Host script runs through its
+/// interpreter, which `CreateProcess` can't skip.
 pub(crate) fn native_plan(exe: &Path, args: Vec<String>, env: &LaunchEnvironment) -> LaunchPlan {
-    let mut cmd = CommandSpec::new(exe).args(args).envs(env.env.clone());
+    let mut cmd = program_command(exe).args(args).envs(env.env.clone());
     if let Some(dir) = working_dir(exe) {
         cmd = cmd.cwd(dir);
     }
@@ -427,6 +434,23 @@ mod tests {
     }
 
     #[test]
+    fn windows_apps_keep_backslashes_in_arguments() {
+        let mut req = request(LaunchEnvironment::default());
+        req.settings.launcher_args = String::new();
+        req.option = None;
+        req.extra_args.clear();
+        let windows = SideloadApp {
+            platform: SideloadPlatform::Windows,
+            launcher_args: r#"-saves C:\Users\me\saves "D:\My Games""#.into(),
+            ..app()
+        };
+        assert_eq!(
+            launch_args(&windows, &req),
+            ["-saves", r"C:\Users\me\saves", r"D:\My Games"]
+        );
+    }
+
+    #[test]
     fn resolves_alternative_executable() {
         let a = app();
         assert_eq!(resolve_executable(&a, ""), Some("/games/g/run.sh".into()));
@@ -451,6 +475,30 @@ mod tests {
         assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/games/g")));
         assert_eq!(plan.command.env.get("FOO").map(String::as_str), Some("1"));
         assert!(!plan.track_wineserver);
+    }
+
+    #[test]
+    fn native_scripts_run_through_their_interpreter_on_windows() {
+        let env = LaunchEnvironment::default();
+        let plan = native_plan(Path::new("/g/start.ps1"), vec!["-x".into()], &env);
+        if cfg!(windows) {
+            assert_eq!(plan.command.program, PathBuf::from("powershell.exe"));
+            assert_eq!(
+                plan.command.args,
+                os(&[
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "/g/start.ps1",
+                    "-x"
+                ])
+            );
+        } else {
+            assert_eq!(plan.command.program, PathBuf::from("/g/start.ps1"));
+            assert_eq!(plan.command.args, os(&["-x"]));
+        }
+        assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/g")));
     }
 
     #[test]

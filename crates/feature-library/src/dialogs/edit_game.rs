@@ -61,6 +61,7 @@ pub fn overrides_for(
         art_background: keep(background, &original.art_background),
         art_logo: keep(logo, &original.art_logo),
         game_modes: super::chosen_modes(known, modes),
+        ..Default::default()
     }
 }
 

@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Avstängt",
   "bigpicture.overlay.no_game_sound": "Inget ljud än",
   "bigpicture.overlay.volume_unavailable": "Inte tillgänglig",
+  "bigpicture.overlay.game_volume_unsupported": "Inte tillgängligt på macOS",
   "bigpicture.overlay.volume_hint": "Vänster och höger ändrar volymen, {button} stänger av ljudet.",
   "bigpicture.overlay.audio_failed": "Volymen kan inte ändras: {error}",
   "bigpicture.overlay.screenshot": "Ta en skärmbild",

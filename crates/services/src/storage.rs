@@ -518,7 +518,7 @@ impl Backend {
         let library = self.library();
         let mut installed = Vec::new();
         let mut uninstalled_prefixes = HashMap::new();
-        for game in library.games.iter().filter(|g| !g.is_dlc) {
+        for game in library.all_games().filter(|g| !g.is_dlc) {
             let id = game.id();
             let settings = self.settings.game(&id);
             if game.is_installed {

@@ -46,7 +46,8 @@ Wine, Proton or umu, and on macOS through Wine, CrossOver or Game Porting Toolki
   virtualizes every long list.
 - License: MIT. Bundled themes are from GPUI Kit (Apache-2.0). The
   vendored `crates/webview`, `crates/comet` and `crates/gpui-pre-windows` are
-  Apache-2.0 and keep their own `LICENSE-APACHE`.
+  Apache-2.0 and keep their own `LICENSE-APACHE`; the vendored `crates/gilrs-core`
+  is used under MIT and keeps its `LICENSE-MIT`.
 
 ## 2. Commands
 
@@ -122,6 +123,7 @@ Environment variables:
 | `IRORI_LOG` | `tracing` filter, e.g. `IRORI_LOG=irori_services=debug,info`. The default is `info` in the app and `warn` for the commands without a window. |
 | `IRORI_SIGN_IDENTITY` | macOS signing identity for `package.py` (default `-`, ad-hoc). |
 | `IRORI_WINDOWS_CRT_DIR` | Windows: explicit `Microsoft.VC*.CRT` directory for packaging. |
+| `IRORI_XBOX_CLIENT_ID` | For packagers: the Microsoft (Azure) app the Xbox account signs in with, instead of Irori's own; empty turns the Xbox account off (`irori-launchers::xbox_account`). |
 | `IRORI_UPDATE_EXPLANATION` | For packagers, at build or run time: Irori never looks for its own new versions and shows this text instead (`irori-services::app_update`). |
 | `IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE`, `IRORI_KEYRING_SMOKE`, `IRORI_SANDBOX_SMOKE`, `IRORI_SANDBOX_PROTON` | Opt-in, `#[ignore]`d runtime tests (see [8](#8-tests)). |
 
@@ -151,6 +153,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/itch` | `irori-itch-api` | itch.io protocol (its public API): API-key login, owned keys, uploads, download links |
 | `crates/steam` | `irori-steam-api` | Steam Web API: login (QR, password and Steam Guard, tokens), owned and Family games, store art and pages, achievements |
 | `crates/retroachievements` | `irori-retroachievements-api` | RetroAchievements: Web API (profile, console game lists, game progress), the emulators' token login, and rcheevos-compatible ROM hashes |
+| `crates/xbox` | `irori-xbox-api` | Xbox network: Microsoft account sign-in (OAuth with PKCE), Xbox Live user and XSTS tokens, title history, minutes played, achievements |
 | `crates/gog-galaxy` | `irori-gog-galaxy` | Hosts comet (Galaxy service for games: achievements, stats, leaderboards) on `127.0.0.1:9977` for the games Irori started |
 | `crates/comet` | `comet` | Small fork of comet, vendored so Irori can fix it; its README lists every difference from upstream |
 | `crates/store-epic` | `irori-epic` | Epic `Store` (`Runner::Legendary`) |
@@ -161,7 +164,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-steam` | `irori-steam` | Steam `Store` (`Runner::Steam`): local library, optional account, game watch, the login API the UI draws |
 | `crates/store-sideload` | `irori-sideload` | Apps the user adds (native, Windows, browser) |
 | `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) and Xbox app packages (`.GamingRoot`, `MicrosoftGame.config`, `AppxManifest.xml`, Gaming Services) |
-| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
+| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, plus the optional Xbox account, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/reshade` | `irori-reshade` | ReShade per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, downloads from the official sources, journaled installs |
@@ -177,6 +180,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/sign-in` | `irori-sign-in` | Store sign-in and store windows (Wry/Tao): library and the `irori-sign-in` program |
 | `crates/webview` | `gpui-webview` | Vendored GPUI WebView, **excluded from the workspace and unused** |
 | `crates/gpui-pre-windows` | `gpui-pre-windows` | GPUI's Windows backend with Irori's fixes, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
+| `crates/gilrs-core` | `gilrs-core` | gilrs' platform layer with Irori's fixes to its Windows.Gaming.Input backend, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
 
 Other top-level paths:
 
@@ -208,12 +212,12 @@ irori-core                        (depends on nothing internal)
   ├─ irori-mods      (core, depot; knows nothing of stores or the UI)
   ├─ irori-reshade   (core, runtime; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
-  │                   irori-steam-api, irori-retroachievements-api
+  │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api
   │                   (depot and secrets only, not core)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   │                   irori-steam, irori-sideload, irori-emulation (+ engines,
   │                   irori-retroachievements-api),
-  │                   irori-launchers (+ runtime, irori-launchers-data)
+  │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
 irori-ui          (services, core)
@@ -370,6 +374,15 @@ and `launch.rs` before changing anything below the UI.
 - It handles line callbacks (split on `\n` and `\r`), capped logs, cancellation and
   process-group termination: SIGTERM then SIGKILL on Unix, `taskkill /T /F` on
   Windows.
+- On Windows a console program started by Irori (a GUI program) opens a console
+  window unless it gets `CREATE_NO_WINDOW`. `run` (tools, scripts, installers)
+  hides it, `spawn` (games and the programs beside them) keeps it so console games
+  stay playable, and `CommandSpec::console` overrides either. A helper started
+  without `CommandSpec` calls `process::hide_console`.
+- Split user-entered arguments by who reads them: `split_program_args(windows, ..)`
+  for the program a game starts (a Windows program gets Windows quoting under Wine
+  too, so `C:\Users\…` keeps its backslashes), `split_args` (this system's rules) for
+  wrappers and other host programs.
 
 **HTTP** (`http.rs`):
 
@@ -411,6 +424,17 @@ commands without a window.
 - **Library:** store games without DLC, plus user overrides (title, art), become a
   sorted `Arc<LibrarySnapshot>` with a revision number. Rebuilds are debounced (30 ms)
   after `LibraryChanged`/`GameChanged`.
+- **Copies** (`copies.rs`): one game owned on several stores is one library entry
+  (`iroriUi.groupCopies`, on by default). Irori matches copies itself only by folded
+  title on different stores, never with two of one title on a store, release years
+  more than a year apart, added games or ROMs; the user combines and separates copies
+  (`GameOverrides::copy_of`, `default_copy`, synced with the other overrides).
+  `LibrarySnapshot::games` holds each entry's default copy (installed, then the user's
+  pick, then the last played), `other_copies` the rest; `get` finds every copy,
+  `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
+  counts, storage, backups and stats). Every per-game operation keeps the copy's own
+  `GameId`; a store filter shows that store's copy. Screens offer the copies through
+  `irori_ui::copies`.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
@@ -518,6 +542,9 @@ commands without a window.
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
+  `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
+  game runs (`back_up_while_playing`): a timer task per session, one backup at a
+  time, finished before the session's cloud upload.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
@@ -558,6 +585,16 @@ commands without a window.
     channel to `LaunchParams::stream`. The game gets the same variables; with
     `iroriSunshine.matchClient`, a game in gamescope takes the client's output size,
     frame limit and HDR where its own settings leave them empty.
+- **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
+  `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
+  art as the large image (Discord fetches external URLs), the `irori` art asset of
+  Irori's Discord application as the small one and a button to the store page, through
+  Discord's local IPC socket (`discord-rich-presence`, which also finds Flatpak and Snap
+  Discord). The application is `irori_core::DISCORD_APPLICATION_ID` unless the user
+  enters their own (`discordClientId`). One worker owns the connection: it wakes when a
+  session starts or ends, retries every minute while a game runs and Discord can't be
+  reached, and closes the socket when nothing is shown. With two games running the later
+  one shows; when it ends the earlier one returns.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other
@@ -603,7 +640,11 @@ commands without a window.
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
-  2. Optional cloud-save sync.
+  2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
+     upload after the session too). A failed download stops the launch with
+     `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
+     again or play anyway (`LaunchParams::skip_save_download`); a failed upload
+     raises a notice.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games").
@@ -846,7 +887,11 @@ it on every platform, and CI's Windows install test runs it.
 ### 4.7 Big Picture and controllers
 
 - `feature-bigpicture/src/gamepad/reader.rs` reads controllers on a dedicated gilrs
-  thread that blocks until an event arrives, so it uses no CPU when idle.
+  thread that blocks until an event arrives, so it uses no CPU when idle. On Windows
+  gilrs reads Windows.Gaming.Input through the patched `crates/gilrs-core`, which
+  never panics (release builds abort on a panic) and reads controllers whose
+  `NonRoamableId` fails. PlayStation and Switch Pro controllers that Steam or an SDL
+  program switched to their full HID report still read nothing there.
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
   keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K) when the element doesn't
@@ -884,7 +929,7 @@ it on every platform, and CI's Windows install test runs it.
   `bigPictureOnController` (open Big Picture when a controller connects).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
-- **In-game overlay** (`overlay/`, beta, Linux, `iroriOverlay.enabled`): Guide while a
+- **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
   game Irori started runs opens a panel above the game (`overlay::open`) instead of
   toggling Big Picture, and every controller input goes to it while it is open. It is
   a second GPUI window in Irori's process (`overlay/window.rs`): a wlr layer-shell
@@ -892,12 +937,18 @@ it on every platform, and CI's Windows install test runs it.
   else a pop-up window, and it exists only while open. Its tabs and focus are pure
   logic in `overlay/model.rs`. While it is open the controllers are grabbed
   (`gamepad/grab.rs`, `EVIOCGRAB`) and read raw (`gamepad/evdev.rs`) on a thread that
-  ends with it. Volume is `Backend::audio`/`change_volume` (`services/src/audio.rs`,
+  ends with it. Volume is `Backend::audio`/`change_volume` (`services/src/audio/`,
   `pactl` matched to the game's process group), screenshots `Backend::take_screenshot`
-  (`services/src/capture.rs`, desktop portal, else `grim`). The shell installs "Back to
+  (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume. `docs/PLATFORMS.md`, "In-game overlay".
+  Up/Down change the system volume. What differs per system is one table,
+  `overlay/support.rs`; macOS and Windows use GPUI's pop-up window (a non-activating
+  panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
+  while a game runs), hold no controller, and get volume and screenshots from
+  `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
+  `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
+  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay".
 
 ### 4.8 Engines (emulators)
 
@@ -1088,6 +1139,35 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   running from the package folder. The game menu's "Show in Microsoft Store"
   (`ClientAction::Show`) opens `ms-windows-store://pdp/`; installs, updates and removal
   stay with the Xbox app. On Linux and macOS the card says it is Windows-only.
+- **Xbox account** (`irori-launchers::xbox_account`, protocol in `irori-xbox-api`),
+  optional, on every OS, from the Xbox card (it is the launchers store's
+  `Store::login`; `Store::user` stays "Local"). Sign-in is Microsoft's OAuth 2.0
+  authorization code flow on `login.live.com` for Irori's own public Azure app
+  (`XBOX_CLIENT_ID`; `IRORI_XBOX_CLIENT_ID` names another, empty turns the account
+  off and hides it), with PKCE, the scopes `Xboxlive.signin Xboxlive.offline_access`
+  and the desktop redirect `https://login.live.com/oauth20_desktop.srf`, whose
+  `?code=` the sign-in window captures (`login` also takes the pasted address, page
+  text or bare code). The access token becomes a Xbox Live user token (RPS ticket
+  `d=<token>`) and an XSTS token for `http://xboxlive.com` (`XBL3.0 x=<uhs>;<token>`,
+  xuid and gamertag from its claims). Only the refresh token, xuid and gamertag are
+  kept (`<config>/xbox-account.json` through `irori_secrets`); a refused refresh
+  token is `SessionExpired`: the card says so and one notice asks to sign in again.
+  Data: the title history (`titlehub`: last played, achievement counts, store art
+  and details), `MinutesPlayed` per title (`userstats` batch, asked again only for
+  titles whose last-played time moved) and achievements (`achievements` v2), cached
+  in `<cache>/xbox/` for 15 minutes. Titles played on a PC with a package family
+  name match installed packages (`xbox:<family name>`) and add their art, details,
+  playtime (`remote_playtime`), last played (`remote_last_played`) and achievements;
+  played PC titles that aren't installed are listed as not installed on every OS,
+  so their playtime and achievements count everywhere. Their Install and "Show in
+  Microsoft Store" open the store page on Windows; elsewhere only the website
+  (`store_url`, when the title names its product id). Titles played through another
+  launcher ("Win32", no family name) and console-only titles are left out. The
+  history can list one package family under several title ids (Microsoft
+  Minesweeper does): they are one game (`merge_titles`), with the newest record's
+  art and details, the latest last played, the minutes of every record added up
+  (each id counts its own sessions) and the achievements of all of them, asked in
+  one request and counted once. The store never lists an app name twice.
 - **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
   anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
   `online_only`, the install gate lets them through and the game page says which mode
@@ -1101,6 +1181,19 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
+- **The client's library without an account** (`client_library/`, opt-in, off by
+  default): Irori creates `.cef-enable-remote-debugging` in Steam's folder (on macOS beside
+  the client in `Steam.AppBundle/Steam/Contents/MacOS`), Steam opens its Chromium debugging
+  port at its next start, and one read-only expression evaluated in the `SharedJSContext`
+  page (`collectionStore.allGamesCollection.allApps`) lists the owned and borrowed games.
+  The port is the web helper's `--remote-debugging-port=` (8080 unless Millennium or a flag
+  chose another); only loopback addresses are contacted, by hand-written HTTP and a plain
+  WebSocket. The games go to `client-games.json` in Steam's cache and are listed like an
+  account's; a signed-in account wins. "Read once" (the default) removes the file after
+  reading; "Keep it on" reads again on refreshes at most every 15 minutes. Irori removes
+  only a file it created (Decky Loader relies on its own), restarts Steam only after
+  asking and never in Game Mode, and logs counts only. The expression must stay read-only
+  (a test guards it); an unknown client shape answers `Unsupported`, never an exception.
 - **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
   through `IAuthenticationService` (protobuf over the Web API). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then
@@ -1129,6 +1222,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
+- **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`, the window
+  `irori_manage::open_steam_friends_dialog`, from the Steam account card and the
+  palette): `ISteamUser/GetFriendList` and `GetPlayerSummaries` with the account's
+  access token (Valve documents them with a Web API key, which Irori must not ship). A
+  401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
+  user out. Read only while the window is open (on open, Refresh and every 3 minutes),
+  kept a minute, dropped at sign-out. Actions are Steam's own links: `steam://open/friends`
+  (Steam has no link that invites to a game; its friends list does, while the game runs),
+  `steam://friends/message/<id>`, and Join only when Steam reports a lobby
+  (`steam://joinlobby/<app>/<lobby>/<friend>`) or a server (`steam://connect/<ip:port>`),
+  built from parsed numbers only.
 
 ### 4.11 Mods
 
@@ -1654,7 +1758,8 @@ These are things that have bitten this codebase before:
   `irori_ui::run` or `backend.spawn_blocking`.
 - **Updating gpui-pre means updating `crates/gpui-pre-windows` too.** Its version
   must match gpui-pre's, or the patch stops applying and Windows quietly gets the
-  unpatched backend. Copy the new crate in and apply `PATCHES.md` again.
+  unpatched backend. Copy the new crate in and apply `PATCHES.md` again. The same goes
+  for gilrs and `crates/gilrs-core`.
 - **Checking Windows code from a Mac** works for `cargo check` with the rustup
   toolchain first on `PATH` (Homebrew's Rust has no Windows standard library) and
   Homebrew LLVM's `llvm-rc` for gpui-pre's resources:

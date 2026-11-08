@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Molnet",
   "ui.saves.conflict_description": "Sparfilerna har ändrats både på den här enheten och i molnet sedan senaste synkroniseringen. De du inte behåller ersätts.",
   "ui.saves.conflict_title": "Vilka sparfiler för ”{title}” vill du behålla?",
+  "ui.saves.download_failed_title": "Det gick inte att ladda ned sparfilerna för ”{title}”",
+  "ui.saves.download_failed_description": "Molnet kan ha nyare sparfiler än den här enheten. Försök igen eller spela nu med den här enhetens sparfiler.",
+  "ui.saves.try_again": "Försök igen",
+  "ui.saves.play_anyway": "Spela ändå",
   "ui.saves.keep_cloud": "Behåll molnets",
   "ui.saves.keep_local": "Behåll den här enhetens",
   "ui.saves.no_saves": "Inga sparfiler",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Dolt i Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite känner inte till någon installationsmapp för det, så Irori kan inte se när det körs.",
   "ui.playnite.reason.folder_missing": "Dess installationsmapp är borta: {path}",
-  "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa"
+  "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa",
+  "ui.copies.title": "Kopior",
+  "ui.copies.open": "Öppna kopian från {store}",
+  "ui.copies.make_default": "Gör den här kopian till standard",
+  "ui.copies.separate": "Visa den här kopian för sig",
+  "ui.copies.separate_all": "Visa varje kopia för sig"
 }

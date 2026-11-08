@@ -141,7 +141,13 @@ signature changes. A build signed with a Developer ID asks once.
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
 isolated testing. On Windows a file named `portable` beside `irori.exe` does the same
 with `irori.exe`'s folder as the root (`config`, `data` and `cache` beside it); see
-[Portable Windows build](#portable-windows-build). `IRORI_HOME` wins over the file. A configured Steam path takes precedence when it holds a Steam
+[Portable Windows build](#portable-windows-build). `IRORI_HOME` wins over the file.
+The start-with-system entry is one per user and belongs to the usual Irori: a run
+with `IRORI_HOME` or a portable folder leaves an entry it didn't write as it is at
+startup, writes its own only when the setting is turned on there, and removes only
+an entry naming its folder. The Heroic import reads Heroic's native config folder or
+the Flatpak's (`~/.var/app/com.heroicgameslauncher.hgl/config/heroic`); when both
+exist, the one whose settings, installs or logins changed last. A configured Steam path takes precedence when it holds a Steam
 library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
 `~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
 (`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
@@ -202,6 +208,21 @@ the access token itself. With an account, the library adds every game it owns an
 its Steam Family shares (`library.json` in Steam's cache folder keeps them for offline
 starts); Install hands those to Steam (`steam://install/<id>`), as Verify files and
 Uninstall do (`steam://validate`, `steam://uninstall`).
+
+Without a login, Accounts › Steam (and a suggestion in the library, the command palette)
+can read the whole library from the running Steam client instead. Irori explains first, then
+creates an empty `.cef-enable-remote-debugging` in Steam's folder (`~/.steam/steam`, Flatpak
+Steam's own folder, `C:\Program Files (x86)\Steam`; on macOS
+`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS`). Steam reads the
+file when it starts and then serves Chromium's remote debugging on `127.0.0.1` (port 8080,
+or whatever `--remote-debugging-port=` its `steamwebhelper` was given); Irori asks before
+restarting Steam, and never restarts it in Game Mode. While the port is open any program on
+the computer can control the Steam client, so by default Irori reads once and removes the
+file again (the port closes at Steam's next start); "Keep it on" leaves it and re-reads on
+library refreshes. A file another program created (Decky Loader) is left alone. The games
+read are kept in `client-games.json` in Steam's cache folder and never leave the computer.
+Millennium can open the port itself on another port, or keep it closed; Irori reads the port
+from the web helper's command line and says so when it finds none.
 
 Playing opens `steam://rungameid/<id>` through `xdg-open`, `open` or the Windows URL
 handler, so Steam applies its own Proton version, launch options and overlay. A game's
@@ -273,6 +294,15 @@ Xbox app and Microsoft Store games are Windows-only: they start through the shel
 follow the processes running from the package folder. On Linux and macOS the Stores
 page explains this instead of listing them.
 
+The Xbox card's optional Xbox (Microsoft) account works on every system: it signs in
+on Microsoft's page in the sign-in window (or the browser, pasting the address of the
+blank page it ends on) and adds the account's playtime, last played times,
+achievements and store art. PC games the account played that aren't installed are
+listed as not installed everywhere, so their playtime and achievements count in the
+stats on Linux and macOS too; only Windows installs and plays them, from their
+Microsoft Store page. Packagers can point `IRORI_XBOX_CLIENT_ID` at their own
+Microsoft app, or set it empty to leave the account out.
+
 ### Playnite import (Windows)
 
 Settings → Advanced → "Import from Playnite" (shown when Playnite is installed) and
@@ -305,6 +335,13 @@ belong to someone else.
 
 The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
 instance makes a relative path absolute before forwarding it.
+
+On Windows itself, an added app, a before- or after-launch script and a program started
+alongside a game may be a script Windows can't start as a program
+(`irori_core::process::program_command`): `.ps1` runs through
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File`, and `.vbs`, `.vbe`, `.js`,
+`.jse` and `.wsf` through `wscript.exe //NoLogo`. Batch files (`.bat`, `.cmd`) start as
+they are.
 
 #### Other programs' links
 
@@ -426,9 +463,10 @@ CPU and GPU cost while a game runs still has to be measured with the real progra
 
 ### In-game overlay (beta)
 
-Linux only for now; off by default (Settings › General › Controller › "In-game
+Off by default on every system (Settings › General › Controller › "In-game
 overlay", `iroriOverlay.enabled`). With it on, the controller's Guide button over a
-game Irori started opens a panel above the game instead of switching to Big Picture.
+game Irori started (and on Windows and macOS also Ctrl+Shift+O, ⌃⇧O on a Mac) opens a
+panel above the game instead of switching to Big Picture.
 LB/RB switch its tabs, A/B and the D-pad or left stick move, and Guide or B close it;
 after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down).
 
@@ -452,7 +490,7 @@ Shortcuts that work without opening it, also while the game has the window: Guid
 (R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
 still saves a clip of the replay buffer.
 
-The surface. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
+The surface on Linux. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
 Hyprland, COSMIC, niri, labwc) the overlay is a layer surface on the overlay layer,
 centred on the output, with on-demand keyboard interactivity: it never takes the
 keyboard from the game on its own. GNOME has no layer-shell; there the overlay opens as
@@ -464,7 +502,7 @@ Steam decides what is shown and the overlay is not visible, so use Steam's overl
 there. The surface exists only while the overlay is open: closed, it costs no thread,
 timer or CPU.
 
-The controller. While the overlay is open each controller's event device is opened again
+The controller on Linux. While the overlay is open each controller's event device is opened again
 and grabbed (`EVIOCGRAB`), so the game sees none of its presses; a thread reads the
 grabbed devices meanwhile and stops when the overlay closes. The grab is let go once no
 button is held (at most 0.8 s later), so the game never sees the release of a press it
@@ -472,19 +510,63 @@ didn't see, and the kernel lets go by itself if Irori exits. Games that read the
 controller through hidraw instead of evdev (Steam Input, SDL's HIDAPI drivers in some
 games) still see the presses; the overlay works regardless.
 
-The sound goes through `pactl` (PulseAudio's, which PipeWire's `pipewire-pulse` answers
+On Linux the sound goes through `pactl` (PulseAudio's, which PipeWire's `pipewire-pulse` answers
 too), found on the host inside the Flatpak. A game's streams are those whose process
 (`application.process.id`, or `pipewire.sec.pid`) is in the game's process group or
 descends from the process Irori started, which covers Wine's and Proton's processes.
 Games another program owns (Steam, third-party launchers) have no process group of
 Irori's, so only the system volume applies to them.
 
-Screenshots come from the desktop portal's Screenshot interface without its dialog
+On Linux screenshots come from the desktop portal's Screenshot interface without its dialog
 (KDE Plasma asks once whether Irori may), else from `grim` on wlroots desktops without
 the portal. They are saved in the desktop's screenshot folder (Spectacle's choice, else
 `Pictures/Screenshots`) as `<game> <date> <time>.png` and announced with a notice. The
 overlay closes before its own screenshot is taken. gamescope's session has neither: use
 Steam's screenshot there.
+
+Per system (`irori_bigpicture::overlay::support` holds the same table):
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Surface | layer-shell surface, else a pop-up window | non-activating panel above fullscreen apps | topmost tool window, shown without activating |
+| Over a fullscreen game | yes (GNOME may keep it behind) | yes, in the game's fullscreen Space | borderless and windowed: yes; exclusive fullscreen: no, a notice says so |
+| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Ctrl+Shift+O |
+| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no: the game sees the presses too |
+| System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
+| Game volume | its streams | not available | its audio sessions (Core Audio) |
+| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
+
+On macOS the overlay is GPUI's pop-up window: a non-activating `NSPanel` at the pop-up
+menu level that joins every Space and may sit over fullscreen apps, so it shows over a
+game in its own fullscreen Space without taking it out of it; the game keeps the keyboard
+until the panel is clicked. ⌃⇧O is registered with Carbon's `RegisterEventHotKey`, which
+needs no Accessibility permission, and only while a game Irori started runs. Holding the
+controller from the game would mean seizing its HID device, which also takes it from
+Irori's own reader, so the game sees the presses made in the overlay (B both closes it
+and presses B in the game). macOS has no per-program volume, so the overlay's game volume
+says "Not available on macOS" and only the system volume changes. Screenshots run
+`screencapture -x -m` (the main display); the first one asks for the Screen Recording
+permission, and until it is granted a screenshot fails with a notice saying where to
+allow it (without it macOS would return only the desktop). On macOS 26 and later a
+controller's Home button may also open the system's own game overlay.
+
+On Windows the overlay is GPUI's pop-up window: a topmost tool window shown without
+activating, which the desktop composes over windowed and borderless fullscreen games;
+clicking it gives it the keyboard. A Direct3D game in exclusive fullscreen owns the
+display and can't be covered (a window coming up could even take it out of fullscreen):
+when Windows reports one (`SHQueryUserNotificationState`), the overlay doesn't open and a
+notice asks to switch the game to borderless. Windows keeps the Xbox controller's Guide
+button for the Xbox Game Bar and neither XInput nor Windows.Gaming.Input reports it to
+other programs, so with Xbox pads use Ctrl+Shift+O (`RegisterHotKey`, registered only
+while a game Irori started runs); PlayStation and other pads read as raw controllers may
+report their Guide button. There is no supported way to hold an XInput or
+Windows.Gaming.Input controller from a game, so the game sees the presses too. Volumes
+are Core Audio's: the system volume is the default output's endpoint volume, and the
+game's are its audio sessions (as in the volume mixer) on every active output, matched to
+the process Irori started and its descendants started since the session began (Windows
+reuses process ids and has no process groups). Screenshots copy the monitor of the
+foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
+the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
 
 ### Mods
 
@@ -556,6 +638,22 @@ The font list is the system's: fontconfig on Linux, Core Text on macOS and Direc
 Windows, read once a session, so a font installed while Irori runs shows up after a
 restart. Manrope, Irori's own, is always first. A picked font that is later uninstalled
 falls back to Manrope.
+
+### Interface size
+
+Settings → Appearance → Interface size (`iroriUi.fontSize`, 75 to 150 %) scales text,
+spacing and controls together, as do <kbd>Ctrl</kbd> and <kbd>+</kbd>, <kbd>−</kbd> or
+<kbd>0</kbd> (<kbd>Cmd</kbd> on macOS, where the View menu has them too) and the command
+palette. The display's own scale needs nothing: GPUI draws at it. On top of the size the
+user picks, Irori follows the system's text size, live as it changes:
+
+| | Source |
+| --- | --- |
+| Linux | `org.gnome.desktop.interface` `text-scaling-factor` through the XDG settings portal (GNOME's Large text and text scaling); without it, `GDK_DPI_SCALE` |
+| macOS | None: macOS has no text size for apps |
+| Windows | Settings → Accessibility → Text size (`UISettings::TextScaleFactor`) |
+
+Factors outside 0.5 to 3 are ignored. Big Picture's own size multiplies on top.
 
 ### New versions of Irori
 
@@ -732,7 +830,8 @@ Inside, the game sees an empty root holding only:
 | Wine or Proton build, umu-run, EAC/BattlEye runtimes, Steam's `legacycompat` | read-only |
 | umu's Steam runtime (`~/.local/share/umu`) | read-only with a throwaway writable layer (`--overlay-src`/`--tmp-overlay`, bubblewrap 0.10+; older bubblewrap binds it writable) |
 | GPU, controllers, sound | `/dev/dri`, `/dev/nvidia*`, `/dev/input`, `/dev/hidraw*`, `/dev/snd`; never `/dev/uinput` |
-| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, `/tmp/.X11-unix`, the X cookie, gamescope's socket when gamescope is on |
+| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, the socket of `$DISPLAY`'s X server (`/tmp/.X11-unix/X<n>`, no other display's), the X cookie, gamescope's socket when gamescope is on |
+| Environment | empty (`env -i`, `--clearenv`), then Irori's display, sound, locale, XDG, graphics driver and Wine/Proton/Steam runtime/umu variables, then every variable of the launch (the game's settings, its store's); nothing else of the session, so its tokens and API keys stay out, `/proc/1/environ` included |
 | `/proc`, `/tmp`, `/run`, `/var/tmp`, `/dev/shm` | private (new PID namespace, fresh tmpfs) |
 | `/sys`, `/run/udev`, fontconfig's cache, DNS configuration | read-only |
 
@@ -744,9 +843,10 @@ folder) stay hidden. Without it the home folder and those drives are shown
 writable, as outside the sandbox. "Block the network" gives the game a network
 namespace with only loopback: no internet, no LAN, nothing listening on the
 computer (GOG Galaxy's comet on port 9977 included); X11 clients then reach the
-display through `/tmp/.X11-unix` instead of the abstract socket. In every mode
+display through its socket in `/tmp/.X11-unix` instead of the abstract socket.
+IPC stays shared, as X11 clients use shared memory with the server. In every mode
 the session D-Bus is left out (it can start programs outside the sandbox) and
-`DBUS_SESSION_BUS_ADDRESS` unset, `--new-session` stops terminal input
+`DBUS_SESSION_BUS_ADDRESS` not passed, `--new-session` stops terminal input
 injection, and `--die-with-parent` ends the sandbox with Irori's stop. A plain
 Wine game waits for its prefix's wineserver inside the sandbox, as everything
 in the sandbox ends with its first process; Proton's `waitforexitandrun` and

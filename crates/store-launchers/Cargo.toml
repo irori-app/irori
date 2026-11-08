@@ -11,6 +11,9 @@ publish.workspace = true
 irori-core.workspace = true
 irori-runtime.workspace = true
 irori-launchers-data.workspace = true
+irori-xbox-api.workspace = true
+irori-secrets.workspace = true
+futures.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -22,3 +25,4 @@ sysinfo.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+irori-depot = { workspace = true, features = ["test-server"] }

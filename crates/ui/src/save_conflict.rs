@@ -7,7 +7,7 @@ use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, StyledExt as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{App, IntoElement, ParentElement as _, SharedString, Styled as _, Window, div};
-use irori_core::{GameId, SaveConflict, SyncDirection, util};
+use irori_core::{GameId, SaveConflict, SaveDownloadFailed, SyncDirection, util};
 use irori_services::LaunchParams;
 
 use crate::i18n::{t, t_args};
@@ -31,11 +31,111 @@ pub fn resolve_launch_error(
     {
         return true;
     }
+    if let Some(failed) = SaveDownloadFailed::of(error).cloned() {
+        open_download_failed(id.clone(), params, failed, window, cx);
+        return true;
+    }
     let Some(conflict) = SaveConflict::of(error).cloned() else {
         return false;
     };
     open_dialog(id.clone(), params, conflict, window, cx);
     true
+}
+
+/// The cloud saves couldn't be downloaded before playing: try again, play on
+/// this device's saves, or not now.
+fn open_download_failed(
+    id: GameId,
+    params: LaunchParams,
+    failed: SaveDownloadFailed,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let title = backend(cx)
+        .game(&id)
+        .map(|g| g.title.clone())
+        .unwrap_or_else(|| id.app_name.to_string());
+    let width = window.rem_size() * 32.;
+    window.open_dialog(cx, move |dialog, _, cx| {
+        let play = |skip: bool| {
+            let (id, title) = (id.clone(), title.clone());
+            let params = LaunchParams {
+                skip_save_download: skip,
+                ..params.clone()
+            };
+            move |_: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut App| {
+                window.close_dialog(cx);
+                play_again(id.clone(), params.clone(), &title, window, cx);
+            }
+        };
+        dialog
+            .title(t_args(
+                "ui.saves.download_failed_title",
+                &[("title", &title)],
+            ))
+            .w(width)
+            .child(
+                v_flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(t("ui.saves.download_failed_description")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(failed.reason.clone()),
+                    ),
+            )
+            .footer(
+                DialogFooter::new()
+                    .child(
+                        Button::new("saves-download-later")
+                            .ghost()
+                            .label(t("ui.saves.not_now"))
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("saves-download-retry")
+                            .outline()
+                            .label(t("ui.saves.try_again"))
+                            .on_click(play(false)),
+                    )
+                    .child(
+                        Button::new("saves-download-play")
+                            .primary()
+                            .label(t("ui.saves.play_anyway"))
+                            .on_click(play(true)),
+                    ),
+            )
+    });
+}
+
+/// Start the game again with `params`; a launch error goes through
+/// [`resolve_launch_error`] once more (the download may fail again).
+fn play_again(id: GameId, params: LaunchParams, title: &str, window: &mut Window, cx: &mut App) {
+    let b = backend(cx);
+    let failed = t_args("ui.saves.start_failed", &[("title", title)]);
+    let task = {
+        let (id, params) = (id.clone(), params.clone());
+        run(cx, async move { b.launch_with(&id, params).await })
+    };
+    window
+        .spawn(cx, async move |cx| {
+            if let Err(e) = task.await {
+                let _ = cx.update(|window, cx| {
+                    if !resolve_launch_error(&id, params, &e, window, cx) {
+                        window.push_notification(
+                            Notification::error(format!("{e:#}")).title(failed),
+                            cx,
+                        );
+                    }
+                });
+            }
+        })
+        .detach();
 }
 
 /// "Changed 5 minutes ago" for a save that changed at `at` (unix seconds).

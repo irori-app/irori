@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Cloud",
   "ui.saves.conflict_description": "De opgeslagen spellen zijn sinds de laatste synchronisatie op dit apparaat en in de cloud gewijzigd. Wat je niet houdt, wordt vervangen.",
   "ui.saves.conflict_title": "Welke opgeslagen spellen van ‘{title}’ wil je houden?",
+  "ui.saves.download_failed_title": "Opgeslagen spellen van ‘{title}’ konden niet worden gedownload",
+  "ui.saves.download_failed_description": "De cloud heeft misschien nieuwere opgeslagen spellen dan dit apparaat. Probeer het opnieuw, of speel nu met de opgeslagen spellen van dit apparaat.",
+  "ui.saves.try_again": "Opnieuw proberen",
+  "ui.saves.play_anyway": "Toch spelen",
   "ui.saves.keep_cloud": "Die uit de cloud houden",
   "ui.saves.keep_local": "Die van dit apparaat houden",
   "ui.saves.no_saves": "Geen opgeslagen spellen",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Verborgen in Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite kent geen installatiemap ervoor, dus Irori kan niet zien wanneer het draait.",
   "ui.playnite.reason.folder_missing": "De installatiemap is verdwenen: {path}",
-  "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen"
+  "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen",
+  "ui.copies.title": "Exemplaren",
+  "ui.copies.open": "Exemplaar van {store} openen",
+  "ui.copies.make_default": "Dit exemplaar standaard maken",
+  "ui.copies.separate": "Dit exemplaar apart tonen",
+  "ui.copies.separate_all": "Elk exemplaar apart tonen"
 }

@@ -39,6 +39,7 @@ mod wall;
 pub(crate) mod tests;
 
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,11 +63,12 @@ use crate::grid::FocusGrid;
 use crate::layout::home::{Dir, grid_move, wall_step};
 use crate::layout::{GridStep, HomeLayout, Metrics, grid_step};
 use crate::model::{
-    Chip, GameAction, GameState, LibraryFilter, PageRow, Row, StatusFilter, build_rows,
+    Chip, GameAction, GameState, LibraryFilter, PageRow, Row, Show, StatusFilter, build_rows,
     cover_action, cycle, disabled_reason, install_platforms, library_games, main_action, page_rows,
     show_options,
 };
 use crate::theme::ShelfKind;
+use irori_services::{LibrarySnapshot, UserData};
 
 /// Focus must rest this long before the backdrop art follows it, so fast
 /// scrolling does not fetch a hero image per cover passed.
@@ -161,6 +163,10 @@ pub struct BigPictureView {
     overlay: Option<Overlay>,
     rows: Vec<Row>,
     rows_key: Option<(u64, usize, u32, Vec<ShelfKind>)>,
+    /// The Library tab's Show choices, per library revision and user data:
+    /// working them out reads every game, too much for each typed letter.
+    show_options: Option<(ShowKey, Rc<Vec<Show>>)>,
+    show_option_computes: usize,
     grid: FocusGrid,
     library: LibraryTab,
     /// Wheel travel not yet turned into a focus move.
@@ -179,6 +185,9 @@ pub struct BigPictureView {
     _editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
+
+/// A library revision and the user data it was read with, by identity.
+type ShowKey = (u64, usize);
 
 /// The current time in the interface language's usual clock format.
 fn clock_text() -> SharedString {
@@ -296,6 +305,8 @@ impl BigPictureView {
             },
             wheel: 0.0,
             hovered_cover: None,
+            show_options: None,
+            show_option_computes: 0,
             pending: HashSet::new(),
             image_cache: LruImageCache::new(IMAGE_CACHE, cx),
             hero: None,
@@ -426,9 +437,10 @@ impl BigPictureView {
             }
         }
 
+        let options = self.show_options(&snapshot, &user);
         let lib = &mut self.library;
         lib.filter.query = lib.search.read(cx).value().trim().to_string();
-        if !show_options(&snapshot, &user).contains(&lib.filter.show) {
+        if !options.contains(&lib.filter.show) {
             lib.filter.show = Default::default();
         }
         let key = (snapshot.revision, user_ptr, lib.filter.clone());
@@ -444,6 +456,26 @@ impl BigPictureView {
         if self.hero.is_none() {
             self.hero = self.focused_game().cloned();
         }
+    }
+
+    /// The Library tab's Show choices for this library.
+    fn show_options(&mut self, snapshot: &LibrarySnapshot, user: &Arc<UserData>) -> Rc<Vec<Show>> {
+        let key = (snapshot.revision, Arc::as_ptr(user) as usize);
+        if let Some((k, options)) = &self.show_options
+            && *k == key
+        {
+            return options.clone();
+        }
+        let options = Rc::new(show_options(snapshot, user));
+        self.show_options = Some((key, options.clone()));
+        self.show_option_computes += 1;
+        options
+    }
+
+    /// How many times the Show choices were worked out.
+    #[cfg(test)]
+    pub(crate) fn show_option_computes(&self) -> usize {
+        self.show_option_computes
     }
 
     fn game_state(game: &GameInfo, cx: &App) -> GameState {
@@ -627,15 +659,24 @@ impl BigPictureView {
     fn activate_chip(&mut self, chip: Chip, window: &mut Window, cx: &mut Context<Self>) {
         self.library.focus =
             LibraryFocus::Chips(Chip::ALL.iter().position(|c| *c == chip).unwrap_or(0));
-        let filter = &mut self.library.filter;
         match chip {
             Chip::Show => {
-                let lib = models(cx).library.read(cx);
-                let options = show_options(&lib.snapshot, &lib.user);
+                let (snapshot, user) = {
+                    let lib = models(cx).library.read(cx);
+                    (lib.snapshot.clone(), lib.user.clone())
+                };
+                let options = self.show_options(&snapshot, &user);
+                let filter = &mut self.library.filter;
                 filter.show = cycle(&options, filter.show);
             }
-            Chip::Sort => filter.sort = cycle(&crate::model::Sort::ALL, filter.sort),
-            Chip::Status => filter.status = cycle(&StatusFilter::ALL, filter.status),
+            Chip::Sort => {
+                let filter = &mut self.library.filter;
+                filter.sort = cycle(&crate::model::Sort::ALL, filter.sort)
+            }
+            Chip::Status => {
+                let filter = &mut self.library.filter;
+                filter.status = cycle(&StatusFilter::ALL, filter.status)
+            }
             Chip::Search => {
                 self.library.searching = true;
                 self.library.search.update(cx, |s, cx| s.focus(window, cx));

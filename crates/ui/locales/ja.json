@@ -9,6 +9,10 @@
   "ui.saves.cloud": "クラウド",
   "ui.saves.conflict_description": "前回の同期以降、このデバイスとクラウドの両方でセーブデータが変更されました。残さなかった方は置き換えられます。",
   "ui.saves.conflict_title": "「{title}」のどちらのセーブデータを残しますか？",
+  "ui.saves.download_failed_title": "「{title}」のセーブデータをダウンロードできませんでした",
+  "ui.saves.download_failed_description": "クラウドにこのデバイスより新しいセーブデータがあるかもしれません。もう一度試すか、このデバイスのセーブデータで今すぐプレイしてください。",
+  "ui.saves.try_again": "もう一度試す",
+  "ui.saves.play_anyway": "このままプレイ",
   "ui.saves.keep_cloud": "クラウドのデータを残す",
   "ui.saves.keep_local": "このデバイスのデータを残す",
   "ui.saves.no_saves": "セーブデータなし",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Playnite で非表示になっています。",
   "ui.playnite.reason.no_install_folder": "Playnite がインストール先フォルダーを把握していないため、Irori は実行中かどうかを判断できません。",
   "ui.playnite.reason.folder_missing": "インストール先フォルダーがありません: {path}",
-  "ui.import.summary.warnings": "Irori が読み込めなかった {launcher} のファイル"
+  "ui.import.summary.warnings": "Irori が読み込めなかった {launcher} のファイル",
+  "ui.copies.title": "コピー",
+  "ui.copies.open": "{store} のコピーを開く",
+  "ui.copies.make_default": "このコピーを既定にする",
+  "ui.copies.separate": "このコピーを別に表示",
+  "ui.copies.separate_all": "すべてのコピーを別々に表示"
 }

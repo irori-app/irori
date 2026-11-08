@@ -92,6 +92,9 @@ pub(crate) struct StoreCard {
     pub accounts: Vec<StoreAccount>,
     /// Another account can log in beside the signed-in ones.
     pub can_add: bool,
+    /// Steam without a signed-in account: reading its library from the
+    /// Steam client ([`crate::steam_library`]).
+    pub steam_client: Option<irori_steam::ClientLibraryState>,
 }
 
 /// Cards for the stores this build has, in display order.
@@ -103,7 +106,7 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
     let app = &m.settings.read(cx).app;
     let shown = app.ui.stores;
     let mut counts: BTreeMap<Runner, usize> = BTreeMap::new();
-    for g in &library.snapshot.games {
+    for g in library.snapshot.all_games() {
         *counts.entry(g.runner()).or_default() += 1;
     }
     ACCOUNT_STORES
@@ -126,6 +129,10 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
             local: !runner.has_account(),
             accounts: accounts.accounts(runner).to_vec(),
             can_add: b.store(runner).is_some_and(|s| s.can_add_account()),
+            steam_client: (runner == Runner::Steam)
+                .then(|| crate::steam_library::steam_client_library_state(cx))
+                .flatten()
+                .filter(|s| !s.signed_in),
         })
         .collect()
 }
@@ -152,6 +159,7 @@ pub struct AccountsView {
     /// Accounts being refreshed or logged out, by store and slot.
     refreshing: BTreeSet<(Runner, String)>,
     logging_out: BTreeSet<(Runner, String)>,
+    steam_ops: gpui_kit::Entity<crate::steam_library::SteamLibraryOps>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -159,10 +167,12 @@ impl AccountsView {
     pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         crate::i18n::register();
         let m = models(cx).clone();
+        let steam_ops = crate::steam_library::steam_library_ops(cx);
         let subscriptions = vec![
             cx.observe(&m.accounts, |this, _, cx| this.rebuild(cx)),
             cx.observe(&m.library, |this, _, cx| this.rebuild(cx)),
             cx.observe(&m.settings, |this, _, cx| this.rebuild(cx)),
+            cx.observe(&steam_ops, |_, _, cx| cx.notify()),
         ];
         let mut this = Self {
             cards: Vec::new(),
@@ -170,6 +180,7 @@ impl AccountsView {
             online: true,
             refreshing: BTreeSet::new(),
             logging_out: BTreeSet::new(),
+            steam_ops,
             _subscriptions: subscriptions,
         };
         this.rebuild(cx);
@@ -720,10 +731,18 @@ impl AccountsView {
                 .into_any_element()
         };
         let detail = if runner.has_optional_account() && !card_data.hidden {
+            let reading = self.steam_ops.read(cx).reading;
             v_flex()
                 .gap_3()
                 .child(detail)
                 .child(self.render_optional_account(card_data, cx))
+                .children(
+                    card_data
+                        .steam_client
+                        .as_ref()
+                        .filter(|s| s.steam_found)
+                        .map(|s| crate::steam_library::render_section(s, reading, cx)),
+                )
                 .into_any_element()
         } else {
             detail
@@ -778,16 +797,35 @@ impl AccountsView {
                         )
                         .child(div().text_sm().text_color(muted).child(games))
                         .into_any_element(),
-                    Button::new("optional-logout")
-                        .small()
-                        .ghost()
-                        .icon(IconName::LogOut)
-                        .label(t("manage.accounts.logout"))
-                        .loading(logging_out)
-                        .disabled(logging_out)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.confirm_logout(runner, account.clone(), false, window, cx)
-                        }))
+                    h_flex()
+                        .gap_1()
+                        .when(
+                            runner == Runner::Steam && crate::friends::steam_friends_available(cx),
+                            |row| {
+                                row.child(
+                                    Button::new("optional-friends")
+                                        .small()
+                                        .ghost()
+                                        .icon(IconName::Users)
+                                        .label(t("manage.friends.button"))
+                                        .on_click(|_, window, cx| {
+                                            crate::friends::open_steam_friends_dialog(window, cx)
+                                        }),
+                                )
+                            },
+                        )
+                        .child(
+                            Button::new("optional-logout")
+                                .small()
+                                .ghost()
+                                .icon(IconName::LogOut)
+                                .label(t("manage.accounts.logout"))
+                                .loading(logging_out)
+                                .disabled(logging_out)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.confirm_logout(runner, account.clone(), false, window, cx)
+                                })),
+                        )
                         .into_any_element(),
                 )
             }

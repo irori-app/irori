@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "ミュート",
   "bigpicture.overlay.no_game_sound": "まだ音がありません",
   "bigpicture.overlay.volume_unavailable": "利用できません",
+  "bigpicture.overlay.game_volume_unsupported": "macOS では利用できません",
   "bigpicture.overlay.volume_hint": "左右で音量を変更、{button} でミュートします。",
   "bigpicture.overlay.audio_failed": "音量を変更できません: {error}",
   "bigpicture.overlay.screenshot": "スクリーンショットを撮る",

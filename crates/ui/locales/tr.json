@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Bulut",
   "ui.saves.conflict_description": "Kayıtlar son eşitlemeden bu yana hem bu cihazda hem de bulutta değişti. Korumadığınız kayıtların yerine diğerleri yazılır.",
   "ui.saves.conflict_title": "“{title}” için hangi kayıtları korumak istiyorsunuz?",
+  "ui.saves.download_failed_title": "“{title}” kayıtları indirilemedi",
+  "ui.saves.download_failed_description": "Bulutta bu cihazdakinden daha yeni kayıtlar olabilir. Yeniden deneyin ya da şimdi bu cihazdaki kayıtlarla oynayın.",
+  "ui.saves.try_again": "Yeniden dene",
+  "ui.saves.play_anyway": "Yine de oyna",
   "ui.saves.keep_cloud": "Buluttakileri koru",
   "ui.saves.keep_local": "Bu cihazdakileri koru",
   "ui.saves.no_saves": "Kayıt yok",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Playnite’ta gizli.",
   "ui.playnite.reason.no_install_folder": "Playnite bunun için bir kurulum klasörü bilmiyor, bu yüzden Irori ne zaman çalıştığını anlayamaz.",
   "ui.playnite.reason.folder_missing": "Kurulum klasörü yok: {path}",
-  "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları"
+  "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları",
+  "ui.copies.title": "Kopyalar",
+  "ui.copies.open": "{store} kopyasını aç",
+  "ui.copies.make_default": "Bu kopyayı varsayılan yap",
+  "ui.copies.separate": "Bu kopyayı ayrı göster",
+  "ui.copies.separate_all": "Her kopyayı ayrı göster"
 }

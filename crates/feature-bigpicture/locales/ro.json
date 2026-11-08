@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Fără sunet",
   "bigpicture.overlay.no_game_sound": "Încă fără sunet",
   "bigpicture.overlay.volume_unavailable": "Indisponibil",
+  "bigpicture.overlay.game_volume_unsupported": "Indisponibil pe macOS",
   "bigpicture.overlay.volume_hint": "Stânga și dreapta schimbă volumul; {button} îl oprește.",
   "bigpicture.overlay.audio_failed": "Volumul nu poate fi schimbat: {error}",
   "bigpicture.overlay.screenshot": "Fă o captură de ecran",

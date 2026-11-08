@@ -1,13 +1,15 @@
-//! The in-game overlay (beta, `iroriOverlay.enabled`, Linux for now).
+//! The in-game overlay (beta, `iroriOverlay.enabled`).
 //!
-//! With it on, the controller's Guide button over a game Irori started
-//! opens a panel above the game instead of switching to Big Picture: the
-//! system's and the game's volume, a screenshot, back to Irori and quitting
-//! the game on Home, then the session's screenshots, the game's achievements
-//! and today's journal note, one tab each (LB/RB switch them). Guide, B or
+//! With it on, the controller's Guide button over a game Irori started (or
+//! Ctrl+Shift+O on Windows and macOS, `hotkey`) opens a panel above the
+//! game instead of switching to Big Picture: the system's and the game's
+//! volume, a screenshot, back to Irori and quitting the game on Home, then
+//! the session's screenshots, the game's achievements and today's journal
+//! note, one tab each (LB/RB switch them). Guide, B or
 //! Escape closes it. While it is open the controllers are held from the game
-//! (`gamepad::grab`), so its presses don't reach the game, and a game that
-//! exits closes it.
+//! where the system allows it (`gamepad::grab`, Linux), so its presses don't
+//! reach the game, and a game that exits closes it. What each system offers
+//! is in [`support`].
 //!
 //! It lives in Big Picture because Big Picture owns controller input; the
 //! shell only names it for "Back to Irori" ([`install_show_irori`]). Nothing
@@ -16,7 +18,10 @@
 //! corner one after another (a corner notice while it is closed would need a
 //! polling timer during play).
 
+#[cfg(any(target_os = "macos", windows))]
+mod hotkey;
 pub(crate) mod model;
+pub mod support;
 mod view;
 mod window;
 
@@ -73,9 +78,18 @@ pub fn install_show_irori(show: impl Fn(&mut App) + 'static, cx: &mut App) {
     state(cx).show_irori = Some(Rc::new(show));
 }
 
+/// Start the overlay's keyboard shortcut where the system has one (see
+/// `hotkey`). Call once after `irori_ui::init`.
+pub fn install(cx: &mut App) {
+    #[cfg(any(target_os = "macos", windows))]
+    hotkey::install(cx);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let _ = cx;
+}
+
 /// Whether the overlay is turned on and this system has it.
 pub fn enabled(cx: &App) -> bool {
-    cfg!(target_os = "linux")
+    support::Support::current().available
         && cx
             .try_global::<irori_ui::Models>()
             .is_some_and(|m| m.settings.read(cx).app.overlay.enabled)
@@ -113,6 +127,25 @@ pub fn open(cx: &mut App) {
     let Some(game) = running_game(cx) else {
         return;
     };
+    if window::covered_by_exclusive_fullscreen() {
+        // Nothing can show above it, and a window coming up could take the
+        // game out of fullscreen: say so instead, for after the game.
+        tracing::info!("the in-game overlay can't cover a game in exclusive fullscreen");
+        irori_ui::backend(cx).bus.notice(
+            irori_core::Notice::new(
+                irori_core::NoticeLevel::Warning,
+                "The overlay can't show over this game",
+            )
+            .message("It runs in exclusive fullscreen; switch it to borderless or windowed.")
+            .keys(
+                "shell.notice.overlay_fullscreen",
+                Some("shell.notice.overlay_fullscreen_message"),
+                &[],
+            )
+            .game(game),
+        );
+        return;
+    }
     let opened = window::open(cx, |window, cx| {
         let game = game.clone();
         cx.new(|cx| OverlayView::new(game, window, cx))

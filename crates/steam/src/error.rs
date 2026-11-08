@@ -21,6 +21,11 @@ pub enum SteamError {
     /// does not.
     #[error("Steam no longer accepts the saved sign-in. Sign in to Steam again.")]
     SessionRejected,
+    /// Steam refused to share something with this sign-in (HTTP 401 or 403
+    /// on a call that the sign-in may not make), though the sign-in itself
+    /// still works.
+    #[error("Steam doesn't share this with Irori's sign-in.")]
+    NotShared,
     /// The sign-in attempt being polled ran out or was declined
     /// (`EResult::FileNotFound` (9) or `Expired` (27) while polling).
     #[error("The Steam sign-in attempt has expired or was declined. Start signing in again.")]
@@ -57,7 +62,9 @@ impl SteamError {
             Self::InvalidPassword => Some(5),
             Self::RateLimited => Some(84),
             Self::Other(code) => Some(*code),
-            Self::InvalidCode | Self::SessionRejected | Self::LoginExpired => None,
+            Self::InvalidCode | Self::SessionRejected | Self::NotShared | Self::LoginExpired => {
+                None
+            }
         }
     }
 }

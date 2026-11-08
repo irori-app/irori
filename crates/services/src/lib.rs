@@ -14,6 +14,7 @@ pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
 pub mod capture;
+pub mod copies;
 mod discord;
 mod downloads;
 mod engines;
@@ -70,7 +71,7 @@ pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
-pub use games::{LaunchParams, RunningGame};
+pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
@@ -345,8 +346,8 @@ impl Backend {
             b.run_automatic_updates().await;
         });
 
-        // Rebuild the aggregated library when stores or user data change, or
-        // the user shows or hides a store.
+        // Rebuild the aggregated library when stores or user data change, the
+        // user shows or hides a store, or turns grouping copies on or off.
         let b = self.clone();
         self.spawn(async move {
             let mut rx = b.subscribe();
@@ -354,6 +355,7 @@ impl Backend {
             // Opt-in stores show their account and games only while on.
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
+            let mut copies = b.settings.app().ui.group_copies;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -378,9 +380,10 @@ impl Backend {
                                 b.bus.emit(Event::AccountChanged(runner));
                             }
                         }
-                        if app.ui.stores != shown || now != on {
+                        if app.ui.stores != shown || now != on || app.ui.group_copies != copies {
                             shown = app.ui.stores;
                             on = now;
+                            copies = app.ui.group_copies;
                             b.rebuild_library();
                         }
                     }
@@ -526,8 +529,8 @@ impl Backend {
     }
 
     /// Refresh every logged-in store's catalogue.
-    /// Take stores' own playtime totals (time played in their launchers)
-    /// into Irori's.
+    /// Take stores' own playtime totals and last-played times (time played
+    /// in their launchers) into Irori's.
     async fn sync_store_playtime(&self) {
         for store in self.stores.values().filter(|s| s.is_logged_in()) {
             match store.remote_playtime().await {
@@ -544,6 +547,14 @@ impl Backend {
                 }
                 Ok(_) => {}
                 Err(e) => tracing::warn!("{} playtime: {e:#}", store.runner().store_name()),
+            }
+            match store.remote_last_played().await {
+                Ok(times) if !times.is_empty() => {
+                    self.userdata
+                        .merge_store_last_played(store.runner(), &store.games(), &times);
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!("{} last played: {e:#}", store.runner().store_name()),
             }
         }
     }

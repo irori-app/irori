@@ -21,6 +21,7 @@ use irori_core::{GameId, GameInfo, Runner};
 use irori_library::InstallFilter;
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
+use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
 /// What confirming a palette row does.
@@ -32,9 +33,13 @@ enum PaletteTarget {
     Refresh,
     Random,
     SetUpEmulation,
+    /// The Steam friends window.
+    SteamFriends,
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
+    /// Read the Steam library from the Steam client.
+    SteamClientLibrary,
     /// Set (or with `None` clear) a game's play status.
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
@@ -47,6 +52,8 @@ enum PaletteTarget {
     QuickControls(bool),
     /// Group the library by game mode (`true`) or stop, and show it.
     GroupByMode(bool),
+    /// Group the library by genre (`true`) or stop, and show it.
+    GroupByGenre(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -67,6 +74,8 @@ enum PaletteTarget {
     Sync,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Make the interface larger, smaller or its default size.
+    InterfaceSize(SizeStep),
 }
 
 /// The library's state that its palette commands change.
@@ -77,6 +86,8 @@ struct LibraryCommands<'a> {
     /// Whether the library groups by game mode, while a library view
     /// exists.
     grouped_by_mode: Option<bool>,
+    /// Whether the library groups by genre, while a library view exists.
+    grouped_by_genre: Option<bool>,
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -109,7 +120,9 @@ impl Palette {
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
-    /// on. `stores` have a store window.
+    /// on. `stores` have a store window. `steam_friends`: a Steam account can
+    /// show its friends.
+    #[allow(clippy::too_many_arguments)] // One row source per argument, all needed.
     fn items(
         games: &[Arc<GameInfo>],
         replay: Option<&str>,
@@ -117,11 +130,13 @@ impl Palette {
         library: LibraryCommands<'_>,
         sync: bool,
         stores: &[Runner],
+        steam_friends: bool,
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views,
             layout,
             install,
@@ -279,6 +294,32 @@ impl Palette {
             PaletteTarget::Route(Route::YearInReview(None)),
             targets,
         );
+        for (step, label, icon) in [
+            (
+                SizeStep::Larger,
+                "shell.palette.interface_larger",
+                IconName::ZoomIn,
+            ),
+            (
+                SizeStep::Smaller,
+                "shell.palette.interface_smaller",
+                IconName::ZoomOut,
+            ),
+            (
+                SizeStep::Reset,
+                "shell.palette.interface_reset",
+                IconName::RotateCcw,
+            ),
+        ] {
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.interface_size_keywords")])
+                    .icon(icon),
+                PaletteTarget::InterfaceSize(step),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.storage"))
@@ -297,6 +338,16 @@ impl Palette {
                     .keywords([t("shell.nav.stores")])
                     .icon(IconName::Store),
                 PaletteTarget::OpenStore(runner),
+                targets,
+            );
+        }
+        if steam_friends {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.steam_friends"))
+                    .keywords([t("shell.palette.steam_friends_keywords")])
+                    .icon(IconName::Users),
+                PaletteTarget::SteamFriends,
                 targets,
             );
         }
@@ -399,6 +450,21 @@ impl Palette {
                     ])
                     .icon(IconName::Users),
                 PaletteTarget::GroupByMode(!grouped),
+                targets,
+            );
+        }
+        if let Some(grouped) = grouped_by_genre {
+            let label = if grouped {
+                "shell.palette.ungroup_by_genre"
+            } else {
+                "shell.palette.group_by_genre"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.genre_keywords")])
+                    .icon(IconName::Tag),
+                PaletteTarget::GroupByGenre(!grouped),
                 targets,
             );
         }
@@ -528,6 +594,7 @@ impl Palette {
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
+        let grouped_by_genre = irori_library::groups_by_genre(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -538,21 +605,35 @@ impl Palette {
         let library = LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views: &views,
             layout,
             install,
             favourites,
             quick_controls,
         };
-        let items = Rc::new(Self::items(
+        let mut items = Self::items(
             &games,
             replay.as_deref(),
             open,
             library,
             sync,
             &irori_manage::store_window_stores(cx),
+            irori_manage::steam_friends_available(cx),
             &mut targets,
-        ));
+        );
+        if irori_manage::steam_client_library_state(cx)
+            .is_some_and(|s| s.steam_found && !s.signed_in)
+        {
+            items.push(
+                CommandItem::new()
+                    .label(t("shell.palette.steam_client_library"))
+                    .keywords([t("shell.palette.steam_client_library_keywords")])
+                    .icon(IconName::LibraryBig),
+            );
+            targets.push(PaletteTarget::SteamClientLibrary);
+        }
+        let items = Rc::new(items);
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -605,10 +686,12 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Refresh => irori_ui::models::refresh_library(false, cx),
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
+        PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::OpenStore(runner) => {
             irori_manage::open_store_window(runner, None, window, cx)
         }
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
+        PaletteTarget::SteamClientLibrary => irori_manage::open_steam_library_dialog(window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
@@ -624,6 +707,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
@@ -643,6 +727,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::GroupByMode(on) => {
             irori_library::set_groups_by_mode(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupByGenre(on) => {
+            irori_library::set_groups_by_genre(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
         PaletteTarget::LibraryView(layout) => {
@@ -709,13 +797,14 @@ mod tests {
         let library = LibraryCommands {
             grouped: install.map(|_| false),
             grouped_by_mode: install.map(|_| true),
+            grouped_by_genre: None,
             views: &[],
             layout: LibraryLayout::Grid,
             install,
             favourites,
             quick_controls: quick,
         };
-        Palette::items(&[], None, None, library, false, &[], &mut targets);
+        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
         targets
             .into_iter()
             .filter_map(|t| match t {

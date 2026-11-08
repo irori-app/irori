@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Cloud",
   "ui.saves.conflict_description": "Die Spielstände haben sich seit dem letzten Abgleich auf diesem Gerät und in der Cloud geändert. Die nicht behaltenen werden ersetzt.",
   "ui.saves.conflict_title": "Welche Spielstände von „{title}“ möchtest du behalten?",
+  "ui.saves.download_failed_title": "Spielstände von „{title}“ konnten nicht heruntergeladen werden",
+  "ui.saves.download_failed_description": "In der Cloud könnten neuere Spielstände liegen als auf diesem Gerät. Versuche es erneut oder spiele jetzt mit den Spielständen dieses Geräts.",
+  "ui.saves.try_again": "Erneut versuchen",
+  "ui.saves.play_anyway": "Trotzdem spielen",
   "ui.saves.keep_cloud": "Cloud-Spielstände behalten",
   "ui.saves.keep_local": "Spielstände dieses Geräts behalten",
   "ui.saves.no_saves": "Keine Spielstände",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "In Playnite ausgeblendet.",
   "ui.playnite.reason.no_install_folder": "Playnite kennt keinen Installationsordner dafür, daher kann Irori nicht erkennen, wann es läuft.",
   "ui.playnite.reason.folder_missing": "Sein Installationsordner ist weg: {path}",
-  "ui.import.summary.warnings": "Dateien von {launcher}, die Irori nicht lesen konnte"
+  "ui.import.summary.warnings": "Dateien von {launcher}, die Irori nicht lesen konnte",
+  "ui.copies.title": "Kopien",
+  "ui.copies.open": "Kopie von {store} öffnen",
+  "ui.copies.make_default": "Diese Kopie als Standard verwenden",
+  "ui.copies.separate": "Diese Kopie einzeln anzeigen",
+  "ui.copies.separate_all": "Jede Kopie einzeln anzeigen"
 }

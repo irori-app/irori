@@ -9,6 +9,10 @@
   "ui.saves.cloud": "Nube",
   "ui.saves.conflict_description": "Las partidas cambiaron en este dispositivo y en la nube desde la última sincronización. Las que no conserves se reemplazarán.",
   "ui.saves.conflict_title": "¿Qué partidas guardadas de «{title}» quieres conservar?",
+  "ui.saves.download_failed_title": "No se pudieron descargar las partidas guardadas de «{title}»",
+  "ui.saves.download_failed_description": "Puede que la nube tenga partidas más recientes que este dispositivo. Vuelve a intentarlo o juega ahora con las partidas de este dispositivo.",
+  "ui.saves.try_again": "Reintentar",
+  "ui.saves.play_anyway": "Jugar de todos modos",
   "ui.saves.keep_cloud": "Conservar las de la nube",
   "ui.saves.keep_local": "Conservar las de este dispositivo",
   "ui.saves.no_saves": "Sin partidas",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "Oculto en Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite no conoce su carpeta de instalación, así que Irori no podría saber cuándo se está ejecutando.",
   "ui.playnite.reason.folder_missing": "Su carpeta de instalación ya no existe: {path}",
-  "ui.import.summary.warnings": "Archivos de {launcher} que Irori no pudo leer"
+  "ui.import.summary.warnings": "Archivos de {launcher} que Irori no pudo leer",
+  "ui.copies.title": "Copias",
+  "ui.copies.open": "Abrir la copia de {store}",
+  "ui.copies.make_default": "Usar esta copia de forma predeterminada",
+  "ui.copies.separate": "Mostrar esta copia por separado",
+  "ui.copies.separate_all": "Mostrar cada copia por separado"
 }

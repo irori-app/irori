@@ -9,6 +9,10 @@
   "ui.saves.cloud": "雲端",
   "ui.saves.conflict_description": "自上次同步以來，此裝置和雲端的存檔都已變更。未保留的一方將被取代。",
   "ui.saves.conflict_title": "要保留「{title}」的哪份存檔？",
+  "ui.saves.download_failed_title": "無法下載「{title}」的存檔",
+  "ui.saves.download_failed_description": "雲端的存檔可能比此裝置上的更新。請重試，或現在使用此裝置上的存檔開始遊戲。",
+  "ui.saves.try_again": "重試",
+  "ui.saves.play_anyway": "仍要開始遊戲",
   "ui.saves.keep_cloud": "保留雲端存檔",
   "ui.saves.keep_local": "保留此裝置的存檔",
   "ui.saves.no_saves": "無存檔",
@@ -206,5 +210,10 @@
   "ui.playnite.reason.hidden": "在 Playnite 中已隱藏。",
   "ui.playnite.reason.no_install_folder": "Playnite 不知道它的安裝資料夾，因此 Irori 無法判斷它何時在執行。",
   "ui.playnite.reason.folder_missing": "它的安裝資料夾不見了：{path}",
-  "ui.import.summary.warnings": "Irori 無法讀取的 {launcher} 檔案"
+  "ui.import.summary.warnings": "Irori 無法讀取的 {launcher} 檔案",
+  "ui.copies.title": "副本",
+  "ui.copies.open": "開啟 {store} 上的副本",
+  "ui.copies.make_default": "將此副本設為預設",
+  "ui.copies.separate": "單獨顯示此副本",
+  "ui.copies.separate_all": "分別顯示每個副本"
 }

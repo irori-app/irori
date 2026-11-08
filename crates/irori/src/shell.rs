@@ -66,7 +66,7 @@ impl AppShell {
             let app = &models(cx).settings.read(cx).app;
             (app.start_with_system, app.start_with_system_minimized)
         };
-        crate::autostart::sync(autostart.0, autostart.1);
+        crate::autostart::sync(autostart.0, autostart.1, crate::autostart::Trigger::Start);
         let m = models(cx).clone();
         let nav = navigator(cx);
         let subs = vec![
@@ -116,7 +116,11 @@ impl AppShell {
                 let autostart = (app.start_with_system, app.start_with_system_minimized);
                 if autostart != this.autostart {
                     this.autostart = autostart;
-                    crate::autostart::sync(autostart.0, autostart.1);
+                    crate::autostart::sync(
+                        autostart.0,
+                        autostart.1,
+                        crate::autostart::Trigger::Changed,
+                    );
                 }
             }),
             // Entering or leaving fullscreen.

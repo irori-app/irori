@@ -6,6 +6,7 @@
 //! * [`library`]: owned games, the Steam Family library and store details.
 //! * [`achievements`]: a game's achievements, the account's unlocks and
 //!   their global unlock rates.
+//! * [`friends`]: the account's friends and what they are playing.
 //! * [`assets`]: store art (covers, heroes, logos) for many apps at once.
 //! * [`SteamError`]: the refusals callers act on.
 //!
@@ -18,6 +19,7 @@ mod api;
 pub mod assets;
 pub mod auth;
 mod error;
+pub mod friends;
 pub mod library;
 mod proto;
 
@@ -32,6 +34,7 @@ pub use auth::{
     Tokens,
 };
 pub use error::SteamError;
+pub use friends::PlayerSummary;
 pub use library::{
     AppDetails, Category, Genre, Metacritic, OwnedGame, Platforms, ReleaseDate, Requirements,
     Screenshot, SharedApp, StoreRating,

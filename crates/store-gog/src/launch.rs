@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, bail};
 use serde_json::Value;
 
-use irori_core::process::{CommandSpec, split_args};
+use irori_core::process::{CommandSpec, split_args, split_program_args};
 use irori_core::{
     InstallPlatform, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest, OpContext,
 };
@@ -45,9 +45,10 @@ pub fn launch_options_from_info(info: &GameInfoFile) -> Vec<LaunchOption> {
     if opts.len() < 2 { Vec::new() } else { opts }
 }
 
-/// `--prefer-task <index>` of a launch option, and the remaining arguments.
-pub fn split_option(parameters: &str) -> (Option<usize>, Vec<String>) {
-    let mut args = split_args(parameters);
+/// `--prefer-task <index>` of a launch option, and the remaining arguments,
+/// split with Windows rules for a Windows game.
+pub fn split_option(windows_program: bool, parameters: &str) -> (Option<usize>, Vec<String>) {
+    let mut args = split_program_args(windows_program, parameters);
     let mut task = None;
     if let Some(i) = args.iter().position(|a| a == "--prefer-task")
         && i + 1 < args.len()
@@ -381,11 +382,17 @@ impl GogStore {
             Some(w)
         };
 
+        let windows_program = rec.platform == irori_core::InstallPlatform::Windows;
         let (mut prefer, mut user_args) = match &request.option {
-            Some(LaunchOption::Basic { parameters, .. }) => split_option(parameters),
+            Some(LaunchOption::Basic { parameters, .. }) => {
+                split_option(windows_program, parameters)
+            }
             _ => (None, Vec::new()),
         };
-        user_args.extend(split_args(&request.settings.launcher_args));
+        user_args.extend(split_program_args(
+            windows_program,
+            &request.settings.launcher_args,
+        ));
         user_args.extend(request.extra_args.iter().cloned());
         let mut task_app = app_name.to_string();
         if app_name == CYBERPUNK_ID
@@ -541,10 +548,20 @@ mod tests {
         assert!(task_command(d.path(), InstallPlatform::Windows, None, None).is_err());
 
         assert_eq!(
-            split_option("--prefer-task 3 -dx11"),
+            split_option(false, "--prefer-task 3 -dx11"),
             (Some(3), vec!["-dx11".to_string()])
         );
-        assert_eq!(split_option("-safe"), (None, vec!["-safe".to_string()]));
+        assert_eq!(
+            split_option(false, "-safe"),
+            (None, vec!["-safe".to_string()])
+        );
+        assert_eq!(
+            split_option(true, r"--prefer-task 1 -saves C:\Users\me\saves"),
+            (
+                Some(1),
+                vec!["-saves".to_string(), r"C:\Users\me\saves".into()]
+            )
+        );
     }
 
     #[test]

@@ -85,16 +85,18 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
             out.skipped.push((label, Skip::NoProgram));
             continue;
         }
-        let args = if input.host == HostPlatform::Windows {
+        // Windows runs Windows programs itself.
+        let in_prefix = program.in_prefix && input.host != HostPlatform::Windows;
+        // A program in the prefix is a Windows program and reads Windows
+        // quoting, backslashes included.
+        let args = if input.host == HostPlatform::Windows || in_prefix {
             process::split_windows_args(&program.args)
         } else {
             process::split_args(&program.args)
         };
-        // Windows runs Windows programs itself.
-        let in_prefix = program.in_prefix && input.host != HostPlatform::Windows;
         let file = irori_core::paths::expand_home(path);
         let spec = if !in_prefix {
-            let mut spec = CommandSpec::new(&file)
+            let mut spec = process::program_command(&file)
                 .args(args)
                 .envs(input.identity.clone());
             if let Some(wine) = &input.environment.wine {
@@ -417,6 +419,19 @@ mod tests {
         let started = &plan(&input(&programs, &env)).start[0];
         assert_eq!(argv(&started.spec), ["/usr/bin/wine", "/games/Trainer.exe"]);
         assert!(!started.spec.env.contains_key("PROTON_VERB"));
+
+        let mut p = programs[0].clone();
+        p.args = r"-config C:\Users\me\trainer.ini".into();
+        let started = &plan(&input(std::slice::from_ref(&p), &env)).start[0];
+        assert_eq!(
+            argv(&started.spec),
+            [
+                "/usr/bin/wine",
+                "/games/Trainer.exe",
+                "-config",
+                r"C:\Users\me\trainer.ini"
+            ]
+        );
     }
 
     #[test]

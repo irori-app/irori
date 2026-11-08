@@ -772,5 +772,16 @@
   "library.folder.find_art": "カバーアートをオンラインで探す（PCGamingWiki と Steam）",
   "library.folder.skipped_hint": "インストーラー、アンインストーラー、再頒布パッケージ、クラッシュハンドラーは表示されません。ゲームのプログラムは後で「編集」から変更できます。",
   "library.folder.add_one": "1 本を追加",
-  "library.folder.add_other": "{count} 本を追加"
+  "library.folder.add_other": "{count} 本を追加",
+  "library.toolbar.group.genre": "ジャンル",
+  "library.filters.section.genre": "ジャンル",
+  "library.group.no_genre": "ジャンルなし",
+  "library.menu.combine": "ほかのストアのコピーとまとめる…",
+  "library.combine.hint": "「{title}」のほかのコピーを選んでから、「1 つのゲームにまとめる」を選んでください。",
+  "library.bulk.combine": "1 つのゲームにまとめる",
+  "library.bulk.combine_tooltip": "選んだゲームを、それぞれのストアにある 1 つのゲームのコピーとして表示します",
+  "library.bulk.done.combined": "{count} 本のゲームを 1 つの項目にまとめました",
+  "library.steam_hint.text": "表示されているのはこのコンピューターにインストール済みの Steam ゲームだけです。Irori はサインインせずに、Steam クライアントからライブラリ全体を読み込めます。",
+  "library.steam_hint.action": "Steam ライブラリを読み込む",
+  "library.steam_hint.dismiss": "今はしない"
 }

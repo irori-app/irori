@@ -2779,8 +2779,6 @@ dependencies = [
 [[package]]
 name = "gilrs-core"
 version = "0.6.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc7f0ce6237abcc0523f2a5502b1e3fe5802daaae47ac14e166fe49551301ea9"
 dependencies = [
  "inotify",
  "js-sys",
@@ -4383,6 +4381,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4719,9 +4718,13 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "irori-core",
+ "irori-depot",
  "irori-launchers-data",
  "irori-runtime",
+ "irori-secrets",
+ "irori-xbox-api",
  "parking_lot",
  "serde",
  "serde_json",
@@ -4794,6 +4797,7 @@ dependencies = [
  "irori-runtime",
  "irori-services",
  "irori-steam",
+ "irori-steam-api",
  "irori-ui",
  "qrcode",
  "regex",
@@ -4982,6 +4986,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "which 8.0.6",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
 ]
 
@@ -5054,6 +5059,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "futures",
  "hex",
  "irori-core",
  "irori-depot",
@@ -5068,6 +5074,7 @@ dependencies = [
  "sysinfo 0.39.6",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "url",
  "uuid 1.28.0",
@@ -5131,6 +5138,26 @@ dependencies = [
  "wayland-protocols",
  "windows 0.62.2",
  "x11rb",
+]
+
+[[package]]
+name = "irori-xbox-api"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "irori-depot",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid 1.28.0",
 ]
 
 [[package]]

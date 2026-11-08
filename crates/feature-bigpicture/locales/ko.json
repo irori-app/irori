@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "음소거",
   "bigpicture.overlay.no_game_sound": "아직 소리 없음",
   "bigpicture.overlay.volume_unavailable": "사용할 수 없음",
+  "bigpicture.overlay.game_volume_unsupported": "macOS에서는 사용할 수 없음",
   "bigpicture.overlay.volume_hint": "왼쪽과 오른쪽으로 음량을 바꾸고 {button}(으)로 음소거합니다.",
   "bigpicture.overlay.audio_failed": "음량을 바꿀 수 없습니다: {error}",
   "bigpicture.overlay.screenshot": "스크린샷 찍기",

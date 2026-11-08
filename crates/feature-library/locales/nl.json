@@ -772,5 +772,16 @@
   "library.folder.find_art": "Covers online zoeken (PCGamingWiki en Steam)",
   "library.folder.skipped_hint": "Installatieprogramma’s, verwijderprogramma’s, redistributables en crashhandlers worden niet getoond. Je kunt het programma van een game later wijzigen met Bewerken.",
   "library.folder.add_one": "1 game toevoegen",
-  "library.folder.add_other": "{count} games toevoegen"
+  "library.folder.add_other": "{count} games toevoegen",
+  "library.toolbar.group.genre": "Genre",
+  "library.filters.section.genre": "Genre",
+  "library.group.no_genre": "Geen genre",
+  "library.menu.combine": "Samenvoegen met exemplaren uit andere winkels…",
+  "library.combine.hint": "Kies de andere exemplaren van ‘{title}’ en daarna Samenvoegen tot één game.",
+  "library.bulk.combine": "Samenvoegen tot één game",
+  "library.bulk.combine_tooltip": "De gekozen games tonen als exemplaren van één game, uit hun winkels",
+  "library.bulk.done.combined": "{count} games zijn nu één item",
+  "library.steam_hint.text": "Alleen de Steam-games die hier zijn geïnstalleerd worden getoond. Irori kan je hele Steam-bibliotheek uit de Steam-client lezen, zonder in te loggen.",
+  "library.steam_hint.action": "Steam-bibliotheek lezen",
+  "library.steam_hint.dismiss": "Niet nu"
 }

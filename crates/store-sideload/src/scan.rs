@@ -109,6 +109,41 @@ pub fn scan_folder(root: &Path) -> Vec<FoundGame> {
     found
 }
 
+/// The game one file stands for, when it is a program, a desktop entry, a
+/// Windows shortcut or an app bundle (a file dropped on the library). Other
+/// files (ROMs, documents) are `None`. Reads the disk: call it off the
+/// async runtime.
+pub fn game_of_file(path: &Path) -> Option<FoundGame> {
+    let lower = file_name(path).to_lowercase();
+    if lower.ends_with(".app") && cfg!(target_os = "macos") && path.is_dir() {
+        return Some(app_bundle(path));
+    }
+    if !path.is_file() {
+        return None;
+    }
+    if lower.ends_with(".desktop") {
+        return desktop_entry(path);
+    }
+    if lower.ends_with(".lnk") {
+        return shortcut(path);
+    }
+    // Batch files start a game too when the user picks one, and on Windows
+    // so do the scripts it runs through an interpreter.
+    let script = |exts: &[&str]| exts.iter().any(|e| lower.ends_with(e));
+    let windows_script = script(&[".bat", ".cmd"]) || (cfg!(windows) && script(&[".ps1", ".vbs"]));
+    let platform =
+        program_platform(path).or_else(|| windows_script.then_some(SideloadPlatform::Windows))?;
+    Some(FoundGame {
+        title: pretty_title(&stem(path)),
+        executable: path.to_path_buf(),
+        platform,
+        args: String::new(),
+        install_folder: None,
+        icon: None,
+        kind: FoundKind::Program,
+    })
+}
+
 fn read_dir(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> {
     std::fs::read_dir(dir)
         .into_iter()
@@ -664,6 +699,46 @@ mod tests {
         bytes.resize(size, 0);
         write(path, &bytes);
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn a_dropped_file_is_the_game_it_starts() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(&root.join("Hollow_Knight.exe"), &[0; 16]);
+        let game = game_of_file(&root.join("Hollow_Knight.exe")).unwrap();
+        assert_eq!(game.title, "Hollow Knight");
+        assert_eq!(game.platform, SideloadPlatform::Windows);
+        assert_eq!(game.kind, FoundKind::Program);
+        write(&root.join("start.bat"), b"@echo off");
+        assert_eq!(
+            game_of_file(&root.join("start.bat")).unwrap().platform,
+            SideloadPlatform::Windows
+        );
+        write(&root.join("run.ps1"), b"Write-Host");
+        assert_eq!(game_of_file(&root.join("run.ps1")).is_some(), cfg!(windows));
+        let program = root.join("supertux2");
+        write(&program, &[0; 16]);
+        write(
+            &root.join("supertux.desktop"),
+            format!(
+                "[Desktop Entry]\nType=Application\nName=SuperTux\nExec={} --fullscreen\n",
+                program.display()
+            )
+            .as_bytes(),
+        );
+        let entry = game_of_file(&root.join("supertux.desktop")).unwrap();
+        assert_eq!(entry.title, "SuperTux");
+        assert_eq!(entry.executable, program);
+        assert_eq!(entry.args, "--fullscreen");
+        assert_eq!(entry.kind, FoundKind::DesktopEntry);
+        // ROMs, documents and folders are not programs.
+        write(&root.join("mario.sfc"), &[0; 16]);
+        assert!(game_of_file(&root.join("mario.sfc")).is_none());
+        write(&root.join("readme.txt"), b"hi");
+        assert!(game_of_file(&root.join("readme.txt")).is_none());
+        assert!(game_of_file(root).is_none());
+        assert!(game_of_file(&root.join("gone.exe")).is_none());
     }
 
     #[test]

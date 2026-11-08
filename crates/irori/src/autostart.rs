@@ -6,6 +6,12 @@
 //! The entry is written from the settings at startup and whenever they
 //! change, so it always names the program that is running now (an
 //! AppImage's own file, the Flatpak, the installed program).
+//!
+//! There is one entry per user, and it belongs to the usual Irori. An Irori
+//! with its files elsewhere (`IRORI_HOME`, a portable folder) leaves an entry
+//! it didn't write alone at startup, so a run against a scratch folder never
+//! rewrites or removes the user's real entry. It writes one only when the
+//! user turns the setting on there, and removes only one naming its folder.
 
 #[cfg(any(not(windows), test))]
 use std::path::Path;
@@ -235,8 +241,79 @@ fn windows_run(launch: Option<&Launch>) -> Result<()> {
     }
 }
 
+/// The entry as it is now, if there is one.
+fn current_entry() -> Option<String> {
+    #[cfg(windows)]
+    {
+        windows_registry::CURRENT_USER
+            .open(r"Software\Microsoft\Windows\CurrentVersion\Run")
+            .ok()?
+            .get_string("Irori")
+            .ok()
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::read_to_string(entry_path()?).ok()
+    }
+}
+
+/// The folder this Irori keeps its files in when it isn't the usual one:
+/// `IRORI_HOME`, or the portable folder beside the program.
+fn relocated_root() -> Option<String> {
+    if let Some(home) = std::env::var("IRORI_HOME").ok().filter(|h| !h.is_empty()) {
+        return Some(home);
+    }
+    if irori_core::paths::is_portable() {
+        let exe = std::env::current_exe().ok()?;
+        return Some(exe.parent()?.to_string_lossy().into_owned());
+    }
+    None
+}
+
+/// Why the entry is being brought in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trigger {
+    /// Irori started.
+    Start,
+    /// The user changed the setting in this Irori.
+    Changed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Write,
+    Remove,
+    Leave,
+}
+
+/// What to do with the entry. The usual Irori owns it. One with its files
+/// elsewhere (`relocated` is its folder) acts on an entry naming that folder
+/// and, when the user turns the setting on there, writes its own; otherwise
+/// it leaves the entry as it is.
+fn decide(
+    enabled: bool,
+    trigger: Trigger,
+    relocated: Option<&str>,
+    existing: Option<&str>,
+) -> Action {
+    let wanted = if enabled {
+        Action::Write
+    } else {
+        Action::Remove
+    };
+    let Some(root) = relocated else {
+        return wanted;
+    };
+    let ours = existing.is_some_and(|entry| entry.contains(root));
+    match (trigger, enabled) {
+        _ if ours => wanted,
+        (Trigger::Changed, true) => Action::Write,
+        _ => Action::Leave,
+    }
+}
+
 /// Keep the entry in step with the settings, off the UI thread.
-pub fn sync(enabled: bool, minimized: bool) {
+pub fn sync(enabled: bool, minimized: bool, trigger: Trigger) {
     // Tests must never touch the real autostart entry.
     if cfg!(test) {
         return;
@@ -244,10 +321,12 @@ pub fn sync(enabled: bool, minimized: bool) {
     std::thread::Builder::new()
         .name("irori-autostart".into())
         .spawn(move || {
-            let result = if enabled {
-                Launch::current(minimized).and_then(|l| apply(Some(&l)))
-            } else {
-                apply(None)
+            let relocated = relocated_root();
+            let existing = relocated.as_ref().and_then(|_| current_entry());
+            let result = match decide(enabled, trigger, relocated.as_deref(), existing.as_deref()) {
+                Action::Write => Launch::current(minimized).and_then(|l| apply(Some(&l))),
+                Action::Remove => apply(None),
+                Action::Leave => Ok(()),
             };
             if let Err(e) = result {
                 tracing::warn!("updating the start-with-system entry: {e:#}");
@@ -270,6 +349,42 @@ mod tests {
             },
             env: Vec::new(),
         }
+    }
+
+    #[test]
+    fn relocated_runs_leave_the_users_entry_alone() {
+        use Action::*;
+        use Trigger::*;
+        let real = "Exec=/usr/bin/irori --minimized";
+        let scratch = "Exec=env IRORI_HOME=/tmp/scratch /usr/bin/irori";
+        // The usual Irori owns the entry.
+        assert_eq!(decide(false, Start, None, Some(real)), Remove);
+        assert_eq!(decide(true, Start, None, Some(real)), Write);
+        // A scratch run neither rewrites nor removes the real one at start…
+        assert_eq!(
+            decide(false, Start, Some("/tmp/scratch"), Some(real)),
+            Leave
+        );
+        assert_eq!(decide(true, Start, Some("/tmp/scratch"), Some(real)), Leave);
+        assert_eq!(decide(true, Start, Some("/tmp/scratch"), None), Leave);
+        // …nor removes it when the setting is turned off there.
+        assert_eq!(
+            decide(false, Changed, Some("/tmp/scratch"), Some(real)),
+            Leave
+        );
+        // It acts on its own entry, and writes one when asked to.
+        assert_eq!(
+            decide(true, Changed, Some("/tmp/scratch"), Some(real)),
+            Write
+        );
+        assert_eq!(
+            decide(true, Start, Some("/tmp/scratch"), Some(scratch)),
+            Write
+        );
+        assert_eq!(
+            decide(false, Start, Some("/tmp/scratch"), Some(scratch)),
+            Remove
+        );
     }
 
     #[test]

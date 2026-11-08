@@ -150,7 +150,7 @@ impl Backend {
     /// Setting overrides of every game in the library, or ever seen in it
     /// (the library is still empty while Irori starts).
     fn all_game_overrides(&self) -> Vec<(GameId, GameSettingsOverrides)> {
-        let mut ids: BTreeSet<GameId> = self.library().games.iter().map(|g| g.id()).collect();
+        let mut ids: BTreeSet<GameId> = self.library().all_games().map(|g| g.id()).collect();
         ids.extend(
             self.userdata
                 .snapshot()

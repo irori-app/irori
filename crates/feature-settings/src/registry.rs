@@ -539,11 +539,9 @@ impl FieldSpec {
         }
         // gpu-screen-recorder, which the replay buffer runs, is Linux only.
         // Only Linux desktops let Irori make itself the program for Windows
-        // files (`irori_services::can_open_windows_files_by_default`). The
-        // in-game overlay is Linux only for now.
+        // files (`irori_services::can_open_windows_files_by_default`).
         if (self.path == "panel.replay"
             || self.path.starts_with("iroriReplay.")
-            || self.path.starts_with("iroriOverlay.")
             || self.path == "action.open-windows-files")
             && host != HostPlatform::Linux
         {
@@ -605,10 +603,12 @@ impl FieldSpec {
                 "panel.replay"
                     | "launcherArgs"
                     | "iroriInSunshine"
+                    | "iroriDiscordPresence"
                     | "beforeLaunchScriptPath"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
                     | "iroriLudusaviAutoBackup"
+                    | "iroriLudusaviInterval"
                     | "panel.save-backups"
                     | "panel.artwork"
             )
@@ -905,6 +905,29 @@ const LSFG_FLOW_SCALE: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(100), Verbatim("100%")),
 ];
 
+const LUDUSAVI_INTERVAL: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.ludusavi_interval.0"),
+    ),
+    opt(
+        ChoiceValue::Num(15),
+        Key("settings.option.ludusavi_interval.15"),
+    ),
+    opt(
+        ChoiceValue::Num(30),
+        Key("settings.option.ludusavi_interval.30"),
+    ),
+    opt(
+        ChoiceValue::Num(60),
+        Key("settings.option.ludusavi_interval.60"),
+    ),
+    opt(
+        ChoiceValue::Num(120),
+        Key("settings.option.ludusavi_interval.120"),
+    ),
+];
+
 const REPLAY_SECONDS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Num(15),
@@ -1064,6 +1087,16 @@ const NEEDS_WALLPAPER_COLORS: &[Condition] = &[when(
     true,
     "settings.requires.wallpaper_colors",
 )];
+
+/// The in-game overlay works differently per system (its Windows and macOS
+/// shortcut, the controller grab only Linux has, macOS's system-only volume).
+const OVERLAY_HELP: &str = if cfg!(windows) {
+    "settings.field.overlay.help_windows"
+} else if cfg!(target_os = "macos") {
+    "settings.field.overlay.help_macos"
+} else {
+    "settings.field.overlay.help"
+};
 
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
@@ -1675,7 +1708,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.controller",
         Toggle,
     )
-    .help("settings.field.overlay.help")
+    .help(OVERLAY_HELP)
     .keywords(&[
         "overlay",
         "in-game",
@@ -1843,6 +1876,24 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["badge", "store", "label"]),
+    app(
+        "iroriUi.groupCopies",
+        "settings.field.ui_group_copies.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_group_copies.help")
+    .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
+        "iroriUi.coverCategories",
+        "settings.field.ui_cover_categories.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_cover_categories.help")
+    .keywords(&["category", "categories", "tag", "cover", "label"]),
     app(
         "iroriUi.libraryQuickControls",
         "settings.field.ui_library_quick_controls.label",
@@ -2799,6 +2850,15 @@ pub static FIELDS: &[FieldSpec] = &[
         "exclude",
     ]),
     game_only(
+        "iroriDiscordPresence",
+        "settings.field.discord_presence.label",
+        Launch,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.discord_presence.help")
+    .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
+    game_only(
         "steamRuntime",
         "settings.field.steam_runtime.label",
         Launch,
@@ -2979,6 +3039,18 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Ludusavi"))
     .help("settings.field.ludusavi_auto_backup.help")
     .keywords(&["ludusavi", "backup", "save", "session", "exit"]),
+    game(
+        "iroriLudusaviInterval",
+        "settings.field.ludusavi_interval.label",
+        CloudSaves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_INTERVAL),
+    )
+    .tag(Verbatim("Ludusavi"))
+    .help("settings.field.ludusavi_interval.help")
+    .keywords(&[
+        "ludusavi", "backup", "save", "periodic", "interval", "minutes",
+    ]),
     game_only(
         "panel.save-backups",
         "settings.field.panel_save_backups.label",
@@ -3401,6 +3473,7 @@ mod tests {
             "panel.save-backups",
             "panel.artwork",
             "iroriInSunshine",
+            "iroriDiscordPresence",
         ] {
             assert!(applies(path), "{path}");
         }

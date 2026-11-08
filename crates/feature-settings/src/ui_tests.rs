@@ -161,9 +161,8 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_sections(vec![FieldSection::General], cx));
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
-        // Linux adds the in-game overlay's switch to the controller rows.
-        let controller_rows = if cfg!(target_os = "linux") { 6 } else { 5 };
-        assert_eq!(app_form.read(cx).visible_count(), controller_rows);
+        // The in-game overlay's switch is among the controller rows.
+        assert_eq!(app_form.read(cx).visible_count(), 6);
         assert!(general > 20);
     });
 }

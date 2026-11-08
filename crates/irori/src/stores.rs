@@ -170,6 +170,11 @@ pub fn hooks() -> Hooks {
         open_store_page: Some(Arc::new(|runner, url, window, cx| {
             irori_manage::open_store_window(runner, Some(url), window, cx)
         })),
+        steam_library_hint: Some(irori_ui::hooks::SteamLibraryHint {
+            shown: Arc::new(irori_manage::suggest_steam_client_library),
+            open: Arc::new(irori_manage::open_steam_library_dialog),
+            dismiss: Arc::new(irori_manage::dismiss_steam_client_library_hint),
+        }),
     }
 }
 
@@ -191,6 +196,7 @@ fn import_from_heroic(cx: &mut App) -> gpui_kit::Task<anyhow::Result<ImportSumma
     irori_ui::run(cx, async move {
         let dir = irori_core::paths::heroic_config_dir()
             .ok_or_else(|| anyhow::anyhow!("No Heroic configuration was found"))?;
+        tracing::info!("importing from Heroic's folder {}", dir.display());
         let mut summary = ImportSummary::default();
         let imports = HEROIC_IMPORTS;
         for (name, import) in imports {

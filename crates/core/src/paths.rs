@@ -247,21 +247,101 @@ pub fn expand_home(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// Heroic's config directory, for import. Checks the native and Flatpak locations.
+/// Heroic's config directory, for import: the native or the Flatpak one.
+/// When both exist, the one Heroic wrote to last, so a native folder left
+/// behind after a switch to the Flatpak doesn't hide the Flatpak's games.
 pub fn heroic_config_dir() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
-    [
+    let candidates: Vec<PathBuf> = [
         dirs::config_dir().map(|c| c.join("heroic")),
         Some(home.join(".var/app/com.heroicgameslauncher.hgl/config/heroic")),
     ]
     .into_iter()
     .flatten()
-    .find(|p| p.join("config.json").is_file())
+    .collect();
+    pick_heroic_dir(&candidates)
+}
+
+/// Files Heroic changes as it is used: its settings and window state, the
+/// stores' installs, logins and library caches, and added apps.
+const HEROIC_ACTIVITY: &[&str] = &[
+    "config.json",
+    "store/config.json",
+    "store_cache/gog_library.json",
+    "store_cache/legendary_library.json",
+    "store_cache/nile_library.json",
+    "gog_store/installed.json",
+    "legendaryConfig/legendary/installed.json",
+    "legendaryConfig/legendary/user.json",
+    "nile_config/nile/installed.json",
+    "nile_config/nile/user.json",
+    "sideload_apps/library.json",
+];
+
+/// The Heroic folder (one holding `config.json`) used last; the first one
+/// listed on a tie.
+fn pick_heroic_dir(candidates: &[PathBuf]) -> Option<PathBuf> {
+    let last_used = |dir: &Path| {
+        HEROIC_ACTIVITY
+            .iter()
+            .filter_map(|p| {
+                std::fs::metadata(dir.join(p))
+                    .and_then(|m| m.modified())
+                    .ok()
+            })
+            .max()
+    };
+    let mut best: Option<(&PathBuf, Option<std::time::SystemTime>)> = None;
+    for dir in candidates
+        .iter()
+        .filter(|p| p.join("config.json").is_file())
+    {
+        let used = last_used(dir);
+        if best.as_ref().is_none_or(|(_, b)| used > *b) {
+            best = Some((dir, used));
+        }
+    }
+    best.map(|(dir, _)| dir.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_heroic_folder_used_last_wins() {
+        use std::time::{Duration, SystemTime};
+        let tmp = tempfile::tempdir().unwrap();
+        let native = tmp.path().join("native");
+        let flatpak = tmp.path().join("flatpak");
+        let touch = |path: &Path, age_days: u64| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"{}").unwrap();
+            let when = SystemTime::now() - Duration::from_secs(age_days * 86_400);
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(when)
+                .unwrap();
+        };
+        let both = [native.clone(), flatpak.clone()];
+
+        // Only the Flatpak folder is a Heroic folder.
+        touch(&flatpak.join("config.json"), 1);
+        assert_eq!(pick_heroic_dir(&both), Some(flatpak.clone()));
+
+        // A stale native folder, left after the switch to the Flatpak.
+        touch(&native.join("config.json"), 300);
+        touch(&native.join("gog_store/installed.json"), 300);
+        touch(&flatpak.join("gog_store/installed.json"), 1);
+        assert_eq!(pick_heroic_dir(&both), Some(flatpak.clone()));
+
+        // Back to the native one: its installs changed last.
+        touch(&native.join("legendaryConfig/legendary/installed.json"), 0);
+        assert_eq!(pick_heroic_dir(&both), Some(native.clone()));
+        assert_eq!(pick_heroic_dir(&[]), None);
+    }
 
     #[test]
     fn sanitized_names_stay_in_their_folder() {

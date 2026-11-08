@@ -258,7 +258,7 @@ impl StatsView {
         years.dedup();
         years.reverse();
         self.years = years;
-        let keys: Vec<String> = snapshot.games.iter().map(|g| g.id().key()).collect();
+        let keys: Vec<String> = snapshot.all_games().map(|g| g.id().key()).collect();
         self.backlog = Some(backlog::compute(
             &history,
             &user,

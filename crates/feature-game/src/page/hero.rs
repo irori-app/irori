@@ -125,7 +125,7 @@ impl GamePage {
                 Some(_) => open_page_button(&self.id),
                 None => back_button(cx),
             }))
-            .child(super::caption(store, ink.muted))
+            .child(self.render_store_line(store, cx))
             .child(heading)
             .children(meta.map(|m| div().text_color(ink.muted).line_clamp(2).child(m)))
             .children(tags)
@@ -141,6 +141,40 @@ impl GamePage {
                 );
                 super::menu::rating_submenu(menu, &menu_id, window, cx)
             })
+            .into_any_element()
+    }
+
+    /// The store the page's game is from or, for an entry of several stores'
+    /// copies, a switch between them: each shows its own copy's page, where
+    /// Play, Install and the rest act on that copy.
+    fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
+        let ink = self.ink;
+        let copies = irori_ui::copies::of(&self.id, cx);
+        if copies.len() < 2 {
+            return super::caption(store.to_string(), ink.muted).into_any_element();
+        }
+        h_flex()
+            .gap_1()
+            .flex_wrap()
+            .children(copies.into_iter().map(|copy| {
+                let id = copy.id();
+                let current = id == self.id;
+                Button::new(SharedString::from(format!("game-copy-{}", id.key())))
+                    .xsmall()
+                    .when(current, |b| b.outline())
+                    .when(!current, |b| b.ghost())
+                    .selected(current)
+                    .when(copy.is_installed, |b| b.icon(IconName::HardDrive))
+                    .label(copy.runner().store_name())
+                    .when(!current, |b| {
+                        b.tooltip(irori_ui::copies::open_label(copy.runner().store_name()))
+                    })
+                    .on_click(move |_, _, cx| {
+                        if !current {
+                            irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx)
+                        }
+                    })
+            }))
             .into_any_element()
     }
 

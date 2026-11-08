@@ -28,6 +28,14 @@ pub enum Stream {
     Stderr,
 }
 
+/// A wrapper argument that stands for the command's own variables: when the
+/// command runs, the first one becomes bubblewrap's `--setenv NAME VALUE` for
+/// each of them. A sandbox that starts from an empty environment
+/// (`--clearenv`) puts it among its options, so the game still gets every
+/// variable its launch sets, which are only all known once the store has
+/// built the command.
+pub const LAUNCH_ENV: &str = "--irori-launch-env";
+
 /// A fully specified command line. Built by stores and the runtime, executed
 /// by [`run`] or [`spawn`].
 #[derive(Debug, Clone, Default)]
@@ -38,6 +46,61 @@ pub struct CommandSpec {
     pub env: BTreeMap<String, String>,
     pub env_remove: Vec<String>,
     pub cwd: Option<PathBuf>,
+    /// Whether a console program gets a console window on Windows.
+    pub console: ConsoleWindow,
+}
+
+/// Whether a program started on Windows gets a console window of its own.
+///
+/// Irori is a GUI-subsystem program without a console, so Windows opens a new
+/// console window for every console-subsystem child (`taskkill`, `reg`,
+/// `powershell`, a `.bat` script) unless it is started with
+/// `CREATE_NO_WINDOW`. Programs with a window of their own (most games, their
+/// launchers, installers) ignore the flag. Nothing changes elsewhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConsoleWindow {
+    /// Hidden for [`run`], whose output Irori reads (tools, scripts,
+    /// installers); shown for [`spawn`], which starts games and the programs
+    /// beside them: a console game needs its console to be played.
+    #[default]
+    Auto,
+    /// Never a console window.
+    Hidden,
+    /// A console window for a console program.
+    Shown,
+}
+
+/// How a command is started, which [`ConsoleWindow::Auto`] decides by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Start {
+    /// [`run`]: Irori reads the output and waits.
+    Run,
+    /// [`spawn`]: a game or a program the user started.
+    Spawn,
+}
+
+/// Windows' `CREATE_NO_WINDOW` process creation flag.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Whether `console` started as `start` hides the console window.
+fn hides_console(console: ConsoleWindow, start: Start) -> bool {
+    match console {
+        ConsoleWindow::Hidden => true,
+        ConsoleWindow::Shown => false,
+        ConsoleWindow::Auto => start == Start::Run,
+    }
+}
+
+/// Start `command` without a console window on Windows (see
+/// [`ConsoleWindow`]); for helper programs Irori starts without
+/// [`CommandSpec`]. Does nothing on other systems.
+pub fn hide_console(command: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
 }
 
 impl CommandSpec {
@@ -83,6 +146,12 @@ impl CommandSpec {
         self
     }
 
+    /// Choose whether a console program gets a console window on Windows.
+    pub fn console(mut self, console: ConsoleWindow) -> Self {
+        self.console = console;
+        self
+    }
+
     /// Prefix the command with wrapper programs (`gamemoderun`, `mangohud`, …):
     /// `[w0, w0args.., w1, .., program, args..]`.
     pub fn wrapped(self, wrappers: &[Vec<String>]) -> Self {
@@ -100,7 +169,25 @@ impl CommandSpec {
         }
     }
 
-    fn to_command(&self) -> Result<Command> {
+    /// The arguments as they run: the first [`LAUNCH_ENV`] becomes
+    /// `--setenv NAME VALUE` for each of the command's variables.
+    pub fn expanded_args(&self) -> Vec<OsString> {
+        let mut out = Vec::with_capacity(self.args.len());
+        let mut expanded = false;
+        for a in &self.args {
+            if !expanded && a == LAUNCH_ENV {
+                expanded = true;
+                for (k, v) in &self.env {
+                    out.extend(["--setenv".into(), k.into(), v.into()]);
+                }
+            } else {
+                out.push(a.clone());
+            }
+        }
+        out
+    }
+
+    fn to_command(&self, start: Start) -> Result<Command> {
         let program =
             if cfg!(target_os = "macos") && self.program.extension().is_some_and(|e| e == "app") {
                 crate::platform::bundle_executable(&self.program)?
@@ -108,7 +195,7 @@ impl CommandSpec {
                 self.program.clone()
             };
         let mut cmd = Command::new(program);
-        cmd.args(&self.args);
+        cmd.args(self.expanded_args());
         for key in &self.env_remove {
             cmd.env_remove(key);
         }
@@ -120,8 +207,40 @@ impl CommandSpec {
         // (wine, wineserver children, game processes).
         #[cfg(unix)]
         cmd.process_group(0);
+        if hides_console(self.console, start) {
+            hide_console(cmd.as_std_mut());
+        }
         cmd.kill_on_drop(false);
         Ok(cmd)
+    }
+}
+
+/// The interpreter Windows needs for a script it can't start as a program
+/// (`CreateProcess` starts `.exe`, `.com`, and `.bat`/`.cmd` through Rust's
+/// own handling, but not PowerShell or Windows Script Host files): its
+/// program and the arguments that come before the script's path.
+/// `ExecutionPolicy Bypass` because the user chose this file to run, and
+/// the default policy refuses every unsigned script.
+pub fn windows_script_interpreter(path: &Path) -> Option<(&'static str, &'static [&'static str])> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "ps1" => Some((
+            "powershell.exe",
+            &["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"],
+        )),
+        "vbs" | "vbe" | "js" | "jse" | "wsf" => Some(("wscript.exe", &["//NoLogo"])),
+        _ => None,
+    }
+}
+
+/// A command running `path` on this system: directly, or on Windows through
+/// the interpreter a script needs ([`windows_script_interpreter`]).
+pub fn program_command(path: &Path) -> CommandSpec {
+    match windows_script_interpreter(path).filter(|_| cfg!(windows)) {
+        Some((interpreter, before)) => CommandSpec::new(interpreter)
+            .args(before.iter().copied())
+            .arg(path.as_os_str()),
+        None => CommandSpec::new(path),
     }
 }
 
@@ -201,12 +320,28 @@ pub fn shell_quote(s: &str) -> String {
     }
 }
 
-/// Split a user-entered argument string like a shell would (quotes, escapes).
+/// Split a user-entered argument string like a shell would (quotes, escapes),
+/// with this system's rules. Use it for programs of this system (wrappers,
+/// native games); the arguments of a Windows program go through
+/// [`split_program_args`].
 pub fn split_args(input: &str) -> Vec<String> {
     if cfg!(windows) {
         split_windows_args(input)
     } else {
         split_unix_args(input)
+    }
+}
+
+/// Split the arguments of the program a game starts. A Windows program reads
+/// its command line with Microsoft's rules wherever it runs, Wine and Proton
+/// included, so `windows_program` picks them on Linux and macOS too: Unix
+/// rules would eat the backslashes of an unquoted `C:\Users\me\saves`. Other
+/// programs get this system's rules, as with [`split_args`].
+pub fn split_program_args(windows_program: bool, input: &str) -> Vec<String> {
+    if windows_program {
+        split_windows_args(input)
+    } else {
+        split_args(input)
     }
 }
 
@@ -408,7 +543,7 @@ impl ExecResult {
 /// Run a command to completion, streaming lines and honouring cancellation.
 pub async fn run(spec: &CommandSpec, mut opts: RunOptions) -> Result<ExecResult> {
     tracing::debug!(command = %spec, "run");
-    let mut cmd = spec.to_command()?;
+    let mut cmd = spec.to_command(Start::Run)?;
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if opts.stdin.is_some() {
         Stdio::piped()
@@ -517,7 +652,7 @@ pub fn runs_from(folder: &str, exe: Option<&Path>, cmd: &[String]) -> bool {
 /// memory: stdout/stderr go straight to `log_file` (or are discarded).
 pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
     tracing::info!(command = %spec, "spawn");
-    let mut cmd = spec.to_command()?;
+    let mut cmd = spec.to_command(Start::Spawn)?;
     cmd.stdin(Stdio::null());
     match log_file {
         Some(path) => {
@@ -579,7 +714,9 @@ pub fn kill_group(pid: u32, force: bool) {
 #[cfg(windows)]
 pub async fn terminate(child: &mut Child) {
     if let Some(pid) = child.id() {
-        let _ = Command::new("taskkill.exe")
+        let mut taskkill = std::process::Command::new("taskkill.exe");
+        hide_console(&mut taskkill);
+        let _ = Command::from(taskkill)
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -595,6 +732,7 @@ pub fn kill_group(pid: u32, force: bool) {
     // Spawn off the UI thread; `/T` includes descendants of the game process.
     std::thread::spawn(move || {
         let mut command = std::process::Command::new("taskkill.exe");
+        hide_console(&mut command);
         command.args(["/PID", &pid.to_string(), "/T"]);
         if force {
             command.arg("/F");
@@ -666,6 +804,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn windows_scripts_get_their_interpreter() {
+        let (ps, args) = windows_script_interpreter(Path::new(r"C:\g\Start.PS1")).unwrap();
+        assert_eq!(ps, "powershell.exe");
+        assert_eq!(args, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+        let (ws, args) = windows_script_interpreter(Path::new("run.vbs")).unwrap();
+        assert_eq!((ws, args), ("wscript.exe", &["//NoLogo"][..]));
+        for direct in ["game.exe", "start.bat", "start.cmd", "run.sh", "noext"] {
+            assert!(
+                windows_script_interpreter(Path::new(direct)).is_none(),
+                "{direct}"
+            );
+        }
+        let cmd = program_command(Path::new("/g/start.ps1"));
+        if cfg!(windows) {
+            assert_eq!(cmd.program, PathBuf::from("powershell.exe"));
+            assert_eq!(cmd.args.last(), Some(&OsString::from("/g/start.ps1")));
+        } else {
+            assert_eq!(cmd.program, PathBuf::from("/g/start.ps1"));
+            assert!(cmd.args.is_empty());
+        }
+    }
+
+    #[test]
     fn matches_wine_and_native_command_lines() {
         let folder = r"C:\Program Files (x86)\Diablo IV";
         assert!(runs_from(
@@ -721,6 +882,23 @@ mod tests {
         .unwrap();
         assert_eq!(result.stdout.trim_end(), "present|space value");
         assert_eq!(result.code, Some(7));
+    }
+
+    #[test]
+    fn console_windows_only_for_spawned_programs() {
+        assert!(hides_console(ConsoleWindow::Auto, Start::Run));
+        assert!(!hides_console(ConsoleWindow::Auto, Start::Spawn));
+        assert!(hides_console(ConsoleWindow::Hidden, Start::Spawn));
+        assert!(!hides_console(ConsoleWindow::Shown, Start::Run));
+        assert_eq!(CommandSpec::new("x").console, ConsoleWindow::Auto);
+        // Builds on every system; Windows CI starts hidden programs in
+        // `windows_native_run_and_cancel`.
+        assert!(
+            CommandSpec::new("x")
+                .console(ConsoleWindow::Hidden)
+                .to_command(Start::Spawn)
+                .is_ok()
+        );
     }
 
     #[cfg(windows)]
@@ -858,6 +1036,45 @@ mod tests {
             [r"a\\\b", "de fg", "h"]
         );
         assert_eq!(split_windows_args(r#"a"b"" c d"#), ["ab\" c d"]);
+    }
+
+    #[test]
+    fn the_launch_env_marker_becomes_the_commands_variables() {
+        let spec = CommandSpec::new("bwrap")
+            .args(["--clearenv", LAUNCH_ENV, "--", "game", LAUNCH_ENV])
+            .env("B", "2")
+            .env("A", "1 x");
+        let args: Vec<String> = spec
+            .expanded_args()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "--clearenv",
+                "--setenv",
+                "A",
+                "1 x",
+                "--setenv",
+                "B",
+                "2",
+                "--",
+                "game",
+                LAUNCH_ENV
+            ]
+        );
+        assert_eq!(CommandSpec::new("x").arg("y").expanded_args(), ["y"]);
+    }
+
+    #[test]
+    fn windows_programs_keep_backslashes_on_every_system() {
+        let line = r"-save C:\Users\me\saves -name a\b";
+        assert_eq!(
+            split_program_args(true, line),
+            ["-save", r"C:\Users\me\saves", "-name", r"a\b"]
+        );
+        assert_eq!(split_program_args(false, line), split_args(line));
     }
 
     #[test]

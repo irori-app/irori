@@ -161,6 +161,10 @@ pub struct GameSettings {
     /// games there. Irori-only; set per game.
     #[serde(rename = "iroriInSunshine")]
     pub in_sunshine: bool,
+    /// Show this game on Discord while it runs, when Rich Presence is on.
+    /// Irori-only; set per game.
+    #[serde(rename = "iroriDiscordPresence")]
+    pub discord_presence: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -283,6 +287,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLudusaviAutoBackup")]
     pub ludusavi_auto_backup: bool,
+    /// Also back up the game's saves with Ludusavi every this many minutes
+    /// while it runs; 0 (the default) for never. Irori-only.
+    #[serde(rename = "iroriLudusaviInterval")]
+    pub ludusavi_interval: u32,
     /// The game's title in Ludusavi, when the user corrected the automatic
     /// match; empty for the automatic one. Per game only. Irori-only.
     #[serde(rename = "iroriLudusaviTitle")]
@@ -417,6 +425,7 @@ impl Default for GameSettings {
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
             in_sunshine: true,
+            discord_presence: true,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),
@@ -463,6 +472,7 @@ impl Default for GameSettings {
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
             ludusavi_auto_backup: false,
+            ludusavi_interval: 0,
             ludusavi_title: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
@@ -604,8 +614,8 @@ pub struct AppSettings {
     pub disable_animations: bool,
     #[serde(rename = "discordRPC")]
     pub discord_rpc: bool,
-    /// Discord application ID used for Rich Presence (register one at
-    /// discord.com/developers). Presence is off while empty.
+    /// A Discord application ID of the user's own for Rich Presence,
+    /// replacing [`DISCORD_APPLICATION_ID`]. Empty uses Irori's.
     pub discord_client_id: String,
     #[serde(rename = "disableGOGPresence")]
     pub disable_gog_presence: bool,
@@ -1050,6 +1060,12 @@ pub struct UiPrefs {
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
     pub show_store_badges: bool,
+    /// The game's categories on its cover in the grid (`coverCategories`,
+    /// off unless turned on).
+    pub cover_categories: bool,
+    /// Copies of one game from several stores are one library entry
+    /// (`groupCopies`, on unless turned off).
+    pub group_copies: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1154,6 +1170,32 @@ impl ShownStores {
     }
 }
 
+/// Irori's Discord application (client) ID, which Rich Presence shows as
+/// "Irori". It is public, not a secret: the project owner created the
+/// Discord application "Irori" at discord.com/developers/applications and
+/// copied its Application ID from General Information. Rich Presence's
+/// small image is that application's art asset named `irori` (Rich
+/// Presence → Art Assets). Left empty, Rich Presence stays off unless the
+/// user enters an application ID of their own (`discordClientId`).
+pub const DISCORD_APPLICATION_ID: &str = "1568789394926870640";
+
+impl AppSettings {
+    /// The Discord application Rich Presence speaks for: the user's own, else
+    /// Irori's. `None` while Rich Presence is off or there is no ID at all.
+    pub fn discord_application(&self) -> Option<String> {
+        if !self.discord_rpc {
+            return None;
+        }
+        let own = self.discord_client_id.trim();
+        let id = if own.is_empty() {
+            DISCORD_APPLICATION_ID
+        } else {
+            own
+        };
+        (!id.is_empty()).then(|| id.to_string())
+    }
+}
+
 /// Shader cache room games get unless the user changes it, in GiB.
 pub const DEFAULT_SHADER_CACHE_GIB: u32 = 10;
 
@@ -1191,6 +1233,8 @@ impl Default for UiPrefs {
             library_drawer_width: 26.0,
             reduce_motion: false,
             show_store_badges: true,
+            cover_categories: false,
+            group_copies: true,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1218,12 +1262,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn discord_presence_uses_the_users_application_else_irori() {
+        let mut app = AppSettings::default();
+        assert!(!app.discord_rpc, "Rich Presence is opt-in");
+        assert_eq!(app.discord_application(), None);
+        app.discord_rpc = true;
+        assert_eq!(
+            app.discord_application().as_deref(),
+            Some(DISCORD_APPLICATION_ID).filter(|id| !id.is_empty())
+        );
+        app.discord_client_id = " 123456789012345678 ".into();
+        assert_eq!(
+            app.discord_application().as_deref(),
+            Some("123456789012345678")
+        );
+        let game: GameSettings = serde_json::from_str("{}").unwrap();
+        assert!(game.discord_presence);
+        let json = serde_json::to_value(GameSettings {
+            discord_presence: false,
+            ..GameSettings::default()
+        })
+        .unwrap();
+        assert_eq!(json["iroriDiscordPresence"], false);
+    }
+
+    #[test]
     fn appearance_keys_default_and_round_trip() {
         let ui: UiPrefs = serde_json::from_str("{}").unwrap();
         assert_eq!(ui.density, Density::Comfortable);
         assert_eq!(ui.library_background, LibraryBackground::None);
         assert_eq!(ui.accent_rgb(), None);
         assert!(ui.library_quick_controls);
+        assert!(!ui.cover_categories);
+        assert!(ui.group_copies);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {
@@ -1239,6 +1310,11 @@ mod tests {
         )
         .unwrap();
         assert!(!ui.library_quick_controls);
+        assert!(
+            serde_json::from_str::<UiPrefs>(r#"{"coverCategories":true}"#)
+                .unwrap()
+                .cover_categories
+        );
         assert_eq!(ui.accent_rgb(), Some(0x3a7bff));
         assert_eq!(ui.density, Density::Compact);
         assert_eq!(ui.library_background, LibraryBackground::GameArt);
