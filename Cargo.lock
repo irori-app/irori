@@ -4564,10 +4564,12 @@ dependencies = [
  "serde_yaml_ng",
  "sysinfo 0.39.6",
  "tempfile",
+ "thiserror 2.0.21",
  "time",
  "tokio",
  "tracing",
  "url",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -4997,6 +4999,7 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
+ "sysinfo 0.39.6",
  "tempfile",
  "tokio",
  "tracing",

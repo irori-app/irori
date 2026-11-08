@@ -16,8 +16,8 @@ quick-xml = "0.42"
 sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-# Only this crate reads the Windows registry directly (Gaming Services and the
-# package repository); the version is already in Cargo.lock.
+# Gaming Services and the package repository; irori-extras reads the
+# registry too (Playnite's link), at the same version.
 windows-registry = "0.6"
 
 [dev-dependencies]

@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Geïmporteerd uit {launcher}",
   "ui.import.summary.games": "{found} games in {launcher}: {imported} toegevoegd aan Irori.",
   "ui.import.summary.wine_build": "{launcher} gebruikte {build}, dat hier niet is geïnstalleerd. Kies een andere versie in de instellingen van de game als die niet start.",
+  "ui.import.summary.games_matched": "{found} games in {launcher}: {imported} toegevoegd aan Irori, {matched} waren er al.",
+  "ui.import.reason.store_game_missing": "Het hoort bij {store}, dat Irori zelf toont, maar {store} toont het niet op deze computer.",
+  "ui.playnite.reason.not_installed": "Niet geïnstalleerd in Playnite.",
+  "ui.playnite.reason.hidden": "Verborgen in Playnite.",
+  "ui.playnite.reason.no_install_folder": "Playnite kent geen installatiemap ervoor, dus Irori kan niet zien wanneer het draait.",
+  "ui.playnite.reason.folder_missing": "De installatiemap is verdwenen: {path}",
   "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen"
 }

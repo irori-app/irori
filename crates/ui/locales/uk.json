@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Імпортовано з {launcher}",
   "ui.import.summary.games": "Ігор у {launcher}: {found}. Додано до Irori: {imported}.",
   "ui.import.summary.wine_build": "{launcher} використовував {build}, якого тут немає. Якщо гра не запуститься, виберіть іншу збірку в її налаштуваннях.",
+  "ui.import.summary.games_matched": "Ігор у {launcher}: {found}. Додано до Irori: {imported}, уже були тут: {matched}.",
+  "ui.import.reason.store_game_missing": "Вона належить до {store}, яку Irori показує сам, але {store} не показує її на цьому комп’ютері.",
+  "ui.playnite.reason.not_installed": "Не встановлена в Playnite.",
+  "ui.playnite.reason.hidden": "Прихована в Playnite.",
+  "ui.playnite.reason.no_install_folder": "Playnite не знає її теки встановлення, тож Irori не зможе зрозуміти, коли вона запущена.",
+  "ui.playnite.reason.folder_missing": "Її теку встановлення видалено: {path}",
   "ui.import.summary.warnings": "Файли {launcher}, які Irori не зміг прочитати"
 }

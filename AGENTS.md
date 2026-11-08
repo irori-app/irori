@@ -77,6 +77,7 @@ irori import-heroic                              import Heroic accounts, install
 irori import-lutris                              import Lutris games, categories and playtime (read-only)
 irori import-bottles                             import the programs of every Bottles bottle (read-only)
 irori import-faugus                              import Faugus Launcher's games (read-only)
+irori import-playnite                            import Playnite's games, art and playtime (Windows, read-only)
 irori refresh                                    refresh every library
 irori list [--installed]
 irori info <runner>/<app> [--platform P]
@@ -918,6 +919,19 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
   test; `rusqlite` is built with `bundled` on every OS.
+- **Playnite import** (Windows; `irori-extras::playnite` reads, `crates/irori/src/playnite.rs`
+  applies, its summary is the Lutris one). Playnite is found through the program its
+  `playnite://` link opens (`HKCU\Software\Classes\Playnite\shell\open\command`), a
+  copy without `unins000.exe` being portable, and `DatabasePath` in its `config.json`.
+  `games.db` and `categories.db` are read with `playnite::litedb`, a read-only LiteDB 4
+  (file version 7) page and BSON reader that bounds-checks every offset and link; tests
+  build the file with a writer of that format in the test. Playnite holds the file
+  exclusively while it runs, so the import asks to close it; nothing is written there.
+  Games of stores Irori lists (plugin ids in `STORE_PLUGINS`) are matched by id or
+  install folder; other installed, non-hidden games become added apps with
+  `SideloadApp::launch_link` (`playnite://playnite/start/<id>`): Irori opens the link
+  through the shell and a `GameWatch` follows the processes in the game's folder, and
+  removing one never deletes that folder. Only the discovery is Windows-only.
 - **RetroAchievements.** The ROM library's optional account is a RetroAchievements one
   (`irori-emulation::retro`): username and Web API key through `Store::login`, kept with
   `irori_secrets`, shown and changed on the Emulators page's Achievements tab. Games

@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Importerat från {launcher}",
   "ui.import.summary.games": "{found} spel i {launcher}: {imported} tillagda i Irori.",
   "ui.import.summary.wine_build": "{launcher} använde {build}, som inte är installerat här. Välj en annan version i spelets inställningar om det inte startar.",
+  "ui.import.summary.games_matched": "{found} spel i {launcher}: {imported} tillagda i Irori, {matched} fanns redan.",
+  "ui.import.reason.store_game_missing": "Det hör till {store}, som Irori visar själv, men {store} visar det inte på den här datorn.",
+  "ui.playnite.reason.not_installed": "Inte installerat i Playnite.",
+  "ui.playnite.reason.hidden": "Dolt i Playnite.",
+  "ui.playnite.reason.no_install_folder": "Playnite känner inte till någon installationsmapp för det, så Irori kan inte se när det körs.",
+  "ui.playnite.reason.folder_missing": "Dess installationsmapp är borta: {path}",
   "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa"
 }

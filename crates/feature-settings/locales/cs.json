@@ -1024,6 +1024,8 @@
   "settings.field.action_import_bottles.help": "Přidá programy všech lahví a hry do nich nainstalované, s lahví jako prefixem. Bottles zůstane beze změny.",
   "settings.field.action_import_faugus.label": "Importovat z Faugus Launcher",
   "settings.field.action_import_faugus.help": "Přidá hry z Faugus Launcher s jejich prefixem, verzí Protonu, proměnnými a argumenty. Faugus Launcher zůstane beze změny.",
+  "settings.field.action_import_playnite.label": "Importovat z Playnite",
+  "settings.field.action_import_playnite.help": "Přidá nainstalované hry z Playnite s obaly, pozadími, herní dobou, oblíbenými a kategoriemi; spouští je Playnite. Hry ze Steamu, Epic Games, GOG a dalších obchodů, které Irori zobrazuje, se spárují, místo aby se přidaly podruhé. Nejprve Playnite zavřete; zůstane nedotčen.",
   "settings.field.action_open_windows_files.label": "Otevírat programy pro Windows v Irori",
   "settings.field.action_open_windows_files.help": "Dvojklikem otevřete soubor .exe, .msi, .bat nebo .reg v prefixu Wine hry, kterou vyberete. Irori nahradí program, který tyto soubory otevírá teď, například Wine.",
   "settings.windows_files.done": "Programy pro Windows se teď otevírají v Irori",

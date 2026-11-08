@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Zaimportowano z {launcher}",
   "ui.import.summary.games": "Gry w {launcher}: {found}. Dodano do Irori: {imported}.",
   "ui.import.summary.wine_build": "{launcher} używał {build}, którego tu nie zainstalowano. Jeśli gra się nie uruchomi, wybierz inną wersję w jej ustawieniach.",
+  "ui.import.summary.games_matched": "Gry w {launcher}: {found}. Dodano do Irori: {imported}, już tu były: {matched}.",
+  "ui.import.reason.store_game_missing": "Należy do {store}, który Irori pokazuje sam, ale {store} nie pokazuje jej na tym komputerze.",
+  "ui.playnite.reason.not_installed": "Nie jest zainstalowana w Playnite.",
+  "ui.playnite.reason.hidden": "Ukryta w Playnite.",
+  "ui.playnite.reason.no_install_folder": "Playnite nie zna jej folderu instalacji, więc Irori nie rozpozna, kiedy działa.",
+  "ui.playnite.reason.folder_missing": "Jej folder instalacji zniknął: {path}",
   "ui.import.summary.warnings": "Pliki {launcher}, których Irori nie mógł odczytać"
 }

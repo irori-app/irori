@@ -94,6 +94,9 @@ pub struct SideloadDialog {
     genres: Entity<InputState>,
     platform: SideloadPlatform,
     fullscreen: bool,
+    /// The link another launcher starts the app from (Playnite's games);
+    /// the form doesn't show it, so it is kept as it was.
+    launch_link: Option<String>,
     saving: bool,
     /// Saved successfully (a provisional entry is then kept).
     saved: bool,
@@ -224,6 +227,7 @@ impl SideloadDialog {
                 SideloadPlatform::default()
             },
             fullscreen: existing.launch_fullscreen,
+            launch_link: existing.launch_link.clone(),
             editing,
             title,
             executable,
@@ -418,6 +422,7 @@ impl SideloadDialog {
                 .split(',')
                 .map(str::to_string)
                 .collect(),
+            launch_link: self.launch_link.clone(),
         }
     }
 

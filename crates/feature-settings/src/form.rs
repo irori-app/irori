@@ -184,6 +184,7 @@ pub struct SettingsForm {
     lutris_detected: bool,
     bottles_detected: bool,
     faugus_detected: bool,
+    playnite_detected: bool,
     /// Self-contained panels (controllers, EOS overlay, EGL sync, save sync).
     panels: HashMap<&'static str, AnyView>,
     /// Game target: the game is installed as a native Linux build.
@@ -248,6 +249,7 @@ impl SettingsForm {
             lutris_detected: irori_ui::hooks::lutris_detected(),
             bottles_detected: irori_ui::hooks::bottles_detected(),
             faugus_detected: irori_ui::hooks::faugus_detected(),
+            playnite_detected: irori_extras::playnite::is_installed(),
             panels: HashMap::new(),
             native: false,
             epic_available: crate::stores::epic(cx).is_some(),
@@ -440,6 +442,11 @@ impl SettingsForm {
             }
             if matches!(f.kind, FieldKind::Action(ActionKind::ImportFaugus))
                 && !self.faugus_detected
+            {
+                return false;
+            }
+            if matches!(f.kind, FieldKind::Action(ActionKind::ImportPlaynite))
+                && !self.playnite_detected
             {
                 return false;
             }
@@ -1422,6 +1429,12 @@ impl SettingsForm {
                 window,
                 cx,
             ),
+            ActionKind::ImportPlaynite => self.import_launcher(
+                ActionKind::ImportPlaynite,
+                irori_ui::hooks::import_from_playnite(cx),
+                window,
+                cx,
+            ),
             ActionKind::OpenWindowsFiles => self.open_windows_files(window, cx),
         }
     }
@@ -1519,7 +1532,7 @@ impl SettingsForm {
         cx.notify();
     }
 
-    /// Run a Bottles or Faugus Launcher import and show what it did.
+    /// Run a Bottles, Faugus Launcher or Playnite import and show what it did.
     fn import_launcher(
         &mut self,
         action: ActionKind,
@@ -1744,7 +1757,8 @@ impl SettingsForm {
                     ActionKind::ImportHeroic
                     | ActionKind::ImportLutris
                     | ActionKind::ImportBottles
-                    | ActionKind::ImportFaugus => ("settings.action.import", false),
+                    | ActionKind::ImportFaugus
+                    | ActionKind::ImportPlaynite => ("settings.action.import", false),
                     ActionKind::OpenWindowsFiles => ("settings.action.use_irori", false),
                 };
                 Button::new(id("action"))

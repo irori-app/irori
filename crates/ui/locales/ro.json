@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Importat din {launcher}",
   "ui.import.summary.games": "Jocuri în {launcher}: {found}. Adăugate în Irori: {imported}.",
   "ui.import.summary.wine_build": "{launcher} folosea {build}, care nu este instalat aici. Dacă jocul nu pornește, alege altă versiune în setările lui.",
+  "ui.import.summary.games_matched": "{found} jocuri în {launcher}: {imported} adăugate în Irori, {matched} erau deja aici.",
+  "ui.import.reason.store_game_missing": "Aparține de {store}, pe care Irori îl afișează singur, dar {store} nu îl arată pe acest computer.",
+  "ui.playnite.reason.not_installed": "Nu este instalat în Playnite.",
+  "ui.playnite.reason.hidden": "Ascuns în Playnite.",
+  "ui.playnite.reason.no_install_folder": "Playnite nu îi cunoaște dosarul de instalare, așa că Irori n-ar ști când rulează.",
+  "ui.playnite.reason.folder_missing": "Dosarul său de instalare a dispărut: {path}",
   "ui.import.summary.warnings": "Fișiere {launcher} pe care Irori nu le-a putut citi"
 }

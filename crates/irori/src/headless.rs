@@ -14,6 +14,7 @@ pub const COMMANDS: &[&str] = &[
     "import-lutris",
     "import-bottles",
     "import-faugus",
+    "import-playnite",
     "list",
     "refresh",
     "info",
@@ -30,6 +31,7 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori import-lutris                 Import games, categories and playtime from Lutris
   irori import-bottles                Import the programs of every Bottles bottle
   irori import-faugus                 Import the games of Faugus Launcher
+  irori import-playnite               Import the games and playtime of Playnite (Windows)
   irori refresh                       Refresh every store's library
   irori list [--installed]            List the library
   irori info <runner>/<app> [--platform windows|linux]
@@ -64,6 +66,12 @@ pub fn run(args: &[String]) -> Result<i32> {
                     crate::lutris::import_faugus(&backend, crate::stores::SIDELOAD.get().cloned())
                         .await?;
                 print_launcher_summary("Faugus Launcher", &s);
+                Ok(0)
+            }
+            "import-playnite" => {
+                let s = crate::playnite::import(&backend, crate::stores::SIDELOAD.get().cloned())
+                    .await?;
+                print_launcher_summary("Playnite", &s);
                 Ok(0)
             }
             "refresh" => {
@@ -176,9 +184,21 @@ async fn import_heroic(backend: &Backend) -> Result<i32> {
     accounts(backend)
 }
 
-/// What a Bottles or Faugus Launcher import did, for the terminal.
+/// What a Bottles, Faugus Launcher or Playnite import did, for the terminal.
 fn print_launcher_summary(launcher: &str, s: &irori_ui::hooks::LutrisSummary) {
     println!("{} games in {launcher}: {} imported", s.found, s.imported);
+    if s.matched > 0 {
+        println!("{} already in Irori", s.matched);
+    }
+    if s.favourites + s.categories + s.playtime_games > 0 {
+        println!(
+            "{} favourites, {} category entries, playtime for {} games",
+            s.favourites, s.categories, s.playtime_games
+        );
+    }
+    for (title, store) in &s.store_games {
+        println!("→ {title}: log in to {store} in Irori to see it");
+    }
     for (title, build) in &s.wine_missing {
         println!("! {title}: Wine build {build} isn't installed; it uses your default build");
     }

@@ -193,5 +193,11 @@
   "ui.import.summary.title": "Importováno z {launcher}",
   "ui.import.summary.games": "Her v {launcher}: {found}. Přidáno do Irori: {imported}.",
   "ui.import.summary.wine_build": "{launcher} používal {build}, který tu není nainstalovaný. Pokud se hra nespustí, zvolte v jejím nastavení jinou verzi.",
+  "ui.import.summary.games_matched": "{found} her v {launcher}: {imported} přidáno do Irori, {matched} už tu bylo.",
+  "ui.import.reason.store_game_missing": "Patří do {store}, kterou Irori zobrazuje sám, ale {store} ji na tomto počítači neukazuje.",
+  "ui.playnite.reason.not_installed": "V Playnite není nainstalována.",
+  "ui.playnite.reason.hidden": "V Playnite je skrytá.",
+  "ui.playnite.reason.no_install_folder": "Playnite pro ni nezná instalační složku, takže Irori nepozná, kdy běží.",
+  "ui.playnite.reason.folder_missing": "Její instalační složka zmizela: {path}",
   "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst"
 }

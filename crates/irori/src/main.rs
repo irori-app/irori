@@ -13,6 +13,7 @@ mod lutris;
 mod pages;
 mod palette;
 mod playing;
+mod playnite;
 mod routing;
 mod shell;
 mod sidebar;

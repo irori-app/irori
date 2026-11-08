@@ -163,7 +163,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Your own art for any game:** a cover, background and logo from a file, SteamGridDB
   or one of your screenshots of it, in the game's Artwork settings.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
-  favourites, categories and playtime.
+  favourites, categories and playtime. Bottles, Faugus Launcher and, on Windows,
+  Playnite libraries come along too.
 
 <table>
   <tr>

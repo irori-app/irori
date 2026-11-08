@@ -193,5 +193,11 @@
   "ui.import.summary.title": "已从 {launcher} 导入",
   "ui.import.summary.games": "{launcher} 中有 {found} 款游戏：已将 {imported} 款添加到 Irori。",
   "ui.import.summary.wine_build": "{launcher} 使用的是 {build}，此处未安装。如果游戏无法启动，请在其设置中选择其他版本。",
+  "ui.import.summary.games_matched": "{launcher} 中有 {found} 个游戏：{imported} 个已添加到 Irori，{matched} 个已存在。",
+  "ui.import.reason.store_game_missing": "它属于 Irori 自己列出的 {store}，但这台电脑上的 {store} 没有显示它。",
+  "ui.playnite.reason.not_installed": "未在 Playnite 中安装。",
+  "ui.playnite.reason.hidden": "在 Playnite 中已隐藏。",
+  "ui.playnite.reason.no_install_folder": "Playnite 不知道它的安装文件夹，因此 Irori 无法判断它何时在运行。",
+  "ui.playnite.reason.folder_missing": "它的安装文件夹不见了：{path}",
   "ui.import.summary.warnings": "Irori 无法读取的 {launcher} 文件"
 }

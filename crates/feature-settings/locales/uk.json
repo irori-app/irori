@@ -1024,6 +1024,8 @@
   "settings.field.action_import_bottles.help": "Додає програми всіх пляшок і встановлені в них ігри, з пляшкою як префіксом. Bottles не змінюється.",
   "settings.field.action_import_faugus.label": "Імпорт із Faugus Launcher",
   "settings.field.action_import_faugus.help": "Додає ігри з Faugus Launcher з їхнім префіксом, версією Proton, змінними й аргументами. Faugus Launcher не змінюється.",
+  "settings.field.action_import_playnite.label": "Імпортувати з Playnite",
+  "settings.field.action_import_playnite.help": "Додає встановлені ігри Playnite з обкладинками, фонами, часом у грі, обраним і категоріями; запускає їх Playnite. Ігри Steam, Epic Games, GOG та інших крамниць, які показує Irori, зіставляються, а не додаються вдруге. Спершу закрийте Playnite; він лишається без змін.",
   "settings.field.action_open_windows_files.label": "Відкривати програми Windows в Irori",
   "settings.field.action_open_windows_files.help": "Двічі клацніть файл .exe, .msi, .bat або .reg, щоб відкрити його в префіксі Wine вибраної гри. Irori замінить програму, яка відкриває ці файли зараз, наприклад Wine.",
   "settings.windows_files.done": "Програми Windows тепер відкриваються в Irori",
