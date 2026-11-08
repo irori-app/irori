@@ -34,6 +34,8 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori import-playnite               Import the games and playtime of Playnite (Windows)
   irori refresh                       Refresh every store's library
   irori list [--installed]            List the library
+  irori list --json                   Installed games as JSON: folders, programs,
+                                      Wine prefixes and builds (for other tools)
   irori info <runner>/<app> [--platform windows|linux]
                                       Show download size, languages, DLCs and builds
   irori playtime <runner>/<app>       Show recorded playtime (and GOG's server total)
@@ -77,6 +79,11 @@ pub fn run(args: &[String]) -> Result<i32> {
             "refresh" => {
                 backend.refresh_all(false).await;
                 println!("{} games", backend.library().len());
+                Ok(0)
+            }
+            "list" if args.iter().any(|a| a == "--json") => {
+                let export = crate::export::collect(&backend).await;
+                println!("{}", serde_json::to_string_pretty(&export)?);
                 Ok(0)
             }
             "list" => list(&backend, args.iter().any(|a| a == "--installed")),

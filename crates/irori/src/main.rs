@@ -6,6 +6,7 @@ mod app_update;
 mod autostart;
 mod cli;
 mod crash;
+mod export;
 mod headless;
 mod import;
 mod instance;

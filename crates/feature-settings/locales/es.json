@@ -582,7 +582,7 @@
   "settings.field.ui_reduce_motion.label": "Reducir movimiento",
   "settings.field.ui_show_store_badges.label": "Mostrar insignias de tienda",
   "settings.field.ui_library_quick_controls.label": "Controles rápidos en la cabecera de la biblioteca",
-  "settings.field.ui_library_quick_controls.help": "Orden, juegos instalados, favoritos y agrupación por estado de juego junto al título de la biblioteca, tantos como quepan en la ventana. El menú de orden y los filtros de la barra de herramientas siguen ahí de todos modos.",
+  "settings.field.ui_library_quick_controls.help": "Juegos instalados y favoritos junto al título de la biblioteca, tantos como quepan en la ventana. Los filtros de la barra de herramientas se mantienen en cualquier caso.",
   "settings.field.ui_system_accent.help": "Tiñe el tema propio de Irori con el color de acento de la configuración del sistema y lo sigue cuando cambia. Un tema elegido de la lista conserva sus propios colores.",
   "settings.field.ui_system_accent.label": "Usar el color de acento del sistema",
   "settings.field.ui_wallpaper_colors.help": "Crea el tema predeterminado con los colores que estas herramientas toman de tu fondo de pantalla y los sigue cada vez que cambia. Un tema elegido de la lista conserva sus propios colores.",

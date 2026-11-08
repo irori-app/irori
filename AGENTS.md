@@ -81,6 +81,7 @@ irori import-faugus                              import Faugus Launcher's games 
 irori import-playnite                            import Playnite's games, art and playtime (Windows, read-only)
 irori refresh                                    refresh every library
 irori list [--installed]
+irori list --json                                installed games as JSON for other tools (`export.rs`, versioned)
 irori info <runner>/<app> [--platform P]
 irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C stops; rerun resumes

@@ -1616,24 +1616,42 @@ impl LibraryView {
                     .loading(refreshing)
                     .on_click(|_, _, cx| irori_ui::models::refresh_library(false, cx)),
             )
-            .when(gog_signed_in, |header| {
-                header.child(
-                    Button::new("library-import-installers")
-                        .outline()
-                        .icon(IconName::FolderInput)
-                        .label(t("library.header.import_installers"))
-                        .tooltip(t("library.header.import_installers_tooltip"))
-                        .on_click(cx.listener(|_, _, _, cx| {
-                            cx.emit(LibraryEvent::RequestImportInstallers)
-                        })),
-                )
-            })
-            .child(
+            .child(if gog_signed_in {
+                // Importing GOG installers is a way to add games, so it lives
+                // in Add game's menu rather than as a header button of its own.
+                let view = cx.entity().downgrade();
                 Button::new("library-add-game")
                     .icon(IconName::Plus)
                     .label(t("library.header.add_game"))
-                    .on_click(|_, window, cx| dialogs::sideload::open_add_game_dialog(window, cx)),
-            );
+                    .dropdown_caret(true)
+                    .dropdown_menu(move |menu, _, _| {
+                        let view = view.clone();
+                        menu.item(
+                            PopupMenuItem::new(t("library.header.add_game_item"))
+                                .icon(Icon::new(IconName::Plus))
+                                .on_click(|_, window, cx| {
+                                    dialogs::sideload::open_add_game_dialog(window, cx)
+                                }),
+                        )
+                        .item(
+                            PopupMenuItem::new(t("library.header.import_installers"))
+                                .icon(Icon::new(IconName::FolderInput))
+                                .on_click(move |_, _, cx| {
+                                    view.update(cx, |_, cx| {
+                                        cx.emit(LibraryEvent::RequestImportInstallers)
+                                    })
+                                    .ok();
+                                }),
+                        )
+                    })
+                    .into_any_element()
+            } else {
+                Button::new("library-add-game")
+                    .icon(IconName::Plus)
+                    .label(t("library.header.add_game"))
+                    .on_click(|_, window, cx| dialogs::sideload::open_add_game_dialog(window, cx))
+                    .into_any_element()
+            });
 
         // `PageHeader`'s layout, except that the title keeps its own width
         // so the quick controls get the room between it and the buttons.

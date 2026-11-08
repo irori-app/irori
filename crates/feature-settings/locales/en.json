@@ -582,7 +582,7 @@
   "settings.field.ui_reduce_motion.label": "Reduce motion",
   "settings.field.ui_show_store_badges.label": "Show store badges",
   "settings.field.ui_library_quick_controls.label": "Quick controls in the library header",
-  "settings.field.ui_library_quick_controls.help": "Sort order, installed games, favourites and grouping by play status beside the library’s title, as many as the window has room for. The toolbar’s sort menu and filters stay either way.",
+  "settings.field.ui_library_quick_controls.help": "Installed games and favourites beside the library’s title, as many as the window has room for. The toolbar’s filters stay either way.",
   "settings.field.ui_system_accent.help": "Tint Irori's own theme with the accent color from the system settings, and follow it as it changes. A theme picked from the list keeps its own colors.",
   "settings.field.ui_system_accent.label": "Use the system accent color",
   "settings.field.ui_wallpaper_colors.help": "Make the default theme from the colors these tools take from your wallpaper, and follow them each time it changes. A theme picked from the list keeps its own colors.",

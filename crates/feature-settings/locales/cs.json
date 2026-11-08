@@ -582,7 +582,7 @@
   "settings.field.ui_reduce_motion.label": "Omezit pohyb",
   "settings.field.ui_show_store_badges.label": "Zobrazovat štítky obchodů",
   "settings.field.ui_library_quick_controls.label": "Rychlé ovládání v záhlaví knihovny",
-  "settings.field.ui_library_quick_controls.help": "Řazení, nainstalované hry, oblíbené a seskupení podle stavu hraní vedle názvu knihovny, kolik se jich do okna vejde. Nabídka řazení a filtry na panelu nástrojů zůstávají tak jako tak.",
+  "settings.field.ui_library_quick_controls.help": "Nainstalované hry a oblíbené vedle názvu knihovny, tolik, kolik se do okna vejde. Filtry na panelu nástrojů zůstávají v každém případě.",
   "settings.field.ui_system_accent.help": "Obarví vlastní motiv Irori barvou zvýraznění z nastavení systému a sleduje její změny. Motiv vybraný ze seznamu si ponechá vlastní barvy.",
   "settings.field.ui_system_accent.label": "Použít barvu zvýraznění systému",
   "settings.field.ui_wallpaper_colors.help": "Výchozí motiv vytvoří z barev, které tyto nástroje získají z tapety, a sleduje je při každé její změně. Motiv vybraný ze seznamu si ponechá vlastní barvy.",

@@ -582,7 +582,7 @@
   "settings.field.ui_reduce_motion.label": "减少动态效果",
   "settings.field.ui_show_store_badges.label": "显示商店标识",
   "settings.field.ui_library_quick_controls.label": "游戏库标题栏中的快捷控件",
-  "settings.field.ui_library_quick_controls.help": "在游戏库标题旁显示排序、已安装游戏、收藏和按游玩状态分组，窗口放得下多少就显示多少。工具栏的排序菜单和筛选始终保留。",
+  "settings.field.ui_library_quick_controls.help": "在库标题旁显示“已安装”和“收藏”，窗口放得下多少就显示多少。工具栏中的筛选器始终保留。",
   "settings.field.ui_system_accent.help": "用系统设置中的强调色为 Irori 自带主题着色，并随其变化。从列表中选择的主题保留自己的颜色。",
   "settings.field.ui_system_accent.label": "使用系统强调色",
   "settings.field.ui_wallpaper_colors.help": "用这些工具从壁纸中提取的颜色生成默认主题，并在壁纸每次更换时跟随。从列表中选择的主题保留自己的颜色。",
