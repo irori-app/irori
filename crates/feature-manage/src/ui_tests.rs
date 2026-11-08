@@ -539,11 +539,17 @@ fn steam_friends_window_lists_friends_and_offers_only_real_joins(cx: &mut TestAp
         .expect("window opens")
     });
     let mut vcx = VisualTestContext::from_window(handle, cx);
-    vcx.run_until_parked();
-    assert!(
-        vcx.update(|_, cx| view.read(cx).failure()).is_some(),
-        "signed out explains itself"
-    );
+    // The store answers on the backend's runtime, outside the test executor.
+    let mut explained = false;
+    for _ in 0..200 {
+        vcx.run_until_parked();
+        if vcx.update(|_, cx| view.read(cx).failure()).is_some() {
+            explained = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert!(explained, "signed out explains itself");
 
     let friend =
         |steamid: u64, playing: Option<(u32, &str)>, join: Option<FriendLink>| SteamFriend {
