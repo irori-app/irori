@@ -13,8 +13,9 @@ use gpui_kit::component::{ActiveTheme as _, Icon, StyledExt as _, WindowExt as _
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, ObjectFit,
-    ParentElement as _, Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Subscription, Task, Window, div, rems,
+    ParentElement as _, Render, Role, ScrollWheelEvent, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Task, Window,
+    div, rems,
 };
 use irori_core::{Achievement, GameId};
 use irori_services::audio::AudioOutput;
@@ -48,6 +49,10 @@ enum Load<T> {
     Failed(SharedString),
 }
 
+/// Wheel travel, in pixels, that moves the focus one row (as in Big
+/// Picture).
+const WHEEL_STEP: f32 = 60.0;
+
 pub(super) struct OverlayView {
     game: GameId,
     title: SharedString,
@@ -66,6 +71,8 @@ pub(super) struct OverlayView {
     achievements: Load<Arc<Vec<Achievement>>>,
     image_cache: Entity<LruImageCache>,
     _toast_timer: Option<Task<()>>,
+    /// Wheel travel not yet turned into a row (see [`WHEEL_STEP`]).
+    wheel: f32,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -113,6 +120,7 @@ impl OverlayView {
             achievements: Load::Loading,
             image_cache: LruImageCache::new(24, cx),
             _toast_timer: None,
+            wheel: 0.0,
             _tasks: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -344,6 +352,30 @@ impl OverlayView {
         }
     }
 
+    /// Wheel or touchpad travel: vertical moves between rows; sideways
+    /// moves along the screenshots' grid (elsewhere it would change a
+    /// volume, which the wheel shouldn't do by accident).
+    fn on_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview.is_some() || self.nav.confirm().is_some() {
+            return;
+        }
+        let delta = event.delta.pixel_delta(window.line_height());
+        let sideways = self.nav.tab() == Tab::Screenshots
+            && f32::from(delta.x.abs()) > f32::from(delta.y.abs());
+        self.wheel += f32::from(if sideways { delta.x } else { delta.y });
+        while self.wheel.abs() >= WHEEL_STEP {
+            let back = self.wheel > 0.0;
+            self.wheel -= WHEEL_STEP.copysign(self.wheel);
+            let input = match (sideways, back) {
+                (true, true) => GamepadInput::Left,
+                (true, false) => GamepadInput::Right,
+                (false, true) => GamepadInput::Up,
+                (false, false) => GamepadInput::Down,
+            };
+            self.handle(input, window, cx);
+        }
+    }
+
     /// Send sound to the output `step` places from the current one, then
     /// read the outputs and volumes again (the new output has its own).
     fn switch_output(&mut self, step: i32, window: &mut Window, cx: &mut Context<Self>) {
@@ -485,7 +517,10 @@ impl Render for OverlayView {
                     }))
                     .on_action(cx.listener(|this, _: &gamepad::Guide, w, cx| {
                         this.handle(GamepadInput::Guide, w, cx)
-                    }));
+                    }))
+                    .on_scroll_wheel(
+                        cx.listener(|this, e: &ScrollWheelEvent, w, cx| this.on_wheel(e, w, cx)),
+                    );
         }
         let theme = cx.theme();
         root.size_full()

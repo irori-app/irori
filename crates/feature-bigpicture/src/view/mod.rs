@@ -955,13 +955,16 @@ impl BigPictureView {
     }
 
     /// Wheel or touchpad travel: vertical moves between shelves or grid
-    /// rows, horizontal along a shelf.
+    /// rows, horizontal along a shelf. On a game's page and in the quick
+    /// menu it moves through their rows (vertical only: sideways there
+    /// would change a row's value).
     fn on_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.page.is_some() || self.overlay.is_some() || self.look.editor.is_some() {
+        if self.look.editor.is_some() {
             return;
         }
+        let rows_only = self.page.is_some() || self.overlay.is_some();
         let delta = event.delta.pixel_delta(window.line_height());
-        let (amount, along) = if f32::from(delta.x.abs()) > f32::from(delta.y.abs()) {
+        let (amount, along) = if !rows_only && f32::from(delta.x.abs()) > f32::from(delta.y.abs()) {
             (f32::from(delta.x), true)
         } else {
             (f32::from(delta.y), false)
@@ -976,7 +979,7 @@ impl BigPictureView {
                 (false, true) => GamepadInput::Up,
                 (false, false) => GamepadInput::Down,
             };
-            if self.tab == Tab::Library && self.library.focus != LibraryFocus::Grid {
+            if !rows_only && self.tab == Tab::Library && self.library.focus != LibraryFocus::Grid {
                 break;
             }
             self.on_input(input, window, cx);

@@ -69,6 +69,28 @@ mod platform {
     }
 }
 
+/// A name `pactl` gives, unless it is empty or PipeWire's "(null)".
+fn shown_name(v: Option<&Value>) -> Option<&str> {
+    v.and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|d| !d.is_empty() && *d != "(null)")
+}
+
+/// The outputs in `pactl list sinks short`, for `pactl` without JSON: their
+/// names only.
+pub fn parse_sinks_short(text: &str, default: &str) -> Vec<AudioOutput> {
+    text.lines()
+        .filter_map(|line| line.split('\t').nth(1))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(|name| AudioOutput {
+            id: name.to_owned(),
+            name: name.to_owned(),
+            current: name == default.trim(),
+        })
+        .collect()
+}
+
 /// A sound output the overlay can switch to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudioOutput {
@@ -90,12 +112,13 @@ pub fn parse_sinks_json(text: &str, default: &str) -> Option<Vec<AudioOutput>> {
             .iter()
             .filter_map(|sink| {
                 let id = sink.get("name")?.as_str()?.to_owned();
-                let name = sink
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .filter(|d| !d.trim().is_empty())
+                // PipeWire writes "(null)" for outputs without a
+                // description (an AirPlay output, for one); their nickname
+                // says more than the sink's name.
+                let properties = sink.get("properties");
+                let name = shown_name(sink.get("description"))
+                    .or_else(|| shown_name(properties.and_then(|p| p.get("node.nick"))))
                     .unwrap_or(&id)
-                    .trim()
                     .to_owned();
                 Some(AudioOutput {
                     current: id == default.trim(),
@@ -517,16 +540,24 @@ mod tests {
              "description": "Built-in Audio Analog Stereo", "state": "RUNNING"},
             {"index": 61, "name": "bluez_output.AA_BB.1", "description": "  Headphones "},
             {"index": 70, "name": "virtual", "description": ""},
+            {"index": 43, "name": "raop_sink.Mac.local", "description": "(null)",
+             "properties": {"node.nick": "Living room"}},
             {"index": 71}
         ]"#;
         let outputs = parse_sinks_json(json, "bluez_output.AA_BB.1\n").unwrap();
-        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs.len(), 4);
+        assert_eq!(outputs[3].name, "Living room", "PipeWire's (null)");
         assert_eq!(outputs[0].name, "Built-in Audio Analog Stereo");
         assert!(!outputs[0].current);
         assert_eq!(outputs[1].name, "Headphones");
         assert!(outputs[1].current);
         assert_eq!(outputs[2].name, "virtual", "no description: its name");
         assert!(parse_sinks_json("Sink #54", "x").is_none());
+        let short = "43\traop_sink.Mac\tPipeWire\ts16le 2ch 44100Hz\tSUSPENDED\n\
+57\talsa_output.pci\tPipeWire\tfloat32le 2ch 48000Hz\tRUNNING\n";
+        let outputs = parse_sinks_short(short, "alsa_output.pci");
+        assert_eq!(outputs.len(), 2);
+        assert!(outputs[1].current && !outputs[0].current);
     }
 
     const JSON: &str = r#"[

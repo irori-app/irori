@@ -129,6 +129,19 @@ signature changes. A build signed with a Developer ID asks once.
 
 ## Paths and desktop behavior
 
+The main window opens where it was: its size, maximized state and display are saved a
+second after it stops moving (`iroriUi.windowWidth`, `windowHeight`, `windowMaximized`,
+`windowDisplay`, the display's UUID), and its place (`windowX`, `windowY`) where the
+system lets programs place windows. Wayland doesn't, so there the compositor places it.
+A window that no longer fits its display (a smaller TV, a higher scale) or whose
+display is gone opens centred and no larger than the display.
+
+Hidden games can be put behind a PIN (Filters › Hidden, or the palette): until it is
+entered they stay out of the library, search, Big Picture, the palette, the stats page
+and Year in review, `irori list` and Discord's "Playing" (Sunshine never lists hidden
+games). The PIN is a salted, stretched SHA-256 hash in `<config>/hidden-lock.json`,
+written through the encrypted logins store; it hides, it doesn't encrypt.
+
 | Data | Linux | macOS | Windows |
 | --- | --- | --- | --- |
 | Settings/credentials | XDG config / `irori` | `~/Library/Application Support/irori` | RoamingAppData / `irori` |
@@ -471,7 +484,11 @@ LB/RB switch its tabs, A/B and the D-pad or left stick move, and Guide or B clos
 after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down).
 
 - **Home**: the system's volume (the default output) and the game's (its streams
-  together), changed with Left/Right and muted with A; a screenshot; Back to Irori
+  together), changed with Left/Right and muted with A; the sound output, switched
+  with Left/Right or A (Linux: `pactl set-default-sink`, the game's streams moved
+  along; macOS: Core Audio's default output device; Windows: the default device for
+  every role through the undocumented `IPolicyConfig` Windows' own sound settings use);
+  a screenshot; Back to Irori
   (the main window, reopened from the tray if it was closed); quitting the game, which
   asks first with Cancel focused and then stops it as the game page's Stop does.
 - **Screenshots**: what was taken during this session (the screenshot index, with the
@@ -483,8 +500,13 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   needs the keyboard, so click the overlay first.
 
 Unlocks the session made are announced one after another in the overlay's corner, with
-their picture, when it opens (each once per run of Irori). Nothing is announced while
-the overlay is closed: that would need polling the stores during play.
+their picture, when it opens (each once per run of Irori). With "Announce new
+achievements" on (`iroriAchievementNotices`), unlocks are also announced while the
+overlay is closed: during the session Irori reads the game's achievements every minute
+when the game keeps them in its own files (`iroriFileAchievements`) and asks its store
+every three minutes otherwise, and each new unlock raises a notice, which the desktop
+shows as a notification over the game while Irori is in the background. The wheel and
+the touchpad move through the overlay's rows too (sideways only in Screenshots).
 
 Shortcuts that work without opening it, also while the game has the window: Guide + RB
 (R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X

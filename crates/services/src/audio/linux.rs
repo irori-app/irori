@@ -136,8 +136,15 @@ pub(super) async fn change(
 
 pub(super) async fn outputs() -> Result<Vec<AudioOutput>> {
     let default = pactl(&["get-default-sink"]).await.unwrap_or_default();
-    let text = pactl(&["-f", "json", "list", "sinks"]).await?;
-    parse_sinks_json(&text, &default).context("pactl is too old to list the sound outputs")
+    if let Ok(text) = pactl(&["-f", "json", "list", "sinks"]).await
+        && let Some(outputs) = parse_sinks_json(&text, &default)
+    {
+        return Ok(outputs);
+    }
+    Ok(parse_sinks_short(
+        &pactl(&["list", "sinks", "short"]).await?,
+        &default,
+    ))
 }
 
 pub(super) async fn set_output(game: Option<GameProcess>, id: String) -> Result<()> {
