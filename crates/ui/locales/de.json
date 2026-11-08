@@ -215,5 +215,21 @@
   "ui.copies.open": "Kopie von {store} öffnen",
   "ui.copies.make_default": "Diese Kopie als Standard verwenden",
   "ui.copies.separate": "Diese Kopie einzeln anzeigen",
-  "ui.copies.separate_all": "Jede Kopie einzeln anzeigen"
+  "ui.copies.separate_all": "Jede Kopie einzeln anzeigen",
+  "ui.hidden_lock.change_title": "PIN für ausgeblendete Spiele",
+  "ui.hidden_lock.confirm_pin": "Neue PIN wiederholen",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "Mit einer PIN bleiben ausgeblendete Spiele aus Bibliothek, Big Picture, Suche, Statistik und Befehlszeile heraus, bis sie eingegeben wird. Dabei wird nichts verschlüsselt.",
+  "ui.hidden_lock.new_pin": "Neue PIN",
+  "ui.hidden_lock.pin_rule": "Eine PIN hat {count} bis 32 Ziffern",
+  "ui.hidden_lock.pins_differ": "Die beiden PINs stimmen nicht überein",
+  "ui.hidden_lock.remove": "PIN entfernen",
+  "ui.hidden_lock.removed": "Die PIN für ausgeblendete Spiele wurde entfernt",
+  "ui.hidden_lock.save": "PIN speichern",
+  "ui.hidden_lock.saved": "Ausgeblendete Spiele sind jetzt mit einer PIN gesperrt",
+  "ui.hidden_lock.set_title": "Ausgeblendete Spiele mit einer PIN sperren",
+  "ui.hidden_lock.unlock": "Entsperren",
+  "ui.hidden_lock.unlock_description": "Gib die PIN ein, um ausgeblendete Spiele anzuzeigen, bis Irori beendet wird oder du sie wieder sperrst.",
+  "ui.hidden_lock.unlock_title": "Ausgeblendete Spiele anzeigen",
+  "ui.hidden_lock.wrong_pin": "Diese PIN stimmt nicht"
 }

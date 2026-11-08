@@ -187,45 +187,73 @@ pub fn pick_search_result(json: &serde_json::Value, title: &str) -> Option<u64> 
         .map(|h| h.pageid)
 }
 
-/// Page ID from a Cargo query by GOG ID.
-pub fn parse_cargo_page_id(json: &serde_json::Value) -> Option<u64> {
-    let v = json
-        .get("cargoquery")?
-        .get(0)?
-        .get("title")?
-        .get("pageID")?;
-    match v {
-        serde_json::Value::String(s) => s.parse().ok(),
-        serde_json::Value::Number(n) => n.as_u64(),
-        _ => None,
-    }
+/// Whether a page's wikitext names `gog_id` among its GOG.com ids
+/// (`gogcom id`, and `gogcom id side` for editions and packs).
+pub fn names_gog_id(wikitext: &str, gog_id: &str) -> bool {
+    GOG_IDS
+        .captures_iter(wikitext)
+        .any(|c| c[1].split(',').any(|id| id.trim() == gog_id))
+}
+
+static GOG_IDS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?m)^\|gogcom id(?: side)? *= *([0-9, ]+)").unwrap());
+
+/// The pages of a `prop=revisions` answer (`formatversion=2`), as
+/// (page id, wikitext), in the order asked.
+pub fn parse_revisions(json: &serde_json::Value, order: &[u64]) -> Vec<(u64, String)> {
+    let mut pages: Vec<(u64, String)> = json
+        .pointer("/query/pages")
+        .and_then(|p| p.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|page| {
+            let id = page.get("pageid")?.as_u64()?;
+            let text = page.pointer("/revisions/0/slots/main/content")?.as_str()?;
+            Some((id, text.to_owned()))
+        })
+        .collect();
+    pages.sort_by_key(|(id, _)| order.iter().position(|o| o == id).unwrap_or(usize::MAX));
+    pages
 }
 
 /// Look the game up. `Ok(None)` when the wiki has no page for it.
+///
+/// The wiki refuses anonymous Cargo queries ("permissiondenied"), so a GOG
+/// game is found by searching its title and keeping the hit whose infobox
+/// lists its GOG id; the hits' wikitext comes in one request, so this costs
+/// what the lookup by id did.
 pub async fn fetch(title: &str, gog_id: Option<&str>) -> Result<Option<PcGamingWikiInfo>> {
     let title = title.replacen(" -", ":", 1);
-    let mut page_id = None;
-    if let Some(gog) = gog_id.filter(|s| !s.is_empty()) {
-        let url = format!(
-            "{API}?action=cargoquery&tables=Infobox_game&fields=Infobox_game._pageID%3DpageID%2C&where=Infobox_game.GOGcom_ID%20HOLDS%20{}&format=json",
-            util::encode_component(gog)
-        );
-        let json: serde_json::Value = util::get_json(&url, TIMEOUT).await?;
-        page_id = parse_cargo_page_id(&json);
-    }
-    if page_id.is_none() {
-        let url = format!(
-            "{API}?action=query&list=search&srsearch={}&format=json",
-            util::encode_component(&title)
-        );
-        let json: serde_json::Value = util::get_json(&url, TIMEOUT).await?;
-        page_id = pick_search_result(&json, &title);
-    }
-    let Some(page_id) = page_id else {
+    let url = format!(
+        "{API}?action=query&list=search&srsearch={}&srlimit={SEARCH_HITS}&format=json",
+        util::encode_component(&title)
+    );
+    let json: serde_json::Value = util::get_json(&url, TIMEOUT).await?;
+    let Some(best) = pick_search_result(&json, &title) else {
         return Ok(None);
     };
-    let url =
-        format!("{API}?action=parse&format=json&pageid={page_id}&redirects=true&prop=wikitext");
+    if let Some(gog) = gog_id.filter(|s| !s.is_empty()) {
+        let hits = search_hits(&json);
+        let ids = hits
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join("|");
+        let url = format!(
+            "{API}?action=query&prop=revisions&rvprop=content&rvslots=main&pageids={}&format=json&formatversion=2",
+            util::encode_component(&ids)
+        );
+        let json: serde_json::Value = util::get_json(&url, TIMEOUT).await?;
+        let pages = parse_revisions(&json, &hits);
+        let page = pages
+            .iter()
+            .find(|(_, text)| names_gog_id(text, gog))
+            .or_else(|| pages.iter().find(|(id, _)| *id == best));
+        return Ok(page
+            .filter(|(_, text)| !text.is_empty())
+            .map(|(id, text)| parse_wikitext(*id, text)));
+    }
+    let url = format!("{API}?action=parse&format=json&pageid={best}&redirects=true&prop=wikitext");
     let json: serde_json::Value = util::get_json(&url, TIMEOUT).await?;
     let text = json
         .pointer("/parse/wikitext/*")
@@ -234,7 +262,19 @@ pub async fn fetch(title: &str, gog_id: Option<&str>) -> Result<Option<PcGamingW
     if text.is_empty() {
         return Ok(None);
     }
-    Ok(Some(parse_wikitext(page_id, text)))
+    Ok(Some(parse_wikitext(best, text)))
+}
+
+/// How many search hits a GOG game's id is checked against.
+const SEARCH_HITS: usize = 5;
+
+/// Page ids of a search response, in rank order.
+fn search_hits(json: &serde_json::Value) -> Vec<u64> {
+    serde_json::from_value::<SearchResponse>(json.clone())
+        .ok()
+        .and_then(|r| r.query)
+        .map(|q| q.search.iter().map(|h| h.pageid).collect())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -316,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn search_and_cargo() {
+    fn search_hits_rank() {
         let json = serde_json::json!({"query": {"search": [
             {"pageid": 1, "title": "Doom Eternal"}, {"pageid": 2, "title": "DOOM"}]}});
         assert_eq!(pick_search_result(&json, "doom"), Some(2));
@@ -325,11 +365,25 @@ mod tests {
             pick_search_result(&serde_json::json!({"query": {"search": []}}), "x"),
             None
         );
-        let cargo = serde_json::json!({"cargoquery": [{"title": {"pageID": "4242"}}]});
-        assert_eq!(parse_cargo_page_id(&cargo), Some(4242));
-        assert_eq!(
-            parse_cargo_page_id(&serde_json::json!({"cargoquery": []})),
-            None
-        );
+        assert_eq!(search_hits(&json), [1, 2]);
+    }
+
+    #[test]
+    fn a_gog_game_is_the_hit_listing_its_id() {
+        let witcher = "{{Infobox game\n|gogcom id    = 1495134320\n\
+|gogcom id side = 1207664663,1207664643\n|hltb = 1}}";
+        assert!(names_gog_id(witcher, "1495134320"));
+        assert!(names_gog_id(witcher, "1207664643"));
+        assert!(!names_gog_id(witcher, "120766466"));
+        assert!(!names_gog_id("|steam appid  = 1207664663", "1207664663"));
+
+        let json = serde_json::json!({"query": {"pages": [
+            {"pageid": 9, "title": "B", "revisions": [{"slots": {"main": {"content": "b"}}}]},
+            {"pageid": 3, "title": "A", "revisions": [{"slots": {"main": {"content": witcher}}}]},
+            {"pageid": 4, "title": "Missing", "missing": true}
+        ]}});
+        let pages = parse_revisions(&json, &[3, 9]);
+        assert_eq!(pages.iter().map(|p| p.0).collect::<Vec<_>>(), [3, 9]);
+        assert!(names_gog_id(&pages[0].1, "1207664663"));
     }
 }

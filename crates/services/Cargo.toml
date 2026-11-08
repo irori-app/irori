@@ -40,6 +40,10 @@ plist.workspace = true
 # Sunshine's covers: game art turned into the PNG it wants, sent as base64.
 image.workspace = true
 base64.workspace = true
+# The hidden-games PIN: a salted, stretched hash.
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -61,13 +65,19 @@ windows-sys = { version = "0.61", features = [
 # The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI
 # builds.
 windows = { version = "0.62", features = [
+    # The sound outputs' names, for switching the output.
+    "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
 ] }
+# `IPolicyConfig` (switching the sound output) is declared with
+# `windows::core::interface`, whose expansion names this crate.
+windows-core = "0.62"
 
 [dev-dependencies]
 tempfile = "3"

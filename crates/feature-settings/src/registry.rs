@@ -1211,6 +1211,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.check_updates_interval.help")
     .keywords(&["minutes", "update", "frequency"]),
     app(
+        "iroriLaunchersRescan",
+        "settings.field.launchers_rescan.label",
+        General,
+        "settings.group.updates",
+        Text(TextKind::Number { min: 0, max: 1440 }),
+    )
+    .help("settings.field.launchers_rescan.help")
+    .keywords(&[
+        "battle.net",
+        "ea",
+        "ubisoft",
+        "rockstar",
+        "xbox",
+        "launcher",
+        "rescan",
+        "minutes",
+    ]),
+    app(
         "autoUpdateGames",
         "settings.field.auto_update_games.label",
         General,

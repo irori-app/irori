@@ -215,5 +215,21 @@
   "ui.copies.open": "Открыть копию из {store}",
   "ui.copies.make_default": "Сделать эту копию основной",
   "ui.copies.separate": "Показывать эту копию отдельно",
-  "ui.copies.separate_all": "Показывать каждую копию отдельно"
+  "ui.copies.separate_all": "Показывать каждую копию отдельно",
+  "ui.hidden_lock.change_title": "PIN-код скрытых игр",
+  "ui.hidden_lock.confirm_pin": "Повторите новый PIN-код",
+  "ui.hidden_lock.current_pin": "PIN-код",
+  "ui.hidden_lock.description": "С PIN-кодом скрытые игры не видны в библиотеке, Big Picture, поиске, статистике и командной строке, пока его не введут. Ничего не шифруется.",
+  "ui.hidden_lock.new_pin": "Новый PIN-код",
+  "ui.hidden_lock.pin_rule": "PIN-код содержит от {count} до 32 цифр",
+  "ui.hidden_lock.pins_differ": "PIN-коды не совпадают",
+  "ui.hidden_lock.remove": "Удалить PIN-код",
+  "ui.hidden_lock.removed": "PIN-код скрытых игр удалён",
+  "ui.hidden_lock.save": "Сохранить PIN-код",
+  "ui.hidden_lock.saved": "Скрытые игры теперь защищены PIN-кодом",
+  "ui.hidden_lock.set_title": "Заблокировать скрытые игры PIN-кодом",
+  "ui.hidden_lock.unlock": "Разблокировать",
+  "ui.hidden_lock.unlock_description": "Введите PIN-код, чтобы показывать скрытые игры, пока Irori не закроется или вы снова их не заблокируете.",
+  "ui.hidden_lock.unlock_title": "Показать скрытые игры",
+  "ui.hidden_lock.wrong_pin": "Неверный PIN-код"
 }

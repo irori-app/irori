@@ -215,5 +215,21 @@
   "ui.copies.open": "Deschide copia de pe {store}",
   "ui.copies.make_default": "Folosește această copie implicit",
   "ui.copies.separate": "Afișează această copie separat",
-  "ui.copies.separate_all": "Afișează fiecare copie separat"
+  "ui.copies.separate_all": "Afișează fiecare copie separat",
+  "ui.hidden_lock.change_title": "PIN pentru jocurile ascunse",
+  "ui.hidden_lock.confirm_pin": "Repetă PIN-ul nou",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "Cu un PIN, jocurile ascunse nu apar în bibliotecă, Big Picture, căutare, statistici sau linia de comandă până îl introduci. Nu criptează nimic.",
+  "ui.hidden_lock.new_pin": "PIN nou",
+  "ui.hidden_lock.pin_rule": "Un PIN are între {count} și 32 de cifre",
+  "ui.hidden_lock.pins_differ": "Cele două PIN-uri diferă",
+  "ui.hidden_lock.remove": "Elimină PIN-ul",
+  "ui.hidden_lock.removed": "PIN-ul jocurilor ascunse a fost eliminat",
+  "ui.hidden_lock.save": "Salvează PIN-ul",
+  "ui.hidden_lock.saved": "Jocurile ascunse sunt acum protejate de un PIN",
+  "ui.hidden_lock.set_title": "Blochează jocurile ascunse cu un PIN",
+  "ui.hidden_lock.unlock": "Deblochează",
+  "ui.hidden_lock.unlock_description": "Introdu PIN-ul ca să afișezi jocurile ascunse până închizi Irori sau le blochezi din nou.",
+  "ui.hidden_lock.unlock_title": "Afișează jocurile ascunse",
+  "ui.hidden_lock.wrong_pin": "PIN-ul nu este corect"
 }

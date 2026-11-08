@@ -180,7 +180,8 @@ pub async fn collect(backend: &Backend) -> Export {
     let library = backend.library();
     for game in library.all_games() {
         let id = game.id();
-        if !listed(id.runner) || game.is_dlc {
+        // Hidden games behind the PIN stay hidden from other tools too.
+        if !listed(id.runner) || game.is_dlc || backend.concealed(&id) {
             continue;
         }
         let settings = backend.settings.game(&id);

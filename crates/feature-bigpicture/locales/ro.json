@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Jurnal",
   "bigpicture.overlay.system_volume": "Volumul sistemului",
   "bigpicture.overlay.game_volume": "Volumul jocului",
+  "bigpicture.overlay.output": "Ieșire audio",
+  "bigpicture.overlay.output_unavailable": "Indisponibil",
   "bigpicture.overlay.muted": "Fără sunet",
   "bigpicture.overlay.no_game_sound": "Încă fără sunet",
   "bigpicture.overlay.volume_unavailable": "Indisponibil",

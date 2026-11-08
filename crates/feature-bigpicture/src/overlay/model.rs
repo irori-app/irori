@@ -37,15 +37,18 @@ impl Tab {
 pub enum HomeRow {
     SystemVolume,
     GameVolume,
+    /// The sound output: Left and Right switch to the previous and next.
+    Output,
     Screenshot,
     BackToIrori,
     QuitGame,
 }
 
 impl HomeRow {
-    pub const ALL: [HomeRow; 5] = [
+    pub const ALL: [HomeRow; 6] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
+        HomeRow::Output,
         HomeRow::Screenshot,
         HomeRow::BackToIrori,
         HomeRow::QuitGame,
@@ -56,9 +59,26 @@ impl HomeRow {
     }
 
     /// Whether Left and Right change this row's value.
-    pub fn is_volume(self) -> bool {
-        matches!(self, HomeRow::SystemVolume | HomeRow::GameVolume)
+    pub fn adjusts(self) -> bool {
+        matches!(
+            self,
+            HomeRow::SystemVolume | HomeRow::GameVolume | HomeRow::Output
+        )
     }
+}
+
+/// The output `step` places from the current one in `outputs` (by
+/// [`AudioOutput::current`]), wrapping around; `None` with fewer than two.
+pub fn next_output(
+    outputs: &[irori_services::audio::AudioOutput],
+    step: i32,
+) -> Option<&irori_services::audio::AudioOutput> {
+    if outputs.len() < 2 {
+        return None;
+    }
+    let len = outputs.len() as i32;
+    let now = outputs.iter().position(|o| o.current).unwrap_or(0) as i32;
+    outputs.get((now + step).rem_euclid(len) as usize)
 }
 
 /// How many screenshots a row of the Screenshots tab holds.
@@ -202,7 +222,7 @@ impl Nav {
                 let step = if input == Left { -1 } else { 1 };
                 if self.tab == Tab::Home {
                     match HomeRow::at(focus) {
-                        Some(row) if row.is_volume() => Action::Adjust(row, step),
+                        Some(row) if row.adjusts() => Action::Adjust(row, step),
                         _ => Action::None,
                     }
                 } else if columns > 1 {
@@ -349,14 +369,32 @@ mod tests {
             Action::Adjust(HomeRow::GameVolume, -1)
         );
         nav.input(Down, rows);
-        assert_eq!(nav.input(Right, rows), Action::None, "not a volume");
-        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 2));
+        assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Output, 1));
+        nav.input(Down, rows);
+        assert_eq!(nav.input(Right, rows), Action::None, "not a value");
+        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 3));
         for _ in 0..10 {
             nav.input(Down, rows);
         }
         assert_eq!(nav.focus(Tab::Home, rows), rows - 1, "stops at the bottom");
         assert_eq!(nav.input(Back, rows), Action::Close);
         assert_eq!(nav.input(Guide, rows), Action::Close);
+    }
+
+    #[test]
+    fn outputs_cycle_from_the_current_one() {
+        use irori_services::audio::AudioOutput;
+        let out = |id: &str, current: bool| AudioOutput {
+            id: id.into(),
+            name: id.into(),
+            current,
+        };
+        let outputs = [out("a", false), out("b", true), out("c", false)];
+        let id = |o: Option<&AudioOutput>| o.map(|o| o.id.clone());
+        assert_eq!(id(next_output(&outputs, 1)), Some("c".into()));
+        assert_eq!(id(next_output(&outputs, -1)), Some("a".into()));
+        assert_eq!(id(next_output(&outputs, 2)), Some("a".into()), "wraps");
+        assert_eq!(next_output(&outputs[..1], 1), None, "nothing to switch to");
     }
 
     #[test]

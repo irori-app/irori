@@ -215,5 +215,21 @@
   "ui.copies.open": "{store} のコピーを開く",
   "ui.copies.make_default": "このコピーを既定にする",
   "ui.copies.separate": "このコピーを別に表示",
-  "ui.copies.separate_all": "すべてのコピーを別々に表示"
+  "ui.copies.separate_all": "すべてのコピーを別々に表示",
+  "ui.hidden_lock.change_title": "非表示のゲームの PIN",
+  "ui.hidden_lock.confirm_pin": "新しい PIN（確認）",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "PIN を設定すると、入力するまで非表示のゲームはライブラリ、Big Picture、検索、統計、コマンドラインに表示されません。暗号化は行いません。",
+  "ui.hidden_lock.new_pin": "新しい PIN",
+  "ui.hidden_lock.pin_rule": "PIN は {count}〜32 桁の数字です",
+  "ui.hidden_lock.pins_differ": "2 つの PIN が一致しません",
+  "ui.hidden_lock.remove": "PIN を削除",
+  "ui.hidden_lock.removed": "非表示のゲームの PIN を削除しました",
+  "ui.hidden_lock.save": "PIN を保存",
+  "ui.hidden_lock.saved": "非表示のゲームが PIN で保護されました",
+  "ui.hidden_lock.set_title": "非表示のゲームを PIN でロック",
+  "ui.hidden_lock.unlock": "ロック解除",
+  "ui.hidden_lock.unlock_description": "PIN を入力すると、Irori を終了するか再びロックするまで非表示のゲームが表示されます。",
+  "ui.hidden_lock.unlock_title": "非表示のゲームを表示",
+  "ui.hidden_lock.wrong_pin": "PIN が正しくありません"
 }

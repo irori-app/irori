@@ -23,6 +23,7 @@ pub mod file_achievements;
 mod files;
 mod follow;
 mod games;
+pub mod hidden_lock;
 mod hooks;
 mod inhibit;
 pub mod journal;
@@ -41,6 +42,7 @@ pub mod search;
 pub mod sessions;
 pub mod settings;
 pub mod status;
+mod steam_tags;
 pub mod storage;
 mod store_facts;
 pub mod sunshine;
@@ -96,6 +98,14 @@ pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);
 
+/// Whether the third-party launchers' games are due a rescan
+/// (`iroriLaunchersRescan` minutes since the last, while they are listed).
+fn launchers_rescan_due(app: &irori_core::AppSettings, since: Duration) -> bool {
+    app.third_party_launchers
+        && app.launchers_rescan > 0
+        && since >= Duration::from_secs(u64::from(app.launchers_rescan) * 60)
+}
+
 /// Shared handle to the backend. Cheap to clone.
 #[derive(Clone)]
 pub struct Backend(Arc<Inner>);
@@ -107,6 +117,8 @@ pub struct Inner {
     pub userdata: UserDataService,
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
+    steam_tags: steam_tags::SteamTagsService,
+    hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
     library: RwLock<Arc<LibrarySnapshot>>,
@@ -198,6 +210,8 @@ impl Backend {
             userdata: UserDataService::load(bus.clone()),
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
+            steam_tags: steam_tags::SteamTagsService::load(),
+            hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
             library: RwLock::new(Arc::new(LibrarySnapshot::default())),
@@ -412,11 +426,13 @@ impl Backend {
 
     async fn periodic_tasks(&self) {
         let mut since_refresh = Duration::ZERO;
+        let mut since_launchers = Duration::ZERO;
         loop {
             // Connectivity is cheap to probe; library refreshes follow the
             // user's interval.
             tokio::time::sleep(CONNECTIVITY_INTERVAL).await;
             since_refresh += CONNECTIVITY_INTERVAL;
+            since_launchers += CONNECTIVITY_INTERVAL;
             let was_online = self.is_online();
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
@@ -430,8 +446,16 @@ impl Backend {
             let reconnected = online && !was_online;
             if online && (since_refresh >= interval || reconnected) {
                 since_refresh = Duration::ZERO;
+                since_launchers = Duration::ZERO;
                 self.refresh_all(false).await;
                 self.run_automatic_updates().await;
+            } else if launchers_rescan_due(&self.settings.app(), since_launchers) {
+                // The launchers' games are read from local files, so this
+                // runs offline too.
+                since_launchers = Duration::ZERO;
+                if let Err(e) = self.refresh_store(Runner::Launchers, false).await {
+                    tracing::info!("rescanning third-party launchers: {e:#}");
+                }
             }
         }
     }

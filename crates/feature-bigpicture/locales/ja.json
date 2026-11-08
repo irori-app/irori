@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "日記",
   "bigpicture.overlay.system_volume": "システムの音量",
   "bigpicture.overlay.game_volume": "ゲームの音量",
+  "bigpicture.overlay.output": "サウンド出力",
+  "bigpicture.overlay.output_unavailable": "利用できません",
   "bigpicture.overlay.muted": "ミュート",
   "bigpicture.overlay.no_game_sound": "まだ音がありません",
   "bigpicture.overlay.volume_unavailable": "利用できません",

@@ -215,5 +215,21 @@
   "ui.copies.open": "Abrir la copia de {store}",
   "ui.copies.make_default": "Usar esta copia de forma predeterminada",
   "ui.copies.separate": "Mostrar esta copia por separado",
-  "ui.copies.separate_all": "Mostrar cada copia por separado"
+  "ui.copies.separate_all": "Mostrar cada copia por separado",
+  "ui.hidden_lock.change_title": "PIN de los juegos ocultos",
+  "ui.hidden_lock.confirm_pin": "Repite el PIN nuevo",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "Con un PIN, los juegos ocultos no aparecen en la biblioteca, Big Picture, la búsqueda, las estadísticas ni la línea de comandos hasta que lo introduzcas. No cifra nada.",
+  "ui.hidden_lock.new_pin": "PIN nuevo",
+  "ui.hidden_lock.pin_rule": "Un PIN tiene de {count} a 32 dígitos",
+  "ui.hidden_lock.pins_differ": "Los dos PIN no coinciden",
+  "ui.hidden_lock.remove": "Quitar PIN",
+  "ui.hidden_lock.removed": "Se quitó el PIN de los juegos ocultos",
+  "ui.hidden_lock.save": "Guardar PIN",
+  "ui.hidden_lock.saved": "Los juegos ocultos ahora están protegidos con un PIN",
+  "ui.hidden_lock.set_title": "Bloquear los juegos ocultos con un PIN",
+  "ui.hidden_lock.unlock": "Desbloquear",
+  "ui.hidden_lock.unlock_description": "Introduce el PIN para mostrar los juegos ocultos hasta que cierres Irori o vuelvas a bloquearlos.",
+  "ui.hidden_lock.unlock_title": "Mostrar juegos ocultos",
+  "ui.hidden_lock.wrong_pin": "Ese PIN no es correcto"
 }

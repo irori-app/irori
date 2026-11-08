@@ -305,10 +305,12 @@ pub fn show_options(library: &LibrarySnapshot, user: &UserData) -> Vec<Show> {
     if stores.len() > 1 {
         out.extend(stores.into_iter().map(Show::Store));
     }
-    if library
-        .games
-        .iter()
-        .any(|g| user.hidden.contains(&g.id().key()))
+    // Hidden games behind the PIN aren't offered (they unlock on the desktop).
+    if !library.hidden_locked
+        && library
+            .games
+            .iter()
+            .any(|g| user.hidden.contains(&g.id().key()))
     {
         out.push(Show::Hidden);
     }
@@ -347,7 +349,7 @@ pub fn library_games(
                 Show::All => !hidden,
                 Show::Favourites => !hidden && user.favourites.contains(&key),
                 Show::Store(runner) => !hidden && g.runner() == runner,
-                Show::Hidden => hidden,
+                Show::Hidden => hidden && !library.hidden_locked,
             };
             shown && filter.status.keeps(g) && {
                 let title = g.title.to_lowercase();

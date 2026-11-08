@@ -216,7 +216,7 @@ impl StatsView {
         })
         .detach();
         let task = irori_ui::state::run_infallible(cx, async move {
-            Arc::new(History::new(b.sessions(), model::local_day))
+            Arc::new(History::new(b.visible_sessions(), model::local_day))
         });
         cx.spawn(async move |this, cx| {
             if let Some(history) = task.await {

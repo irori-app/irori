@@ -263,6 +263,42 @@ impl Backend {
     /// After a session: ask again (unlocks happen while playing) and, when
     /// the setting is on, announce what the session unlocked.
     pub(crate) async fn after_session_achievements(&self, id: &GameId, title: &str) {
+        self.check_unlocks(id, title).await;
+    }
+
+    /// While a game runs, with `iroriAchievementNotices` on: ask for its
+    /// achievements every so often and announce new unlocks as they happen,
+    /// so they show over the game (a desktop notification while Irori is in
+    /// the background) rather than only after it. Unlocks the game keeps in
+    /// its own files are read every minute; a store is asked every few.
+    pub(crate) async fn watch_achievements_while_playing(
+        &self,
+        id: GameId,
+        title: String,
+        stop: tokio_util::sync::CancellationToken,
+    ) {
+        let mut every = LIVE_FILES;
+        loop {
+            tokio::select! {
+                _ = stop.cancelled() => return,
+                _ = tokio::time::sleep(every) => {}
+            }
+            if !self.settings.app().achievement_notices || !self.is_online() {
+                continue;
+            }
+            every = match self.check_unlocks(&id, &title).await {
+                Some(Source::Files) => LIVE_FILES,
+                Some(Source::Store) => LIVE_STORE,
+                // No achievements to watch: stop asking.
+                None => return,
+            };
+        }
+    }
+
+    /// Ask for `id`'s achievements past every cache, record them and, with
+    /// notices on, announce the unlocks new since the last answer. Returns
+    /// where the answer came from; `None` when nothing answered.
+    async fn check_unlocks(&self, id: &GameId, title: &str) -> Option<Source> {
         let known = self
             .achievement_store
             .current()
@@ -272,37 +308,53 @@ impl Backend {
             .cloned();
         let language = self.settings.app().ui_language.clone();
         // Game files are read afresh every time; a store is asked past its cache.
-        let answer = match self.file_achievements(id, &language).await {
-            Some(answer) => answer,
+        let (answer, source) = match self.file_achievements(id, &language).await {
+            Some(answer) => (answer, Source::Files),
             None => {
-                let Some(store) = self.store(id.runner) else {
-                    return;
-                };
+                let store = self.store(id.runner)?;
                 store.forget_achievements(&id.app_name).await;
-                store.achievements(&id.app_name, &language).await
+                (
+                    store.achievements(&id.app_name, &language).await,
+                    Source::Store,
+                )
             }
         };
         let list = match answer {
             Ok(list) => list,
             Err(e) => {
-                tracing::debug!("achievements of {id} after playing: {e:#}");
-                return;
+                tracing::debug!("achievements of {id}: {e:#}");
+                // A failed request isn't "no achievements": keep watching.
+                return Some(source);
             }
         };
+        if list.is_empty() {
+            return None;
+        }
         let before = self.achievement_store.record(id.key(), &list).await;
         if !self.settings.app().achievement_notices {
-            return;
+            return Some(source);
         }
         // Without an earlier answer every unlock would look new.
-        let Some(before) = known.or(before) else {
-            return;
-        };
+        let before = known.or(before)?;
         let fresh = new_unlocks(&before, &list);
         if let Some(notice) = unlock_notice(id, title, &fresh) {
             self.bus.notice(notice);
         }
+        Some(source)
     }
 }
+
+/// Where a game's achievements were read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Source {
+    Files,
+    Store,
+}
+
+/// How often achievements are read while playing: game files (local) and
+/// store APIs (one request per game, kept polite).
+const LIVE_FILES: std::time::Duration = std::time::Duration::from_secs(60);
+const LIVE_STORE: std::time::Duration = std::time::Duration::from_secs(3 * 60);
 
 /// The notice announcing `fresh` unlocks, if there are any.
 pub fn unlock_notice(id: &GameId, title: &str, fresh: &[&Achievement]) -> Option<Notice> {

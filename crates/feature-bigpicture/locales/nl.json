@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Dagboek",
   "bigpicture.overlay.system_volume": "Systeemvolume",
   "bigpicture.overlay.game_volume": "Spelvolume",
+  "bigpicture.overlay.output": "Geluidsuitvoer",
+  "bigpicture.overlay.output_unavailable": "Niet beschikbaar",
   "bigpicture.overlay.muted": "Gedempt",
   "bigpicture.overlay.no_game_sound": "Nog geen geluid",
   "bigpicture.overlay.volume_unavailable": "Niet beschikbaar",

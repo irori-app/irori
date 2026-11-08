@@ -164,7 +164,10 @@ impl Backend {
     /// game ([`irori_extras::wiki::game_info`], cached for a month). The
     /// wiki's game modes are kept, for games whose store names none.
     pub async fn wiki_info(&self, game: &GameInfo) -> Result<Arc<WikiInfo>> {
-        let info = wiki::game_info(&game.title, &StoreIds::of(game)).await?;
+        let mut ids = StoreIds::of(game);
+        let chosen = self.settings.game(&game.id()).hltb_id;
+        ids.hltb_id = Some(chosen.trim().to_owned()).filter(|c| !c.is_empty());
+        let info = wiki::game_info(&game.title, &ids).await?;
         let modes = info
             .pcgamingwiki
             .as_ref()
@@ -174,6 +177,18 @@ impl Backend {
             self.rebuild_library();
         }
         Ok(info)
+    }
+
+    /// HowLongToBeat's games named like `query`, for "Change match".
+    pub async fn search_hltb(&self, query: &str) -> Result<Vec<wiki::HowLongToBeat>> {
+        wiki::hltb::search(query).await
+    }
+
+    /// Use HowLongToBeat game `hltb_id` for `id`'s times; `Some("none")`
+    /// for none, `None` to find one again on its own.
+    pub fn set_hltb_match(&self, id: &GameId, hltb_id: Option<String>) {
+        self.settings
+            .set_game_value(id, "iroriHltbId", hltb_id.map(serde_json::Value::String));
     }
 
     /// A game's modes as stores and PCGamingWiki tell them, without the

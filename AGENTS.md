@@ -463,6 +463,23 @@ commands without a window.
   notes, and a restore keeps the later-written note of each day. Screens edit them
   through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
   Journal tab).
+- **Steam tags** (`steam_tags.rs`): Steam games' user tags (`GameInfo::store_tags`,
+  strongest first, named in the interface language) from the keyless
+  `IStoreBrowseService/GetItems` and `IStoreService/GetTagList`
+  (`irori_steam_api::tags`), kept in `<cache>/steam-tags.json` (a month per app, a week
+  per language) and asked after a library rebuild only for apps without an answer.
+  The library filters by them (`ViewFilter::tags`, the commonest 30 offered) and
+  searches with `tag:` (`search::tag_key` folds case and punctuation).
+- **Hidden games PIN** (`hidden_lock.rs`, UI `irori_ui::hidden_lock`): with a PIN,
+  `LibrarySnapshot::hidden_locked` holds until it is entered (per run) and every place
+  that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
+  Picture's options, the palette, `visible_sessions` (stats, Year in review),
+  `Backend::concealed` (CLI, Discord). New screens that list games must too.
+- **HowLongToBeat** (`irori-extras::wiki::hltb`): GOG's store box, else PCGamingWiki's
+  HLTB id, else HLTB's site search (a token from `/api/search/site/init`), taken only
+  when a result's folded name is the title (`best_match`). The user's choice
+  ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
+  no match) and part of the wiki cache's file name.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -831,6 +848,9 @@ Other parts:
 
 - `shell.rs` (`AppShell`) owns the window content: title bar, sidebar, pages,
   notices, language/theme/translucency changes, and the "playing" state.
+- `placement.rs` saves the main window's size, place, display (by UUID) and maximized
+  state after it stops moving, and opens it there, kept on screen (`place` is pure and
+  tested; Wayland keeps only size and display).
 - `actions.rs` binds global shortcuts. `ctrl-` becomes `cmd-` on macOS, which also
   gets a native menu.
 - `palette.rs` is the Ctrl/Cmd+K command palette.
@@ -939,7 +959,8 @@ it on every platform, and CI's Windows install test runs it.
   logic in `overlay/model.rs`. While it is open the controllers are grabbed
   (`gamepad/grab.rs`, `EVIOCGRAB`) and read raw (`gamepad/evdev.rs`) on a thread that
   ends with it. Volume is `Backend::audio`/`change_volume` (`services/src/audio/`,
-  `pactl` matched to the game's process group), screenshots `Backend::take_screenshot`
+  `pactl` matched to the game's process group), the output `audio_outputs`/
+  `set_audio_output`, screenshots `Backend::take_screenshot`
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
@@ -1103,6 +1124,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
   launcher's flags or URI; Irori never installs, updates or removes them.
+- **Rescans.** The launchers' local data is read again every `iroriLaunchersRescan`
+  minutes (5 by default, 0 = only on refresh) from the periodic task while
+  `iroriThirdPartyLaunchers` is on, so games installed in a launcher show up on their
+  own. It reads only local files, so it runs offline too.
 - **Sessions follow the game, not the launcher** (`crates/services/src/follow.rs`):
   while such a game runs, services look every 3 s for processes running from its
   install folder; the session ends when they are gone, or when the launcher exits

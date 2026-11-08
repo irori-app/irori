@@ -120,6 +120,8 @@ pub struct FiltersPanel {
     systems: crate::filter::PerRevision<Vec<String>>,
     /// The genres the library's games have, as (key, name).
     genres: crate::filter::PerRevision<Vec<(String, String)>>,
+    /// The commonest store tags, as (key, name).
+    tags: crate::filter::PerRevision<Vec<(String, String)>>,
     _observe: Vec<Subscription>,
 }
 
@@ -129,6 +131,7 @@ impl FiltersPanel {
         Self {
             systems: Default::default(),
             genres: Default::default(),
+            tags: Default::default(),
             _observe: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&library, |_, _, cx| cx.notify()),
@@ -386,6 +389,141 @@ impl FiltersPanel {
         )
     }
 
+    /// One chip per common Steam tag, and any picked ones; several may be
+    /// picked. `None` when no game has a store tag.
+    fn render_tags(&mut self, f: &ViewFilter, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use irori_services::search::tag_key;
+        let snapshot = models(cx).library.read(cx).snapshot.clone();
+        let mut tags = self
+            .tags
+            .get(&snapshot, crate::filter::present_tags)
+            .clone();
+        for picked in &f.tags {
+            let key = tag_key(picked);
+            if !tags.iter().any(|(k, _)| *k == key) {
+                tags.push((key, picked.clone()));
+            }
+        }
+        if tags.is_empty() {
+            return None;
+        }
+        let picked: std::collections::HashSet<String> = f.tags.iter().map(|t| tag_key(t)).collect();
+        Some(
+            v_flex()
+                .gap_2()
+                .child(section(t("library.filters.section.steam_tags")))
+                .child(h_flex().flex_wrap().gap_1().children(tags.into_iter().map(
+                    |(key, name)| {
+                        let selected = picked.contains(&key);
+                        Button::new(SharedString::from(format!("tag-{key}")))
+                            .xsmall()
+                            .outline()
+                            .label(name.clone())
+                            .selected(selected)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let (key, name) = (key.clone(), name.clone());
+                                this.set(
+                                    move |f| {
+                                        let before = f.tags.len();
+                                        f.tags.retain(|t| tag_key(t) != key);
+                                        if f.tags.len() == before {
+                                            f.tags.insert(name);
+                                        }
+                                    },
+                                    cx,
+                                )
+                            }))
+                    },
+                )))
+                .into_any_element(),
+        )
+    }
+
+    /// Hide / show / only hidden games, behind the PIN when one is set, and
+    /// the PIN itself: set it, lock again, or change it.
+    fn render_hidden(
+        &self,
+        f: &ViewFilter,
+        hidden: [(HiddenMode, SharedString); 3],
+        values: [HiddenMode; 3],
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use irori_ui::hidden_lock;
+        let locked = hidden_lock::locked(cx);
+        let pin_set = hidden_lock::pin_set(cx);
+        // While locked the filter can't be showing hidden games, whatever a
+        // saved view says.
+        let shown = if locked { HiddenMode::Hide } else { f.hidden };
+        let model = self.model.clone();
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .justify_between()
+                    .child(section(t("library.filters.section.hidden")))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .when(pin_set && !locked, |row| {
+                                row.child(
+                                    Button::new("hidden-lock")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(IconName::Lock)
+                                        .label(t("library.filters.hidden.lock"))
+                                        .on_click(|_, _, cx| hidden_lock::lock(cx)),
+                                )
+                            })
+                            .when(!locked, |row| {
+                                row.child(
+                                    Button::new("hidden-pin")
+                                        .ghost()
+                                        .xsmall()
+                                        .label(if pin_set {
+                                            t("library.filters.hidden.change_pin")
+                                        } else {
+                                            t("library.filters.hidden.set_pin")
+                                        })
+                                        .on_click(|_, window, cx| {
+                                            hidden_lock::open_pin_dialog(window, cx)
+                                        }),
+                                )
+                            }),
+                    ),
+            )
+            .child(
+                ButtonGroup::new("filter-hidden")
+                    .small()
+                    .outline()
+                    .children(hidden.into_iter().enumerate().map(|(ix, (v, label))| {
+                        Button::new(SharedString::from(format!("hidden-{ix}")))
+                            .label(label)
+                            .when(locked && v != HiddenMode::Hide, |b| b.icon(IconName::Lock))
+                            .selected(shown == v)
+                    }))
+                    .on_click(cx.listener(move |this, clicked: &Vec<usize>, window, cx| {
+                        let Some(&ix) = clicked.first() else {
+                            return;
+                        };
+                        let v = values[ix];
+                        if v == HiddenMode::Hide || !hidden_lock::locked(cx) {
+                            this.set(move |f| f.hidden = v, cx);
+                            return;
+                        }
+                        let model = model.clone();
+                        hidden_lock::open_unlock_dialog(
+                            std::rc::Rc::new(move |_, cx| {
+                                model.update(cx, |m, cx| m.update(|f| f.hidden = v, cx))
+                            }),
+                            window,
+                            cx,
+                        );
+                    })),
+            )
+            .into_any_element()
+    }
+
     /// The age limit: "Any" or the youngest age every rating must allow,
     /// and, with a limit, whether games no board rated are shown.
     fn render_age(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
@@ -443,6 +581,7 @@ impl Render for FiltersPanel {
         let f = self.model.read(cx).filter().clone();
         let systems = self.render_systems(&f, cx);
         let genres = self.render_genres(&f, cx);
+        let tags = self.render_tags(&f, cx);
         let categories: Vec<String> = models(cx)
             .library
             .read(cx)
@@ -566,29 +705,10 @@ impl Render for FiltersPanel {
                             })),
                     ),
             )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(section(t("library.filters.section.hidden")))
-                    .child(
-                        ButtonGroup::new("filter-hidden")
-                            .small()
-                            .outline()
-                            .children(hidden.into_iter().enumerate().map(|(ix, (v, label))| {
-                                Button::new(SharedString::from(format!("hidden-{ix}")))
-                                    .label(label)
-                                    .selected(f.hidden == v)
-                            }))
-                            .on_click(cx.listener(move |this, clicked: &Vec<usize>, _, cx| {
-                                if let Some(&ix) = clicked.first() {
-                                    let v = hidden_values[ix];
-                                    this.set(move |f| f.hidden = v, cx);
-                                }
-                            })),
-                    ),
-            )
+            .child(self.render_hidden(&f, hidden, hidden_values, cx))
             .child(self.render_modes(&f, cx))
             .when_some(genres, |el, genres| el.child(genres))
+            .when_some(tags, |el, tags| el.child(tags))
             .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))

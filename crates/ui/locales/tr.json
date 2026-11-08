@@ -215,5 +215,21 @@
   "ui.copies.open": "{store} kopyasını aç",
   "ui.copies.make_default": "Bu kopyayı varsayılan yap",
   "ui.copies.separate": "Bu kopyayı ayrı göster",
-  "ui.copies.separate_all": "Her kopyayı ayrı göster"
+  "ui.copies.separate_all": "Her kopyayı ayrı göster",
+  "ui.hidden_lock.change_title": "Gizli oyunlar PIN'i",
+  "ui.hidden_lock.confirm_pin": "Yeni PIN'i tekrar girin",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "PIN ile gizli oyunlar, PIN girilene kadar kitaplıkta, Big Picture'da, aramada, istatistiklerde ve komut satırında görünmez. Hiçbir şey şifrelenmez.",
+  "ui.hidden_lock.new_pin": "Yeni PIN",
+  "ui.hidden_lock.pin_rule": "PIN {count} ile 32 rakam arasındadır",
+  "ui.hidden_lock.pins_differ": "İki PIN farklı",
+  "ui.hidden_lock.remove": "PIN'i kaldır",
+  "ui.hidden_lock.removed": "Gizli oyunlar PIN'i kaldırıldı",
+  "ui.hidden_lock.save": "PIN'i kaydet",
+  "ui.hidden_lock.saved": "Gizli oyunlar artık PIN ile korunuyor",
+  "ui.hidden_lock.set_title": "Gizli oyunları PIN ile kilitle",
+  "ui.hidden_lock.unlock": "Kilidi aç",
+  "ui.hidden_lock.unlock_description": "Irori kapanana veya yeniden kilitleyene kadar gizli oyunları göstermek için PIN'i girin.",
+  "ui.hidden_lock.unlock_title": "Gizli oyunları göster",
+  "ui.hidden_lock.wrong_pin": "Bu PIN doğru değil"
 }

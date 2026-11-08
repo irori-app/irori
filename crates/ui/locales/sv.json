@@ -215,5 +215,21 @@
   "ui.copies.open": "Öppna kopian från {store}",
   "ui.copies.make_default": "Gör den här kopian till standard",
   "ui.copies.separate": "Visa den här kopian för sig",
-  "ui.copies.separate_all": "Visa varje kopia för sig"
+  "ui.copies.separate_all": "Visa varje kopia för sig",
+  "ui.hidden_lock.change_title": "Pinkod för dolda spel",
+  "ui.hidden_lock.confirm_pin": "Ny pinkod igen",
+  "ui.hidden_lock.current_pin": "Pinkod",
+  "ui.hidden_lock.description": "Med en pinkod hålls dolda spel borta från biblioteket, Big Picture, sökningen, statistiken och kommandoraden tills den anges. Inget krypteras.",
+  "ui.hidden_lock.new_pin": "Ny pinkod",
+  "ui.hidden_lock.pin_rule": "En pinkod har {count} till 32 siffror",
+  "ui.hidden_lock.pins_differ": "Pinkoderna skiljer sig åt",
+  "ui.hidden_lock.remove": "Ta bort pinkod",
+  "ui.hidden_lock.removed": "Pinkoden för dolda spel har tagits bort",
+  "ui.hidden_lock.save": "Spara pinkod",
+  "ui.hidden_lock.saved": "Dolda spel skyddas nu av en pinkod",
+  "ui.hidden_lock.set_title": "Lås dolda spel med en pinkod",
+  "ui.hidden_lock.unlock": "Lås upp",
+  "ui.hidden_lock.unlock_description": "Ange pinkoden för att visa dolda spel tills Irori avslutas eller du låser dem igen.",
+  "ui.hidden_lock.unlock_title": "Visa dolda spel",
+  "ui.hidden_lock.wrong_pin": "Pinkoden stämmer inte"
 }
