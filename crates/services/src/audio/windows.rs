@@ -241,20 +241,20 @@ pub(super) async fn change(
 /// (what Windows' own sound settings call). Microsoft doesn't document it,
 /// but it has kept this layout since Windows 7 and every output switcher
 /// uses it. Only `SetDefaultEndpoint` is called; the methods before it are
-/// declared so it sits in its place in the table.
+/// declared so it sits in its place in the table (COM goes by place, not name).
 #[windows::core::interface("f8679f50-850a-41cf-9c72-430f290290c8")]
 unsafe trait IPolicyConfig: windows::core::IUnknown {
-    fn GetMixFormat(&self) -> windows::core::HRESULT;
-    fn GetDeviceFormat(&self) -> windows::core::HRESULT;
-    fn ResetDeviceFormat(&self) -> windows::core::HRESULT;
-    fn SetDeviceFormat(&self) -> windows::core::HRESULT;
-    fn GetProcessingPeriod(&self) -> windows::core::HRESULT;
-    fn SetProcessingPeriod(&self) -> windows::core::HRESULT;
-    fn GetShareMode(&self) -> windows::core::HRESULT;
-    fn SetShareMode(&self) -> windows::core::HRESULT;
-    fn GetPropertyValue(&self) -> windows::core::HRESULT;
-    fn SetPropertyValue(&self) -> windows::core::HRESULT;
-    fn SetDefaultEndpoint(
+    fn get_mix_format(&self) -> windows::core::HRESULT;
+    fn get_device_format(&self) -> windows::core::HRESULT;
+    fn reset_device_format(&self) -> windows::core::HRESULT;
+    fn set_device_format(&self) -> windows::core::HRESULT;
+    fn get_processing_period(&self) -> windows::core::HRESULT;
+    fn set_processing_period(&self) -> windows::core::HRESULT;
+    fn get_share_mode(&self) -> windows::core::HRESULT;
+    fn set_share_mode(&self) -> windows::core::HRESULT;
+    fn get_property_value(&self) -> windows::core::HRESULT;
+    fn set_property_value(&self) -> windows::core::HRESULT;
+    fn set_default_endpoint(
         &self,
         device: windows::core::PCWSTR,
         role: windows::Win32::Media::Audio::ERole,
@@ -325,7 +325,7 @@ fn switch_output(id: &str) -> Result<()> {
             .context("Windows' sound settings didn't answer")?;
         for role in [eConsole, eMultimedia, eCommunications] {
             policy
-                .SetDefaultEndpoint(windows::core::PCWSTR(wide.as_ptr()), role)
+                .set_default_endpoint(windows::core::PCWSTR(wide.as_ptr()), role)
                 .ok()
                 .context("Windows didn't switch the sound output")?;
         }
