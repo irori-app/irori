@@ -699,7 +699,7 @@ fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     let (window, dialog) = cx
         .update(|cx| {
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-                cx.new(|cx| SideloadDialog::new(Some(app_name), window, cx))
+                cx.new(|cx| SideloadDialog::with_app(Some(app_name), None, window, cx))
             })
         })
         .expect("window opens");
@@ -717,6 +717,34 @@ fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     .unwrap();
     let changed = cx.read(|cx| dialog.read(cx).collect(cx));
     assert_eq!(changed.description.as_deref(), Some("A louder story."));
+}
+
+#[gpui_kit::test]
+fn a_dropped_file_opens_add_game_filled_in(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let prefill = SideloadApp {
+        title: "Hollow Knight".into(),
+        executable: Some("/games/hk/Hollow_Knight.exe".into()),
+        platform: SideloadPlatform::Windows,
+        launcher_args: "-windowed".into(),
+        ..Default::default()
+    };
+    let (_window, dialog) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| SideloadDialog::with_app(None, Some(prefill), window, cx))
+            })
+        })
+        .expect("window opens");
+    cx.run_until_parked();
+    let app = cx.read(|cx| dialog.read(cx).collect(cx));
+    assert_eq!(app.title, "Hollow Knight");
+    assert_eq!(
+        app.executable.as_deref(),
+        Some(Path::new("/games/hk/Hollow_Knight.exe"))
+    );
+    assert_eq!(app.platform, SideloadPlatform::Windows);
+    assert_eq!(app.launcher_args, "-windowed");
 }
 
 #[gpui_kit::test]

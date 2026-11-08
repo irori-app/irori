@@ -27,11 +27,11 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, BoxShadow, ClickEvent, Context, ElementId, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyDownEvent,
-    Keystroke, ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy, SharedString,
-    Size, SpringAnimation, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    Subscription, WeakEntity, Window, canvas, div, linear_color_stop, linear_gradient, point, px,
-    rems, size,
+    EventEmitter, ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    KeyDownEvent, Keystroke, ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy,
+    SharedString, Size, SpringAnimation, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Subscription, WeakEntity, Window, canvas, div, linear_color_stop,
+    linear_gradient, point, px, rems, size,
 };
 use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
@@ -431,6 +431,29 @@ impl LibraryView {
     /// Move keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |s, cx| s.focus(window, cx));
+    }
+
+    /// A file or folder dropped on the library: the Add game dialog filled in
+    /// from the file, or the games found in the folder. Only the first of
+    /// several dropped paths is added.
+    fn on_paths_dropped(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = paths.paths().first().cloned() else {
+            return;
+        };
+        let bundle = cfg!(target_os = "macos")
+            && path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("app"));
+        if path.is_dir() && !bundle {
+            crate::dialogs::folder::open_add_dropped_folder_dialog(path, window, cx);
+        } else {
+            crate::dialogs::sideload::open_add_dropped_file_dialog(path, window, cx);
+        }
     }
 
     /// Type to search: a printable key the grid or list doesn't use itself
@@ -3073,6 +3096,7 @@ impl Render for LibraryView {
                 cx.listener(|this, _: &ToggleStatusGroups, _, cx| this.toggle_status_groups(cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleModeGroups, _, cx| this.toggle_mode_groups(cx)))
+            .on_drop(cx.listener(Self::on_paths_dropped))
             .size_full()
             .min_h_0()
             .text_color(cx.theme().foreground)
@@ -3080,6 +3104,14 @@ impl Render for LibraryView {
             .child(self.render_header(window, cx))
             .child(self.render_body(window, cx))
             .children(bulk_bar)
+            .child(
+                // Shows where a dragged file lands; it takes no clicks.
+                div()
+                    .id("library-drop-target")
+                    .absolute()
+                    .inset_0()
+                    .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target)),
+            )
     }
 }
 

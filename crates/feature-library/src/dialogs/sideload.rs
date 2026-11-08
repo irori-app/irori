@@ -146,11 +146,19 @@ pub fn save_mode(editing: Option<&str>, provisional: Option<&str>) -> SaveMode {
 }
 
 impl SideloadDialog {
-    pub fn new(editing: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let existing = editing
+    /// The dialog for `editing`, or for a new app filled in from `prefill`
+    /// (a file dropped on the library).
+    pub(crate) fn with_app(
+        editing: Option<String>,
+        prefill: Option<SideloadApp>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let stored = editing
             .as_deref()
-            .and_then(|name| crate::sideload_store(cx).and_then(|s| s.app(name)))
-            .unwrap_or_default();
+            .and_then(|name| crate::sideload_store(cx).and_then(|s| s.app(name)));
+        let given = stored.is_some() || prefill.is_some();
+        let existing = stored.or(prefill).unwrap_or_default();
         let path_text = |p: &Option<PathBuf>| {
             p.as_ref()
                 .map(|p| p.to_string_lossy().into_owned())
@@ -243,7 +251,7 @@ impl SideloadDialog {
         }
 
         Self {
-            platform: if editing.is_some() {
+            platform: if given {
                 existing.platform
             } else {
                 SideloadPlatform::default()
@@ -976,11 +984,11 @@ fn installer_error(error: &anyhow::Error) -> SharedString {
     )
 }
 
-fn open(editing: Option<String>, window: &mut Window, cx: &mut App) {
+fn open(editing: Option<String>, prefill: Option<SideloadApp>, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         cx.on_release(|this: &mut SideloadDialog, cx| this.discard_provisional(cx))
             .detach();
-        SideloadDialog::new(editing, window, cx)
+        SideloadDialog::with_app(editing, prefill, window, cx)
     });
     let width = dialog_width(window, 40.);
     let focus = Cell::new(true);
@@ -996,12 +1004,56 @@ fn open(editing: Option<String>, window: &mut Window, cx: &mut App) {
 
 /// Open the "Add game" dialog for an app that is not from a store.
 pub fn open_add_game_dialog(window: &mut Window, cx: &mut App) {
-    open(None, window, cx);
+    open(None, None, window, cx);
+}
+
+/// Open the "Add game" dialog filled in for a file dropped on the library:
+/// the game it starts when it is a program, desktop entry, shortcut or app
+/// bundle, else just the file (a ROM, which the dialog offers to the ROM
+/// library).
+pub(crate) fn open_add_dropped_file_dialog(file: PathBuf, window: &mut Window, cx: &mut App) {
+    let found = irori_ui::backend(cx).spawn_blocking({
+        let file = file.clone();
+        move || irori_sideload::scan::game_of_file(&file)
+    });
+    let task = irori_ui::run(cx, async move { Ok(found.await?) });
+    window
+        .spawn(cx, async move |cx| {
+            let found = task.await.ok().flatten();
+            let _ = cx.update(|window, cx| {
+                open(None, Some(dropped_app(&file, found)), window, cx);
+            });
+        })
+        .detach();
+}
+
+/// The new app a dropped file fills the form with.
+fn dropped_app(file: &Path, found: Option<irori_sideload::scan::FoundGame>) -> SideloadApp {
+    match found {
+        Some(game) => SideloadApp {
+            cover_art: game
+                .icon
+                .as_ref()
+                .filter(|p| super::is_picture(p))
+                .map(|p| p.display().to_string()),
+            title: game.title,
+            executable: Some(game.executable),
+            platform: game.platform,
+            install_folder: game.install_folder,
+            launcher_args: game.args,
+            ..Default::default()
+        },
+        None => SideloadApp {
+            title: title_from_executable(file).unwrap_or_default(),
+            executable: Some(file.to_path_buf()),
+            ..Default::default()
+        },
+    }
 }
 
 /// Open the edit dialog of a manually added app.
 pub(crate) fn open_edit_app_dialog(app_name: String, window: &mut Window, cx: &mut App) {
-    open(Some(app_name), window, cx);
+    open(Some(app_name), None, window, cx);
 }
 
 #[cfg(test)]
@@ -1013,6 +1065,37 @@ mod tests {
         assert_eq!(save_mode(None, None), SaveMode::Add);
         assert_eq!(save_mode(None, Some("p")), SaveMode::Finish("p".into()));
         assert_eq!(save_mode(Some("e"), Some("p")), SaveMode::Edit("e".into()));
+    }
+
+    #[test]
+    fn a_dropped_file_fills_in_the_form() {
+        use irori_sideload::scan::{FoundGame, FoundKind};
+        let rom = dropped_app(Path::new("/roms/Super_Mario.sfc"), None);
+        assert_eq!(rom.title, "Super Mario");
+        assert_eq!(
+            rom.executable.as_deref(),
+            Some(Path::new("/roms/Super_Mario.sfc"))
+        );
+        let entry = dropped_app(
+            Path::new("/apps/tux.desktop"),
+            Some(FoundGame {
+                title: "SuperTux".into(),
+                executable: "/usr/games/supertux2".into(),
+                platform: SideloadPlatform::Linux,
+                args: "--fullscreen".into(),
+                install_folder: None,
+                icon: Some("/icons/tux.png".into()),
+                kind: FoundKind::DesktopEntry,
+            }),
+        );
+        assert_eq!(entry.title, "SuperTux");
+        assert_eq!(
+            entry.executable.as_deref(),
+            Some(Path::new("/usr/games/supertux2"))
+        );
+        assert_eq!(entry.platform, SideloadPlatform::Linux);
+        assert_eq!(entry.launcher_args, "--fullscreen");
+        assert_eq!(entry.cover_art.as_deref(), Some("/icons/tux.png"));
     }
 
     #[test]
