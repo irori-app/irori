@@ -48,6 +48,7 @@ irori-manage = { path = "crates/feature-manage" }
 irori-bigpicture = { path = "crates/feature-bigpicture" }
 irori-scripts = { path = "crates/scripts" }
 irori-mods = { path = "crates/mods" }
+irori-reshade = { path = "crates/reshade" }
 
 gpui-kit = "0.8.0"
 anyhow = "1"

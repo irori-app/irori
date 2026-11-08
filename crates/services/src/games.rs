@@ -154,7 +154,7 @@ impl Backend {
         store.client_action(&id.app_name, action).await
     }
 
-    fn installed_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+    pub(crate) fn installed_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
         let game = self
             .game(id)
             .with_context(|| format!("{} is not in the library", id.app_name))?;
@@ -256,11 +256,15 @@ impl Backend {
         ctx.step.as_ref()("Preparing");
         // Another launcher starts its games with its own settings; Irori's
         // Wine, wrappers and variables would only apply to the opener.
-        let environment = if id.runner.manages_installs() {
+        let mut environment = if id.runner.manages_installs() {
             irori_runtime::prepare_launch(&app, &settings, target, &ctx).await?
         } else {
             Default::default()
         };
+        // Wine loads its own DLL unless told to prefer the game folder's.
+        if environment.wine.is_some() {
+            self.reshade_launch_env(id, &mut environment.env).await;
+        }
         // prepare_launch refuses rather than leaving the sandbox out, so a
         // game set to run sandboxed that got this far is in one.
         let sandbox = (settings.sandbox.is_enabled()

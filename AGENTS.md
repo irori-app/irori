@@ -164,6 +164,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
+| `crates/reshade` | `irori-reshade` | ReShade per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, downloads from the official sources, journaled installs |
 | `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
@@ -205,6 +206,7 @@ irori-core                        (depends on nothing internal)
   ├─ irori-engines   (core, runtime, depot)
   ├─ irori-scripts   (core, runtime, depot; knows nothing of stores or the UI)
   ├─ irori-mods      (core, depot; knows nothing of stores or the UI)
+  ├─ irori-reshade   (core, runtime; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
   │                   irori-steam-api, irori-retroachievements-api
   │                   (depot and secrets only, not core)
@@ -212,8 +214,8 @@ irori-core                        (depends on nothing internal)
   │                   irori-steam, irori-sideload, irori-emulation (+ engines,
   │                   irori-retroachievements-api),
   │                   irori-launchers (+ runtime, irori-launchers-data)
-  └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, irori-steam-api for
-                      Steam's public achievement schema; stores reach it as `DynStore`)
+  └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
+                      for Steam's public achievement schema; stores reach it as `DynStore`)
 irori-ui          (services, core)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
@@ -1141,6 +1143,40 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   install through `nxm://` links, which carry a one-time key.
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
+
+### 4.12 ReShade
+
+- **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
+  natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
+  section (`irori_settings` `ReshadePanel`, route id `reshade`). Direct3D 9,
+  DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
+  registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **Detection** (`irori_reshade::detect`): the configured program (`targetExe`, else
+  the store's executable) when its PE imports name an API; otherwise the game folder is
+  searched (installers, redistributables, crash reporters, launchers and anticheat
+  skipped) for one `Compatibility.ini` knows, else the largest that draws. The user can
+  choose another program inside the game folder. `pe.rs` reads only the headers and
+  import tables, bounded, never the whole file.
+- **Compatibility list.** `Compatibility.ini` from crosire/reshade-shaders' `list`
+  branch, the file ReShade's installer reads: `Banned` refuses the install (the
+  configured launcher counts too), `RenderApi`/`ForceInstallApi` pick the API and DLL,
+  `InstallTarget` the folder. AreWeAntiCheatYet anticheat makes the UI ask first.
+- **Downloads** (`download.rs`): the version is read from reshade.me's front page
+  link; the DLLs come out of the zip appended to `ReShade_Setup_<version>.exe`, each
+  checked to be a PE of its architecture; shaders from `slim.zip`; under Wine,
+  `d3dcompiler_47.dll` from Mozilla's fxc2 copy, checked against its SHA-256 (a fixed
+  file). Lists are cached a day, downloads under `<cache>/reshade`. Never bundle any.
+- **Journal** (`journal.rs`): the manifest (`<data>/reshade/<runner>/<app>.json`) lists
+  every file with its hash and every folder created, saved before the first write.
+  An existing DLL that isn't ours refuses the install (`DllTaken`); an existing
+  `ReShade.ini`, compiler or shader is left alone and unrecorded. Off renames the DLL
+  to `.irori-disabled`. Removal vets the folder with `fs_guard::ensure_deletable`,
+  then deletes only recorded files whose hash still matches and recorded folders left
+  empty. A failed or cancelled install removes what it wrote.
+- **Launch.** Under Wine, `Backend::launch_with` adds `<dll>=n,b` (and
+  `d3dcompiler_47=n,b` for Direct3D) to `WINEDLLOVERRIDES` through
+  `irori_runtime::env::add_dll_overrides`, replacing only those DLLs' entries in the
+  user's value, while the install is complete, on, and its DLL is there.
 
 ## 5. Rust conventions
 

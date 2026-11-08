@@ -27,6 +27,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
+use crate::reshade::ReshadePanel;
 use crate::steam_compat::SteamCompatPanel;
 use crate::widgets::{RowState, field_row, muted, nav_button};
 use crate::winetricks::WinetricksPanel;
@@ -79,7 +80,7 @@ impl GameSection {
             "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" => GameSection::Tools,
+            "tools" | "reshade" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -146,6 +147,7 @@ pub struct GameSettingsView {
     form: Entity<SettingsForm>,
     log: Entity<LogViewer>,
     winetricks: Entity<WinetricksPanel>,
+    reshade: Entity<ReshadePanel>,
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
@@ -191,6 +193,10 @@ impl GameSettingsView {
             let id = id.clone();
             cx.new(|cx| WinetricksPanel::new(id, window, cx))
         };
+        let reshade = {
+            let id = id.clone();
+            cx.new(|_| ReshadePanel::new(id))
+        };
         // Steam Play exists on Linux only.
         let steam_compat = (cfg!(target_os = "linux") && id.runner == Runner::Steam)
             .then(|| crate::stores::steam(cx))
@@ -209,6 +215,7 @@ impl GameSettingsView {
             form,
             log,
             winetricks,
+            reshade,
             steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
@@ -323,6 +330,9 @@ impl GameSettingsView {
         }
         if section == GameSection::Tools && self.uses_wine(cx) {
             self.winetricks.update(cx, |w, cx| w.activate(window, cx));
+        }
+        if section == GameSection::Tools {
+            self.reshade.update(cx, |r, cx| r.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -563,6 +573,11 @@ impl GameSettingsView {
                 cx,
             ))
             .children(dx_rows)
+            .child(crate::widgets::group_heading(
+                t("settings.tools.group.reshade"),
+                cx,
+            ))
+            .child(self.reshade.clone())
             .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,

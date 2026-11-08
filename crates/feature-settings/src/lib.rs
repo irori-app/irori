@@ -34,6 +34,7 @@ mod launch_programs;
 mod logs;
 pub mod registry;
 mod replay;
+mod reshade;
 mod saves;
 mod steam_compat;
 mod storage;

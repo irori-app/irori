@@ -87,6 +87,50 @@ pub fn remove_quote_if_necessary(s: &str) -> String {
     }
 }
 
+/// Add DLL overrides to a `WINEDLLOVERRIDES` value: each `(dll, mode)` (as
+/// `dxgi`, `n,b`) replaces whatever the value said about that DLL, and the
+/// rest stays in order. Entries are `;`-separated `dll1,dll2=mode` lists, as
+/// Wine reads them; names compare without letter case or `.dll`.
+pub fn add_dll_overrides(existing: Option<&str>, add: &[(&str, &str)]) -> String {
+    let norm = |name: &str| {
+        let name = name.trim().to_ascii_lowercase();
+        name.strip_suffix(".dll").map(str::to_owned).unwrap_or(name)
+    };
+    let ours: Vec<String> = add.iter().map(|(dll, _)| norm(dll)).collect();
+    let mut entries: Vec<String> = Vec::new();
+    for entry in existing
+        .map(remove_quote_if_necessary)
+        .unwrap_or_default()
+        .split(';')
+    {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let (dlls, mode) = match entry.split_once('=') {
+            Some((dlls, mode)) => (dlls, Some(mode)),
+            None => (entry, None),
+        };
+        let kept: Vec<&str> = dlls
+            .split(',')
+            .map(str::trim)
+            .filter(|d| !d.is_empty() && !ours.contains(&norm(d)))
+            .collect();
+        if kept.is_empty() {
+            continue;
+        }
+        entries.push(match mode {
+            Some(mode) => format!("{}={mode}", kept.join(",")),
+            None => kept.join(","),
+        });
+    }
+    entries.extend(
+        add.iter()
+            .map(|(dll, mode)| format!("{}={mode}", norm(dll))),
+    );
+    entries.join(";")
+}
+
 /// `HEROIC_APP_SOURCE` value of a runner.
 pub fn app_source(runner: Runner) -> &'static str {
     match runner {
@@ -1087,5 +1131,24 @@ mod tests {
         assert_eq!(env["WINEPREFIX"], "/pfx");
         assert_eq!(env["FIX"], "fix");
         assert_eq!(env["STORE"], "gog");
+    }
+
+    #[test]
+    fn dll_overrides_merge_with_the_users() {
+        let add = [("dxgi", "n,b"), ("d3dcompiler_47", "n,b")];
+        assert_eq!(add_dll_overrides(None, &add), "dxgi=n,b;d3dcompiler_47=n,b");
+        assert_eq!(
+            add_dll_overrides(Some("winemenubuilder.exe=d"), &add),
+            "winemenubuilder.exe=d;dxgi=n,b;d3dcompiler_47=n,b"
+        );
+        // The user's own entry for the same DLL gives way; its neighbours stay.
+        assert_eq!(
+            add_dll_overrides(Some("\"dxgi,d3d11=b;xinput1_3=n;\""), &add),
+            "d3d11=b;xinput1_3=n;dxgi=n,b;d3dcompiler_47=n,b"
+        );
+        assert_eq!(
+            add_dll_overrides(Some("DXGI.dll=b;;D3DCompiler_47=d"), &[("dxgi.dll", "n,b")]),
+            "D3DCompiler_47=d;dxgi=n,b"
+        );
     }
 }

@@ -12,6 +12,7 @@ irori-core.workspace = true
 irori-services.workspace = true
 irori-ui.workspace = true
 irori-runtime.workspace = true
+irori-reshade.workspace = true
 irori-extras.workspace = true
 irori-epic.workspace = true
 irori-steam.workspace = true
