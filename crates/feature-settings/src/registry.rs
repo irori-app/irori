@@ -603,6 +603,7 @@ impl FieldSpec {
                 "panel.replay"
                     | "launcherArgs"
                     | "iroriInSunshine"
+                    | "iroriDiscordPresence"
                     | "beforeLaunchScriptPath"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
@@ -2779,6 +2780,15 @@ pub static FIELDS: &[FieldSpec] = &[
         "exclude",
     ]),
     game_only(
+        "iroriDiscordPresence",
+        "settings.field.discord_presence.label",
+        Launch,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.discord_presence.help")
+    .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
+    game_only(
         "steamRuntime",
         "settings.field.steam_runtime.label",
         Launch,
@@ -3381,6 +3391,7 @@ mod tests {
             "panel.save-backups",
             "panel.artwork",
             "iroriInSunshine",
+            "iroriDiscordPresence",
         ] {
             assert!(applies(path), "{path}");
         }

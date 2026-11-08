@@ -550,6 +550,16 @@ commands without a window.
     channel to `LaunchParams::stream`. The game gets the same variables; with
     `iroriSunshine.matchClient`, a game in gamescope takes the client's output size,
     frame limit and HDR where its own settings leave them empty.
+- **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
+  `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
+  art as the large image (Discord fetches external URLs), the `irori` art asset of
+  Irori's Discord application as the small one and a button to the store page, through
+  Discord's local IPC socket (`discord-rich-presence`, which also finds Flatpak and Snap
+  Discord). The application is `irori_core::DISCORD_APPLICATION_ID` unless the user
+  enters their own (`discordClientId`). One worker owns the connection: it wakes when a
+  session starts or ends, retries every minute while a game runs and Discord can't be
+  reached, and closes the socket when nothing is shown. With two games running the later
+  one shows; when it ends the earlier one returns.
 - **Screenshots** (`screenshots.rs`, `Backend::screenshots`): the user's own
   screenshots, only read, never moved or removed. A Steam app's folder
   (`userdata/<account>/760/remote/<appid>/screenshots`) names its game; every other

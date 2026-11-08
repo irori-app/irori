@@ -161,6 +161,10 @@ pub struct GameSettings {
     /// games there. Irori-only; set per game.
     #[serde(rename = "iroriInSunshine")]
     pub in_sunshine: bool,
+    /// Show this game on Discord while it runs, when Rich Presence is on.
+    /// Irori-only; set per game.
+    #[serde(rename = "iroriDiscordPresence")]
+    pub discord_presence: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -417,6 +421,7 @@ impl Default for GameSettings {
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
             in_sunshine: true,
+            discord_presence: true,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),
@@ -604,8 +609,8 @@ pub struct AppSettings {
     pub disable_animations: bool,
     #[serde(rename = "discordRPC")]
     pub discord_rpc: bool,
-    /// Discord application ID used for Rich Presence (register one at
-    /// discord.com/developers). Presence is off while empty.
+    /// A Discord application ID of the user's own for Rich Presence,
+    /// replacing [`DISCORD_APPLICATION_ID`]. Empty uses Irori's.
     pub discord_client_id: String,
     #[serde(rename = "disableGOGPresence")]
     pub disable_gog_presence: bool,
@@ -1141,6 +1146,32 @@ impl ShownStores {
     }
 }
 
+/// Irori's Discord application (client) ID, which Rich Presence shows as
+/// "Irori". It is public, not a secret: the project owner created the
+/// Discord application "Irori" at discord.com/developers/applications and
+/// copied its Application ID from General Information. Rich Presence's
+/// small image is that application's art asset named `irori` (Rich
+/// Presence → Art Assets). Left empty, Rich Presence stays off unless the
+/// user enters an application ID of their own (`discordClientId`).
+pub const DISCORD_APPLICATION_ID: &str = "1568789394926870640";
+
+impl AppSettings {
+    /// The Discord application Rich Presence speaks for: the user's own, else
+    /// Irori's. `None` while Rich Presence is off or there is no ID at all.
+    pub fn discord_application(&self) -> Option<String> {
+        if !self.discord_rpc {
+            return None;
+        }
+        let own = self.discord_client_id.trim();
+        let id = if own.is_empty() {
+            DISCORD_APPLICATION_ID
+        } else {
+            own
+        };
+        (!id.is_empty()).then(|| id.to_string())
+    }
+}
+
 /// Shader cache room games get unless the user changes it, in GiB.
 pub const DEFAULT_SHADER_CACHE_GIB: u32 = 10;
 
@@ -1203,6 +1234,31 @@ impl Default for UiPrefs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discord_presence_uses_the_users_application_else_irori() {
+        let mut app = AppSettings::default();
+        assert!(!app.discord_rpc, "Rich Presence is opt-in");
+        assert_eq!(app.discord_application(), None);
+        app.discord_rpc = true;
+        assert_eq!(
+            app.discord_application().as_deref(),
+            Some(DISCORD_APPLICATION_ID).filter(|id| !id.is_empty())
+        );
+        app.discord_client_id = " 123456789012345678 ".into();
+        assert_eq!(
+            app.discord_application().as_deref(),
+            Some("123456789012345678")
+        );
+        let game: GameSettings = serde_json::from_str("{}").unwrap();
+        assert!(game.discord_presence);
+        let json = serde_json::to_value(GameSettings {
+            discord_presence: false,
+            ..GameSettings::default()
+        })
+        .unwrap();
+        assert_eq!(json["iroriDiscordPresence"], false);
+    }
 
     #[test]
     fn appearance_keys_default_and_round_trip() {
