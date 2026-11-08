@@ -735,6 +735,8 @@
   "game.age_rating.title": "年龄分级",
   "game.age_rating.separator": "、",
   "game.age_rating.also": "其他分级：{ratings}",
+  "game.modes.show": "在游戏库中显示“{mode}”游戏",
+  "game.modes.edit": "编辑游戏模式",
   "game.sandbox.running": "正在沙盒中运行",
   "game.sandbox.no_network": "无网络",
   "game.sandbox.no_home": "无主文件夹",

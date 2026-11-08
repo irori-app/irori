@@ -735,6 +735,8 @@
   "game.age_rating.title": "Возрастной рейтинг",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Другие рейтинги: {ratings}",
+  "game.modes.show": "Показать в библиотеке игры с режимом «{mode}»",
+  "game.modes.edit": "Изменить режимы игры",
   "game.sandbox.running": "Запущена в песочнице",
   "game.sandbox.no_network": "Без сети",
   "game.sandbox.no_home": "Без домашней папки",

@@ -70,6 +70,14 @@ pub struct GameInfo {
     /// those services learned from the game's store page.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub age_ratings: Vec<crate::AgeRating>,
+    /// How the game is played, when known: from the store's data, what
+    /// services learned from its store page or PCGamingWiki, or the user's
+    /// own choice. Normalized ([`crate::game_mode::normalize`]).
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "crate::game_mode::lenient"
+    )]
+    pub game_modes: Vec<crate::GameMode>,
     /// When the account got the game, as RFC 3339, when the store says.
     pub date_added: Option<String>,
     /// The user hid the game on the store's own website.
@@ -217,6 +225,12 @@ pub struct ExtraInfo {
     /// Age ratings from the store page (Steam, GOG).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub age_ratings: Vec<crate::AgeRating>,
+    /// Game modes from the store page (Steam's categories, GOG's features).
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "crate::game_mode::lenient"
+    )]
+    pub game_modes: Vec<crate::GameMode>,
 }
 
 /// One row of system requirements.
@@ -344,6 +358,13 @@ pub struct GameOverrides {
     pub art_square: Option<String>,
     pub art_background: Option<String>,
     pub art_logo: Option<String>,
+    /// The game's modes as the user set them, replacing what stores and
+    /// wikis say (an empty list says the game has none of them).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::game_mode::lenient_option"
+    )]
+    pub game_modes: Option<Vec<crate::GameMode>>,
 }
 
 impl GameOverrides {

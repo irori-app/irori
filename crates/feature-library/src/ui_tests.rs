@@ -42,6 +42,11 @@ impl MemoryStore {
                     is_installed: installed,
                     installable: true,
                     install,
+                    game_modes: if app == "3" {
+                        vec![irori_core::GameMode::Single, irori_core::GameMode::Coop]
+                    } else {
+                        Vec::new()
+                    },
                     ..Default::default()
                 }
                 .finalize(),
@@ -486,6 +491,61 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     // A double click opens the game's page.
     click(cx, "2", 2);
     assert_eq!(route(cx), irori_ui::Route::Game(game("2")));
+}
+
+#[gpui_kit::test]
+fn a_mode_chosen_before_the_library_opens_filters_it(cx: &mut TestAppContext) {
+    use irori_core::GameMode;
+    start(cx);
+    // A game page opened first (from a link): no library view exists yet.
+    assert!(cx.read(crate::filters_panel::active_filters).is_none());
+    cx.update(|cx| crate::show_game_mode(GameMode::Coop, cx));
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    cx.update_window(window, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let modes = cx.read(|cx| {
+        let model = crate::filters_panel::active_filters(cx).expect("the view's filters");
+        model.read(cx).filter().modes.clone()
+    });
+    assert_eq!(modes, [GameMode::Coop].into());
+    let shown: Vec<String> = cx.read(|cx| {
+        view.read(cx)
+            .visible_games()
+            .iter()
+            .map(|g| g.title.clone())
+            .collect()
+    });
+    assert_eq!(shown, ["Hades"]);
+
+    // With the view open, the chip changes it at once.
+    cx.update(|cx| crate::show_game_mode(GameMode::Single, cx));
+    let modes = cx.read(|cx| {
+        crate::filters_panel::active_filters(cx)
+            .expect("the view's filters")
+            .read(cx)
+            .filter()
+            .modes
+            .clone()
+    });
+    assert_eq!(modes, [GameMode::Single].into());
 }
 
 #[gpui_kit::test]

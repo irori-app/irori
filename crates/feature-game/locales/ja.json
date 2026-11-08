@@ -735,6 +735,8 @@
   "game.age_rating.title": "年齢レーティング",
   "game.age_rating.separator": "、",
   "game.age_rating.also": "その他のレーティング: {ratings}",
+  "game.modes.show": "ライブラリで「{mode}」のゲームを表示",
+  "game.modes.edit": "ゲームモードを編集",
   "game.sandbox.running": "サンドボックスで実行中",
   "game.sandbox.no_network": "ネットワークなし",
   "game.sandbox.no_home": "ホームフォルダーなし",

@@ -12,6 +12,7 @@ mod desktop_accent;
 mod desktop_theme;
 mod engine_problem;
 pub mod game_log;
+pub mod game_mode;
 pub mod glass;
 pub mod hooks;
 pub mod i18n;

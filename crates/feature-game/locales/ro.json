@@ -735,6 +735,8 @@
   "game.age_rating.title": "Clasificare de vârstă",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Alte clasificări: {ratings}",
+  "game.modes.show": "Arată în bibliotecă jocurile cu „{mode}”",
+  "game.modes.edit": "Editează modurile de joc",
   "game.sandbox.running": "Rulează în sandbox",
   "game.sandbox.no_network": "Fără rețea",
   "game.sandbox.no_home": "Fără dosar personal",

@@ -476,6 +476,30 @@ fn custom_art_from_files_stays_on_its_computer() {
 }
 
 #[test]
+fn game_modes_the_user_set_travel_with_the_custom_title() {
+    use irori_core::GameMode;
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "steam:620".into(),
+        GameOverrides {
+            game_modes: Some(vec![GameMode::Coop, GameMode::Local]),
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    assert_eq!(
+        b.data.overrides["steam:620"].game_modes,
+        Some(vec![GameMode::Coop, GameMode::Local])
+    );
+    // "None of these" is a choice too, and wins when made later.
+    b.data.overrides.get_mut("steam:620").unwrap().game_modes = Some(Vec::new());
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(a.data.overrides["steam:620"].game_modes, Some(Vec::new()));
+}
+
+#[test]
 fn a_category_change_lost_to_a_later_one_is_a_conflict() {
     let mut a = Device::new("a");
     let mut b = Device::new("b");

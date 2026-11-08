@@ -80,6 +80,8 @@ pub struct AppDetails {
     pub platforms: Platforms,
     pub release_date: ReleaseDate,
     pub genres: Vec<Genre>,
+    /// Store features ("Single-player", "Online Co-op", "Steam Cloud").
+    pub categories: Vec<Category>,
     pub header_image: String,
     #[serde(deserialize_with = "lenient_u64")]
     pub required_age: u64,
@@ -163,6 +165,16 @@ pub struct ReleaseDate {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Genre {
+    pub description: String,
+}
+
+/// One store feature: Steam's id (2 is "Single-player", 38 "Online
+/// Co-op"…) and its name in the page's language.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Category {
+    #[serde(deserialize_with = "lenient_u64")]
+    pub id: u64,
     pub description: String,
 }
 
@@ -530,6 +542,8 @@ mod tests {
                     "pc_requirements": {"minimum": "<ul>1.2 GHz</ul>", "recommended": "<ul>2 GHz</ul>"},
                     "mac_requirements": [],
                     "linux_requirements": {"minimum": "<ul>Ubuntu</ul>"},
+                    "categories": [{"id": 2, "description": "Single-player"},
+                                   {"id": "38", "description": "Online Co-op"}],
                     "ratings": {
                         "esrb": {"rating": "m", "descriptors": "Blood and Gore\r\nIntense Violence",
                                  "use_age_gate": "true", "required_age": "17"},
@@ -563,6 +577,8 @@ mod tests {
         assert_eq!(d.ratings[0].1.rating, "m");
         assert_eq!(d.ratings[0].1.required_age, 17);
         assert_eq!(d.ratings[2].1.rating, "16");
+        let categories: Vec<u64> = d.categories.iter().map(|c| c.id).collect();
+        assert_eq!(categories, [2, 38]);
         assert_eq!(d.developers, ["Valve"]);
         assert_eq!(
             d.platforms,

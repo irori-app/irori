@@ -14,6 +14,7 @@
 //! the dialog is closed without saving, that provisional entry is removed.
 
 use std::cell::Cell;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use gpui_kit::assets::IconName;
@@ -32,7 +33,7 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
 };
-use irori_core::{GameId, Runner, Store as _};
+use irori_core::{GameId, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
 use irori_sideload::{SideloadApp, SideloadPlatform};
 use irori_ui::i18n::{t, t_args};
@@ -92,6 +93,10 @@ pub struct SideloadDialog {
     developer: Entity<InputState>,
     release_date: Entity<InputState>,
     genres: Entity<InputState>,
+    /// The app's modes as PCGamingWiki says.
+    known_modes: Vec<GameMode>,
+    /// The app's modes as ticked; kept as the user's own (`GameOverrides`).
+    modes: BTreeSet<GameMode>,
     platform: SideloadPlatform,
     fullscreen: bool,
     /// The link another launcher starts the app from (Playnite's games);
@@ -206,6 +211,23 @@ impl SideloadDialog {
                 .default_value(existing.description.clone().unwrap_or_default())
         });
 
+        let (known_modes, modes) = match &editing {
+            Some(name) => {
+                let id = GameId::new(Runner::Sideload, name.as_str());
+                let known = backend(cx).known_game_modes(&id);
+                let own = irori_ui::models(cx)
+                    .library
+                    .read(cx)
+                    .user
+                    .overrides
+                    .get(&id.key())
+                    .and_then(|o| o.game_modes.clone());
+                let ticked = own.unwrap_or_else(|| known.clone()).into_iter().collect();
+                (known, ticked)
+            }
+            None => (Vec::new(), BTreeSet::new()),
+        };
+
         let mut subscriptions = Vec::new();
         for state in [&title, &executable, &url] {
             subscriptions.push(
@@ -241,6 +263,8 @@ impl SideloadDialog {
             developer,
             release_date,
             genres,
+            known_modes,
+            modes,
             saving: false,
             saved: false,
             provisional: None,
@@ -443,23 +467,39 @@ impl SideloadDialog {
         };
         let title = app.title.trim().to_string();
         let mode = save_mode(self.editing.as_deref(), self.provisional.as_deref());
-        let settings = backend(cx).settings.app();
+        let b = backend(cx);
+        let settings = b.settings.app();
+        let modes = super::chosen_modes(&self.known_modes, &self.modes);
         self.saving = true;
         self.error = None;
         cx.notify();
 
         let task = irori_ui::run(cx, async move {
-            let id = match mode {
+            let (id, added) = match mode {
                 SaveMode::Edit(name) => {
                     store.edit_app(&name, app).await?;
-                    return Ok(false);
+                    (GameId::new(Runner::Sideload, name.as_str()), false)
                 }
                 SaveMode::Finish(name) => {
                     store.edit_app(&name, app).await?;
-                    GameId::new(Runner::Sideload, name.as_str())
+                    (GameId::new(Runner::Sideload, name.as_str()), true)
                 }
-                SaveMode::Add => store.add_app(app).await?,
+                SaveMode::Add => (store.add_app(app).await?, true),
             };
+            let mut own = b
+                .userdata
+                .snapshot()
+                .overrides
+                .get(&id.key())
+                .cloned()
+                .unwrap_or_default();
+            if own.game_modes != modes {
+                own.game_modes = modes;
+                b.userdata.set_overrides(&id, own);
+            }
+            if !added {
+                return Ok(false);
+            }
             let targets = ShortcutTargets::from_settings(&settings);
             if (targets.desktop || targets.app_menu || targets.steam)
                 && let Some(game) = store.game(&id.app_name)
@@ -864,7 +904,16 @@ impl Render for SideloadDialog {
                             ArtKind::Background,
                             cx,
                         ),
-                    )),
+                    ))
+                    .child(
+                        field()
+                            .label(irori_ui::game_mode::title())
+                            .child(super::mode_boxes(
+                                &self.modes,
+                                |this: &mut Self| &mut this.modes,
+                                cx,
+                            )),
+                    ),
             )
             .when_some(self.error.clone(), |this, e| {
                 this.child(Alert::error("sideload-error", e))

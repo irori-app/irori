@@ -54,7 +54,7 @@ pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
 pub use dialogs::steamgrid::open_art_picker_dialog;
 pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
-pub use filter::{CategoryFilter, Grouping, HiddenMode, InstallFilter, ViewFilter};
+pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
 pub use random::open_random_game;
@@ -102,6 +102,8 @@ gpui_kit::actions!(
         EndSelection,
         /// Turn grouping the library by play status on or off.
         ToggleStatusGroups,
+        /// Turn grouping the library by game mode on or off.
+        ToggleModeGroups,
         /// Show the library as a cover grid.
         ShowGrid,
         /// Show the library as a list.
@@ -135,6 +137,7 @@ pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-f", FocusSearch, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("ctrl-g", ToggleStatusGroups, Some(LIBRARY_CONTEXT)),
+        KeyBinding::new("ctrl-alt-g", ToggleModeGroups, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("alt-1", ShowGrid, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("alt-2", ShowList, Some(LIBRARY_CONTEXT)),
         KeyBinding::new("alt-3", ShowFocus, Some(LIBRARY_CONTEXT)),
@@ -252,6 +255,37 @@ pub fn set_quick_controls(on: bool, cx: &mut App) {
             .update_app(|s| s.ui.library_quick_controls = on)
     })
     .detach();
+}
+
+/// Whether the library groups its games by game mode; `None` until a
+/// library view exists.
+pub fn groups_by_mode(cx: &App) -> Option<bool> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group == Grouping::Mode)
+}
+
+/// Group the library by game mode, or stop. Does nothing until a library
+/// view exists.
+pub fn set_groups_by_mode(on: bool, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        let group = if on { Grouping::Mode } else { Grouping::None };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
+/// Show the library's games played in `mode` (a game page's mode chip):
+/// the Filters popover's criteria give way to that mode alone, while the
+/// search, store, sort and grouping stay. Without a library view yet, the
+/// view the navigation creates applies it ([`filters_panel::change_filters`]).
+pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.modes = [mode].into();
+        },
+        cx,
+    );
+    irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 
 /// How the library shows games: grid, list or Focus (`iroriUi.libraryLayout`).

@@ -735,6 +735,8 @@
   "game.age_rating.title": "Age rating",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Also rated {ratings}",
+  "game.modes.show": "Show {mode} games in the library",
+  "game.modes.edit": "Edit game modes",
   "game.sandbox.running": "Running sandboxed",
   "game.sandbox.no_network": "No network",
   "game.sandbox.no_home": "No home folder",

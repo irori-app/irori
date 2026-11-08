@@ -14,7 +14,7 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
     Styled as _, Subscription, Task, WeakEntity, Window, div,
 };
-use irori_core::InstallPlatform;
+use irori_core::{GameMode, InstallPlatform};
 use irori_services::EffectiveStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{models, play_status};
@@ -78,6 +78,39 @@ pub fn set_active_filters(model: &Entity<FilterModel>, cx: &mut App) {
 /// The library's filter model, while a library view exists.
 pub fn active_filters(cx: &App) -> Option<Entity<FilterModel>> {
     cx.try_global::<ActiveFilters>()?.0.upgrade()
+}
+
+/// A change of the criteria asked for while no library view existed.
+type Change = Box<dyn FnOnce(&mut ViewFilter)>;
+
+/// Changes waiting for the next library view, in the order asked.
+#[derive(Default)]
+struct PendingChanges(Vec<Change>);
+impl Global for PendingChanges {}
+
+/// Change the library's criteria: the open view's at once, else those of the
+/// next view, which applies the change over its saved criteria as it is
+/// created (a game page opened before the library, from a link or at
+/// start, asks this). Either way the change is saved like any other.
+pub fn change_filters(change: impl FnOnce(&mut ViewFilter) + 'static, cx: &mut App) {
+    match active_filters(cx) {
+        Some(model) => model.update(cx, |m, cx| m.update(change, cx)),
+        None => cx
+            .default_global::<PendingChanges>()
+            .0
+            .push(Box::new(change)),
+    }
+}
+
+/// Apply the changes waiting for a library view to its new `model`.
+pub(crate) fn apply_pending(model: &Entity<FilterModel>, cx: &mut App) {
+    if !cx.has_global::<PendingChanges>() {
+        return;
+    }
+    let changes = std::mem::take(&mut cx.global_mut::<PendingChanges>().0);
+    for change in changes {
+        model.update(cx, |m, cx| m.update(change, cx));
+    }
 }
 
 /// Content of the Filters popover. Re-renders when the model changes.
@@ -266,6 +299,44 @@ impl FiltersPanel {
                                 )
                             }))
                     })),
+            )
+            .into_any_element()
+    }
+
+    /// Game modes: games with any of the chosen ones are shown.
+    fn render_modes(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        let muted = cx.theme().muted_foreground;
+        v_flex()
+            .gap_2()
+            .child(section(irori_ui::game_mode::title()))
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .gap_1()
+                    .children(GameMode::ALL.into_iter().map(|mode| {
+                        Button::new(SharedString::from(format!("game-mode-{}", mode.id())))
+                            .xsmall()
+                            .outline()
+                            .icon(Icon::new(irori_ui::game_mode::icon(mode)))
+                            .label(irori_ui::game_mode::label(mode))
+                            .selected(f.modes.contains(&mode))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.set(
+                                    move |f| {
+                                        if !f.modes.remove(&mode) {
+                                            f.modes.insert(mode);
+                                        }
+                                    },
+                                    cx,
+                                )
+                            }))
+                    })),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("library.filters.modes.hint")),
             )
             .into_any_element()
     }
@@ -472,6 +543,7 @@ impl Render for FiltersPanel {
                             })),
                     ),
             )
+            .child(self.render_modes(&f, cx))
             .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))

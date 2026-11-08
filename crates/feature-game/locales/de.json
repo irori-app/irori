@@ -735,6 +735,8 @@
   "game.age_rating.title": "Alterseinstufung",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Außerdem eingestuft: {ratings}",
+  "game.modes.show": "Spiele mit „{mode}“ in der Bibliothek zeigen",
+  "game.modes.edit": "Spielmodi bearbeiten",
   "game.sandbox.running": "Läuft in der Sandbox",
   "game.sandbox.no_network": "Kein Netzwerk",
   "game.sandbox.no_home": "Kein Home-Ordner",

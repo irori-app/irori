@@ -15,6 +15,7 @@ mod compat;
 mod details;
 mod drawer;
 mod extras;
+mod game_modes;
 mod hero;
 mod info;
 mod journal;
@@ -76,6 +77,9 @@ pub enum GamePageEvent {
     /// "Categories…" was chosen: open category assignment for the page's
     /// game ([`GamePage::game_id`]) through `irori_library`'s categories dialog.
     RequestCategories,
+    /// A game-mode chip was chosen: show the library's games of that mode
+    /// (`irori_library::show_game_mode`).
+    ShowGameMode(irori_core::GameMode),
 }
 
 /// A small uppercase label over the page ("SCREENSHOTS", "DETAILS"), in

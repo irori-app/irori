@@ -8,7 +8,8 @@ use anyhow::Result;
 use irori_core::{GameInfo, Runner};
 use irori_extras::anticheat::{self, AntiCheatInfo, AntiCheatQuery, AntiCheatStatus};
 use irori_extras::known_fixes::{self, KnownFix};
-use irori_extras::wiki::{self, GameScore, ProtonDbTier, SteamDeckCompat, StoreIds, WikiInfo};
+use irori_extras::wiki::{self, GameScore, ProtonDbTier, SteamDeckCompat, WikiInfo};
+use irori_services::Backend;
 
 use irori_ui::i18n::t_args;
 
@@ -18,10 +19,10 @@ use crate::hooks::{
 };
 
 /// Gather every report for a game. Sources fail independently; the result
-/// is an error only when nothing could be loaded at all.
-pub(crate) async fn load(game: Arc<GameInfo>) -> Result<CompatibilityInfo> {
-    let ids = StoreIds::of(&game);
-    let wiki = wiki::game_info(&game.title, &ids).await;
+/// is an error only when nothing could be loaded at all. The wiki is read
+/// through the backend, which keeps the game modes PCGamingWiki names.
+pub(crate) async fn load(backend: Backend, game: Arc<GameInfo>) -> Result<CompatibilityInfo> {
+    let wiki = backend.wiki_info(&game).await;
     let steam_id = wiki
         .as_ref()
         .ok()

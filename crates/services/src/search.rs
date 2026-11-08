@@ -7,12 +7,16 @@
 //! each title ("gta" finds "Grand Theft Auto"). A query is folded the same
 //! way and each game gets a score; matches rank exact, then prefix, then
 //! word, then fuzzy (typos and abbreviations), titles before people.
+//!
+//! A query may also hold `mode:` terms ([`ParsedQuery`]): `mode:coop`
+//! keeps games played in co-op, `mode:local,online` games with either, and
+//! several terms must all hold. The rest of the query is searched as text.
 
 use std::sync::Arc;
 
 use fuzzy_matcher::FuzzyMatcher as _;
 use fuzzy_matcher::skim::SkimMatcherV2;
-use irori_core::GameInfo;
+use irori_core::{GameInfo, GameMode};
 
 /// How well a query matched one field, best last.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -172,6 +176,53 @@ impl Query {
             digits,
             words,
         })
+    }
+}
+
+/// A query split into its text and its `mode:` terms.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ParsedQuery {
+    /// What is left to search as text.
+    pub text: String,
+    /// One entry per `mode:` term: the modes it names, any of which a game
+    /// must have.
+    pub modes: Vec<Vec<GameMode>>,
+}
+
+impl ParsedQuery {
+    /// Split `raw`. A `mode:` term (any case) names modes by their ids or
+    /// usual spellings ([`GameMode::from_search`]), several separated by
+    /// commas; a term naming something that isn't a mode stays text.
+    pub fn new(raw: &str) -> Self {
+        let mut text: Vec<&str> = Vec::new();
+        let mut modes = Vec::new();
+        for word in raw.split_whitespace() {
+            let named = word
+                .get(..5)
+                .filter(|p| p.eq_ignore_ascii_case("mode:"))
+                .and_then(|_| {
+                    let mut any = Vec::new();
+                    for part in word[5..].split(',').filter(|p| !p.is_empty()) {
+                        any.extend(GameMode::from_search(part)?);
+                    }
+                    (!any.is_empty()).then(|| irori_core::game_mode::normalized(any))
+                });
+            match named {
+                Some(any) => modes.push(any),
+                None => text.push(word),
+            }
+        }
+        Self {
+            text: text.join(" "),
+            modes,
+        }
+    }
+
+    /// Whether a game with `game_modes` passes every `mode:` term.
+    pub fn modes_match(&self, game_modes: &[GameMode]) -> bool {
+        self.modes
+            .iter()
+            .all(|any| any.iter().any(|m| game_modes.contains(m)))
     }
 }
 
@@ -425,6 +476,32 @@ fn split_camel(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mode_terms_split_from_the_text() {
+        let q = ParsedQuery::new("  portal  MODE:co-op mode:local,online ");
+        assert_eq!(q.text, "portal");
+        assert_eq!(
+            q.modes,
+            [
+                vec![GameMode::Coop],
+                vec![GameMode::Local, GameMode::Online]
+            ]
+        );
+        let both = [GameMode::Coop, GameMode::Online];
+        assert!(q.modes_match(&both));
+        assert!(!q.modes_match(&[GameMode::Coop]));
+        assert!(!q.modes_match(&[]));
+        // Something that isn't a mode is searched as text.
+        let q = ParsedQuery::new("mode:racing mode:");
+        assert_eq!(q.text, "mode:racing mode:");
+        assert!(q.modes.is_empty());
+        assert!(q.modes_match(&[]));
+        let q = ParsedQuery::new("mode:multiplayer");
+        assert!(q.text.is_empty());
+        assert!(q.modes_match(&[GameMode::Mmo]));
+        assert!(!q.modes_match(&[GameMode::Single]));
+    }
 
     fn game(title: &str) -> Arc<GameInfo> {
         Arc::new(

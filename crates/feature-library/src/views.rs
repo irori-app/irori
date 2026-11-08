@@ -476,4 +476,22 @@ mod tests {
         assert_eq!(back, views);
         assert!(text.contains("\"builtin\":\"playingNow\""));
     }
+
+    #[test]
+    fn keeps_facets_a_newer_version_saved() {
+        let text = r#"{"views": [{"id": 1, "name": "Couch", "filter": {
+            "modes": ["local"], "players": {"min": 2}}}], "seeded": true, "nextId": 1}"#;
+        let mut views: SavedViews = serde_json::from_str(text).unwrap();
+        let view = views.get(1).unwrap().clone();
+        assert_eq!(view.filter.modes, [irori_core::GameMode::Local].into());
+        // Applying the view and saving it again keeps what this version
+        // can't use, and the view still reads as the one shown.
+        assert!(view.shows(&view.filter));
+        views.rename(1, "Couch co-op").unwrap();
+        let written = serde_json::to_value(&views).unwrap();
+        assert_eq!(
+            written["views"][0]["filter"]["players"],
+            serde_json::json!({"min": 2})
+        );
+    }
 }

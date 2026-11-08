@@ -735,6 +735,8 @@
   "game.age_rating.title": "Åldersgräns",
   "game.age_rating.separator": ", ",
   "game.age_rating.also": "Även klassat: {ratings}",
+  "game.modes.show": "Visa spel med ”{mode}” i biblioteket",
+  "game.modes.edit": "Redigera spellägen",
   "game.sandbox.running": "Körs i sandlåda",
   "game.sandbox.no_network": "Inget nätverk",
   "game.sandbox.no_home": "Ingen hemmapp",
