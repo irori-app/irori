@@ -2464,7 +2464,10 @@ impl LibraryView {
             })
             .child(markers)
             .when(actions.is_none() && status_overlay.is_none(), |el| {
-                el.children(categories.map(|names| category_chips(names, scrim)))
+                el.children(categories.map(|names| {
+                    // A cover Irori draws itself has the title at its foot.
+                    category_chips(names, game.cover_art().is_some(), scrim)
+                }))
             })
             .when(actions.is_none(), |el| el.children(status_overlay))
             .children(actions)
@@ -3221,12 +3224,13 @@ pub(crate) fn typed_search_text(keystroke: &Keystroke) -> Option<String> {
 /// the line stays on the cover however many there are.
 const COVER_CATEGORIES: usize = 2;
 
-/// A game's categories as small chips along its cover's foot.
-fn category_chips(names: Vec<String>, scrim: gpui_kit::Hsla) -> AnyElement {
+/// A game's categories as small chips along its cover's foot, or its top
+/// when the cover is drawn with the title at its foot.
+fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> AnyElement {
     let more = names.len().saturating_sub(COVER_CATEGORIES);
     h_flex()
         .absolute()
-        .bottom_2()
+        .map(|el| if at_foot { el.bottom_2() } else { el.top_2() })
         .left_2()
         .right_2()
         .gap_1()
