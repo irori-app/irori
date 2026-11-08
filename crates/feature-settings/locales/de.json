@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Dichte",
   "settings.field.ui_font_family.help": "Jede auf diesem Computer installierte Schriftart. Jede wird in der Liste in ihrer eigenen Schrift angezeigt.",
   "settings.field.ui_font_family.label": "Schriftart der Oberfläche",
-  "settings.field.ui_font_size.help": "Skaliert Text, Abstände und Bedienelemente gemeinsam.",
+  "settings.field.ui_font_size.help": "Skaliert Text, Abstände und Bedienelemente gemeinsam, zusätzlich zur Textgröße des Systems.",
   "settings.field.ui_font_size.label": "Größe der Oberfläche",
   "settings.field.ui_language.help": "Sprache der Oberfläche.",
   "settings.field.ui_language.label": "Sprache",

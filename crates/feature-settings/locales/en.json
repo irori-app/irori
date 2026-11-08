@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Density",
   "settings.field.ui_font_family.help": "Any font installed on this computer. Each one in the list is shown in its own face.",
   "settings.field.ui_font_family.label": "Interface font",
-  "settings.field.ui_font_size.help": "Scales text, spacing and controls together.",
+  "settings.field.ui_font_size.help": "Scales text, spacing and controls together, on top of the system’s text size.",
   "settings.field.ui_font_size.label": "Interface size",
   "settings.field.ui_language.help": "Language of the interface.",
   "settings.field.ui_language.label": "Language",

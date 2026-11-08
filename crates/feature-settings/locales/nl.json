@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Dichtheid",
   "settings.field.ui_font_family.help": "Elk lettertype dat op deze computer is geïnstalleerd. In de lijst wordt elk lettertype in zijn eigen letter getoond.",
   "settings.field.ui_font_family.label": "Lettertype van de interface",
-  "settings.field.ui_font_size.help": "Schaalt tekst, witruimte en bedieningselementen samen.",
+  "settings.field.ui_font_size.help": "Schaalt tekst, witruimte en bedieningselementen samen, bovenop de tekstgrootte van het systeem.",
   "settings.field.ui_font_size.label": "Interfacegrootte",
   "settings.field.ui_language.help": "Taal van de interface.",
   "settings.field.ui_language.label": "Taal",

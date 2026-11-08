@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Klasörden oyun ekle…",
   "shell.palette.add_folder_keywords": "klasör tara içe aktar ekle programlar",
   "shell.palette.steam_play": "{title} için Steam Play aracı",
-  "shell.palette.steam_play_keywords": "proton uyumluluk aracı steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton uyumluluk aracı steam play ge-proton",
+  "shell.palette.interface_larger": "Arayüzü büyüt",
+  "shell.palette.interface_smaller": "Arayüzü küçült",
+  "shell.palette.interface_reset": "Arayüz boyutunu sıfırla",
+  "shell.palette.interface_size_keywords": "yakınlaştır ölçek boyut metin büyük küçük arayüz zoom",
+  "shell.menu.view": "Görüntü"
 }

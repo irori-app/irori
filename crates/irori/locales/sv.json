@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Lägg till spel från en mapp…",
   "shell.palette.add_folder_keywords": "mapp sök importera lägg till program",
   "shell.palette.steam_play": "Steam Play-verktyg för {title}",
-  "shell.palette.steam_play_keywords": "proton kompatibilitetsverktyg steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton kompatibilitetsverktyg steam play ge-proton",
+  "shell.palette.interface_larger": "Gör gränssnittet större",
+  "shell.palette.interface_smaller": "Gör gränssnittet mindre",
+  "shell.palette.interface_reset": "Återställ gränssnittets storlek",
+  "shell.palette.interface_size_keywords": "zoom skala storlek text större mindre gränssnitt",
+  "shell.menu.view": "Visa"
 }

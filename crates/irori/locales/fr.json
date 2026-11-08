@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Ajouter les jeux d’un dossier…",
   "shell.palette.add_folder_keywords": "dossier analyser importer ajouter programmes",
   "shell.palette.steam_play": "Outil Steam Play pour {title}",
-  "shell.palette.steam_play_keywords": "proton outil compatibilité steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton outil compatibilité steam play ge-proton",
+  "shell.palette.interface_larger": "Agrandir l’interface",
+  "shell.palette.interface_smaller": "Réduire l’interface",
+  "shell.palette.interface_reset": "Rétablir la taille de l’interface",
+  "shell.palette.interface_size_keywords": "zoom échelle taille texte plus grand plus petit interface",
+  "shell.menu.view": "Présentation"
 }

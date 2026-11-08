@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "밀도",
   "settings.field.ui_font_family.help": "이 컴퓨터에 설치된 글꼴이라면 무엇이든 사용할 수 있습니다. 목록의 각 글꼴은 해당 글꼴 모양으로 표시됩니다.",
   "settings.field.ui_font_family.label": "인터페이스 글꼴",
-  "settings.field.ui_font_size.help": "텍스트, 간격, 컨트롤의 크기를 함께 조정합니다.",
+  "settings.field.ui_font_size.help": "시스템의 텍스트 크기에 더해 텍스트, 간격, 컨트롤의 크기를 함께 조정합니다.",
   "settings.field.ui_font_size.label": "인터페이스 크기",
   "settings.field.ui_language.help": "인터페이스에 사용할 언어입니다.",
   "settings.field.ui_language.label": "언어",

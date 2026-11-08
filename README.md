@@ -327,6 +327,8 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Linux desktops, macOS, Windows), live as you change it. Turn it on and it follows the
   colours pywal, wallust or matugen take from your wallpaper. It honours Increase contrast,
   Reduce transparency and Windows high contrast.
+- **Any interface size**, with <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>
+  or in Settings, on top of the text size your system asks for.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload
   in one click.
 

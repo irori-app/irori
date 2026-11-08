@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Yoğunluk",
   "settings.field.ui_font_family.help": "Bu bilgisayarda yüklü herhangi bir yazı tipi. Listedeki her biri kendi görünümüyle gösterilir.",
   "settings.field.ui_font_family.label": "Arayüz yazı tipi",
-  "settings.field.ui_font_size.help": "Metni, boşlukları ve denetimleri birlikte ölçekler.",
+  "settings.field.ui_font_size.help": "Metni, boşlukları ve denetimleri sistemin metin boyutunun üzerine birlikte ölçekler.",
   "settings.field.ui_font_size.label": "Arayüz boyutu",
   "settings.field.ui_language.help": "Arayüzün dili.",
   "settings.field.ui_language.label": "Dil",

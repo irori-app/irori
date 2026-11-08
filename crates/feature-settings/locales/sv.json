@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Täthet",
   "settings.field.ui_font_family.help": "Valfritt teckensnitt som är installerat på den här datorn. Vart och ett visas i listan med sitt eget utseende.",
   "settings.field.ui_font_family.label": "Gränssnittets teckensnitt",
-  "settings.field.ui_font_size.help": "Skalar text, avstånd och kontroller tillsammans.",
+  "settings.field.ui_font_size.help": "Skalar text, avstånd och kontroller tillsammans, utöver systemets textstorlek.",
   "settings.field.ui_font_size.label": "Gränssnittsstorlek",
   "settings.field.ui_language.help": "Gränssnittets språk.",
   "settings.field.ui_language.label": "Språk",

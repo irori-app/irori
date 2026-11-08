@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Přidat hry ze složky…",
   "shell.palette.add_folder_keywords": "složka prohledat import přidat programy",
   "shell.palette.steam_play": "Nástroj Steam Play pro {title}",
-  "shell.palette.steam_play_keywords": "proton nástroj kompatibility steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton nástroj kompatibility steam play ge-proton",
+  "shell.palette.interface_larger": "Zvětšit rozhraní",
+  "shell.palette.interface_smaller": "Zmenšit rozhraní",
+  "shell.palette.interface_reset": "Obnovit výchozí velikost rozhraní",
+  "shell.palette.interface_size_keywords": "lupa měřítko velikost text větší menší rozhraní zoom",
+  "shell.menu.view": "Zobrazení"
 }

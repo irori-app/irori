@@ -31,6 +31,7 @@ pub mod save_conflict;
 pub mod state;
 pub mod style;
 pub mod system_notify;
+mod text_scale;
 pub mod theme;
 mod wallpaper;
 
@@ -59,6 +60,7 @@ pub fn init(backend: Backend, cx: &mut App) {
     state::AppState::install(backend, cx);
     theme::install(cx);
     theme::follow_desktop(cx);
+    theme::follow_text_scale(cx);
     art::install(cx);
     nav::install(cx);
     models::install(cx);

@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Hustota",
   "settings.field.ui_font_family.help": "Jakékoli písmo nainstalované v tomto počítači. Každé se v seznamu zobrazí svým vlastním řezem.",
   "settings.field.ui_font_family.label": "Písmo rozhraní",
-  "settings.field.ui_font_size.help": "Mění velikost textu, mezer a ovládacích prvků najednou.",
+  "settings.field.ui_font_size.help": "Mění velikost textu, mezer a ovládacích prvků najednou, navíc k velikosti textu nastavené v systému.",
   "settings.field.ui_font_size.label": "Velikost rozhraní",
   "settings.field.ui_language.help": "Jazyk rozhraní.",
   "settings.field.ui_language.label": "Jazyk",

@@ -1,6 +1,7 @@
 //! Window-level commands and their key bindings.
 
 use gpui_kit::{App, KeyBinding, actions};
+use irori_ui::theme::{self, SizeStep};
 
 actions!(
     irori,
@@ -21,6 +22,12 @@ actions!(
         ToggleFullscreen,
         EnterBigPicture,
         PickRandomGame,
+        /// Make the whole interface larger.
+        ZoomIn,
+        /// Make the whole interface smaller.
+        ZoomOut,
+        /// Give the interface its default size.
+        ResetZoom,
         Quit
     ]
 );
@@ -58,7 +65,16 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(&primary("ctrl-shift-b"), EnterBigPicture, ctx),
         KeyBinding::new(&primary("ctrl-shift-g"), PickRandomGame, ctx),
         KeyBinding::new(&primary("ctrl-q"), Quit, None),
+        // `=` is `+` without Shift on most layouts, so both are bound.
+        KeyBinding::new(&primary("ctrl-="), ZoomIn, ctx),
+        KeyBinding::new(&primary("ctrl-+"), ZoomIn, ctx),
+        KeyBinding::new(&primary("ctrl-shift-="), ZoomIn, ctx),
+        KeyBinding::new(&primary("ctrl--"), ZoomOut, ctx),
+        KeyBinding::new(&primary("ctrl-0"), ResetZoom, ctx),
     ]);
+    cx.on_action(|_: &ZoomIn, cx| theme::change_interface_size(SizeStep::Larger, cx));
+    cx.on_action(|_: &ZoomOut, cx| theme::change_interface_size(SizeStep::Smaller, cx));
+    cx.on_action(|_: &ResetZoom, cx| theme::change_interface_size(SizeStep::Reset, cx));
     #[cfg(target_os = "macos")]
     {
         use gpui_kit::{Menu, MenuItem};
@@ -68,10 +84,17 @@ pub fn bind_keys(cx: &mut App) {
             KeyBinding::new("cmd-]", GoForward, ctx),
             KeyBinding::new("ctrl-cmd-f", ToggleFullscreen, ctx),
         ]);
-        cx.set_menus([Menu::new("Irori").items([
-            MenuItem::action(t("shell.nav.settings"), GoSettings),
-            MenuItem::separator(),
-            MenuItem::action(t("shell.tray.quit"), Quit),
-        ])]);
+        cx.set_menus([
+            Menu::new("Irori").items([
+                MenuItem::action(t("shell.nav.settings"), GoSettings),
+                MenuItem::separator(),
+                MenuItem::action(t("shell.tray.quit"), Quit),
+            ]),
+            Menu::new(t("shell.menu.view")).items([
+                MenuItem::action(t("shell.palette.interface_larger"), ZoomIn),
+                MenuItem::action(t("shell.palette.interface_smaller"), ZoomOut),
+                MenuItem::action(t("shell.palette.interface_reset"), ResetZoom),
+            ]),
+        ]);
     }
 }

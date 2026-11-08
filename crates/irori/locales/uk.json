@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Додати ігри з теки…",
   "shell.palette.add_folder_keywords": "тека пошук імпорт додати програми",
   "shell.palette.steam_play": "Інструмент Steam Play для {title}",
-  "shell.palette.steam_play_keywords": "proton інструмент сумісності steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton інструмент сумісності steam play ge-proton",
+  "shell.palette.interface_larger": "Збільшити інтерфейс",
+  "shell.palette.interface_smaller": "Зменшити інтерфейс",
+  "shell.palette.interface_reset": "Скинути розмір інтерфейсу",
+  "shell.palette.interface_size_keywords": "масштаб розмір текст більше менше інтерфейс зум",
+  "shell.menu.view": "Вигляд"
 }

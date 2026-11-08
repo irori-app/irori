@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Densitate",
   "settings.field.ui_font_family.help": "Orice font instalat pe acest computer. Fiecare font din listă este afișat cu propriile litere.",
   "settings.field.ui_font_family.label": "Fontul interfeței",
-  "settings.field.ui_font_size.help": "Scalează împreună textul, spațierea și controalele.",
+  "settings.field.ui_font_size.help": "Scalează împreună textul, spațierea și controalele, pe lângă dimensiunea textului din sistem.",
   "settings.field.ui_font_size.label": "Dimensiunea interfeței",
   "settings.field.ui_language.help": "Limba interfeței.",
   "settings.field.ui_language.label": "Limbă",

@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Щільність",
   "settings.field.ui_font_family.help": "Будь-який шрифт, установлений на цьому комп’ютері. Кожен шрифт у списку показано його власним накресленням.",
   "settings.field.ui_font_family.label": "Шрифт інтерфейсу",
-  "settings.field.ui_font_size.help": "Масштабує текст, відступи й елементи керування разом.",
+  "settings.field.ui_font_size.help": "Масштабує текст, відступи й елементи керування разом, на додачу до розміру тексту в системі.",
   "settings.field.ui_font_size.label": "Розмір інтерфейсу",
   "settings.field.ui_language.help": "Мова інтерфейсу.",
   "settings.field.ui_language.label": "Мова",

@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Games uit een map toevoegen…",
   "shell.palette.add_folder_keywords": "map scannen importeren toevoegen programma’s",
   "shell.palette.steam_play": "Steam Play-tool voor {title}",
-  "shell.palette.steam_play_keywords": "proton compatibiliteitstool steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton compatibiliteitstool steam play ge-proton",
+  "shell.palette.interface_larger": "Interface groter maken",
+  "shell.palette.interface_smaller": "Interface kleiner maken",
+  "shell.palette.interface_reset": "Interfacegrootte herstellen",
+  "shell.palette.interface_size_keywords": "zoom schaal grootte tekst groter kleiner interface",
+  "shell.menu.view": "Weergave"
 }

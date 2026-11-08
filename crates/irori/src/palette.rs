@@ -21,6 +21,7 @@ use irori_core::{GameId, GameInfo, Runner};
 use irori_library::InstallFilter;
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
+use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
 /// What confirming a palette row does.
@@ -67,6 +68,8 @@ enum PaletteTarget {
     Sync,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Make the interface larger, smaller or its default size.
+    InterfaceSize(SizeStep),
 }
 
 /// The library's state that its palette commands change.
@@ -279,6 +282,32 @@ impl Palette {
             PaletteTarget::Route(Route::YearInReview(None)),
             targets,
         );
+        for (step, label, icon) in [
+            (
+                SizeStep::Larger,
+                "shell.palette.interface_larger",
+                IconName::ZoomIn,
+            ),
+            (
+                SizeStep::Smaller,
+                "shell.palette.interface_smaller",
+                IconName::ZoomOut,
+            ),
+            (
+                SizeStep::Reset,
+                "shell.palette.interface_reset",
+                IconName::RotateCcw,
+            ),
+        ] {
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.interface_size_keywords")])
+                    .icon(icon),
+                PaletteTarget::InterfaceSize(step),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.storage"))
@@ -624,6 +653,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);

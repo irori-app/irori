@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Densidad",
   "settings.field.ui_font_family.help": "Cualquier fuente instalada en este equipo. Cada una se muestra en la lista con su propio tipo de letra.",
   "settings.field.ui_font_family.label": "Fuente de la interfaz",
-  "settings.field.ui_font_size.help": "Escala a la vez el texto, el espaciado y los controles.",
+  "settings.field.ui_font_size.help": "Escala a la vez el texto, el espaciado y los controles, además del tamaño de texto del sistema.",
   "settings.field.ui_font_size.label": "Tamaño de la interfaz",
   "settings.field.ui_language.help": "Idioma de la interfaz.",
   "settings.field.ui_language.label": "Idioma",

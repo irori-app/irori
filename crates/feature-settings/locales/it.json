@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Densità",
   "settings.field.ui_font_family.help": "Qualsiasi font installato su questo computer. Nell’elenco ognuno è mostrato con il proprio carattere.",
   "settings.field.ui_font_family.label": "Font dell’interfaccia",
-  "settings.field.ui_font_size.help": "Ridimensiona insieme testo, spaziature e controlli.",
+  "settings.field.ui_font_size.help": "Ridimensiona insieme testo, spaziature e controlli, oltre alla dimensione del testo del sistema.",
   "settings.field.ui_font_size.label": "Dimensione dell'interfaccia",
   "settings.field.ui_language.help": "Lingua dell'interfaccia.",
   "settings.field.ui_language.label": "Lingua",

@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Плотность",
   "settings.field.ui_font_family.help": "Любой шрифт, установленный на этом компьютере. Каждый шрифт в списке показан собственным начертанием.",
   "settings.field.ui_font_family.label": "Шрифт интерфейса",
-  "settings.field.ui_font_size.help": "Масштабирует текст, отступы и элементы управления вместе.",
+  "settings.field.ui_font_size.help": "Масштабирует текст, отступы и элементы управления вместе, поверх размера текста в системе.",
   "settings.field.ui_font_size.label": "Размер интерфейса",
   "settings.field.ui_language.help": "Язык интерфейса.",
   "settings.field.ui_language.label": "Язык",

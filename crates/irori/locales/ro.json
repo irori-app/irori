@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "Adaugă jocuri dintr-un dosar…",
   "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe",
   "shell.palette.steam_play": "Instrumentul Steam Play pentru {title}",
-  "shell.palette.steam_play_keywords": "proton instrument compatibilitate steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton instrument compatibilitate steam play ge-proton",
+  "shell.palette.interface_larger": "Mărește interfața",
+  "shell.palette.interface_smaller": "Micșorează interfața",
+  "shell.palette.interface_reset": "Resetează dimensiunea interfeței",
+  "shell.palette.interface_size_keywords": "zoom scară dimensiune text mai mare mai mic interfață",
+  "shell.menu.view": "Vizualizare"
 }

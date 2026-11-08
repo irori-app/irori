@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "Gęstość",
   "settings.field.ui_font_family.help": "Dowolna czcionka zainstalowana na tym komputerze. Każda pozycja na liście jest pokazana własnym krojem.",
   "settings.field.ui_font_family.label": "Czcionka interfejsu",
-  "settings.field.ui_font_size.help": "Skaluje jednocześnie tekst, odstępy i kontrolki.",
+  "settings.field.ui_font_size.help": "Skaluje jednocześnie tekst, odstępy i kontrolki, dodatkowo względem rozmiaru tekstu w systemie.",
   "settings.field.ui_font_size.label": "Rozmiar interfejsu",
   "settings.field.ui_language.help": "Język interfejsu.",
   "settings.field.ui_language.label": "Język",

@@ -224,6 +224,111 @@ fn zoom(cx: &App) -> f32 {
     cx.try_global::<Zoom>().map_or(1.0, |z| z.0)
 }
 
+/// A step of Ctrl/Cmd and +, minus or 0 through the interface sizes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SizeStep {
+    Larger,
+    Smaller,
+    /// Back to the default size (which the system's text size still scales).
+    Reset,
+}
+
+/// The interface sizes (`iroriUi.fontSize`, in px) the keys step through:
+/// about a tenth apart, within the 75 to 150 % the setting allows.
+const INTERFACE_SIZES: [f32; 9] = [12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0, 22.0, 24.0];
+
+/// The interface size after `step` from `current`. A size between two steps
+/// (set with the slider) moves to the next one in that direction; the ends
+/// stay where they are.
+pub fn interface_size_step(current: f32, step: SizeStep) -> f32 {
+    match step {
+        SizeStep::Reset => UiPrefs::default().font_size,
+        SizeStep::Larger => INTERFACE_SIZES
+            .into_iter()
+            .find(|s| *s > current + 0.01)
+            .unwrap_or(current.max(INTERFACE_SIZES[INTERFACE_SIZES.len() - 1])),
+        SizeStep::Smaller => INTERFACE_SIZES
+            .into_iter()
+            .rev()
+            .find(|s| *s < current - 0.01)
+            .unwrap_or(current.min(INTERFACE_SIZES[0])),
+    }
+}
+
+/// Make the whole interface larger, smaller or its default size, as the
+/// Appearance settings' interface size does.
+pub fn change_interface_size(step: SizeStep, cx: &mut App) {
+    let settings = &crate::backend(cx).settings;
+    let current = settings.app().ui.font_size;
+    let next = interface_size_step(current, step);
+    if next != current {
+        settings.update_app(|s| s.ui.font_size = next);
+    }
+}
+
+/// The system's text size ([`crate::text_scale`]). Absent means 1.
+#[derive(Clone, Copy, PartialEq)]
+struct TextScale(f32);
+
+impl Global for TextScale {}
+
+/// What the interface size is multiplied by: the screen's zoom and the
+/// system's text size.
+fn scale(cx: &App) -> f32 {
+    zoom(cx) * cx.try_global::<TextScale>().map_or(1.0, |s| s.0)
+}
+
+/// Resize the interface for the size the user picked times [`scale`].
+fn rescale(cx: &mut App) {
+    let Some(base) = cx
+        .try_global::<Applied>()
+        .map(|a| f32::from_bits(a.font_size))
+    else {
+        return;
+    };
+    let size = base * scale(cx);
+    Theme::update(cx, |theme| theme.font_size = px(size));
+    cx.refresh_windows();
+}
+
+/// Scale the interface by the system's text size, now and as it changes.
+fn set_text_scale(factor: f32, cx: &mut App) {
+    if cx.try_global::<TextScale>().map_or(1.0, |s| s.0) == factor {
+        return;
+    }
+    cx.set_global(TextScale(factor));
+    rescale(cx);
+}
+
+/// Follow the system's text size. The first read waits as the accent's does,
+/// so the first window has the right size.
+pub(crate) fn follow_text_scale(cx: &mut App) {
+    let backend = crate::backend(cx);
+    let Some(mut changes) = crate::text_scale::watch(&backend) else {
+        return;
+    };
+    let first = changes.try_recv().ok().or_else(|| {
+        backend
+            .runtime()
+            .block_on(async { tokio::time::timeout(ACCENT_WAIT, changes.next()).await })
+            .ok()
+            .flatten()
+    });
+    if let Some(factor) = first {
+        set_text_scale(factor, cx);
+    }
+    cx.spawn(async move |cx| {
+        while let Some(mut factor) = changes.next().await {
+            cx.background_executor().timer(DESKTOP_SETTLE).await;
+            while let Ok(newer) = changes.try_recv() {
+                factor = newer;
+            }
+            cx.update(|cx| set_text_scale(factor, cx));
+        }
+    })
+    .detach();
+}
+
 /// Scale the whole interface by `zoom` on top of the interface size the user
 /// picked (1 = none). Big Picture sets its TV size with this while it shows
 /// and resets it to 1 when it closes.
@@ -233,14 +338,7 @@ pub fn set_zoom(zoom: f32, cx: &mut App) {
         return;
     }
     cx.set_global(Zoom(zoom));
-    let Some(base) = cx
-        .try_global::<Applied>()
-        .map(|a| f32::from_bits(a.font_size))
-    else {
-        return;
-    };
-    Theme::update(cx, |theme| theme.font_size = px(base * zoom));
-    cx.refresh_windows();
+    rescale(cx);
 }
 
 pub(crate) fn install(cx: &mut App) {
@@ -778,7 +876,7 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         } == next
     });
     cx.set_global(next);
-    let zoomed = font_size * zoom(cx);
+    let zoomed = font_size * scale(cx);
     if only_size {
         Theme::update(cx, |theme| theme.font_size = px(zoomed));
         return;
@@ -1886,6 +1984,32 @@ mod tests {
             assert_eq!(cx.theme().theme_name().as_ref(), "Tokyo Storm");
             assert_eq!(cx.theme().font_size, px(20.0));
         });
+    }
+
+    #[test]
+    fn interface_sizes_step_within_their_bounds() {
+        use SizeStep::*;
+        assert_eq!(interface_size_step(16.0, Larger), 18.0);
+        assert_eq!(interface_size_step(16.0, Smaller), 15.0);
+        assert_eq!(interface_size_step(17.0, Larger), 18.0);
+        assert_eq!(interface_size_step(17.0, Smaller), 16.0);
+        assert_eq!(interface_size_step(24.0, Larger), 24.0);
+        assert_eq!(interface_size_step(12.0, Smaller), 12.0);
+        assert_eq!(interface_size_step(22.0, Reset), 16.0);
+    }
+
+    #[gpui_kit::test]
+    fn the_systems_text_size_scales_the_interface(cx: &mut TestAppContext) {
+        setup(cx);
+        let p = prefs(ThemePreference::Dark, "");
+        cx.update(|cx| apply(&p, None, cx));
+        cx.update(|cx| set_text_scale(1.25, cx));
+        cx.read(|cx| assert_eq!(cx.theme().font_size, px(20.0)));
+        cx.update(|cx| set_zoom(1.5, cx));
+        cx.read(|cx| assert_eq!(cx.theme().font_size, px(30.0)));
+        cx.update(|cx| set_zoom(1.0, cx));
+        cx.update(|cx| set_text_scale(1.0, cx));
+        cx.read(|cx| assert_eq!(cx.theme().font_size, px(16.0)));
     }
 
     #[gpui_kit::test]

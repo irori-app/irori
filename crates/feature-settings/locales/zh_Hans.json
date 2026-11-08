@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "密度",
   "settings.field.ui_font_family.help": "可使用此电脑上安装的任意字体。列表中的每种字体都以其自身字形显示。",
   "settings.field.ui_font_family.label": "界面字体",
-  "settings.field.ui_font_size.help": "同时缩放文字、间距和控件。",
+  "settings.field.ui_font_size.help": "在系统文字大小的基础上，同时缩放文字、间距和控件。",
   "settings.field.ui_font_size.label": "界面大小",
   "settings.field.ui_language.help": "界面的显示语言。",
   "settings.field.ui_language.label": "语言",

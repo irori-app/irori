@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "从文件夹添加游戏…",
   "shell.palette.add_folder_keywords": "文件夹 扫描 导入 添加 程序",
   "shell.palette.steam_play": "{title} 的 Steam Play 工具",
-  "shell.palette.steam_play_keywords": "proton 兼容性工具 steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton 兼容性工具 steam play ge-proton",
+  "shell.palette.interface_larger": "放大界面",
+  "shell.palette.interface_smaller": "缩小界面",
+  "shell.palette.interface_reset": "重置界面大小",
+  "shell.palette.interface_size_keywords": "缩放 放大 缩小 大小 文字 界面",
+  "shell.menu.view": "显示"
 }

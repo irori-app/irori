@@ -135,5 +135,10 @@
   "shell.palette.add_folder": "폴더에서 게임 추가…",
   "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램",
   "shell.palette.steam_play": "{title}의 Steam Play 도구",
-  "shell.palette.steam_play_keywords": "proton 호환성 도구 steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton 호환성 도구 steam play ge-proton",
+  "shell.palette.interface_larger": "인터페이스 크게",
+  "shell.palette.interface_smaller": "인터페이스 작게",
+  "shell.palette.interface_reset": "인터페이스 크기 초기화",
+  "shell.palette.interface_size_keywords": "확대 축소 배율 크기 텍스트 인터페이스 줌",
+  "shell.menu.view": "보기"
 }

@@ -550,7 +550,7 @@
   "settings.field.ui_density.label": "表示密度",
   "settings.field.ui_font_family.help": "このコンピューターにインストールされている任意のフォントを使えます。一覧の各フォントは、そのフォント自体で表示されます。",
   "settings.field.ui_font_family.label": "インターフェースのフォント",
-  "settings.field.ui_font_size.help": "文字、余白、コントロールをまとめて拡大・縮小します。",
+  "settings.field.ui_font_size.help": "システムの文字サイズに加えて、文字、余白、コントロールをまとめて拡大・縮小します。",
   "settings.field.ui_font_size.label": "インターフェースのサイズ",
   "settings.field.ui_language.help": "インターフェースの言語です。",
   "settings.field.ui_language.label": "言語",

@@ -478,6 +478,22 @@ Windows, read once a session, so a font installed while Irori runs shows up afte
 restart. Manrope, Irori's own, is always first. A picked font that is later uninstalled
 falls back to Manrope.
 
+### Interface size
+
+Settings → Appearance → Interface size (`iroriUi.fontSize`, 75 to 150 %) scales text,
+spacing and controls together, as do <kbd>Ctrl</kbd> and <kbd>+</kbd>, <kbd>−</kbd> or
+<kbd>0</kbd> (<kbd>Cmd</kbd> on macOS, where the View menu has them too) and the command
+palette. The display's own scale needs nothing: GPUI draws at it. On top of the size the
+user picks, Irori follows the system's text size, live as it changes:
+
+| | Source |
+| --- | --- |
+| Linux | `org.gnome.desktop.interface` `text-scaling-factor` through the XDG settings portal (GNOME's Large text and text scaling); without it, `GDK_DPI_SCALE` |
+| macOS | None: macOS has no text size for apps |
+| Windows | Settings → Accessibility → Text size (`UISettings::TextScaleFactor`) |
+
+Factors outside 0.5 to 3 are ignored. Big Picture's own size multiplies on top.
+
 ### New versions of Irori
 
 Irori looks for its own new versions only where nothing else updates it. It works out
