@@ -377,6 +377,10 @@ and `launch.rs` before changing anything below the UI.
   hides it, `spawn` (games and the programs beside them) keeps it so console games
   stay playable, and `CommandSpec::console` overrides either. A helper started
   without `CommandSpec` calls `process::hide_console`.
+- Split user-entered arguments by who reads them: `split_program_args(windows, ..)`
+  for the program a game starts (a Windows program gets Windows quoting under Wine
+  too, so `C:\Users\…` keeps its backslashes), `split_args` (this system's rules) for
+  wrappers and other host programs.
 
 **HTTP** (`http.rs`):
 
@@ -525,6 +529,9 @@ commands without a window.
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
+  `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
+  game runs (`back_up_while_playing`): a timer task per session, one backup at a
+  time, finished before the session's cloud upload.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
@@ -610,7 +617,11 @@ commands without a window.
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
-  2. Optional cloud-save sync.
+  2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
+     upload after the session too). A failed download stops the launch with
+     `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
+     again or play anyway (`LaunchParams::skip_save_download`); a failed upload
+     raises a notice.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games").

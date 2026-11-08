@@ -141,7 +141,13 @@ signature changes. A build signed with a Developer ID asks once.
 `IRORI_HOME` relocates settings, data and cache under one root and is useful for
 isolated testing. On Windows a file named `portable` beside `irori.exe` does the same
 with `irori.exe`'s folder as the root (`config`, `data` and `cache` beside it); see
-[Portable Windows build](#portable-windows-build). `IRORI_HOME` wins over the file. A configured Steam path takes precedence when it holds a Steam
+[Portable Windows build](#portable-windows-build). `IRORI_HOME` wins over the file.
+The start-with-system entry is one per user and belongs to the usual Irori: a run
+with `IRORI_HOME` or a portable folder leaves an entry it didn't write as it is at
+startup, writes its own only when the setting is turned on there, and removes only
+an entry naming its folder. The Heroic import reads Heroic's native config folder or
+the Flatpak's (`~/.var/app/com.heroicgameslauncher.hgl/config/heroic`); when both
+exist, the one whose settings, installs or logins changed last. A configured Steam path takes precedence when it holds a Steam
 library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
 `~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
 (`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
@@ -732,7 +738,8 @@ Inside, the game sees an empty root holding only:
 | Wine or Proton build, umu-run, EAC/BattlEye runtimes, Steam's `legacycompat` | read-only |
 | umu's Steam runtime (`~/.local/share/umu`) | read-only with a throwaway writable layer (`--overlay-src`/`--tmp-overlay`, bubblewrap 0.10+; older bubblewrap binds it writable) |
 | GPU, controllers, sound | `/dev/dri`, `/dev/nvidia*`, `/dev/input`, `/dev/hidraw*`, `/dev/snd`; never `/dev/uinput` |
-| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, `/tmp/.X11-unix`, the X cookie, gamescope's socket when gamescope is on |
+| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, the socket of `$DISPLAY`'s X server (`/tmp/.X11-unix/X<n>`, no other display's), the X cookie, gamescope's socket when gamescope is on |
+| Environment | empty (`env -i`, `--clearenv`), then Irori's display, sound, locale, XDG, graphics driver and Wine/Proton/Steam runtime/umu variables, then every variable of the launch (the game's settings, its store's); nothing else of the session, so its tokens and API keys stay out, `/proc/1/environ` included |
 | `/proc`, `/tmp`, `/run`, `/var/tmp`, `/dev/shm` | private (new PID namespace, fresh tmpfs) |
 | `/sys`, `/run/udev`, fontconfig's cache, DNS configuration | read-only |
 
@@ -744,9 +751,10 @@ folder) stay hidden. Without it the home folder and those drives are shown
 writable, as outside the sandbox. "Block the network" gives the game a network
 namespace with only loopback: no internet, no LAN, nothing listening on the
 computer (GOG Galaxy's comet on port 9977 included); X11 clients then reach the
-display through `/tmp/.X11-unix` instead of the abstract socket. In every mode
+display through its socket in `/tmp/.X11-unix` instead of the abstract socket.
+IPC stays shared, as X11 clients use shared memory with the server. In every mode
 the session D-Bus is left out (it can start programs outside the sandbox) and
-`DBUS_SESSION_BUS_ADDRESS` unset, `--new-session` stops terminal input
+`DBUS_SESSION_BUS_ADDRESS` not passed, `--new-session` stops terminal input
 injection, and `--die-with-parent` ends the sandbox with Irori's stop. A plain
 Wine game waits for its prefix's wineserver inside the sandbox, as everything
 in the sandbox ends with its first process; Proton's `waitforexitandrun` and

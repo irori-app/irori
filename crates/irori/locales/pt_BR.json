@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Seu login salvo não funciona mais. Abra Contas para entrar de novo.",
   "shell.notice.saves_conflict": "Os saves de {title} não foram enviados",
   "shell.notice.saves_conflict_message": "Eles mudaram aqui e na nuvem. Abra os saves na nuvem do jogo para escolher quais manter.",
+  "shell.notice.saves_upload_failed_message": "O Irori não conseguiu acessar a nuvem. Envie-os mais tarde pelos saves na nuvem do jogo.",
   "shell.notice.ludusavi_backup_failed": "O backup dos saves de {title} não ficou completo",
   "shell.palette.back_up_saves": "Fazer backup dos saves de {title}",
   "shell.palette.save_backups": "Backups de saves de {title}",

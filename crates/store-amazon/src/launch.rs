@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use irori_amazon_api::fuel::{FuelAction, LaunchInfo};
 use irori_amazon_api::sdk;
-use irori_core::process::{CommandSpec, split_args};
+use irori_core::process::{CommandSpec, split_windows_args};
 use irori_core::{GameSettings, LaunchEnvironment, LaunchOption, LaunchPlan, WineKind, WineLaunch};
 
 /// Everything a game command depends on.
@@ -74,9 +74,9 @@ pub fn build_launch_plan(i: &LaunchInputs<'_>) -> Result<LaunchPlan> {
     let exe = executable(i);
     let mut args = i.info.args.clone();
     if let Some(LaunchOption::Basic { parameters, .. }) = i.option {
-        args.extend(split_args(parameters));
+        args.extend(split_windows_args(parameters));
     }
-    args.extend(split_args(&i.settings.launcher_args));
+    args.extend(split_windows_args(&i.settings.launcher_args));
     args.extend(i.extra_args.iter().cloned());
 
     let mut env = launch_env(i.environment, i.app_name);
@@ -240,7 +240,7 @@ mod tests {
         );
         let basic = LaunchOption::Basic {
             name: "Safe".into(),
-            parameters: "-safe".into(),
+            parameters: r"-safe -saves C:\Users\me\saves".into(),
         };
         let extra = vec!["--extra".to_string()];
         let info = info();
@@ -269,6 +269,8 @@ mod tests {
                 "/g/Bin/Game.exe",
                 "-fuel",
                 "-safe",
+                "-saves",
+                r"C:\Users\me\saves",
                 "-windowed",
                 "-name X",
                 "--extra"

@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Kayıtlı oturumunuz artık çalışmıyor. Yeniden oturum açmak için Hesaplar'ı açın.",
   "shell.notice.saves_conflict": "{title} kayıtları yüklenmedi",
   "shell.notice.saves_conflict_message": "Hem burada hem de bulutta değişti. Hangilerini koruyacağınızı seçmek için oyunun bulut kayıtlarını açın.",
+  "shell.notice.saves_upload_failed_message": "Irori buluta ulaşamadı. Daha sonra oyunun bulut kayıtlarından yükleyin.",
   "shell.notice.ludusavi_backup_failed": "{title} kayıtları tam olarak yedeklenemedi",
   "shell.palette.back_up_saves": "{title} kayıtlarını yedekle",
   "shell.palette.save_backups": "{title} kayıt yedekleri",

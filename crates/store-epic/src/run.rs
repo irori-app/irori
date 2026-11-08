@@ -168,6 +168,7 @@ impl EpicStore {
             request.option.as_ref(),
             &settings.launcher_args,
             &request.extra_args,
+            needs_wine,
         );
         let command = launch::build_command(&CommandInput {
             params: &params,

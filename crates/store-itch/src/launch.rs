@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
-use irori_core::process::{CommandSpec, split_args};
+use irori_core::process::{CommandSpec, split_program_args};
 use irori_core::{LaunchOption, LaunchPlan, LaunchRequest, WineKind};
 
 use crate::records::InstalledRecord;
@@ -21,10 +21,10 @@ pub(crate) fn build_plan(record: &InstalledRecord, request: &LaunchRequest) -> R
             install.display()
         );
     }
-    let mut args = split_args(&request.settings.launcher_args);
+    let mut arg_lines = vec![request.settings.launcher_args.as_str()];
     let mut exe_override = None;
     match &request.option {
-        Some(LaunchOption::Basic { parameters, .. }) => args.extend(split_args(parameters)),
+        Some(LaunchOption::Basic { parameters, .. }) => arg_lines.push(parameters),
         Some(LaunchOption::AltExe { executable }) if !executable.is_empty() => {
             exe_override = Some(executable.clone());
         }
@@ -34,7 +34,6 @@ pub(crate) fn build_plan(record: &InstalledRecord, request: &LaunchRequest) -> R
     if exe_override.is_none() && !target.is_empty() {
         exe_override = Some(target.to_string());
     }
-    args.extend(request.extra_args.iter().cloned());
 
     let exe = match &exe_override {
         Some(e) => record.resolve(e),
@@ -56,6 +55,11 @@ pub(crate) fn build_plan(record: &InstalledRecord, request: &LaunchRequest) -> R
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("bat"));
     let uses_wine = record.platform.needs_wine() || (windows_exe && !cfg!(windows));
+    let mut args: Vec<String> = arg_lines
+        .iter()
+        .flat_map(|line| split_program_args(uses_wine, line))
+        .collect();
+    args.extend(request.extra_args.iter().cloned());
     let env = &request.environment;
     let mut command = if uses_wine {
         let wine = env.wine.as_ref().with_context(|| {
@@ -163,7 +167,7 @@ mod tests {
             uses_umu: false,
             proton_verb: "waitforexitandrun",
         };
-        let plan = build_plan(&record, &request(Some(wine))).unwrap();
+        let plan = build_plan(&record, &request(Some(wine.clone()))).unwrap();
         assert_eq!(plan.command.program, PathBuf::from("gamemoderun"));
         let a = args(&plan);
         if cfg!(windows) {
@@ -185,6 +189,14 @@ mod tests {
         if !cfg!(windows) {
             assert!(build_plan(&record, &request(None)).is_err());
         }
+
+        let mut with_path = request(Some(wine));
+        with_path.settings.launcher_args = r"-saves C:\Users\me\saves".into();
+        let a = args(&build_plan(&record, &with_path).unwrap());
+        assert_eq!(
+            &a[a.len() - 3..],
+            ["-saves", r"C:\Users\me\saves", "--extra"]
+        );
     }
 
     #[test]

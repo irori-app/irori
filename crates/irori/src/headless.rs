@@ -163,6 +163,7 @@ fn accounts(backend: &Backend) -> Result<i32> {
 async fn import_heroic(backend: &Backend) -> Result<i32> {
     let dir =
         irori_core::paths::heroic_config_dir().context("No Heroic configuration was found")?;
+    println!("Importing from {}", dir.display());
     let imports = crate::stores::HEROIC_IMPORTS;
     for (name, import) in imports {
         let d = dir.clone();

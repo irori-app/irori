@@ -191,6 +191,7 @@ fn import_from_heroic(cx: &mut App) -> gpui_kit::Task<anyhow::Result<ImportSumma
     irori_ui::run(cx, async move {
         let dir = irori_core::paths::heroic_config_dir()
             .ok_or_else(|| anyhow::anyhow!("No Heroic configuration was found"))?;
+        tracing::info!("importing from Heroic's folder {}", dir.display());
         let mut summary = ImportSummary::default();
         let imports = HEROIC_IMPORTS;
         for (name, import) in imports {

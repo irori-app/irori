@@ -13,7 +13,7 @@ use anyhow::{Context as _, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use irori_core::process::split_args;
+use irori_core::process::split_windows_args;
 use irori_core::{OpContext, Outcome};
 
 use irori_gog_api::content::{Client, Repository};
@@ -83,7 +83,7 @@ pub fn redist_command(redist_dir: &Path, depot: &RedistDepot) -> Option<(String,
         .join(&depot.executable.path)
         .to_string_lossy()
         .into_owned();
-    let args = split_args(&depot.executable.arguments);
+    let args = split_windows_args(&depot.executable.arguments);
     if depot.dependency_id == "PHYSXLEGACY" {
         let mut a = vec!["/i".to_string(), exe];
         a.extend(args);

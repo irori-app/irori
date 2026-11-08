@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Tu inicio de sesión guardado ya no funciona. Abre Cuentas para volver a iniciar sesión.",
   "shell.notice.saves_conflict": "No se subieron las partidas de {title}",
   "shell.notice.saves_conflict_message": "Cambiaron aquí y en la nube. Abre las partidas en la nube del juego para elegir cuáles conservar.",
+  "shell.notice.saves_upload_failed_message": "Irori no pudo conectar con la nube. Súbelas más tarde desde las partidas en la nube del juego.",
   "shell.notice.ludusavi_backup_failed": "La copia de las partidas de {title} no se completó",
   "shell.palette.back_up_saves": "Hacer copia de las partidas de {title}",
   "shell.palette.save_backups": "Copias de partidas de {title}",

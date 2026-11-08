@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Din sparade inloggning fungerar inte längre. Öppna Konton för att logga in igen.",
   "shell.notice.saves_conflict": "Sparfilerna för {title} laddades inte upp",
   "shell.notice.saves_conflict_message": "De har ändrats här och i molnet. Öppna spelets molnsparningar och välj vilka du behåller.",
+  "shell.notice.saves_upload_failed_message": "Irori nådde inte molnet. Ladda upp dem senare från spelets molnsparningar.",
   "shell.notice.ludusavi_backup_failed": "Alla sparfiler för {title} säkerhetskopierades inte",
   "shell.palette.back_up_saves": "Säkerhetskopiera sparfilerna för {title}",
   "shell.palette.save_backups": "Säkerhetskopior av sparfiler för {title}",

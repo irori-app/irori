@@ -455,10 +455,30 @@ async fn add_app(
             executable: Some(exe.to_path_buf()),
             platform,
             install_folder: working_dir.map(Path::to_path_buf),
-            launcher_args: args.unwrap_or_default(),
+            launcher_args: args.map(|a| app_args(platform, &a)).unwrap_or_default(),
             ..Default::default()
         })
         .await
+}
+
+/// The imported launchers keep arguments in POSIX quoting, and Irori splits
+/// a Windows app's with Windows rules, so a Windows app's are written again
+/// in Windows quoting: the game gets the same arguments it got there.
+fn app_args(platform: SideloadPlatform, args: &str) -> String {
+    if platform != SideloadPlatform::Windows {
+        return args.to_string();
+    }
+    irori_core::process::split_args(args)
+        .iter()
+        .map(|a| {
+            if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+                a.clone()
+            } else {
+                irori_core::process::windows_arg(a)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Lutris's pre-launch and post-exit commands: one Irori runs alongside the
@@ -599,6 +619,17 @@ mod tests {
         assert_eq!(irori_core::process::split_args(&p.args), ["--speed", "2 x"]);
         assert!(p.enabled && p.stop_with_game && !p.in_prefix);
         assert!(program_of("  ").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn windows_apps_get_their_arguments_in_windows_quoting() {
+        let args = app_args(SideloadPlatform::Windows, r#"-name 'a b' -dx11 "c\"d""#);
+        assert_eq!(
+            irori_core::process::split_windows_args(&args),
+            ["-name", "a b", "-dx11", "c\"d"]
+        );
+        assert_eq!(app_args(SideloadPlatform::Linux, "-a 'b c'"), "-a 'b c'");
     }
 
     #[test]

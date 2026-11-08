@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "已保存的登录已失效。请打开“账号”重新登录。",
   "shell.notice.saves_conflict": "{title} 的存档未上传",
   "shell.notice.saves_conflict_message": "此处和云端的存档都已更改。请打开游戏的云存档，选择要保留的一方。",
+  "shell.notice.saves_upload_failed_message": "Irori 无法连接到云端。请稍后在游戏的云存档中上传。",
   "shell.notice.ludusavi_backup_failed": "{title} 的存档未完全备份",
   "shell.palette.back_up_saves": "备份 {title} 的存档",
   "shell.palette.save_backups": "{title} 的存档备份",

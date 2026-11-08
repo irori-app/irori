@@ -10,7 +10,8 @@ use irori_core::log_cap;
 use irori_core::process::{self, CancellationToken, CommandSpec, ExecResult, RunOptions};
 use irori_core::{
     Event, GameId, GameInfo, InstallPlatform, InstallProgress, LaunchOption, LaunchRequest, Notice,
-    NoticeLevel, Outcome, Paths, RemoveArgs, Runner, SaveConflict, StatusKind, SyncDirection, util,
+    NoticeLevel, Outcome, Paths, RemoveArgs, Runner, SaveConflict, SaveDownloadFailed, StatusKind,
+    SyncDirection, util,
 };
 use irori_runtime::Target;
 use serde_json::Value;
@@ -29,7 +30,16 @@ pub struct LaunchParams {
     pub verbose: bool,
     /// The streaming client the session is for (Sunshine's Moonlight).
     pub stream: Option<crate::sunshine::StreamClient>,
+    /// Play without the cloud-save download first: the user chose to play
+    /// on this device's saves after it failed ([`SaveDownloadFailed`]).
+    pub skip_save_download: bool,
 }
+
+/// How long the cloud-save sync before a launch, or after a session, may
+/// take. A store that hangs (a stalled connection) would otherwise keep the
+/// game from starting, or the session from ending, for good; three minutes
+/// is far longer than syncing a game's saves takes on a working connection.
+pub const SAVE_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
 
 /// A game process Irori started and is tracking.
 #[derive(Debug, Clone)]
@@ -223,6 +233,7 @@ impl Backend {
             skip_version_check,
             verbose,
             stream,
+            skip_save_download,
         } = params;
         if self.is_running(id) {
             bail!("already running");
@@ -268,15 +279,35 @@ impl Backend {
             platform: Self::target_platform(&game),
         };
 
-        if settings.auto_sync_saves && store.supports_cloud_saves() && self.is_online() {
+        if settings.auto_sync_saves
+            && store.supports_cloud_saves()
+            && game.cloud_save_enabled
+            && !skip_save_download
+            && self.is_online()
+        {
             ctx.step.as_ref()("Syncing saves");
-            if let Err(e) = self.sync_saves_inner(id, SyncDirection::Download).await {
-                // Playing on would build on saves the next upload overwrites,
-                // or that overwrite the cloud's; the caller asks the user.
-                if SaveConflict::of(&e).is_some() {
-                    return Err(e);
+            match self.save_locations(id).await {
+                // A save folder Irori can't work out is the game's setup,
+                // not the cloud's; the game page's cloud saves say so.
+                Err(e) => tracing::warn!("pre-launch save sync of {id}: {e:#}"),
+                Ok(saves) => {
+                    if let Err(e) = self
+                        .sync_saves_limited(id, &store, SyncDirection::Download, &saves)
+                        .await
+                    {
+                        // Playing on would build on saves the next upload
+                        // overwrites, or that overwrite the cloud's; the
+                        // caller asks the user.
+                        if SaveConflict::of(&e).is_some() {
+                            return Err(e);
+                        }
+                        tracing::warn!("pre-launch save sync of {id}: {e:#}");
+                        return Err(SaveDownloadFailed {
+                            reason: format!("{e:#}"),
+                        }
+                        .into());
+                    }
                 }
-                tracing::warn!("pre-launch save sync of {id}: {e:#}");
             }
         }
 
@@ -375,6 +406,15 @@ impl Backend {
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
         self.start_replay(id, &game.title, &settings.replay);
+        let backups = (settings.ludusavi_interval > 0).then(|| {
+            let stop = CancellationToken::new();
+            let (b, id, title) = (self.clone(), id.clone(), game.title.clone());
+            let every = crate::ludusavi::backup_interval(settings.ludusavi_interval);
+            let until = stop.clone();
+            let task =
+                self.spawn(async move { b.back_up_while_playing(id, title, every, until).await });
+            (stop, task)
+        });
         self.statuses.set(id, StatusKind::Playing);
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
@@ -458,6 +498,11 @@ impl Backend {
                 programs.end().await;
             }
             b.stop_replay(&id).await;
+            // A backup under way finishes before the saves sync below.
+            if let Some((stop, task)) = backups {
+                stop.cancel();
+                let _ = task.await;
+            }
             let seconds = started.elapsed().as_secs();
             let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
             let crashed = failed_start(status, seconds, stopped);
@@ -488,26 +533,8 @@ impl Backend {
             if !settings.after_launch_script_path.is_empty() {
                 let _ = run_script(&settings.after_launch_script_path, &game, &log_file).await;
             }
-            if settings.auto_sync_saves
-                && b.is_online()
-                && let Err(e) = b.sync_saves(&id, SyncDirection::Upload).await
-            {
-                tracing::warn!("post-exit save sync of {id}: {e:#}");
-                if SaveConflict::of(&e).is_some() {
-                    b.bus.notice(
-                        Notice::new(
-                            NoticeLevel::Warning,
-                            format!("Saves of {} weren't uploaded", game.title),
-                        )
-                        .message(format!("{e:#}"))
-                        .keys(
-                            "shell.notice.saves_conflict",
-                            Some("shell.notice.saves_conflict_message"),
-                            &[("title", &game.title)],
-                        )
-                        .game(id.clone()),
-                    );
-                }
+            if settings.auto_sync_saves && b.is_online() {
+                b.upload_after_session(&id, &game).await;
             }
             // After the cloud upload, so Ludusavi copies the saves the
             // cloud now holds too.
@@ -822,10 +849,84 @@ impl Backend {
     /// Resolve the save folder (settings, else the store default) and sync.
     pub async fn sync_saves(&self, id: &GameId, direction: SyncDirection) -> Result<String> {
         let _guard = self.statuses.guard(id, StatusKind::SyncingSaves);
-        self.sync_saves_inner(id, direction).await
+        let saves = self.save_locations(id).await?;
+        let store = self.store(id.runner).context("store not available")?;
+        let ctx = self.op_context(id, CancellationToken::new());
+        store.sync_saves(&id.app_name, direction, &saves, ctx).await
     }
 
-    async fn sync_saves_inner(&self, id: &GameId, direction: SyncDirection) -> Result<String> {
+    /// Sync like [`Self::sync_saves`], given up after [`SAVE_SYNC_TIMEOUT`].
+    async fn sync_saves_limited(
+        &self,
+        id: &GameId,
+        store: &irori_core::DynStore,
+        direction: SyncDirection,
+        saves: &str,
+    ) -> Result<String> {
+        let cancel = CancellationToken::new();
+        let ctx = self.op_context(id, cancel.clone());
+        let sync = store.sync_saves(&id.app_name, direction, saves, ctx);
+        match tokio::time::timeout(SAVE_SYNC_TIMEOUT, sync).await {
+            Ok(result) => result,
+            Err(_) => {
+                cancel.cancel();
+                bail!(
+                    "The cloud didn't answer within {} minutes",
+                    SAVE_SYNC_TIMEOUT.as_secs() / 60
+                )
+            }
+        }
+    }
+
+    /// Upload the saves after a session, within [`SAVE_SYNC_TIMEOUT`]; a
+    /// conflict or a failed upload is told with a notice, as the saves only
+    /// reach the cloud when the user acts.
+    async fn upload_after_session(&self, id: &GameId, game: &GameInfo) {
+        let Some(store) = self.store(id.runner) else {
+            return;
+        };
+        if !store.supports_cloud_saves() || !game.cloud_save_enabled {
+            return;
+        }
+        let _guard = self.statuses.guard(id, StatusKind::SyncingSaves);
+        let saves = match self.save_locations(id).await {
+            Ok(saves) => saves,
+            Err(e) => {
+                tracing::warn!("post-exit save sync of {id}: {e:#}");
+                return;
+            }
+        };
+        let Err(e) = self
+            .sync_saves_limited(id, &store, SyncDirection::Upload, &saves)
+            .await
+        else {
+            return;
+        };
+        tracing::warn!("post-exit save sync of {id}: {e:#}");
+        let message = if SaveConflict::of(&e).is_some() {
+            "shell.notice.saves_conflict_message"
+        } else {
+            "shell.notice.saves_upload_failed_message"
+        };
+        self.bus.notice(
+            Notice::new(
+                NoticeLevel::Warning,
+                format!("Saves of {} weren't uploaded", game.title),
+            )
+            .message(format!("{e:#}"))
+            .keys(
+                "shell.notice.saves_conflict",
+                Some(message),
+                &[("title", &game.title)],
+            )
+            .game(id.clone()),
+        );
+    }
+
+    /// The game's save locations as its store takes them: the save folder
+    /// (the settings', else the store's default, which is then kept), or
+    /// GOG's named locations as `name=path` lines.
+    async fn save_locations(&self, id: &GameId) -> Result<String> {
         let game = self.installed_game(id)?;
         let store = self.store(id.runner).context("store not available")?;
         if !store.supports_cloud_saves() || !game.cloud_save_enabled {
@@ -840,9 +941,7 @@ impl Backend {
                 .set_game_value(id, "savesPath", Some(Value::String(path.clone())));
             settings.saves_path = path;
         }
-        // GOG games can have several named save locations; the GOG store
-        // takes them as `name=path` lines.
-        let saves = if settings.gog_saves.is_empty() {
+        Ok(if settings.gog_saves.is_empty() {
             settings.saves_path.clone()
         } else {
             settings
@@ -851,9 +950,7 @@ impl Backend {
                 .map(|l| format!("{}={}", l.name, l.location))
                 .collect::<Vec<_>>()
                 .join("\n")
-        };
-        let ctx = self.op_context(id, CancellationToken::new());
-        store.sync_saves(&id.app_name, direction, &saves, ctx).await
+        })
     }
 
     /// Run a Windows program (or `winecfg`, `regedit`…) in the game's prefix.
