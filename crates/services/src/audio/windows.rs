@@ -353,7 +353,11 @@ mod tests {
         let Ok(outputs) = list_outputs() else {
             return;
         };
-        assert!(outputs.iter().all(|o| !o.id.is_empty() && !o.name.is_empty()));
+        assert!(
+            outputs
+                .iter()
+                .all(|o| !o.id.is_empty() && !o.name.is_empty())
+        );
         assert!(outputs.iter().filter(|o| o.current).count() <= 1);
     }
 }
