@@ -38,6 +38,61 @@ pub struct CommandSpec {
     pub env: BTreeMap<String, String>,
     pub env_remove: Vec<String>,
     pub cwd: Option<PathBuf>,
+    /// Whether a console program gets a console window on Windows.
+    pub console: ConsoleWindow,
+}
+
+/// Whether a program started on Windows gets a console window of its own.
+///
+/// Irori is a GUI-subsystem program without a console, so Windows opens a new
+/// console window for every console-subsystem child (`taskkill`, `reg`,
+/// `powershell`, a `.bat` script) unless it is started with
+/// `CREATE_NO_WINDOW`. Programs with a window of their own (most games, their
+/// launchers, installers) ignore the flag. Nothing changes elsewhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConsoleWindow {
+    /// Hidden for [`run`], whose output Irori reads (tools, scripts,
+    /// installers); shown for [`spawn`], which starts games and the programs
+    /// beside them: a console game needs its console to be played.
+    #[default]
+    Auto,
+    /// Never a console window.
+    Hidden,
+    /// A console window for a console program.
+    Shown,
+}
+
+/// How a command is started, which [`ConsoleWindow::Auto`] decides by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Start {
+    /// [`run`]: Irori reads the output and waits.
+    Run,
+    /// [`spawn`]: a game or a program the user started.
+    Spawn,
+}
+
+/// Windows' `CREATE_NO_WINDOW` process creation flag.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Whether `console` started as `start` hides the console window.
+fn hides_console(console: ConsoleWindow, start: Start) -> bool {
+    match console {
+        ConsoleWindow::Hidden => true,
+        ConsoleWindow::Shown => false,
+        ConsoleWindow::Auto => start == Start::Run,
+    }
+}
+
+/// Start `command` without a console window on Windows (see
+/// [`ConsoleWindow`]); for helper programs Irori starts without
+/// [`CommandSpec`]. Does nothing on other systems.
+pub fn hide_console(command: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
 }
 
 impl CommandSpec {
@@ -83,6 +138,12 @@ impl CommandSpec {
         self
     }
 
+    /// Choose whether a console program gets a console window on Windows.
+    pub fn console(mut self, console: ConsoleWindow) -> Self {
+        self.console = console;
+        self
+    }
+
     /// Prefix the command with wrapper programs (`gamemoderun`, `mangohud`, …):
     /// `[w0, w0args.., w1, .., program, args..]`.
     pub fn wrapped(self, wrappers: &[Vec<String>]) -> Self {
@@ -100,7 +161,7 @@ impl CommandSpec {
         }
     }
 
-    fn to_command(&self) -> Result<Command> {
+    fn to_command(&self, start: Start) -> Result<Command> {
         let program =
             if cfg!(target_os = "macos") && self.program.extension().is_some_and(|e| e == "app") {
                 crate::platform::bundle_executable(&self.program)?
@@ -120,6 +181,9 @@ impl CommandSpec {
         // (wine, wineserver children, game processes).
         #[cfg(unix)]
         cmd.process_group(0);
+        if hides_console(self.console, start) {
+            hide_console(cmd.as_std_mut());
+        }
         cmd.kill_on_drop(false);
         Ok(cmd)
     }
@@ -408,7 +472,7 @@ impl ExecResult {
 /// Run a command to completion, streaming lines and honouring cancellation.
 pub async fn run(spec: &CommandSpec, mut opts: RunOptions) -> Result<ExecResult> {
     tracing::debug!(command = %spec, "run");
-    let mut cmd = spec.to_command()?;
+    let mut cmd = spec.to_command(Start::Run)?;
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if opts.stdin.is_some() {
         Stdio::piped()
@@ -517,7 +581,7 @@ pub fn runs_from(folder: &str, exe: Option<&Path>, cmd: &[String]) -> bool {
 /// memory: stdout/stderr go straight to `log_file` (or are discarded).
 pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
     tracing::info!(command = %spec, "spawn");
-    let mut cmd = spec.to_command()?;
+    let mut cmd = spec.to_command(Start::Spawn)?;
     cmd.stdin(Stdio::null());
     match log_file {
         Some(path) => {
@@ -579,7 +643,9 @@ pub fn kill_group(pid: u32, force: bool) {
 #[cfg(windows)]
 pub async fn terminate(child: &mut Child) {
     if let Some(pid) = child.id() {
-        let _ = Command::new("taskkill.exe")
+        let mut taskkill = std::process::Command::new("taskkill.exe");
+        hide_console(&mut taskkill);
+        let _ = Command::from(taskkill)
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -595,6 +661,7 @@ pub fn kill_group(pid: u32, force: bool) {
     // Spawn off the UI thread; `/T` includes descendants of the game process.
     std::thread::spawn(move || {
         let mut command = std::process::Command::new("taskkill.exe");
+        hide_console(&mut command);
         command.args(["/PID", &pid.to_string(), "/T"]);
         if force {
             command.arg("/F");
@@ -721,6 +788,23 @@ mod tests {
         .unwrap();
         assert_eq!(result.stdout.trim_end(), "present|space value");
         assert_eq!(result.code, Some(7));
+    }
+
+    #[test]
+    fn console_windows_only_for_spawned_programs() {
+        assert!(hides_console(ConsoleWindow::Auto, Start::Run));
+        assert!(!hides_console(ConsoleWindow::Auto, Start::Spawn));
+        assert!(hides_console(ConsoleWindow::Hidden, Start::Spawn));
+        assert!(!hides_console(ConsoleWindow::Shown, Start::Run));
+        assert_eq!(CommandSpec::new("x").console, ConsoleWindow::Auto);
+        // Builds on every system; Windows CI starts hidden programs in
+        // `windows_native_run_and_cancel`.
+        assert!(
+            CommandSpec::new("x")
+                .console(ConsoleWindow::Hidden)
+                .to_command(Start::Spawn)
+                .is_ok()
+        );
     }
 
     #[cfg(windows)]

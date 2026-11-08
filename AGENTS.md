@@ -46,7 +46,8 @@ Wine, Proton or umu, and on macOS through Wine, CrossOver or Game Porting Toolki
   virtualizes every long list.
 - License: MIT. Bundled themes are from GPUI Kit (Apache-2.0). The
   vendored `crates/webview`, `crates/comet` and `crates/gpui-pre-windows` are
-  Apache-2.0 and keep their own `LICENSE-APACHE`.
+  Apache-2.0 and keep their own `LICENSE-APACHE`; the vendored `crates/gilrs-core`
+  is used under MIT and keeps its `LICENSE-MIT`.
 
 ## 2. Commands
 
@@ -177,6 +178,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/sign-in` | `irori-sign-in` | Store sign-in and store windows (Wry/Tao): library and the `irori-sign-in` program |
 | `crates/webview` | `gpui-webview` | Vendored GPUI WebView, **excluded from the workspace and unused** |
 | `crates/gpui-pre-windows` | `gpui-pre-windows` | GPUI's Windows backend with Irori's fixes, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
+| `crates/gilrs-core` | `gilrs-core` | gilrs' platform layer with Irori's fixes to its Windows.Gaming.Input backend, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
 
 Other top-level paths:
 
@@ -370,6 +372,11 @@ and `launch.rs` before changing anything below the UI.
 - It handles line callbacks (split on `\n` and `\r`), capped logs, cancellation and
   process-group termination: SIGTERM then SIGKILL on Unix, `taskkill /T /F` on
   Windows.
+- On Windows a console program started by Irori (a GUI program) opens a console
+  window unless it gets `CREATE_NO_WINDOW`. `run` (tools, scripts, installers)
+  hides it, `spawn` (games and the programs beside them) keeps it so console games
+  stay playable, and `CommandSpec::console` overrides either. A helper started
+  without `CommandSpec` calls `process::hide_console`.
 
 **HTTP** (`http.rs`):
 
@@ -846,7 +853,11 @@ it on every platform, and CI's Windows install test runs it.
 ### 4.7 Big Picture and controllers
 
 - `feature-bigpicture/src/gamepad/reader.rs` reads controllers on a dedicated gilrs
-  thread that blocks until an event arrives, so it uses no CPU when idle.
+  thread that blocks until an event arrives, so it uses no CPU when idle. On Windows
+  gilrs reads Windows.Gaming.Input through the patched `crates/gilrs-core`, which
+  never panics (release builds abort on a panic) and reads controllers whose
+  `NonRoamableId` fails. PlayStation and Switch Pro controllers that Steam or an SDL
+  program switched to their full HID report still read nothing there.
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
   keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K) when the element doesn't
@@ -1654,7 +1665,8 @@ These are things that have bitten this codebase before:
   `irori_ui::run` or `backend.spawn_blocking`.
 - **Updating gpui-pre means updating `crates/gpui-pre-windows` too.** Its version
   must match gpui-pre's, or the patch stops applying and Windows quietly gets the
-  unpatched backend. Copy the new crate in and apply `PATCHES.md` again.
+  unpatched backend. Copy the new crate in and apply `PATCHES.md` again. The same goes
+  for gilrs and `crates/gilrs-core`.
 - **Checking Windows code from a Mac** works for `cargo check` with the rustup
   toolchain first on `PATH` (Homebrew's Rust has no Windows standard library) and
   Homebrew LLVM's `llvm-rc` for gpui-pre's resources:

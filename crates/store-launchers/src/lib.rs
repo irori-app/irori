@@ -786,7 +786,8 @@ fn windows_registry() -> Registry {
         ] {
             // A short system tool on the blocking scan thread, not a game or
             // a long-running tool, so `irori_core::process` isn't needed.
-            let ok = std::process::Command::new("reg")
+            let mut reg = std::process::Command::new("reg");
+            let ok = irori_core::process::hide_console(&mut reg)
                 .args(["export", key])
                 .arg(&out)
                 .arg("/y")
