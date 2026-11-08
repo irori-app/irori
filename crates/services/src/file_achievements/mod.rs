@@ -84,6 +84,7 @@ pub fn from_schema(app_id: u32, schema: &AchievementSchema) -> Vec<Achievement> 
                 name: g.localized_name.clone(),
                 dlc_app_id: (g.dlcappid > 0).then(|| g.dlcappid.to_string()),
                 order: g.order,
+                ..Default::default()
             }),
             ..Default::default()
         })
