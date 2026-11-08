@@ -580,7 +580,7 @@
   "settings.field.ui_reduce_motion.label": "Beweging beperken",
   "settings.field.ui_show_store_badges.label": "Storebadges tonen",
   "settings.field.ui_library_quick_controls.label": "Snelle knoppen in de bibliotheekkop",
-  "settings.field.ui_library_quick_controls.help": "Sortering, geïnstalleerde games, favorieten en groeperen op speelstatus naast de titel van de bibliotheek, zoveel als er in het venster passen. Het sorteermenu en de filters in de werkbalk blijven hoe dan ook.",
+  "settings.field.ui_library_quick_controls.help": "Geïnstalleerde games en favorieten naast de titel van de bibliotheek, zoveel als er in het venster passen. De filters van de werkbalk blijven hoe dan ook.",
   "settings.field.ui_system_accent.help": "Kleurt het eigen thema van Irori in de accentkleur uit de systeeminstellingen en volgt die wanneer ze verandert. Een uit de lijst gekozen thema behoudt zijn eigen kleuren.",
   "settings.field.ui_system_accent.label": "Accentkleur van het systeem gebruiken",
   "settings.field.ui_wallpaper_colors.help": "Maakt het standaardthema van de kleuren die deze programma’s uit je achtergrond halen, en volgt ze elke keer dat die verandert. Een uit de lijst gekozen thema behoudt zijn eigen kleuren.",

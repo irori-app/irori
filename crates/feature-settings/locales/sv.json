@@ -580,7 +580,7 @@
   "settings.field.ui_reduce_motion.label": "Minska rörelse",
   "settings.field.ui_show_store_badges.label": "Visa butiksmärken",
   "settings.field.ui_library_quick_controls.label": "Snabbval i bibliotekets sidhuvud",
-  "settings.field.ui_library_quick_controls.help": "Sortering, installerade spel, favoriter och gruppering efter spelstatus bredvid bibliotekets rubrik, så många som får plats i fönstret. Verktygsfältets sorteringsmeny och filter finns kvar i vilket fall.",
+  "settings.field.ui_library_quick_controls.help": "Installerade spel och favoriter bredvid bibliotekets rubrik, så många som får plats i fönstret. Verktygsfältets filter finns kvar i vilket fall som helst.",
   "settings.field.ui_system_accent.help": "Färgar Iroris eget tema med accentfärgen från systeminställningarna och följer den när den ändras. Ett tema som väljs i listan behåller sina egna färger.",
   "settings.field.ui_system_accent.label": "Använd systemets accentfärg",
   "settings.field.ui_wallpaper_colors.help": "Gör standardtemat av färgerna som de här verktygen tar från din skrivbordsbakgrund och följer dem varje gång den ändras. Ett tema som väljs i listan behåller sina egna färger.",
