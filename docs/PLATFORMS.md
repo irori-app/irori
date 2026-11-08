@@ -306,6 +306,13 @@ belong to someone else.
 The file arrives as a path or a `file://` URL (`irori /path/setup.exe`); a second
 instance makes a relative path absolute before forwarding it.
 
+On Windows itself, an added app, a before- or after-launch script and a program started
+alongside a game may be a script Windows can't start as a program
+(`irori_core::process::program_command`): `.ps1` runs through
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File`, and `.vbs`, `.vbe`, `.js`,
+`.jse` and `.wsf` through `wscript.exe //NoLogo`. Batch files (`.bat`, `.cmd`) start as
+they are.
+
 #### Other programs' links
 
 A link of a scheme that a Windows program registers in its prefix (a game client's

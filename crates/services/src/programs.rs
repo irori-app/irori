@@ -94,7 +94,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
         let in_prefix = program.in_prefix && input.host != HostPlatform::Windows;
         let file = irori_core::paths::expand_home(path);
         let spec = if !in_prefix {
-            let mut spec = CommandSpec::new(&file)
+            let mut spec = process::program_command(&file)
                 .args(args)
                 .envs(input.identity.clone());
             if let Some(wine) = &input.environment.wine {

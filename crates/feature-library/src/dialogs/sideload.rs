@@ -616,7 +616,18 @@ impl SideloadDialog {
         let ext = path.extension()?.to_str()?.to_ascii_lowercase();
         if matches!(
             ext.as_str(),
-            "exe" | "com" | "bat" | "sh" | "appimage" | "msi" | "lnk" | "desktop" | "app"
+            "exe"
+                | "com"
+                | "bat"
+                | "cmd"
+                | "ps1"
+                | "vbs"
+                | "sh"
+                | "appimage"
+                | "msi"
+                | "lnk"
+                | "desktop"
+                | "app"
         ) {
             return None;
         }
