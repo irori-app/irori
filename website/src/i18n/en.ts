@@ -101,7 +101,7 @@ export const en = {
     },
     stores: {
       tag: 'Gathers',
-      title: 'Ten stores and launchers, built in',
+      title: 'Eleven stores and launchers, built in',
       body: 'Irori speaks the Epic Games, GOG and Amazon Games protocols itself, in Rust. There is no legendary, gogdl or nile to download, update or break.',
       more: 'How each store works',
       notes: {
@@ -115,6 +115,7 @@ export const en = {
         ea: 'Own Wine prefix',
         ubisoft: 'Own Wine prefix',
         rockstar: 'Own Wine prefix',
+        xbox: 'Windows; account optional',
       },
     },
     tour: {
@@ -253,7 +254,7 @@ export const en = {
     },
     {
       q: 'Can I bring my Heroic or Lutris library?',
-      a: 'Yes. Irori imports Heroic’s accounts, installs, settings, favourites and categories in one click, and reads Lutris’s games, categories and playtime without changing anything in Lutris.',
+      a: 'Yes. Irori imports Heroic’s accounts, installs, settings, favourites and categories in one click, and reads Lutris’s games, categories and playtime without changing anything in Lutris. Bottles and Faugus Launcher libraries come along too, and on Windows so does Playnite’s.',
     },
     {
       q: 'Does Irori collect data about me?',
@@ -281,9 +282,9 @@ export const en = {
     buildBody: 'Irori needs Rust 1.95 or newer. On Linux, the sign-in window also needs WebKitGTK 4.1; Irori runs without it.',
     planned: 'Flathub, winget and the AUR are planned.',
     platforms: {
-      linux: 'x86-64. The sign-in window is a separate, recommended package that brings WebKitGTK.',
+      linux: 'x86-64 and arm64. The sign-in window is a separate, recommended package that brings WebKitGTK.',
       macos: 'macOS 12 or later, on Apple silicon and Intel.',
-      windows: 'Windows 10 and 11, x64. Builds aren’t signed yet, so SmartScreen may warn the first time: choose More info, then Run anyway.',
+      windows: 'Windows 10 and 11, x64 and arm64. Builds aren’t signed yet, so SmartScreen may warn the first time: choose More info, then Run anyway.',
     },
     options: {
       debian: { label: 'Debian, Ubuntu', note: 'Also for Linux Mint and Pop!_OS.' },
@@ -295,7 +296,7 @@ export const en = {
       arch: { label: 'Arch Linux', note: 'Also for Manjaro, EndeavourOS and CachyOS.' },
       appimage: {
         label: 'AppImage',
-        note: 'Download Irori-…-x86_64.AppImage from the releases page: one file for any distribution with glibc 2.35 or newer, nothing to install. AppImageUpdate and Gear Lever update it in place.',
+        note: 'Download Irori-…-x86_64.AppImage, or Irori-…-aarch64.AppImage for arm64, from the releases page: one file for any distribution with glibc 2.35 or newer, nothing to install. AppImageUpdate and Gear Lever update it in place.',
       },
       homebrew: { label: 'Homebrew', note: '' },
       dmg: { label: 'Disk image', note: 'Download the .dmg for Apple silicon or Intel from the releases page and drag Irori to Applications.' },

@@ -119,7 +119,7 @@ const website = { '@context': 'https://schema.org', '@type': 'WebSite', name: 'I
       <ul class="lattice grid min-w-0 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {
           STORES.map((store, i) => (
-            <li class="store flex min-h-20 flex-col justify-center gap-0.5 bg-ash px-4 py-3" data-reveal style={`--reveal-delay:${i % 5}`}>
+            <li class:list={['store flex min-h-20 flex-col justify-center gap-0.5 bg-ash px-4 py-3', i === STORES.length - 1 && STORES.length % 5 === 1 && 'col-span-2 lg:col-span-5']} data-reveal style={`--reveal-delay:${i % 5}`}>
               <span class="font-display text-[1.02rem] font-bold leading-tight text-paper">{store.name}</span>
               <span class="font-mono text-xs text-smoke">{h.stores.notes[store.id]}</span>
             </li>
