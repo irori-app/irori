@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "O aplicativo Xbox só funciona no Windows. Abra o Irori no Windows para ver esses jogos na sua biblioteca.",
   "manage.launchers.xbox.get_app": "Baixar o aplicativo Xbox",
   "manage.launchers.state.windows_only": "Somente Windows",
-  "manage.launchers.state.no_xbox_app": "Aplicativo Xbox não instalado"
+  "manage.launchers.state.no_xbox_app": "Aplicativo Xbox não instalado",
+  "manage.launchers.xbox.account.about": "Entre com sua conta Microsoft para adicionar tempo de jogo, conquistas e imagens do Xbox e para ver os jogos de PC que você jogou e não estão instalados aqui.",
+  "manage.launchers.xbox.account.sign_in": "Entrar no Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Entrar novamente",
+  "manage.launchers.xbox.account.signed_in": "Conectado ao Xbox como {name}",
+  "manage.launchers.xbox.account.titles_one": "1 jogo de PC jogado",
+  "manage.launchers.xbox.account.titles_other": "{count} jogos de PC jogados",
+  "manage.launchers.xbox.account.expired": "A Microsoft não aceita mais o login salvo. Entre novamente para manter atualizados seu tempo de jogo e suas conquistas do Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Sair",
+  "manage.launchers.xbox.account.sign_out_failed": "Não foi possível sair do Xbox"
 }

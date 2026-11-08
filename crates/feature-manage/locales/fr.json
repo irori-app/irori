@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "L’application Xbox ne fonctionne que sous Windows. Lancez Irori sous Windows pour voir ces jeux dans votre bibliothèque.",
   "manage.launchers.xbox.get_app": "Obtenir l’application Xbox",
   "manage.launchers.state.windows_only": "Windows uniquement",
-  "manage.launchers.state.no_xbox_app": "Application Xbox non installée"
+  "manage.launchers.state.no_xbox_app": "Application Xbox non installée",
+  "manage.launchers.xbox.account.about": "Connectez-vous avec votre compte Microsoft pour ajouter le temps de jeu, les succès et les visuels de Xbox, et afficher les jeux PC auxquels vous avez joué sans les avoir installés ici.",
+  "manage.launchers.xbox.account.sign_in": "Se connecter à Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Se reconnecter",
+  "manage.launchers.xbox.account.signed_in": "Connecté à Xbox en tant que {name}",
+  "manage.launchers.xbox.account.titles_one": "1 jeu PC joué",
+  "manage.launchers.xbox.account.titles_other": "{count} jeux PC joués",
+  "manage.launchers.xbox.account.expired": "Microsoft n’accepte plus la connexion enregistrée. Reconnectez-vous pour garder à jour votre temps de jeu et vos succès Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Se déconnecter",
+  "manage.launchers.xbox.account.sign_out_failed": "Impossible de se déconnecter de Xbox"
 }

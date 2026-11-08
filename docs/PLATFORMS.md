@@ -273,6 +273,15 @@ Xbox app and Microsoft Store games are Windows-only: they start through the shel
 follow the processes running from the package folder. On Linux and macOS the Stores
 page explains this instead of listing them.
 
+The Xbox card's optional Xbox (Microsoft) account works on every system: it signs in
+on Microsoft's page in the sign-in window (or the browser, pasting the address of the
+blank page it ends on) and adds the account's playtime, last played times,
+achievements and store art. PC games the account played that aren't installed are
+listed as not installed everywhere, so their playtime and achievements count in the
+stats on Linux and macOS too; only Windows installs and plays them, from their
+Microsoft Store page. Packagers can point `IRORI_XBOX_CLIENT_ID` at their own
+Microsoft app, or set it empty to leave the account out.
+
 ### Playnite import (Windows)
 
 Settings → Advanced → "Import from Playnite" (shown when Playnite is installed) and

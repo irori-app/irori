@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Er is een crashrapport opgeslagen in {path}. Voeg het toe als je het probleem meldt.",
   "shell.notice.login_expired": "Log opnieuw in bij {store}",
   "shell.notice.login_expired_message": "Je opgeslagen inlog werkt niet meer. Open Accounts om opnieuw in te loggen.",
+  "shell.notice.xbox_login_expired_message": "Je opgeslagen Xbox-aanmelding werkt niet meer. Meld je opnieuw aan op de pagina Winkels, onder Andere launchers.",
   "shell.notice.saves_conflict": "Opgeslagen spellen van {title} zijn niet geüpload",
   "shell.notice.saves_conflict_message": "Ze zijn hier en in de cloud gewijzigd. Open de cloudopslag van het spel om te kiezen wat je houdt.",
   "shell.notice.ludusavi_backup_failed": "Niet alle saves van {title} zijn geback-upt",

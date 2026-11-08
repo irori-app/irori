@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Xbox 應用程式僅能在 Windows 上執行。在 Windows 上啟動 Irori，即可在遊戲庫中看到這些遊戲。",
   "manage.launchers.xbox.get_app": "取得 Xbox 應用程式",
   "manage.launchers.state.windows_only": "僅限 Windows",
-  "manage.launchers.state.no_xbox_app": "未安裝 Xbox 應用程式"
+  "manage.launchers.state.no_xbox_app": "未安裝 Xbox 應用程式",
+  "manage.launchers.xbox.account.about": "使用 Microsoft 帳戶登入，即可加入 Xbox 的遊戲時數、成就和圖片，並列出你玩過但未在此安裝的 PC 遊戲。",
+  "manage.launchers.xbox.account.sign_in": "登入 Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "重新登入",
+  "manage.launchers.xbox.account.signed_in": "已以 {name} 身分登入 Xbox",
+  "manage.launchers.xbox.account.titles_one": "玩過 1 款 PC 遊戲",
+  "manage.launchers.xbox.account.titles_other": "玩過 {count} 款 PC 遊戲",
+  "manage.launchers.xbox.account.expired": "Microsoft 不再接受已儲存的登入。請重新登入，讓 Xbox 遊戲時數和成就保持最新。",
+  "manage.launchers.xbox.account.sign_out": "登出",
+  "manage.launchers.xbox.account.sign_out_failed": "無法登出 Xbox"
 }

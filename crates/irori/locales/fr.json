@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Un rapport de plantage a été enregistré dans {path}. Joignez-le quand vous signalez le problème.",
   "shell.notice.login_expired": "Reconnectez-vous à {store}",
   "shell.notice.login_expired_message": "Votre connexion enregistrée ne fonctionne plus. Ouvrez Comptes pour vous reconnecter.",
+  "shell.notice.xbox_login_expired_message": "Votre connexion Xbox enregistrée ne fonctionne plus. Reconnectez-vous depuis la page Boutiques, dans Autres lanceurs.",
   "shell.notice.saves_conflict": "Les sauvegardes de {title} n’ont pas été envoyées",
   "shell.notice.saves_conflict_message": "Elles ont changé ici et dans le cloud. Ouvrez les sauvegardes cloud du jeu pour choisir celles à garder.",
   "shell.notice.ludusavi_backup_failed": "Les sauvegardes de {title} n’ont pas toutes été copiées",

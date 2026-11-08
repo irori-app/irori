@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "A aplicação Xbox só funciona no Windows. Abra o Irori no Windows para ver estes jogos na sua biblioteca.",
   "manage.launchers.xbox.get_app": "Obter a aplicação Xbox",
   "manage.launchers.state.windows_only": "Apenas Windows",
-  "manage.launchers.state.no_xbox_app": "Aplicação Xbox não instalada"
+  "manage.launchers.state.no_xbox_app": "Aplicação Xbox não instalada",
+  "manage.launchers.xbox.account.about": "Inicie sessão com a sua conta Microsoft para adicionar tempo de jogo, conquistas e imagens da Xbox e para ver os jogos de PC que jogou e não estão instalados aqui.",
+  "manage.launchers.xbox.account.sign_in": "Iniciar sessão na Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Iniciar sessão novamente",
+  "manage.launchers.xbox.account.signed_in": "Sessão iniciada na Xbox como {name}",
+  "manage.launchers.xbox.account.titles_one": "1 jogo de PC jogado",
+  "manage.launchers.xbox.account.titles_other": "{count} jogos de PC jogados",
+  "manage.launchers.xbox.account.expired": "A Microsoft já não aceita a sessão guardada. Inicie sessão novamente para manter atualizados o tempo de jogo e as conquistas da Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Terminar sessão",
+  "manage.launchers.xbox.account.sign_out_failed": "Não foi possível terminar a sessão na Xbox"
 }

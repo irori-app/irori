@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "當機報告已儲存至 {path}。回報問題時請附上它。",
   "shell.notice.login_expired": "請重新登入 {store}",
   "shell.notice.login_expired_message": "已儲存的登入已失效。請開啟「帳號」重新登入。",
+  "shell.notice.xbox_login_expired_message": "已儲存的 Xbox 登入已失效。請在「商店」頁面的「其他啟動器」中重新登入。",
   "shell.notice.saves_conflict": "{title} 的存檔未上傳",
   "shell.notice.saves_conflict_message": "此處和雲端的存檔都已變更。請開啟遊戲的雲端存檔，選擇要保留的一方。",
   "shell.notice.ludusavi_backup_failed": "{title} 的存檔未完整備份",

@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Xbox 앱은 Windows에서만 실행됩니다. Windows에서 Irori를 실행하면 이 게임들이 라이브러리에 표시됩니다.",
   "manage.launchers.xbox.get_app": "Xbox 앱 받기",
   "manage.launchers.state.windows_only": "Windows 전용",
-  "manage.launchers.state.no_xbox_app": "Xbox 앱이 설치되지 않음"
+  "manage.launchers.state.no_xbox_app": "Xbox 앱이 설치되지 않음",
+  "manage.launchers.xbox.account.about": "Microsoft 계정으로 로그인하면 Xbox의 플레이 시간, 도전 과제, 이미지가 추가되고, 여기에 설치하지 않은 플레이한 PC 게임도 표시됩니다.",
+  "manage.launchers.xbox.account.sign_in": "Xbox에 로그인",
+  "manage.launchers.xbox.account.sign_in_again": "다시 로그인",
+  "manage.launchers.xbox.account.signed_in": "{name}(으)로 Xbox에 로그인됨",
+  "manage.launchers.xbox.account.titles_one": "플레이한 PC 게임 1개",
+  "manage.launchers.xbox.account.titles_other": "플레이한 PC 게임 {count}개",
+  "manage.launchers.xbox.account.expired": "Microsoft가 저장된 로그인을 더 이상 받지 않습니다. Xbox 플레이 시간과 도전 과제를 최신으로 유지하려면 다시 로그인하세요.",
+  "manage.launchers.xbox.account.sign_out": "로그아웃",
+  "manage.launchers.xbox.account.sign_out_failed": "Xbox에서 로그아웃하지 못했습니다"
 }

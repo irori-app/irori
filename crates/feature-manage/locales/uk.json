@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Програма Xbox працює лише у Windows. Запустіть Irori у Windows, щоб побачити ці ігри в бібліотеці.",
   "manage.launchers.xbox.get_app": "Отримати програму Xbox",
   "manage.launchers.state.windows_only": "Лише Windows",
-  "manage.launchers.state.no_xbox_app": "Програму Xbox не встановлено"
+  "manage.launchers.state.no_xbox_app": "Програму Xbox не встановлено",
+  "manage.launchers.xbox.account.about": "Увійдіть з обліковим записом Microsoft, щоб додати час гри, досягнення й обкладинки з Xbox і показати ігри для ПК, у які ви грали, але які тут не встановлені.",
+  "manage.launchers.xbox.account.sign_in": "Увійти в Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Увійти знову",
+  "manage.launchers.xbox.account.signed_in": "Вхід у Xbox виконано: {name}",
+  "manage.launchers.xbox.account.titles_one": "Зіграно 1 гру для ПК",
+  "manage.launchers.xbox.account.titles_other": "Зіграно ігор для ПК: {count}",
+  "manage.launchers.xbox.account.expired": "Microsoft більше не приймає збережений вхід. Увійдіть знову, щоб час гри й досягнення Xbox залишалися актуальними.",
+  "manage.launchers.xbox.account.sign_out": "Вийти",
+  "manage.launchers.xbox.account.sign_out_failed": "Не вдалося вийти з Xbox"
 }

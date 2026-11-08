@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "The Xbox app runs only on Windows. Start Irori on Windows to see these games in your library.",
   "manage.launchers.xbox.get_app": "Get the Xbox app",
   "manage.launchers.state.windows_only": "Windows only",
-  "manage.launchers.state.no_xbox_app": "Xbox app not installed"
+  "manage.launchers.state.no_xbox_app": "Xbox app not installed",
+  "manage.launchers.xbox.account.about": "Sign in with your Microsoft account to add playtime, achievements and art from Xbox, and to list the PC games you played that aren’t installed here.",
+  "manage.launchers.xbox.account.sign_in": "Sign in to Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Sign in again",
+  "manage.launchers.xbox.account.signed_in": "Signed in to Xbox as {name}",
+  "manage.launchers.xbox.account.titles_one": "1 PC game played",
+  "manage.launchers.xbox.account.titles_other": "{count} PC games played",
+  "manage.launchers.xbox.account.expired": "Microsoft no longer accepts the saved sign-in. Sign in again to keep your Xbox playtime and achievements up to date.",
+  "manage.launchers.xbox.account.sign_out": "Sign out",
+  "manage.launchers.xbox.account.sign_out_failed": "Couldn’t sign out of Xbox"
 }

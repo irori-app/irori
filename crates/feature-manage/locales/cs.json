@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Aplikace Xbox běží jen ve Windows. Spusťte Irori ve Windows a tyto hry uvidíte v knihovně.",
   "manage.launchers.xbox.get_app": "Získat aplikaci Xbox",
   "manage.launchers.state.windows_only": "Jen Windows",
-  "manage.launchers.state.no_xbox_app": "Aplikace Xbox není nainstalovaná"
+  "manage.launchers.state.no_xbox_app": "Aplikace Xbox není nainstalovaná",
+  "manage.launchers.xbox.account.about": "Přihlaste se účtem Microsoft a přidejte z Xboxu herní čas, úspěchy a obrázky a také PC hry, které jste hráli a nemáte tu nainstalované.",
+  "manage.launchers.xbox.account.sign_in": "Přihlásit se k Xboxu",
+  "manage.launchers.xbox.account.sign_in_again": "Přihlásit se znovu",
+  "manage.launchers.xbox.account.signed_in": "Přihlášeno k Xboxu jako {name}",
+  "manage.launchers.xbox.account.titles_one": "1 hraná PC hra",
+  "manage.launchers.xbox.account.titles_other": "Hraných PC her: {count}",
+  "manage.launchers.xbox.account.expired": "Microsoft už uložené přihlášení nepřijímá. Přihlaste se znovu, aby herní čas a úspěchy z Xboxu zůstaly aktuální.",
+  "manage.launchers.xbox.account.sign_out": "Odhlásit se",
+  "manage.launchers.xbox.account.sign_out_failed": "Odhlášení z Xboxu se nezdařilo"
 }

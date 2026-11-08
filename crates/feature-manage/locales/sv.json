@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Xbox-appen fungerar bara på Windows. Starta Irori på Windows för att se de här spelen i ditt bibliotek.",
   "manage.launchers.xbox.get_app": "Hämta Xbox-appen",
   "manage.launchers.state.windows_only": "Endast Windows",
-  "manage.launchers.state.no_xbox_app": "Xbox-appen är inte installerad"
+  "manage.launchers.state.no_xbox_app": "Xbox-appen är inte installerad",
+  "manage.launchers.xbox.account.about": "Logga in med ditt Microsoft-konto för att lägga till speltid, prestationer och bilder från Xbox och visa de pc-spel du har spelat som inte är installerade här.",
+  "manage.launchers.xbox.account.sign_in": "Logga in på Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Logga in igen",
+  "manage.launchers.xbox.account.signed_in": "Inloggad på Xbox som {name}",
+  "manage.launchers.xbox.account.titles_one": "1 spelat pc-spel",
+  "manage.launchers.xbox.account.titles_other": "{count} spelade pc-spel",
+  "manage.launchers.xbox.account.expired": "Microsoft godtar inte längre den sparade inloggningen. Logga in igen så att speltid och prestationer från Xbox hålls uppdaterade.",
+  "manage.launchers.xbox.account.sign_out": "Logga ut",
+  "manage.launchers.xbox.account.sign_out_failed": "Det gick inte att logga ut från Xbox"
 }

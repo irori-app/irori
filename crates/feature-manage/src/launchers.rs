@@ -8,7 +8,9 @@
 //!
 //! A last card is the Xbox app's: nothing to set up, since Windows lists its
 //! games; it opens the Xbox app and looks for games again, and elsewhere
-//! says it is Windows-only.
+//! says it is Windows-only. On every system it also signs in to an Xbox
+//! (Microsoft) account, which adds playtime, achievements and art, and the
+//! PC games the account played.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -34,7 +36,8 @@ use gpui_kit::{
 };
 use irori_core::{InstallProgress, OpContext, Runner, WineInstallation};
 use irori_launchers::{
-    LauncherKind as Launcher, LauncherSignIn, LauncherStatus, LaunchersStore, XboxStatus,
+    LauncherKind as Launcher, LauncherSignIn, LauncherStatus, LaunchersStore, XboxAccountStatus,
+    XboxStatus,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -92,6 +95,8 @@ struct Live {
 pub struct LaunchersSection {
     statuses: Vec<LauncherStatus>,
     xbox: Option<XboxStatus>,
+    xbox_account: XboxAccountStatus,
+    signing_out: bool,
     wines: Vec<WineInstallation>,
     wine_select: Entity<SelectState<Vec<WineChoice>>>,
     running: HashMap<Launcher, Arc<Mutex<Live>>>,
@@ -108,10 +113,13 @@ impl LaunchersSection {
                 this.refresh_statuses(cx);
             }),
             cx.observe(&m.settings, |_, _, cx| cx.notify()),
+            cx.observe(&m.accounts, |this, _, cx| this.refresh_statuses(cx)),
         ];
         let mut this = Self {
             statuses: Vec::new(),
             xbox: None,
+            xbox_account: XboxAccountStatus::default(),
+            signing_out: false,
             wines: Vec::new(),
             wine_select,
             running: HashMap::new(),
@@ -129,6 +137,7 @@ impl LaunchersSection {
         if let Some(store) = launchers_store(cx) {
             self.statuses = store.statuses();
             self.xbox = Some(store.xbox_status());
+            self.xbox_account = store.xbox_account_status();
         }
         cx.notify();
     }
@@ -397,6 +406,131 @@ impl LaunchersSection {
         .detach();
     }
 
+    /// Sign out of the Xbox account.
+    fn xbox_sign_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(store) = launchers_store(cx) else {
+            return;
+        };
+        self.signing_out = true;
+        cx.notify();
+        let task = irori_ui::run(cx, async move {
+            irori_core::Store::logout(store.as_ref()).await
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.signing_out = false;
+                if let Err(e) = result {
+                    notify_error(
+                        t("manage.launchers.xbox.account.sign_out_failed"),
+                        &e,
+                        window,
+                        cx,
+                    );
+                }
+                this.refresh_statuses(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// The Xbox account's part of the card: sign in, who is signed in, or
+    /// that Microsoft no longer accepts the sign-in.
+    fn render_xbox_account(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let account = &self.xbox_account;
+        if !account.available {
+            return None;
+        }
+        let muted = cx.theme().muted_foreground;
+        let sign_in = |label: SharedString| {
+            Button::new("launcher-xbox-sign-in")
+                .debug_selector(|| "launcher-xbox-sign-in".to_string())
+                .small()
+                .icon(IconName::LogIn)
+                .label(label)
+                .on_click(|_, window, cx| {
+                    crate::login::open_login_dialog(Runner::Launchers, window, cx)
+                })
+        };
+        let body: AnyElement = match (&account.gamertag, &account.expired) {
+            (None, _) => v_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(t("manage.launchers.xbox.account.about")),
+                )
+                .child(
+                    h_flex()
+                        .justify_end()
+                        .child(sign_in(t("manage.launchers.xbox.account.sign_in"))),
+                )
+                .into_any_element(),
+            (Some(_), Some(_)) => v_flex()
+                .gap_2()
+                .child(Alert::warning(
+                    "launcher-xbox-expired",
+                    t("manage.launchers.xbox.account.expired"),
+                ))
+                .child(
+                    h_flex()
+                        .justify_end()
+                        .child(sign_in(t("manage.launchers.xbox.account.sign_in_again"))),
+                )
+                .into_any_element(),
+            (Some(name), None) => {
+                let played = match account.titles {
+                    1 => t("manage.launchers.xbox.account.titles_one"),
+                    n => t_args(
+                        "manage.launchers.xbox.account.titles_other",
+                        &[("count", &n.to_string())],
+                    ),
+                };
+                h_flex()
+                    .gap_2()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .truncate()
+                                    .debug_selector(|| "launcher-xbox-gamertag".to_string())
+                                    .child(t_args(
+                                        "manage.launchers.xbox.account.signed_in",
+                                        &[("name", name)],
+                                    )),
+                            )
+                            .child(div().text_xs().text_color(muted).truncate().child(played)),
+                    )
+                    .child(
+                        Button::new("launcher-xbox-sign-out")
+                            .ghost()
+                            .small()
+                            .icon(IconName::LogOut)
+                            .label(t("manage.launchers.xbox.account.sign_out"))
+                            .loading(self.signing_out)
+                            .disabled(self.signing_out)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.xbox_sign_out(window, cx)),
+                            ),
+                    )
+                    .into_any_element()
+            }
+        };
+        Some(
+            v_flex()
+                .gap_2()
+                .pt_3()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(body)
+                .into_any_element(),
+        )
+    }
+
     /// The Xbox app's card: its games on Windows, a note elsewhere.
     fn render_xbox_card(&self, status: XboxStatus, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
@@ -484,6 +618,7 @@ impl LaunchersSection {
                     .child(t("manage.launchers.about.xbox")),
             )
             .child(h_flex().justify_end().child(footer))
+            .children(self.render_xbox_account(cx))
             .into_any_element()
     }
 

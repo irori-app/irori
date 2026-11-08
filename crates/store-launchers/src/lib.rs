@@ -18,6 +18,11 @@
 //! (`irori_launchers_data::xbox`), start through the shell, and are followed
 //! by their processes. Elsewhere there are none.
 //!
+//! An optional Xbox (Microsoft) account (`xbox_account`) adds the
+//! account's minutes played, last played times, achievements and store art
+//! to those games, and lists the PC games it played that aren't installed.
+//! It is the store's [`Store::login`]; the store itself needs none.
+//!
 //! Everything is behind `iroriThirdPartyLaunchers`: while it is off the store
 //! lists nothing.
 
@@ -30,15 +35,24 @@ use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
 use irori_core::process::{self, CommandSpec};
 use irori_core::{
-    ClientAction, Event, EventBus, ExtraInfo, GameInfo, GameSettings, GameWatch, InstallInfo,
-    InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan, LaunchRequest,
-    LoginFlow, OpContext, Outcome, Paths, RemoveArgs, Runner, SettingsFn, Store, UpdateRequest,
-    UserInfo, WineInstallation, WineKind, json_store, util,
+    Achievement, ClientAction, Event, EventBus, ExtraInfo, GameInfo, GameSettings, GameWatch,
+    InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan,
+    LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome, Paths, RemoveArgs, Runner,
+    SessionExpired, SettingsFn, Store, StoreAccount, UpdateRequest, UserInfo, WineInstallation,
+    WineKind, json_store, util,
 };
 use irori_launchers_data::xbox::{self, XboxGame};
 use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use xbox_account::XboxAccount;
+
+mod xbox_account;
+
+pub use xbox_account::{
+    AccountTitle as XboxAccountTitle, CLIENT_ID_VAR as XBOX_CLIENT_ID_VAR, XBOX_CLIENT_ID,
+    XboxAccountStatus,
+};
 
 pub use irori_launchers_data::Launcher as LauncherKind;
 pub use irori_launchers_data::SignIn as LauncherSignIn;
@@ -90,6 +104,8 @@ struct State {
     xbox_app: bool,
     /// Xbox games' sizes in bytes, by package folder and version.
     sizes: HashMap<(PathBuf, Option<String>), u64>,
+    /// PC games the Xbox account played.
+    account: Vec<xbox_account::AccountTitle>,
 }
 
 /// What the launchers page shows for the Xbox app.
@@ -126,19 +142,21 @@ pub struct LaunchersStore {
     state: RwLock<State>,
     /// One setup or scan at a time.
     busy: tokio::sync::Mutex<()>,
+    xbox_account: XboxAccount,
+    /// The account's expiry was announced.
+    expiry_told: std::sync::atomic::AtomicBool,
     me: Weak<Self>,
 }
 
 impl LaunchersStore {
     pub fn new(bus: EventBus, settings: SettingsFn) -> Arc<Self> {
         let paths = Paths::get();
-        Self::build(
-            bus,
-            settings,
+        let (config, cache) = (
             paths.store_config_dir(Runner::Launchers),
             paths.store_cache_dir(Runner::Launchers),
-            paths.logs_dir(),
-        )
+        );
+        let xbox = XboxAccount::new(&config, &cache, Default::default());
+        Self::build(bus, settings, config, cache, paths.logs_dir(), xbox)
     }
 
     /// A store keeping its files in the given folders (tests).
@@ -149,7 +167,23 @@ impl LaunchersStore {
         cache_dir: PathBuf,
     ) -> Arc<Self> {
         let logs = cache_dir.join("logs");
-        Self::build(bus, settings, config_dir, cache_dir, logs)
+        let xbox = XboxAccount::new(&config_dir, &cache_dir, Default::default());
+        Self::build(bus, settings, config_dir, cache_dir, logs, xbox)
+    }
+
+    /// A store keeping its files in the given folders whose Xbox account
+    /// talks to `endpoints` (tests).
+    pub fn with_xbox_endpoints(
+        bus: EventBus,
+        settings: SettingsFn,
+        config_dir: PathBuf,
+        cache_dir: PathBuf,
+        endpoints: irori_xbox_api::Endpoints,
+    ) -> Arc<Self> {
+        let logs = cache_dir.join("logs");
+        let client = irori_xbox_api::Client::with_endpoints("test-client", endpoints).ok();
+        let xbox = XboxAccount::with_client(&config_dir, &cache_dir, client);
+        Self::build(bus, settings, config_dir, cache_dir, logs, xbox)
     }
 
     fn build(
@@ -158,6 +192,7 @@ impl LaunchersStore {
         config_dir: PathBuf,
         cache_dir: PathBuf,
         logs: PathBuf,
+        xbox_account: XboxAccount,
     ) -> Arc<Self> {
         Arc::new_cyclic(|me| Self {
             bus,
@@ -167,6 +202,8 @@ impl LaunchersStore {
             logs,
             state: RwLock::new(State::default()),
             busy: tokio::sync::Mutex::new(()),
+            xbox_account,
+            expiry_told: Default::default(),
             me: me.clone(),
         })
     }
@@ -208,6 +245,55 @@ impl LaunchersStore {
             app_installed: s.xbox_app,
             games: s.xbox.len(),
         }
+    }
+
+    /// The Xbox account: whether Irori can sign in, who is signed in, and
+    /// what it found.
+    pub fn xbox_account_status(&self) -> XboxAccountStatus {
+        self.xbox_account.status()
+    }
+
+    /// Fetch the Xbox account's titles again and show them. A refused
+    /// sign-in is announced once and fails with [`SessionExpired`].
+    async fn refresh_xbox(&self, full: bool) -> Result<()> {
+        let language = (self.settings)().ui_language.clone();
+        match self.xbox_account.refresh(full, &language).await {
+            Ok(changed) => {
+                if changed {
+                    self.show_account_titles();
+                }
+                Ok(())
+            }
+            Err(e) => {
+                if let Some(expired) = SessionExpired::of(&e)
+                    && !self
+                        .expiry_told
+                        .swap(true, std::sync::atomic::Ordering::Relaxed)
+                {
+                    self.bus.emit(Event::AccountChanged(Runner::Launchers));
+                    self.bus.notice(
+                        Notice::new(NoticeLevel::Warning, "Sign in to Xbox again")
+                            .message(expired.reason.clone())
+                            .keys(
+                                "shell.notice.login_expired",
+                                Some("shell.notice.xbox_login_expired_message"),
+                                &[("store", "Xbox")],
+                            ),
+                    );
+                }
+                Err(e)
+            }
+        }
+    }
+
+    /// Rebuild the library with the account's titles as last fetched.
+    fn show_account_titles(&self) {
+        {
+            let mut s = self.state.write();
+            s.account = self.xbox_account.titles();
+            s.games = library(&s);
+        }
+        self.bus.emit(Event::LibraryChanged(Runner::Launchers));
     }
 
     /// Start the Xbox app (Windows), to sign in or install games there.
@@ -550,17 +636,82 @@ impl LaunchersStore {
     }
 }
 
-/// Every game the library shows, from what the last scan found.
+/// Every game the library shows, from what the last scan found and the
+/// Xbox account's titles.
 fn library(s: &State) -> Vec<Arc<GameInfo>> {
+    let title = |pfn: &str| s.account.iter().find(|t| t.pfn.eq_ignore_ascii_case(pfn));
     let launchers = s.found.iter().map(game_info);
     let xbox = s.xbox.iter().map(|g| {
         let size = s
             .sizes
             .get(&(g.install_dir.clone(), g.version.clone()))
             .copied();
-        xbox_game_info(g, size)
+        let info = xbox_game_info(g, size);
+        match title(&g.family_name) {
+            Some(t) => with_account_title(info, t),
+            None => info,
+        }
     });
-    launchers.chain(xbox).map(Arc::new).collect()
+    let played = s
+        .account
+        .iter()
+        .filter(|t| {
+            !s.xbox
+                .iter()
+                .any(|g| g.family_name.eq_ignore_ascii_case(&t.pfn))
+        })
+        .map(account_game_info);
+    launchers.chain(xbox).chain(played).map(Arc::new).collect()
+}
+
+/// An installed Xbox game with what the account knows: the store's cover
+/// and hero art over the package's small tiles, and its details where the
+/// package has none.
+fn with_account_title(info: GameInfo, t: &xbox_account::AccountTitle) -> GameInfo {
+    GameInfo {
+        art_cover: t.cover.clone().or(info.art_cover),
+        art_square: t.square.clone().or(info.art_square),
+        art_background: t.background.clone().or(info.art_background),
+        art_logo: t.logo.clone().or(info.art_logo),
+        developer: info.developer.or_else(|| t.developer.clone()),
+        publisher: info.publisher.or_else(|| t.publisher.clone()),
+        description: info.description.or_else(|| t.description.clone()),
+        store_url: info.store_url.or_else(|| t.store_web_url()),
+        release_date: info.release_date.or_else(|| t.release_date.clone()),
+        genres: if info.genres.is_empty() {
+            t.genres.clone()
+        } else {
+            info.genres
+        },
+        ..info
+    }
+    .finalize()
+}
+
+/// A PC game the Xbox account played that isn't installed here: listed,
+/// never installed by Irori (the Microsoft Store page installs it).
+fn account_game_info(t: &xbox_account::AccountTitle) -> GameInfo {
+    GameInfo {
+        runner: Some(Runner::Launchers),
+        app_name: t.app_name(),
+        title: t.name.clone(),
+        developer: t.developer.clone(),
+        publisher: t.publisher.clone(),
+        description: t.description.clone(),
+        store_url: t.store_web_url(),
+        art_cover: t.cover.clone(),
+        art_square: t.square.clone(),
+        art_background: t.background.clone(),
+        art_logo: t.logo.clone(),
+        is_installed: false,
+        installable: false,
+        third_party_managed_app: Some(xbox::DISPLAY_NAME.to_string()),
+        platforms: vec![InstallPlatform::Windows],
+        release_date: t.release_date.clone(),
+        genres: t.genres.clone(),
+        ..Default::default()
+    }
+    .finalize()
 }
 
 /// The command that hands `target` (a link, or a `shell:` address) to the
@@ -910,6 +1061,8 @@ impl Store for LaunchersStore {
                 .await
                 .context("loading the launchers stopped")?;
         self.state.write().setups = file.setups;
+        self.xbox_account.load().await;
+        self.state.write().account = self.xbox_account.titles();
         self.rescan().await;
         Ok(())
     }
@@ -921,21 +1074,82 @@ impl Store for LaunchersStore {
         })
     }
 
+    /// The Xbox account's sign-in (Microsoft's page); none without a
+    /// Microsoft app to sign in with.
     fn login_flow(&self) -> LoginFlow {
-        LoginFlow::None
+        self.xbox_account.login_flow()
     }
 
-    async fn login(&self, _input: &str) -> Result<UserInfo> {
-        self.user().context("no account")
+    /// Sign in to Xbox with what the sign-in page gave, then read the
+    /// account's titles.
+    async fn login(&self, input: &str) -> Result<UserInfo> {
+        let user = self.xbox_account.login(input).await?;
+        self.expiry_told
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.bus.emit(Event::AccountChanged(Runner::Launchers));
+        if let Err(e) = self.refresh_xbox(true).await {
+            tracing::warn!("Xbox titles: {e:#}");
+        }
+        self.show_account_titles();
+        Ok(user)
     }
 
+    /// Sign out of Xbox; the account's games leave the library.
     async fn logout(&self) -> Result<()> {
+        self.xbox_account.logout().await?;
+        self.bus.emit(Event::AccountChanged(Runner::Launchers));
+        self.show_account_titles();
         Ok(())
     }
 
-    async fn refresh(&self, _full: bool) -> Result<()> {
+    /// The Xbox account, when signed in.
+    fn accounts(&self) -> Vec<StoreAccount> {
+        let expired = self.xbox_account.expired();
+        self.xbox_account
+            .user()
+            .map(|u| StoreAccount {
+                slot: xbox_account::SLOT.into(),
+                account_id: u.account_id,
+                display_name: u.display_name,
+                signed_in: true,
+                games: self.xbox_account.titles().len(),
+                expired,
+                ..Default::default()
+            })
+            .into_iter()
+            .collect()
+    }
+
+    /// Read the launchers' data again, then the Xbox account's titles. The
+    /// local games show even when the Xbox network can't be reached; a
+    /// refused Xbox sign-in is announced by the store itself.
+    async fn refresh(&self, full: bool) -> Result<()> {
         self.rescan().await;
+        if let Err(e) = self.refresh_xbox(full).await {
+            tracing::warn!("Xbox titles: {e:#}");
+        }
         Ok(())
+    }
+
+    async fn achievements(&self, app_name: &str, language: &str) -> Result<Vec<Achievement>> {
+        if !is_xbox_game(app_name) {
+            return Ok(Vec::new());
+        }
+        self.xbox_account.achievements(app_name, language).await
+    }
+
+    async fn forget_achievements(&self, app_name: &str) {
+        self.xbox_account.forget_achievements(app_name).await
+    }
+
+    /// Minutes played on the Xbox account, by app name.
+    async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
+        Ok(self.xbox_account.playtime())
+    }
+
+    /// When the Xbox account last played each game.
+    async fn remote_last_played(&self) -> Result<HashMap<String, String>> {
+        Ok(self.xbox_account.last_played())
     }
 
     fn games(&self) -> Vec<Arc<GameInfo>> {
@@ -991,21 +1205,38 @@ impl Store for LaunchersStore {
     }
 
     async fn is_available(&self, app_name: &str) -> bool {
-        self.game(app_name).is_some()
+        self.game(app_name).is_some_and(|g| g.is_installed)
     }
 
     /// Xbox games: show the game's page in the Microsoft Store, where the
     /// Xbox app's install, update and remove commands are too. The other
     /// launchers keep their games to themselves.
+    ///
+    /// A game the Xbox account played that isn't installed: its Microsoft
+    /// Store page installs it, so Install shows that too (Windows only).
     async fn client_action(&self, app_name: &str, action: ClientAction) -> Result<()> {
-        let game = self
-            .xbox_game(app_name)
+        if let Some(game) = self.xbox_game(app_name) {
+            anyhow::ensure!(
+                action == ClientAction::Show,
+                "Install, update and remove Xbox games in the Xbox app"
+            );
+            process::spawn(&shell_open(&game.store_link()), None)?;
+            return Ok(());
+        }
+        let link = self
+            .xbox_account
+            .store_link(app_name)
+            .filter(|_| is_xbox_game(app_name))
             .context("This game's launcher has no page to show")?;
         anyhow::ensure!(
-            action == ClientAction::Show,
+            matches!(action, ClientAction::Show | ClientAction::Install),
             "Install, update and remove Xbox games in the Xbox app"
         );
-        process::spawn(&shell_open(&game.store_link()), None)?;
+        anyhow::ensure!(
+            cfg!(windows),
+            "Xbox app games install and play only on Windows; the game's store page is in its menu"
+        );
+        process::spawn(&shell_open(&link), None)?;
         Ok(())
     }
 
@@ -1034,7 +1265,13 @@ impl Store for LaunchersStore {
             .iter()
             .find(|g| g.app_name() == app_name)
             .cloned()
-            .context("This game is no longer listed by its launcher")?;
+            .with_context(|| {
+                if is_xbox_game(app_name) {
+                    "Install this game in the Xbox app first"
+                } else {
+                    "This game is no longer listed by its launcher"
+                }
+            })?;
         let setup = self.state.read().setups.get(&game.launcher).cloned();
         let program = launcher_program(game.launcher, setup.as_ref())
             .filter(|p| p.exists())
@@ -1484,5 +1721,130 @@ fi
             skip_version_check: false,
             log_file: dir.join("log"),
         }
+    }
+
+    #[tokio::test]
+    async fn the_xbox_account_adds_art_and_played_games() {
+        let dir = tempfile::tempdir().unwrap();
+        let launchers = store(dir.path(), true);
+        launchers.init().await.unwrap();
+        // Signed out: no account entry, nothing more listed.
+        assert!(launchers.accounts().is_empty());
+        let title = |pfn: &str, name: &str| xbox_account::AccountTitle {
+            title_id: "17".into(),
+            pfn: pfn.into(),
+            name: name.into(),
+            cover: Some("https://img/poster".into()),
+            background: Some("https://img/hero".into()),
+            developer: Some("Studio".into()),
+            product_id: Some("9NFLY".into()),
+            ..Default::default()
+        };
+        {
+            let mut s = launchers.state.write();
+            s.xbox = vec![sky_racer(dir.path())];
+            s.account = vec![
+                // Matched by family name, whatever its letter case.
+                title("studio.skyracer_abcdefghjkmnp", "Sky Racer"),
+                title("Studio.Glider_abcdefghjkmnp", "Glider"),
+            ];
+            s.games = library(&s);
+        }
+        let games = launchers.games();
+        assert_eq!(games.len(), 2);
+        let installed = launchers
+            .game("xbox:Studio.SkyRacer_abcdefghjkmnp")
+            .unwrap();
+        assert!(installed.is_installed);
+        assert_eq!(installed.art_cover.as_deref(), Some("https://img/poster"));
+        assert_eq!(
+            installed.art_background.as_deref(),
+            Some("https://img/hero")
+        );
+        // The package's own details stay.
+        assert_eq!(installed.publisher.as_deref(), Some("Example Studio"));
+        assert_eq!(installed.developer.as_deref(), Some("Studio"));
+
+        let played = launchers.game("xbox:Studio.Glider_abcdefghjkmnp").unwrap();
+        assert!(!played.is_installed && !played.installable);
+        assert_eq!(played.third_party_managed_app.as_deref(), Some("Xbox app"));
+        assert_eq!(
+            played.store_url.as_deref(),
+            Some("https://apps.microsoft.com/detail/9NFLY")
+        );
+        assert!(!launchers.is_available(&played.app_name).await);
+        let refused = launchers
+            .launch(
+                &played.app_name,
+                &dummy_request(dir.path()),
+                OpContext::detached(),
+            )
+            .await
+            .unwrap_err();
+        assert!(format!("{refused:#}").contains("Xbox app"));
+        // Without an account to know the title, there is no page to show.
+        // (The account is set in the state only.)
+        assert!(
+            launchers
+                .client_action(&played.app_name, ClientAction::Show)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn signing_in_to_xbox_lists_the_accounts_games_and_playtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = xbox_account::tests::server(true);
+        let app = Arc::new(AppSettings {
+            third_party_launchers: true,
+            ..Default::default()
+        });
+        let launchers = LaunchersStore::with_xbox_endpoints(
+            EventBus::new(),
+            Arc::new(move || app.clone()),
+            dir.path().join("config"),
+            dir.path().join("cache"),
+            irori_xbox_api::Endpoints::all_at(&server.base()),
+        );
+        launchers.init().await.unwrap();
+        assert!(launchers.xbox_account_status().available);
+        let LoginFlow::Browser { capture, .. } = launchers.login_flow() else {
+            panic!("the Xbox sign-in");
+        };
+        assert!(capture.contains("oauth20_desktop"));
+        let user = launchers
+            .login("https://login.live.com/oauth20_desktop.srf?code=M.C1.code")
+            .await
+            .unwrap();
+        assert_eq!(user.display_name, "Pilot");
+        // The store's own login stays local; the account is listed beside it.
+        assert!(launchers.is_logged_in());
+        let accounts = launchers.accounts();
+        assert_eq!(accounts.len(), 1);
+        assert_eq!((accounts[0].slot.as_str(), accounts[0].games), ("xbox", 1));
+
+        let app_name = format!("xbox:{}", xbox_account::tests::PFN);
+        let game = launchers.game(&app_name).expect("the played game");
+        assert!(!game.is_installed);
+        assert_eq!(
+            launchers.remote_playtime().await.unwrap(),
+            HashMap::from([(app_name.clone(), 754)])
+        );
+        assert!(
+            launchers
+                .remote_last_played()
+                .await
+                .unwrap()
+                .contains_key(&app_name)
+        );
+        assert_eq!(
+            launchers.achievements(&app_name, "en").await.unwrap().len(),
+            1
+        );
+
+        launchers.logout().await.unwrap();
+        assert!(launchers.game(&app_name).is_none());
+        assert!(launchers.accounts().is_empty());
     }
 }

@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "クラッシュレポートを {path} に保存しました。問題を報告するときに添付してください。",
   "shell.notice.login_expired": "{store} にもう一度ログインしてください",
   "shell.notice.login_expired_message": "保存されたログインが使えなくなりました。［アカウント］を開いてもう一度ログインしてください。",
+  "shell.notice.xbox_login_expired_message": "保存された Xbox のサインインが使えなくなりました。「ストア」ページの「その他のランチャー」でもう一度サインインしてください。",
   "shell.notice.saves_conflict": "{title} のセーブデータはアップロードされませんでした",
   "shell.notice.saves_conflict_message": "ここでもクラウドでも変更されています。ゲームのクラウドセーブを開いて、残す方を選んでください。",
   "shell.notice.ludusavi_backup_failed": "{title} のセーブデータを完全にはバックアップできませんでした",

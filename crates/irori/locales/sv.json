@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "En kraschrapport sparades i {path}. Bifoga den när du rapporterar problemet.",
   "shell.notice.login_expired": "Logga in på {store} igen",
   "shell.notice.login_expired_message": "Din sparade inloggning fungerar inte längre. Öppna Konton för att logga in igen.",
+  "shell.notice.xbox_login_expired_message": "Din sparade Xbox-inloggning fungerar inte längre. Logga in igen på sidan Butiker, under Andra startprogram.",
   "shell.notice.saves_conflict": "Sparfilerna för {title} laddades inte upp",
   "shell.notice.saves_conflict_message": "De har ändrats här och i molnet. Öppna spelets molnsparningar och välj vilka du behåller.",
   "shell.notice.ludusavi_backup_failed": "Alla sparfiler för {title} säkerhetskopierades inte",

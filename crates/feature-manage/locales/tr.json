@@ -538,5 +538,14 @@
   "manage.launchers.xbox.windows_only": "Xbox uygulaması yalnızca Windows'ta çalışır. Bu oyunları kitaplığında görmek için Irori'yi Windows'ta başlat.",
   "manage.launchers.xbox.get_app": "Xbox uygulamasını edin",
   "manage.launchers.state.windows_only": "Yalnızca Windows",
-  "manage.launchers.state.no_xbox_app": "Xbox uygulaması yüklü değil"
+  "manage.launchers.state.no_xbox_app": "Xbox uygulaması yüklü değil",
+  "manage.launchers.xbox.account.about": "Xbox’tan oynama süresi, başarımlar ve görseller eklemek ve oynadığın ama burada yüklü olmayan PC oyunlarını görmek için Microsoft hesabınla oturum aç.",
+  "manage.launchers.xbox.account.sign_in": "Xbox’ta oturum aç",
+  "manage.launchers.xbox.account.sign_in_again": "Yeniden oturum aç",
+  "manage.launchers.xbox.account.signed_in": "Xbox’ta {name} olarak oturum açıldı",
+  "manage.launchers.xbox.account.titles_one": "Oynanan 1 PC oyunu",
+  "manage.launchers.xbox.account.titles_other": "Oynanan {count} PC oyunu",
+  "manage.launchers.xbox.account.expired": "Microsoft kayıtlı oturumu artık kabul etmiyor. Xbox oynama süren ve başarımların güncel kalsın diye yeniden oturum aç.",
+  "manage.launchers.xbox.account.sign_out": "Oturumu kapat",
+  "manage.launchers.xbox.account.sign_out_failed": "Xbox oturumu kapatılamadı"
 }
