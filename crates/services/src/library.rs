@@ -278,7 +278,7 @@ impl LibraryFilter {
             if self.updates_only && !updates.contains(&g.id()) {
                 continue;
             }
-            if !parsed.modes_match(&g.game_modes) {
+            if !parsed.modes_match(&g.game_modes) || !parsed.tags_match(&g.store_tags) {
                 continue;
             }
             let score = match (&query, index) {
@@ -401,6 +401,8 @@ impl Backend {
 
     pub(crate) fn rebuild_library(&self) {
         let user = self.userdata.snapshot();
+        let tag_language =
+            irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
             .values()
@@ -429,6 +431,7 @@ impl Backend {
                     }
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
+                    self.steam_tags.complete(&mut g, tag_language);
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
@@ -438,6 +441,7 @@ impl Backend {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
+                    self.steam_tags.complete(&mut g, tag_language);
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {
@@ -455,7 +459,9 @@ impl Backend {
         if self.is_online() {
             let (b, list) = (self.clone(), games.clone());
             self.spawn(async move {
-                if b.facts.refresh(&list).await {
+                let facts = b.facts.refresh(&list).await;
+                let tags = b.steam_tags.refresh(&list, tag_language).await;
+                if facts || tags {
                     b.rebuild_library();
                 }
             });

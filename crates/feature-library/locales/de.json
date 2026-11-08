@@ -775,6 +775,7 @@
   "library.folder.add_other": "{count} Spiele hinzufügen",
   "library.toolbar.group.genre": "Genre",
   "library.filters.section.genre": "Genre",
+  "library.filters.section.steam_tags": "Steam-Tags",
   "library.group.no_genre": "Ohne Genre",
   "library.menu.combine": "Mit Kopien aus anderen Stores zusammenfassen…",
   "library.combine.hint": "Wähle die anderen Kopien von „{title}“ und dann „Als ein Spiel zusammenfassen“.",

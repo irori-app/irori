@@ -10,7 +10,9 @@
 //!
 //! A query may also hold `mode:` terms ([`ParsedQuery`]): `mode:coop`
 //! keeps games played in co-op, `mode:local,online` games with either, and
-//! several terms must all hold. The rest of the query is searched as text.
+//! several terms must all hold. `tag:` terms work the same way on Steam's
+//! user tags (`tag:puzzle`, `tag:open-world,roguelike`; spaces, hyphens and
+//! case don't matter). The rest of the query is searched as text.
 
 use std::sync::Arc;
 
@@ -187,6 +189,18 @@ pub struct ParsedQuery {
     /// One entry per `mode:` term: the modes it names, any of which a game
     /// must have.
     pub modes: Vec<Vec<GameMode>>,
+    /// One entry per `tag:` term: the tags it names ([`tag_key`]), any of
+    /// which a game must have.
+    pub tags: Vec<Vec<String>>,
+}
+
+/// How store tags compare: letters and digits only, lower case, so
+/// `open-world` names "Open World".
+pub fn tag_key(tag: &str) -> String {
+    tag.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 impl ParsedQuery {
@@ -196,7 +210,23 @@ impl ParsedQuery {
     pub fn new(raw: &str) -> Self {
         let mut text: Vec<&str> = Vec::new();
         let mut modes = Vec::new();
+        let mut tags = Vec::new();
         for word in raw.split_whitespace() {
+            if let Some(rest) = word
+                .get(..4)
+                .filter(|p| p.eq_ignore_ascii_case("tag:"))
+                .map(|_| &word[4..])
+            {
+                let any: Vec<String> = rest
+                    .split(',')
+                    .map(tag_key)
+                    .filter(|k| !k.is_empty())
+                    .collect();
+                if !any.is_empty() {
+                    tags.push(any);
+                    continue;
+                }
+            }
             let named = word
                 .get(..5)
                 .filter(|p| p.eq_ignore_ascii_case("mode:"))
@@ -215,6 +245,17 @@ impl ParsedQuery {
         Self {
             text: text.join(" "),
             modes,
+            tags,
+        }
+    }
+
+    /// Whether a game with `store_tags` passes every `tag:` term.
+    pub fn tags_match(&self, store_tags: &[String]) -> bool {
+        self.tags.is_empty() || {
+            let keys: Vec<String> = store_tags.iter().map(|t| tag_key(t)).collect();
+            self.tags
+                .iter()
+                .all(|any| any.iter().any(|k| keys.contains(k)))
         }
     }
 
@@ -476,6 +517,25 @@ fn split_camel(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tag_terms_match_steam_tags_loosely() {
+        let q = ParsedQuery::new("hades TAG:rogue-like tag:co_op,Open-World");
+        assert_eq!(q.text, "hades");
+        assert_eq!(
+            q.tags,
+            [
+                vec!["roguelike".to_owned()],
+                vec!["coop".into(), "openworld".into()]
+            ]
+        );
+        let tags = |t: &[&str]| t.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(q.tags_match(&tags(&["Roguelike", "Open World"])));
+        assert!(!q.tags_match(&tags(&["Roguelike"])));
+        assert!(ParsedQuery::new("portal").tags_match(&[]));
+        // An empty term stays text.
+        assert_eq!(ParsedQuery::new("tag: x").text, "tag: x");
+    }
 
     #[test]
     fn mode_terms_split_from_the_text() {

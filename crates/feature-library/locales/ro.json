@@ -775,6 +775,7 @@
   "library.folder.add_other": "Adaugă jocuri: {count}",
   "library.toolbar.group.genre": "Gen",
   "library.filters.section.genre": "Gen",
+  "library.filters.section.steam_tags": "Etichete Steam",
   "library.group.no_genre": "Fără gen",
   "library.menu.combine": "Combină cu copii din alte magazine…",
   "library.combine.hint": "Alege celelalte copii ale „{title}”, apoi Combină într-un singur joc.",

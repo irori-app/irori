@@ -775,6 +775,7 @@
   "library.folder.add_other": "게임 {count}개 추가",
   "library.toolbar.group.genre": "장르",
   "library.filters.section.genre": "장르",
+  "library.filters.section.steam_tags": "Steam 태그",
   "library.group.no_genre": "장르 없음",
   "library.menu.combine": "다른 스토어의 사본과 합치기…",
   "library.combine.hint": "“{title}”의 다른 사본을 고른 다음 하나의 게임으로 합치기를 선택하세요.",

@@ -775,6 +775,7 @@
   "library.folder.add_other": "{count} 本を追加",
   "library.toolbar.group.genre": "ジャンル",
   "library.filters.section.genre": "ジャンル",
+  "library.filters.section.steam_tags": "Steam タグ",
   "library.group.no_genre": "ジャンルなし",
   "library.menu.combine": "ほかのストアのコピーとまとめる…",
   "library.combine.hint": "「{title}」のほかのコピーを選んでから、「1 つのゲームにまとめる」を選んでください。",

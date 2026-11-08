@@ -775,6 +775,7 @@
   "library.folder.add_other": "Adicionar {count} jogos",
   "library.toolbar.group.genre": "Género",
   "library.filters.section.genre": "Género",
+  "library.filters.section.steam_tags": "Etiquetas do Steam",
   "library.group.no_genre": "Sem género",
   "library.menu.combine": "Juntar com cópias de outras lojas…",
   "library.combine.hint": "Escolha as outras cópias de «{title}» e depois Juntar num só jogo.",

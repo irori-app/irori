@@ -89,6 +89,10 @@ pub struct GameInfo {
     /// Short labels shown as badges: a ROM's region and revision ("USA",
     /// "Rev 1").
     pub tags: Vec<String>,
+    /// The store's user tags ("Puzzle", "Co-op"), strongest first, in the
+    /// interface language: Steam's, for Steam games.
+    #[serde(default)]
+    pub store_tags: Vec<String>,
 }
 
 impl GameInfo {

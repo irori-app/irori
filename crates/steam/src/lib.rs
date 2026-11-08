@@ -22,6 +22,7 @@ mod error;
 pub mod friends;
 pub mod library;
 mod proto;
+pub mod tags;
 
 pub use achievements::{
     AchievementGroup, AchievementSchema, GameAchievement, UserAchievement, UserAchievementGroup,

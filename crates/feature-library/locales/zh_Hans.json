@@ -775,6 +775,7 @@
   "library.folder.add_other": "添加 {count} 款游戏",
   "library.toolbar.group.genre": "类型",
   "library.filters.section.genre": "类型",
+  "library.filters.section.steam_tags": "Steam 标签",
   "library.group.no_genre": "无类型",
   "library.menu.combine": "与其他商店的副本合并…",
   "library.combine.hint": "选择“{title}”的其他副本，然后选择“合并为一个游戏”。",

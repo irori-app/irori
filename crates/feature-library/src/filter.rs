@@ -169,6 +169,38 @@ pub fn present_genres(library: &LibrarySnapshot) -> Vec<(String, String)> {
     genres
 }
 
+/// Store tags the Filters popover offers: the most common ones in the
+/// library (Steam has hundreds), as (key, name) by name. Picked tags stay
+/// offered even when they have become rarer.
+pub const SHOWN_TAGS: usize = 30;
+
+/// The [`SHOWN_TAGS`] commonest store tags among the library's games, as
+/// (key, the name it is shown with), by name.
+pub fn present_tags(library: &LibrarySnapshot) -> Vec<(String, String)> {
+    let mut counts: std::collections::HashMap<String, (usize, String)> =
+        std::collections::HashMap::new();
+    for tag in library.games.iter().flat_map(|g| g.store_tags.iter()) {
+        let key = irori_services::search::tag_key(tag);
+        if key.is_empty() {
+            continue;
+        }
+        counts
+            .entry(key)
+            .or_insert_with(|| (0, tag.trim().to_owned()))
+            .0 += 1;
+    }
+    let mut common: Vec<(String, usize, String)> = counts
+        .into_iter()
+        .map(|(k, (n, name))| (k, n, name))
+        .collect();
+    common.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    common.truncate(SHOWN_TAGS);
+    let mut tags: Vec<(String, String)> =
+        common.into_iter().map(|(k, _, name)| (k, name)).collect();
+    tags.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
+    tags
+}
+
 /// The first spelling of each genre key among `games`.
 fn genre_names(games: &[Arc<GameInfo>]) -> std::collections::HashMap<String, String> {
     let mut names = std::collections::HashMap::new();
@@ -366,6 +398,9 @@ pub struct ViewFilter {
     /// Games with any of these genres, as they were shown when picked and
     /// compared by [`genre_key`]; empty shows every game.
     pub genres: BTreeSet<String>,
+    /// Games with any of these store tags (Steam's), as shown when picked
+    /// and compared by `tag_key`; empty shows every game.
+    pub tags: BTreeSet<String>,
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -423,6 +458,7 @@ impl ViewFilter {
             self.max_age.is_some(),
             !self.modes.is_empty(),
             !self.genres.is_empty(),
+            !self.tags.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -546,6 +582,10 @@ impl ViewFilter {
         }
         if !self.genres.is_empty() {
             let names: Vec<&str> = self.genres.iter().map(String::as_str).collect();
+            out.push(names.join(&t("library.filter.list_separator")));
+        }
+        if !self.tags.is_empty() {
+            let names: Vec<&str> = self.tags.iter().map(String::as_str).collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
         let heading = self.category_heading();
@@ -792,6 +832,11 @@ pub fn apply(
         let wanted: HashSet<String> = filter.genres.iter().map(|g| genre_key(g)).collect();
         games.retain(|g| g.genres.iter().any(|x| wanted.contains(&genre_key(x))));
     }
+    if !filter.tags.is_empty() {
+        use irori_services::search::tag_key;
+        let wanted: HashSet<String> = filter.tags.iter().map(|t| tag_key(t)).collect();
+        games.retain(|g| g.store_tags.iter().any(|x| wanted.contains(&tag_key(x))));
+    }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
         games.retain(|g| filter.released.contains(g.release_date.as_deref(), year));
@@ -958,6 +1003,36 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn filters_by_steam_tags_and_offers_the_common_ones() {
+        let tagged = |app: &str, title: &str, tags: &[&str]| {
+            let mut g = (*of_genres(app, title, &[])).clone();
+            g.store_tags = tags.iter().map(|t| t.to_string()).collect();
+            Arc::new(g)
+        };
+        let library = snapshot(vec![
+            tagged("1", "Portal 2", &["Puzzle", "Co-op"]),
+            tagged("2", "Hades", &["Roguelike", "Co-op"]),
+            tagged("3", "Celeste", &["Platformer"]),
+        ]);
+        let user = Arc::new(UserData::default());
+        let none = Arc::new(HashSet::new());
+        let offered: Vec<String> = present_tags(&library).into_iter().map(|(_, n)| n).collect();
+        assert_eq!(offered, ["Co-op", "Platformer", "Puzzle", "Roguelike"]);
+        let f = ViewFilter {
+            tags: ["co-op".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        let mut shown = titles(&shown);
+        shown.sort_unstable();
+        assert_eq!(shown, ["Hades", "Portal 2"]);
+        assert_eq!(f.active_count(), 1);
+        // Saved views from before tags existed still read.
+        let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
+        assert!(old.tags.is_empty());
+    }
+
+    #[test]
     fn filters_and_groups_by_genre() {
         let library = snapshot(vec![
             of_genres("1", "Celeste", &["Platformer", "Indie"]),
@@ -1095,7 +1170,7 @@ pub(crate) mod tests {
         // A view a newer Irori saved: a facet and a mode this one doesn't
         // know, and a grouping it doesn't have.
         let json = r#"{"favourites_only": true, "modes": ["coop", "vr"],
-            "group": "decade", "price": {"max": 10}, "tags": ["roguelike"]}"#;
+            "group": "decade", "price": {"max": 10}, "moods": ["cozy"]}"#;
         let f: ViewFilter = serde_json::from_str(json).unwrap();
         assert!(f.favourites_only);
         assert_eq!(f.modes, [GameMode::Coop].into());
@@ -1104,7 +1179,7 @@ pub(crate) mod tests {
         // Writing it again keeps the unknown facets as they were.
         let written = serde_json::to_value(&f).unwrap();
         assert_eq!(written["price"], serde_json::json!({"max": 10}));
-        assert_eq!(written["tags"], serde_json::json!(["roguelike"]));
+        assert_eq!(written["moods"], serde_json::json!(["cozy"]));
         assert_eq!(written["modes"], serde_json::json!(["coop"]));
         let back: ViewFilter = serde_json::from_value(written).unwrap();
         assert_eq!(back, f);
