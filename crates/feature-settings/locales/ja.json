@@ -580,7 +580,7 @@
   "settings.field.ui_reduce_motion.label": "動きを減らす",
   "settings.field.ui_show_store_badges.label": "ストアバッジを表示",
   "settings.field.ui_library_quick_controls.label": "ライブラリのヘッダーにクイック操作を表示",
-  "settings.field.ui_library_quick_controls.help": "並べ替え、インストール済みのゲーム、お気に入り、プレイ状況でのグループ化を、ウィンドウに収まる分だけライブラリのタイトルの横に表示します。ツールバーの並べ替えメニューとフィルターはどちらの場合も残ります。",
+  "settings.field.ui_library_quick_controls.help": "ライブラリのタイトルの横に、インストール済みのゲームとお気に入りを、ウィンドウに収まる分だけ表示します。ツールバーのフィルターはどちらの場合も残ります。",
   "settings.field.ui_system_accent.help": "Irori 独自のテーマをシステム設定のアクセントカラーで彩り、変更にも追従します。一覧から選んだテーマは独自の色のままです。",
   "settings.field.ui_system_accent.label": "システムのアクセントカラーを使用",
   "settings.field.ui_wallpaper_colors.help": "これらのツールが壁紙から取り出した色で既定のテーマを作り、壁紙が変わるたびに追従します。一覧から選んだテーマは独自の色のままです。",

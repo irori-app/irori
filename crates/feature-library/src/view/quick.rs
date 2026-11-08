@@ -1,13 +1,13 @@
-//! The library header's quick controls: the sort field and direction, All /
-//! Installed / Not installed, favourites only and grouping by play status,
-//! one click each. They sit between the title and the header's buttons and
-//! join, in that order, while the measured room allows (`crate::quick`). They
-//! change the same criteria as the toolbar's Sort menu and the Filters
-//! popover, which stay; `iroriUi.libraryQuickControls` turns them off.
+//! The library header's quick controls: All / Installed / Not installed and
+//! favourites only, one click each. They sit between the title and the
+//! header's buttons and join, in that order, while the measured room allows
+//! (`crate::quick`). They change the same criteria as the Filters popover,
+//! which stays; `iroriUi.libraryQuickControls` turns them off. The Sort menu
+//! shared with the toolbar lives here too.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::component::{Selectable as _, Sizable as _, h_flex};
 use gpui_kit::{
     AnyElement, App, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -17,7 +17,7 @@ use irori_services::LibrarySort;
 use irori_ui::i18n::t;
 
 use super::LibraryView;
-use crate::filter::{Grouping, InstallFilter, ViewFilter};
+use crate::filter::{InstallFilter, ViewFilter};
 use crate::filters_panel::FilterModel;
 use crate::quick::QuickControl;
 
@@ -40,8 +40,7 @@ const INSTALLS: [(InstallFilter, &str, &str); 3] = [
     ),
 ];
 
-/// The sort fields, then "Reverse order": the toolbar's Sort menu and the
-/// quick sort control share it.
+/// The sort fields, then "Reverse order", for the toolbar's Sort menu.
 pub(super) fn sort_menu(
     mut menu: PopupMenu,
     model: &Entity<FilterModel>,
@@ -116,10 +115,8 @@ impl LibraryView {
             .iter()
             .map(|&control| {
                 let element = match control {
-                    QuickControl::Sort => self.quick_sort(filter, cx),
                     QuickControl::Install => self.quick_install(filter, cx),
                     QuickControl::Favourites => self.quick_favourites(filter, cx),
-                    QuickControl::Group => self.quick_group(filter, cx),
                 };
                 measured(control, element, view.clone())
             })
@@ -143,39 +140,6 @@ impl LibraryView {
                 )
                 .into_any_element(),
         )
-    }
-
-    /// The sort field as a menu, and a button that reverses the order.
-    fn quick_sort(&self, filter: &ViewFilter, _: &mut Context<Self>) -> AnyElement {
-        let (sort, descending) = (filter.sort, filter.descending);
-        let model = self.filters.clone();
-        let reverse_model = self.filters.clone();
-        h_flex()
-            .gap_1()
-            .child(
-                Button::new("library-quick-sort")
-                    .small()
-                    .outline()
-                    .icon(IconName::ArrowDownUp)
-                    .label(crate::i18n::sort_label(sort))
-                    .tooltip(t("library.quick.sort_tooltip"))
-                    .dropdown_caret(true)
-                    .dropdown_menu(move |menu, _, _| sort_menu(menu, &model, sort, descending)),
-            )
-            .child(
-                Button::new("library-quick-reverse")
-                    .small()
-                    .outline()
-                    .icon(if descending {
-                        IconName::ArrowDownWideNarrow
-                    } else {
-                        IconName::ArrowDownNarrowWide
-                    })
-                    .selected(descending)
-                    .tooltip(t("library.toolbar.reverse"))
-                    .on_click(move |_, _, cx| reverse(&reverse_model, cx)),
-            )
-            .into_any_element()
     }
 
     fn quick_install(&self, filter: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
@@ -211,17 +175,6 @@ impl LibraryView {
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.update_filter(|f| f.favourites_only = !on, cx)
             }))
-            .into_any_element()
-    }
-
-    fn quick_group(&self, filter: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        Button::new("library-quick-group")
-            .small()
-            .outline()
-            .icon(IconName::Rows3)
-            .label(t("library.toolbar.group_by_status"))
-            .selected(filter.group == Grouping::Status)
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_status_groups(cx)))
             .into_any_element()
     }
 }

@@ -791,10 +791,10 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
     assert_eq!(shown(cx), &QuickControl::ORDER, "a wide window has room");
 
     // Narrower windows drop controls from the end, never the title.
-    resize(cx, 1100.);
+    resize(cx, 760.);
     settle(cx);
     let narrow = shown(cx);
-    assert!(narrow.len() < 4, "{narrow:?}");
+    assert!(narrow.len() < QuickControl::ORDER.len(), "{narrow:?}");
     assert_eq!(narrow, &QuickControl::ORDER[..narrow.len()]);
     resize(cx, 500.);
     settle(cx);
