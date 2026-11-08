@@ -10,6 +10,13 @@
 //! own and hides every other drive; "No network" gives it a network namespace
 //! with nothing but loopback.
 //!
+//! The game also starts from an empty environment: bubblewrap itself runs
+//! under `env -i`, and inside it gets only the display, sound, locale and
+//! runtime variables of Irori's environment ([`host_env`]) and the variables
+//! its launch sets ([`LAUNCH_ENV`]), so tokens and API keys of the user's
+//! session stay out. Only the X socket of the display `DISPLAY` names is
+//! bound. IPC stays shared: X11 clients use shared memory with the server.
+//!
 //! The same outer sandbox serves every runner. umu runs Proton in
 //! pressure-vessel, which is itself bubblewrap; it nests inside ours (its
 //! user namespace is a child of ours) and only ever sees what ours exposes.
@@ -25,7 +32,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
-use irori_core::process::CommandSpec;
+use irori_core::process::{CommandSpec, LAUNCH_ENV};
 use irori_core::{GameId, Paths, SandboxProblem, SandboxSettings, SandboxUnavailable};
 
 use crate::locations;
@@ -78,8 +85,15 @@ pub struct HostLayout {
     pub runtime_dir: Option<PathBuf>,
     /// Wayland, PipeWire and PulseAudio sockets, by absolute path.
     pub sockets: Vec<PathBuf>,
-    /// `/tmp/.X11-unix` exists.
-    pub x11: bool,
+    /// The socket of the X display `DISPLAY` names (`/tmp/.X11-unix/X0`).
+    pub x11_socket: Option<PathBuf>,
+    /// The variables of Irori's environment the game keeps ([`host_env`]);
+    /// everything else stays outside.
+    pub env: Vec<(String, String)>,
+    /// `env`, which starts bubblewrap itself with an empty environment, so
+    /// not even the sandbox's first process (its `/proc/1/environ`) holds
+    /// Irori's variables.
+    pub env_program: Option<PathBuf>,
     /// The X cookie file.
     pub xauthority: Option<PathBuf>,
     /// Device nodes and folders to pass through (`/dev/dri`, `/dev/nvidia0`…).
@@ -164,7 +178,11 @@ const WAIT_FOR_WINESERVER: &str = r#"w=$1; shift; "$@"; s=$?; "$w" -w; exit $s"#
 /// The wrapper argv: `bwrap`, its options, `--`, and for plain Wine the shell
 /// that waits for the wineserver. The game's command follows it.
 pub fn bwrap_args(bwrap: &str, host: &HostLayout, plan: &SandboxPlan) -> Vec<String> {
-    let mut a: Vec<String> = vec![bwrap.to_string()];
+    let mut a: Vec<String> = Vec::new();
+    if let Some(env) = &host.env_program {
+        a.extend([s(env), "-i".into()]);
+    }
+    a.push(bwrap.to_string());
     let mut push = |args: &[&str]| a.extend(args.iter().map(|x| x.to_string()));
     let no_home = plan.settings.no_home;
     let no_network = plan.settings.no_network;
@@ -179,10 +197,17 @@ pub fn bwrap_args(bwrap: &str, host: &HostLayout, plan: &SandboxPlan) -> Vec<Str
     if host.disable_userns && plan.kind != SandboxKind::PressureVessel {
         push(&["--unshare-user", "--disable-userns"]);
     }
-    // The session bus isn't in the sandbox (it could start programs outside
-    // it); a variable still naming it makes pressure-vessel try to bind it.
-    push(&["--unsetenv", "DBUS_SESSION_BUS_ADDRESS"]);
-    push(&["--unsetenv", "DBUS_SYSTEM_BUS_ADDRESS"]);
+    // An empty environment: the game gets the display, sound, locale and
+    // runtime variables it needs from Irori's ([`host_env`]), then every
+    // variable its launch sets ([`LAUNCH_ENV`]), and no launcher token or API
+    // key the user's session holds. The session bus stays out too (it could
+    // start programs outside the sandbox); a variable still naming it would
+    // make pressure-vessel try to bind it.
+    push(&["--clearenv"]);
+    for (k, v) in &host.env {
+        push(&["--setenv", k, v]);
+    }
+    push(&[LAUNCH_ENV]);
     push(&["--setenv", "IRORI_SANDBOX", "1"]);
     if plan.kind == SandboxKind::PressureVessel {
         // Updates would land in the throwaway layer; Irori's own launches
@@ -251,10 +276,13 @@ pub fn bwrap_args(bwrap: &str, host: &HostLayout, plan: &SandboxPlan) -> Vec<Str
             push(&["--ro-bind-try", &p, &p]);
         }
     }
-    if host.x11 {
+    if let Some(socket) = &host.x11_socket {
         // In a network namespace of their own, X11 clients can't reach the
-        // abstract socket and fall back to these.
-        push(&["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"]);
+        // abstract socket and fall back to this one. Only the display the
+        // game uses: another X server's (a second session, a nested one)
+        // stays out.
+        let p = s(socket);
+        push(&["--ro-bind", &p, &p]);
     }
 
     let mut mounts: Vec<Mount> = Vec::new();
@@ -343,12 +371,22 @@ impl HostLayout {
             .or_else(|| Some(home.join(".Xauthority")))
             .filter(|p| p.is_file());
         let (major, minor) = bwrap_version.unwrap_or((0, 0));
+        let x11_socket = std::env::var("DISPLAY")
+            .ok()
+            .and_then(|d| x11_socket(&d))
+            .filter(|p| p.exists());
+        let env_program = ["/usr/bin/env", "/bin/env"]
+            .into_iter()
+            .map(PathBuf::from)
+            .find(|p| p.is_file());
         Self {
             root: read_root(Path::new("/")),
             home,
             runtime_dir,
             sockets,
-            x11: Path::new("/tmp/.X11-unix").is_dir(),
+            x11_socket,
+            env: host_env(std::env::vars()),
+            env_program,
             xauthority,
             devices: devices(Path::new("/dev")),
             resolver_dirs: resolver_dirs(Path::new("/etc/resolv.conf")),
@@ -418,6 +456,108 @@ fn resolver_dirs(resolv: &Path) -> Vec<PathBuf> {
         .and_then(|p| p.parent().map(Path::to_path_buf))
         .into_iter()
         .collect()
+}
+
+/// Variables of Irori's environment a sandboxed game keeps, by name: the
+/// session's basics, display, sound, locale and the XDG folders.
+const HOST_ENV: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
+    "LANG",
+    "LANGUAGE",
+    "TZ",
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "XAUTHORITY",
+    "XDG_RUNTIME_DIR",
+    "XDG_SESSION_TYPE",
+    "XDG_SESSION_DESKTOP",
+    "XDG_CURRENT_DESKTOP",
+    "DESKTOP_SESSION",
+    "XDG_DATA_DIRS",
+    "XDG_CONFIG_DIRS",
+    "XDG_DATA_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_STATE_HOME",
+    "XCURSOR_THEME",
+    "XCURSOR_SIZE",
+    "XCURSOR_PATH",
+    "XMODIFIERS",
+    "GTK_IM_MODULE",
+    "QT_IM_MODULE",
+    "LD_LIBRARY_PATH",
+    "LIBVA_DRIVER_NAME",
+    "VDPAU_DRIVER",
+    "DRI_PRIME",
+];
+
+/// Prefixes of the variables a sandboxed game keeps: locale, SDL, graphics
+/// drivers and Vulkan, sound, keyboard layout, and Wine, Proton, Steam
+/// runtime, umu and overlay settings the user set for every game.
+const HOST_ENV_PREFIXES: &[&str] = &[
+    "LC_",
+    "SDL_",
+    "__GL_",
+    "__NV_",
+    "__EGL_",
+    "__VK_",
+    "VK_",
+    "MESA_",
+    "RADV_",
+    "AMD_",
+    "GALLIUM_",
+    "LIBGL_",
+    "DXVK_",
+    "VKD3D_",
+    "PROTON_",
+    "WINE",
+    "STEAM_",
+    "UMU_",
+    "PRESSURE_VESSEL_",
+    "MANGOHUD",
+    "ENABLE_",
+    "GAMESCOPE",
+    "PULSE_",
+    "PIPEWIRE_",
+    "ALSA_",
+    "XKB_",
+];
+
+/// The variables of `vars` (Irori's environment) a sandboxed game keeps:
+/// [`HOST_ENV`] by name, [`HOST_ENV_PREFIXES`] by prefix unless the name
+/// looks like a secret (`…_TOKEN`, `…_KEY`). Sorted, so the arguments stay
+/// the same from launch to launch.
+pub fn host_env(vars: impl IntoIterator<Item = (String, String)>) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = vars
+        .into_iter()
+        .filter(|(k, _)| {
+            HOST_ENV.contains(&k.as_str())
+                || (HOST_ENV_PREFIXES.iter().any(|p| k.starts_with(p))
+                    && !irori_core::process::is_secret_var(k))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The socket of the X display `display` names: `:0`, `:1.0` and `unix:0`
+/// are `/tmp/.X11-unix/X0`, `X1` and `X0`. A display on another host (TCP)
+/// has none.
+pub fn x11_socket(display: &str) -> Option<PathBuf> {
+    let (host, rest) = display.rsplit_once(':')?;
+    if !(host.is_empty() || host == "unix") {
+        return None;
+    }
+    let number = rest.split('.').next()?;
+    if number.is_empty() || !number.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(PathBuf::from(format!("/tmp/.X11-unix/X{number}")))
 }
 
 /// `bubblewrap 0.11.0` → `(0, 11)`.
@@ -545,6 +685,54 @@ pub async fn check() -> Result<(PathBuf, Option<(u32, u32)>)> {
     }
 }
 
+#[cfg(test)]
+mod env_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_games_variables_pass_into_the_sandbox() {
+        let vars = [
+            ("LANG", "de_DE.UTF-8"),
+            ("LC_TIME", "de_DE.UTF-8"),
+            ("DISPLAY", ":0"),
+            ("XAUTHORITY", "/run/user/1000/xauth"),
+            ("DXVK_HUD", "fps"),
+            ("WINEDEBUG", "-all"),
+            ("GITHUB_TOKEN", "ghp_x"),
+            ("AWS_SECRET_ACCESS_KEY", "x"),
+            ("STEAM_API_KEY", "x"),
+            ("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus"),
+            ("SSH_AUTH_SOCK", "/run/user/1000/ssh"),
+            ("EDITOR", "vim"),
+        ]
+        .map(|(k, v)| (k.to_string(), v.to_string()));
+        let kept: Vec<String> = host_env(vars).into_iter().map(|(k, _)| k).collect();
+        assert_eq!(
+            kept,
+            [
+                "DISPLAY",
+                "DXVK_HUD",
+                "LANG",
+                "LC_TIME",
+                "WINEDEBUG",
+                "XAUTHORITY"
+            ]
+        );
+    }
+
+    #[test]
+    fn finds_the_x_displays_socket() {
+        let x = |n: &str| Some(PathBuf::from(format!("/tmp/.X11-unix/X{n}")));
+        assert_eq!(x11_socket(":0"), x("0"));
+        assert_eq!(x11_socket(":1.0"), x("1"));
+        assert_eq!(x11_socket("unix:12"), x("12"));
+        assert_eq!(x11_socket("otherhost:0"), None);
+        assert_eq!(x11_socket(":"), None);
+        assert_eq!(x11_socket(""), None);
+        assert_eq!(x11_socket(":0/../../etc"), None);
+    }
+}
+
 // The sandbox exists only on Linux, and the expected arguments are Linux paths.
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
@@ -572,7 +760,12 @@ mod tests {
                 "/run/user/1000/wayland-0".into(),
                 "/run/user/1000/pipewire-0".into(),
             ],
-            x11: true,
+            x11_socket: Some("/tmp/.X11-unix/X1".into()),
+            env: vec![
+                ("DISPLAY".into(), ":1".into()),
+                ("LANG".into(), "de_DE.UTF-8".into()),
+            ],
+            env_program: None,
             xauthority: Some("/run/user/1000/xauth_x".into()),
             devices: vec![
                 "/dev/dri".into(),
@@ -702,10 +895,30 @@ mod tests {
             &a,
             &["--die-with-parent", "--new-session", "--unshare-pid"]
         ));
-        assert!(has(&a, &["--unsetenv", "DBUS_SESSION_BUS_ADDRESS"]));
+        assert!(!a.iter().any(|x| x.starts_with("DBUS_")));
         assert!(!a.iter().any(|x| x.contains("/run/user/1000/bus")));
         assert!(!a.iter().any(|x| x.contains("uinput")));
         assert!(!a.iter().any(|x| x == "--unshare-ipc"), "X11 shared memory");
+    }
+
+    #[test]
+    fn the_game_starts_from_an_empty_environment() {
+        let a = args(&host(), &plan(false, false, SandboxKind::Native));
+        let clear = pos(&a, &["--clearenv"]);
+        let lang = pos(&a, &["--setenv", "LANG", "de_DE.UTF-8"]);
+        let launch = pos(&a, &[LAUNCH_ENV]);
+        let sandbox = pos(&a, &["--setenv", "IRORI_SANDBOX", "1"]);
+        // Irori's kept variables, then the launch's, then the sandbox's own.
+        assert!(clear < lang && lang < launch && launch < sandbox);
+        assert!(has(&a, &["--setenv", "DISPLAY", ":1"]));
+
+        // `env -i` starts bubblewrap itself with nothing.
+        let h = HostLayout {
+            env_program: Some("/usr/bin/env".into()),
+            ..host()
+        };
+        let a = args(&h, &plan(false, false, SandboxKind::Native));
+        assert_eq!(a[..3], ["/usr/bin/env", "-i", "/usr/bin/bwrap"]);
     }
 
     #[test]
@@ -724,14 +937,26 @@ mod tests {
         for socket in ["/run/user/1000/wayland-0", "/run/user/1000/pipewire-0"] {
             assert!(has(&a, &["--ro-bind-try", socket, socket]), "{socket}");
         }
-        assert!(has(&a, &["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"]));
+        // Only the display the game uses, not every X server's socket.
+        assert!(has(
+            &a,
+            &["--ro-bind", "/tmp/.X11-unix/X1", "/tmp/.X11-unix/X1"]
+        ));
+        assert!(!has(&a, &["--ro-bind", "/tmp/.X11-unix", "/tmp/.X11-unix"]));
         assert!(has(&a, &["--ro-bind-try", "/run/user/1000/xauth_x"]));
         // The runtime folder exists before the sockets in it.
         assert!(
             pos(&a, &["--dir", "/run/user/1000"])
                 < pos(&a, &["--ro-bind-try", "/run/user/1000/wayland-0"])
         );
-        assert!(pos(&a, &["--tmpfs", "/tmp"]) < pos(&a, &["--ro-bind", "/tmp/.X11-unix"]));
+        assert!(pos(&a, &["--tmpfs", "/tmp"]) < pos(&a, &["--ro-bind", "/tmp/.X11-unix/X1"]));
+
+        let no_x = HostLayout {
+            x11_socket: None,
+            ..host()
+        };
+        let a = args(&no_x, &plan(true, true, SandboxKind::Native));
+        assert!(!a.iter().any(|x| x.starts_with("/tmp/.X11-unix")));
     }
 
     #[test]
@@ -968,6 +1193,9 @@ mod tests {
             test -e "$REPO/Cargo.toml" && exit 4
             test "$(grep -c : /proc/net/dev)" = 1 || exit 5
             test "$IRORI_SANDBOX" = 1 || exit 6
+            env | grep -q '^CARGO_' && exit 7
+            grep -qa CARGO_ /proc/1/environ && exit 8
+            test -n "$PATH" || exit 9
             echo ok"#;
         argv.extend(["/bin/sh".into(), "-c".into(), script.into()]);
         let game_dir = game.path().to_string_lossy().into_owned();

@@ -28,6 +28,14 @@ pub enum Stream {
     Stderr,
 }
 
+/// A wrapper argument that stands for the command's own variables: when the
+/// command runs, the first one becomes bubblewrap's `--setenv NAME VALUE` for
+/// each of them. A sandbox that starts from an empty environment
+/// (`--clearenv`) puts it among its options, so the game still gets every
+/// variable its launch sets, which are only all known once the store has
+/// built the command.
+pub const LAUNCH_ENV: &str = "--irori-launch-env";
+
 /// A fully specified command line. Built by stores and the runtime, executed
 /// by [`run`] or [`spawn`].
 #[derive(Debug, Clone, Default)]
@@ -100,6 +108,24 @@ impl CommandSpec {
         }
     }
 
+    /// The arguments as they run: the first [`LAUNCH_ENV`] becomes
+    /// `--setenv NAME VALUE` for each of the command's variables.
+    pub fn expanded_args(&self) -> Vec<OsString> {
+        let mut out = Vec::with_capacity(self.args.len());
+        let mut expanded = false;
+        for a in &self.args {
+            if !expanded && a == LAUNCH_ENV {
+                expanded = true;
+                for (k, v) in &self.env {
+                    out.extend(["--setenv".into(), k.into(), v.into()]);
+                }
+            } else {
+                out.push(a.clone());
+            }
+        }
+        out
+    }
+
     fn to_command(&self) -> Result<Command> {
         let program =
             if cfg!(target_os = "macos") && self.program.extension().is_some_and(|e| e == "app") {
@@ -108,7 +134,7 @@ impl CommandSpec {
                 self.program.clone()
             };
         let mut cmd = Command::new(program);
-        cmd.args(&self.args);
+        cmd.args(self.expanded_args());
         for key in &self.env_remove {
             cmd.env_remove(key);
         }
@@ -874,6 +900,35 @@ mod tests {
             [r"a\\\b", "de fg", "h"]
         );
         assert_eq!(split_windows_args(r#"a"b"" c d"#), ["ab\" c d"]);
+    }
+
+    #[test]
+    fn the_launch_env_marker_becomes_the_commands_variables() {
+        let spec = CommandSpec::new("bwrap")
+            .args(["--clearenv", LAUNCH_ENV, "--", "game", LAUNCH_ENV])
+            .env("B", "2")
+            .env("A", "1 x");
+        let args: Vec<String> = spec
+            .expanded_args()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "--clearenv",
+                "--setenv",
+                "A",
+                "1 x",
+                "--setenv",
+                "B",
+                "2",
+                "--",
+                "game",
+                LAUNCH_ENV
+            ]
+        );
+        assert_eq!(CommandSpec::new("x").arg("y").expanded_args(), ["y"]);
     }
 
     #[test]

@@ -652,7 +652,8 @@ Inside, the game sees an empty root holding only:
 | Wine or Proton build, umu-run, EAC/BattlEye runtimes, Steam's `legacycompat` | read-only |
 | umu's Steam runtime (`~/.local/share/umu`) | read-only with a throwaway writable layer (`--overlay-src`/`--tmp-overlay`, bubblewrap 0.10+; older bubblewrap binds it writable) |
 | GPU, controllers, sound | `/dev/dri`, `/dev/nvidia*`, `/dev/input`, `/dev/hidraw*`, `/dev/snd`; never `/dev/uinput` |
-| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, `/tmp/.X11-unix`, the X cookie, gamescope's socket when gamescope is on |
+| Display, audio | the Wayland, PipeWire and PulseAudio sockets in `$XDG_RUNTIME_DIR`, the socket of `$DISPLAY`'s X server (`/tmp/.X11-unix/X<n>`, no other display's), the X cookie, gamescope's socket when gamescope is on |
+| Environment | empty (`env -i`, `--clearenv`), then Irori's display, sound, locale, XDG, graphics driver and Wine/Proton/Steam runtime/umu variables, then every variable of the launch (the game's settings, its store's); nothing else of the session, so its tokens and API keys stay out, `/proc/1/environ` included |
 | `/proc`, `/tmp`, `/run`, `/var/tmp`, `/dev/shm` | private (new PID namespace, fresh tmpfs) |
 | `/sys`, `/run/udev`, fontconfig's cache, DNS configuration | read-only |
 
@@ -664,9 +665,10 @@ folder) stay hidden. Without it the home folder and those drives are shown
 writable, as outside the sandbox. "Block the network" gives the game a network
 namespace with only loopback: no internet, no LAN, nothing listening on the
 computer (GOG Galaxy's comet on port 9977 included); X11 clients then reach the
-display through `/tmp/.X11-unix` instead of the abstract socket. In every mode
+display through its socket in `/tmp/.X11-unix` instead of the abstract socket.
+IPC stays shared, as X11 clients use shared memory with the server. In every mode
 the session D-Bus is left out (it can start programs outside the sandbox) and
-`DBUS_SESSION_BUS_ADDRESS` unset, `--new-session` stops terminal input
+`DBUS_SESSION_BUS_ADDRESS` not passed, `--new-session` stops terminal input
 injection, and `--die-with-parent` ends the sandbox with Irori's stop. A plain
 Wine game waits for its prefix's wineserver inside the sandbox, as everything
 in the sandbox ends with its first process; Proton's `waitforexitandrun` and
