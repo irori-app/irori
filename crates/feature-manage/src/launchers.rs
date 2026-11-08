@@ -457,6 +457,7 @@ impl LaunchersSection {
                 .gap_2()
                 .child(
                     div()
+                        .min_w_0()
                         .text_xs()
                         .text_color(muted)
                         .child(t("manage.launchers.xbox.account.about")),
@@ -488,6 +489,8 @@ impl LaunchersSection {
                     ),
                 };
                 h_flex()
+                    .w_full()
+                    .min_w_0()
                     .gap_2()
                     .child(
                         v_flex()
@@ -553,15 +556,22 @@ impl LaunchersSection {
                 .xsmall()
                 .child(t("manage.launchers.state.no_xbox_app")),
         };
+        // The note sits straight in the card, so it wraps at the card's
+        // width; inside the buttons' row it kept its own length and ran
+        // out of the card.
         let footer: AnyElement = if !status.supported {
             div()
                 .debug_selector(|| "launcher-xbox-windows-only".to_string())
+                .w_full()
+                .min_w_0()
                 .text_xs()
                 .text_color(muted)
                 .child(t("manage.launchers.xbox.windows_only"))
                 .into_any_element()
         } else {
             h_flex()
+                .w_full()
+                .min_w_0()
                 .flex_wrap()
                 .justify_end()
                 .gap_2()
@@ -596,6 +606,7 @@ impl LaunchersSection {
         };
         card(cx)
             .id("launcher-xbox")
+            .debug_selector(|| "launcher-xbox-card".to_string())
             .w(rems(22.))
             .flex_grow(1.)
             .child(
@@ -613,11 +624,12 @@ impl LaunchersSection {
             )
             .child(
                 div()
+                    .min_w_0()
                     .text_xs()
                     .text_color(muted)
                     .child(t("manage.launchers.about.xbox")),
             )
-            .child(h_flex().justify_end().child(footer))
+            .child(footer)
             .children(self.render_xbox_account(cx))
             .into_any_element()
     }
