@@ -215,5 +215,21 @@
   "ui.copies.open": "Open the {store} copy",
   "ui.copies.make_default": "Make this the default copy",
   "ui.copies.separate": "Show this copy on its own",
-  "ui.copies.separate_all": "Show every copy on its own"
+  "ui.copies.separate_all": "Show every copy on its own",
+  "ui.hidden_lock.change_title": "Hidden games PIN",
+  "ui.hidden_lock.confirm_pin": "New PIN again",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "With a PIN, hidden games stay out of the library, Big Picture, search, stats and the command line until it is entered. It doesn’t encrypt anything.",
+  "ui.hidden_lock.new_pin": "New PIN",
+  "ui.hidden_lock.pin_rule": "A PIN is {count} to 32 digits",
+  "ui.hidden_lock.pins_differ": "The two PINs differ",
+  "ui.hidden_lock.remove": "Remove PIN",
+  "ui.hidden_lock.removed": "The hidden games PIN is removed",
+  "ui.hidden_lock.save": "Save PIN",
+  "ui.hidden_lock.saved": "Hidden games are now behind a PIN",
+  "ui.hidden_lock.set_title": "Lock hidden games with a PIN",
+  "ui.hidden_lock.unlock": "Unlock",
+  "ui.hidden_lock.unlock_description": "Enter the PIN to show hidden games until Irori quits or you lock them again.",
+  "ui.hidden_lock.unlock_title": "Show hidden games",
+  "ui.hidden_lock.wrong_pin": "That PIN isn’t right"
 }

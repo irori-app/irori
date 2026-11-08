@@ -215,5 +215,21 @@
   "ui.copies.open": "Відкрити копію з {store}",
   "ui.copies.make_default": "Зробити цю копію основною",
   "ui.copies.separate": "Показувати цю копію окремо",
-  "ui.copies.separate_all": "Показувати кожну копію окремо"
+  "ui.copies.separate_all": "Показувати кожну копію окремо",
+  "ui.hidden_lock.change_title": "PIN-код прихованих ігор",
+  "ui.hidden_lock.confirm_pin": "Повторіть новий PIN-код",
+  "ui.hidden_lock.current_pin": "PIN-код",
+  "ui.hidden_lock.description": "З PIN-кодом приховані ігри не видно в бібліотеці, Big Picture, пошуку, статистиці й командному рядку, доки його не введуть. Нічого не шифрується.",
+  "ui.hidden_lock.new_pin": "Новий PIN-код",
+  "ui.hidden_lock.pin_rule": "PIN-код містить від {count} до 32 цифр",
+  "ui.hidden_lock.pins_differ": "PIN-коди не збігаються",
+  "ui.hidden_lock.remove": "Видалити PIN-код",
+  "ui.hidden_lock.removed": "PIN-код прихованих ігор видалено",
+  "ui.hidden_lock.save": "Зберегти PIN-код",
+  "ui.hidden_lock.saved": "Приховані ігри тепер захищено PIN-кодом",
+  "ui.hidden_lock.set_title": "Заблокувати приховані ігри PIN-кодом",
+  "ui.hidden_lock.unlock": "Розблокувати",
+  "ui.hidden_lock.unlock_description": "Введіть PIN-код, щоб показувати приховані ігри, доки Irori не закриється або ви знову їх не заблокуєте.",
+  "ui.hidden_lock.unlock_title": "Показати приховані ігри",
+  "ui.hidden_lock.wrong_pin": "Неправильний PIN-код"
 }

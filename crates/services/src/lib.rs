@@ -23,6 +23,7 @@ pub mod file_achievements;
 mod files;
 mod follow;
 mod games;
+pub mod hidden_lock;
 mod hooks;
 mod inhibit;
 pub mod journal;
@@ -117,6 +118,7 @@ pub struct Inner {
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
     steam_tags: steam_tags::SteamTagsService,
+    hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
     library: RwLock<Arc<LibrarySnapshot>>,
@@ -209,6 +211,7 @@ impl Backend {
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
             steam_tags: steam_tags::SteamTagsService::load(),
+            hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
             library: RwLock::new(Arc::new(LibrarySnapshot::default())),

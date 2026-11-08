@@ -35,6 +35,9 @@ pub struct LibrarySnapshot {
     pub owners: HashMap<GameId, Vec<String>>,
     /// Folded search fields, built on the first search of this revision.
     search: std::sync::OnceLock<SearchIndex>,
+    /// Hidden games are behind a PIN not entered yet: nothing may show
+    /// them (`crate::hidden_lock`).
+    pub hidden_locked: bool,
 }
 
 impl LibrarySnapshot {
@@ -72,6 +75,7 @@ impl LibrarySnapshot {
             copies,
             owners,
             search: Default::default(),
+            hidden_locked: false,
         }
     }
 
@@ -229,6 +233,9 @@ impl LibraryFilter {
             };
             let key = g.id().key();
             let hidden = user.hidden.contains(&key);
+            if hidden && library.hidden_locked {
+                continue;
+            }
             if self.hidden_only {
                 if !hidden {
                     continue;
@@ -490,7 +497,9 @@ impl Backend {
             .filter(|(id, _)| known.contains(id))
             .collect();
         let revision = REVISION.fetch_add(1, Ordering::Relaxed) + 1;
-        *self.library.write() = Arc::new(LibrarySnapshot::new(revision, grouped, owners));
+        let mut snapshot = LibrarySnapshot::new(revision, grouped, owners);
+        snapshot.hidden_locked = self.hidden_locked();
+        *self.library.write() = Arc::new(snapshot);
         self.bus.emit(Event::LibraryUpdated(revision));
     }
 }
@@ -605,6 +614,20 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(f.apply(&lib, &user, &none).len(), 1);
+
+        // Behind the PIN, no filter shows hidden games.
+        let mut lib = lib;
+        lib.hidden_locked = true;
+        assert!(f.apply(&lib, &user, &none).is_empty());
+        let f = LibraryFilter {
+            show_hidden: true,
+            ..Default::default()
+        };
+        assert!(
+            f.apply(&lib, &user, &none)
+                .iter()
+                .all(|g| !user.hidden.contains(&g.id().key()))
+        );
     }
 
     #[test]

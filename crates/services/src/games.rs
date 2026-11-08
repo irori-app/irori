@@ -419,9 +419,10 @@ impl Backend {
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
 
+        // A hidden game behind the PIN isn't announced to friends either.
         let discord = app
             .discord_application()
-            .filter(|_| settings.discord_presence);
+            .filter(|_| settings.discord_presence && !self.concealed(id));
         if let Some(application) = discord.clone() {
             let presence = self.presence.clone();
             let started_ms = (util::unix_now() as i64).saturating_mul(1000);

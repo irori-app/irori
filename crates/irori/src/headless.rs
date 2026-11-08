@@ -253,6 +253,8 @@ fn list(backend: &Backend, installed_only: bool) -> Result<i32> {
         .games
         .iter()
         .filter(|g| !installed_only || g.is_installed)
+        // Hidden games behind the PIN stay hidden here too.
+        .filter(|g| !backend.concealed(&g.id()))
     {
         let state = match &g.install {
             Some(i) if g.is_installed => format!("installed {} {}", i.platform, i.install_size),

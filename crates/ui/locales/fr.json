@@ -215,5 +215,21 @@
   "ui.copies.open": "Ouvrir la copie {store}",
   "ui.copies.make_default": "Utiliser cette copie par défaut",
   "ui.copies.separate": "Afficher cette copie à part",
-  "ui.copies.separate_all": "Afficher chaque copie à part"
+  "ui.copies.separate_all": "Afficher chaque copie à part",
+  "ui.hidden_lock.change_title": "Code PIN des jeux masqués",
+  "ui.hidden_lock.confirm_pin": "Confirmez le nouveau code PIN",
+  "ui.hidden_lock.current_pin": "Code PIN",
+  "ui.hidden_lock.description": "Avec un code PIN, les jeux masqués restent hors de la bibliothèque, de Big Picture, de la recherche, des statistiques et de la ligne de commande jusqu’à sa saisie. Rien n’est chiffré.",
+  "ui.hidden_lock.new_pin": "Nouveau code PIN",
+  "ui.hidden_lock.pin_rule": "Un code PIN compte de {count} à 32 chiffres",
+  "ui.hidden_lock.pins_differ": "Les deux codes PIN ne correspondent pas",
+  "ui.hidden_lock.remove": "Supprimer le code PIN",
+  "ui.hidden_lock.removed": "Le code PIN des jeux masqués a été supprimé",
+  "ui.hidden_lock.save": "Enregistrer le code PIN",
+  "ui.hidden_lock.saved": "Les jeux masqués sont maintenant protégés par un code PIN",
+  "ui.hidden_lock.set_title": "Verrouiller les jeux masqués avec un code PIN",
+  "ui.hidden_lock.unlock": "Déverrouiller",
+  "ui.hidden_lock.unlock_description": "Saisissez le code PIN pour afficher les jeux masqués jusqu’à ce qu’Irori se ferme ou que vous les verrouilliez à nouveau.",
+  "ui.hidden_lock.unlock_title": "Afficher les jeux masqués",
+  "ui.hidden_lock.wrong_pin": "Ce code PIN est incorrect"
 }

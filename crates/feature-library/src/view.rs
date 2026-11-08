@@ -521,7 +521,7 @@ impl LibraryView {
             self.top.get(
                 app.library_top_section,
                 app.max_recent_games as usize,
-                filter.hidden == HiddenMode::Show,
+                filter.hidden == HiddenMode::Show && !snapshot.hidden_locked,
                 &snapshot,
                 &user,
             )

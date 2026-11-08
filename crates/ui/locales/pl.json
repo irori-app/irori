@@ -215,5 +215,21 @@
   "ui.copies.open": "Otwórz kopię z {store}",
   "ui.copies.make_default": "Ustaw tę kopię jako domyślną",
   "ui.copies.separate": "Pokazuj tę kopię osobno",
-  "ui.copies.separate_all": "Pokazuj każdą kopię osobno"
+  "ui.copies.separate_all": "Pokazuj każdą kopię osobno",
+  "ui.hidden_lock.change_title": "PIN ukrytych gier",
+  "ui.hidden_lock.confirm_pin": "Powtórz nowy PIN",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "Z kodem PIN ukryte gry nie pojawiają się w bibliotece, Big Picture, wyszukiwaniu, statystykach ani wierszu poleceń, dopóki go nie wpiszesz. Nic nie jest szyfrowane.",
+  "ui.hidden_lock.new_pin": "Nowy PIN",
+  "ui.hidden_lock.pin_rule": "PIN ma od {count} do 32 cyfr",
+  "ui.hidden_lock.pins_differ": "Oba kody PIN się różnią",
+  "ui.hidden_lock.remove": "Usuń PIN",
+  "ui.hidden_lock.removed": "Usunięto PIN ukrytych gier",
+  "ui.hidden_lock.save": "Zapisz PIN",
+  "ui.hidden_lock.saved": "Ukryte gry są teraz chronione kodem PIN",
+  "ui.hidden_lock.set_title": "Zablokuj ukryte gry kodem PIN",
+  "ui.hidden_lock.unlock": "Odblokuj",
+  "ui.hidden_lock.unlock_description": "Wpisz PIN, aby pokazywać ukryte gry do zamknięcia Irori lub ponownego zablokowania.",
+  "ui.hidden_lock.unlock_title": "Pokaż ukryte gry",
+  "ui.hidden_lock.wrong_pin": "Ten PIN jest nieprawidłowy"
 }

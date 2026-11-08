@@ -215,5 +215,21 @@
   "ui.copies.open": "打开 {store} 上的副本",
   "ui.copies.make_default": "将此副本设为默认",
   "ui.copies.separate": "单独显示此副本",
-  "ui.copies.separate_all": "分别显示每个副本"
+  "ui.copies.separate_all": "分别显示每个副本",
+  "ui.hidden_lock.change_title": "隐藏游戏的 PIN",
+  "ui.hidden_lock.confirm_pin": "再次输入新 PIN",
+  "ui.hidden_lock.current_pin": "PIN",
+  "ui.hidden_lock.description": "设置 PIN 后，在输入前隐藏的游戏不会出现在库、Big Picture、搜索、统计和命令行中。不会加密任何内容。",
+  "ui.hidden_lock.new_pin": "新 PIN",
+  "ui.hidden_lock.pin_rule": "PIN 为 {count} 到 32 位数字",
+  "ui.hidden_lock.pins_differ": "两次输入的 PIN 不一致",
+  "ui.hidden_lock.remove": "移除 PIN",
+  "ui.hidden_lock.removed": "已移除隐藏游戏的 PIN",
+  "ui.hidden_lock.save": "保存 PIN",
+  "ui.hidden_lock.saved": "隐藏的游戏现已受 PIN 保护",
+  "ui.hidden_lock.set_title": "用 PIN 锁定隐藏的游戏",
+  "ui.hidden_lock.unlock": "解锁",
+  "ui.hidden_lock.unlock_description": "输入 PIN 以显示隐藏的游戏，直到 Irori 退出或你再次锁定。",
+  "ui.hidden_lock.unlock_title": "显示隐藏的游戏",
+  "ui.hidden_lock.wrong_pin": "PIN 不正确"
 }

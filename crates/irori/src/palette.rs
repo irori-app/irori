@@ -50,6 +50,10 @@ enum PaletteTarget {
     FavouritesOnly(bool),
     /// Show the library header's quick controls (`true`) or stop.
     QuickControls(bool),
+    /// Lock hidden games behind their PIN again.
+    LockHidden,
+    /// Set, change or remove the hidden games' PIN.
+    HiddenPin,
     /// Group the library by game mode (`true`) or stop, and show it.
     GroupByMode(bool),
     /// Group the library by genre (`true`) or stop, and show it.
@@ -98,6 +102,9 @@ struct LibraryCommands<'a> {
     favourites: Option<bool>,
     /// Whether its header shows the quick controls.
     quick_controls: bool,
+    /// While hidden games aren't locked: whether a PIN guards them (it can
+    /// be locked again). `None` while locked: nothing about them is offered.
+    hidden_pin: Option<bool>,
 }
 
 /// Retained palette state, owned by the shell.
@@ -142,6 +149,7 @@ impl Palette {
             install,
             favourites,
             quick_controls,
+            hidden_pin,
         } = library;
         let mut items = Vec::with_capacity(games.len() * 2 + 16);
         let mut push =
@@ -435,6 +443,26 @@ impl Palette {
             PaletteTarget::QuickControls(!quick_controls),
             targets,
         );
+        if let Some(pin_set) = hidden_pin {
+            if pin_set {
+                push(
+                    CommandItem::new()
+                        .label(t("shell.palette.lock_hidden"))
+                        .keywords([t("shell.palette.hidden_keywords")])
+                        .icon(IconName::Lock),
+                    PaletteTarget::LockHidden,
+                    targets,
+                );
+            }
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.hidden_pin"))
+                    .keywords([t("shell.palette.hidden_keywords")])
+                    .icon(IconName::Lock),
+                PaletteTarget::HiddenPin,
+                targets,
+            );
+        }
         if let Some(grouped) = grouped_by_mode {
             let label = if grouped {
                 "shell.palette.ungroup_by_mode"
@@ -589,7 +617,19 @@ impl Palette {
                     .map(|g| (g.clone(), library.user.play_status(&id.key()))),
                 _ => None,
             };
-            (library.snapshot.games.clone(), open)
+            // Hidden games behind the PIN aren't found here either.
+            let games = if library.snapshot.hidden_locked {
+                library
+                    .snapshot
+                    .games
+                    .iter()
+                    .filter(|g| !library.user.hidden.contains(&g.id().key()))
+                    .cloned()
+                    .collect()
+            } else {
+                library.snapshot.games.clone()
+            };
+            (games, open)
         };
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
@@ -602,6 +642,8 @@ impl Palette {
         let quick_controls = irori_library::quick_controls(cx);
         let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
         let replay = irori_ui::backend(cx).replay().map(|r| r.title);
+        let hidden_pin =
+            (!irori_ui::hidden_lock::locked(cx)).then(|| irori_ui::hidden_lock::pin_set(cx));
         let library = LibraryCommands {
             grouped,
             grouped_by_mode,
@@ -611,6 +653,7 @@ impl Palette {
             install,
             favourites,
             quick_controls,
+            hidden_pin,
         };
         let mut items = Self::items(
             &games,
@@ -725,6 +768,8 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_quick_controls(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::LockHidden => irori_ui::hidden_lock::lock(cx),
+        PaletteTarget::HiddenPin => irori_ui::hidden_lock::open_pin_dialog(window, cx),
         PaletteTarget::GroupByMode(on) => {
             irori_library::set_groups_by_mode(on, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -803,6 +848,7 @@ mod tests {
             install,
             favourites,
             quick_controls: quick,
+            hidden_pin: None,
         };
         Palette::items(&[], None, None, library, false, &[], false, &mut targets);
         targets
@@ -815,6 +861,39 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn the_hidden_games_pin_is_offered_only_while_unlocked() {
+        let offered = |hidden_pin: Option<bool>| {
+            let mut targets = Vec::new();
+            let library = LibraryCommands {
+                grouped: None,
+                grouped_by_mode: None,
+                grouped_by_genre: None,
+                views: &[],
+                layout: LibraryLayout::Grid,
+                install: None,
+                favourites: None,
+                quick_controls: false,
+                hidden_pin,
+            };
+            Palette::items(&[], None, None, library, false, &[], false, &mut targets);
+            targets
+                .into_iter()
+                .filter_map(|t| match t {
+                    PaletteTarget::LockHidden => Some("lock"),
+                    PaletteTarget::HiddenPin => Some("pin"),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            offered(None).is_empty(),
+            "locked: nothing about hidden games"
+        );
+        assert_eq!(offered(Some(false)), ["pin"]);
+        assert_eq!(offered(Some(true)), ["lock", "pin"]);
     }
 
     #[test]
