@@ -772,5 +772,8 @@
   "library.folder.find_art": "Szukaj okładek online (PCGamingWiki i Steam)",
   "library.folder.skipped_hint": "Instalatory, deinstalatory, pakiety redystrybucyjne i programy obsługi awarii nie są wyświetlane. Program gry możesz później zmienić w Edytuj.",
   "library.folder.add_one": "Dodaj 1 grę",
-  "library.folder.add_other": "Dodaj gry: {count}"
+  "library.folder.add_other": "Dodaj gry: {count}",
+  "library.toolbar.group.genre": "Gatunek",
+  "library.filters.section.genre": "Gatunek",
+  "library.group.no_genre": "Bez gatunku"
 }

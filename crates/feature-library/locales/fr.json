@@ -772,5 +772,8 @@
   "library.folder.find_art": "Chercher les jaquettes en ligne (PCGamingWiki et Steam)",
   "library.folder.skipped_hint": "Les installateurs, désinstallateurs, redistribuables et gestionnaires de plantage ne sont pas listés. Vous pourrez changer le programme d’un jeu plus tard avec Modifier.",
   "library.folder.add_one": "Ajouter 1 jeu",
-  "library.folder.add_other": "Ajouter {count} jeux"
+  "library.folder.add_other": "Ajouter {count} jeux",
+  "library.toolbar.group.genre": "Genre",
+  "library.filters.section.genre": "Genre",
+  "library.group.no_genre": "Sans genre"
 }

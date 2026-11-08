@@ -88,6 +88,9 @@ pub enum Grouping {
     /// A section per game mode, in [`MODE_GROUP_ORDER`]: each game in the
     /// section of its most specific mode ([`mode_section`]).
     Mode,
+    /// A section per genre, alphabetically: each game in the section of its
+    /// first genre, games without one last.
+    Genre,
 }
 
 /// Order of the game-mode sections: playing together on one screen first,
@@ -134,11 +137,72 @@ pub const GROUP_ORDER: [EffectiveStatus; 7] = [
 ];
 
 /// What a section of a grouped list holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupKind {
     Status(EffectiveStatus),
     /// Games of this [`mode_section`]; `None` for modes unknown.
     Mode(Option<GameMode>),
+    /// Games whose first genre is this one (as the library spells it
+    /// first); `None` for games without a genre.
+    Genre(Option<Arc<str>>),
+}
+
+/// How genres compare: stores spell the same one differently ("Action",
+/// "action ").
+pub fn genre_key(genre: &str) -> String {
+    genre.trim().to_lowercase()
+}
+
+/// A game's first genre's key, if it has a genre.
+fn first_genre(game: &GameInfo) -> Option<String> {
+    game.genres
+        .iter()
+        .map(|g| genre_key(g))
+        .find(|k| !k.is_empty())
+}
+
+/// Every genre of the library, as (key, the name it is shown with), by name.
+/// A genre spelled several ways is shown as the library spells it first.
+pub fn present_genres(library: &LibrarySnapshot) -> Vec<(String, String)> {
+    let mut genres: Vec<(String, String)> = genre_names(&library.games).into_iter().collect();
+    genres.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
+    genres
+}
+
+/// The first spelling of each genre key among `games`.
+fn genre_names(games: &[Arc<GameInfo>]) -> std::collections::HashMap<String, String> {
+    let mut names = std::collections::HashMap::new();
+    for genre in games.iter().flat_map(|g| g.genres.iter()) {
+        let key = genre_key(genre);
+        if !key.is_empty() {
+            names.entry(key).or_insert_with(|| genre.trim().to_string());
+        }
+    }
+    names
+}
+
+/// Reorder `games` into genre sections by name (stable, so the chosen order
+/// holds within each), games without a genre last, and return the non-empty
+/// sections. A game in several genres sits in its first one's section, so
+/// the list keeps each game once.
+pub fn group_by_genre(games: &mut [Arc<GameInfo>]) -> Vec<StatusGroup> {
+    let names = genre_names(games);
+    let shown: std::collections::HashMap<String, Arc<str>> =
+        names.into_iter().map(|(k, n)| (k, Arc::from(n))).collect();
+    games.sort_by_cached_key(|g| match first_genre(g) {
+        Some(key) => (
+            0,
+            shown
+                .get(&key)
+                .map(|n| n.to_lowercase())
+                .unwrap_or_default(),
+            key,
+        ),
+        None => (1, String::new(), String::new()),
+    });
+    sections(games, |g| {
+        GroupKind::Genre(first_genre(g).and_then(|k| shown.get(&k).cloned()))
+    })
 }
 
 /// One section of a grouped list: the games at `range` of the shown list.
@@ -299,6 +363,9 @@ pub struct ViewFilter {
     /// Games with any of these modes; empty shows every game.
     #[serde(deserialize_with = "deserialize_modes")]
     pub modes: BTreeSet<GameMode>,
+    /// Games with any of these genres, as they were shown when picked and
+    /// compared by [`genre_key`]; empty shows every game.
+    pub genres: BTreeSet<String>,
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -355,6 +422,7 @@ impl ViewFilter {
             !self.statuses.is_empty(),
             self.max_age.is_some(),
             !self.modes.is_empty(),
+            !self.genres.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -474,6 +542,10 @@ impl ViewFilter {
                 .iter()
                 .map(|m| irori_ui::game_mode::label(*m).to_string())
                 .collect();
+            out.push(names.join(&t("library.filter.list_separator")));
+        }
+        if !self.genres.is_empty() {
+            let names: Vec<&str> = self.genres.iter().map(String::as_str).collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
         let heading = self.category_heading();
@@ -716,6 +788,10 @@ pub fn apply(
     if !filter.modes.is_empty() {
         games.retain(|g| g.game_modes.iter().any(|m| filter.modes.contains(m)));
     }
+    if !filter.genres.is_empty() {
+        let wanted: HashSet<String> = filter.genres.iter().map(|g| genre_key(g)).collect();
+        games.retain(|g| g.genres.iter().any(|x| wanted.contains(&genre_key(x))));
+    }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
         games.retain(|g| filter.released.contains(g.release_date.as_deref(), year));
@@ -772,6 +848,7 @@ impl FilteredGames {
                 Grouping::None => Arc::from(Vec::new()),
                 Grouping::Status => group_by_status(&mut games, user).into(),
                 Grouping::Mode => group_by_mode(&mut games).into(),
+                Grouping::Genre => group_by_genre(&mut games).into(),
             };
             let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
@@ -867,6 +944,77 @@ pub(crate) mod tests {
         assert!(!f.is_narrowed());
     }
 
+    fn of_genres(app: &str, title: &str, genres: &[&str]) -> Arc<GameInfo> {
+        Arc::new(
+            GameInfo {
+                runner: Some(Runner::Steam),
+                app_name: app.into(),
+                title: title.into(),
+                genres: genres.iter().map(|g| g.to_string()).collect(),
+                ..Default::default()
+            }
+            .finalize(),
+        )
+    }
+
+    #[test]
+    fn filters_and_groups_by_genre() {
+        let library = snapshot(vec![
+            of_genres("1", "Celeste", &["Platformer", "Indie"]),
+            of_genres("2", "Hades", &["Action", "Roguelike"]),
+            of_genres("3", "Doom", &["action ", "Shooter"]),
+            of_genres("4", "Mystery", &[]),
+            of_genres("5", "Dead Cells", &["Roguelike", "Action"]),
+        ]);
+        let user = Arc::new(UserData::default());
+        let none = Arc::new(HashSet::new());
+        // One genre spelled two ways is one genre, named as first seen.
+        assert_eq!(
+            present_genres(&library)
+                .into_iter()
+                .map(|(_, name)| name)
+                .collect::<Vec<_>>(),
+            ["Action", "Indie", "Platformer", "Roguelike", "Shooter"]
+        );
+        let f = ViewFilter {
+            genres: ["ACTION".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        let mut shown = titles(&shown);
+        shown.sort_unstable();
+        assert_eq!(shown, ["Dead Cells", "Doom", "Hades"]);
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(f.describe(), ["ACTION"]);
+
+        // Each game once, in its first genre's section; no genre last.
+        let mut cache = FilteredGames::default();
+        let f = ViewFilter {
+            group: Grouping::Genre,
+            ..Default::default()
+        };
+        let games = cache.get(&f, &[], &library, &user, &none, &none);
+        assert_eq!(
+            titles(&games),
+            ["Hades", "Doom", "Celeste", "Dead Cells", "Mystery"]
+        );
+        let sections: Vec<_> = cache
+            .groups()
+            .iter()
+            .map(|g| (g.kind.clone(), g.range.clone()))
+            .collect();
+        let genre = |name: &str| GroupKind::Genre(Some(Arc::from(name)));
+        assert_eq!(
+            sections,
+            [
+                (genre("Action"), 0..2),
+                (genre("Platformer"), 2..3),
+                (genre("Roguelike"), 3..4),
+                (GroupKind::Genre(None), 4..5),
+            ]
+        );
+    }
+
     fn played(app: &str, title: &str, modes: &[GameMode]) -> Arc<GameInfo> {
         Arc::new(
             GameInfo {
@@ -928,7 +1076,7 @@ pub(crate) mod tests {
         let sections: Vec<_> = cache
             .groups()
             .iter()
-            .map(|g| (g.kind, g.range.clone()))
+            .map(|g| (g.kind.clone(), g.range.clone()))
             .collect();
         assert_eq!(
             sections,
@@ -947,7 +1095,7 @@ pub(crate) mod tests {
         // A view a newer Irori saved: a facet and a mode this one doesn't
         // know, and a grouping it doesn't have.
         let json = r#"{"favourites_only": true, "modes": ["coop", "vr"],
-            "group": "genre", "price": {"max": 10}, "tags": ["roguelike"]}"#;
+            "group": "decade", "price": {"max": 10}, "tags": ["roguelike"]}"#;
         let f: ViewFilter = serde_json::from_str(json).unwrap();
         assert!(f.favourites_only);
         assert_eq!(f.modes, [GameMode::Coop].into());
@@ -1387,7 +1535,7 @@ pub(crate) mod tests {
         let sections: Vec<_> = cache
             .groups()
             .iter()
-            .map(|g| (g.kind, g.range.clone()))
+            .map(|g| (g.kind.clone(), g.range.clone()))
             .collect();
         let status = GroupKind::Status;
         assert_eq!(

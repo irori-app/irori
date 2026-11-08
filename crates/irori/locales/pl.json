@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Pomniejsz interfejs",
   "shell.palette.interface_reset": "Przywróć rozmiar interfejsu",
   "shell.palette.interface_size_keywords": "zoom skala rozmiar tekst większy mniejszy interfejs",
-  "shell.menu.view": "Widok"
+  "shell.menu.view": "Widok",
+  "shell.palette.group_by_genre": "Grupuj bibliotekę według gatunku",
+  "shell.palette.ungroup_by_genre": "Przestań grupować bibliotekę według gatunku",
+  "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka"
 }

@@ -772,5 +772,8 @@
   "library.folder.find_art": "Najít obal online (PCGamingWiki a Steam)",
   "library.folder.skipped_hint": "Instalátory, odinstalátory, redistribuovatelné balíčky a obsluhy pádů se nezobrazují. Program hry můžete později změnit přes Upravit.",
   "library.folder.add_one": "Přidat 1 hru",
-  "library.folder.add_other": "Přidat hry: {count}"
+  "library.folder.add_other": "Přidat hry: {count}",
+  "library.toolbar.group.genre": "Žánr",
+  "library.filters.section.genre": "Žánr",
+  "library.group.no_genre": "Bez žánru"
 }

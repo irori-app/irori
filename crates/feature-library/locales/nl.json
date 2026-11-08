@@ -772,5 +772,8 @@
   "library.folder.find_art": "Covers online zoeken (PCGamingWiki en Steam)",
   "library.folder.skipped_hint": "Installatieprogramma’s, verwijderprogramma’s, redistributables en crashhandlers worden niet getoond. Je kunt het programma van een game later wijzigen met Bewerken.",
   "library.folder.add_one": "1 game toevoegen",
-  "library.folder.add_other": "{count} games toevoegen"
+  "library.folder.add_other": "{count} games toevoegen",
+  "library.toolbar.group.genre": "Genre",
+  "library.filters.section.genre": "Genre",
+  "library.group.no_genre": "Geen genre"
 }

@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Réduire l’interface",
   "shell.palette.interface_reset": "Rétablir la taille de l’interface",
   "shell.palette.interface_size_keywords": "zoom échelle taille texte plus grand plus petit interface",
-  "shell.menu.view": "Présentation"
+  "shell.menu.view": "Présentation",
+  "shell.palette.group_by_genre": "Regrouper la bibliothèque par genre",
+  "shell.palette.ungroup_by_genre": "Ne plus regrouper la bibliothèque par genre",
+  "shell.palette.genre_keywords": "genre action aventure stratégie réflexion jeu de rôle tir"
 }

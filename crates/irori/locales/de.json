@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Oberfläche verkleinern",
   "shell.palette.interface_reset": "Oberflächengröße zurücksetzen",
   "shell.palette.interface_size_keywords": "zoom skalierung größe text größer kleiner oberfläche",
-  "shell.menu.view": "Darstellung"
+  "shell.menu.view": "Darstellung",
+  "shell.palette.group_by_genre": "Bibliothek nach Genre gruppieren",
+  "shell.palette.ungroup_by_genre": "Bibliothek nicht mehr nach Genre gruppieren",
+  "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter"
 }

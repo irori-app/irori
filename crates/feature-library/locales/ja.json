@@ -772,5 +772,8 @@
   "library.folder.find_art": "カバーアートをオンラインで探す（PCGamingWiki と Steam）",
   "library.folder.skipped_hint": "インストーラー、アンインストーラー、再頒布パッケージ、クラッシュハンドラーは表示されません。ゲームのプログラムは後で「編集」から変更できます。",
   "library.folder.add_one": "1 本を追加",
-  "library.folder.add_other": "{count} 本を追加"
+  "library.folder.add_other": "{count} 本を追加",
+  "library.toolbar.group.genre": "ジャンル",
+  "library.filters.section.genre": "ジャンル",
+  "library.group.no_genre": "ジャンルなし"
 }

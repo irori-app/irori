@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Riduci l’interfaccia",
   "shell.palette.interface_reset": "Ripristina la dimensione dell’interfaccia",
   "shell.palette.interface_size_keywords": "zoom scala dimensione testo più grande più piccolo interfaccia",
-  "shell.menu.view": "Vista"
+  "shell.menu.view": "Vista",
+  "shell.palette.group_by_genre": "Raggruppa la libreria per genere",
+  "shell.palette.ungroup_by_genre": "Non raggruppare più la libreria per genere",
+  "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto"
 }

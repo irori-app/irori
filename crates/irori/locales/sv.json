@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Gör gränssnittet mindre",
   "shell.palette.interface_reset": "Återställ gränssnittets storlek",
   "shell.palette.interface_size_keywords": "zoom skala storlek text större mindre gränssnitt",
-  "shell.menu.view": "Visa"
+  "shell.menu.view": "Visa",
+  "shell.palette.group_by_genre": "Gruppera biblioteket efter genre",
+  "shell.palette.ungroup_by_genre": "Sluta gruppera biblioteket efter genre",
+  "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel"
 }

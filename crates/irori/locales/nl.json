@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Interface kleiner maken",
   "shell.palette.interface_reset": "Interfacegrootte herstellen",
   "shell.palette.interface_size_keywords": "zoom schaal grootte tekst groter kleiner interface",
-  "shell.menu.view": "Weergave"
+  "shell.menu.view": "Weergave",
+  "shell.palette.group_by_genre": "Bibliotheek groeperen op genre",
+  "shell.palette.ungroup_by_genre": "Bibliotheek niet meer groeperen op genre",
+  "shell.palette.genre_keywords": "genre actie avontuur strategie puzzel rpg shooter"
 }

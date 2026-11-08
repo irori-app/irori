@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "인터페이스 작게",
   "shell.palette.interface_reset": "인터페이스 크기 초기화",
   "shell.palette.interface_size_keywords": "확대 축소 배율 크기 텍스트 인터페이스 줌",
-  "shell.menu.view": "보기"
+  "shell.menu.view": "보기",
+  "shell.palette.group_by_genre": "라이브러리를 장르별로 묶기",
+  "shell.palette.ungroup_by_genre": "라이브러리 장르별 묶기 해제",
+  "shell.palette.genre_keywords": "장르 액션 어드벤처 전략 퍼즐 RPG 슈팅"
 }

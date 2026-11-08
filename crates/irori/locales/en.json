@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Make the interface smaller",
   "shell.palette.interface_reset": "Reset the interface size",
   "shell.palette.interface_size_keywords": "zoom scale size text bigger smaller interface",
-  "shell.menu.view": "View"
+  "shell.menu.view": "View",
+  "shell.palette.group_by_genre": "Group the library by genre",
+  "shell.palette.ungroup_by_genre": "Stop grouping the library by genre",
+  "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter"
 }

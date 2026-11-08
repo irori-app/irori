@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "缩小界面",
   "shell.palette.interface_reset": "重置界面大小",
   "shell.palette.interface_size_keywords": "缩放 放大 缩小 大小 文字 界面",
-  "shell.menu.view": "显示"
+  "shell.menu.view": "显示",
+  "shell.palette.group_by_genre": "按类型对游戏库分组",
+  "shell.palette.ungroup_by_genre": "停止按类型对游戏库分组",
+  "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击"
 }

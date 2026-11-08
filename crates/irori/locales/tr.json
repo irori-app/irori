@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Arayüzü küçült",
   "shell.palette.interface_reset": "Arayüz boyutunu sıfırla",
   "shell.palette.interface_size_keywords": "yakınlaştır ölçek boyut metin büyük küçük arayüz zoom",
-  "shell.menu.view": "Görüntü"
+  "shell.menu.view": "Görüntü",
+  "shell.palette.group_by_genre": "Kitaplığı türe göre grupla",
+  "shell.palette.ungroup_by_genre": "Kitaplığı türe göre gruplamayı bırak",
+  "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı"
 }

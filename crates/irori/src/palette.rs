@@ -48,6 +48,8 @@ enum PaletteTarget {
     QuickControls(bool),
     /// Group the library by game mode (`true`) or stop, and show it.
     GroupByMode(bool),
+    /// Group the library by genre (`true`) or stop, and show it.
+    GroupByGenre(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -80,6 +82,8 @@ struct LibraryCommands<'a> {
     /// Whether the library groups by game mode, while a library view
     /// exists.
     grouped_by_mode: Option<bool>,
+    /// Whether the library groups by genre, while a library view exists.
+    grouped_by_genre: Option<bool>,
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -125,6 +129,7 @@ impl Palette {
         let LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views,
             layout,
             install,
@@ -431,6 +436,21 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(grouped) = grouped_by_genre {
+            let label = if grouped {
+                "shell.palette.ungroup_by_genre"
+            } else {
+                "shell.palette.group_by_genre"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.genre_keywords")])
+                    .icon(IconName::Tag),
+                PaletteTarget::GroupByGenre(!grouped),
+                targets,
+            );
+        }
         for (id, name) in views {
             push(
                 CommandItem::new()
@@ -557,6 +577,7 @@ impl Palette {
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
+        let grouped_by_genre = irori_library::groups_by_genre(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -567,6 +588,7 @@ impl Palette {
         let library = LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views: &views,
             layout,
             install,
@@ -675,6 +697,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_groups_by_mode(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::GroupByGenre(on) => {
+            irori_library::set_groups_by_genre(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -739,6 +765,7 @@ mod tests {
         let library = LibraryCommands {
             grouped: install.map(|_| false),
             grouped_by_mode: install.map(|_| true),
+            grouped_by_genre: None,
             views: &[],
             layout: LibraryLayout::Grid,
             install,

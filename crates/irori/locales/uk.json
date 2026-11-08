@@ -140,5 +140,8 @@
   "shell.palette.interface_smaller": "Зменшити інтерфейс",
   "shell.palette.interface_reset": "Скинути розмір інтерфейсу",
   "shell.palette.interface_size_keywords": "масштаб розмір текст більше менше інтерфейс зум",
-  "shell.menu.view": "Вигляд"
+  "shell.menu.view": "Вигляд",
+  "shell.palette.group_by_genre": "Групувати бібліотеку за жанром",
+  "shell.palette.ungroup_by_genre": "Не групувати бібліотеку за жанром",
+  "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер"
 }

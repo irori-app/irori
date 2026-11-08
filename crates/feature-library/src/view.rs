@@ -361,7 +361,7 @@ impl LibraryView {
             .iter()
             .filter_map(|g| match g.kind {
                 GroupKind::Status(s) => Some(s),
-                GroupKind::Mode(_) => None,
+                GroupKind::Mode(_) | GroupKind::Genre(_) => None,
             })
             .collect()
     }
@@ -560,7 +560,10 @@ impl LibraryView {
         let key = FrameKey {
             count: games.len(),
             top: top.as_ref().map(|(k, g)| (*k, g.len())),
-            groups: groups.iter().map(|g| (g.kind, g.range.len())).collect(),
+            groups: groups
+                .iter()
+                .map(|g| (g.kind.clone(), g.range.len()))
+                .collect(),
             layout: self.layout,
             list_rem: (list_rem * 16.0).round() as u32,
             metrics,
@@ -1241,7 +1244,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Status => Grouping::None,
-                    Grouping::None | Grouping::Mode => Grouping::Status,
+                    Grouping::None | Grouping::Mode | Grouping::Genre => Grouping::Status,
                 }
             },
             cx,
@@ -1254,7 +1257,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Mode => Grouping::None,
-                    Grouping::None | Grouping::Status => Grouping::Mode,
+                    Grouping::None | Grouping::Status | Grouping::Genre => Grouping::Mode,
                 }
             },
             cx,
@@ -1834,6 +1837,7 @@ impl LibraryView {
                                 (Grouping::None, "library.toolbar.group.none"),
                                 (Grouping::Status, "library.toolbar.group.status"),
                                 (Grouping::Mode, "library.toolbar.group.mode"),
+                                (Grouping::Genre, "library.toolbar.group.genre"),
                             ];
                             options.into_iter().fold(menu, |menu, (option, key)| {
                                 let model = model.clone();
@@ -2124,7 +2128,7 @@ impl LibraryView {
             return div().into_any_element();
         };
         let theme = cx.theme();
-        let (mark, name): (AnyElement, SharedString) = match group.kind {
+        let (mark, name): (AnyElement, SharedString) = match group.kind.clone() {
             GroupKind::Status(status) => (
                 div()
                     .flex_none()
@@ -2144,6 +2148,16 @@ impl LibraryView {
                 mode.map_or_else(
                     irori_ui::game_mode::unknown_label,
                     irori_ui::game_mode::label,
+                ),
+            ),
+            GroupKind::Genre(genre) => (
+                Icon::new(IconName::Tag)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                genre.map_or_else(
+                    || t("library.group.no_genre"),
+                    |g| SharedString::from(g.to_string()),
                 ),
             ),
         };

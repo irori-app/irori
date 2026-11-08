@@ -772,5 +772,8 @@
   "library.folder.find_art": "Procurar capas online (PCGamingWiki e Steam)",
   "library.folder.skipped_hint": "Instaladores, desinstaladores, redistribuíveis e gestores de falhas não são listados. Pode mudar o programa de um jogo mais tarde em Editar.",
   "library.folder.add_one": "Adicionar 1 jogo",
-  "library.folder.add_other": "Adicionar {count} jogos"
+  "library.folder.add_other": "Adicionar {count} jogos",
+  "library.toolbar.group.genre": "Género",
+  "library.filters.section.genre": "Género",
+  "library.group.no_genre": "Sem género"
 }

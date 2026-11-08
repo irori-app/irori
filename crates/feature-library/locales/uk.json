@@ -772,5 +772,8 @@
   "library.folder.find_art": "Шукати обкладинки в мережі (PCGamingWiki і Steam)",
   "library.folder.skipped_hint": "Інсталятори, деінсталятори, розповсюджувані пакети й обробники збоїв не показуються. Програму гри можна змінити пізніше через «Редагувати».",
   "library.folder.add_one": "Додати 1 гру",
-  "library.folder.add_other": "Додати ігри: {count}"
+  "library.folder.add_other": "Додати ігри: {count}",
+  "library.toolbar.group.genre": "Жанр",
+  "library.filters.section.genre": "Жанр",
+  "library.group.no_genre": "Без жанру"
 }

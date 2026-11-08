@@ -772,5 +772,8 @@
   "library.folder.find_art": "在线查找封面（PCGamingWiki 和 Steam）",
   "library.folder.skipped_hint": "不会列出安装程序、卸载程序、运行库和崩溃处理程序。之后可以在“编辑”中更改游戏的程序。",
   "library.folder.add_one": "添加 1 款游戏",
-  "library.folder.add_other": "添加 {count} 款游戏"
+  "library.folder.add_other": "添加 {count} 款游戏",
+  "library.toolbar.group.genre": "类型",
+  "library.filters.section.genre": "类型",
+  "library.group.no_genre": "无类型"
 }

@@ -118,6 +118,8 @@ pub struct FiltersPanel {
     model: Entity<FilterModel>,
     /// The systems the library has games of.
     systems: crate::filter::PerRevision<Vec<String>>,
+    /// The genres the library's games have, as (key, name).
+    genres: crate::filter::PerRevision<Vec<(String, String)>>,
     _observe: Vec<Subscription>,
 }
 
@@ -126,6 +128,7 @@ impl FiltersPanel {
         let library = models(cx).library.clone();
         Self {
             systems: Default::default(),
+            genres: Default::default(),
             _observe: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&library, |_, _, cx| cx.notify()),
@@ -336,6 +339,53 @@ impl FiltersPanel {
 }
 
 impl FiltersPanel {
+    /// One chip per genre the library has; several may be picked. `None`
+    /// when no game has a genre.
+    fn render_genres(&mut self, f: &ViewFilter, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let snapshot = models(cx).library.read(cx).snapshot.clone();
+        let genres = self
+            .genres
+            .get(&snapshot, crate::filter::present_genres)
+            .clone();
+        if genres.is_empty() {
+            return None;
+        }
+        let picked: std::collections::HashSet<String> =
+            f.genres.iter().map(|g| filter::genre_key(g)).collect();
+        Some(
+            v_flex()
+                .gap_2()
+                .child(section(t("library.filters.section.genre")))
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .children(genres.into_iter().map(|(key, name)| {
+                            let selected = picked.contains(&key);
+                            Button::new(SharedString::from(format!("genre-{key}")))
+                                .xsmall()
+                                .outline()
+                                .label(name.clone())
+                                .selected(selected)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    let (key, name) = (key.clone(), name.clone());
+                                    this.set(
+                                        move |f| {
+                                            let before = f.genres.len();
+                                            f.genres.retain(|g| filter::genre_key(g) != key);
+                                            if f.genres.len() == before {
+                                                f.genres.insert(name);
+                                            }
+                                        },
+                                        cx,
+                                    )
+                                }))
+                        })),
+                )
+                .into_any_element(),
+        )
+    }
+
     /// The age limit: "Any" or the youngest age every rating must allow,
     /// and, with a limit, whether games no board rated are shown.
     fn render_age(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
@@ -392,6 +442,7 @@ impl Render for FiltersPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let f = self.model.read(cx).filter().clone();
         let systems = self.render_systems(&f, cx);
+        let genres = self.render_genres(&f, cx);
         let categories: Vec<String> = models(cx)
             .library
             .read(cx)
@@ -537,6 +588,7 @@ impl Render for FiltersPanel {
                     ),
             )
             .child(self.render_modes(&f, cx))
+            .when_some(genres, |el, genres| el.child(genres))
             .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))
