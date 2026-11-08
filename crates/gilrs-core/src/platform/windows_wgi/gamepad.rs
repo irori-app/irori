@@ -11,13 +11,14 @@ use crate::{utils, AxisInfo, Event, EventType, PlatformError, PowerInfo};
 
 #[cfg(feature = "serde-serialize")]
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 use uuid::Uuid;
-use windows::core::HSTRING;
+use windows::core::{Interface, HSTRING};
 use windows::Devices::Power::BatteryReport;
 use windows::Foundation::EventHandler;
 use windows::Gaming::Input::{
@@ -71,9 +72,22 @@ impl WgiEvent {
     }
 }
 
+/// Irori patch: a key for `controller` that stays the same while it is connected.
+/// `NonRoamableId` fails on some Windows builds, and upstream then dropped every
+/// event of the controller (or failed to start). WinRT hands out one object per
+/// connected controller (SDL's backend compares them the same way), so its
+/// address stands in.
+fn controller_key(controller: &RawGameController) -> HSTRING {
+    controller
+        .NonRoamableId()
+        .unwrap_or_else(|_| HSTRING::from(format!("irori-wgi:{:p}", controller.as_raw())))
+}
+
 #[derive(Debug)]
 pub struct Gilrs {
     gamepads: Vec<Gamepad>,
+    /// Irori patch: events held back behind a synthesized `Connected`.
+    pending: VecDeque<Event>,
     rx: Receiver<WgiEvent>,
     join_handle: Option<JoinHandle<()>>,
     stop_tx: Sender<()>,
@@ -89,59 +103,69 @@ impl Gilrs {
         // Intentionally avoiding using RawGameControllers.into_iter() as it triggers a crash when
         // the app is run through steam.
         // https://gitlab.com/gilrs-project/gilrs/-/issues/132
-        let gamepads = (0..count)
-            .map(|i| {
-                let controller = raw_game_controllers
-                    .GetAt(i)
-                    .map_err(|e| PlatformError::Other(Box::new(e)))?;
-                Gamepad::new(i, controller)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        // Irori patch: a controller that can't be read is skipped, not a reason to
+        // leave every other controller unread.
+        let mut gamepads = Vec::new();
+        for i in 0..count {
+            match raw_game_controllers.GetAt(i) {
+                Ok(controller) => gamepads.push(Gamepad::new(gamepads.len() as u32, controller)?),
+                Err(e) => warn!("Failed to read game controller {i}: {e}"),
+            }
+        }
 
         let (tx, rx) = mpsc::channel();
         let (stop_tx, stop_rx) = mpsc::channel();
-        let join_handle = Some(Self::spawn_thread(tx, stop_rx));
+        let join_handle = Some(Self::spawn_thread(tx, stop_rx)?);
         Ok(Gilrs {
             gamepads,
+            pending: VecDeque::new(),
             rx,
             join_handle,
             stop_tx,
         })
     }
 
-    fn spawn_thread(tx: Sender<WgiEvent>, stop_rx: Receiver<()>) -> JoinHandle<()> {
+    // Irori patch: no panics here. With `panic = "abort"` one ends the whole
+    // program, and a panic in a WinRT callback can't unwind anyway.
+    fn spawn_thread(
+        tx: Sender<WgiEvent>,
+        stop_rx: Receiver<()>,
+    ) -> Result<JoinHandle<()>, PlatformError> {
         let added_tx = tx.clone();
         let added_handler = EventHandler::<RawGameController>::new(move |_, g| {
             if let Some(g) = g.as_ref() {
-                added_tx
-                    .send(WgiEvent::new(g.clone(), EventType::Connected))
-                    .expect("should be able to send to main thread");
+                // Fails only once `Gilrs` is gone.
+                let _ = added_tx.send(WgiEvent::new(g.clone(), EventType::Connected));
             }
             Ok(())
         });
-        let controller_added_token =
-            RawGameController::RawGameControllerAdded(&added_handler).unwrap();
+        let controller_added_token = RawGameController::RawGameControllerAdded(&added_handler)
+            .map_err(|e| PlatformError::Other(Box::new(e)))?;
 
         let removed_tx = tx.clone();
         let removed_handler = EventHandler::<RawGameController>::new(move |_, g| {
             if let Some(g) = g.as_ref() {
-                removed_tx
-                    .send(WgiEvent::new(g.clone(), EventType::Disconnected))
-                    .expect("should be able to send to main thread");
+                let _ = removed_tx.send(WgiEvent::new(g.clone(), EventType::Disconnected));
             }
             Ok(())
         });
         let controller_removed_token =
-            RawGameController::RawGameControllerRemoved(&removed_handler).unwrap();
+            match RawGameController::RawGameControllerRemoved(&removed_handler) {
+                Ok(token) => token,
+                Err(e) => {
+                    let _ = RawGameController::RemoveRawGameControllerAdded(controller_added_token);
+                    return Err(PlatformError::Other(Box::new(e)));
+                }
+            };
 
         std::thread::Builder::new()
             .name("gilrs".to_owned())
             .spawn(move || {
                 let mut controllers: Vec<RawGameController> = Vec::new();
+                let mut keys: Vec<HSTRING> = Vec::new();
                 // To avoid allocating every update, store old and new readings for every controller
                 // and swap their memory
                 let mut readings: Vec<(HSTRING, Reading, Reading)> = Vec::new();
-                let mut last_failed_get_id: Option<Instant> = None;
                 loop {
                     match stop_rx.try_recv() {
                         Ok(_) => break,
@@ -164,30 +188,30 @@ impl Gilrs {
                         }
                     }
 
-                    for controller in controllers.iter() {
-                        let id: HSTRING = match controller.NonRoamableId() {
-                            Ok(id) => id,
-                            Err(e) => {
-                                if last_failed_get_id.map_or(true, |x| x.elapsed().as_secs() > 59) {
-                                    error!(
-                                        "Failed to get gamepad id: {e}! Skipping reading events \
-                                         for this gamepad."
-                                    );
-                                    last_failed_get_id = Some(Instant::now());
-                                }
+                    // Irori patch: forget the readings of controllers that are gone,
+                    // so the list stays as long as the controllers connected.
+                    keys.clear();
+                    keys.extend(controllers.iter().map(controller_key));
+                    readings.retain(|(id, ..)| keys.contains(id));
 
-                                continue;
-                            }
-                        };
+                    for (controller, id) in controllers.iter().zip(keys.iter()) {
+                        let id = id.clone();
                         // Find readings for this controller or insert new ones.
                         let index = match readings.iter().position(|(other_id, ..)| id == *other_id)
                         {
                             None => {
+                                // Irori patch: a controller that can't be read yet (one
+                                // being disconnected) is tried again next round instead
+                                // of panicking.
                                 let reading = match WgiGamepad::FromGameController(controller) {
-                                    Ok(wgi_gamepad) => {
-                                        Reading::Gamepad(wgi_gamepad.GetCurrentReading().unwrap())
-                                    }
-                                    _ => Reading::Raw(RawGamepadReading::new(controller).unwrap()),
+                                    Ok(wgi_gamepad) => match wgi_gamepad.GetCurrentReading() {
+                                        Ok(reading) => Reading::Gamepad(reading),
+                                        Err(_) => continue,
+                                    },
+                                    _ => match RawGamepadReading::new(controller) {
+                                        Ok(reading) => Reading::Raw(reading),
+                                        Err(_) => continue,
+                                    },
                                 };
 
                                 readings.push((id, reading.clone(), reading));
@@ -233,10 +257,13 @@ impl Gilrs {
                     error!("Failed to remove RawGameControllerRemoved event handler: {e}");
                 }
             })
-            .expect("failed to spawn thread")
+            .map_err(|e| PlatformError::Other(Box::new(e)))
     }
 
     pub(crate) fn next_event(&mut self) -> Option<Event> {
+        if let Some(event) = self.pending.pop_front() {
+            return Some(event);
+        }
         self.rx
             .try_recv()
             .ok()
@@ -244,6 +271,9 @@ impl Gilrs {
     }
 
     pub(crate) fn next_event_blocking(&mut self, timeout: Option<Duration>) -> Option<Event> {
+        if let Some(event) = self.pending.pop_front() {
+            return Some(event);
+        }
         if let Some(timeout) = timeout {
             self.rx
                 .recv_timeout(timeout)
@@ -259,17 +289,36 @@ impl Gilrs {
 
     fn handle_event(&mut self, wgi_event: WgiEvent) -> Option<Event> {
         // Find the index of the gamepad in our vec or insert it
-        let id = match self.gamepads.iter().position(|gamepad| {
-            match wgi_event.raw_game_controller.NonRoamableId() {
-                Ok(id) => id == gamepad.non_roamable_id,
-                _ => false,
-            }
-        }) {
+        let key = controller_key(&wgi_event.raw_game_controller);
+        let id = match self
+            .gamepads
+            .iter()
+            .position(|gamepad| gamepad.non_roamable_id == key)
+        {
             Some(id) => id,
+            // Irori patch: nothing to forget about a controller never seen.
+            None if matches!(wgi_event.event, EventType::Disconnected) => return None,
             None => match Gamepad::new(self.gamepads.len() as u32, wgi_event.raw_game_controller) {
                 Ok(gamepad) => {
                     self.gamepads.push(gamepad);
-                    self.gamepads.len() - 1
+                    let id = self.gamepads.len() - 1;
+                    // Irori patch: the reading thread can see a new controller before
+                    // its `Connected` arrives, and gilrs indexes a gamepad's state by
+                    // id from `Connected` on: any other first event panicked there.
+                    // Announce the controller first and hold the event back.
+                    if !matches!(wgi_event.event, EventType::Connected) {
+                        self.pending.push_back(Event {
+                            id,
+                            event: wgi_event.event,
+                            time: wgi_event.time,
+                        });
+                        return Some(Event {
+                            id,
+                            event: EventType::Connected,
+                            time: wgi_event.time,
+                        });
+                    }
+                    id
                 }
                 Err(_) => {
                     return None;
@@ -543,9 +592,7 @@ impl Gamepad {
     fn new(id: u32, raw_game_controller: RawGameController) -> Result<Gamepad, PlatformError> {
         let is_connected = true;
 
-        let non_roamable_id = raw_game_controller
-            .NonRoamableId()
-            .map_err(|e| PlatformError::Other(Box::new(e)))?;
+        let non_roamable_id = controller_key(&raw_game_controller);
 
         // See if we can cast this to a windows definition of a gamepad
         let wgi_gamepad = WgiGamepad::FromGameController(&raw_game_controller).ok();
