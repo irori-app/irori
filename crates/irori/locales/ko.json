@@ -85,6 +85,8 @@
   "shell.palette.open_store": "{store} 스토어 열기",
   "shell.palette.lutris_script": "Lutris 스크립트로 설치",
   "shell.palette.lutris_script_keywords": "Lutris 스크립트 설치 프로그램 lutris.net 커뮤니티",
+  "shell.palette.steam_client_library": "Steam 클라이언트에서 Steam 라이브러리 읽기",
+  "shell.palette.steam_client_library_keywords": "Steam 라이브러리 보유 게임 미설치 로그인 없이 클라이언트",
   "shell.palette.play_status": "{title}: 플레이 상태를 {status}(으)로 설정",
   "shell.palette.clear_play_status": "{title}: 플레이 상태 지우기",
   "shell.palette.group_by_status": "라이브러리를 플레이 상태별로 묶기",

@@ -772,5 +772,8 @@
   "library.folder.find_art": "Искать обложки в сети (PCGamingWiki и Steam)",
   "library.folder.skipped_hint": "Установщики, деинсталляторы, распространяемые пакеты и обработчики сбоев не показываются. Программу игры можно сменить позже через «Изменить».",
   "library.folder.add_one": "Добавить 1 игру",
-  "library.folder.add_other": "Добавить игры: {count}"
+  "library.folder.add_other": "Добавить игры: {count}",
+  "library.steam_hint.text": "Показаны только игры Steam, установленные на этом компьютере. Irori может прочитать всю вашу библиотеку Steam из клиента Steam без входа в аккаунт.",
+  "library.steam_hint.action": "Прочитать библиотеку Steam",
+  "library.steam_hint.dismiss": "Не сейчас"
 }

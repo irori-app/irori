@@ -85,6 +85,8 @@
   "shell.palette.open_store": "打开 {store} 商店",
   "shell.palette.lutris_script": "使用 Lutris 脚本安装",
   "shell.palette.lutris_script_keywords": "Lutris 脚本 安装程序 lutris.net 社区",
+  "shell.palette.steam_client_library": "从 Steam 客户端读取 Steam 库",
+  "shell.palette.steam_client_library_keywords": "Steam 库 已拥有游戏 未安装 无需登录 客户端",
   "shell.palette.play_status": "{title}：将游玩状态设为“{status}”",
   "shell.palette.clear_play_status": "{title}：清除游玩状态",
   "shell.palette.group_by_status": "按游玩状态为游戏库分组",

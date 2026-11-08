@@ -772,5 +772,8 @@
   "library.folder.find_art": "Hitta omslag på nätet (PCGamingWiki och Steam)",
   "library.folder.skipped_hint": "Installerare, avinstallerare, redistributables och kraschhanterare visas inte. Du kan byta ett spels program senare med Redigera.",
   "library.folder.add_one": "Lägg till 1 spel",
-  "library.folder.add_other": "Lägg till {count} spel"
+  "library.folder.add_other": "Lägg till {count} spel",
+  "library.steam_hint.text": "Bara Steam-spelen som är installerade här visas. Irori kan läsa hela ditt Steam-bibliotek från Steam-klienten, utan inloggning.",
+  "library.steam_hint.action": "Läs Steam-biblioteket",
+  "library.steam_hint.dismiss": "Inte nu"
 }

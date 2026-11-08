@@ -772,5 +772,8 @@
   "library.folder.find_art": "Buscar carátulas en línea (PCGamingWiki y Steam)",
   "library.folder.skipped_hint": "No se muestran instaladores, desinstaladores, redistribuibles ni gestores de fallos. Puedes cambiar el programa de un juego más tarde con Editar.",
   "library.folder.add_one": "Añadir 1 juego",
-  "library.folder.add_other": "Añadir {count} juegos"
+  "library.folder.add_other": "Añadir {count} juegos",
+  "library.steam_hint.text": "Solo aparecen los juegos de Steam instalados aquí. Irori puede leer toda tu biblioteca de Steam desde el cliente de Steam, sin iniciar sesión.",
+  "library.steam_hint.action": "Leer biblioteca de Steam",
+  "library.steam_hint.dismiss": "Ahora no"
 }

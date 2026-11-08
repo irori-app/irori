@@ -20,6 +20,7 @@ mod i18n;
 mod launchers;
 mod login;
 mod onboarding;
+mod steam_library;
 mod store_window;
 mod stores;
 mod updates;
@@ -35,6 +36,10 @@ pub use launchers::install_launchers_store;
 pub use login::{open_account_login_dialog, open_login_dialog};
 pub use onboarding::{
     OnboardingEvent, OnboardingView, mark_onboarding_done, should_show_onboarding,
+};
+pub use steam_library::{
+    dismiss_steam_client_library_hint, install_steam_store, open_steam_library_dialog,
+    steam_client_library_state, suggest_steam_client_library,
 };
 pub use store_window::{open_store_window, store_window_stores};
 pub use stores::StoresView;

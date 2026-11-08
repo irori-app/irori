@@ -37,3 +37,4 @@ tempfile = "3"
 irori-amazon-api.workspace = true
 irori-epic-api.workspace = true
 irori-gog-api.workspace = true
+irori-steam-api.workspace = true

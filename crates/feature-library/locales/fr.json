@@ -772,5 +772,8 @@
   "library.folder.find_art": "Chercher les jaquettes en ligne (PCGamingWiki et Steam)",
   "library.folder.skipped_hint": "Les installateurs, désinstallateurs, redistribuables et gestionnaires de plantage ne sont pas listés. Vous pourrez changer le programme d’un jeu plus tard avec Modifier.",
   "library.folder.add_one": "Ajouter 1 jeu",
-  "library.folder.add_other": "Ajouter {count} jeux"
+  "library.folder.add_other": "Ajouter {count} jeux",
+  "library.steam_hint.text": "Seuls les jeux Steam installés ici sont affichés. Irori peut lire toute votre bibliothèque Steam depuis le client Steam, sans connexion.",
+  "library.steam_hint.action": "Lire la bibliothèque Steam",
+  "library.steam_hint.dismiss": "Pas maintenant"
 }

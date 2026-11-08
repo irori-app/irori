@@ -85,6 +85,8 @@
   "shell.palette.open_store": "Otevřít obchod {store}",
   "shell.palette.lutris_script": "Instalovat pomocí skriptu Lutris",
   "shell.palette.lutris_script_keywords": "Lutris skript instalátor lutris.net komunita",
+  "shell.palette.steam_client_library": "Načíst knihovnu Steamu z klienta Steam",
+  "shell.palette.steam_client_library_keywords": "Steam knihovna vlastněné hry nenainstalované bez přihlášení klient",
   "shell.palette.play_status": "{title}: nastavit stav hraní na {status}",
   "shell.palette.clear_play_status": "{title}: zrušit stav hraní",
   "shell.palette.group_by_status": "Seskupit knihovnu podle stavu hraní",

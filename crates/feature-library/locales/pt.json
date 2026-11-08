@@ -772,5 +772,8 @@
   "library.folder.find_art": "Procurar capas online (PCGamingWiki e Steam)",
   "library.folder.skipped_hint": "Instaladores, desinstaladores, redistribuíveis e gestores de falhas não são listados. Pode mudar o programa de um jogo mais tarde em Editar.",
   "library.folder.add_one": "Adicionar 1 jogo",
-  "library.folder.add_other": "Adicionar {count} jogos"
+  "library.folder.add_other": "Adicionar {count} jogos",
+  "library.steam_hint.text": "Só são mostrados os jogos Steam instalados aqui. O Irori pode ler toda a sua biblioteca Steam a partir do cliente Steam, sem iniciar sessão.",
+  "library.steam_hint.action": "Ler biblioteca Steam",
+  "library.steam_hint.dismiss": "Agora não"
 }

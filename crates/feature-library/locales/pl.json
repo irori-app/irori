@@ -772,5 +772,8 @@
   "library.folder.find_art": "Szukaj okładek online (PCGamingWiki i Steam)",
   "library.folder.skipped_hint": "Instalatory, deinstalatory, pakiety redystrybucyjne i programy obsługi awarii nie są wyświetlane. Program gry możesz później zmienić w Edytuj.",
   "library.folder.add_one": "Dodaj 1 grę",
-  "library.folder.add_other": "Dodaj gry: {count}"
+  "library.folder.add_other": "Dodaj gry: {count}",
+  "library.steam_hint.text": "Widoczne są tylko gry Steam zainstalowane na tym komputerze. Irori może odczytać całą twoją bibliotekę Steam z klienta Steam, bez logowania.",
+  "library.steam_hint.action": "Odczytaj bibliotekę Steam",
+  "library.steam_hint.dismiss": "Nie teraz"
 }

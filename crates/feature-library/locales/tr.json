@@ -772,5 +772,8 @@
   "library.folder.find_art": "Kapak görsellerini çevrimiçi bul (PCGamingWiki ve Steam)",
   "library.folder.skipped_hint": "Kurulum ve kaldırma programları, yeniden dağıtılabilir paketler ve çökme işleyicileri listelenmez. Bir oyunun programını daha sonra Düzenle ile değiştirebilirsiniz.",
   "library.folder.add_one": "1 oyun ekle",
-  "library.folder.add_other": "{count} oyun ekle"
+  "library.folder.add_other": "{count} oyun ekle",
+  "library.steam_hint.text": "Yalnızca burada yüklü Steam oyunları listeleniyor. Irori, oturum açmadan tüm Steam kitaplığınızı Steam istemcisinden okuyabilir.",
+  "library.steam_hint.action": "Steam kitaplığını oku",
+  "library.steam_hint.dismiss": "Şimdi değil"
 }

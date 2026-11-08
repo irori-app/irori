@@ -772,5 +772,8 @@
   "library.folder.find_art": "Cover online suchen (PCGamingWiki und Steam)",
   "library.folder.skipped_hint": "Installer, Deinstaller, Redistributables und Absturzmelder werden nicht aufgeführt. Das Programm eines Spiels lässt sich später über „Bearbeiten“ ändern.",
   "library.folder.add_one": "1 Spiel hinzufügen",
-  "library.folder.add_other": "{count} Spiele hinzufügen"
+  "library.folder.add_other": "{count} Spiele hinzufügen",
+  "library.steam_hint.text": "Es werden nur die hier installierten Steam-Spiele angezeigt. Irori kann deine ganze Steam-Bibliothek ohne Anmeldung aus dem Steam-Client lesen.",
+  "library.steam_hint.action": "Steam-Bibliothek lesen",
+  "library.steam_hint.dismiss": "Nicht jetzt"
 }

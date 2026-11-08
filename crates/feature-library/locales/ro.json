@@ -772,5 +772,8 @@
   "library.folder.find_art": "Caută coperte online (PCGamingWiki și Steam)",
   "library.folder.skipped_hint": "Programele de instalare și dezinstalare, pachetele redistribuibile și gestionarele de erori nu sunt afișate. Poți schimba ulterior programul unui joc din Editează.",
   "library.folder.add_one": "Adaugă 1 joc",
-  "library.folder.add_other": "Adaugă jocuri: {count}"
+  "library.folder.add_other": "Adaugă jocuri: {count}",
+  "library.steam_hint.text": "Sunt afișate doar jocurile Steam instalate aici. Irori poate citi toată biblioteca ta Steam din clientul Steam, fără autentificare.",
+  "library.steam_hint.action": "Citește biblioteca Steam",
+  "library.steam_hint.dismiss": "Nu acum"
 }

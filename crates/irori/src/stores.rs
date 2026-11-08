@@ -170,6 +170,11 @@ pub fn hooks() -> Hooks {
         open_store_page: Some(Arc::new(|runner, url, window, cx| {
             irori_manage::open_store_window(runner, Some(url), window, cx)
         })),
+        steam_library_hint: Some(irori_ui::hooks::SteamLibraryHint {
+            shown: Arc::new(irori_manage::suggest_steam_client_library),
+            open: Arc::new(irori_manage::open_steam_library_dialog),
+            dismiss: Arc::new(irori_manage::dismiss_steam_client_library_hint),
+        }),
     }
 }
 

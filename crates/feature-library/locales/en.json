@@ -772,5 +772,8 @@
   "library.folder.find_art": "Find cover art online (PCGamingWiki and Steam)",
   "library.folder.skipped_hint": "Installers, uninstallers, redistributables and crash handlers aren’t listed. You can change a game’s program later with Edit.",
   "library.folder.add_one": "Add 1 game",
-  "library.folder.add_other": "Add {count} games"
+  "library.folder.add_other": "Add {count} games",
+  "library.steam_hint.text": "Only the Steam games installed here are listed. Irori can read your whole Steam library from the Steam client, without a sign-in.",
+  "library.steam_hint.action": "Read Steam library",
+  "library.steam_hint.dismiss": "Not now"
 }

@@ -85,6 +85,8 @@
   "shell.palette.open_store": "{store} mağazasını aç",
   "shell.palette.lutris_script": "Lutris betiğiyle kur",
   "shell.palette.lutris_script_keywords": "Lutris betik kurulum lutris.net topluluk",
+  "shell.palette.steam_client_library": "Steam kitaplığını Steam istemcisinden oku",
+  "shell.palette.steam_client_library_keywords": "Steam kitaplık sahip olunan oyunlar yüklü olmayan oturumsuz istemci",
   "shell.palette.play_status": "{title}: oynama durumunu {status} yap",
   "shell.palette.clear_play_status": "{title}: oynama durumunu temizle",
   "shell.palette.group_by_status": "Kitaplığı oynama durumuna göre grupla",
