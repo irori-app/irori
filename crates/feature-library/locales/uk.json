@@ -780,5 +780,8 @@
   "library.combine.hint": "Виберіть інші копії «{title}», потім «Об’єднати в одну гру».",
   "library.bulk.combine": "Об’єднати в одну гру",
   "library.bulk.combine_tooltip": "Показувати вибрані ігри як копії однієї гри з різних крамниць",
-  "library.bulk.done.combined": "Ігри об’єднано в один запис: {count}"
+  "library.bulk.done.combined": "Ігри об’єднано в один запис: {count}",
+  "library.steam_hint.text": "Показано лише ігри Steam, установлені на цьому комп’ютері. Irori може прочитати всю вашу бібліотеку Steam із клієнта Steam без входу.",
+  "library.steam_hint.action": "Прочитати бібліотеку Steam",
+  "library.steam_hint.dismiss": "Не зараз"
 }

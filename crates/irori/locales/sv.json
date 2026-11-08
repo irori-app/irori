@@ -88,6 +88,8 @@
   "shell.palette.open_store": "Öppna butiken {store}",
   "shell.palette.lutris_script": "Installera med ett Lutris-skript",
   "shell.palette.lutris_script_keywords": "Lutris skript installation lutris.net community",
+  "shell.palette.steam_client_library": "Läs Steam-biblioteket från Steam-klienten",
+  "shell.palette.steam_client_library_keywords": "Steam bibliotek egna spel ej installerade utan inloggning klient",
   "shell.palette.play_status": "{title}: sätt spelstatus till {status}",
   "shell.palette.clear_play_status": "{title}: rensa spelstatus",
   "shell.palette.group_by_status": "Gruppera biblioteket efter spelstatus",

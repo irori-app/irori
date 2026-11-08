@@ -780,5 +780,8 @@
   "library.combine.hint": "选择“{title}”的其他副本，然后选择“合并为一个游戏”。",
   "library.bulk.combine": "合并为一个游戏",
   "library.bulk.combine_tooltip": "将所选游戏显示为同一游戏在各商店的副本",
-  "library.bulk.done.combined": "{count} 个游戏现已合并为一项"
+  "library.bulk.done.combined": "{count} 个游戏现已合并为一项",
+  "library.steam_hint.text": "目前只列出本机已安装的 Steam 游戏。Irori 无需登录即可从 Steam 客户端读取你的整个 Steam 库。",
+  "library.steam_hint.action": "读取 Steam 库",
+  "library.steam_hint.dismiss": "暂不"
 }

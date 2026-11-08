@@ -1669,7 +1669,63 @@ impl LibraryView {
             .pt_5()
             .pb_3()
             .child(header)
+            .children(self.render_steam_hint(cx))
             .child(self.render_toolbar(&filter, cx))
+    }
+
+    /// A quiet suggestion, while it would help, to read the whole Steam
+    /// library from the Steam client (only installed Steam games show
+    /// without a Steam account).
+    fn render_steam_hint(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !irori_ui::hooks::steam_library_hint_shown(cx) {
+            return None;
+        }
+        let theme = cx.theme();
+        Some(
+            h_flex()
+                .id("library-steam-hint")
+                .gap_3()
+                .px_3()
+                .py_2()
+                .rounded(theme.radius)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.group_box)
+                .child(
+                    Icon::new(IconName::Info)
+                        .small()
+                        .text_color(theme.muted_foreground)
+                        .flex_shrink_0(),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_sm()
+                        .child(t("library.steam_hint.text")),
+                )
+                .child(
+                    Button::new("library-steam-hint-read")
+                        .small()
+                        .outline()
+                        .label(t("library.steam_hint.action"))
+                        .on_click(|_, window, cx| {
+                            irori_ui::hooks::open_steam_library_hint(window, cx)
+                        }),
+                )
+                .child(
+                    Button::new("library-steam-hint-dismiss")
+                        .small()
+                        .ghost()
+                        .icon(IconName::X)
+                        .tooltip(t("library.steam_hint.dismiss"))
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            irori_ui::hooks::dismiss_steam_library_hint(cx);
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_toolbar(&mut self, filter: &ViewFilter, cx: &mut Context<Self>) -> impl IntoElement {

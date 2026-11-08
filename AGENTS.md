@@ -1144,6 +1144,19 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
+- **The client's library without an account** (`client_library/`, opt-in, off by
+  default): Irori creates `.cef-enable-remote-debugging` in Steam's folder (on macOS beside
+  the client in `Steam.AppBundle/Steam/Contents/MacOS`), Steam opens its Chromium debugging
+  port at its next start, and one read-only expression evaluated in the `SharedJSContext`
+  page (`collectionStore.allGamesCollection.allApps`) lists the owned and borrowed games.
+  The port is the web helper's `--remote-debugging-port=` (8080 unless Millennium or a flag
+  chose another); only loopback addresses are contacted, by hand-written HTTP and a plain
+  WebSocket. The games go to `client-games.json` in Steam's cache and are listed like an
+  account's; a signed-in account wins. "Read once" (the default) removes the file after
+  reading; "Keep it on" reads again on refreshes at most every 15 minutes. Irori removes
+  only a file it created (Decky Loader relies on its own), restarts Steam only after
+  asking and never in Game Mode, and logs counts only. The expression must stay read-only
+  (a test guards it); an unknown client shape answers `Unsupported`, never an exception.
 - **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
   through `IAuthenticationService` (protobuf over the Web API). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then

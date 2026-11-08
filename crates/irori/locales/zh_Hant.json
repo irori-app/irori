@@ -88,6 +88,8 @@
   "shell.palette.open_store": "開啟 {store} 商店",
   "shell.palette.lutris_script": "使用 Lutris 指令碼安裝",
   "shell.palette.lutris_script_keywords": "Lutris 指令碼 安裝程式 lutris.net 社群",
+  "shell.palette.steam_client_library": "從 Steam 用戶端讀取 Steam 遊戲庫",
+  "shell.palette.steam_client_library_keywords": "Steam 遊戲庫 已擁有遊戲 未安裝 不必登入 用戶端",
   "shell.palette.play_status": "{title}：將遊玩狀態設為「{status}」",
   "shell.palette.clear_play_status": "{title}：清除遊玩狀態",
   "shell.palette.group_by_status": "依遊玩狀態將遊戲庫分組",

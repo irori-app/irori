@@ -75,6 +75,18 @@ type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
 
+/// The library's suggestion to read the Steam library from the Steam client
+/// (the Steam store and its dialog live outside the UI layer).
+#[derive(Clone)]
+pub struct SteamLibraryHint {
+    /// Whether the suggestion would help now. Reads memory only.
+    pub shown: Arc<dyn Fn(&App) -> bool>,
+    /// Explain and offer to read the library.
+    pub open: OpenFn,
+    /// Put the suggestion away for good.
+    pub dismiss: Arc<dyn Fn(&mut App)>,
+}
+
 #[derive(Clone, Default)]
 pub struct Hooks {
     pub import_from_heroic: Option<ImportFn>,
@@ -96,6 +108,7 @@ pub struct Hooks {
     /// Show a page of a store's website in the store window (it lives in
     /// the management screens).
     pub open_store_page: Option<StorePageFn>,
+    pub steam_library_hint: Option<SteamLibraryHint>,
 }
 
 impl Global for Hooks {}
@@ -242,6 +255,34 @@ pub fn open_store_page(runner: Runner, url: String, window: &mut Window, cx: &mu
                 cx.open_url(&url);
             }
         }
+    }
+}
+
+/// Whether the library should suggest reading the Steam library from the
+/// Steam client; false without the hook.
+pub fn steam_library_hint_shown(cx: &App) -> bool {
+    cx.try_global::<Hooks>()
+        .and_then(|h| h.steam_library_hint.as_ref())
+        .is_some_and(|hint| (hint.shown)(cx))
+}
+
+/// Explain and offer reading the Steam library from the Steam client.
+pub fn open_steam_library_hint(window: &mut Window, cx: &mut App) {
+    if let Some(hint) = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.steam_library_hint.clone())
+    {
+        (hint.open)(window, cx);
+    }
+}
+
+/// Stop suggesting to read the Steam library from the Steam client.
+pub fn dismiss_steam_library_hint(cx: &mut App) {
+    if let Some(hint) = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.steam_library_hint.clone())
+    {
+        (hint.dismiss)(cx);
     }
 }
 

@@ -780,5 +780,8 @@
   "library.combine.hint": "Wybierz pozostałe kopie gry „{title}”, a potem Połącz w jedną grę.",
   "library.bulk.combine": "Połącz w jedną grę",
   "library.bulk.combine_tooltip": "Pokazuj wybrane gry jako kopie jednej gry z ich sklepów",
-  "library.bulk.done.combined": "Połączone gry ({count}) są teraz jedną pozycją"
+  "library.bulk.done.combined": "Połączone gry ({count}) są teraz jedną pozycją",
+  "library.steam_hint.text": "Widoczne są tylko gry Steam zainstalowane na tym komputerze. Irori może odczytać całą twoją bibliotekę Steam z klienta Steam, bez logowania.",
+  "library.steam_hint.action": "Odczytaj bibliotekę Steam",
+  "library.steam_hint.dismiss": "Nie teraz"
 }

@@ -38,6 +38,8 @@ enum PaletteTarget {
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
+    /// Read the Steam library from the Steam client.
+    SteamClientLibrary,
     /// Set (or with `None` clear) a game's play status.
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
@@ -610,7 +612,7 @@ impl Palette {
             favourites,
             quick_controls,
         };
-        let items = Rc::new(Self::items(
+        let mut items = Self::items(
             &games,
             replay.as_deref(),
             open,
@@ -619,7 +621,19 @@ impl Palette {
             &irori_manage::store_window_stores(cx),
             irori_manage::steam_friends_available(cx),
             &mut targets,
-        ));
+        );
+        if irori_manage::steam_client_library_state(cx)
+            .is_some_and(|s| s.steam_found && !s.signed_in)
+        {
+            items.push(
+                CommandItem::new()
+                    .label(t("shell.palette.steam_client_library"))
+                    .keywords([t("shell.palette.steam_client_library_keywords")])
+                    .icon(IconName::LibraryBig),
+            );
+            targets.push(PaletteTarget::SteamClientLibrary);
+        }
+        let items = Rc::new(items);
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
 
@@ -677,6 +691,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_manage::open_store_window(runner, None, window, cx)
         }
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
+        PaletteTarget::SteamClientLibrary => irori_manage::open_steam_library_dialog(window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),

@@ -14,7 +14,11 @@ irori-steam-api.workspace = true
 irori-secrets.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
+futures.workspace = true
+# The Steam client's DevTools endpoint (client_library): plain WebSocket on
+# this computer only, so no TLS.
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
 parking_lot.workspace = true
 tracing.workspace = true
 notify = "8"

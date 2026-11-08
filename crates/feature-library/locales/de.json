@@ -780,5 +780,8 @@
   "library.combine.hint": "Wähle die anderen Kopien von „{title}“ und dann „Als ein Spiel zusammenfassen“.",
   "library.bulk.combine": "Als ein Spiel zusammenfassen",
   "library.bulk.combine_tooltip": "Die ausgewählten Spiele als Kopien eines Spiels aus ihren Stores anzeigen",
-  "library.bulk.done.combined": "{count} Spiele sind jetzt ein Eintrag"
+  "library.bulk.done.combined": "{count} Spiele sind jetzt ein Eintrag",
+  "library.steam_hint.text": "Es werden nur die hier installierten Steam-Spiele angezeigt. Irori kann deine ganze Steam-Bibliothek ohne Anmeldung aus dem Steam-Client lesen.",
+  "library.steam_hint.action": "Steam-Bibliothek lesen",
+  "library.steam_hint.dismiss": "Nicht jetzt"
 }

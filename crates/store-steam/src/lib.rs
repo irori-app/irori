@@ -17,11 +17,13 @@
 //! computer (`localconfig.vdf`) and what the account reports. On Linux the
 //! Proton build Steam runs a game with can be chosen ([`compat`]): only that
 //! game's entry of Steam's settings is written, and only while Steam is
-//! closed.
+//! closed. Without an account, the user can let Irori read the whole
+//! library from the running Steam client instead ([`client_library`]).
 
 mod account;
 mod achievements;
 mod client;
+mod client_library;
 mod compat;
 mod entries;
 mod friends;
@@ -47,6 +49,8 @@ use parking_lot::{Mutex, RwLock};
 
 use account::{AccountFiles, LibraryCache, Session};
 use client::ClientLink;
+use client_library::{ClientCache, ClientFiles, ClientSettings};
+pub use client_library::{ClientLibraryError, ClientLibraryMode, ClientLibraryState};
 pub use compat::{CompatTool, CompatToolState, SteamRunning, ToolSource};
 pub use friends::{FriendLink, FriendState, Friends, SteamFriend};
 use scan::{InstalledApp, LocalArt};
@@ -103,19 +107,28 @@ pub struct SteamStore {
     runtime: Mutex<Option<tokio::runtime::Handle>>,
     /// The account's friends as last read; one read at a time.
     friends: tokio::sync::Mutex<Friends>,
+    client_files: ClientFiles,
+    client_settings: RwLock<ClientSettings>,
+    client_cache: RwLock<Arc<ClientCache>>,
+    /// Steam's debugging file is in place.
+    client_marker: RwLock<bool>,
+    /// One read of the Steam client at a time.
+    client_reading: tokio::sync::Mutex<()>,
 }
 
 impl SteamStore {
     pub fn new(bus: EventBus, settings: SettingsFn) -> Arc<Self> {
         let paths = Paths::get();
+        let (config, cache) = (
+            paths.store_config_dir(Runner::Steam),
+            paths.store_cache_dir(Runner::Steam),
+        );
         Self::build(
             bus,
             settings,
             None,
-            AccountFiles::new(
-                &paths.store_config_dir(Runner::Steam),
-                &paths.store_cache_dir(Runner::Steam),
-            ),
+            AccountFiles::new(&config, &cache),
+            ClientFiles::new(&config, &cache),
             Endpoints::default(),
         )
     }
@@ -134,6 +147,7 @@ impl SteamStore {
             settings,
             Some(steam_dir),
             AccountFiles::new(&data.join("config"), &data.join("cache")),
+            ClientFiles::new(&data.join("config"), &data.join("cache")),
             endpoints,
         )
     }
@@ -143,6 +157,7 @@ impl SteamStore {
         settings: SettingsFn,
         steam_dir: Option<PathBuf>,
         files: AccountFiles,
+        client_files: ClientFiles,
         endpoints: Endpoints,
     ) -> Arc<Self> {
         let client = Client::with_endpoints(endpoints)
@@ -169,6 +184,11 @@ impl SteamStore {
             watcher: Mutex::new(None),
             runtime: Mutex::new(None),
             friends: tokio::sync::Mutex::new(Friends::default()),
+            client_files,
+            client_settings: RwLock::new(ClientSettings::default()),
+            client_cache: RwLock::new(Arc::default()),
+            client_marker: RwLock::new(false),
+            client_reading: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -213,13 +233,15 @@ impl SteamStore {
     async fn scan(&self) -> Result<bool> {
         let dir = self.steam_dir();
         let account = self.account_library.read().clone();
+        let client = self.client_games();
         let (found, apps, art) = tokio::task::spawn_blocking(move || {
             let found = dir.join("steamapps").is_dir();
             let apps = scan::installed_apps(&dir);
             let ids = apps
                 .iter()
                 .map(|a| a.app_id.as_str())
-                .chain(account.games.iter().map(|g| g.app_id.as_str()));
+                .chain(account.games.iter().map(|g| g.app_id.as_str()))
+                .chain(client.games.iter().map(|g| g.app_id.as_str()));
             let art: HashMap<String, LocalArt> = ids
                 .map(|id| (id.to_string(), scan::local_art(&dir, id)))
                 .collect();
@@ -231,6 +253,7 @@ impl SteamStore {
 
     fn publish(&self, found: bool, apps: &[InstalledApp], art: &HashMap<String, LocalArt>) -> bool {
         let account = self.account_library.read().clone();
+        let client = self.client_games();
         let remote = &account.art;
         let mut games: Vec<Arc<GameInfo>> = apps
             .iter()
@@ -243,10 +266,13 @@ impl SteamStore {
             })
             .collect();
         let installed: HashSet<&str> = apps.iter().map(|a| a.app_id.as_str()).collect();
+        // Without an account, the games read from the Steam client stand in
+        // for the account's ([`client_library`]).
         games.extend(
             account
                 .games
                 .iter()
+                .chain(client.games.iter())
                 .filter(|g| !installed.contains(g.app_id.as_str()))
                 .map(|g| Arc::new(entries::owned(g, art.get(&g.app_id), remote.get(&g.app_id)))),
         );
@@ -501,7 +527,6 @@ impl Store for SteamStore {
         Runner::Steam
     }
 
-    /// Reads Steam's files (no network).
     /// Reads Steam's files and the saved account (no network).
     async fn init(&self) -> Result<()> {
         *self.runtime.lock() = tokio::runtime::Handle::try_current().ok();
@@ -509,6 +534,7 @@ impl Store for SteamStore {
         let (session, cache) =
             tokio::task::spawn_blocking(move || (files.read_session(), files.read_library()))
                 .await?;
+        self.load_client_library().await?;
         // A library cached for another account is not this one's.
         let cache = match &session {
             Some(s) if s.steamid == cache.steamid => cache,
@@ -638,6 +664,7 @@ impl Store for SteamStore {
         if matches!(account, Ok(true)) {
             changed |= self.scan().await?;
         }
+        changed |= self.refresh_client_library(full).await;
         if self.library.read().found != found {
             self.bus.emit(Event::AccountChanged(Runner::Steam));
         }
@@ -816,7 +843,9 @@ impl Store for SteamStore {
         let mut minutes =
             tokio::task::spawn_blocking(move || scan::playtime_minutes(&dir, steamid.as_deref()))
                 .await?;
-        for game in &self.account_library.read().games {
+        let account = self.account_library.read().clone();
+        let client = self.client_games();
+        for game in account.games.iter().chain(client.games.iter()) {
             if game.playtime_minutes > 0 {
                 let entry = minutes.entry(game.app_id.clone()).or_default();
                 *entry = (*entry).max(game.playtime_minutes);

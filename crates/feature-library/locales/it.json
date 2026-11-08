@@ -780,5 +780,8 @@
   "library.combine.hint": "Scegli le altre copie di «{title}», poi Unisci in un solo gioco.",
   "library.bulk.combine": "Unisci in un solo gioco",
   "library.bulk.combine_tooltip": "Mostra i giochi scelti come copie di un unico gioco, dai loro negozi",
-  "library.bulk.done.combined": "{count} giochi sono ora una sola voce"
+  "library.bulk.done.combined": "{count} giochi sono ora una sola voce",
+  "library.steam_hint.text": "Sono elencati solo i giochi Steam installati qui. Irori può leggere tutta la tua libreria Steam dal client Steam, senza accedere.",
+  "library.steam_hint.action": "Leggi libreria Steam",
+  "library.steam_hint.dismiss": "Non ora"
 }

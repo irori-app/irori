@@ -780,5 +780,8 @@
   "library.combine.hint": "Choisissez les autres copies de « {title} », puis Regrouper en un seul jeu.",
   "library.bulk.combine": "Regrouper en un seul jeu",
   "library.bulk.combine_tooltip": "Afficher les jeux choisis comme des copies d’un même jeu, de leurs boutiques",
-  "library.bulk.done.combined": "{count} jeux forment maintenant une seule entrée"
+  "library.bulk.done.combined": "{count} jeux forment maintenant une seule entrée",
+  "library.steam_hint.text": "Seuls les jeux Steam installés ici sont affichés. Irori peut lire toute votre bibliothèque Steam depuis le client Steam, sans connexion.",
+  "library.steam_hint.action": "Lire la bibliothèque Steam",
+  "library.steam_hint.dismiss": "Pas maintenant"
 }

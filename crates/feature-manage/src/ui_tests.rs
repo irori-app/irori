@@ -360,6 +360,48 @@ fn account_cards_are_all_as_tall_as_the_tallest(cx: &mut TestAppContext) {
     }
 }
 
+/// Steam without an account offers to read its library from the Steam
+/// client; once games were read, the card counts them and offers to remove
+/// them.
+#[gpui_kit::test]
+fn steam_card_reads_the_library_from_the_client(cx: &mut TestAppContext) {
+    use irori_core::{AppSettings, EventBus};
+
+    let dir = tempfile::tempdir().expect("temp dir").keep();
+    let steam = dir.join("Steam");
+    std::fs::create_dir_all(steam.join("steamapps")).expect("mkdir");
+    let data = steam.join("irori");
+    std::fs::create_dir_all(data.join("cache")).expect("mkdir");
+    let app = Arc::new(AppSettings::default());
+    let dead = "http://127.0.0.1:9".to_string();
+    let store = irori_steam::SteamStore::with_layout(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        steam,
+        &data,
+        irori_steam_api::Endpoints {
+            api: dead.clone(),
+            store: dead.clone(),
+            assets: dead,
+        },
+    );
+    let registered: DynStore = store.clone();
+    setup_with(cx, move || vec![registered]);
+    cx.update(|cx| crate::install_steam_library_store(store.clone(), cx));
+    assert!(cx.update(|cx| crate::suggest_steam_client_library(cx)));
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| AccountsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("steam-library-read").is_some());
+    assert!(vcx.debug_bounds("steam-library-forget").is_none());
+    assert!(vcx.debug_bounds("steam-library-off").is_none());
+}
+
 /// The Rockstar card of a prefix adopted with a game and a signed-in
 /// account offers Close and Remove from Irori; removing brings Set up back
 /// and leaves the prefix on disk.

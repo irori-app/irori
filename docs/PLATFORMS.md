@@ -209,6 +209,21 @@ its Steam Family shares (`library.json` in Steam's cache folder keeps them for o
 starts); Install hands those to Steam (`steam://install/<id>`), as Verify files and
 Uninstall do (`steam://validate`, `steam://uninstall`).
 
+Without a login, Accounts › Steam (and a suggestion in the library, the command palette)
+can read the whole library from the running Steam client instead. Irori explains first, then
+creates an empty `.cef-enable-remote-debugging` in Steam's folder (`~/.steam/steam`, Flatpak
+Steam's own folder, `C:\Program Files (x86)\Steam`; on macOS
+`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS`). Steam reads the
+file when it starts and then serves Chromium's remote debugging on `127.0.0.1` (port 8080,
+or whatever `--remote-debugging-port=` its `steamwebhelper` was given); Irori asks before
+restarting Steam, and never restarts it in Game Mode. While the port is open any program on
+the computer can control the Steam client, so by default Irori reads once and removes the
+file again (the port closes at Steam's next start); "Keep it on" leaves it and re-reads on
+library refreshes. A file another program created (Decky Loader) is left alone. The games
+read are kept in `client-games.json` in Steam's cache folder and never leave the computer.
+Millennium can open the port itself on another port, or keep it closed; Irori reads the port
+from the web helper's command line and says so when it finds none.
+
 Playing opens `steam://rungameid/<id>` through `xdg-open`, `open` or the Windows URL
 handler, so Steam applies its own Proton version, launch options and overlay. A game's
 launch options in Irori (its menu, `launcherArgs`) are passed with

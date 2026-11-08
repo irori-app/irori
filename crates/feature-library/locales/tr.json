@@ -780,5 +780,8 @@
   "library.combine.hint": "“{title}” oyununun diğer kopyalarını seçin, sonra Tek oyunda birleştir’i seçin.",
   "library.bulk.combine": "Tek oyunda birleştir",
   "library.bulk.combine_tooltip": "Seçilen oyunları, mağazalarından tek bir oyunun kopyaları olarak göster",
-  "library.bulk.done.combined": "{count} oyun artık tek bir giriş"
+  "library.bulk.done.combined": "{count} oyun artık tek bir giriş",
+  "library.steam_hint.text": "Yalnızca burada yüklü Steam oyunları listeleniyor. Irori, oturum açmadan tüm Steam kitaplığınızı Steam istemcisinden okuyabilir.",
+  "library.steam_hint.action": "Steam kitaplığını oku",
+  "library.steam_hint.dismiss": "Şimdi değil"
 }

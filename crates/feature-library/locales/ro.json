@@ -780,5 +780,8 @@
   "library.combine.hint": "Alege celelalte copii ale „{title}”, apoi Combină într-un singur joc.",
   "library.bulk.combine": "Combină într-un singur joc",
   "library.bulk.combine_tooltip": "Afișează jocurile alese drept copii ale aceluiași joc, din magazinele lor",
-  "library.bulk.done.combined": "Jocuri combinate într-o singură intrare: {count}"
+  "library.bulk.done.combined": "Jocuri combinate într-o singură intrare: {count}",
+  "library.steam_hint.text": "Sunt afișate doar jocurile Steam instalate aici. Irori poate citi toată biblioteca ta Steam din clientul Steam, fără autentificare.",
+  "library.steam_hint.action": "Citește biblioteca Steam",
+  "library.steam_hint.dismiss": "Nu acum"
 }

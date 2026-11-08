@@ -780,5 +780,8 @@
   "library.combine.hint": "Pick the other copies of “{title}”, then choose Combine as one game.",
   "library.bulk.combine": "Combine as one game",
   "library.bulk.combine_tooltip": "Show the picked games as copies of one game, from their stores",
-  "library.bulk.done.combined": "{count} games are now one entry"
+  "library.bulk.done.combined": "{count} games are now one entry",
+  "library.steam_hint.text": "Only the Steam games installed here are listed. Irori can read your whole Steam library from the Steam client, without a sign-in.",
+  "library.steam_hint.action": "Read Steam library",
+  "library.steam_hint.dismiss": "Not now"
 }

@@ -780,5 +780,8 @@
   "library.combine.hint": "Vyberte další kopie hry „{title}“ a pak zvolte Spojit do jedné hry.",
   "library.bulk.combine": "Spojit do jedné hry",
   "library.bulk.combine_tooltip": "Zobrazovat vybrané hry jako kopie jedné hry z jejich obchodů",
-  "library.bulk.done.combined": "Počet her spojených do jedné položky: {count}"
+  "library.bulk.done.combined": "Počet her spojených do jedné položky: {count}",
+  "library.steam_hint.text": "Zobrazují se jen hry ze Steamu nainstalované na tomto počítači. Irori umí načíst celou vaši knihovnu Steamu z klienta Steam, bez přihlášení.",
+  "library.steam_hint.action": "Načíst knihovnu Steamu",
+  "library.steam_hint.dismiss": "Teď ne"
 }

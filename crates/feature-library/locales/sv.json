@@ -780,5 +780,8 @@
   "library.combine.hint": "Välj de andra kopiorna av ”{title}” och sedan Slå ihop till ett spel.",
   "library.bulk.combine": "Slå ihop till ett spel",
   "library.bulk.combine_tooltip": "Visa de valda spelen som kopior av ett spel, från sina butiker",
-  "library.bulk.done.combined": "{count} spel är nu en post"
+  "library.bulk.done.combined": "{count} spel är nu en post",
+  "library.steam_hint.text": "Bara Steam-spelen som är installerade här visas. Irori kan läsa hela ditt Steam-bibliotek från Steam-klienten, utan inloggning.",
+  "library.steam_hint.action": "Läs Steam-biblioteket",
+  "library.steam_hint.dismiss": "Inte nu"
 }

@@ -88,6 +88,8 @@
   "shell.palette.open_store": "Apri il negozio {store}",
   "shell.palette.lutris_script": "Installa con uno script Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script installazione lutris.net comunità",
+  "shell.palette.steam_client_library": "Leggi la libreria Steam dal client Steam",
+  "shell.palette.steam_client_library_keywords": "Steam libreria giochi posseduti non installati senza accesso client",
   "shell.palette.play_status": "{title}: imposta lo stato di gioco su {status}",
   "shell.palette.clear_play_status": "{title}: rimuovi lo stato di gioco",
   "shell.palette.group_by_status": "Raggruppa la libreria per stato di gioco",
