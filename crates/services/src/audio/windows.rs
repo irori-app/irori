@@ -342,3 +342,18 @@ pub(super) async fn set_output(_game: Option<GameProcess>, id: String) -> Result
     // one in Windows' settings, so the game moves along.
     blocking(move || switch_output(&id)).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lists_outputs_with_ids_and_at_most_one_current() {
+        // Read only: CI machines may have no outputs, or no audio service.
+        let Ok(outputs) = list_outputs() else {
+            return;
+        };
+        assert!(outputs.iter().all(|o| !o.id.is_empty() && !o.name.is_empty()));
+        assert!(outputs.iter().filter(|o| o.current).count() <= 1);
+    }
+}
