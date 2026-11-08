@@ -83,6 +83,8 @@
   "shell.notice.mods_not_restored": "Modurile pentru {title} sunt încă în folderul jocului",
   "shell.palette.set_up_emulation": "Configurează emularea",
   "shell.palette.set_up_emulation_keywords": "emulator ROM consolă retro BIOS RetroArch",
+  "shell.palette.steam_friends": "Arată prietenii Steam",
+  "shell.palette.steam_friends_keywords": "prieteni online joacă alătură invită chat",
   "shell.palette.open_store": "Deschide magazinul {store}",
   "shell.palette.lutris_script": "Instalează cu un script Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script instalare lutris.net comunitate",

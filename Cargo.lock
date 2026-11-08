@@ -4792,6 +4792,7 @@ dependencies = [
  "irori-runtime",
  "irori-services",
  "irori-steam",
+ "irori-steam-api",
  "irori-ui",
  "qrcode",
  "regex",

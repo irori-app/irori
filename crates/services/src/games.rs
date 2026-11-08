@@ -419,13 +419,15 @@ impl Backend {
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
 
-        let discord = (app.discord_rpc && !app.discord_client_id.is_empty())
-            .then(|| app.discord_client_id.clone());
-        if let Some(client_id) = discord.clone() {
+        let discord = app
+            .discord_application()
+            .filter(|_| settings.discord_presence);
+        if let Some(application) = discord.clone() {
             let presence = self.presence.clone();
-            let (title, store) = (game.title.clone(), id.runner.store_name());
-            let started = util::unix_now() as i64;
-            self.spawn(async move { presence.playing(client_id, title, store, started).await });
+            let started_ms = (util::unix_now() as i64).saturating_mul(1000);
+            let shown = crate::discord::Shown::new(application, id, &game, started_ms);
+            let id = id.clone();
+            self.spawn(async move { presence.playing(id, shown) });
         }
 
         // A third-party launcher's games are followed by their own processes;
@@ -474,7 +476,7 @@ impl Backend {
                 awake.release().await;
             }
             if discord.is_some() {
-                b.presence.clear().await;
+                b.presence.ended(&id);
             }
             let install_path = game
                 .install_path()

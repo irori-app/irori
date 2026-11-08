@@ -778,16 +778,35 @@ impl AccountsView {
                         )
                         .child(div().text_sm().text_color(muted).child(games))
                         .into_any_element(),
-                    Button::new("optional-logout")
-                        .small()
-                        .ghost()
-                        .icon(IconName::LogOut)
-                        .label(t("manage.accounts.logout"))
-                        .loading(logging_out)
-                        .disabled(logging_out)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.confirm_logout(runner, account.clone(), false, window, cx)
-                        }))
+                    h_flex()
+                        .gap_1()
+                        .when(
+                            runner == Runner::Steam && crate::friends::steam_friends_available(cx),
+                            |row| {
+                                row.child(
+                                    Button::new("optional-friends")
+                                        .small()
+                                        .ghost()
+                                        .icon(IconName::Users)
+                                        .label(t("manage.friends.button"))
+                                        .on_click(|_, window, cx| {
+                                            crate::friends::open_steam_friends_dialog(window, cx)
+                                        }),
+                                )
+                            },
+                        )
+                        .child(
+                            Button::new("optional-logout")
+                                .small()
+                                .ghost()
+                                .icon(IconName::LogOut)
+                                .label(t("manage.accounts.logout"))
+                                .loading(logging_out)
+                                .disabled(logging_out)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.confirm_logout(runner, account.clone(), false, window, cx)
+                                })),
+                        )
                         .into_any_element(),
                 )
             }

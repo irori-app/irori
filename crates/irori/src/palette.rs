@@ -33,6 +33,8 @@ enum PaletteTarget {
     Refresh,
     Random,
     SetUpEmulation,
+    /// The Steam friends window.
+    SteamFriends,
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -116,7 +118,9 @@ impl Palette {
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
-    /// on. `stores` have a store window.
+    /// on. `stores` have a store window. `steam_friends`: a Steam account can
+    /// show its friends.
+    #[allow(clippy::too_many_arguments)] // One row source per argument, all needed.
     fn items(
         games: &[Arc<GameInfo>],
         replay: Option<&str>,
@@ -124,6 +128,7 @@ impl Palette {
         library: LibraryCommands<'_>,
         sync: bool,
         stores: &[Runner],
+        steam_friends: bool,
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let LibraryCommands {
@@ -331,6 +336,16 @@ impl Palette {
                     .keywords([t("shell.nav.stores")])
                     .icon(IconName::Store),
                 PaletteTarget::OpenStore(runner),
+                targets,
+            );
+        }
+        if steam_friends {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.steam_friends"))
+                    .keywords([t("shell.palette.steam_friends_keywords")])
+                    .icon(IconName::Users),
+                PaletteTarget::SteamFriends,
                 targets,
             );
         }
@@ -602,6 +617,7 @@ impl Palette {
             library,
             sync,
             &irori_manage::store_window_stores(cx),
+            irori_manage::steam_friends_available(cx),
             &mut targets,
         ));
         *self.targets.borrow_mut() = targets;
@@ -656,6 +672,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Refresh => irori_ui::models::refresh_library(false, cx),
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
+        PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::OpenStore(runner) => {
             irori_manage::open_store_window(runner, None, window, cx)
         }
@@ -772,7 +789,7 @@ mod tests {
             favourites,
             quick_controls: quick,
         };
-        Palette::items(&[], None, None, library, false, &[], &mut targets);
+        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
         targets
             .into_iter()
             .filter_map(|t| match t {
