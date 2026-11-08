@@ -78,7 +78,12 @@ impl std::fmt::Debug for Saved {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AccountTitle {
+    /// The title record played most recently.
     pub title_id: String,
+    /// Every title record of the game, most recently played first: the
+    /// title history can list one game (one package family) under several
+    /// title ids.
+    pub title_ids: Vec<String>,
     /// Package family name: what installed packages match by.
     pub pfn: String,
     pub name: String,
@@ -108,6 +113,7 @@ impl AccountTitle {
         let nonempty = |s: Option<String>| s.filter(|s| !s.trim().is_empty());
         Self {
             title_id: t.title_id.clone(),
+            title_ids: vec![t.title_id.clone()],
             pfn: t.pfn.clone().unwrap_or_default(),
             name: t.name.clone(),
             last_played: t.last_played().map(str::to_string),
@@ -124,6 +130,16 @@ impl AccountTitle {
             release_date: nonempty(detail.release_date),
             genres: detail.genres,
             product_id: nonempty(t.product_id.clone()),
+        }
+    }
+
+    /// Every title id of the game (titles cached before they were merged
+    /// name only one).
+    pub fn ids(&self) -> Vec<String> {
+        if self.title_ids.is_empty() {
+            vec![self.title_id.clone()]
+        } else {
+            self.title_ids.clone()
         }
     }
 
@@ -149,6 +165,79 @@ struct TitlesFile {
     at: u64,
     xuid: String,
     titles: Vec<AccountTitle>,
+    /// Minutes played per title id, with the last-played time they were
+    /// read at.
+    stats: HashMap<String, TitleStat>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct TitleStat {
+    last_played: Option<String>,
+    minutes: Option<u64>,
+}
+
+/// The account's PC games from the title history's PC records, one per
+/// package family. A game listed under several title ids (an old and a
+/// new release of one package) is one game: its newest record gives the
+/// name, art and details (older ones fill what it lacks), its last played
+/// is the latest, and its minutes are the sum of the records' minutes,
+/// since each title id counts the sessions played under it and no session
+/// counts under two.
+fn merge_titles(records: &[&Title], stats: &HashMap<String, TitleStat>) -> Vec<AccountTitle> {
+    let played = |t: &Title| t.last_played().and_then(util::parse_rfc3339);
+    let mut families: Vec<(String, Vec<&Title>)> = Vec::new();
+    for t in records {
+        let pfn = t.pfn.clone().unwrap_or_default().to_lowercase();
+        match families.iter_mut().find(|(f, _)| *f == pfn) {
+            Some((_, list)) => list.push(t),
+            None => families.push((pfn, vec![t])),
+        }
+    }
+    families
+        .into_iter()
+        .map(|(_, mut list)| {
+            list.sort_by_key(|t| std::cmp::Reverse(played(t)));
+            let mut game = AccountTitle::from_title(list[0]);
+            for older in &list[1..] {
+                let o = AccountTitle::from_title(older);
+                game.cover = game.cover.or(o.cover);
+                game.square = game.square.or(o.square);
+                game.background = game.background.or(o.background);
+                game.logo = game.logo.or(o.logo);
+                game.developer = game.developer.or(o.developer);
+                game.publisher = game.publisher.or(o.publisher);
+                game.description = game.description.or(o.description);
+                game.release_date = game.release_date.or(o.release_date);
+                game.product_id = game.product_id.or(o.product_id);
+                if game.genres.is_empty() {
+                    game.genres = o.genres;
+                }
+            }
+            game.title_ids = list.iter().map(|t| t.title_id.clone()).collect();
+            game.minutes = game
+                .title_ids
+                .iter()
+                .filter_map(|id| stats.get(id)?.minutes)
+                .reduce(|a, b| a + b);
+            game
+        })
+        .collect()
+}
+
+/// Achievements of several title records of one game, each once: the
+/// same achievement (same id and name) listed for two records counts once,
+/// unlocked if either has it.
+fn merge_achievements(lists: Vec<irori_xbox_api::Achievement>) -> Vec<irori_xbox_api::Achievement> {
+    let mut out: Vec<irori_xbox_api::Achievement> = Vec::new();
+    for a in lists {
+        match out.iter_mut().find(|b| b.id == a.id && b.name == a.name) {
+            Some(b) if !b.is_unlocked() && a.is_unlocked() => *b = a,
+            Some(_) => {}
+            None => out.push(a),
+        }
+    }
+    out
 }
 
 /// What the Xbox card shows about the account.
@@ -458,68 +547,68 @@ impl XboxAccount {
                 async move { client.title_history(&s, &language).await }
             })
             .await?;
-        let known: HashMap<String, AccountTitle> = self
-            .titles
-            .read()
-            .titles
-            .iter()
-            .map(|t| (t.title_id.clone(), t.clone()))
-            .collect();
-        let mut titles: Vec<AccountTitle> = history
-            .iter()
-            .filter(|t| t.is_pc_game())
-            .map(AccountTitle::from_title)
-            .collect();
+        let known = self.titles.read().stats.clone();
+        let records: Vec<&Title> = history.iter().filter(|t| t.is_pc_game()).collect();
         // Minutes only change while a title is played, which moves its
-        // last-played time; ask only for those.
+        // last-played time; ask only for those (an answer without minutes
+        // counts as an answer too, a failed request doesn't).
+        let mut stats: HashMap<String, TitleStat> = HashMap::new();
         let mut ask = Vec::new();
-        for (i, t) in titles.iter_mut().enumerate() {
+        for t in &records {
+            let last_played = t.last_played().map(str::to_string);
             match known.get(&t.title_id) {
-                Some(k) if k.last_played == t.last_played && k.minutes.is_some() => {
-                    t.minutes = k.minutes;
+                Some(k) if k.last_played == last_played => {
+                    stats.insert(t.title_id.clone(), k.clone());
                 }
-                _ => ask.push(i),
+                _ => ask.push((t.title_id.clone(), last_played)),
             }
         }
         if !ask.is_empty() {
             let session = self.session().await?;
-            let answers: Vec<(usize, Option<u64>)> = futures::stream::iter(ask)
-                .map(|i| {
+            let answers: Vec<(String, TitleStat)> = futures::stream::iter(ask)
+                .map(|(id, last_played)| {
                     let (client, session) = (client.clone(), session.clone());
-                    let id = titles[i].title_id.clone();
+                    let known = known.get(&id).cloned().unwrap_or_default();
                     async move {
-                        let minutes = client
-                            .minutes_played(&session, &id)
-                            .await
-                            .inspect_err(|e| tracing::debug!("minutes played of {id}: {e:#}"))
-                            .ok()
-                            .flatten();
-                        (i, minutes)
+                        let stat = match client.minutes_played(&session, &id).await {
+                            Ok(minutes) => TitleStat {
+                                last_played,
+                                minutes: minutes.or(known.minutes),
+                            },
+                            Err(e) => {
+                                tracing::debug!("minutes played of {id}: {e:#}");
+                                known
+                            }
+                        };
+                        (id, stat)
                     }
                 })
                 .buffer_unordered(STATS_AT_ONCE)
                 .collect()
                 .await;
-            for (i, minutes) in answers {
-                titles[i].minutes =
-                    minutes.or(known.get(&titles[i].title_id).and_then(|k| k.minutes));
-            }
+            stats.extend(answers);
         }
+        let titles = merge_titles(&records, &stats);
+        debug_assert!(
+            {
+                let mut names: Vec<String> = titles.iter().map(|t| t.app_name()).collect();
+                names.sort();
+                names.windows(2).all(|w| !w[0].eq_ignore_ascii_case(&w[1]))
+            },
+            "one account title per package family"
+        );
         let file = TitlesFile {
             at: util::unix_now(),
             xuid: saved.xuid.clone(),
             titles,
+            stats,
         };
         let changed = {
             let current = self.titles.read();
             current.titles != file.titles || current.xuid != file.xuid
         };
         let path = self.titles_file.clone();
-        let written = TitlesFile {
-            at: file.at,
-            xuid: file.xuid.clone(),
-            titles: file.titles.clone(),
-        };
+        let written = file.clone();
         if let Ok(Err(e)) =
             tokio::task::spawn_blocking(move || json_store::write(&path, &written)).await
         {
@@ -562,15 +651,20 @@ impl XboxAccount {
         }
         let client = self.client()?.clone();
         let accept = accept_language(language);
+        // The service takes several title ids at once, comma-separated.
+        let ids = title.ids().join(",");
         let fetched = self
             .with_session(|s| {
-                let (client, accept, id) = (client.clone(), accept.clone(), title.title_id.clone());
-                async move { client.achievements(&s, &id, &accept).await }
+                let (client, accept, ids) = (client.clone(), accept.clone(), ids.clone());
+                async move { client.achievements(&s, &ids, &accept).await }
             })
             .await;
         match fetched {
             Ok(list) => {
-                let list: Vec<Achievement> = list.iter().map(map_achievement).collect();
+                let list: Vec<Achievement> = merge_achievements(list)
+                    .iter()
+                    .map(map_achievement)
+                    .collect();
                 self.achievements.put(app_name, language, &list).await;
                 Ok(list)
             }
@@ -820,5 +914,135 @@ pub(crate) mod tests {
         let off = XboxAccount::with_client(dir.path(), dir.path(), None);
         assert_eq!(off.login_flow(), LoginFlow::None);
         assert!(!off.status().available);
+    }
+
+    const MINESWEEPER: &str = "Microsoft.MicrosoftMinesweeper_8wekyb3d8bbwe";
+
+    /// The title history as a real account sent it (values redacted): one
+    /// package family under two title ids, with the same product id.
+    fn two_records() -> serde_json::Value {
+        serde_json::json!({"titles": [
+            {"titleId": "1889321756", "pfn": MINESWEEPER, "name": "Microsoft Minesweeper",
+             "type": "Game", "devices": ["PC"], "productId": "9WZDNCRFHWCN",
+             "images": [{"type": "Poster", "url": "https://img/new-poster"}],
+             "titleHistory": {"lastTimePlayed": "2026-10-20T18:00:00.1234567Z"}},
+            {"titleId": "1297290226", "pfn": MINESWEEPER, "name": "Microsoft Minesweeper",
+             "type": "Game", "devices": ["PC"], "productId": "9WZDNCRFHWCN",
+             "images": [{"type": "Poster", "url": "https://img/old-poster"},
+                        {"type": "SuperHeroArt", "url": "https://img/old-hero"}],
+             "titleHistory": {"lastTimePlayed": "2024-02-01T10:00:00Z"}}
+        ]})
+    }
+
+    #[test]
+    fn one_game_listed_under_two_title_ids_is_one_game() {
+        let hub: Vec<Title> = serde_json::from_value(two_records()["titles"].clone()).unwrap();
+        let records: Vec<&Title> = hub.iter().collect();
+        // The older record keeps no minutes, the newer one 2.
+        let stats = HashMap::from([
+            (
+                "1297290226".to_string(),
+                TitleStat {
+                    minutes: None,
+                    ..Default::default()
+                },
+            ),
+            (
+                "1889321756".to_string(),
+                TitleStat {
+                    minutes: Some(2),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        let titles = merge_titles(&records, &stats);
+        assert_eq!(titles.len(), 1);
+        let game = &titles[0];
+        assert_eq!(game.app_name(), format!("xbox:{MINESWEEPER}"));
+        assert_eq!(game.title_ids, ["1889321756", "1297290226"]);
+        assert_eq!(game.title_id, "1889321756");
+        assert_eq!(game.minutes, Some(2));
+        assert_eq!(
+            game.last_played.as_deref(),
+            Some("2026-10-20T18:00:00.1234567Z")
+        );
+        // Art from the newest record; the older one fills what it lacks.
+        assert_eq!(game.cover.as_deref(), Some("https://img/new-poster"));
+        assert_eq!(game.background.as_deref(), Some("https://img/old-hero"));
+        // Both records counting time add up.
+        let both = HashMap::from([
+            (
+                "1297290226".to_string(),
+                TitleStat {
+                    minutes: Some(30),
+                    ..Default::default()
+                },
+            ),
+            (
+                "1889321756".to_string(),
+                TitleStat {
+                    minutes: Some(2),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        assert_eq!(merge_titles(&records, &both)[0].minutes, Some(32));
+    }
+
+    #[tokio::test]
+    async fn the_account_lists_a_game_with_two_title_ids_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = TestServer::start(|req| {
+            let path = req.path.split('?').next().unwrap_or_default().to_string();
+            let body = String::from_utf8_lossy(&req.body).to_string();
+            match path.as_str() {
+                "/oauth20_token.srf" => Resp::json(serde_json::json!({
+                    "access_token": "access", "refresh_token": "refresh", "expires_in": 3600
+                })),
+                "/user/authenticate" => Resp::json(serde_json::json!({
+                    "Token": "user", "DisplayClaims": {"xui": [{"uhs": "h"}]}
+                })),
+                "/xsts/authorize" => Resp::json(serde_json::json!({
+                    "Token": "xsts", "NotAfter": "2099-01-01T00:00:00Z",
+                    "DisplayClaims": {"xui": [{"uhs": "h", "xid": "25", "gtg": "Pilot"}]}
+                })),
+                p if p.contains("/titlehistory/") => Resp::json(two_records()),
+                "/batch" if body.contains("1889321756") => {
+                    Resp::json(serde_json::json!({"statlistscollection": [
+                        {"stats": [{"name": "MinutesPlayed", "value": "2"}]}]}))
+                }
+                "/batch" => Resp::json(serde_json::json!({"statlistscollection": [{"stats": []}]})),
+                p if p.ends_with("/achievements") => {
+                    assert!(
+                        req.path.contains("titleId=1889321756%2C1297290226"),
+                        "{}",
+                        req.path
+                    );
+                    Resp::json(serde_json::json!({"achievements": [
+                        {"id": "1", "name": "Sweeper", "progressState": "NotStarted"},
+                        {"id": "1", "name": "Sweeper", "progressState": "Achieved",
+                         "progression": {"timeUnlocked": "2024-02-01T10:00:00Z"}},
+                        {"id": "2", "name": "Expert", "progressState": "NotStarted"}
+                    ]}))
+                }
+                _ => Resp::status(404),
+            }
+        });
+        let xbox = account(dir.path(), &s);
+        let _ = xbox.login_flow();
+        xbox.login("M.C1.abcdefgh").await.unwrap();
+        xbox.refresh(true, "en").await.unwrap();
+        let app = format!("xbox:{MINESWEEPER}");
+        assert_eq!(xbox.titles().len(), 1);
+        assert_eq!(xbox.playtime(), HashMap::from([(app.clone(), 2)]));
+        let list = xbox.achievements(&app, "en").await.unwrap();
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().find(|a| a.id == "1").unwrap().is_unlocked());
+        // Asked again with nothing played since: no minutes asked, not
+        // even for the record that keeps none.
+        let batches = |s: &TestServer| s.requests().iter().filter(|r| r.path == "/batch").count();
+        assert_eq!(batches(&s), 2);
+        xbox.refresh(true, "en").await.unwrap();
+        assert_eq!(batches(&s), 2);
     }
 }

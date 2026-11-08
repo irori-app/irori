@@ -661,7 +661,26 @@ fn library(s: &State) -> Vec<Arc<GameInfo>> {
                 .any(|g| g.family_name.eq_ignore_ascii_case(&t.pfn))
         })
         .map(account_game_info);
-    launchers.chain(xbox).chain(played).map(Arc::new).collect()
+    unique(launchers.chain(xbox).chain(played).map(Arc::new).collect())
+}
+
+/// The games with one entry per app name, the first kept: two entries
+/// with one id would share every per-game state, and the UI keys its
+/// elements by it.
+fn unique(games: Vec<Arc<GameInfo>>) -> Vec<Arc<GameInfo>> {
+    let mut seen = std::collections::HashSet::new();
+    let before = games.len();
+    let games: Vec<_> = games
+        .into_iter()
+        .filter(|g| seen.insert(g.app_name.clone()))
+        .collect();
+    if games.len() != before {
+        tracing::warn!(
+            "{} launcher games listed twice; showing each once",
+            before - games.len()
+        );
+    }
+    games
 }
 
 /// An installed Xbox game with what the account knows: the store's cover
@@ -1156,7 +1175,16 @@ impl Store for LaunchersStore {
         if !self.enabled() {
             return Vec::new();
         }
-        self.state.read().games.clone()
+        let games = self.state.read().games.clone();
+        debug_assert!(
+            {
+                let mut names: Vec<&str> = games.iter().map(|g| g.app_name.as_str()).collect();
+                names.sort_unstable();
+                names.windows(2).all(|w| w[0] != w[1])
+            },
+            "every game is listed once"
+        );
+        games
     }
 
     fn game(&self, app_name: &str) -> Option<Arc<GameInfo>> {
@@ -1747,6 +1775,8 @@ fi
                 // Matched by family name, whatever its letter case.
                 title("studio.skyracer_abcdefghjkmnp", "Sky Racer"),
                 title("Studio.Glider_abcdefghjkmnp", "Glider"),
+                // Listed twice: still one game, one id.
+                title("Studio.Glider_abcdefghjkmnp", "Glider (old)"),
             ];
             s.games = library(&s);
         }

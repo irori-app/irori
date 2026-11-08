@@ -1093,7 +1093,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   so their playtime and achievements count everywhere. Their Install and "Show in
   Microsoft Store" open the store page on Windows; elsewhere only the website
   (`store_url`, when the title names its product id). Titles played through another
-  launcher ("Win32", no family name) and console-only titles are left out.
+  launcher ("Win32", no family name) and console-only titles are left out. The
+  history can list one package family under several title ids (Microsoft
+  Minesweeper does): they are one game (`merge_titles`), with the newest record's
+  art and details, the latest last played, the minutes of every record added up
+  (each id counts its own sessions) and the achievements of all of them, asked in
+  one request and counted once. The store never lists an app name twice.
 - **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
   anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
   `online_only`, the install gate lets them through and the game page says which mode

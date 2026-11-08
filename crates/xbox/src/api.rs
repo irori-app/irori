@@ -471,6 +471,8 @@ impl Client {
     }
 
     /// A title's achievements with the account's progress, every page.
+    /// `title_id` may name several titles, comma-separated, as the service
+    /// accepts.
     pub async fn achievements(
         &self,
         session: &Session,
