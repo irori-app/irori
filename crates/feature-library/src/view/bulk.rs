@@ -3,6 +3,7 @@
 //! floating over the library. Edits of library data say what they did in a
 //! notification with an Undo that puts every game back as it was.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
@@ -16,20 +17,55 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, Modifiers, ParentElement as _,
+    AnyElement, App, Context, InteractiveElement as _, IntoElement, Modifiers, ParentElement as _,
     SharedString, Styled as _, Window, div,
 };
 use irori_core::settings::LibraryLayout;
-use irori_core::{GameId, GameInfo, RemoveArgs};
+use irori_core::{GameId, GameInfo, RemoveArgs, StatusKind};
 use irori_services::{PlayStatus, UserDataService};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use super::LibraryView;
+use crate::commands::GameState;
 use crate::layouts::{self, Click};
 
 /// Titles listed in the uninstall confirmation before "and N more".
 const LISTED: usize = 8;
+
+/// What the bulk bar offers for the picked games.
+#[derive(Clone, Default)]
+pub(super) struct BulkSummary {
+    count: usize,
+    installable: Rc<Vec<Arc<GameInfo>>>,
+    removable: Rc<Vec<Arc<GameInfo>>>,
+    for_steam: Rc<Vec<Arc<GameInfo>>>,
+    ids: Rc<Vec<GameId>>,
+    all_favourite: bool,
+    all_hidden: bool,
+    /// Each category, and whether every picked game is in it.
+    categories: Rc<Vec<(String, bool)>>,
+}
+
+/// What a [`BulkSummary`] depends on: the picks, the shown list and the
+/// library data by identity, and the few games that are busy right now.
+#[derive(PartialEq)]
+struct BulkKey {
+    picks: u64,
+    games: usize,
+    user: usize,
+    statuses: Vec<(GameId, StatusKind)>,
+    launching: Vec<GameId>,
+}
+
+/// The last [`BulkSummary`], so drawing the bar with thousands of games
+/// picked doesn't go through them on every frame.
+#[derive(Default)]
+pub(super) struct BulkCache {
+    key: Option<BulkKey>,
+    summary: Rc<BulkSummary>,
+    computes: usize,
+}
 
 impl LibraryView {
     /// A click on a game: Shift extends the selection, Ctrl (or any click in
@@ -99,6 +135,89 @@ impl LibraryView {
 
     fn picked(&self) -> Vec<Arc<GameInfo>> {
         self.selection.games(&self.frame.games)
+    }
+
+    /// What the bulk bar offers, worked out again only when the picks, the
+    /// shown games, the library data or a game's state changed.
+    fn bulk_summary(&mut self, cx: &App) -> Rc<BulkSummary> {
+        let user = models(cx).library.read(cx).user.clone();
+        let mut statuses: Vec<_> = models(cx)
+            .statuses
+            .read(cx)
+            .all()
+            .map(|s| (s.id.clone(), s.kind))
+            .collect();
+        statuses.sort_by_key(|(id, _)| id.key());
+        let mut launching: Vec<_> = self.launching.iter().cloned().collect();
+        launching.sort_by_key(GameId::key);
+        let key = BulkKey {
+            picks: self.selection.revision(),
+            games: Arc::as_ptr(&self.frame.games) as *const () as usize,
+            user: Arc::as_ptr(&user) as usize,
+            statuses,
+            launching,
+        };
+        if self.bulk.key.as_ref() == Some(&key) {
+            return self.bulk.summary.clone();
+        }
+        let picked = self.picked();
+        let states: Vec<_> = picked
+            .iter()
+            .map(|g| self.state_for(g, false, cx))
+            .collect();
+        let pick = |keep: &dyn Fn(&Arc<GameInfo>, &GameState) -> bool| {
+            Rc::new(
+                picked
+                    .iter()
+                    .zip(&states)
+                    .filter(|(g, s)| keep(g, s))
+                    .map(|(g, _)| g.clone())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let installable = pick(&|g, s| {
+            !s.installed
+                && s.installable
+                && !s.is_queued()
+                && !s.is_busy()
+                && !s.browser
+                && g.third_party_managed_app.is_none()
+        });
+        let removable = pick(&|_, s| s.installed && !s.external && !s.is_playing() && !s.is_busy());
+        let for_steam = pick(&|_, s| !s.browser && !s.external && (s.installed || s.installable));
+        let ids: Vec<GameId> = picked.iter().map(|g| g.id()).collect();
+        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        let all_favourite = !keys.is_empty() && keys.iter().all(|k| user.favourites.contains(k));
+        let all_hidden = !keys.is_empty() && keys.iter().all(|k| user.hidden.contains(k));
+        let categories = user
+            .categories
+            .iter()
+            .map(|(name, games)| {
+                (
+                    name.clone(),
+                    !keys.is_empty() && keys.iter().all(|k| games.contains(k)),
+                )
+            })
+            .collect();
+        self.bulk.summary = Rc::new(BulkSummary {
+            count: picked.len(),
+            installable,
+            removable,
+            for_steam,
+            ids: Rc::new(ids),
+            all_favourite,
+            all_hidden,
+            categories: Rc::new(categories),
+        });
+        self.bulk.key = Some(key);
+        self.bulk.computes += 1;
+        self.bulk.summary.clone()
+    }
+
+    /// How many times the bulk bar's offers were worked out.
+    #[cfg(test)]
+    pub(crate) fn bulk_computes(&self) -> usize {
+        self.bulk.computes
     }
 
     /// Queue every picked game that can be installed, with default options.
@@ -259,54 +378,18 @@ impl LibraryView {
         if !self.selection.is_active() {
             return None;
         }
-        let picked = self.picked();
-        let user = models(cx).library.read(cx).user.clone();
-        let states: Vec<_> = picked
-            .iter()
-            .map(|g| self.state_for(g, false, cx))
-            .collect();
-        let installable: Vec<Arc<GameInfo>> = picked
-            .iter()
-            .zip(&states)
-            .filter(|(g, s)| {
-                !s.installed
-                    && s.installable
-                    && !s.is_queued()
-                    && !s.is_busy()
-                    && !s.browser
-                    && g.third_party_managed_app.is_none()
-            })
-            .map(|(g, _)| g.clone())
-            .collect();
-        let removable: Vec<Arc<GameInfo>> = picked
-            .iter()
-            .zip(&states)
-            .filter(|(_, s)| s.installed && !s.external && !s.is_playing() && !s.is_busy())
-            .map(|(g, _)| g.clone())
-            .collect();
-        let for_steam: Vec<Arc<GameInfo>> = picked
-            .iter()
-            .zip(&states)
-            .filter(|(_, s)| !s.browser && !s.external && (s.installed || s.installable))
-            .map(|(g, _)| g.clone())
-            .collect();
-        let ids: Vec<GameId> = picked.iter().map(|g| g.id()).collect();
-        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
-        let all_favourite = !keys.is_empty() && keys.iter().all(|k| user.favourites.contains(k));
-        let all_hidden = !keys.is_empty() && keys.iter().all(|k| user.hidden.contains(k));
-        let categories: Vec<(String, bool)> = user
-            .categories
-            .iter()
-            .map(|(name, games)| {
-                (
-                    name.clone(),
-                    !keys.is_empty() && keys.iter().all(|k| games.contains(k)),
-                )
-            })
-            .collect();
-
+        let summary = self.bulk_summary(cx);
+        let BulkSummary {
+            count,
+            installable,
+            removable,
+            for_steam,
+            ids,
+            all_favourite,
+            all_hidden,
+            categories,
+        } = (*summary).clone();
         let theme = cx.theme();
-        let count = picked.len();
         let status: SharedString = match count {
             0 => t("library.bulk.none"),
             1 => t("library.bulk.count_one"),
@@ -326,7 +409,7 @@ impl LibraryView {
                 ))
                 .disabled(installable.is_empty())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.install_picked(games.clone(), window, cx)
+                    this.install_picked(games.to_vec(), window, cx)
                 }))
         };
         let uninstall = {
@@ -341,7 +424,7 @@ impl LibraryView {
                 ))
                 .disabled(removable.is_empty())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.confirm_uninstall(games.clone(), window, cx)
+                    this.confirm_uninstall(games.to_vec(), window, cx)
                 }))
         };
         let steam = {
@@ -356,7 +439,7 @@ impl LibraryView {
                 ))
                 .disabled(for_steam.is_empty())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.add_picked_to_steam(games.clone(), window, cx)
+                    this.add_picked_to_steam(games.to_vec(), window, cx)
                 }))
         };
         let category_ids = ids.clone();
@@ -368,7 +451,7 @@ impl LibraryView {
             .label(t("library.bulk.categories"))
             .disabled(nothing)
             .dropdown_menu(move |mut menu, _, _| {
-                for (name, all_in) in &categories {
+                for (name, all_in) in categories.iter() {
                     let (ids, name, add) = (category_ids.clone(), name.clone(), !*all_in);
                     menu = menu.item(PopupMenuItem::new(name.clone()).checked(*all_in).on_click(
                         move |_, window, cx| {
@@ -389,7 +472,7 @@ impl LibraryView {
                             );
                             let name = name.clone();
                             edit_with_undo(
-                                ids.clone(),
+                                ids.to_vec(),
                                 message,
                                 move |u, ids| u.set_category_many(ids, &name, add),
                                 window,
@@ -419,7 +502,7 @@ impl LibraryView {
             .label(irori_ui::play_status::title())
             .disabled(nothing)
             .dropdown_menu(move |menu, _, cx| {
-                irori_ui::play_status::menu_many_with(menu, status_ids.clone(), cx, set_statuses)
+                irori_ui::play_status::menu_many_with(menu, status_ids.to_vec(), cx, set_statuses)
             });
         let favourite = {
             let ids = ids.clone();
@@ -452,7 +535,7 @@ impl LibraryView {
                     };
                     let message = counted(key, ids.len(), &[]);
                     edit_with_undo(
-                        ids.clone(),
+                        ids.to_vec(),
                         message,
                         move |u, ids| u.set_favourites(ids, on),
                         window,
@@ -489,7 +572,7 @@ impl LibraryView {
                 };
                 let message = counted(key, ids.len(), &[]);
                 edit_with_undo(
-                    ids.clone(),
+                    ids.to_vec(),
                     message,
                     move |u, ids| u.set_hidden_many(ids, on),
                     window,

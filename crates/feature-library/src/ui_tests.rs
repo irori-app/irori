@@ -385,6 +385,11 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
     assert_eq!(state(cx).0.len(), 5);
+    // Redrawing with everything picked doesn't work out the bar again.
+    let computes = cx.read(|cx| view.read(cx).bulk_computes());
+    draw(cx);
+    draw(cx);
+    assert_eq!(cx.read(|cx| view.read(cx).bulk_computes()), computes);
 
     // A filter hiding picked games drops them from the selection.
     cx.update(|cx| {

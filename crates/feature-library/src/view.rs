@@ -194,6 +194,10 @@ pub struct LibraryView {
     menu_open: Option<GameId>,
     /// Games picked for bulk actions.
     selection: crate::selection::Selection,
+    /// What the bulk bar offers for the picks, worked out once per change.
+    bulk: bulk::BulkCache,
+    /// The stores the library has games of, once per library revision.
+    stores_with_games: filter::PerRevision<HashSet<Runner>>,
     launching: HashSet<GameId>,
     /// Games whose next launch skips the store's update check ("Play now").
     skip_version_check: HashSet<GameId>,
@@ -322,6 +326,8 @@ impl LibraryView {
             menu_open: None,
             selection: crate::selection::Selection::default(),
             launching: HashSet::new(),
+            bulk: Default::default(),
+            stores_with_games: Default::default(),
             skip_version_check: HashSet::new(),
             availability: Availability::default(),
             shortcuts: HashMap::new(),
@@ -488,7 +494,10 @@ impl LibraryView {
         let app = m.settings.read(cx).app.clone();
         let stores = {
             let accounts = m.accounts.read(cx);
-            filter::offered_stores(&snapshot, &|r| accounts.is_logged_in(r), &app.ui.stores)
+            let with_games = self
+                .stores_with_games
+                .get(&snapshot, filter::stores_with_games);
+            filter::offered_stores(with_games, &|r| accounts.is_logged_in(r), &app.ui.stores)
         };
         let filter = self.filters.read(cx).filter().clone();
         self.check_availability(&snapshot, cx);
@@ -597,7 +606,9 @@ impl LibraryView {
         }
         // Picks a filter or search now hides are dropped: bulk actions only
         // ever touch games on screen.
-        self.selection.keep_shown(&games);
+        if !Arc::ptr_eq(&self.frame.games, &games) {
+            self.selection.keep_shown(&games);
+        }
         self.frame.games = games;
         self.frame.groups = groups;
         self.frame.top = top;

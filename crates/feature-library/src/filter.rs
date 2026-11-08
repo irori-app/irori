@@ -587,19 +587,65 @@ pub fn save(filter: &ViewFilter) -> anyhow::Result<()> {
 /// stores the user is logged in to, leaving out stores the user hid.
 /// Ordered like [`Runner::ALL`].
 pub fn offered_stores(
-    library: &LibrarySnapshot,
+    with_games: &HashSet<Runner>,
     logged_in: &dyn Fn(Runner) -> bool,
     shown: &ShownStores,
 ) -> Vec<Runner> {
-    let mut with_games = HashSet::new();
-    for g in &library.games {
-        with_games.insert(g.runner());
-    }
     Runner::ALL
         .into_iter()
         .filter(|r| with_games.contains(r) || (r.has_account() && logged_in(*r)))
         .filter(|r| shown.shows(*r))
         .collect()
+}
+
+/// Something worked out from the library once per revision rather than on
+/// every frame (the stores it has games of, the systems and genres the
+/// Filters popover offers).
+#[derive(Debug, Default)]
+pub struct PerRevision<T> {
+    revision: Option<u64>,
+    value: T,
+    computes: usize,
+}
+
+impl<T> PerRevision<T> {
+    pub fn get(&mut self, library: &LibrarySnapshot, f: impl FnOnce(&LibrarySnapshot) -> T) -> &T {
+        if self.revision != Some(library.revision) {
+            self.value = f(library);
+            self.revision = Some(library.revision);
+            self.computes += 1;
+        }
+        &self.value
+    }
+
+    /// How many times the value was worked out.
+    #[cfg(test)]
+    pub fn computes(&self) -> usize {
+        self.computes
+    }
+}
+
+/// The stores the library has games of.
+pub fn stores_with_games(library: &LibrarySnapshot) -> HashSet<Runner> {
+    library.games.iter().map(|g| g.runner()).collect()
+}
+
+/// The systems the library has games of, in the systems catalogue's order.
+pub fn present_systems(library: &LibrarySnapshot) -> Vec<String> {
+    let mut present: Vec<String> = library
+        .games
+        .iter()
+        .filter_map(|g| g.system.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    present.sort_by_key(|id| {
+        irori_engines::systems::all()
+            .iter()
+            .position(|s| &s.id == id)
+            .unwrap_or(usize::MAX)
+    });
+    present
 }
 
 /// The age limits the Filters popover offers, after "Any": PEGI's steps,
@@ -1216,8 +1262,13 @@ pub(crate) mod tests {
     #[test]
     fn offered_stores_include_logged_in_and_non_empty() {
         let lib = sample();
+        let mut with_games = PerRevision::default();
         let shown = ShownStores::default();
-        let stores = offered_stores(&lib, &|r| r == Runner::Zoom, &shown);
+        let stores = offered_stores(
+            with_games.get(&lib, stores_with_games),
+            &|r| r == Runner::Zoom,
+            &shown,
+        );
         assert_eq!(
             stores,
             vec![
@@ -1231,10 +1282,16 @@ pub(crate) mod tests {
             epic: false,
             ..shown
         };
-        let stores = offered_stores(&lib, &|r| r != Runner::Gog, &shown);
+        let stores = offered_stores(
+            with_games.get(&lib, stores_with_games),
+            &|r| r != Runner::Gog,
+            &shown,
+        );
         assert!(!stores.contains(&Runner::Legendary));
         assert!(stores.contains(&Runner::Nile));
         assert!(stores.contains(&Runner::Gog));
+        // Asked every frame, the library is read once per revision.
+        assert_eq!(with_games.computes(), 1);
     }
 
     #[test]

@@ -116,6 +116,8 @@ pub(crate) fn apply_pending(model: &Entity<FilterModel>, cx: &mut App) {
 /// Content of the Filters popover. Re-renders when the model changes.
 pub struct FiltersPanel {
     model: Entity<FilterModel>,
+    /// The systems the library has games of.
+    systems: crate::filter::PerRevision<Vec<String>>,
     _observe: Vec<Subscription>,
 }
 
@@ -123,6 +125,7 @@ impl FiltersPanel {
     pub fn new(model: Entity<FilterModel>, cx: &mut Context<Self>) -> Self {
         let library = models(cx).library.clone();
         Self {
+            systems: Default::default(),
             _observe: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&library, |_, _, cx| cx.notify()),
@@ -217,22 +220,12 @@ fn section(title: SharedString) -> impl IntoElement {
 
 impl FiltersPanel {
     /// The system chips, for libraries with emulated games.
-    fn render_systems(&self, f: &ViewFilter, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let mut present: Vec<String> = models(cx)
-            .library
-            .read(cx)
-            .snapshot
-            .games
-            .iter()
-            .filter_map(|g| g.system.clone())
-            .collect();
-        present.sort_by_key(|id| {
-            irori_engines::systems::all()
-                .iter()
-                .position(|s| &s.id == id)
-                .unwrap_or(usize::MAX)
-        });
-        present.dedup();
+    fn render_systems(&mut self, f: &ViewFilter, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let snapshot = models(cx).library.read(cx).snapshot.clone();
+        let present = self
+            .systems
+            .get(&snapshot, crate::filter::present_systems)
+            .clone();
         if present.is_empty() {
             return None;
         }
