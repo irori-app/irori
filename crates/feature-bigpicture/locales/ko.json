@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "일지",
   "bigpicture.overlay.system_volume": "시스템 음량",
   "bigpicture.overlay.game_volume": "게임 음량",
+  "bigpicture.overlay.output": "사운드 출력",
+  "bigpicture.overlay.output_unavailable": "사용할 수 없음",
   "bigpicture.overlay.muted": "음소거",
   "bigpicture.overlay.no_game_sound": "아직 소리 없음",
   "bigpicture.overlay.volume_unavailable": "사용할 수 없음",

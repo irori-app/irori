@@ -415,6 +415,14 @@ impl Backend {
                 self.spawn(async move { b.back_up_while_playing(id, title, every, until).await });
             (stop, task)
         });
+        // New achievements are announced as they unlock, not only after.
+        let live_achievements = app.achievement_notices.then(|| {
+            let stop = CancellationToken::new();
+            let (b, id, title) = (self.clone(), id.clone(), game.title.clone());
+            let until = stop.clone();
+            self.spawn(async move { b.watch_achievements_while_playing(id, title, until).await });
+            stop
+        });
         self.statuses.set(id, StatusKind::Playing);
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
@@ -501,6 +509,9 @@ impl Backend {
                 programs.end().await;
             }
             b.stop_replay(&id).await;
+            if let Some(stop) = live_achievements {
+                stop.cancel();
+            }
             // A backup under way finishes before the saves sync below.
             if let Some((stop, task)) = backups {
                 stop.cancel();

@@ -133,3 +133,24 @@ pub(super) async fn change(
     }
     Ok(())
 }
+
+pub(super) async fn outputs() -> Result<Vec<AudioOutput>> {
+    let default = pactl(&["get-default-sink"]).await.unwrap_or_default();
+    let text = pactl(&["-f", "json", "list", "sinks"]).await?;
+    parse_sinks_json(&text, &default).context("pactl is too old to list the sound outputs")
+}
+
+pub(super) async fn set_output(game: Option<GameProcess>, id: String) -> Result<()> {
+    pactl(&["set-default-sink", &id]).await?;
+    // Streams PipeWire placed on an output of their own stay there; move
+    // the game's along.
+    if let Some(game) = game {
+        for stream in streams_of(game.pid).await.unwrap_or_default() {
+            let index = stream.index.to_string();
+            if let Err(e) = pactl(&["move-sink-input", &index, &id]).await {
+                tracing::info!("moving the game's sound to {id}: {e:#}");
+            }
+        }
+    }
+    Ok(())
+}

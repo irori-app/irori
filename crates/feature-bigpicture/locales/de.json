@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Tagebuch",
   "bigpicture.overlay.system_volume": "Systemlautstärke",
   "bigpicture.overlay.game_volume": "Spiellautstärke",
+  "bigpicture.overlay.output": "Tonausgabe",
+  "bigpicture.overlay.output_unavailable": "Nicht verfügbar",
   "bigpicture.overlay.muted": "Stumm",
   "bigpicture.overlay.no_game_sound": "Noch kein Ton",
   "bigpicture.overlay.volume_unavailable": "Nicht verfügbar",

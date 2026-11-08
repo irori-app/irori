@@ -17,6 +17,7 @@ use gpui_kit::{
     StyledImage as _, Subscription, Task, Window, div, rems,
 };
 use irori_core::{Achievement, GameId};
+use irori_services::audio::AudioOutput;
 use irori_services::{GameAudio, JournalEntry, Screenshot, Volume, VolumeTarget};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::art_img;
@@ -25,7 +26,7 @@ use irori_ui::journal::shot_url;
 use irori_ui::models;
 
 use super::model::{
-    Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, next_up, progress, unlocked_since,
+    Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, next_output, next_up, progress, unlocked_since,
 };
 use crate::gamepad::{self, ControllerKind, GamepadInput};
 
@@ -57,6 +58,8 @@ pub(super) struct OverlayView {
     audio: Load<GameAudio>,
     /// Why the last volume change failed; the volumes read before stay.
     audio_error: Option<SharedString>,
+    /// The sound outputs, the one in use marked.
+    outputs: Load<Vec<AudioOutput>>,
     shots: Load<Vec<Screenshot>>,
     /// The screenshot shown large, by its place in `shots`.
     preview: Option<usize>,
@@ -104,6 +107,7 @@ impl OverlayView {
             focus,
             audio: Load::Loading,
             audio_error: None,
+            outputs: Load::Loading,
             shots: Load::Loading,
             preview: None,
             achievements: Load::Loading,
@@ -126,6 +130,16 @@ impl OverlayView {
             let result = audio.await;
             let _ = this.update(cx, |this, cx| {
                 this.audio = loaded(result);
+                cx.notify();
+            });
+        }));
+
+        let b = backend.clone();
+        let outputs = irori_ui::run(cx, async move { b.audio_outputs().await });
+        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+            let result = outputs.await;
+            let _ = this.update(cx, |this, cx| {
+                this.outputs = loaded(result);
                 cx.notify();
             });
         }));
@@ -265,6 +279,7 @@ impl OverlayView {
             {
                 return;
             }
+            Action::Adjust(HomeRow::Output, step) => self.switch_output(step, window, cx),
             Action::Adjust(row, step) => {
                 let target = if row == HomeRow::SystemVolume {
                     VolumeTarget::System
@@ -293,6 +308,7 @@ impl OverlayView {
                     self.change_audio(VolumeTarget::Game, None, window, cx)
                 }
                 Some(HomeRow::GameVolume) => {}
+                Some(HomeRow::Output) => self.switch_output(1, window, cx),
                 Some(HomeRow::Screenshot) => {
                     let backend = irori_ui::backend(cx);
                     let id = self.game.clone();
@@ -326,6 +342,42 @@ impl OverlayView {
                 );
             }
         }
+    }
+
+    /// Send sound to the output `step` places from the current one, then
+    /// read the outputs and volumes again (the new output has its own).
+    fn switch_output(&mut self, step: i32, window: &mut Window, cx: &mut Context<Self>) {
+        let Load::Ready(outputs) = &self.outputs else {
+            return;
+        };
+        let Some(next) = next_output(outputs, step) else {
+            return;
+        };
+        let output = next.id.clone();
+        let backend = irori_ui::backend(cx);
+        let id = self.game.clone();
+        let task = irori_ui::run(cx, async move {
+            backend.set_audio_output(&id, &output).await?;
+            let outputs = backend.audio_outputs().await?;
+            let audio = backend.audio(&id).await.ok();
+            Ok((outputs, audio))
+        });
+        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok((outputs, audio)) => {
+                        this.outputs = Load::Ready(outputs);
+                        if let Some(audio) = audio {
+                            this.audio = Load::Ready(audio);
+                        }
+                        this.audio_error = None;
+                    }
+                    Err(e) => this.audio_error = Some(format!("{e:#}").into()),
+                }
+                cx.notify();
+            });
+        }));
     }
 
     /// Move a volume by `step` percent, or mute it (`None`).
@@ -620,6 +672,31 @@ impl OverlayView {
             .unwrap_or_default()
     }
 
+    /// The output in use, between the arrows that switch it.
+    fn output_text(&self, cx: &mut Context<Self>) -> AnyElement {
+        let text: SharedString = match &self.outputs {
+            Load::Loading => t("bigpicture.overlay.loading"),
+            Load::Ready(outputs) => outputs
+                .iter()
+                .find(|o| o.current)
+                .map(|o| SharedString::from(o.name.clone()))
+                .unwrap_or_else(|| t("bigpicture.overlay.output_unavailable")),
+            Load::Failed(_) => t("bigpicture.overlay.output_unavailable"),
+        };
+        let several = matches!(&self.outputs, Load::Ready(o) if o.len() > 1);
+        h_flex()
+            .flex_shrink_1()
+            .min_w_0()
+            .max_w(rems(16.))
+            .gap_2()
+            .items_center()
+            .text_color(cx.theme().muted_foreground)
+            .when(several, |d| d.child(Icon::new(IconName::ChevronLeft)))
+            .child(div().min_w_0().truncate().child(text))
+            .when(several, |d| d.child(Icon::new(IconName::ChevronRight)))
+            .into_any_element()
+    }
+
     fn render_home(&self, cx: &mut Context<Self>) -> AnyElement {
         let kind = self.kind(cx);
         let (system, game, error) = match &self.audio {
@@ -682,6 +759,14 @@ impl OverlayView {
             self.row(
                 Tab::Home,
                 2,
+                IconName::Speaker,
+                t("bigpicture.overlay.output"),
+                Some(self.output_text(cx)),
+                cx,
+            ),
+            self.row(
+                Tab::Home,
+                3,
                 IconName::Camera,
                 t("bigpicture.overlay.screenshot"),
                 None,
@@ -689,7 +774,7 @@ impl OverlayView {
             ),
             self.row(
                 Tab::Home,
-                3,
+                4,
                 IconName::House,
                 t("bigpicture.overlay.back_to_irori"),
                 None,
@@ -697,7 +782,7 @@ impl OverlayView {
             ),
             self.row(
                 Tab::Home,
-                4,
+                5,
                 IconName::Power,
                 t("bigpicture.overlay.quit"),
                 None,

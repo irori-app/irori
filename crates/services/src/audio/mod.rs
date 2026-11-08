@@ -17,6 +17,14 @@
 //! - **macOS** (`macos.rs`): the system volume only, the default output's,
 //!   through `osascript` (`get volume settings`). macOS has no per-program
 //!   volume, so the game's can't be changed there ([`PER_GAME`]).
+//!
+//! The overlay also switches the sound output ([`Backend::audio_outputs`],
+//! [`Backend::set_audio_output`]): `pactl set-default-sink` on Linux, moving
+//! the game's streams along (PipeWire leaves a stream on the output it
+//! started on when that was chosen for it); Core Audio's default output
+//! device on macOS; and on Windows the policy configuration COM object
+//! Windows' own sound settings use (`IPolicyConfig`, which Microsoft doesn't
+//! document but every output switcher relies on), for every role.
 
 use std::collections::{HashMap, HashSet};
 
@@ -51,6 +59,52 @@ mod platform {
     ) -> Result<()> {
         anyhow::bail!("Volume control isn't available on this system")
     }
+
+    pub(super) async fn outputs() -> Result<Vec<AudioOutput>> {
+        anyhow::bail!("Sound outputs can't be switched on this system")
+    }
+
+    pub(super) async fn set_output(_game: Option<GameProcess>, _id: String) -> Result<()> {
+        anyhow::bail!("Sound outputs can't be switched on this system")
+    }
+}
+
+/// A sound output the overlay can switch to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioOutput {
+    /// The system's id for it (a PulseAudio sink name, a Core Audio device
+    /// UID, a Windows endpoint id).
+    pub id: String,
+    /// The name to show.
+    pub name: String,
+    /// Sound goes here now.
+    pub current: bool,
+}
+
+/// The outputs in `pactl -f json list sinks`, `default` (`pactl
+/// get-default-sink`) marked current. `None` when the text isn't that JSON.
+pub fn parse_sinks_json(text: &str, default: &str) -> Option<Vec<AudioOutput>> {
+    let sinks: Vec<Value> = serde_json::from_str(text).ok()?;
+    Some(
+        sinks
+            .iter()
+            .filter_map(|sink| {
+                let id = sink.get("name")?.as_str()?.to_owned();
+                let name = sink
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .filter(|d| !d.trim().is_empty())
+                    .unwrap_or(&id)
+                    .trim()
+                    .to_owned();
+                Some(AudioOutput {
+                    current: id == default.trim(),
+                    id,
+                    name,
+                })
+            })
+            .collect(),
+    )
 }
 
 /// Whether a game's own volume can be changed on this system (macOS has no
@@ -415,6 +469,17 @@ impl Backend {
         platform::audio(game).await
     }
 
+    /// The sound outputs, the one in use marked.
+    pub async fn audio_outputs(&self) -> Result<Vec<AudioOutput>> {
+        platform::outputs().await
+    }
+
+    /// Send sound to `output` (an [`AudioOutput::id`]): the system's
+    /// default, and the running game `id`'s sound with it.
+    pub async fn set_audio_output(&self, id: &GameId, output: &str) -> Result<()> {
+        platform::set_output(self.game_process(id), output.to_owned()).await
+    }
+
     /// Move the system's volume by `step` percent, for the controller's
     /// volume shortcut (no window shows it, so a failure is announced).
     pub fn step_system_volume(&self, step: i32) {
@@ -444,6 +509,25 @@ enum Change {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_outputs_pactl_lists() {
+        let json = r#"[
+            {"index": 54, "name": "alsa_output.pci-0000_00_1f.3.analog-stereo",
+             "description": "Built-in Audio Analog Stereo", "state": "RUNNING"},
+            {"index": 61, "name": "bluez_output.AA_BB.1", "description": "  Headphones "},
+            {"index": 70, "name": "virtual", "description": ""},
+            {"index": 71}
+        ]"#;
+        let outputs = parse_sinks_json(json, "bluez_output.AA_BB.1\n").unwrap();
+        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs[0].name, "Built-in Audio Analog Stereo");
+        assert!(!outputs[0].current);
+        assert_eq!(outputs[1].name, "Headphones");
+        assert!(outputs[1].current);
+        assert_eq!(outputs[2].name, "virtual", "no description: its name");
+        assert!(parse_sinks_json("Sink #54", "x").is_none());
+    }
 
     const JSON: &str = r#"[
       {"index": 42, "driver": "PipeWire", "mute": false,

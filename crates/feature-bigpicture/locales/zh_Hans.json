@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "日志",
   "bigpicture.overlay.system_volume": "系统音量",
   "bigpicture.overlay.game_volume": "游戏音量",
+  "bigpicture.overlay.output": "声音输出",
+  "bigpicture.overlay.output_unavailable": "不可用",
   "bigpicture.overlay.muted": "已静音",
   "bigpicture.overlay.no_game_sound": "尚无声音",
   "bigpicture.overlay.volume_unavailable": "不可用",

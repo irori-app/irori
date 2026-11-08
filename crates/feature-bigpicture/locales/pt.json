@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Diário",
   "bigpicture.overlay.system_volume": "Volume do sistema",
   "bigpicture.overlay.game_volume": "Volume do jogo",
+  "bigpicture.overlay.output": "Saída de som",
+  "bigpicture.overlay.output_unavailable": "Indisponível",
   "bigpicture.overlay.muted": "Sem som",
   "bigpicture.overlay.no_game_sound": "Ainda sem som",
   "bigpicture.overlay.volume_unavailable": "Indisponível",

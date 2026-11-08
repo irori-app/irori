@@ -230,6 +230,8 @@
   "bigpicture.overlay.tab.journal": "Deník",
   "bigpicture.overlay.system_volume": "Hlasitost systému",
   "bigpicture.overlay.game_volume": "Hlasitost hry",
+  "bigpicture.overlay.output": "Zvukový výstup",
+  "bigpicture.overlay.output_unavailable": "Není k dispozici",
   "bigpicture.overlay.muted": "Ztlumeno",
   "bigpicture.overlay.no_game_sound": "Zatím bez zvuku",
   "bigpicture.overlay.volume_unavailable": "Nedostupné",
