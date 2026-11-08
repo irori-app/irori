@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam toont geen vrienden voor dit account.",
   "manage.friends.failed": "Kan je vrienden niet tonen",
   "manage.friends.signed_out": "Meld je in Irori aan bij Steam om je vrienden te zien.",
-  "manage.friends.open_failed": "Kan Steam niet openen"
+  "manage.friends.open_failed": "Kan Steam niet openen",
+  "manage.launchers.xbox.account.about": "Meld je aan met je Microsoft-account om speeltijd, prestaties en afbeeldingen van Xbox toe te voegen en de pc-games te tonen die je hebt gespeeld maar hier niet zijn geïnstalleerd.",
+  "manage.launchers.xbox.account.sign_in": "Aanmelden bij Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Opnieuw aanmelden",
+  "manage.launchers.xbox.account.signed_in": "Aangemeld bij Xbox als {name}",
+  "manage.launchers.xbox.account.titles_one": "1 gespeelde pc-game",
+  "manage.launchers.xbox.account.titles_other": "{count} gespeelde pc-games",
+  "manage.launchers.xbox.account.expired": "Microsoft accepteert de opgeslagen aanmelding niet meer. Meld je opnieuw aan om je Xbox-speeltijd en -prestaties bij te houden.",
+  "manage.launchers.xbox.account.sign_out": "Afmelden",
+  "manage.launchers.xbox.account.sign_out_failed": "Afmelden bij Xbox is mislukt"
 }

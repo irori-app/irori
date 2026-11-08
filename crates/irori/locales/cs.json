@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Zpráva o pádu byla uložena do {path}. Přiložte ji, když budete problém hlásit.",
   "shell.notice.login_expired": "Znovu se přihlaste do {store}",
   "shell.notice.login_expired_message": "Uložené přihlášení už nefunguje. Otevřete Účty a přihlaste se znovu.",
+  "shell.notice.xbox_login_expired_message": "Uložené přihlášení k Xboxu už nefunguje. Přihlaste se znovu na stránce Obchody v části Další spouštěče.",
   "shell.notice.saves_conflict": "Uložené pozice hry {title} nebyly nahrány",
   "shell.notice.saves_conflict_message": "Změnily se tady i v cloudu. Otevřete cloudová uložení hry a vyberte, které ponechat.",
   "shell.notice.saves_upload_failed_message": "Irori se nepodařilo spojit s cloudem. Nahrajte je později z cloudových uložení hry.",

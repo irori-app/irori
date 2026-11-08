@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam nie pokazuje znajomych dla tego konta.",
   "manage.friends.failed": "Nie można pokazać znajomych",
   "manage.friends.signed_out": "Zaloguj się do Steam w Irori, aby zobaczyć znajomych.",
-  "manage.friends.open_failed": "Nie można otworzyć Steam"
+  "manage.friends.open_failed": "Nie można otworzyć Steam",
+  "manage.launchers.xbox.account.about": "Zaloguj się kontem Microsoft, aby dodać z Xboksa czas gry, osiągnięcia i grafiki oraz zobaczyć gry na PC, w które grałeś, a których nie masz tu zainstalowanych.",
+  "manage.launchers.xbox.account.sign_in": "Zaloguj się do Xboksa",
+  "manage.launchers.xbox.account.sign_in_again": "Zaloguj się ponownie",
+  "manage.launchers.xbox.account.signed_in": "Zalogowano do Xboksa jako {name}",
+  "manage.launchers.xbox.account.titles_one": "1 gra na PC, w którą grano",
+  "manage.launchers.xbox.account.titles_other": "Gry na PC, w które grano: {count}",
+  "manage.launchers.xbox.account.expired": "Microsoft nie akceptuje już zapisanego logowania. Zaloguj się ponownie, aby czas gry i osiągnięcia z Xboksa były aktualne.",
+  "manage.launchers.xbox.account.sign_out": "Wyloguj się",
+  "manage.launchers.xbox.account.sign_out_failed": "Nie udało się wylogować z Xboksa"
 }

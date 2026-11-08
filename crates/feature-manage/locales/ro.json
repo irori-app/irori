@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam nu afișează prieteni pentru acest cont.",
   "manage.friends.failed": "Prietenii nu pot fi afișați",
   "manage.friends.signed_out": "Conectează-te la Steam în Irori ca să-ți vezi prietenii.",
-  "manage.friends.open_failed": "Steam nu poate fi deschis"
+  "manage.friends.open_failed": "Steam nu poate fi deschis",
+  "manage.launchers.xbox.account.about": "Conectează-te cu contul Microsoft ca să adaugi timpul de joc, realizările și imaginile de pe Xbox și să vezi jocurile PC pe care le-ai jucat, dar nu sunt instalate aici.",
+  "manage.launchers.xbox.account.sign_in": "Conectează-te la Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Conectează-te din nou",
+  "manage.launchers.xbox.account.signed_in": "Conectat la Xbox ca {name}",
+  "manage.launchers.xbox.account.titles_one": "1 joc PC jucat",
+  "manage.launchers.xbox.account.titles_other": "{count} jocuri PC jucate",
+  "manage.launchers.xbox.account.expired": "Microsoft nu mai acceptă conectarea salvată. Conectează-te din nou ca timpul de joc și realizările de pe Xbox să rămână la zi.",
+  "manage.launchers.xbox.account.sign_out": "Deconectează-te",
+  "manage.launchers.xbox.account.sign_out_failed": "Deconectarea de la Xbox a eșuat"
 }

@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Foi guardado um relatório de falha em {path}. Anexe-o quando comunicar o problema.",
   "shell.notice.login_expired": "Inicie sessão novamente na {store}",
   "shell.notice.login_expired_message": "A sessão guardada já não funciona. Abra Contas para iniciar sessão novamente.",
+  "shell.notice.xbox_login_expired_message": "A sua sessão guardada da Xbox já não funciona. Inicie sessão novamente na página Lojas, em Outros launchers.",
   "shell.notice.saves_conflict": "As gravações de {title} não foram enviadas",
   "shell.notice.saves_conflict_message": "Mudaram aqui e na nuvem. Abra as gravações na nuvem do jogo para escolher quais manter.",
   "shell.notice.saves_upload_failed_message": "O Irori não conseguiu contactar a nuvem. Envie-as mais tarde a partir das gravações na nuvem do jogo.",

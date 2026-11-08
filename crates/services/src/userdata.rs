@@ -247,6 +247,39 @@ fn grown_totals(
         .collect()
 }
 
+/// The store's last-played times that are later than Irori's, for the
+/// store's games, as `(key, RFC 3339)` in Irori's own spelling.
+fn later_last_played(
+    data: &UserData,
+    runner: irori_core::Runner,
+    games: &[Arc<GameInfo>],
+    times: &std::collections::HashMap<String, String>,
+) -> Vec<(String, String)> {
+    let playable: BTreeSet<&str> = games
+        .iter()
+        .filter(|g| !g.is_dlc)
+        .map(|g| g.app_name.as_str())
+        .collect();
+    let mut later: Vec<(String, String)> = times
+        .iter()
+        .filter(|(app, _)| playable.contains(app.as_str()))
+        .filter_map(|(app, at)| {
+            let secs = util::parse_rfc3339(at)?;
+            let key = GameId::new(runner, app.as_str()).key();
+            let known = data
+                .playtime
+                .get(&key)
+                .and_then(|r| r.last_played.as_deref())
+                .and_then(util::parse_rfc3339);
+            (known.is_none_or(|k| secs > k))
+                .then(|| util::rfc3339_from_unix(secs).map(|at| (key, at)))
+                .flatten()
+        })
+        .collect();
+    later.sort();
+    later
+}
+
 fn rate(d: &mut UserData, key: String, stars: Option<u8>) {
     match stars.filter(|s| *s > 0) {
         Some(s) => {
@@ -680,6 +713,30 @@ impl UserDataService {
         grown.len()
     }
 
+    /// Take a store's own last-played times (RFC 3339 by app name) into
+    /// account: each game keeps the later of Irori's last session and the
+    /// store's, so a game played outside Irori sorts as recently played.
+    /// Only the store's games (not DLC) count. Writes only when a time
+    /// moved forward; returns how many did.
+    pub fn merge_store_last_played(
+        &self,
+        runner: irori_core::Runner,
+        games: &[Arc<GameInfo>],
+        times: &std::collections::HashMap<String, String>,
+    ) -> usize {
+        let later = later_last_played(&self.snapshot(), runner, games, times);
+        if !later.is_empty() {
+            self.update(None, |d| {
+                for (key, at) in &later {
+                    let rec = d.playtime.entry(key.clone()).or_default();
+                    rec.last_played = Some(at.clone());
+                    rec.first_played.get_or_insert_with(|| at.clone());
+                }
+            });
+        }
+        later.len()
+    }
+
     /// Note games appearing for the first time and follow the hidden flags
     /// stores report, writing only when something changed.
     pub fn sync_library(&self, games: &[Arc<GameInfo>]) {
@@ -855,6 +912,55 @@ mod tests {
         ]);
         let grown = grown_totals(&data, Runner::Legendary, &totals);
         assert_eq!(grown, [("legendary:Sugar".to_string(), 600)]);
+    }
+
+    #[test]
+    fn store_last_played_only_moves_forward_for_games() {
+        let mut data = UserData::default();
+        data.playtime.insert(
+            "launchers:xbox:Old".into(),
+            PlaytimeRecord {
+                last_played: Some("2026-10-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        let game = |app: &str, is_dlc| {
+            Arc::new(GameInfo {
+                app_name: app.into(),
+                is_dlc,
+                ..Default::default()
+            })
+        };
+        let games = [
+            game("xbox:Old", false),
+            game("xbox:New", false),
+            game("xbox:Dlc", true),
+        ];
+        let times = std::collections::HashMap::from([
+            // Earlier than Irori's own session: kept as it is.
+            ("xbox:Old".to_string(), "2026-09-01T10:00:00Z".to_string()),
+            // Xbox's seven fractional digits.
+            (
+                "xbox:New".to_string(),
+                "2026-10-08T01:55:12.4411936Z".to_string(),
+            ),
+            ("xbox:Dlc".to_string(), "2026-10-09T00:00:00Z".to_string()),
+            ("xbox:Gone".to_string(), "2026-10-09T00:00:00Z".to_string()),
+            ("xbox:Bad".to_string(), "yesterday".to_string()),
+        ]);
+        let later = later_last_played(&data, Runner::Launchers, &games, &times);
+        assert_eq!(
+            later,
+            [(
+                "launchers:xbox:New".to_string(),
+                "2026-10-08T01:55:12Z".to_string()
+            )]
+        );
+        let mut newer = times.clone();
+        newer.insert("xbox:Old".into(), "2026-10-02T00:00:00Z".into());
+        let later = later_last_played(&data, Runner::Launchers, &games, &newer);
+        assert_eq!(later.len(), 2);
+        assert_eq!(later[1].0, "launchers:xbox:Old");
     }
 
     #[test]

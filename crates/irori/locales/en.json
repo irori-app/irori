@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "A crash report was saved to {path}. Attach it when you report the problem.",
   "shell.notice.login_expired": "Log in to {store} again",
   "shell.notice.login_expired_message": "Your saved login no longer works. Open Accounts to log in again.",
+  "shell.notice.xbox_login_expired_message": "Your saved Xbox sign-in no longer works. Sign in again on the Stores page, under Other launchers.",
   "shell.notice.saves_conflict": "Saves of {title} weren’t uploaded",
   "shell.notice.saves_conflict_message": "They changed here and in the cloud. Open the game’s cloud saves to choose which to keep.",
   "shell.notice.saves_upload_failed_message": "Irori couldn’t reach the cloud. Upload them later from the game’s cloud saves.",

@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Raport o awarii zapisano w {path}. Dołącz go, zgłaszając problem.",
   "shell.notice.login_expired": "Zaloguj się ponownie do {store}",
   "shell.notice.login_expired_message": "Zapisane logowanie już nie działa. Otwórz Konta, aby zalogować się ponownie.",
+  "shell.notice.xbox_login_expired_message": "Zapisane logowanie do Xboksa już nie działa. Zaloguj się ponownie na stronie Sklepy, w sekcji Inne launchery.",
   "shell.notice.saves_conflict": "Zapisy gry {title} nie zostały przesłane",
   "shell.notice.saves_conflict_message": "Zmieniły się tutaj i w chmurze. Otwórz zapisy w chmurze gry, aby wybrać, które zachować.",
   "shell.notice.saves_upload_failed_message": "Irori nie mógł połączyć się z chmurą. Prześlij je później z zapisów w chmurze gry.",

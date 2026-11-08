@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Un raport de eroare a fost salvat în {path}. Atașează-l când raportezi problema.",
   "shell.notice.login_expired": "Conectează-te din nou la {store}",
   "shell.notice.login_expired_message": "Conectarea salvată nu mai funcționează. Deschide Conturi ca să te conectezi din nou.",
+  "shell.notice.xbox_login_expired_message": "Conectarea salvată la Xbox nu mai funcționează. Conectează-te din nou din pagina Magazine, la Alte launchere.",
   "shell.notice.saves_conflict": "Salvările {title} nu au fost încărcate",
   "shell.notice.saves_conflict_message": "S-au schimbat aici și în cloud. Deschide salvările din cloud ale jocului ca să alegi pe care le păstrezi.",
   "shell.notice.saves_upload_failed_message": "Irori nu a putut ajunge la cloud. Încarcă-le mai târziu din salvările din cloud ale jocului.",

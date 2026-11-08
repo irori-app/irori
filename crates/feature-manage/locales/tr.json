@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam bu hesap için arkadaş göstermiyor.",
   "manage.friends.failed": "Arkadaşların gösterilemedi",
   "manage.friends.signed_out": "Arkadaşlarını görmek için Irori’de Steam’e giriş yap.",
-  "manage.friends.open_failed": "Steam açılamadı"
+  "manage.friends.open_failed": "Steam açılamadı",
+  "manage.launchers.xbox.account.about": "Xbox’tan oynama süresi, başarımlar ve görseller eklemek ve oynadığın ama burada yüklü olmayan PC oyunlarını görmek için Microsoft hesabınla oturum aç.",
+  "manage.launchers.xbox.account.sign_in": "Xbox’ta oturum aç",
+  "manage.launchers.xbox.account.sign_in_again": "Yeniden oturum aç",
+  "manage.launchers.xbox.account.signed_in": "Xbox’ta {name} olarak oturum açıldı",
+  "manage.launchers.xbox.account.titles_one": "Oynanan 1 PC oyunu",
+  "manage.launchers.xbox.account.titles_other": "Oynanan {count} PC oyunu",
+  "manage.launchers.xbox.account.expired": "Microsoft kayıtlı oturumu artık kabul etmiyor. Xbox oynama süren ve başarımların güncel kalsın diye yeniden oturum aç.",
+  "manage.launchers.xbox.account.sign_out": "Oturumu kapat",
+  "manage.launchers.xbox.account.sign_out_failed": "Xbox oturumu kapatılamadı"
 }

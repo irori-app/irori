@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Звіт про збій збережено в {path}. Додайте його, коли повідомлятимете про проблему.",
   "shell.notice.login_expired": "Увійдіть у {store} знову",
   "shell.notice.login_expired_message": "Збережений вхід більше не працює. Відкрийте «Облікові записи», щоб увійти знову.",
+  "shell.notice.xbox_login_expired_message": "Збережений вхід у Xbox більше не працює. Увійдіть знову на сторінці «Магазини», у розділі «Інші лаунчери».",
   "shell.notice.saves_conflict": "Збереження {title} не вивантажено",
   "shell.notice.saves_conflict_message": "Вони змінилися і тут, і в хмарі. Відкрийте хмарні збереження гри й виберіть, які залишити.",
   "shell.notice.saves_upload_failed_message": "Irori не вдалося з’єднатися з хмарою. Вивантажте їх пізніше з хмарних збережень гри.",

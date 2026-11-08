@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam не показывает друзей для этой учётной записи.",
   "manage.friends.failed": "Не удалось показать друзей",
   "manage.friends.signed_out": "Войдите в Steam в Irori, чтобы видеть друзей.",
-  "manage.friends.open_failed": "Не удалось открыть Steam"
+  "manage.friends.open_failed": "Не удалось открыть Steam",
+  "manage.launchers.xbox.account.about": "Войдите с учётной записью Microsoft, чтобы добавить время игры, достижения и обложки из Xbox и показать игры для ПК, в которые вы играли, но которые здесь не установлены.",
+  "manage.launchers.xbox.account.sign_in": "Войти в Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Войти снова",
+  "manage.launchers.xbox.account.signed_in": "Вход в Xbox выполнен: {name}",
+  "manage.launchers.xbox.account.titles_one": "Сыграна 1 игра для ПК",
+  "manage.launchers.xbox.account.titles_other": "Сыграно игр для ПК: {count}",
+  "manage.launchers.xbox.account.expired": "Microsoft больше не принимает сохранённый вход. Войдите снова, чтобы время игры и достижения Xbox оставались актуальными.",
+  "manage.launchers.xbox.account.sign_out": "Выйти",
+  "manage.launchers.xbox.account.sign_out_failed": "Не удалось выйти из Xbox"
 }

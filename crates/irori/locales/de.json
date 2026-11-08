@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Ein Absturzbericht wurde unter {path} gespeichert. Hänge ihn an, wenn du das Problem meldest.",
   "shell.notice.login_expired": "Melde dich erneut bei {store} an",
   "shell.notice.login_expired_message": "Deine gespeicherte Anmeldung funktioniert nicht mehr. Öffne Konten, um dich erneut anzumelden.",
+  "shell.notice.xbox_login_expired_message": "Deine gespeicherte Xbox-Anmeldung funktioniert nicht mehr. Melde dich auf der Seite „Stores“ unter „Andere Launcher“ erneut an.",
   "shell.notice.saves_conflict": "Spielstände von {title} wurden nicht hochgeladen",
   "shell.notice.saves_conflict_message": "Sie haben sich hier und in der Cloud geändert. Öffne die Cloud-Spielstände des Spiels, um zu wählen, welche bleiben.",
   "shell.notice.saves_upload_failed_message": "Irori konnte die Cloud nicht erreichen. Lade sie später über die Cloud-Spielstände des Spiels hoch.",

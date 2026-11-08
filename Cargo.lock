@@ -4717,9 +4717,13 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "irori-core",
+ "irori-depot",
  "irori-launchers-data",
  "irori-runtime",
+ "irori-secrets",
+ "irori-xbox-api",
  "parking_lot",
  "serde",
  "serde_json",
@@ -5132,6 +5136,26 @@ dependencies = [
  "wayland-protocols",
  "windows 0.62.2",
  "x11rb",
+]
+
+[[package]]
+name = "irori-xbox-api"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "irori-depot",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid 1.28.0",
 ]
 
 [[package]]

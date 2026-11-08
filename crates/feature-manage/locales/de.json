@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam führt für dieses Konto keine Freunde.",
   "manage.friends.failed": "Freunde können nicht angezeigt werden",
   "manage.friends.signed_out": "Melde dich in Irori bei Steam an, um deine Freunde zu sehen.",
-  "manage.friends.open_failed": "Steam kann nicht geöffnet werden"
+  "manage.friends.open_failed": "Steam kann nicht geöffnet werden",
+  "manage.launchers.xbox.account.about": "Melde dich mit deinem Microsoft-Konto an, um Spielzeit, Erfolge und Bilder von Xbox hinzuzufügen und die PC-Spiele zu zeigen, die du gespielt hast, aber hier nicht installiert sind.",
+  "manage.launchers.xbox.account.sign_in": "Bei Xbox anmelden",
+  "manage.launchers.xbox.account.sign_in_again": "Erneut anmelden",
+  "manage.launchers.xbox.account.signed_in": "Bei Xbox angemeldet als {name}",
+  "manage.launchers.xbox.account.titles_one": "1 gespieltes PC-Spiel",
+  "manage.launchers.xbox.account.titles_other": "{count} gespielte PC-Spiele",
+  "manage.launchers.xbox.account.expired": "Microsoft akzeptiert die gespeicherte Anmeldung nicht mehr. Melde dich erneut an, damit Spielzeit und Erfolge von Xbox aktuell bleiben.",
+  "manage.launchers.xbox.account.sign_out": "Abmelden",
+  "manage.launchers.xbox.account.sign_out_failed": "Abmelden von Xbox fehlgeschlagen"
 }

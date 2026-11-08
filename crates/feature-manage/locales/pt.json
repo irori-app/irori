@@ -593,5 +593,14 @@
   "manage.friends.empty": "O Steam não indica amigos para esta conta.",
   "manage.friends.failed": "Não foi possível mostrar os seus amigos",
   "manage.friends.signed_out": "Inicie sessão no Steam no Irori para ver os seus amigos.",
-  "manage.friends.open_failed": "Não foi possível abrir o Steam"
+  "manage.friends.open_failed": "Não foi possível abrir o Steam",
+  "manage.launchers.xbox.account.about": "Inicie sessão com a sua conta Microsoft para adicionar tempo de jogo, conquistas e imagens da Xbox e para ver os jogos de PC que jogou e não estão instalados aqui.",
+  "manage.launchers.xbox.account.sign_in": "Iniciar sessão na Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Iniciar sessão novamente",
+  "manage.launchers.xbox.account.signed_in": "Sessão iniciada na Xbox como {name}",
+  "manage.launchers.xbox.account.titles_one": "1 jogo de PC jogado",
+  "manage.launchers.xbox.account.titles_other": "{count} jogos de PC jogados",
+  "manage.launchers.xbox.account.expired": "A Microsoft já não aceita a sessão guardada. Inicie sessão novamente para manter atualizados o tempo de jogo e as conquistas da Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Terminar sessão",
+  "manage.launchers.xbox.account.sign_out_failed": "Não foi possível terminar a sessão na Xbox"
 }

@@ -1,0 +1,26 @@
+[package]
+name = "irori-xbox-api"
+description = "Xbox network client: Microsoft account sign-in (OAuth with PKCE), Xbox Live user and XSTS tokens, title history, minutes played and achievements"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+base64.workspace = true
+uuid.workspace = true
+url.workspace = true
+time.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }
+tokio.workspace = true
+regex.workspace = true

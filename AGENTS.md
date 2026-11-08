@@ -123,6 +123,7 @@ Environment variables:
 | `IRORI_LOG` | `tracing` filter, e.g. `IRORI_LOG=irori_services=debug,info`. The default is `info` in the app and `warn` for the commands without a window. |
 | `IRORI_SIGN_IDENTITY` | macOS signing identity for `package.py` (default `-`, ad-hoc). |
 | `IRORI_WINDOWS_CRT_DIR` | Windows: explicit `Microsoft.VC*.CRT` directory for packaging. |
+| `IRORI_XBOX_CLIENT_ID` | For packagers: the Microsoft (Azure) app the Xbox account signs in with, instead of Irori's own; empty turns the Xbox account off (`irori-launchers::xbox_account`). |
 | `IRORI_UPDATE_EXPLANATION` | For packagers, at build or run time: Irori never looks for its own new versions and shows this text instead (`irori-services::app_update`). |
 | `IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE`, `IRORI_KEYRING_SMOKE`, `IRORI_SANDBOX_SMOKE`, `IRORI_SANDBOX_PROTON` | Opt-in, `#[ignore]`d runtime tests (see [8](#8-tests)). |
 
@@ -152,6 +153,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/itch` | `irori-itch-api` | itch.io protocol (its public API): API-key login, owned keys, uploads, download links |
 | `crates/steam` | `irori-steam-api` | Steam Web API: login (QR, password and Steam Guard, tokens), owned and Family games, store art and pages, achievements |
 | `crates/retroachievements` | `irori-retroachievements-api` | RetroAchievements: Web API (profile, console game lists, game progress), the emulators' token login, and rcheevos-compatible ROM hashes |
+| `crates/xbox` | `irori-xbox-api` | Xbox network: Microsoft account sign-in (OAuth with PKCE), Xbox Live user and XSTS tokens, title history, minutes played, achievements |
 | `crates/gog-galaxy` | `irori-gog-galaxy` | Hosts comet (Galaxy service for games: achievements, stats, leaderboards) on `127.0.0.1:9977` for the games Irori started |
 | `crates/comet` | `comet` | Small fork of comet, vendored so Irori can fix it; its README lists every difference from upstream |
 | `crates/store-epic` | `irori-epic` | Epic `Store` (`Runner::Legendary`) |
@@ -162,7 +164,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-steam` | `irori-steam` | Steam `Store` (`Runner::Steam`): local library, optional account, game watch, the login API the UI draws |
 | `crates/store-sideload` | `irori-sideload` | Apps the user adds (native, Windows, browser) |
 | `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) and Xbox app packages (`.GamingRoot`, `MicrosoftGame.config`, `AppxManifest.xml`, Gaming Services) |
-| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, opt-in through `iroriThirdPartyLaunchers` |
+| `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, plus the optional Xbox account, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/reshade` | `irori-reshade` | ReShade per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, downloads from the official sources, journaled installs |
@@ -210,12 +212,12 @@ irori-core                        (depends on nothing internal)
   ├─ irori-mods      (core, depot; knows nothing of stores or the UI)
   ├─ irori-reshade   (core, runtime; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
-  │                   irori-steam-api, irori-retroachievements-api
+  │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api
   │                   (depot and secrets only, not core)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   │                   irori-steam, irori-sideload, irori-emulation (+ engines,
   │                   irori-retroachievements-api),
-  │                   irori-launchers (+ runtime, irori-launchers-data)
+  │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
 irori-ui          (services, core)
@@ -1131,6 +1133,35 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   running from the package folder. The game menu's "Show in Microsoft Store"
   (`ClientAction::Show`) opens `ms-windows-store://pdp/`; installs, updates and removal
   stay with the Xbox app. On Linux and macOS the card says it is Windows-only.
+- **Xbox account** (`irori-launchers::xbox_account`, protocol in `irori-xbox-api`),
+  optional, on every OS, from the Xbox card (it is the launchers store's
+  `Store::login`; `Store::user` stays "Local"). Sign-in is Microsoft's OAuth 2.0
+  authorization code flow on `login.live.com` for Irori's own public Azure app
+  (`XBOX_CLIENT_ID`; `IRORI_XBOX_CLIENT_ID` names another, empty turns the account
+  off and hides it), with PKCE, the scopes `Xboxlive.signin Xboxlive.offline_access`
+  and the desktop redirect `https://login.live.com/oauth20_desktop.srf`, whose
+  `?code=` the sign-in window captures (`login` also takes the pasted address, page
+  text or bare code). The access token becomes a Xbox Live user token (RPS ticket
+  `d=<token>`) and an XSTS token for `http://xboxlive.com` (`XBL3.0 x=<uhs>;<token>`,
+  xuid and gamertag from its claims). Only the refresh token, xuid and gamertag are
+  kept (`<config>/xbox-account.json` through `irori_secrets`); a refused refresh
+  token is `SessionExpired`: the card says so and one notice asks to sign in again.
+  Data: the title history (`titlehub`: last played, achievement counts, store art
+  and details), `MinutesPlayed` per title (`userstats` batch, asked again only for
+  titles whose last-played time moved) and achievements (`achievements` v2), cached
+  in `<cache>/xbox/` for 15 minutes. Titles played on a PC with a package family
+  name match installed packages (`xbox:<family name>`) and add their art, details,
+  playtime (`remote_playtime`), last played (`remote_last_played`) and achievements;
+  played PC titles that aren't installed are listed as not installed on every OS,
+  so their playtime and achievements count everywhere. Their Install and "Show in
+  Microsoft Store" open the store page on Windows; elsewhere only the website
+  (`store_url`, when the title names its product id). Titles played through another
+  launcher ("Win32", no family name) and console-only titles are left out. The
+  history can list one package family under several title ids (Microsoft
+  Minesweeper does): they are one game (`merge_titles`), with the newest record's
+  art and details, the latest last played, the minutes of every record added up
+  (each id counts its own sessions) and the achievements of all of them, asked in
+  one request and counted once. The store never lists an app name twice.
 - **Online-only anticheat.** `irori_extras::anticheat::KNOWN` lists games whose
   anticheat blocks only an online mode under Wine (GTA Online); the lookup sets
   `online_only`, the install gate lets them through and the game page says which mode

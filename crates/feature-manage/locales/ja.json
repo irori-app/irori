@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam にはこのアカウントのフレンドがいません。",
   "manage.friends.failed": "フレンドを表示できません",
   "manage.friends.signed_out": "フレンドを表示するには Irori で Steam にサインインしてください。",
-  "manage.friends.open_failed": "Steam を開けません"
+  "manage.friends.open_failed": "Steam を開けません",
+  "manage.launchers.xbox.account.about": "Microsoft アカウントでサインインすると、Xbox のプレイ時間・実績・画像が追加され、ここにインストールしていないプレイ済みの PC ゲームも表示されます。",
+  "manage.launchers.xbox.account.sign_in": "Xbox にサインイン",
+  "manage.launchers.xbox.account.sign_in_again": "もう一度サインイン",
+  "manage.launchers.xbox.account.signed_in": "{name} として Xbox にサインイン中",
+  "manage.launchers.xbox.account.titles_one": "プレイ済みの PC ゲーム 1 本",
+  "manage.launchers.xbox.account.titles_other": "プレイ済みの PC ゲーム {count} 本",
+  "manage.launchers.xbox.account.expired": "保存されたサインインは Microsoft に受け付けられなくなりました。Xbox のプレイ時間と実績を最新に保つには、もう一度サインインしてください。",
+  "manage.launchers.xbox.account.sign_out": "サインアウト",
+  "manage.launchers.xbox.account.sign_out_failed": "Xbox からサインアウトできませんでした"
 }

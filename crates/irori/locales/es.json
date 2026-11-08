@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "Se guardó un informe del fallo en {path}. Adjúntalo cuando informes del problema.",
   "shell.notice.login_expired": "Vuelve a iniciar sesión en {store}",
   "shell.notice.login_expired_message": "Tu inicio de sesión guardado ya no funciona. Abre Cuentas para volver a iniciar sesión.",
+  "shell.notice.xbox_login_expired_message": "Tu sesión guardada de Xbox ya no funciona. Vuelve a iniciar sesión en la página Tiendas, en Otros lanzadores.",
   "shell.notice.saves_conflict": "No se subieron las partidas de {title}",
   "shell.notice.saves_conflict_message": "Cambiaron aquí y en la nube. Abre las partidas en la nube del juego para elegir cuáles conservar.",
   "shell.notice.saves_upload_failed_message": "Irori no pudo conectar con la nube. Súbelas más tarde desde las partidas en la nube del juego.",

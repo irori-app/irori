@@ -468,6 +468,32 @@ fn rockstar_card_after_adopting_a_prefix(cx: &mut TestAppContext) {
         vcx.debug_bounds("launcher-xbox-windows-only").is_some(),
         "the Xbox app's card says it is Windows-only"
     );
+    // The note takes the card's width, so its text wraps there instead of
+    // keeping its own length and running over the neighbouring card. (The
+    // test platform's glyphs are too narrow for the text to overflow, so
+    // the width is what is checked.)
+    vcx.simulate_resize(size(px(1400.), px(900.)));
+    vcx.run_until_parked();
+    let card = vcx
+        .debug_bounds("launcher-xbox-card")
+        .expect("the Xbox card");
+    let note = vcx
+        .debug_bounds("launcher-xbox-windows-only")
+        .expect("the note");
+    assert!(
+        note.left() >= card.left() && note.right() <= card.right(),
+        "{note:?} stays within {card:?}"
+    );
+    assert!(
+        note.size.width >= card.size.width * 0.8,
+        "{note:?} fills {card:?}"
+    );
+    if std::env::var_os(irori_launchers::XBOX_CLIENT_ID_VAR).is_none() {
+        let sign_in = vcx
+            .debug_bounds("launcher-xbox-sign-in")
+            .expect("the Xbox account's sign-in, on every system");
+        assert!(sign_in.right() <= card.right());
+    }
 
     click(&mut vcx, "launcher-rockstar-remove");
     for _ in 0..50 {

@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam non elenca amici per questo account.",
   "manage.friends.failed": "Impossibile mostrare i tuoi amici",
   "manage.friends.signed_out": "Accedi a Steam in Irori per vedere i tuoi amici.",
-  "manage.friends.open_failed": "Impossibile aprire Steam"
+  "manage.friends.open_failed": "Impossibile aprire Steam",
+  "manage.launchers.xbox.account.about": "Accedi con il tuo account Microsoft per aggiungere tempo di gioco, obiettivi e immagini da Xbox e per vedere i giochi PC a cui hai giocato e che qui non sono installati.",
+  "manage.launchers.xbox.account.sign_in": "Accedi a Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Accedi di nuovo",
+  "manage.launchers.xbox.account.signed_in": "Accesso a Xbox come {name}",
+  "manage.launchers.xbox.account.titles_one": "1 gioco PC giocato",
+  "manage.launchers.xbox.account.titles_other": "{count} giochi PC giocati",
+  "manage.launchers.xbox.account.expired": "Microsoft non accetta più l’accesso salvato. Accedi di nuovo per mantenere aggiornati il tempo di gioco e gli obiettivi di Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Esci",
+  "manage.launchers.xbox.account.sign_out_failed": "Impossibile uscire da Xbox"
 }

@@ -42,6 +42,16 @@ use crate::common::notify_success;
 /// How often the clipboard is checked while the dialog is open.
 const CLIPBOARD_POLL: Duration = Duration::from_millis(700);
 
+/// The account the dialog signs in to: the store's, except for the other
+/// launchers, whose only account is the Xbox one (their launchers keep
+/// their own).
+fn login_name(runner: Runner) -> &'static str {
+    match runner {
+        Runner::Launchers => "Xbox",
+        _ => runner.store_name(),
+    }
+}
+
 /// Open the login dialog for `runner`. On success the dialog closes, a
 /// notification names the account, and the library refreshes. Stores with
 /// several accounts sign in a new one when none is free.
@@ -70,9 +80,9 @@ pub fn open_account_login_dialog(
     focus.focus(window, cx);
     let width = window.rem_size() * 34.;
     let title = if adding {
-        t_args("manage.login.add_title", &[("store", runner.store_name())])
+        t_args("manage.login.add_title", &[("store", login_name(runner))])
     } else {
-        t_args("manage.login.title", &[("store", runner.store_name())])
+        t_args("manage.login.title", &[("store", login_name(runner))])
     };
     window.open_dialog(cx, move |d, _, _| {
         let on_close = dialog.clone();
@@ -185,7 +195,7 @@ impl LoginDialog {
             None => {
                 this.flow = FlowState::unavailable(t_args(
                     "manage.login.not_in_build",
-                    &[("store", runner.store_name())],
+                    &[("store", login_name(runner))],
                 ));
             }
             Some(store) => {
@@ -218,7 +228,7 @@ impl LoginDialog {
             LoginFlow::None => {
                 self.flow = FlowState::unavailable(t_args(
                     "manage.login.no_account",
-                    &[("store", self.runner.store_name())],
+                    &[("store", login_name(self.runner))],
                 ));
             }
             LoginFlow::InApp if self.runner == Runner::Steam => {
@@ -235,7 +245,7 @@ impl LoginDialog {
             LoginFlow::InApp => {
                 self.flow = FlowState::unavailable(t_args(
                     "manage.login.not_in_build",
-                    &[("store", self.runner.store_name())],
+                    &[("store", login_name(self.runner))],
                 ));
             }
             LoginFlow::Browser {
@@ -287,7 +297,7 @@ impl LoginDialog {
         self.close_window();
         self.fallback = None;
         let cancel = CancellationToken::new();
-        let title = t_args("manage.login.title", &[("store", self.runner.store_name())]);
+        let title = t_args("manage.login.title", &[("store", login_name(self.runner))]);
         let task = irori_ui::run(
             cx,
             window::sign_in(helper, url, pattern, title.to_string(), cancel.clone()),
@@ -411,7 +421,7 @@ impl LoginDialog {
                         window.close_dialog(cx);
                         irori_ui::backend(cx).forget_expired_login(runner);
                         let name = user.display_name.trim();
-                        let store = runner.store_name();
+                        let store = login_name(runner);
                         let message = if name.is_empty() {
                             t_args("manage.login.signed_in", &[("store", store)])
                         } else {
@@ -509,7 +519,7 @@ impl Render for LoginDialog {
             }
             FlowState::Ready { .. } if !matches!(self.window, SignInWindow::None) => {
                 let open = matches!(self.window, SignInWindow::Open { .. });
-                let store = self.runner.store_name();
+                let store = login_name(self.runner);
                 v_flex()
                     .gap_4()
                     .child(
@@ -576,7 +586,7 @@ impl Render for LoginDialog {
                         "login-another",
                         t_args(
                             "manage.login.another_in_browser",
-                            &[("store", self.runner.store_name())],
+                            &[("store", login_name(self.runner))],
                         ),
                     ))
                 })

@@ -593,5 +593,14 @@
   "manage.friends.empty": "Steam n’indique aucun ami pour ce compte.",
   "manage.friends.failed": "Impossible d’afficher vos amis",
   "manage.friends.signed_out": "Connectez-vous à Steam dans Irori pour voir vos amis.",
-  "manage.friends.open_failed": "Impossible d’ouvrir Steam"
+  "manage.friends.open_failed": "Impossible d’ouvrir Steam",
+  "manage.launchers.xbox.account.about": "Connectez-vous avec votre compte Microsoft pour ajouter le temps de jeu, les succès et les visuels de Xbox, et afficher les jeux PC auxquels vous avez joué sans les avoir installés ici.",
+  "manage.launchers.xbox.account.sign_in": "Se connecter à Xbox",
+  "manage.launchers.xbox.account.sign_in_again": "Se reconnecter",
+  "manage.launchers.xbox.account.signed_in": "Connecté à Xbox en tant que {name}",
+  "manage.launchers.xbox.account.titles_one": "1 jeu PC joué",
+  "manage.launchers.xbox.account.titles_other": "{count} jeux PC joués",
+  "manage.launchers.xbox.account.expired": "Microsoft n’accepte plus la connexion enregistrée. Reconnectez-vous pour garder à jour votre temps de jeu et vos succès Xbox.",
+  "manage.launchers.xbox.account.sign_out": "Se déconnecter",
+  "manage.launchers.xbox.account.sign_out_failed": "Impossible de se déconnecter de Xbox"
 }

@@ -56,6 +56,7 @@
   "shell.notice.crashed_last_time_message": "È stato salvato un rapporto sull’arresto anomalo in {path}. Allegalo quando segnali il problema.",
   "shell.notice.login_expired": "Accedi di nuovo a {store}",
   "shell.notice.login_expired_message": "L’accesso salvato non funziona più. Apri Account per accedere di nuovo.",
+  "shell.notice.xbox_login_expired_message": "L’accesso a Xbox salvato non funziona più. Accedi di nuovo dalla pagina Negozi, in Altri launcher.",
   "shell.notice.saves_conflict": "I salvataggi di {title} non sono stati caricati",
   "shell.notice.saves_conflict_message": "Sono cambiati qui e nel cloud. Apri i salvataggi cloud del gioco per scegliere quali tenere.",
   "shell.notice.saves_upload_failed_message": "Irori non è riuscito a raggiungere il cloud. Caricali più tardi dai salvataggi cloud del gioco.",
