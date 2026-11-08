@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze : fonctionne, mais souvent avec des problèmes. Essayez Proton Experimental ou GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked : ne fonctionne pas d’après les rapports. Lisez-les avant d’essayer un autre outil.",
   "settings.steam_compat.protondb.pending": "Pending : trop peu de rapports pour une note pour l’instant.",
-  "settings.steam_compat.protondb.reports": "Rapports"
+  "settings.steam_compat.protondb.reports": "Rapports",
+  "settings.field.ui_cover_categories.label": "Afficher les catégories sur les jaquettes",
+  "settings.field.ui_cover_categories.help": "Les catégories de chaque jeu au bas de sa jaquette dans la grille : les deux premières et le nombre des autres."
 }

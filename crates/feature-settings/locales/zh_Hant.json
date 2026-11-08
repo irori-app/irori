@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze：可以執行，但常出問題。請試試 Proton Experimental 或 GE-Proton。",
   "settings.steam_compat.protondb.borked": "Borked：據報告無法執行。嘗試其他工具前請先閱讀報告。",
   "settings.steam_compat.protondb.pending": "Pending：報告太少，尚無評級。",
-  "settings.steam_compat.protondb.reports": "報告"
+  "settings.steam_compat.protondb.reports": "報告",
+  "settings.field.ui_cover_categories.label": "在封面上顯示分類",
+  "settings.field.ui_cover_categories.help": "在網格中每個遊戲封面的底部顯示其分類：前兩個以及其餘的數量。"
 }

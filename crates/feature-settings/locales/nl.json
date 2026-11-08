@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: werkt, maar vaak met problemen. Probeer Proton Experimental of GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: werkt volgens de rapporten niet. Lees de rapporten voordat je een andere tool probeert.",
   "settings.steam_compat.protondb.pending": "Pending: nog te weinig rapporten voor een beoordeling.",
-  "settings.steam_compat.protondb.reports": "Rapporten"
+  "settings.steam_compat.protondb.reports": "Rapporten",
+  "settings.field.ui_cover_categories.label": "Categorieën op covers tonen",
+  "settings.field.ui_cover_categories.help": "De categorieën van elke game onderaan de cover in het raster: de eerste twee en hoeveel er nog meer zijn."
 }

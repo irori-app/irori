@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: çalışır ama çoğu zaman sorunlu. Proton Experimental veya GE-Proton deneyin.",
   "settings.steam_compat.protondb.borked": "Borked: raporlara göre çalışmıyor. Başka bir araç denemeden önce raporları okuyun.",
   "settings.steam_compat.protondb.pending": "Pending: puan için henüz yeterli rapor yok.",
-  "settings.steam_compat.protondb.reports": "Raporlar"
+  "settings.steam_compat.protondb.reports": "Raporlar",
+  "settings.field.ui_cover_categories.label": "Kapaklarda kategorileri göster",
+  "settings.field.ui_cover_categories.help": "Her oyunun kategorileri ızgaradaki kapağının altında: ilk ikisi ve kaç tane daha olduğu."
 }

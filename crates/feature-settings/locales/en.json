@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: runs, but often with problems. Try Proton Experimental or GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: reported not to run. Read the reports before trying another tool.",
   "settings.steam_compat.protondb.pending": "Pending: too few reports for a rating yet.",
-  "settings.steam_compat.protondb.reports": "Reports"
+  "settings.steam_compat.protondb.reports": "Reports",
+  "settings.field.ui_cover_categories.label": "Show categories on covers",
+  "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more."
 }

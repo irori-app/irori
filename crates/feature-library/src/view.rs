@@ -2230,7 +2230,15 @@ impl LibraryView {
         let key = id.key();
         let state = self.state_for(game, in_recent, cx);
         let status = models(cx).statuses.read(cx).get(&id).cloned();
-        let show_badges = models(cx).settings.read(cx).app.ui.show_store_badges;
+        let (show_badges, cover_categories) = {
+            let ui = &models(cx).settings.read(cx).app.ui;
+            (ui.show_store_badges, ui.cover_categories)
+        };
+        let focus_view = self.layout == LibraryLayout::Focus;
+        // The user's categories, at the cover's foot while nothing else is.
+        let categories = (cover_categories && !focus_view)
+            .then(|| models(cx).library.read(cx).categories_of(&id))
+            .filter(|c| !c.is_empty());
         let keyboard =
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
         let active =
@@ -2238,7 +2246,6 @@ impl LibraryView {
         // The game the drawer or the Focus page shows keeps its ring.
         let selected =
             !in_recent && self.panel_kind().is_some() && self.focused.as_ref() == Some(&id);
-        let focus_view = self.layout == LibraryLayout::Focus;
         let busy = status.as_ref().filter(|s| {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
@@ -2402,6 +2409,9 @@ impl LibraryView {
                 )
             })
             .child(markers)
+            .when(actions.is_none() && status_overlay.is_none(), |el| {
+                el.children(categories.map(|names| category_chips(names, scrim)))
+            })
             .when(actions.is_none(), |el| el.children(status_overlay))
             .children(actions)
             // Selection mode: a ring and a tick on picked covers, an empty
@@ -3151,6 +3161,45 @@ pub(crate) fn typed_search_text(keystroke: &Keystroke) -> Option<String> {
     let text = keystroke.key_char.as_deref()?;
     (!text.is_empty() && text.chars().all(|c| !c.is_control() && !c.is_whitespace()))
         .then(|| text.to_string())
+}
+
+/// The categories shown on a cover: the first two, then how many more, so
+/// the line stays on the cover however many there are.
+const COVER_CATEGORIES: usize = 2;
+
+/// A game's categories as small chips along its cover's foot.
+fn category_chips(names: Vec<String>, scrim: gpui_kit::Hsla) -> AnyElement {
+    let more = names.len().saturating_sub(COVER_CATEGORIES);
+    h_flex()
+        .absolute()
+        .bottom_2()
+        .left_2()
+        .right_2()
+        .gap_1()
+        .min_w_0()
+        .overflow_hidden()
+        .children(names.into_iter().take(COVER_CATEGORIES).map(|name| {
+            div()
+                .min_w_0()
+                .px_1p5()
+                .rounded_md()
+                .bg(scrim)
+                .text_xs()
+                .truncate()
+                .child(name)
+        }))
+        .when(more > 0, |el| {
+            el.child(
+                div()
+                    .flex_none()
+                    .px_1p5()
+                    .rounded_md()
+                    .bg(scrim)
+                    .text_xs()
+                    .child(format!("+{more}")),
+            )
+        })
+        .into_any_element()
 }
 
 #[cfg(test)]

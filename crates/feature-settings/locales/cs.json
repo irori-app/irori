@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: běží, ale často s problémy. Zkuste Proton Experimental nebo GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: podle hlášení nefunguje. Než zkusíte jiný nástroj, přečtěte si hlášení.",
   "settings.steam_compat.protondb.pending": "Pending: pro hodnocení je zatím málo hlášení.",
-  "settings.steam_compat.protondb.reports": "Hlášení"
+  "settings.steam_compat.protondb.reports": "Hlášení",
+  "settings.field.ui_cover_categories.label": "Zobrazovat kategorie na obalech",
+  "settings.field.ui_cover_categories.help": "Kategorie každé hry při spodním okraji jejího obalu v mřížce: první dvě a kolik dalších."
 }

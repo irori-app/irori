@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: працює, але часто з проблемами. Спробуйте Proton Experimental або GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: за звітами не працює. Прочитайте звіти, перш ніж пробувати інший інструмент.",
   "settings.steam_compat.protondb.pending": "Pending: поки що замало звітів для оцінки.",
-  "settings.steam_compat.protondb.reports": "Звіти"
+  "settings.steam_compat.protondb.reports": "Звіти",
+  "settings.field.ui_cover_categories.label": "Показувати категорії на обкладинках",
+  "settings.field.ui_cover_categories.help": "Категорії кожної гри внизу її обкладинки в сітці: перші дві й скільки ще."
 }

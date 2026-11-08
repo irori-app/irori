@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze: merge, dar adesea cu probleme. Încearcă Proton Experimental sau GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: conform rapoartelor nu merge. Citește rapoartele înainte să încerci alt instrument.",
   "settings.steam_compat.protondb.pending": "Pending: prea puține rapoarte pentru o evaluare deocamdată.",
-  "settings.steam_compat.protondb.reports": "Rapoarte"
+  "settings.steam_compat.protondb.reports": "Rapoarte",
+  "settings.field.ui_cover_categories.label": "Afișează categoriile pe coperți",
+  "settings.field.ui_cover_categories.help": "Categoriile fiecărui joc în partea de jos a copertei în grilă: primele două și câte mai sunt."
 }

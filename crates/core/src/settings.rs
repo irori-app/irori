@@ -1037,6 +1037,9 @@ pub struct UiPrefs {
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
     pub show_store_badges: bool,
+    /// The game's categories on its cover in the grid (`coverCategories`,
+    /// off unless turned on).
+    pub cover_categories: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1178,6 +1181,7 @@ impl Default for UiPrefs {
             library_drawer_width: 26.0,
             reduce_motion: false,
             show_store_badges: true,
+            cover_categories: false,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1211,6 +1215,7 @@ mod tests {
         assert_eq!(ui.library_background, LibraryBackground::None);
         assert_eq!(ui.accent_rgb(), None);
         assert!(ui.library_quick_controls);
+        assert!(!ui.cover_categories);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {
@@ -1226,6 +1231,11 @@ mod tests {
         )
         .unwrap();
         assert!(!ui.library_quick_controls);
+        assert!(
+            serde_json::from_str::<UiPrefs>(r#"{"coverCategories":true}"#)
+                .unwrap()
+                .cover_categories
+        );
         assert_eq!(ui.accent_rgb(), Some(0x3a7bff));
         assert_eq!(ui.density, Density::Compact);
         assert_eq!(ui.library_background, LibraryBackground::GameArt);

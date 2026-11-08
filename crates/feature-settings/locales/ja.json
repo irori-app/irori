@@ -1064,5 +1064,7 @@
   "settings.steam_compat.protondb.bronze": "Bronze：動作しますが、問題が多めです。Proton Experimental や GE-Proton を試してください。",
   "settings.steam_compat.protondb.borked": "Borked：動作しないと報告されています。別のツールを試す前にレポートを読んでください。",
   "settings.steam_compat.protondb.pending": "Pending：評価に必要なレポートがまだ足りません。",
-  "settings.steam_compat.protondb.reports": "レポート"
+  "settings.steam_compat.protondb.reports": "レポート",
+  "settings.field.ui_cover_categories.label": "カバーにカテゴリーを表示",
+  "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。"
 }
