@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use irori_core::process::{CommandSpec, split_args};
+use irori_core::process::{CommandSpec, split_program_args};
 use irori_core::{LaunchEnvironment, LaunchOption, WineKind, WineLaunch};
 use irori_epic_api::launch::LaunchParams;
 
@@ -14,17 +14,19 @@ fn strip_quotes(bin: &Path) -> String {
 }
 
 /// Arguments chosen by the user: the launch option's parameters, the game
-/// settings' launcher arguments and extra arguments of the request.
+/// settings' launcher arguments and extra arguments of the request, split
+/// with Windows rules when the game runs through Wine.
 pub(crate) fn user_args(
     option: Option<&LaunchOption>,
     launcher_args: &str,
     extra_args: &[String],
+    needs_wine: bool,
 ) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(LaunchOption::Basic { parameters, .. }) = option {
-        out.extend(split_args(parameters));
+        out.extend(split_program_args(needs_wine, parameters));
     }
-    out.extend(split_args(launcher_args));
+    out.extend(split_program_args(needs_wine, launcher_args));
     out.extend(extra_args.iter().cloned());
     out
 }
@@ -193,8 +195,13 @@ mod tests {
             }),
             "-dx11",
             &["-proto".into()],
+            true,
         );
         assert_eq!(user, ["-safe", "-name=a b", "-dx11", "-proto"]);
+        assert_eq!(
+            user_args(None, r"-saves C:\Users\me\saves", &[], true),
+            ["-saves", r"C:\Users\me\saves"]
+        );
         let e = env(
             vec![vec!["gamemoderun"]],
             Some(wine(WineKind::Proton, "'/p/proton'", false)),

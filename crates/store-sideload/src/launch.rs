@@ -23,8 +23,10 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::paths::{expand_home, sanitize};
-use irori_core::process::{CommandSpec, split_args};
-use irori_core::{GameWatch, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest};
+use irori_core::process::{CommandSpec, split_program_args};
+use irori_core::{
+    GameWatch, InstallPlatform, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest,
+};
 
 use crate::app::SideloadApp;
 
@@ -236,12 +238,15 @@ pub(crate) fn resolve_executable(app: &SideloadApp, target_exe: &str) -> Option<
 }
 
 /// Arguments for a launch: the app's own arguments, the per-game launcher
-/// arguments setting, the chosen launch option, then extra arguments.
+/// arguments setting, the chosen launch option, then extra arguments. A
+/// Windows app's are split with Windows rules, Wine or not.
 pub(crate) fn launch_args(app: &SideloadApp, request: &LaunchRequest) -> Vec<String> {
-    let mut args = split_args(&app.launcher_args);
-    args.extend(split_args(&request.settings.launcher_args));
+    let windows = app.platform.install_platform() == InstallPlatform::Windows;
+    let split = |line: &str| split_program_args(windows, line);
+    let mut args = split(&app.launcher_args);
+    args.extend(split(&request.settings.launcher_args));
     if let Some(LaunchOption::Basic { parameters, .. }) = &request.option {
-        args.extend(split_args(parameters));
+        args.extend(split(parameters));
     }
     args.extend(request.extra_args.iter().cloned());
     args
@@ -423,6 +428,23 @@ mod tests {
         assert_eq!(
             launch_args(&app(), &req),
             vec!["-a", "b c", "--setting", "two words", "-safe", "--extra"]
+        );
+    }
+
+    #[test]
+    fn windows_apps_keep_backslashes_in_arguments() {
+        let mut req = request(LaunchEnvironment::default());
+        req.settings.launcher_args = String::new();
+        req.option = None;
+        req.extra_args.clear();
+        let windows = SideloadApp {
+            platform: SideloadPlatform::Windows,
+            launcher_args: r#"-saves C:\Users\me\saves "D:\My Games""#.into(),
+            ..app()
+        };
+        assert_eq!(
+            launch_args(&windows, &req),
+            ["-saves", r"C:\Users\me\saves", r"D:\My Games"]
         );
     }
 

@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
-use irori_core::process::{self, CommandSpec, ExecResult, RunOptions, split_args};
+use irori_core::process::{self, CommandSpec, ExecResult, RunOptions, split_windows_args};
 use irori_core::{
     Achievement, Event, EventBus, ExtraInfo, GameInfo, InstallInfo, InstallInfoQuery,
     InstallPlatform, InstallProgress, InstallRequest, LaunchOption, LaunchPlan, LaunchRequest,
@@ -715,7 +715,7 @@ impl EpicStore {
             let install_dir = Path::new(&installed.install_path);
             let exe = install_dir.join(p.path.replace('\\', "/"));
             let mut argv = vec![exe.to_string_lossy().into_owned()];
-            argv.extend(split_args(&p.args));
+            argv.extend(split_windows_args(&p.args));
             if let Err(e) = self
                 .run_windows(wine, env, argv, Some(install_dir), log)
                 .await

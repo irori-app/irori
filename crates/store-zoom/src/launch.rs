@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use irori_core::process::{CommandSpec, split_args};
+use irori_core::process::{CommandSpec, split_program_args};
 use irori_core::{LaunchOption, LaunchPlan, LaunchRequest, WineKind};
 
 use crate::records::InstalledRecord;
@@ -32,10 +32,10 @@ pub fn build_plan(
         );
     }
 
-    let mut args: Vec<String> = split_args(&request.settings.launcher_args);
+    let mut arg_lines = vec![request.settings.launcher_args.as_str()];
     let mut exe_override = None;
     match &request.option {
-        Some(LaunchOption::Basic { parameters, .. }) => args.extend(split_args(parameters)),
+        Some(LaunchOption::Basic { parameters, .. }) => arg_lines.push(parameters),
         Some(LaunchOption::AltExe { executable }) if !executable.is_empty() => {
             exe_override = Some(executable.clone());
         }
@@ -44,10 +44,18 @@ pub fn build_plan(
     if exe_override.is_none() && !request.settings.target_exe.trim().is_empty() {
         exe_override = Some(request.settings.target_exe.trim().to_string());
     }
-    args.extend(request.extra_args.iter().cloned());
 
     let env = &request.environment;
     let uses_wine = command_uses_wine(record, request, dosbox, exe_override.is_some());
+    let windows_program = uses_wine
+        || exe_override
+            .as_deref()
+            .is_some_and(|e| is_windows_program(Path::new(e)));
+    let mut args: Vec<String> = arg_lines
+        .iter()
+        .flat_map(|line| split_program_args(windows_program, line))
+        .collect();
+    args.extend(request.extra_args.iter().cloned());
     let mut command = if record.is_dosbox && exe_override.is_none() {
         dosbox_command(record, title, request, dosbox, args)?
     } else {
@@ -66,9 +74,7 @@ pub fn build_plan(
             );
         }
         let cwd = exe.parent().unwrap_or(&install).to_path_buf();
-        let windows_exe = exe
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("bat"));
+        let windows_exe = is_windows_program(&exe);
         if record.platform.needs_wine() || (windows_exe && !cfg!(windows)) {
             wine_command(request, title, &exe, &cwd, args)?
         } else {
@@ -96,6 +102,11 @@ pub fn build_plan(
         track_wineserver: uses_wine,
         watch: None,
     })
+}
+
+fn is_windows_program(exe: &Path) -> bool {
+    exe.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("bat"))
 }
 
 fn command_uses_wine(
@@ -278,6 +289,14 @@ mod tests {
         assert_eq!(
             args(&plan.command)[exe_index],
             d.path().join("Other.exe").to_string_lossy()
+        );
+
+        let mut req = request(Some(proton()));
+        req.settings.launcher_args = r"-saves C:\Users\me\saves".into();
+        let a = args(&build_plan(&rec, "G", &req, None).unwrap().command);
+        assert_eq!(
+            &a[exe_index + 1..],
+            ["-saves", r"C:\Users\me\saves", "--extra"]
         );
 
         let native = build_plan(&rec, "G", &request(None), None);

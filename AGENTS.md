@@ -368,6 +368,10 @@ and `launch.rs` before changing anything below the UI.
 - It handles line callbacks (split on `\n` and `\r`), capped logs, cancellation and
   process-group termination: SIGTERM then SIGKILL on Unix, `taskkill /T /F` on
   Windows.
+- Split user-entered arguments by who reads them: `split_program_args(windows, ..)`
+  for the program a game starts (a Windows program gets Windows quoting under Wine
+  too, so `C:\Users\…` keeps its backslashes), `split_args` (this system's rules) for
+  wrappers and other host programs.
 
 **HTTP** (`http.rs`):
 

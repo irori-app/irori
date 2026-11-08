@@ -201,12 +201,28 @@ pub fn shell_quote(s: &str) -> String {
     }
 }
 
-/// Split a user-entered argument string like a shell would (quotes, escapes).
+/// Split a user-entered argument string like a shell would (quotes, escapes),
+/// with this system's rules. Use it for programs of this system (wrappers,
+/// native games); the arguments of a Windows program go through
+/// [`split_program_args`].
 pub fn split_args(input: &str) -> Vec<String> {
     if cfg!(windows) {
         split_windows_args(input)
     } else {
         split_unix_args(input)
+    }
+}
+
+/// Split the arguments of the program a game starts. A Windows program reads
+/// its command line with Microsoft's rules wherever it runs, Wine and Proton
+/// included, so `windows_program` picks them on Linux and macOS too: Unix
+/// rules would eat the backslashes of an unquoted `C:\Users\me\saves`. Other
+/// programs get this system's rules, as with [`split_args`].
+pub fn split_program_args(windows_program: bool, input: &str) -> Vec<String> {
+    if windows_program {
+        split_windows_args(input)
+    } else {
+        split_args(input)
     }
 }
 
@@ -858,6 +874,16 @@ mod tests {
             [r"a\\\b", "de fg", "h"]
         );
         assert_eq!(split_windows_args(r#"a"b"" c d"#), ["ab\" c d"]);
+    }
+
+    #[test]
+    fn windows_programs_keep_backslashes_on_every_system() {
+        let line = r"-save C:\Users\me\saves -name a\b";
+        assert_eq!(
+            split_program_args(true, line),
+            ["-save", r"C:\Users\me\saves", "-name", r"a\b"]
+        );
+        assert_eq!(split_program_args(false, line), split_args(line));
     }
 
     #[test]
