@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Deine gespeicherte Anmeldung funktioniert nicht mehr. Öffne Konten, um dich erneut anzumelden.",
   "shell.notice.saves_conflict": "Spielstände von {title} wurden nicht hochgeladen",
   "shell.notice.saves_conflict_message": "Sie haben sich hier und in der Cloud geändert. Öffne die Cloud-Spielstände des Spiels, um zu wählen, welche bleiben.",
+  "shell.notice.saves_upload_failed_message": "Irori konnte die Cloud nicht erreichen. Lade sie später über die Cloud-Spielstände des Spiels hoch.",
   "shell.notice.ludusavi_backup_failed": "Die Spielstände von {title} wurden nicht vollständig gesichert",
   "shell.palette.back_up_saves": "Spielstände von {title} sichern",
   "shell.palette.save_backups": "Spielstand-Sicherungen von {title}",

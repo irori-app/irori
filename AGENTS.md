@@ -599,7 +599,11 @@ commands without a window.
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
 - **Launching** (`games.rs`):
   1. Busy and availability checks.
-  2. Optional cloud-save sync.
+  2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
+     upload after the session too). A failed download stops the launch with
+     `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
+     again or play anyway (`LaunchParams::skip_save_download`); a failed upload
+     raises a notice.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games").

@@ -274,6 +274,23 @@ impl SaveConflict {
     }
 }
 
+/// The cloud saves couldn't be downloaded before a launch (the store failed,
+/// or didn't answer in time), so the cloud may hold newer saves than this
+/// device. The launch stops; the UI asks whether to play anyway.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("The saves couldn't be downloaded from the cloud: {reason}")]
+pub struct SaveDownloadFailed {
+    /// Why, as the store said it (not translated).
+    pub reason: String,
+}
+
+impl SaveDownloadFailed {
+    /// The failed download behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&SaveDownloadFailed> {
+        error.downcast_ref()
+    }
+}
+
 /// The game starts through another company's launcher (a Rockstar title
 /// bought on Epic needs the Rockstar Games Launcher), and that launcher isn't
 /// in the game's Wine prefix. Stores return it from `launch`; the UI offers

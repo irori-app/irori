@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "Uložené přihlášení už nefunguje. Otevřete Účty a přihlaste se znovu.",
   "shell.notice.saves_conflict": "Uložené pozice hry {title} nebyly nahrány",
   "shell.notice.saves_conflict_message": "Změnily se tady i v cloudu. Otevřete cloudová uložení hry a vyberte, které ponechat.",
+  "shell.notice.saves_upload_failed_message": "Irori se nepodařilo spojit s cloudem. Nahrajte je později z cloudových uložení hry.",
   "shell.notice.ludusavi_backup_failed": "Uložené pozice hry {title} se nepodařilo zálohovat celé",
   "shell.palette.back_up_saves": "Zálohovat uložené pozice hry {title}",
   "shell.palette.save_backups": "Zálohy uložených pozic hry {title}",

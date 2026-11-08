@@ -58,6 +58,7 @@
   "shell.notice.login_expired_message": "保存されたログインが使えなくなりました。［アカウント］を開いてもう一度ログインしてください。",
   "shell.notice.saves_conflict": "{title} のセーブデータはアップロードされませんでした",
   "shell.notice.saves_conflict_message": "ここでもクラウドでも変更されています。ゲームのクラウドセーブを開いて、残す方を選んでください。",
+  "shell.notice.saves_upload_failed_message": "Irori はクラウドに接続できませんでした。後でゲームのクラウドセーブからアップロードしてください。",
   "shell.notice.ludusavi_backup_failed": "{title} のセーブデータを完全にはバックアップできませんでした",
   "shell.palette.back_up_saves": "{title} のセーブデータをバックアップ",
   "shell.palette.save_backups": "{title} のセーブデータのバックアップ",

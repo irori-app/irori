@@ -66,7 +66,7 @@ pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
-pub use games::{LaunchParams, RunningGame};
+pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};

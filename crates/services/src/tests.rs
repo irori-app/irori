@@ -299,6 +299,8 @@ fn unanswered_script_questions_cancel_and_roll_back() {
 struct PlayStore {
     game: Arc<GameInfo>,
     command: irori_core::process::CommandSpec,
+    /// Has cloud saves, and the cloud can't be reached.
+    saves_fail: bool,
 }
 
 #[cfg(unix)]
@@ -363,6 +365,21 @@ impl Store for PlayStore {
     async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
         Ok(())
     }
+    fn supports_cloud_saves(&self) -> bool {
+        self.saves_fail
+    }
+    async fn default_save_path(&self, _: &str, _: Option<&Path>) -> Result<String> {
+        Ok("/saves".into())
+    }
+    async fn sync_saves(
+        &self,
+        _: &str,
+        _: irori_core::SyncDirection,
+        _: &str,
+        _: OpContext,
+    ) -> Result<String> {
+        bail!("the cloud can't be reached")
+    }
     async fn launch(&self, _: &str, request: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
         Ok(LaunchPlan {
             command: self.command.clone().envs(request.environment.env.clone()),
@@ -397,6 +414,7 @@ fn programs_alongside_start_and_stop_with_the_game() {
     let store: irori_core::DynStore = Arc::new(PlayStore {
         game,
         command: irori_core::process::CommandSpec::new("sh").args(["-c", "sleep 2"]),
+        saves_fail: false,
     });
     let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
     // The first program writes its game's name and then lives on until it is
@@ -444,6 +462,12 @@ fn programs_alongside_start_and_stop_with_the_game() {
 /// A backend with one added game that runs `script` through `sh -c`.
 #[cfg(unix)]
 fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
+    play_with(app, script, false)
+}
+
+/// [`play`], with cloud saves that can't be reached when `saves_fail`.
+#[cfg(unix)]
+fn play_with(app: &str, script: &str, saves_fail: bool) -> (Backend, irori_core::GameId) {
     isolate_paths();
     let game = Arc::new(
         GameInfo {
@@ -460,6 +484,7 @@ fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
                 },
                 ..Default::default()
             }),
+            cloud_save_enabled: saves_fail,
             ..Default::default()
         }
         .finalize(),
@@ -468,11 +493,36 @@ fn play(app: &str, script: &str) -> (Backend, irori_core::GameId) {
     let store: irori_core::DynStore = Arc::new(PlayStore {
         game,
         command: irori_core::process::CommandSpec::new("sh").args(["-c", script]),
+        saves_fail,
     });
     (
         Backend::start_headless(move |_, _| vec![store]).unwrap(),
         id,
     )
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_save_download_stops_the_launch_until_the_user_plays_anyway() {
+    let (b, id) = play_with("saves-unreachable", "exit 0", true);
+    b.settings
+        .set_game_value(&id, "autoSyncSaves", Some(serde_json::Value::Bool(true)));
+    let e = b
+        .runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap_err();
+    let failed = irori_core::SaveDownloadFailed::of(&e).expect("a failed download");
+    assert!(failed.reason.contains("can't be reached"), "{e:#}");
+    assert!(!b.is_running(&id));
+
+    let mut rx = b.subscribe();
+    let params = crate::LaunchParams {
+        skip_save_download: true,
+        ..Default::default()
+    };
+    b.runtime().block_on(b.launch_with(&id, params)).unwrap();
+    let ended = session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15));
+    assert!(ended.is_some(), "the game ran");
 }
 
 /// Wait up to `limit` for `id`'s session to end; how long that took.
