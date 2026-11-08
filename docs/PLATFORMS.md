@@ -145,7 +145,9 @@ with `irori.exe`'s folder as the root (`config`, `data` and `cache` beside it); 
 The start-with-system entry is one per user and belongs to the usual Irori: a run
 with `IRORI_HOME` or a portable folder leaves an entry it didn't write as it is at
 startup, writes its own only when the setting is turned on there, and removes only
-an entry naming its folder. A configured Steam path takes precedence when it holds a Steam
+an entry naming its folder. The Heroic import reads Heroic's native config folder or
+the Flatpak's (`~/.var/app/com.heroicgameslauncher.hgl/config/heroic`); when both
+exist, the one whose settings, installs or logins changed last. A configured Steam path takes precedence when it holds a Steam
 library (`steamapps`); otherwise, on Linux, Irori looks at `~/.steam/steam`,
 `~/.local/share/Steam`, `~/.steam/debian-installation`, Flatpak Steam
 (`~/.var/app/com.valvesoftware.Steam`, `.steam/steam`, `.local/share/Steam` or
