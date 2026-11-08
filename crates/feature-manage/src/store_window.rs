@@ -154,7 +154,10 @@ async fn show(
     mut pages: mpsc::UnboundedReceiver<String>,
     external: mpsc::UnboundedSender<String>,
 ) -> Result<()> {
-    let mut child = tokio::process::Command::new(&helper.program)
+    let mut command = tokio::process::Command::new(&helper.program);
+    // `irori-sign-in` is a console program; its output comes through pipes.
+    irori_core::process::hide_console(command.as_std_mut());
+    let mut child = command
         .args(helper.args)
         .arg(STORE_FLAG)
         .args(&args)

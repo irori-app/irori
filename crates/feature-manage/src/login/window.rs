@@ -69,7 +69,10 @@ pub(super) async fn sign_in(
     title: String,
     cancel: CancellationToken,
 ) -> Result<WindowOutcome> {
-    let mut child = tokio::process::Command::new(&helper.program)
+    let mut command = tokio::process::Command::new(&helper.program);
+    // `irori-sign-in` is a console program; its output comes through pipes.
+    irori_core::process::hide_console(command.as_std_mut());
+    let mut child = command
         .args(helper.args)
         .args(["--url", &url, "--capture", &capture, "--title", &title])
         .stdin(Stdio::null())

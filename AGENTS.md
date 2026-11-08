@@ -368,6 +368,11 @@ and `launch.rs` before changing anything below the UI.
 - It handles line callbacks (split on `\n` and `\r`), capped logs, cancellation and
   process-group termination: SIGTERM then SIGKILL on Unix, `taskkill /T /F` on
   Windows.
+- On Windows a console program started by Irori (a GUI program) opens a console
+  window unless it gets `CREATE_NO_WINDOW`. `run` (tools, scripts, installers)
+  hides it, `spawn` (games and the programs beside them) keeps it so console games
+  stay playable, and `CommandSpec::console` overrides either. A helper started
+  without `CommandSpec` calls `process::hide_console`.
 
 **HTTP** (`http.rs`):
 
