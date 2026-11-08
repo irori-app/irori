@@ -82,6 +82,8 @@
   "shell.notice.mods_not_restored": "{title} 的模組仍在其資料夾中",
   "shell.palette.set_up_emulation": "設定模擬遊戲",
   "shell.palette.set_up_emulation_keywords": "模擬器 ROM 主機 復古 BIOS RetroArch",
+  "shell.palette.steam_friends": "顯示 Steam 好友",
+  "shell.palette.steam_friends_keywords": "好友 上線 正在玩 加入 邀請 聊天",
   "shell.palette.open_store": "開啟 {store} 商店",
   "shell.palette.lutris_script": "使用 Lutris 指令碼安裝",
   "shell.palette.lutris_script_keywords": "Lutris 指令碼 安裝程式 lutris.net 社群",

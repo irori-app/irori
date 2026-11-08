@@ -82,6 +82,8 @@
   "shell.notice.mods_not_restored": "Моды {title} всё ещё в папке игры",
   "shell.palette.set_up_emulation": "Настроить эмуляцию",
   "shell.palette.set_up_emulation_keywords": "эмулятор ROM консоль ретро BIOS RetroArch",
+  "shell.palette.steam_friends": "Показать друзей в Steam",
+  "shell.palette.steam_friends_keywords": "друзья в сети играет присоединиться пригласить чат",
   "shell.palette.open_store": "Открыть магазин {store}",
   "shell.palette.lutris_script": "Установить по скрипту Lutris",
   "shell.palette.lutris_script_keywords": "Lutris скрипт установщик lutris.net сообщество",

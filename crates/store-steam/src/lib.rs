@@ -24,6 +24,7 @@ mod achievements;
 mod client;
 mod compat;
 mod entries;
+mod friends;
 mod scan;
 pub mod signin;
 mod stats_file;
@@ -47,6 +48,7 @@ use parking_lot::{Mutex, RwLock};
 use account::{AccountFiles, LibraryCache, Session};
 use client::ClientLink;
 pub use compat::{CompatTool, CompatToolState, SteamRunning, ToolSource};
+pub use friends::{FriendLink, FriendState, Friends, SteamFriend};
 use scan::{InstalledApp, LocalArt};
 
 const NOT_MANAGED: &str =
@@ -99,6 +101,8 @@ pub struct SteamStore {
     /// Watches Steam's library folders (the ones in the key).
     watcher: Mutex<Option<(Vec<PathBuf>, notify::RecommendedWatcher)>>,
     runtime: Mutex<Option<tokio::runtime::Handle>>,
+    /// The account's friends as last read; one read at a time.
+    friends: tokio::sync::Mutex<Friends>,
 }
 
 impl SteamStore {
@@ -164,6 +168,7 @@ impl SteamStore {
             me: me.clone(),
             watcher: Mutex::new(None),
             runtime: Mutex::new(None),
+            friends: tokio::sync::Mutex::new(Friends::default()),
         })
     }
 
@@ -438,6 +443,56 @@ impl SteamStore {
     pub async fn close_steam(&self) -> Result<()> {
         compat::close_steam(&self.steam_dir()).await
     }
+
+    /// Whether a Steam account is signed in to Irori, which friends need.
+    pub fn has_account(&self) -> bool {
+        self.session.read().is_some()
+    }
+
+    /// The account's friends, with what they are playing; `None` without a
+    /// signed-in account. A list read within [`friends::MAX_AGE`] is reused
+    /// unless `force`.
+    pub async fn friends(&self, force: bool) -> Result<Option<Friends>> {
+        if !self.has_account() {
+            return Ok(None);
+        }
+        let mut cached = self.friends.lock().await;
+        if !force && cached.is_fresh() {
+            return Ok(Some(cached.clone()));
+        }
+        let session = self
+            .live_session()
+            .await
+            .context("Steam couldn't renew your sign-in. Check your connection and try again.")?;
+        let client = self.client()?;
+        let token = &session.access_token;
+        let read = async {
+            let ids = client.friend_list(token, session.steamid()?).await?;
+            client.player_summaries(token, &ids).await
+        };
+        let players = read.await.map_err(|e| {
+            if e.downcast_ref() == Some(&irori_steam_api::SteamError::NotShared) {
+                e.context("Steam didn't share your friends list with Irori's sign-in")
+            } else {
+                e.context("Couldn't read your Steam friends")
+            }
+        })?;
+        *cached = Friends {
+            list: friends::from_summaries(players),
+            read_at: Some(Instant::now()),
+        };
+        Ok(Some(cached.clone()))
+    }
+
+    /// Open `link` in the Steam client.
+    pub async fn open_friend_link(&self, link: FriendLink) -> Result<()> {
+        irori_core::process::run(&client::open_url(&link.url()), Default::default())
+            .await
+            .context("Steam didn't open")?
+            .check()
+            .context("Steam didn't open")?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -565,6 +620,7 @@ impl Store for SteamStore {
         *self.session.write() = None;
         *self.account_library.write() = Arc::new(cache);
         *self.fetched.lock() = None;
+        *self.friends.lock().await = Friends::default();
         self.scan().await?;
         self.bus.emit(Event::AccountChanged(Runner::Steam));
         self.bus.emit(Event::LibraryChanged(Runner::Steam));
@@ -921,6 +977,76 @@ mod tests {
         assert!(s.accounts().is_empty());
         assert_eq!(s.user().unwrap().account_id, "local");
         assert!(s.login("a pasted code").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn reads_friends_briefly_cached_and_only_with_an_account() {
+        use irori_depot::test_server::{Resp, TestServer};
+        let refuse = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let refusing = refuse.clone();
+        let server = TestServer::start(move |req| {
+            let path = req.path.as_str();
+            if path.starts_with("/IPlayerService/GetOwnedGames/") {
+                Resp::json(serde_json::json!({"response": {"games": []}}))
+            } else if path.starts_with("/ISteamUser/GetFriendList/") {
+                if refusing.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Resp::status(401);
+                }
+                Resp::json(serde_json::json!({"friendslist": {"friends": [
+                    {"steamid": "76561197960265730", "relationship": "friend"}
+                ]}}))
+            } else if path.starts_with("/ISteamUser/GetPlayerSummaries/") {
+                Resp::json(serde_json::json!({"response": {"players": [
+                    {"steamid": "76561197960265730", "personaname": "Ada", "personastate": 1,
+                     "gameid": "620", "gameextrainfo": "Portal 2"}
+                ]}}))
+            } else {
+                Resp::json(serde_json::json!({"response": {}}))
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+        let endpoints = Endpoints {
+            api: server.base(),
+            store: server.base(),
+            assets: server.base(),
+        };
+        let s = store_at(&steam, AppSettings::default(), endpoints);
+        s.init().await.unwrap();
+        assert!(s.friends(false).await.unwrap().is_none());
+        let asked = |server: &TestServer| {
+            server
+                .requests()
+                .iter()
+                .filter(|r| r.path.starts_with("/ISteamUser/GetFriendList/"))
+                .count()
+        };
+        assert_eq!(asked(&server), 0, "no account, no request");
+
+        let input = format!(
+            r#"{{"accountName":"player","steamid":"76561197960265729","refreshToken":"r","accessToken":"{}"}}"#,
+            token(76561197960265729)
+        );
+        s.login(&input).await.unwrap();
+        let friends = s.friends(false).await.unwrap().unwrap();
+        assert_eq!(friends.list.len(), 1);
+        assert_eq!(friends.list[0].name, "Ada");
+        assert_eq!(friends.playing(620).count(), 1);
+        s.friends(false).await.unwrap();
+        assert_eq!(asked(&server), 1, "a fresh list is reused");
+        s.friends(true).await.unwrap();
+        assert_eq!(asked(&server), 2);
+
+        // Steam refusing the friends list leaves the sign-in alone.
+        refuse.store(true, std::sync::atomic::Ordering::SeqCst);
+        let e = s.friends(true).await.unwrap_err();
+        assert!(e.downcast_ref::<irori_core::SessionExpired>().is_none());
+        assert!(format!("{e:#}").contains("didn't share"), "{e:#}");
+        assert!(s.has_account());
+
+        s.logout().await.unwrap();
+        assert!(s.friends(false).await.unwrap().is_none());
     }
 
     #[tokio::test]

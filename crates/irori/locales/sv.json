@@ -82,6 +82,8 @@
   "shell.notice.mods_not_restored": "Moddarna för {title} ligger kvar i dess mapp",
   "shell.palette.set_up_emulation": "Konfigurera emulering",
   "shell.palette.set_up_emulation_keywords": "emulator ROM konsol retro BIOS RetroArch",
+  "shell.palette.steam_friends": "Visa Steam-vänner",
+  "shell.palette.steam_friends_keywords": "vänner online spelar gå med bjud in chatt",
   "shell.palette.open_store": "Öppna butiken {store}",
   "shell.palette.lutris_script": "Installera med ett Lutris-skript",
   "shell.palette.lutris_script_keywords": "Lutris skript installation lutris.net community",

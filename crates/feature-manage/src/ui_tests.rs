@@ -439,3 +439,76 @@ fn rockstar_card_after_adopting_a_prefix(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("launcher-rockstar-close").is_none());
     assert!(program.is_file(), "the prefix stays on disk");
 }
+
+#[gpui_kit::test]
+fn steam_friends_window_lists_friends_and_offers_only_real_joins(cx: &mut TestAppContext) {
+    use irori_core::{AppSettings, EventBus};
+    use irori_steam::{FriendLink, FriendState, Friends, SteamFriend, SteamStore};
+
+    setup(cx);
+    let dir = tempfile::tempdir().expect("temp dir").keep();
+    let app = Arc::new(AppSettings::default());
+    let store = SteamStore::with_layout(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        dir.join("Steam"),
+        &dir.join("data"),
+        irori_steam_api::Endpoints {
+            api: "http://127.0.0.1:9".into(),
+            store: "http://127.0.0.1:9".into(),
+            assets: "http://127.0.0.1:9".into(),
+        },
+    );
+    cx.update(|cx| crate::install_steam_store(store.clone(), cx));
+    assert!(
+        !cx.update(|cx| crate::steam_friends_available(cx)),
+        "no account, no friends window"
+    );
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| crate::friends::FriendsDialog::new(store, window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(
+        vcx.update(|_, cx| view.read(cx).failure()).is_some(),
+        "signed out explains itself"
+    );
+
+    let friend =
+        |steamid: u64, playing: Option<(u32, &str)>, join: Option<FriendLink>| SteamFriend {
+            steamid,
+            name: format!("Friend {steamid}"),
+            avatar: String::new(),
+            profile: format!("https://steamcommunity.com/profiles/{steamid}"),
+            state: FriendState::Online,
+            playing: playing.map(|(a, n)| (a, n.to_string())),
+            join,
+        };
+    let friends = Friends {
+        list: vec![
+            friend(
+                1,
+                Some((730, "Counter-Strike 2")),
+                Some(FriendLink::JoinLobby {
+                    app: 730,
+                    lobby: 5,
+                    friend: 1,
+                }),
+            ),
+            friend(2, Some((620, "Portal 2")), None),
+            friend(3, None, None),
+        ],
+        read_at: None,
+    };
+    vcx.update(|_, cx| view.update(cx, |v, cx| v.show(friends, cx)));
+    vcx.run_until_parked();
+    for selector in ["friend-1", "friend-2", "friend-3"] {
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector} is listed");
+    }
+    assert!(vcx.debug_bounds("friend-join-1").is_some());
+    assert!(vcx.debug_bounds("friend-join-2").is_none());
+    assert!(vcx.debug_bounds("friend-join-3").is_none());
+}
