@@ -4,7 +4,7 @@ seoTitle: 'Install Irori on Linux, macOS and Windows'
 description: 'Every way to install Irori: apt, dnf and pacman, Flatpak, AppImage, Homebrew, the disk image, the Windows installer, portable zip and Scoop, or from source.'
 summary: Packages for every system, how they update, and building from source.
 order: 2
-updated: 2026-11-04
+updated: 2026-11-08
 related: [getting-started, files-and-folders, troubleshooting]
 ---
 
@@ -13,9 +13,9 @@ Every release is on the [releases page](https://github.com/irori-app/irori/relea
 
 ## Linux
 
-Linux builds are for x86-64. The packages put the sign-in window in a separate, recommended
-package, because it brings WebKitGTK; Irori runs without it and signs in through your browser
-instead.
+Linux builds are for x86-64 and arm64; the Arch packages are x86-64 only, as Arch is. The
+packages put the sign-in window in a separate, recommended package, because it brings WebKitGTK;
+Irori runs without it and signs in through your browser instead.
 
 ### Debian, Ubuntu, Linux Mint, Pop!_OS
 
@@ -44,7 +44,7 @@ sudo pacman -Syu irori
 
 ### Flatpak and Steam Deck
 
-Download `Irori-…-linux.flatpak` from the
+Download `Irori-…-linux.flatpak` (`Irori-…-linux-arm64.flatpak` on arm64) from the
 [latest release](https://github.com/irori-app/irori/releases/latest), then (on a Steam Deck, in
 Desktop Mode):
 
@@ -58,7 +58,8 @@ Irori isn’t on Flathub yet, so install each new version the same way.
 ### AppImage
 
 One file for any distribution with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora,
-openSUSE, Arch and their relatives). Download `Irori-…-x86_64.AppImage` from the
+openSUSE, Arch and their relatives). Download `Irori-…-x86_64.AppImage` (`Irori-…-aarch64.AppImage`
+on arm64) from the
 [latest release](https://github.com/irori-app/irori/releases/latest), then:
 
 ```bash
@@ -85,7 +86,8 @@ Applications. The app is signed with Irori’s Developer ID and notarized by App
 
 ## Windows
 
-Windows 10 and 11, x64. Download `Irori-…-windows-setup.exe` from the
+Windows 10 and 11, x64 or arm64. Download `Irori-…-windows-setup.exe` (`…-windows-arm64-setup.exe`
+on arm64) from the
 [latest release](https://github.com/irori-app/irori/releases/latest). It installs for your user
 under `%LOCALAPPDATA%\Programs\Irori`, registers the `irori://` links and a Start-menu shortcut,
 and never asks for administrator rights. Or with Scoop:

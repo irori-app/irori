@@ -5,7 +5,7 @@ description: 'Irori and Playnite compared: Playnite is a Windows library manager
 rival: Playnite
 summary: Playnite organizes store clients on Windows; Irori installs and plays games itself, everywhere.
 order: 2
-updated: 2026-11-03
+updated: 2026-11-08
 related: [heroic, lutris]
 rows:
   - feature: Systems
@@ -15,7 +15,7 @@ rows:
     irori: Rust and GPUI
     rival: C# and WPF
   - feature: Store libraries
-    irori: Built in for Epic Games, GOG, Amazon, ZOOM, itch.io and Steam
+    irori: Built in for Epic Games, GOG, Amazon, ZOOM, itch.io, Steam and the Xbox app
     rival: Through extensions, for many stores
   - feature: Installs and updates games itself
     irori: Epic Games, GOG, Amazon Games, ZOOM, itch.io
@@ -33,7 +33,7 @@ rows:
     irori: Big Picture
     rival: Fullscreen mode
   - feature: Themes and add-ons
-    irori: Bundled themes
+    irori: Bundled themes, Big Picture themes you can make and share
     rival: Community themes and extensions
   - feature: Licence
     irori: MIT
@@ -60,6 +60,8 @@ installed at all.
 - **Big Picture on the Steam Deck.** Irori opens its controller interface by itself in the Deck’s
   Game Mode.
 - **Several accounts per store**, in one library.
+- **Streaming built in.** Irori keeps your installed games among Sunshine’s or Apollo’s
+  applications itself, and a game’s session ends when the stream does.
 
 ## Where Playnite is ahead
 
@@ -71,4 +73,6 @@ installed at all.
 
 On Windows, if you want a highly customizable front end over the store clients you already use,
 Playnite is excellent. If you play on Linux, macOS or a Steam Deck, or would rather not run the
-store clients at all for Epic, GOG and Amazon, Irori is built for that.
+store clients at all for Epic, GOG and Amazon, Irori is built for that. On Windows it imports
+your Playnite library, playtime, favourites and categories included, and only reads it, so
+Playnite stays as it was.

@@ -7,7 +7,7 @@ summary: Point Irori at your ROM folders; it recognizes each system, installs th
 icon: joystick
 screen: emulators
 order: 5
-updated: 2026-11-03
+updated: 2026-11-08
 related: [library, bigpicture, wine]
 highlights:
   - title: Your ROM folders, watched
@@ -29,8 +29,9 @@ highlights:
 Tell Irori where your ROM folders are. It scans them incrementally, caching what it found by path,
 size and modification time, and watches them for new files. Each game gets its system, and its
 region and revision from the file name, which drive the system filter, the badges, a generated
-cover and Big Picture’s per-system shelves. Removing a game only hides it from the library: Irori
-never deletes ROMs.
+cover and Big Picture’s per-system shelves. PlayStation 3 and 4 game folders, usually named by
+serial, take their real title from the game’s own `PARAM.SFO`, and PlayStation 5 games from
+`param.json`. Removing a game only hides it from the library: Irori never deletes ROMs.
 
 ## Emulators Irori can install
 
@@ -42,7 +43,8 @@ RetroArch with twelve cores, **DuckStation**, **PPSSPP**, **Dolphin**, **ScummVM
 Irori downloads emulators from the projects’ own servers when you ask, and never redistributes
 them. Versions sit side by side, so installing a new one changes nothing until you choose Update,
 and a game pinned to a version keeps it. Flatpak and system installs are detected and labelled,
-never installed or removed by Irori.
+never installed or removed by Irori. On Windows on Arm, emulators without an arm64 build install
+their x64 build, which Windows runs itself.
 
 ## BIOS files, handled carefully
 
@@ -59,4 +61,5 @@ The Emulators page installs, updates and removes versions and cores, and sets ea
 default.
 
 Systems include NES, SNES, N64, Game Boy, Game Boy Color and Advance, DS, 3DS, GameCube, Wii,
-PlayStation, PlayStation 2, PSP, Genesis, PC Engine, DOS and arcade games.
+Wii U, PlayStation 1 to 5, PSP, Xbox, Master System, Genesis, Game Gear, Sega CD, PC Engine, DOS,
+ScummVM adventures and arcade games.

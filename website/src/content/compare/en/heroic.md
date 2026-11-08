@@ -5,7 +5,7 @@ description: 'Irori and Heroic Games Launcher compared: the same stores, built-i
 rival: Heroic
 summary: The same stores and features, without Electron or helper tools, plus Steam, itch.io and emulators.
 order: 1
-updated: 2026-11-03
+updated: 2026-11-08
 related: [playnite, lutris]
 rows:
   - feature: Systems
@@ -24,7 +24,7 @@ rows:
     irori: Yes, opt-in
     rival: No
   - feature: Steam library
-    irori: Installed games without a login; owned and Family games with one
+    irori: Installed games without a login; every owned game from the running client or a login
     rival: No
   - feature: Battle.net, EA app, Ubisoft Connect, Rockstar
     irori: Set up in their own prefix; games listed and started
@@ -77,9 +77,10 @@ Irori even reads Heroic’s settings with Heroic’s own names, which is why
 - **No Electron.** Irori is one native process drawn on your graphics card. On the same Linux PC,
   with the window open and an empty profile, Irori 0.2.0 used about 88 MiB of memory in one
   process and Heroic 2.22.4 about 478 MiB across seven.
-- **More in one library.** Your installed Steam games (and, with a login, your owned and Family
-  games), itch.io, the games from Battle.net, the EA app, Ubisoft Connect and Rockstar, and a ROM
-  library with emulators Irori installs and updates.
+- **More in one library.** Your Steam games (installed ones without a login, the rest from the
+  running Steam client or a login), itch.io, the games from Battle.net, the EA app, Ubisoft
+  Connect and Rockstar, the Xbox app’s games on Windows, and a ROM library with emulators Irori
+  installs and updates. A game you own on several stores is one entry.
 - **Several accounts per store.** Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io each
   take more than one account, in one library.
 - **Big Picture.** A full controller interface that opens by itself in the Steam Deck’s Game Mode.
