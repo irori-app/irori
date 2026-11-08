@@ -375,6 +375,15 @@ impl Backend {
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
         self.start_replay(id, &game.title, &settings.replay);
+        let backups = (settings.ludusavi_interval > 0).then(|| {
+            let stop = CancellationToken::new();
+            let (b, id, title) = (self.clone(), id.clone(), game.title.clone());
+            let every = crate::ludusavi::backup_interval(settings.ludusavi_interval);
+            let until = stop.clone();
+            let task =
+                self.spawn(async move { b.back_up_while_playing(id, title, every, until).await });
+            (stop, task)
+        });
         self.statuses.set(id, StatusKind::Playing);
         self.userdata
             .record_launch(id, app.max_recent_games as usize);
@@ -458,6 +467,11 @@ impl Backend {
                 programs.end().await;
             }
             b.stop_replay(&id).await;
+            // A backup under way finishes before the saves sync below.
+            if let Some((stop, task)) = backups {
+                stop.cancel();
+                let _ = task.await;
+            }
             let seconds = started.elapsed().as_secs();
             let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
             let crashed = failed_start(status, seconds, stopped);

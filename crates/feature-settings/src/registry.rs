@@ -607,6 +607,7 @@ impl FieldSpec {
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
                     | "iroriLudusaviAutoBackup"
+                    | "iroriLudusaviInterval"
                     | "panel.save-backups"
                     | "panel.artwork"
             )
@@ -901,6 +902,29 @@ const LSFG_FLOW_SCALE: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(75), Verbatim("75%")),
     opt(ChoiceValue::Num(85), Verbatim("85%")),
     opt(ChoiceValue::Num(100), Verbatim("100%")),
+];
+
+const LUDUSAVI_INTERVAL: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.ludusavi_interval.0"),
+    ),
+    opt(
+        ChoiceValue::Num(15),
+        Key("settings.option.ludusavi_interval.15"),
+    ),
+    opt(
+        ChoiceValue::Num(30),
+        Key("settings.option.ludusavi_interval.30"),
+    ),
+    opt(
+        ChoiceValue::Num(60),
+        Key("settings.option.ludusavi_interval.60"),
+    ),
+    opt(
+        ChoiceValue::Num(120),
+        Key("settings.option.ludusavi_interval.120"),
+    ),
 ];
 
 const REPLAY_SECONDS: &[ChoiceOption] = &[
@@ -2959,6 +2983,18 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Ludusavi"))
     .help("settings.field.ludusavi_auto_backup.help")
     .keywords(&["ludusavi", "backup", "save", "session", "exit"]),
+    game(
+        "iroriLudusaviInterval",
+        "settings.field.ludusavi_interval.label",
+        CloudSaves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_INTERVAL),
+    )
+    .tag(Verbatim("Ludusavi"))
+    .help("settings.field.ludusavi_interval.help")
+    .keywords(&[
+        "ludusavi", "backup", "save", "periodic", "interval", "minutes",
+    ]),
     game_only(
         "panel.save-backups",
         "settings.field.panel_save_backups.label",

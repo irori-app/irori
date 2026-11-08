@@ -514,6 +514,9 @@ commands without a window.
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
+  `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
+  game runs (`back_up_while_playing`): a timer task per session, one backup at a
+  time, finished before the session's cloud upload.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.

@@ -503,6 +503,68 @@ impl Backend {
     }
 }
 
+impl Backend {
+    /// Back up `id`'s saves every `every` while its session lasts
+    /// (`iroriLudusaviInterval`), one backup at a time, until `stop`. Only a
+    /// sleeping timer between backups, and nothing at all outside a session.
+    /// A backup under way when the session ends finishes first, so it never
+    /// overlaps the cloud upload and the backup after the session. The game
+    /// keeps its playing status; a failure is told once per session.
+    pub(crate) async fn back_up_while_playing(
+        &self,
+        id: GameId,
+        title: String,
+        every: std::time::Duration,
+        stop: CancellationToken,
+    ) {
+        let mut told = false;
+        loop {
+            tokio::select! {
+                _ = stop.cancelled() => return,
+                _ = tokio::time::sleep(every) => {}
+            }
+            match self.back_up_saves_inner(&id).await {
+                Ok(done) if done.failed == 0 => tracing::info!(
+                    "Ludusavi backed up {} files ({} bytes) of {id} while playing",
+                    done.files,
+                    done.bytes
+                ),
+                result => {
+                    let error = match result {
+                        Ok(done) => format!(
+                            "{} files couldn’t be copied; the app log lists them.",
+                            done.failed
+                        ),
+                        Err(e) => format!("{e:#}"),
+                    };
+                    tracing::warn!("Ludusavi backup of {id} while playing: {error}");
+                    if !told {
+                        told = true;
+                        self.bus.notice(
+                            Notice::new(
+                                NoticeLevel::Warning,
+                                format!("Saves of {title} weren’t fully backed up"),
+                            )
+                            .message(error)
+                            .keys(
+                                "shell.notice.ludusavi_backup_failed",
+                                None,
+                                &[("title", &title)],
+                            )
+                            .game(id.clone()),
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The time between backups while playing, never under a minute.
+pub(crate) fn backup_interval(minutes: u32) -> std::time::Duration {
+    std::time::Duration::from_secs(u64::from(minutes.max(1)) * 60)
+}
+
 /// Most titles a search lists.
 const SEARCH_RESULTS: usize = 20;
 

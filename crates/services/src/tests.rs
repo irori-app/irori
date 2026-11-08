@@ -666,3 +666,50 @@ fn launch_presets_save_apply_and_go() {
     );
     assert!(b.settings.game(&to).show_mangohud, "applied settings stay");
 }
+
+#[cfg(unix)]
+#[test]
+fn backups_while_playing_repeat_tell_one_failure_and_stop_with_the_session() {
+    let (b, id) = play_with("backups-while-playing", "exit 0", false);
+    // A chosen Ludusavi that is gone: every backup fails, none runs.
+    b.settings
+        .update_app(|a| a.ludusavi_path = "/nonexistent/irori-test/ludusavi".into());
+    let mut rx = b.subscribe();
+    let stop = irori_core::process::CancellationToken::new();
+    let task = b.spawn({
+        let (b, id, stop) = (b.clone(), id.clone(), stop.clone());
+        async move {
+            b.back_up_while_playing(
+                id,
+                "Backups".into(),
+                std::time::Duration::from_millis(20),
+                stop,
+            )
+            .await
+        }
+    });
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    stop.cancel();
+    let ended = b
+        .runtime()
+        .block_on(async { tokio::time::timeout(std::time::Duration::from_secs(5), task).await });
+    assert!(ended.is_ok(), "the backups end with the session");
+    let mut notices = 0;
+    while let Ok(event) = rx.try_recv() {
+        if let Event::Notice(n) = event
+            && n.title_key == Some("shell.notice.ludusavi_backup_failed")
+            && n.game.as_ref() == Some(&id)
+        {
+            notices += 1;
+        }
+    }
+    assert_eq!(notices, 1, "a failure is told once per session");
+    assert_eq!(
+        crate::ludusavi::backup_interval(0),
+        std::time::Duration::from_secs(60)
+    );
+    assert_eq!(
+        crate::ludusavi::backup_interval(15),
+        std::time::Duration::from_secs(900)
+    );
+}

@@ -283,6 +283,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLudusaviAutoBackup")]
     pub ludusavi_auto_backup: bool,
+    /// Also back up the game's saves with Ludusavi every this many minutes
+    /// while it runs; 0 (the default) for never. Irori-only.
+    #[serde(rename = "iroriLudusaviInterval")]
+    pub ludusavi_interval: u32,
     /// The game's title in Ludusavi, when the user corrected the automatic
     /// match; empty for the automatic one. Per game only. Irori-only.
     #[serde(rename = "iroriLudusaviTitle")]
@@ -463,6 +467,7 @@ impl Default for GameSettings {
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
             ludusavi_auto_backup: false,
+            ludusavi_interval: 0,
             ludusavi_title: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
