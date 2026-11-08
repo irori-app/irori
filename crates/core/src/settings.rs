@@ -295,6 +295,11 @@ pub struct GameSettings {
     /// match; empty for the automatic one. Per game only. Irori-only.
     #[serde(rename = "iroriLudusaviTitle")]
     pub ludusavi_title: String,
+    /// The game's HowLongToBeat id, when the user chose its match ("Change
+    /// match"), or `none` for no match; empty finds one. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriHltbId")]
+    pub hltb_id: String,
     /// The game's Steam app id for its achievements read from game files,
     /// when the user chose one; empty finds it in the game's files and
     /// variables. Per game only. Irori-only.
@@ -474,6 +479,7 @@ impl Default for GameSettings {
             ludusavi_auto_backup: false,
             ludusavi_interval: 0,
             ludusavi_title: String::new(),
+            hltb_id: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
         }

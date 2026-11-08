@@ -19,6 +19,7 @@
 mod choice;
 mod compat_source;
 mod dlc;
+mod hltb_match;
 mod hooks;
 mod i18n;
 mod import_installers;

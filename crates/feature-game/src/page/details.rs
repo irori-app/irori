@@ -397,27 +397,85 @@ impl GamePage {
         rows
     }
 
-    /// HowLongToBeat, as a bar marking the user's own play time.
+    /// HowLongToBeat, as a bar marking the user's own play time, with
+    /// "Change match"; without times, a way to find them.
     fn compat_detail_rows(&self, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
         let Some(info) = self.compat.ready() else {
             return Vec::new();
         };
+        let page = cx.entity().downgrade();
+        let id = self.id.clone();
+        let title = models(cx)
+            .library
+            .read(cx)
+            .snapshot
+            .get(&self.id)
+            .map(|g| g.title.clone())
+            .unwrap_or_else(|| self.id.app_name.to_string());
+        let change = move |label: &'static str| {
+            let (page, id, title) = (page.clone(), id.clone(), title.clone());
+            Button::new("details-hltb-match")
+                .ghost()
+                .xsmall()
+                .label(t(label))
+                .on_click(move |_, window, cx| {
+                    let page = page.clone();
+                    let on_chosen: crate::hltb_match::OnChosen =
+                        std::rc::Rc::new(move |window, cx| {
+                            page.update(cx, |this, cx| this.reload_compat(window, cx))
+                                .ok();
+                        });
+                    crate::hltb_match::open_hltb_match_dialog(
+                        id.clone(),
+                        title.clone(),
+                        on_chosen,
+                        window,
+                        cx,
+                    );
+                })
+        };
         let mut rows = Vec::new();
-        if let Some(h) = info
+        match info
             .how_long_to_beat
             .as_ref()
             .filter(|h| h.main.or(h.main_extra).or(h.completionist).is_some())
         {
-            let minutes = models(cx).library.read(cx).playtime_minutes(&self.id);
-            rows.push(
-                v_flex()
+            Some(h) => {
+                let minutes = models(cx).library.read(cx).playtime_minutes(&self.id);
+                rows.push(
+                    v_flex()
+                        .w_full()
+                        .gap_2()
+                        .py_1p5()
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .justify_between()
+                                .gap_2()
+                                .child(div().text_sm().text_color(muted).child("HowLongToBeat"))
+                                .child(change("game.hltb.change_match")),
+                        )
+                        .child(hltb_bar(h, minutes as f32 / 60., muted, cx))
+                        .into_any_element(),
+                );
+            }
+            None => rows.push(
+                h_flex()
                     .w_full()
+                    .justify_between()
                     .gap_2()
                     .py_1p5()
-                    .child(div().text_sm().text_color(muted).child("HowLongToBeat"))
-                    .child(hltb_bar(h, minutes as f32 / 60., muted, cx))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .text_color(muted)
+                            .child(t("game.hltb.none_found")),
+                    )
+                    .child(change("game.hltb.find"))
                     .into_any_element(),
-            );
+            ),
         }
         rows
     }

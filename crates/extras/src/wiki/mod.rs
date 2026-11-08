@@ -41,7 +41,15 @@ pub struct StoreIds {
     pub app_name: String,
     /// Store product page; used for GOG's HowLongToBeat box.
     pub store_url: Option<String>,
+    /// The HowLongToBeat game the user chose ("Change match"): an HLTB id,
+    /// or [`HLTB_NONE`] for "no match". `None` finds one on its own.
+    pub hltb_id: Option<String>,
+    /// The release year, to tell remakes apart in HLTB's search.
+    pub release_year: Option<u32>,
 }
+
+/// [`StoreIds::hltb_id`] for a game the user said HowLongToBeat doesn't have.
+pub const HLTB_NONE: &str = "none";
 
 impl StoreIds {
     pub fn of(game: &GameInfo) -> Self {
@@ -53,6 +61,12 @@ impl StoreIds {
                 .clone()
                 .or_else(|| game.extra.as_ref().and_then(|e| e.store_url.clone()))
                 .filter(|s| !s.is_empty()),
+            hltb_id: None,
+            release_year: game
+                .release_date
+                .as_deref()
+                .and_then(|d| d.get(..4))
+                .and_then(|y| y.parse().ok()),
         }
     }
 }
@@ -103,8 +117,15 @@ pub fn clean_title(title: &str) -> String {
 }
 
 fn cache_file(ids: &StoreIds) -> PathBuf {
+    // The user's HLTB choice is part of the name, so changing it reads the
+    // game again instead of the answer cached for the old one.
+    let choice = ids
+        .hltb_id
+        .as_deref()
+        .map(|id| format!("-hltb{}", irori_core::paths::sanitize(id)))
+        .unwrap_or_default();
     util::cache_dir("wiki").join(format!(
-        "{}-{}.json",
+        "{}-{}{choice}.json",
         ids.runner.id(),
         irori_core::paths::sanitize(&ids.app_name)
     ))
@@ -136,20 +157,10 @@ pub async fn game_info(title: &str, ids: &StoreIds) -> Result<Arc<WikiInfo>> {
     let gamesdb_steam_id = take("GamesDB", &title, &mut failures, gamesdb);
     let umu_id = take("umu", &title, &mut failures, umu);
 
-    let hltb = if ids.runner == Runner::Gog {
-        match &ids.store_url {
-            Some(url) => hltb::fetch_from_gog_store(url, &title).await,
-            None => Ok(None),
-        }
-    } else {
-        match pcgamingwiki
-            .as_ref()
-            .map(|p| p.how_long_to_beat_id.as_str())
-            .filter(|s| !s.is_empty())
-        {
-            Some(id) => hltb::fetch_by_id(id).await,
-            None => Ok(None),
-        }
+    let hltb = match ids.hltb_id.as_deref() {
+        Some(HLTB_NONE) => Ok(None),
+        Some(id) => hltb::fetch_by_id(id).await,
+        None => find_hltb(&title, ids, pcgamingwiki.as_ref()).await,
     };
     let howlongtobeat = take("HowLongToBeat", &title, &mut failures, hltb);
 
@@ -186,6 +197,33 @@ pub async fn game_info(title: &str, ids: &StoreIds) -> Result<Arc<WikiInfo>> {
         tracing::warn!("caching game information: {e:#}");
     }
     Ok(Arc::new(info))
+}
+
+/// HowLongToBeat's times without a choice from the user: GOG's store page,
+/// else the HLTB id PCGamingWiki gives, else HLTB's title search when its
+/// result is the game.
+async fn find_hltb(
+    title: &str,
+    ids: &StoreIds,
+    pcgamingwiki: Option<&PcGamingWikiInfo>,
+) -> Result<Option<HowLongToBeat>> {
+    let found = if ids.runner == Runner::Gog
+        && let Some(url) = &ids.store_url
+    {
+        hltb::fetch_from_gog_store(url, title).await?
+    } else if let Some(id) = pcgamingwiki
+        .map(|p| p.how_long_to_beat_id.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        hltb::fetch_by_id(id).await?
+    } else {
+        None
+    };
+    if found.is_some() {
+        return Ok(found);
+    }
+    let results = hltb::search(title).await?;
+    Ok(hltb::best_match(&results, title, ids.release_year).cloned())
 }
 
 /// Unwrap a source result, recording a failure.

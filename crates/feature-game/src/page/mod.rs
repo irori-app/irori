@@ -477,6 +477,14 @@ impl GamePage {
         .detach();
     }
 
+    /// Read the compatibility data again (after the HowLongToBeat match
+    /// changed).
+    pub(super) fn reload_compat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.compat = Load::Idle;
+        self.load_compat(window, cx);
+        cx.notify();
+    }
+
     fn load_compat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(game) = self.game.clone() else {
             return;
