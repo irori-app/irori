@@ -4,7 +4,7 @@ seoTitle: 'Irori command line and irori:// links'
 description: 'Start games and open pages with irori:// links, and use Irori from a terminal: list, install, uninstall, refresh, import from Heroic or Lutris, and launch options.'
 summary: Links that open pages and games, and commands that work without a window.
 order: 4
-updated: 2026-11-03
+updated: 2026-11-08
 related: [shortcuts, environment-variables, files-and-folders]
 ---
 
@@ -25,6 +25,7 @@ irori import-heroic                              import Heroic accounts, install
 irori import-lutris                              import Lutris games, categories and playtime (read-only)
 irori refresh                                    refresh every library
 irori list [--installed]
+irori list --json                                installed games as JSON, for other tools
 irori info <runner>/<app> [--platform P]
 irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]
@@ -33,6 +34,47 @@ irori uninstall <runner>/<app> [--keep-files]
 
 `irori install` shows its progress in the terminal. <kbd>Ctrl</kbd> <kbd>C</kbd> stops it; run
 the same command again to resume.
+
+## Installed games as JSON
+
+`irori list --json` prints the games Irori installs and runs itself, for tools that work on a
+game's files or Wine prefix (SCSKiller compiles their shader caches ahead of time with it).
+Steam's games, third-party launchers' games and the ROM library aren't listed: they run through
+their own clients or emulators.
+
+```json
+{
+  "version": 1,
+  "games": [
+    {
+      "id": "legendary/Quail",
+      "runner": "legendary",
+      "appName": "Quail",
+      "title": "Quail Quest",
+      "platform": "windows",
+      "installPath": "/home/me/Games/Irori/QuailQuest",
+      "executable": "/home/me/Games/Irori/QuailQuest/Binaries/Quail.exe",
+      "arguments": "-dx11",
+      "launchCommand": ["/usr/bin/irori", "--launch", "legendary/Quail"],
+      "wine": {
+        "prefix": "/home/me/Games/Irori/Prefixes/Quail Quest",
+        "kind": "proton",
+        "name": "GE-Proton10-1",
+        "buildPath": "/home/me/.local/share/Steam/compatibilitytools.d/GE-Proton10-1",
+        "bin": "/home/me/.local/share/Steam/compatibilitytools.d/GE-Proton10-1/proton",
+        "umu": true,
+        "environment": [["DXVK_ASYNC", "1"]]
+      }
+    }
+  ]
+}
+```
+
+`wine` is `null` for a game that runs natively. `prefix` is what Irori passes as `WINEPREFIX`, or
+as `STEAM_COMPAT_DATA_PATH` for Proton, whose `drive_c` is then in `pfx/`. `kind` is `wine`,
+`proton`, `crossover` or `toolkit`. Within a `version`, fields are only ever added, so ignore the
+ones you don't know. A game Irori starts gets `IRORI_GAME_ID=<runner>/<app>` in its
+environment, the same id as `id`.
 
 ## Options for the app
 
