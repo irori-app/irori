@@ -51,9 +51,22 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "g
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    # The in-game overlay's screenshot (GDI, the game's monitor).
+    "Win32_Graphics_Gdi",
     "Win32_Networking_WinSock",
     "Win32_System_LibraryLoader",
     "Win32_System_Power",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI
+# builds.
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
 ] }
 
 [dev-dependencies]
