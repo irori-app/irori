@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Ritardo di ripetizione",
   "settings.field.gamepad_repeat_delay.help": "Millisecondi tra le ripetizioni mentre un pulsante è tenuto premuto (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Intervallo di ripetizione",
+  "settings.field.overlay.label": "Overlay di gioco (beta)",
+  "settings.field.overlay.help": "Il tasto Guide del controller, durante un gioco avviato da Irori, apre sopra il gioco volume, screenshot, obiettivi e la nota di oggi, e sottrae il controller al gioco finché resta aperto. Guide + RB fa uno screenshot e Guide + su o giù cambia il volume. Funziona al meglio sui desktop Wayland con layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Opzioni aggiuntive di gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Mantieni il cursore nella finestra",
   "settings.field.gamescope_enable_limiter.label": "Limitatore FPS",

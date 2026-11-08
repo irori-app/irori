@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Tekrar gecikmesi",
   "settings.field.gamepad_repeat_delay.help": "Tuş basılı tutulurken tekrarlar arasındaki süre, milisaniye cinsinden (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Tekrar aralığı",
+  "settings.field.overlay.label": "Oyun içi katman (beta)",
+  "settings.field.overlay.help": "Irori’nin başlattığı bir oyun sırasında denetleyicinin Guide düğmesi, oyunun üstünde ses düzeyini, ekran görüntülerini, başarımları ve bugünün notunu açar; açık kaldığı sürece denetleyiciyi oyundan ayırır. Guide + RB ekran görüntüsü alır, Guide + yukarı veya aşağı ses düzeyini değiştirir. En iyi layer-shell destekli Wayland masaüstlerinde çalışır (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Ek gamescope seçenekleri",
   "settings.field.gamescope_enable_force_grab_cursor.label": "İmleci pencerede tut",
   "settings.field.gamescope_enable_limiter.label": "Kare sınırlayıcı",

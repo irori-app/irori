@@ -118,7 +118,7 @@ fn library() -> Vec<Arc<GameInfo>> {
     ]
 }
 
-fn start_backend() -> Backend {
+pub(crate) fn start_backend() -> Backend {
     let root = std::env::temp_dir().join(format!("irori-bigpicture-test-{}", std::process::id()));
     Paths::init(Paths::under(&root));
     let backend = Backend::start_headless(|_, _| {
@@ -154,7 +154,7 @@ fn focused_title(view: &Entity<BigPictureView>, cx: &TestAppContext) -> String {
 }
 
 /// Let the backend's events reach the models until `done` holds.
-fn wait_for(cx: &mut TestAppContext, done: impl Fn(&gpui_kit::App) -> bool) {
+pub(crate) fn wait_for(cx: &mut TestAppContext, done: impl Fn(&gpui_kit::App) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         cx.run_until_parked();

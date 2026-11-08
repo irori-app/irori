@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "重複延遲",
   "settings.field.gamepad_repeat_delay.help": "按住按鈕時每次重複之間的毫秒數（5–150）。",
   "settings.field.gamepad_repeat_delay.label": "重複間隔",
+  "settings.field.overlay.label": "遊戲內覆疊（測試版）",
+  "settings.field.overlay.help": "在 Irori 啟動的遊戲中按下控制器的 Guide 鍵，會在遊戲上方開啟音量、螢幕截圖、成就和今天的筆記；開啟期間控制器輸入不會傳給遊戲。Guide + RB 擷取螢幕畫面，Guide + 上或下調整音量。在支援 layer-shell 的 Wayland 桌面（KDE Plasma、sway、Hyprland、COSMIC）上效果最佳。",
   "settings.field.gamescope_additional_options.label": "額外的 gamescope 選項",
   "settings.field.gamescope_enable_force_grab_cursor.label": "將游標鎖定在視窗內",
   "settings.field.gamescope_enable_limiter.label": "幀率限制器",

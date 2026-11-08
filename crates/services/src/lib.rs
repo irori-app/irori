@@ -10,8 +10,10 @@
 pub mod accounts;
 pub mod achievements;
 pub mod app_update;
+pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
+pub mod capture;
 mod discord;
 mod downloads;
 mod engines;
@@ -62,6 +64,7 @@ use tokio::sync::{Notify, broadcast};
 pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
 pub use achievements::{AchievementIndex, AchievementTotals, GameAchievements, Unlock};
 pub use app_update::{AppUpdateStatus, InstallKind, Release};
+pub use audio::{GameAudio, Volume, VolumeTarget};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
 pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};

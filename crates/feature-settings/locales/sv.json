@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Fördröjning före upprepning",
   "settings.field.gamepad_repeat_delay.help": "Millisekunder mellan upprepningar medan en knapp hålls nedtryckt (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Upprepningsintervall",
+  "settings.field.overlay.label": "Överlägg i spelet (beta)",
+  "settings.field.overlay.help": "Handkontrollens Guide-knapp över ett spel som Irori startat öppnar volym, skärmbilder, prestationer och dagens anteckning ovanpå spelet och håller handkontrollen borta från spelet medan överlägget är öppet. Guide + RB tar en skärmbild och Guide + upp eller ner ändrar volymen. Fungerar bäst på Wayland-skrivbord med layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Extra gamescope-alternativ",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Håll muspekaren i fönstret",
   "settings.field.gamescope_enable_limiter.label": "Bildfrekvensbegränsare",

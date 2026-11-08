@@ -539,9 +539,11 @@ impl FieldSpec {
         }
         // gpu-screen-recorder, which the replay buffer runs, is Linux only.
         // Only Linux desktops let Irori make itself the program for Windows
-        // files (`irori_services::can_open_windows_files_by_default`).
+        // files (`irori_services::can_open_windows_files_by_default`). The
+        // in-game overlay is Linux only for now.
         if (self.path == "panel.replay"
             || self.path.starts_with("iroriReplay.")
+            || self.path.starts_with("iroriOverlay.")
             || self.path == "action.open-windows-files")
             && host != HostPlatform::Linux
         {
@@ -1665,6 +1667,24 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.gamepad_repeat_delay.help")
     .keywords(&["gamepad", "controller", "repeat", "frequency"])
+    .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriOverlay.enabled",
+        "settings.field.overlay.label",
+        General,
+        "settings.group.controller",
+        Toggle,
+    )
+    .help("settings.field.overlay.help")
+    .keywords(&[
+        "overlay",
+        "in-game",
+        "guide",
+        "screenshot",
+        "volume",
+        "gamepad",
+        "controller",
+    ])
     .requires(NEEDS_CONTROLLER),
     // ---- Appearance ----
     app(

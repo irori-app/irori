@@ -16,9 +16,12 @@
 //!    Confirm presses Enter (activating the focused control), Back presses
 //!    Escape and falls back to navigating back, Alt sends Ctrl+Enter (play),
 //!    Menu opens the command palette (Ctrl+K) and the shoulders page.
-//! 3. Guide toggles Big Picture from anywhere.
+//! 3. Guide toggles Big Picture from anywhere. With the in-game overlay on
+//!    (`iroriOverlay`), Guide while a game Irori started runs opens the
+//!    overlay instead, and every input goes to it while it is open.
 //! 4. Guide + X (Square on PlayStation) saves a clip of the replay buffer,
-//!    also while a game has the window.
+//!    also while a game has the window. With the overlay on, Guide + RB takes
+//!    a screenshot and Guide + Up/Down change the system's volume.
 //!
 //! With `iroriUi.bigPictureOnController` on, a controller connecting while
 //! Irori runs (not one already there when it starts) brings Irori to the
@@ -27,8 +30,9 @@
 //! Input is ignored while `disable_controller` is set. When Irori is not the
 //! active window only Guide is honoured, and only while no game is running:
 //! it brings Irori to the front in Big Picture instead of acting on input
-//! meant for a game. Guide acts on a short press, so holding it to switch a
-//! controller off does nothing.
+//! meant for a game (with the overlay on, it opens the overlay while a game
+//! runs, whichever window is active). Guide acts on a short press, so
+//! holding it to switch a controller off does nothing.
 //!
 //! Steam Input must not make a press count twice: controllers Steam lists in
 //! `SDL_GAMECONTROLLER_IGNORE_DEVICES` (it drives them through a virtual
@@ -36,6 +40,10 @@
 //! echoes a controller press just handled (Steam's desktop layout types
 //! them) is dropped, as is a controller press echoing such a key.
 
+// Only the Linux grab reads raw events; the tests run everywhere.
+#[cfg(any(target_os = "linux", test))]
+mod evdev;
+pub(crate) mod grab;
 mod input;
 mod reader;
 
@@ -56,8 +64,8 @@ use irori_ui::nav::{self, navigator};
 use parking_lot::RwLock;
 
 pub use input::{
-    ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, InputSource, PadButton, Repeater,
-    SteamIgnoreList, StickAxis, is_ignored_device, keyboard_equivalent, map_button,
+    Chord, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, InputSource, PadButton,
+    Repeater, SteamIgnoreList, StickAxis, is_ignored_device, keyboard_equivalent, map_button,
 };
 use reader::{Message, SharedConfig};
 
@@ -195,6 +203,10 @@ impl GamepadModel {
 
 struct GamepadGlobal {
     model: Entity<GamepadModel>,
+    shared: Arc<SharedConfig>,
+    /// The reader's channel, for the thread that reads the controllers
+    /// while the overlay holds them.
+    tx: futures::channel::mpsc::UnboundedSender<Message>,
 }
 
 impl Global for GamepadGlobal {}
@@ -216,7 +228,7 @@ pub fn install(cx: &mut App) {
         .try_global::<irori_ui::Models>()
         .map(|m| m.settings.clone());
     let shared = {
-        let (disabled, initial, repeat) = settings
+        let (disabled, initial, repeat, overlay) = settings
             .as_ref()
             .map(|s| {
                 let app = &s.read(cx).app;
@@ -224,10 +236,11 @@ pub fn install(cx: &mut App) {
                     app.disable_controller,
                     app.gamepad_initial_repeat_delay,
                     app.gamepad_repeat_delay,
+                    overlay_shortcuts(app),
                 )
             })
-            .unwrap_or((false, 300, 50));
-        Arc::new(SharedConfig::new(disabled, initial, repeat))
+            .unwrap_or((false, 300, 50, false));
+        Arc::new(SharedConfig::new(disabled, initial, repeat, overlay))
     };
     if let Some(settings) = settings {
         let shared = shared.clone();
@@ -242,16 +255,21 @@ pub fn install(cx: &mut App) {
             shared
                 .repeat_ms
                 .store(app.gamepad_repeat_delay, Ordering::Relaxed);
+            shared
+                .overlay
+                .store(overlay_shortcuts(app), Ordering::Relaxed);
         })
         .detach();
     }
 
+    let (tx, mut rx) = futures::channel::mpsc::unbounded();
     let model = cx.new(|_| GamepadModel::default());
     cx.set_global(GamepadGlobal {
         model: model.clone(),
+        shared: shared.clone(),
+        tx: tx.clone(),
     });
 
-    let (tx, mut rx) = futures::channel::mpsc::unbounded();
     let thread_shared = shared.clone();
     if let Err(e) = std::thread::Builder::new()
         .name("irori-gamepad".into())
@@ -286,6 +304,19 @@ pub fn install(cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// Whether the overlay's controller shortcuts are on.
+fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> bool {
+    cfg!(target_os = "linux") && app.overlay.enabled
+}
+
+/// Hold the controllers from the game while the overlay is open (see
+/// `grab`); `None` when there is nothing to hold or this system can't.
+pub(crate) fn start_grab(cx: &App) -> Option<grab::Grab> {
+    let global = cx.try_global::<GamepadGlobal>()?;
+    let devices = global.shared.devices.lock().clone();
+    grab::Grab::start(devices, global.shared.clone(), global.tx.clone())
 }
 
 /// Controllers found this soon after start were there already; connecting
@@ -350,12 +381,7 @@ fn on_message(
                 open_for_controller(before, after, started, cx);
             }
         }
-        Message::SaveClip => {
-            let backend = irori_ui::backend(cx);
-            if backend.replay().is_some() || game_running(cx) {
-                backend.save_clip();
-            }
-        }
+        Message::Chord(chord) => on_chord(chord, cx),
         Message::Input { input, kind } => {
             if disabled
                 || !echoes
@@ -370,8 +396,35 @@ fn on_message(
                     cx.notify();
                 }
             });
+            if crate::overlay::input(input, cx) {
+                return;
+            }
+            if input == GamepadInput::Guide && crate::overlay::wanted(cx) {
+                crate::overlay::open(cx);
+                return;
+            }
             dispatch_input(input, cx);
         }
+    }
+}
+
+/// A button pressed with Guide held (see the module docs).
+fn on_chord(chord: Chord, cx: &mut App) {
+    let backend = irori_ui::backend(cx);
+    match chord {
+        Chord::Clip => {
+            if backend.replay().is_some() || game_running(cx) {
+                backend.save_clip();
+            }
+        }
+        Chord::Screenshot => {
+            let game = cx
+                .try_global::<irori_ui::Models>()
+                .and_then(|m| m.statuses.read(cx).playing().next().cloned());
+            backend.take_screenshot(game);
+        }
+        Chord::VolumeUp => backend.step_system_volume(irori_services::audio::VOLUME_STEP),
+        Chord::VolumeDown => backend.step_system_volume(-irori_services::audio::VOLUME_STEP),
     }
 }
 

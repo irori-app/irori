@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "Prodleva opakování",
   "settings.field.gamepad_repeat_delay.help": "Počet milisekund mezi opakováními při držení tlačítka (5–150).",
   "settings.field.gamepad_repeat_delay.label": "Interval opakování",
+  "settings.field.overlay.label": "Překryv ve hře (beta)",
+  "settings.field.overlay.help": "Tlačítko Guide na ovladači nad hrou spuštěnou z Irori otevře nad hrou hlasitost, snímky obrazovky, úspěchy a dnešní poznámku a po dobu otevření drží ovladač mimo hru. Guide + RB pořídí snímek obrazovky, Guide + nahoru nebo dolů mění hlasitost. Nejlépe funguje na plochách Wayland s layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
   "settings.field.gamescope_additional_options.label": "Další volby gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Držet kurzor v okně",
   "settings.field.gamescope_enable_limiter.label": "Omezovač snímků",

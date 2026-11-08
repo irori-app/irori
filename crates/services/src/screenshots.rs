@@ -146,6 +146,15 @@ fn steam_folders(steam: &Path) -> Vec<Folder> {
 }
 
 /// Where the desktop saves screenshots, without duplicates.
+/// Where Irori saves the screenshots it takes: the desktop's own screenshot
+/// folder (Spectacle's choice, else `Pictures/Screenshots`).
+pub(crate) fn save_folder() -> PathBuf {
+    desktop_folders()
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| std::env::temp_dir().join("Screenshots"))
+}
+
 fn desktop_folders() -> Vec<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
     let pictures = dirs::picture_dir().unwrap_or_else(|| home.join("Pictures"));

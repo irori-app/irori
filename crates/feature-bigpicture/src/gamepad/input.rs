@@ -405,10 +405,12 @@ fn parse_ids(list: &str) -> Vec<(u16, u16)> {
 /// The Guide button acts on a short press, when released: holding it is how
 /// many controllers switch off, which must not toggle Big Picture. Held with
 /// another button it makes a chord (Guide + X saves a clip), and then its
-/// release does nothing.
+/// release does nothing. Guide stays held through a chord, so holding it and
+/// pressing a button again makes another (Guide + Up, Up: louder twice).
 #[derive(Debug, Default)]
 pub struct GuideTap {
-    pressed: Vec<(usize, Instant)>,
+    /// Devices holding Guide: since when, and whether it made a chord.
+    pressed: Vec<(usize, Instant, bool)>,
 }
 
 impl GuideTap {
@@ -416,24 +418,57 @@ impl GuideTap {
     pub const MAX_HOLD: Duration = Duration::from_millis(600);
 
     pub fn press(&mut self, device: usize, now: Instant) {
-        self.pressed.retain(|(d, _)| *d != device);
-        self.pressed.push((device, now));
+        self.pressed.retain(|(d, ..)| *d != device);
+        self.pressed.push((device, now, false));
     }
 
     /// Whether the release at `now` ends a short press on `device`.
     pub fn release(&mut self, device: usize, now: Instant) -> bool {
-        let Some(ix) = self.pressed.iter().position(|(d, _)| *d == device) else {
+        let Some(ix) = self.pressed.iter().position(|(d, ..)| *d == device) else {
             return false;
         };
-        let (_, at) = self.pressed.swap_remove(ix);
-        now.saturating_duration_since(at) <= Self::MAX_HOLD
+        let (_, at, chorded) = self.pressed.swap_remove(ix);
+        !chorded && now.saturating_duration_since(at) <= Self::MAX_HOLD
     }
 
     /// Whether a button pressed on `device` makes a chord with Guide held
     /// there. Guide's release then no longer counts as a press.
     pub fn chord(&mut self, device: usize) -> bool {
-        let held = self.pressed.iter().position(|(d, _)| *d == device);
-        held.map(|ix| self.pressed.swap_remove(ix)).is_some()
+        match self.pressed.iter_mut().find(|(d, ..)| *d == device) {
+            Some(held) => {
+                held.2 = true;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// What a button pressed with Guide held does without opening anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Chord {
+    /// Guide + X (Square): save a clip of the replay buffer.
+    Clip,
+    /// Guide + RB (R1): take a screenshot.
+    Screenshot,
+    /// Guide + Up: the system's volume up.
+    VolumeUp,
+    /// Guide + Down: the system's volume down.
+    VolumeDown,
+}
+
+impl Chord {
+    /// The chord `input` makes with Guide. Only the clip is there without
+    /// the in-game overlay's shortcuts (`overlay`), which come with its
+    /// setting.
+    pub fn of(input: GamepadInput, overlay: bool) -> Option<Self> {
+        match input {
+            GamepadInput::Alt => Some(Chord::Clip),
+            GamepadInput::NextPage if overlay => Some(Chord::Screenshot),
+            GamepadInput::Up if overlay => Some(Chord::VolumeUp),
+            GamepadInput::Down if overlay => Some(Chord::VolumeDown),
+            _ => None,
+        }
     }
 }
 
@@ -530,6 +565,31 @@ mod tests {
         assert!(!tap.release(0, t0 + ms(200)));
         tap.press(0, t0);
         assert!(tap.release(0, t0 + ms(200)));
+    }
+
+    #[test]
+    fn guide_stays_held_through_chords() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        assert!(tap.chord(0));
+        assert!(tap.chord(0), "a second chord while Guide is still held");
+        assert!(!tap.release(0, t0 + ms(100)));
+        assert!(!tap.chord(0), "released");
+    }
+
+    #[test]
+    fn chords_follow_the_overlay_setting() {
+        use GamepadInput::*;
+        assert_eq!(Chord::of(Alt, false), Some(Chord::Clip));
+        assert_eq!(Chord::of(Alt, true), Some(Chord::Clip));
+        assert_eq!(Chord::of(NextPage, false), None);
+        assert_eq!(Chord::of(NextPage, true), Some(Chord::Screenshot));
+        assert_eq!(Chord::of(Up, true), Some(Chord::VolumeUp));
+        assert_eq!(Chord::of(Down, true), Some(Chord::VolumeDown));
+        assert_eq!(Chord::of(Up, false), None);
+        assert_eq!(Chord::of(Confirm, true), None);
+        assert_eq!(Chord::of(PrevPage, true), None);
     }
 
     #[test]

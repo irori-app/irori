@@ -359,6 +359,8 @@
   "settings.field.gamepad_initial_repeat_delay.label": "リピート開始までの遅延",
   "settings.field.gamepad_repeat_delay.help": "ボタンを押し続けている間のリピート間隔です（ミリ秒、5～150）。",
   "settings.field.gamepad_repeat_delay.label": "リピート間隔",
+  "settings.field.overlay.label": "ゲーム内オーバーレイ（ベータ）",
+  "settings.field.overlay.help": "Irori で起動したゲーム中にコントローラーの Guide ボタンを押すと、ゲームの上に音量、スクリーンショット、実績、今日のメモを開き、開いている間はコントローラーの入力をゲームに渡しません。Guide + RB でスクリーンショット、Guide + 上下で音量を変更します。layer-shell 対応の Wayland デスクトップ（KDE Plasma、sway、Hyprland、COSMIC）で最もよく動作します。",
   "settings.field.gamescope_additional_options.label": "gamescopeの追加オプション",
   "settings.field.gamescope_enable_force_grab_cursor.label": "カーソルをウィンドウ内に固定",
   "settings.field.gamescope_enable_limiter.label": "フレームリミッター",

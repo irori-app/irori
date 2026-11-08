@@ -424,6 +424,68 @@ stopping took 111 ms. The recorder's own memory is the buffer above (bitrate × 
 plus its encoder. It was not installed on the machine these numbers come from, so its
 CPU and GPU cost while a game runs still has to be measured with the real program.
 
+### In-game overlay (beta)
+
+Linux only for now; off by default (Settings › General › Controller › "In-game
+overlay", `iroriOverlay.enabled`). With it on, the controller's Guide button over a
+game Irori started opens a panel above the game instead of switching to Big Picture.
+LB/RB switch its tabs, A/B and the D-pad or left stick move, and Guide or B close it;
+after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down).
+
+- **Home**: the system's volume (the default output) and the game's (its streams
+  together), changed with Left/Right and muted with A; a screenshot; Back to Irori
+  (the main window, reopened from the tray if it was closed); quitting the game, which
+  asks first with Cancel focused and then stops it as the game page's Stop does.
+- **Screenshots**: what was taken during this session (the screenshot index, with the
+  running session counted), shown large with A.
+- **Achievements**: unlocked out of total, what this session unlocked and what is next
+  (furthest progress first, then the most common). Opening the overlay asks the store
+  afresh, at most once a minute per game.
+- **Journal**: today's note for the game, written or edited in the usual editor. Typing
+  needs the keyboard, so click the overlay first.
+
+Unlocks the session made are announced one after another in the overlay's corner, with
+their picture, when it opens (each once per run of Irori). Nothing is announced while
+the overlay is closed: that would need polling the stores during play.
+
+Shortcuts that work without opening it, also while the game has the window: Guide + RB
+(R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
+still saves a clip of the replay buffer.
+
+The surface. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
+Hyprland, COSMIC, niri, labwc) the overlay is a layer surface on the overlay layer,
+centred on the output, with on-demand keyboard interactivity: it never takes the
+keyboard from the game on its own. GNOME has no layer-shell; there the overlay opens as
+an ordinary window that takes focus, which GNOME may keep behind a fullscreen game
+(windowed or borderless games work). On X11 it is an override-redirect notification
+window that stays on top but never gets the keyboard. A game run in nested gamescope on
+a desktop is covered like any window; inside gamescope's own session (Steam's Game Mode)
+Steam decides what is shown and the overlay is not visible, so use Steam's overlay
+there. The surface exists only while the overlay is open: closed, it costs no thread,
+timer or CPU.
+
+The controller. While the overlay is open each controller's event device is opened again
+and grabbed (`EVIOCGRAB`), so the game sees none of its presses; a thread reads the
+grabbed devices meanwhile and stops when the overlay closes. The grab is let go once no
+button is held (at most 0.8 s later), so the game never sees the release of a press it
+didn't see, and the kernel lets go by itself if Irori exits. Games that read the
+controller through hidraw instead of evdev (Steam Input, SDL's HIDAPI drivers in some
+games) still see the presses; the overlay works regardless.
+
+The sound goes through `pactl` (PulseAudio's, which PipeWire's `pipewire-pulse` answers
+too), found on the host inside the Flatpak. A game's streams are those whose process
+(`application.process.id`, or `pipewire.sec.pid`) is in the game's process group or
+descends from the process Irori started, which covers Wine's and Proton's processes.
+Games another program owns (Steam, third-party launchers) have no process group of
+Irori's, so only the system volume applies to them.
+
+Screenshots come from the desktop portal's Screenshot interface without its dialog
+(KDE Plasma asks once whether Irori may), else from `grim` on wlroots desktops without
+the portal. They are saved in the desktop's screenshot folder (Spectacle's choice, else
+`Pictures/Screenshots`) as `<game> <date> <time>.png` and announced with a notice. The
+overlay closes before its own screenshot is taken. gamescope's session has neither: use
+Steam's screenshot there.
+
 ### Mods
 
 A game's mods sit in `<data>/mods/<runner>/<app>/` and go into the game only
