@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Dichte",
   "settings.field.ui_font_family.help": "Jede auf diesem Computer installierte Schriftart. Jede wird in der Liste in ihrer eigenen Schrift angezeigt.",
   "settings.field.ui_font_family.label": "Schriftart der Oberfläche",
-  "settings.field.ui_font_size.help": "Skaliert Text, Abstände und Bedienelemente gemeinsam.",
+  "settings.field.ui_font_size.help": "Skaliert Text, Abstände und Bedienelemente gemeinsam, zusätzlich zur Textgröße des Systems.",
   "settings.field.ui_font_size.label": "Größe der Oberfläche",
   "settings.field.ui_language.help": "Sprache der Oberfläche.",
   "settings.field.ui_language.label": "Sprache",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: Läuft, aber oft mit Problemen. Probiere Proton Experimental oder GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: Läuft laut Berichten nicht. Lies die Berichte, bevor du ein anderes Tool probierst.",
   "settings.steam_compat.protondb.pending": "Pending: Noch zu wenige Berichte für eine Bewertung.",
-  "settings.steam_compat.protondb.reports": "Berichte"
+  "settings.steam_compat.protondb.reports": "Berichte",
+  "settings.field.ui_cover_categories.label": "Kategorien auf Covern anzeigen",
+  "settings.field.ui_cover_categories.help": "Die Kategorien jedes Spiels am unteren Rand seines Covers im Raster: die ersten beiden und wie viele weitere.",
+  "settings.field.ui_group_copies.label": "Kopien aus mehreren Stores als ein Spiel anzeigen",
+  "settings.field.ui_group_copies.help": "Ein Spiel, das du auf Steam, bei Epic Games und GOG besitzt, erscheint einmal und startet die installierte Kopie. Auf seiner Seite wechselst du zwischen den Kopien; jede behält ihre eigene Spielzeit und ihre Erfolge."
 }

@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Masqué dans Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite ne connaît pas son dossier d’installation : Irori ne pourrait pas savoir quand il tourne.",
   "ui.playnite.reason.folder_missing": "Son dossier d’installation a disparu : {path}",
-  "ui.import.summary.warnings": "Fichiers de {launcher} qu’Irori n’a pas pu lire"
+  "ui.import.summary.warnings": "Fichiers de {launcher} qu’Irori n’a pas pu lire",
+  "ui.copies.title": "Copies",
+  "ui.copies.open": "Ouvrir la copie {store}",
+  "ui.copies.make_default": "Utiliser cette copie par défaut",
+  "ui.copies.separate": "Afficher cette copie à part",
+  "ui.copies.separate_all": "Afficher chaque copie à part"
 }

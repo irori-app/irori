@@ -772,5 +772,13 @@
   "library.folder.find_art": "Kapak görsellerini çevrimiçi bul (PCGamingWiki ve Steam)",
   "library.folder.skipped_hint": "Kurulum ve kaldırma programları, yeniden dağıtılabilir paketler ve çökme işleyicileri listelenmez. Bir oyunun programını daha sonra Düzenle ile değiştirebilirsiniz.",
   "library.folder.add_one": "1 oyun ekle",
-  "library.folder.add_other": "{count} oyun ekle"
+  "library.folder.add_other": "{count} oyun ekle",
+  "library.toolbar.group.genre": "Tür",
+  "library.filters.section.genre": "Tür",
+  "library.group.no_genre": "Türü yok",
+  "library.menu.combine": "Diğer mağazalardaki kopyalarla birleştir…",
+  "library.combine.hint": "“{title}” oyununun diğer kopyalarını seçin, sonra Tek oyunda birleştir’i seçin.",
+  "library.bulk.combine": "Tek oyunda birleştir",
+  "library.bulk.combine_tooltip": "Seçilen oyunları, mağazalarından tek bir oyunun kopyaları olarak göster",
+  "library.bulk.done.combined": "{count} oyun artık tek bir giriş"
 }

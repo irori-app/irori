@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Yoğunluk",
   "settings.field.ui_font_family.help": "Bu bilgisayarda yüklü herhangi bir yazı tipi. Listedeki her biri kendi görünümüyle gösterilir.",
   "settings.field.ui_font_family.label": "Arayüz yazı tipi",
-  "settings.field.ui_font_size.help": "Metni, boşlukları ve denetimleri birlikte ölçekler.",
+  "settings.field.ui_font_size.help": "Metni, boşlukları ve denetimleri sistemin metin boyutunun üzerine birlikte ölçekler.",
   "settings.field.ui_font_size.label": "Arayüz boyutu",
   "settings.field.ui_language.help": "Arayüzün dili.",
   "settings.field.ui_language.label": "Dil",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: çalışır ama çoğu zaman sorunlu. Proton Experimental veya GE-Proton deneyin.",
   "settings.steam_compat.protondb.borked": "Borked: raporlara göre çalışmıyor. Başka bir araç denemeden önce raporları okuyun.",
   "settings.steam_compat.protondb.pending": "Pending: puan için henüz yeterli rapor yok.",
-  "settings.steam_compat.protondb.reports": "Raporlar"
+  "settings.steam_compat.protondb.reports": "Raporlar",
+  "settings.field.ui_cover_categories.label": "Kapaklarda kategorileri göster",
+  "settings.field.ui_cover_categories.help": "Her oyunun kategorileri ızgaradaki kapağının altında: ilk ikisi ve kaç tane daha olduğu.",
+  "settings.field.ui_group_copies.label": "Birden çok mağazadaki kopyaları tek oyun olarak göster",
+  "settings.field.ui_group_copies.help": "Steam, Epic Games ve GOG’da sahip olunan bir oyun bir kez görünür ve kurulu kopyayı başlatır. Sayfası kopyalar arasında geçiş yapar; her biri kendi oynama süresini ve başarımlarını korur."
 }

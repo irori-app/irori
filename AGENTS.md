@@ -422,6 +422,17 @@ commands without a window.
 - **Library:** store games without DLC, plus user overrides (title, art), become a
   sorted `Arc<LibrarySnapshot>` with a revision number. Rebuilds are debounced (30 ms)
   after `LibraryChanged`/`GameChanged`.
+- **Copies** (`copies.rs`): one game owned on several stores is one library entry
+  (`iroriUi.groupCopies`, on by default). Irori matches copies itself only by folded
+  title on different stores, never with two of one title on a store, release years
+  more than a year apart, added games or ROMs; the user combines and separates copies
+  (`GameOverrides::copy_of`, `default_copy`, synced with the other overrides).
+  `LibrarySnapshot::games` holds each entry's default copy (installed, then the user's
+  pick, then the last played), `other_copies` the rest; `get` finds every copy,
+  `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
+  counts, storage, backups and stats). Every per-game operation keeps the copy's own
+  `GameId`; a store filter shows that store's copy. Screens offer the copies through
+  `irori_ui::copies`.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank

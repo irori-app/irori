@@ -772,5 +772,13 @@
   "library.folder.find_art": "온라인에서 표지 찾기 (PCGamingWiki 및 Steam)",
   "library.folder.skipped_hint": "설치 프로그램, 제거 프로그램, 재배포 패키지, 충돌 처리기는 표시되지 않습니다. 게임의 프로그램은 나중에 ‘편집’에서 바꿀 수 있습니다.",
   "library.folder.add_one": "게임 1개 추가",
-  "library.folder.add_other": "게임 {count}개 추가"
+  "library.folder.add_other": "게임 {count}개 추가",
+  "library.toolbar.group.genre": "장르",
+  "library.filters.section.genre": "장르",
+  "library.group.no_genre": "장르 없음",
+  "library.menu.combine": "다른 스토어의 사본과 합치기…",
+  "library.combine.hint": "“{title}”의 다른 사본을 고른 다음 하나의 게임으로 합치기를 선택하세요.",
+  "library.bulk.combine": "하나의 게임으로 합치기",
+  "library.bulk.combine_tooltip": "고른 게임을 각 스토어에 있는 하나의 게임 사본으로 표시합니다",
+  "library.bulk.done.combined": "게임 {count}개가 이제 하나의 항목입니다"
 }

@@ -139,5 +139,13 @@
   "shell.palette.add_folder": "Добавить игры из папки…",
   "shell.palette.add_folder_keywords": "папка поиск импорт добавить программы",
   "shell.palette.steam_play": "Инструмент Steam Play для {title}",
-  "shell.palette.steam_play_keywords": "proton инструмент совместимости steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton инструмент совместимости steam play ge-proton",
+  "shell.palette.interface_larger": "Увеличить интерфейс",
+  "shell.palette.interface_smaller": "Уменьшить интерфейс",
+  "shell.palette.interface_reset": "Сбросить размер интерфейса",
+  "shell.palette.interface_size_keywords": "масштаб размер текст больше меньше интерфейс зум",
+  "shell.menu.view": "Вид",
+  "shell.palette.group_by_genre": "Группировать библиотеку по жанру",
+  "shell.palette.ungroup_by_genre": "Не группировать библиотеку по жанру",
+  "shell.palette.genre_keywords": "жанр экшен приключения стратегия головоломка rpg шутер"
 }

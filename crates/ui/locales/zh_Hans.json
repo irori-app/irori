@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "在 Playnite 中已隐藏。",
   "ui.playnite.reason.no_install_folder": "Playnite 不知道它的安装文件夹，因此 Irori 无法判断它何时在运行。",
   "ui.playnite.reason.folder_missing": "它的安装文件夹不见了：{path}",
-  "ui.import.summary.warnings": "Irori 无法读取的 {launcher} 文件"
+  "ui.import.summary.warnings": "Irori 无法读取的 {launcher} 文件",
+  "ui.copies.title": "副本",
+  "ui.copies.open": "打开 {store} 上的副本",
+  "ui.copies.make_default": "将此副本设为默认",
+  "ui.copies.separate": "单独显示此副本",
+  "ui.copies.separate_all": "分别显示每个副本"
 }

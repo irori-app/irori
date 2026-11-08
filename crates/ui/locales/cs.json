@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "V Playnite je skrytá.",
   "ui.playnite.reason.no_install_folder": "Playnite pro ni nezná instalační složku, takže Irori nepozná, kdy běží.",
   "ui.playnite.reason.folder_missing": "Její instalační složka zmizela: {path}",
-  "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst"
+  "ui.import.summary.warnings": "Soubory {launcher}, které Irori nedokázal přečíst",
+  "ui.copies.title": "Kopie",
+  "ui.copies.open": "Otevřít kopii z {store}",
+  "ui.copies.make_default": "Nastavit tuto kopii jako výchozí",
+  "ui.copies.separate": "Zobrazovat tuto kopii samostatně",
+  "ui.copies.separate_all": "Zobrazovat každou kopii samostatně"
 }

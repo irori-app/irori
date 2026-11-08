@@ -772,5 +772,13 @@
   "library.folder.find_art": "Caută coperte online (PCGamingWiki și Steam)",
   "library.folder.skipped_hint": "Programele de instalare și dezinstalare, pachetele redistribuibile și gestionarele de erori nu sunt afișate. Poți schimba ulterior programul unui joc din Editează.",
   "library.folder.add_one": "Adaugă 1 joc",
-  "library.folder.add_other": "Adaugă jocuri: {count}"
+  "library.folder.add_other": "Adaugă jocuri: {count}",
+  "library.toolbar.group.genre": "Gen",
+  "library.filters.section.genre": "Gen",
+  "library.group.no_genre": "Fără gen",
+  "library.menu.combine": "Combină cu copii din alte magazine…",
+  "library.combine.hint": "Alege celelalte copii ale „{title}”, apoi Combină într-un singur joc.",
+  "library.bulk.combine": "Combină într-un singur joc",
+  "library.bulk.combine_tooltip": "Afișează jocurile alese drept copii ale aceluiași joc, din magazinele lor",
+  "library.bulk.done.combined": "Jocuri combinate într-o singură intrare: {count}"
 }

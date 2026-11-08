@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Hustota",
   "settings.field.ui_font_family.help": "Jakékoli písmo nainstalované v tomto počítači. Každé se v seznamu zobrazí svým vlastním řezem.",
   "settings.field.ui_font_family.label": "Písmo rozhraní",
-  "settings.field.ui_font_size.help": "Mění velikost textu, mezer a ovládacích prvků najednou.",
+  "settings.field.ui_font_size.help": "Mění velikost textu, mezer a ovládacích prvků najednou, navíc k velikosti textu nastavené v systému.",
   "settings.field.ui_font_size.label": "Velikost rozhraní",
   "settings.field.ui_language.help": "Jazyk rozhraní.",
   "settings.field.ui_language.label": "Jazyk",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: běží, ale často s problémy. Zkuste Proton Experimental nebo GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: podle hlášení nefunguje. Než zkusíte jiný nástroj, přečtěte si hlášení.",
   "settings.steam_compat.protondb.pending": "Pending: pro hodnocení je zatím málo hlášení.",
-  "settings.steam_compat.protondb.reports": "Hlášení"
+  "settings.steam_compat.protondb.reports": "Hlášení",
+  "settings.field.ui_cover_categories.label": "Zobrazovat kategorie na obalech",
+  "settings.field.ui_cover_categories.help": "Kategorie každé hry při spodním okraji jejího obalu v mřížce: první dvě a kolik dalších.",
+  "settings.field.ui_group_copies.label": "Zobrazovat kopie z více obchodů jako jednu hru",
+  "settings.field.ui_group_copies.help": "Hra vlastněná na Steamu, v Epic Games a na GOG se zobrazí jednou a spouští nainstalovanou kopii. Na její stránce lze přepínat mezi kopiemi; každá si ponechává vlastní herní čas i úspěchy."
 }

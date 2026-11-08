@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Verborgen in Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite kent geen installatiemap ervoor, dus Irori kan niet zien wanneer het draait.",
   "ui.playnite.reason.folder_missing": "De installatiemap is verdwenen: {path}",
-  "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen"
+  "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen",
+  "ui.copies.title": "Exemplaren",
+  "ui.copies.open": "Exemplaar van {store} openen",
+  "ui.copies.make_default": "Dit exemplaar standaard maken",
+  "ui.copies.separate": "Dit exemplaar apart tonen",
+  "ui.copies.separate_all": "Elk exemplaar apart tonen"
 }

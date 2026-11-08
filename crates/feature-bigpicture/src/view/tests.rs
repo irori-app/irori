@@ -240,11 +240,15 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
     // returns to the results.
     cx.simulate_keystrokes(handle, "up right right right enter");
     cx.read(|cx| assert!(view.read(cx).library.searching));
+    let computes = cx.read(|cx| view.read(cx).show_option_computes());
     cx.simulate_input(handle, "alm");
     cx.read(|cx| {
         let v = view.read(cx);
         assert!(!v.is_overlay_open(), "M typed into the field");
         assert!(v.library.games.is_empty());
+        // Typing filters the list but doesn't read the library again for
+        // the Show choices.
+        assert_eq!(v.show_option_computes(), computes);
     });
     cx.simulate_keystrokes(handle, "backspace backspace");
     cx.simulate_keystrokes(handle, "enter");

@@ -772,5 +772,13 @@
   "library.folder.find_art": "線上尋找封面（PCGamingWiki 和 Steam）",
   "library.folder.skipped_hint": "不會列出安裝程式、解除安裝程式、執行庫和當機處理程式。之後可以在「編輯」中更改遊戲的程式。",
   "library.folder.add_one": "新增 1 款遊戲",
-  "library.folder.add_other": "新增 {count} 款遊戲"
+  "library.folder.add_other": "新增 {count} 款遊戲",
+  "library.toolbar.group.genre": "類型",
+  "library.filters.section.genre": "類型",
+  "library.group.no_genre": "無類型",
+  "library.menu.combine": "與其他商店的副本合併…",
+  "library.combine.hint": "選擇「{title}」的其他副本，然後選擇「合併為一個遊戲」。",
+  "library.bulk.combine": "合併為一個遊戲",
+  "library.bulk.combine_tooltip": "將所選遊戲顯示為同一遊戲在各商店的副本",
+  "library.bulk.done.combined": "{count} 個遊戲現已合併為一項"
 }

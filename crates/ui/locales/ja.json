@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Playnite で非表示になっています。",
   "ui.playnite.reason.no_install_folder": "Playnite がインストール先フォルダーを把握していないため、Irori は実行中かどうかを判断できません。",
   "ui.playnite.reason.folder_missing": "インストール先フォルダーがありません: {path}",
-  "ui.import.summary.warnings": "Irori が読み込めなかった {launcher} のファイル"
+  "ui.import.summary.warnings": "Irori が読み込めなかった {launcher} のファイル",
+  "ui.copies.title": "コピー",
+  "ui.copies.open": "{store} のコピーを開く",
+  "ui.copies.make_default": "このコピーを既定にする",
+  "ui.copies.separate": "このコピーを別に表示",
+  "ui.copies.separate_all": "すべてのコピーを別々に表示"
 }

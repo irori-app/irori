@@ -215,6 +215,35 @@ impl CommandSpec {
     }
 }
 
+/// The interpreter Windows needs for a script it can't start as a program
+/// (`CreateProcess` starts `.exe`, `.com`, and `.bat`/`.cmd` through Rust's
+/// own handling, but not PowerShell or Windows Script Host files): its
+/// program and the arguments that come before the script's path.
+/// `ExecutionPolicy Bypass` because the user chose this file to run, and
+/// the default policy refuses every unsigned script.
+pub fn windows_script_interpreter(path: &Path) -> Option<(&'static str, &'static [&'static str])> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "ps1" => Some((
+            "powershell.exe",
+            &["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"],
+        )),
+        "vbs" | "vbe" | "js" | "jse" | "wsf" => Some(("wscript.exe", &["//NoLogo"])),
+        _ => None,
+    }
+}
+
+/// A command running `path` on this system: directly, or on Windows through
+/// the interpreter a script needs ([`windows_script_interpreter`]).
+pub fn program_command(path: &Path) -> CommandSpec {
+    match windows_script_interpreter(path).filter(|_| cfg!(windows)) {
+        Some((interpreter, before)) => CommandSpec::new(interpreter)
+            .args(before.iter().copied())
+            .arg(path.as_os_str()),
+        None => CommandSpec::new(path),
+    }
+}
+
 impl fmt::Display for CommandSpec {
     /// Shell-like rendering for logs. Values of variables that look like
     /// secrets are masked.
@@ -773,6 +802,29 @@ impl Tail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_scripts_get_their_interpreter() {
+        let (ps, args) = windows_script_interpreter(Path::new(r"C:\g\Start.PS1")).unwrap();
+        assert_eq!(ps, "powershell.exe");
+        assert_eq!(args, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+        let (ws, args) = windows_script_interpreter(Path::new("run.vbs")).unwrap();
+        assert_eq!((ws, args), ("wscript.exe", &["//NoLogo"][..]));
+        for direct in ["game.exe", "start.bat", "start.cmd", "run.sh", "noext"] {
+            assert!(
+                windows_script_interpreter(Path::new(direct)).is_none(),
+                "{direct}"
+            );
+        }
+        let cmd = program_command(Path::new("/g/start.ps1"));
+        if cfg!(windows) {
+            assert_eq!(cmd.program, PathBuf::from("powershell.exe"));
+            assert_eq!(cmd.args.last(), Some(&OsString::from("/g/start.ps1")));
+        } else {
+            assert_eq!(cmd.program, PathBuf::from("/g/start.ps1"));
+            assert!(cmd.args.is_empty());
+        }
+    }
 
     #[test]
     fn matches_wine_and_native_command_lines() {

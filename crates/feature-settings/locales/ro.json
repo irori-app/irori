@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Densitate",
   "settings.field.ui_font_family.help": "Orice font instalat pe acest computer. Fiecare font din listă este afișat cu propriile litere.",
   "settings.field.ui_font_family.label": "Fontul interfeței",
-  "settings.field.ui_font_size.help": "Scalează împreună textul, spațierea și controalele.",
+  "settings.field.ui_font_size.help": "Scalează împreună textul, spațierea și controalele, pe lângă dimensiunea textului din sistem.",
   "settings.field.ui_font_size.label": "Dimensiunea interfeței",
   "settings.field.ui_language.help": "Limba interfeței.",
   "settings.field.ui_language.label": "Limbă",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: merge, dar adesea cu probleme. Încearcă Proton Experimental sau GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: conform rapoartelor nu merge. Citește rapoartele înainte să încerci alt instrument.",
   "settings.steam_compat.protondb.pending": "Pending: prea puține rapoarte pentru o evaluare deocamdată.",
-  "settings.steam_compat.protondb.reports": "Rapoarte"
+  "settings.steam_compat.protondb.reports": "Rapoarte",
+  "settings.field.ui_cover_categories.label": "Afișează categoriile pe coperți",
+  "settings.field.ui_cover_categories.help": "Categoriile fiecărui joc în partea de jos a copertei în grilă: primele două și câte mai sunt.",
+  "settings.field.ui_group_copies.label": "Afișează copiile din mai multe magazine ca un singur joc",
+  "settings.field.ui_group_copies.help": "Un joc deținut pe Steam, Epic Games și GOG apare o singură dată și pornește copia instalată. Pagina lui comută între copii; fiecare își păstrează timpul de joc și realizările."
 }

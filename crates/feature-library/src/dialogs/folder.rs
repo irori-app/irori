@@ -103,11 +103,7 @@ impl AddFolderDialog {
             let mut failed = Vec::new();
             for game in games {
                 // Pictures only: themed icon names and SVGs are not cover art.
-                let picture = game.icon.as_ref().filter(|p| {
-                    p.extension()
-                        .and_then(|e| e.to_str())
-                        .is_some_and(|e| matches!(e, "png" | "jpg" | "jpeg" | "webp"))
-                });
+                let picture = game.icon.as_ref().filter(|p| super::is_picture(p));
                 let (cover, background) = match picture.map(|p| p.display().to_string()) {
                     Some(c) => (Some(c), None),
                     None if find_art => {
@@ -371,6 +367,29 @@ pub fn open_add_folder_dialog(window: &mut Window, cx: &mut App) {
     window
         .spawn(cx, async move |cx| {
             let Some(folder) = pick.await else { return };
+            let _ = cx.update(|window, cx| offer_folder(folder, window, cx));
+        })
+        .detach();
+}
+
+/// Look for games in a folder dropped on the library and offer them.
+pub(crate) fn open_add_dropped_folder_dialog(folder: PathBuf, window: &mut Window, cx: &mut App) {
+    if crate::sideload_store(cx).is_none() {
+        crate::notify_error(
+            t("library.folder.title"),
+            &anyhow::anyhow!(t("library.sideload.error.unavailable").to_string()),
+            window,
+            cx,
+        );
+        return;
+    }
+    offer_folder(folder, window, cx);
+}
+
+/// Scan `folder` off the UI thread, then offer the games found in it.
+fn offer_folder(folder: PathBuf, window: &mut Window, cx: &mut App) {
+    window
+        .spawn(cx, async move |cx| {
             let scan = cx.update(|_, cx| {
                 let folder = folder.clone();
                 let scan = irori_ui::backend(cx)

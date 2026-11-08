@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Скрыта в Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite не знает её папку установки, поэтому Irori не сможет понять, когда она запущена.",
   "ui.playnite.reason.folder_missing": "Её папка установки пропала: {path}",
-  "ui.import.summary.warnings": "Файлы {launcher}, которые Irori не смог прочитать"
+  "ui.import.summary.warnings": "Файлы {launcher}, которые Irori не смог прочитать",
+  "ui.copies.title": "Копии",
+  "ui.copies.open": "Открыть копию из {store}",
+  "ui.copies.make_default": "Сделать эту копию основной",
+  "ui.copies.separate": "Показывать эту копию отдельно",
+  "ui.copies.separate_all": "Показывать каждую копию отдельно"
 }

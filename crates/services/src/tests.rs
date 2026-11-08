@@ -713,3 +713,168 @@ fn backups_while_playing_repeat_tell_one_failure_and_stop_with_the_session() {
         std::time::Duration::from_secs(900)
     );
 }
+
+/// A store of fixed games, for library tests.
+struct ListStore {
+    runner: Runner,
+    games: Vec<Arc<GameInfo>>,
+}
+
+impl ListStore {
+    fn store(runner: Runner, games: &[(&str, &str)]) -> irori_core::DynStore {
+        let games = games
+            .iter()
+            .map(|(app, title)| {
+                Arc::new(
+                    GameInfo {
+                        runner: Some(runner),
+                        app_name: (*app).into(),
+                        title: (*title).into(),
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )
+            })
+            .collect();
+        Arc::new(Self { runner, games })
+    }
+}
+
+#[async_trait]
+impl Store for ListStore {
+    fn runner(&self) -> Runner {
+        self.runner
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        Some(UserInfo::default())
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.games.clone()
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        self.games.iter().find(|g| g.app_name == app).cloned()
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+}
+
+#[test]
+fn copies_combine_separate_and_prefer_as_the_user_says() {
+    use irori_core::GameId;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![
+            ListStore::store(
+                Runner::Steam,
+                &[
+                    ("copies-620", "Copies: Portal 2"),
+                    ("copies-1", "Copies: A"),
+                ],
+            ),
+            ListStore::store(
+                Runner::Gog,
+                &[("copies-p2", "Copies: Portal 2"), ("copies-b", "Copies: B")],
+            ),
+        ]
+    })
+    .unwrap();
+    let ids = |b: &Backend, id: &GameId| -> Vec<String> {
+        b.library().copies_of(id).iter().map(GameId::key).collect()
+    };
+    let (steam, gog) = (
+        GameId::new(Runner::Steam, "copies-620"),
+        GameId::new(Runner::Gog, "copies-p2"),
+    );
+    let (a, other) = (
+        GameId::new(Runner::Steam, "copies-1"),
+        GameId::new(Runner::Gog, "copies-b"),
+    );
+    b.rebuild_library();
+    assert_eq!(ids(&b, &steam), ["gog:copies-p2", "steam:copies-620"]);
+    assert!(ids(&b, &a).is_empty());
+
+    // The user's choice leads.
+    b.userdata
+        .set_default_copy(&steam, &[gog.clone(), steam.clone()]);
+    b.rebuild_library();
+    assert_eq!(ids(&b, &gog), ["steam:copies-620", "gog:copies-p2"]);
+    assert_eq!(b.library().entry_of(&gog).unwrap().id(), steam);
+
+    // Games of other titles combine only when the user says so.
+    b.userdata.combine_copies(&[a.clone(), other.clone()]);
+    b.rebuild_library();
+    assert_eq!(ids(&b, &other), ["steam:copies-1", "gog:copies-b"]);
+
+    // Separated, each stands alone; editing a game's title keeps that.
+    b.userdata
+        .separate_copy(&steam, &[steam.clone(), gog.clone()]);
+    b.userdata.set_overrides(
+        &steam,
+        irori_core::game::GameOverrides {
+            title: Some("Copies: Portal 2".into()),
+            ..Default::default()
+        },
+    );
+    b.rebuild_library();
+    assert!(ids(&b, &steam).is_empty());
+    assert!(ids(&b, &gog).is_empty());
+    b.userdata.separate_copies(&[a.clone(), other.clone()]);
+    b.rebuild_library();
+    assert!(ids(&b, &a).is_empty());
+    assert_eq!(b.library().all_games().count(), 4);
+
+    // Turned off, nothing is grouped.
+    b.userdata.combine_copies(&[a.clone(), other.clone()]);
+    b.settings.update_app(|s| s.ui.group_copies = false);
+    b.rebuild_library();
+    assert!(ids(&b, &a).is_empty());
+    b.settings.update_app(|s| s.ui.group_copies = true);
+}

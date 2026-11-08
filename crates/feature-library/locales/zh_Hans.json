@@ -772,5 +772,13 @@
   "library.folder.find_art": "在线查找封面（PCGamingWiki 和 Steam）",
   "library.folder.skipped_hint": "不会列出安装程序、卸载程序、运行库和崩溃处理程序。之后可以在“编辑”中更改游戏的程序。",
   "library.folder.add_one": "添加 1 款游戏",
-  "library.folder.add_other": "添加 {count} 款游戏"
+  "library.folder.add_other": "添加 {count} 款游戏",
+  "library.toolbar.group.genre": "类型",
+  "library.filters.section.genre": "类型",
+  "library.group.no_genre": "无类型",
+  "library.menu.combine": "与其他商店的副本合并…",
+  "library.combine.hint": "选择“{title}”的其他副本，然后选择“合并为一个游戏”。",
+  "library.bulk.combine": "合并为一个游戏",
+  "library.bulk.combine_tooltip": "将所选游戏显示为同一游戏在各商店的副本",
+  "library.bulk.done.combined": "{count} 个游戏现已合并为一项"
 }

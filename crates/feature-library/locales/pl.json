@@ -772,5 +772,13 @@
   "library.folder.find_art": "Szukaj okładek online (PCGamingWiki i Steam)",
   "library.folder.skipped_hint": "Instalatory, deinstalatory, pakiety redystrybucyjne i programy obsługi awarii nie są wyświetlane. Program gry możesz później zmienić w Edytuj.",
   "library.folder.add_one": "Dodaj 1 grę",
-  "library.folder.add_other": "Dodaj gry: {count}"
+  "library.folder.add_other": "Dodaj gry: {count}",
+  "library.toolbar.group.genre": "Gatunek",
+  "library.filters.section.genre": "Gatunek",
+  "library.group.no_genre": "Bez gatunku",
+  "library.menu.combine": "Połącz z kopiami z innych sklepów…",
+  "library.combine.hint": "Wybierz pozostałe kopie gry „{title}”, a potem Połącz w jedną grę.",
+  "library.bulk.combine": "Połącz w jedną grę",
+  "library.bulk.combine_tooltip": "Pokazuj wybrane gry jako kopie jednej gry z ich sklepów",
+  "library.bulk.done.combined": "Połączone gry ({count}) są teraz jedną pozycją"
 }

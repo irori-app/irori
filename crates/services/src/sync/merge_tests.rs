@@ -476,6 +476,32 @@ fn custom_art_from_files_stays_on_its_computer() {
 }
 
 #[test]
+fn combined_and_separated_copies_travel_with_the_custom_title() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "gog:1".into(),
+        GameOverrides {
+            copy_of: Some("steam:620".into()),
+            default_copy: true,
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    let at_b = &b.data.overrides["gog:1"];
+    assert_eq!(at_b.copy_of.as_deref(), Some("steam:620"));
+    assert!(at_b.default_copy);
+    // b separates it again; a learns that it stands alone.
+    let o = b.data.overrides.get_mut("gog:1").unwrap();
+    o.copy_of = Some(String::new());
+    o.default_copy = false;
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(a.data.overrides["gog:1"].copy_of.as_deref(), Some(""));
+    assert!(!a.data.overrides["gog:1"].default_copy);
+}
+
+#[test]
 fn game_modes_the_user_set_travel_with_the_custom_title() {
     use irori_core::GameMode;
     let mut a = Device::new("a");

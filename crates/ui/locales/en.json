@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Hidden in Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite knows no install folder for it, so Irori couldn’t tell when it’s running.",
   "ui.playnite.reason.folder_missing": "Its install folder is gone: {path}",
-  "ui.import.summary.warnings": "{launcher} files Irori couldn’t read"
+  "ui.import.summary.warnings": "{launcher} files Irori couldn’t read",
+  "ui.copies.title": "Copies",
+  "ui.copies.open": "Open the {store} copy",
+  "ui.copies.make_default": "Make this the default copy",
+  "ui.copies.separate": "Show this copy on its own",
+  "ui.copies.separate_all": "Show every copy on its own"
 }

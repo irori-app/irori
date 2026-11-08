@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
 use irori_core::log_cap;
-use irori_core::process::{self, CancellationToken, CommandSpec, ExecResult, RunOptions};
+use irori_core::process::{self, CancellationToken, ExecResult, RunOptions};
 use irori_core::{
     Event, GameId, GameInfo, InstallPlatform, InstallProgress, LaunchOption, LaunchRequest, Notice,
     NoticeLevel, Outcome, Paths, RemoveArgs, Runner, SaveConflict, SaveDownloadFailed, StatusKind,
@@ -150,7 +150,7 @@ impl Backend {
         // wins over another store's copy of the same game.
         let library = self.library();
         let mut titles = std::collections::HashMap::new();
-        for g in library.games.iter().filter(|g| !g.is_dlc) {
+        for g in library.all_games().filter(|g| !g.is_dlc) {
             let name = irori_core::paths::sanitize(g.title.trim());
             if g.is_installed || !titles.contains_key(&name) {
                 titles.insert(name, g.id().key());
@@ -1157,7 +1157,8 @@ pub(crate) fn append_log(path: &Path, text: &str) {
 }
 
 async fn run_script(script: &str, game: &GameInfo, log_file: &Path) -> Result<()> {
-    let spec = CommandSpec::new(script).envs(crate::programs::identity_env(game));
+    let spec =
+        process::program_command(Path::new(script)).envs(crate::programs::identity_env(game));
     let res = process::run(&spec, RunOptions::default().log_file(log_file)).await?;
     if !res.success() {
         tracing::warn!("script {script} exited with {:?}", res.code);

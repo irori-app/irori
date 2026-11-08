@@ -390,6 +390,16 @@ pub struct GameOverrides {
         deserialize_with = "crate::game_mode::lenient_option"
     )]
     pub game_modes: Option<Vec<crate::GameMode>>,
+    /// How this copy joins other stores' copies of the game in one library
+    /// entry, as the user decided: `Some(key)` joins the game with that
+    /// `GameId::key()`, `Some("")` keeps it apart from copies Irori would
+    /// match by itself, `None` lets Irori match it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copy_of: Option<String>,
+    /// The user picked this copy as the one its entry plays and installs
+    /// (an installed copy still goes first).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub default_copy: bool,
 }
 
 impl GameOverrides {

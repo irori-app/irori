@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Dolt i Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite känner inte till någon installationsmapp för det, så Irori kan inte se när det körs.",
   "ui.playnite.reason.folder_missing": "Dess installationsmapp är borta: {path}",
-  "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa"
+  "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa",
+  "ui.copies.title": "Kopior",
+  "ui.copies.open": "Öppna kopian från {store}",
+  "ui.copies.make_default": "Gör den här kopian till standard",
+  "ui.copies.separate": "Visa den här kopian för sig",
+  "ui.copies.separate_all": "Visa varje kopia för sig"
 }

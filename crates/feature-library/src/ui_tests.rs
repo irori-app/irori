@@ -227,6 +227,27 @@ fn keyboard_navigation_filters_and_search(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "end");
     assert_eq!(focused(cx), Some(GameId::new(Runner::Gog, "5")));
 
+    // Typing a letter in the grid starts a search with it, in the field.
+    cx.simulate_keystrokes(window, "c");
+    draw(cx);
+    let search_focused = cx
+        .update_window(window, |_, window, cx| {
+            view.read(cx).search_focus_handle(cx).is_focused(window)
+        })
+        .unwrap();
+    assert!(search_focused, "typing moves to the search field");
+    cx.simulate_input(window, "eleste");
+    draw(cx);
+    assert_eq!(titles(cx), vec!["Celeste"]);
+    cx.simulate_keystrokes(window, "escape");
+    draw(cx);
+    assert_eq!(titles(cx).len(), 5);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+
     // "/" moves focus to the search field; typing filters instantly.
     cx.simulate_keystrokes(window, "/");
     draw(cx);
@@ -364,6 +385,11 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
     assert_eq!(state(cx).0.len(), 5);
+    // Redrawing with everything picked doesn't work out the bar again.
+    let computes = cx.read(|cx| view.read(cx).bulk_computes());
+    draw(cx);
+    draw(cx);
+    assert_eq!(cx.read(|cx| view.read(cx).bulk_computes()), computes);
 
     // A filter hiding picked games drops them from the selection.
     cx.update(|cx| {
@@ -678,7 +704,7 @@ fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     let (window, dialog) = cx
         .update(|cx| {
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-                cx.new(|cx| SideloadDialog::new(Some(app_name), window, cx))
+                cx.new(|cx| SideloadDialog::with_app(Some(app_name), None, window, cx))
             })
         })
         .expect("window opens");
@@ -696,6 +722,34 @@ fn editing_an_app_keeps_and_changes_its_description(cx: &mut TestAppContext) {
     .unwrap();
     let changed = cx.read(|cx| dialog.read(cx).collect(cx));
     assert_eq!(changed.description.as_deref(), Some("A louder story."));
+}
+
+#[gpui_kit::test]
+fn a_dropped_file_opens_add_game_filled_in(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let prefill = SideloadApp {
+        title: "Hollow Knight".into(),
+        executable: Some("/games/hk/Hollow_Knight.exe".into()),
+        platform: SideloadPlatform::Windows,
+        launcher_args: "-windowed".into(),
+        ..Default::default()
+    };
+    let (_window, dialog) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| SideloadDialog::with_app(None, Some(prefill), window, cx))
+            })
+        })
+        .expect("window opens");
+    cx.run_until_parked();
+    let app = cx.read(|cx| dialog.read(cx).collect(cx));
+    assert_eq!(app.title, "Hollow Knight");
+    assert_eq!(
+        app.executable.as_deref(),
+        Some(Path::new("/games/hk/Hollow_Knight.exe"))
+    );
+    assert_eq!(app.platform, SideloadPlatform::Windows);
+    assert_eq!(app.launcher_args, "-windowed");
 }
 
 #[gpui_kit::test]

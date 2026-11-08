@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Density",
   "settings.field.ui_font_family.help": "Any font installed on this computer. Each one in the list is shown in its own face.",
   "settings.field.ui_font_family.label": "Interface font",
-  "settings.field.ui_font_size.help": "Scales text, spacing and controls together.",
+  "settings.field.ui_font_size.help": "Scales text, spacing and controls together, on top of the system’s text size.",
   "settings.field.ui_font_size.label": "Interface size",
   "settings.field.ui_language.help": "Language of the interface.",
   "settings.field.ui_language.label": "Language",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: runs, but often with problems. Try Proton Experimental or GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: reported not to run. Read the reports before trying another tool.",
   "settings.steam_compat.protondb.pending": "Pending: too few reports for a rating yet.",
-  "settings.steam_compat.protondb.reports": "Reports"
+  "settings.steam_compat.protondb.reports": "Reports",
+  "settings.field.ui_cover_categories.label": "Show categories on covers",
+  "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more.",
+  "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
+  "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements."
 }

@@ -13,6 +13,9 @@ pub struct Selection {
     picked: HashSet<GameId>,
     /// Where the last plain pick happened; Shift-click extends from here.
     anchor: Option<GameId>,
+    /// Counts changes to the picks, so what is worked out from them is
+    /// worked out again only after one.
+    revision: u64,
 }
 
 impl Selection {
@@ -27,7 +30,16 @@ impl Selection {
 
     /// Leave selection mode, forgetting the picks.
     pub fn end(&mut self) {
-        *self = Self::default();
+        let revision = self.revision + 1;
+        *self = Self {
+            revision,
+            ..Self::default()
+        };
+    }
+
+    /// Changes with every change to the picks.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     pub fn contains(&self, id: &GameId) -> bool {
@@ -47,6 +59,7 @@ impl Selection {
     /// Pick or unpick one game (a click or Ctrl-click).
     pub fn toggle(&mut self, id: &GameId) {
         self.active = true;
+        self.revision += 1;
         if !self.picked.remove(id) {
             self.picked.insert(id.clone());
         }
@@ -62,6 +75,7 @@ impl Selection {
             return;
         };
         self.active = true;
+        self.revision += 1;
         let (lo, hi) = (from.min(to), from.max(to));
         self.picked.extend(order[lo..=hi].iter().map(|g| g.id()));
     }
@@ -69,6 +83,7 @@ impl Selection {
     /// Pick every shown game.
     pub fn select_all(&mut self, order: &[Arc<GameInfo>]) {
         self.active = true;
+        self.revision += 1;
         self.picked.extend(order.iter().map(|g| g.id()));
     }
 
@@ -77,6 +92,7 @@ impl Selection {
     pub fn clear(&mut self) {
         self.picked.clear();
         self.anchor = None;
+        self.revision += 1;
     }
 
     /// Drop picks that are no longer shown (a filter or search changed), so
@@ -86,7 +102,11 @@ impl Selection {
             return;
         }
         let shown: HashSet<GameId> = order.iter().map(|g| g.id()).collect();
+        let before = self.picked.len();
         self.picked.retain(|id| shown.contains(id));
+        if self.picked.len() != before {
+            self.revision += 1;
+        }
     }
 
     /// The picked games in display order.
@@ -161,5 +181,27 @@ mod tests {
         assert!(s.is_empty() && s.is_active());
         s.end();
         assert!(!s.is_active());
+    }
+
+    #[test]
+    fn every_change_to_the_picks_moves_the_revision() {
+        let all = order(4);
+        let mut s = Selection::default();
+        let mut last = s.revision();
+        let mut changed = |s: &Selection| {
+            let moved = s.revision() != last;
+            last = s.revision();
+            moved
+        };
+        s.toggle(&id(0));
+        assert!(changed(&s));
+        s.select_all(&all);
+        assert!(changed(&s));
+        s.keep_shown(&all);
+        assert!(!changed(&s), "nothing dropped");
+        s.keep_shown(&all[..1]);
+        assert!(changed(&s));
+        s.end();
+        assert!(changed(&s));
     }
 }

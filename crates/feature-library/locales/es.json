@@ -772,5 +772,13 @@
   "library.folder.find_art": "Buscar carátulas en línea (PCGamingWiki y Steam)",
   "library.folder.skipped_hint": "No se muestran instaladores, desinstaladores, redistribuibles ni gestores de fallos. Puedes cambiar el programa de un juego más tarde con Editar.",
   "library.folder.add_one": "Añadir 1 juego",
-  "library.folder.add_other": "Añadir {count} juegos"
+  "library.folder.add_other": "Añadir {count} juegos",
+  "library.toolbar.group.genre": "Género",
+  "library.filters.section.genre": "Género",
+  "library.group.no_genre": "Sin género",
+  "library.menu.combine": "Combinar con copias de otras tiendas…",
+  "library.combine.hint": "Elige las otras copias de «{title}» y luego Combinar en un juego.",
+  "library.bulk.combine": "Combinar en un juego",
+  "library.bulk.combine_tooltip": "Mostrar los juegos elegidos como copias de un mismo juego en sus tiendas",
+  "library.bulk.done.combined": "{count} juegos son ahora una sola entrada"
 }

@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Densità",
   "settings.field.ui_font_family.help": "Qualsiasi font installato su questo computer. Nell’elenco ognuno è mostrato con il proprio carattere.",
   "settings.field.ui_font_family.label": "Font dell’interfaccia",
-  "settings.field.ui_font_size.help": "Ridimensiona insieme testo, spaziature e controlli.",
+  "settings.field.ui_font_size.help": "Ridimensiona insieme testo, spaziature e controlli, oltre alla dimensione del testo del sistema.",
   "settings.field.ui_font_size.label": "Dimensione dell'interfaccia",
   "settings.field.ui_language.help": "Lingua dell'interfaccia.",
   "settings.field.ui_language.label": "Lingua",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: funziona, ma spesso con problemi. Prova Proton Experimental o GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: secondo i resoconti non funziona. Leggili prima di provare un altro strumento.",
   "settings.steam_compat.protondb.pending": "Pending: ancora troppo pochi resoconti per una valutazione.",
-  "settings.steam_compat.protondb.reports": "Resoconti"
+  "settings.steam_compat.protondb.reports": "Resoconti",
+  "settings.field.ui_cover_categories.label": "Mostra le categorie sulle copertine",
+  "settings.field.ui_cover_categories.help": "Le categorie di ogni gioco in fondo alla sua copertina nella griglia: le prime due e quante altre.",
+  "settings.field.ui_group_copies.label": "Mostra le copie di più negozi come un solo gioco",
+  "settings.field.ui_group_copies.help": "Un gioco posseduto su Steam, Epic Games e GOG compare una volta sola e avvia la copia installata. La sua pagina passa da una copia all’altra; ognuna conserva il proprio tempo di gioco e i propri obiettivi."
 }

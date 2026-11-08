@@ -139,5 +139,13 @@
   "shell.palette.add_folder": "フォルダーからゲームを追加…",
   "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム",
   "shell.palette.steam_play": "{title} の Steam Play ツール",
-  "shell.palette.steam_play_keywords": "proton 互換性ツール steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton 互換性ツール steam play ge-proton",
+  "shell.palette.interface_larger": "インターフェースを大きくする",
+  "shell.palette.interface_smaller": "インターフェースを小さくする",
+  "shell.palette.interface_reset": "インターフェースのサイズを元に戻す",
+  "shell.palette.interface_size_keywords": "ズーム 拡大 縮小 サイズ 文字 インターフェース",
+  "shell.menu.view": "表示",
+  "shell.palette.group_by_genre": "ライブラリをジャンルでグループ化",
+  "shell.palette.ungroup_by_genre": "ライブラリのジャンル別グループ化をやめる",
+  "shell.palette.genre_keywords": "ジャンル アクション アドベンチャー ストラテジー パズル RPG シューティング"
 }

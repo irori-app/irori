@@ -772,5 +772,13 @@
   "library.folder.find_art": "Cover online suchen (PCGamingWiki und Steam)",
   "library.folder.skipped_hint": "Installer, Deinstaller, Redistributables und Absturzmelder werden nicht aufgeführt. Das Programm eines Spiels lässt sich später über „Bearbeiten“ ändern.",
   "library.folder.add_one": "1 Spiel hinzufügen",
-  "library.folder.add_other": "{count} Spiele hinzufügen"
+  "library.folder.add_other": "{count} Spiele hinzufügen",
+  "library.toolbar.group.genre": "Genre",
+  "library.filters.section.genre": "Genre",
+  "library.group.no_genre": "Ohne Genre",
+  "library.menu.combine": "Mit Kopien aus anderen Stores zusammenfassen…",
+  "library.combine.hint": "Wähle die anderen Kopien von „{title}“ und dann „Als ein Spiel zusammenfassen“.",
+  "library.bulk.combine": "Als ein Spiel zusammenfassen",
+  "library.bulk.combine_tooltip": "Die ausgewählten Spiele als Kopien eines Spiels aus ihren Stores anzeigen",
+  "library.bulk.done.combined": "{count} Spiele sind jetzt ein Eintrag"
 }

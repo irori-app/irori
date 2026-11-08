@@ -139,5 +139,13 @@
   "shell.palette.add_folder": "從資料夾新增遊戲…",
   "shell.palette.add_folder_keywords": "資料夾 掃描 匯入 新增 程式",
   "shell.palette.steam_play": "{title} 的 Steam Play 工具",
-  "shell.palette.steam_play_keywords": "proton 相容性工具 steam play ge-proton"
+  "shell.palette.steam_play_keywords": "proton 相容性工具 steam play ge-proton",
+  "shell.palette.interface_larger": "放大介面",
+  "shell.palette.interface_smaller": "縮小介面",
+  "shell.palette.interface_reset": "重設介面大小",
+  "shell.palette.interface_size_keywords": "縮放 放大 縮小 大小 文字 介面",
+  "shell.menu.view": "顯示方式",
+  "shell.palette.group_by_genre": "依類型將遊戲庫分組",
+  "shell.palette.ungroup_by_genre": "停止依類型將遊戲庫分組",
+  "shell.palette.genre_keywords": "類型 動作 冒險 策略 解謎 角色扮演 射擊"
 }

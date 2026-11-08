@@ -772,5 +772,13 @@
   "library.folder.find_art": "Procurar capas online (PCGamingWiki e Steam)",
   "library.folder.skipped_hint": "Instaladores, desinstaladores, redistribuíveis e gestores de falhas não são listados. Pode mudar o programa de um jogo mais tarde em Editar.",
   "library.folder.add_one": "Adicionar 1 jogo",
-  "library.folder.add_other": "Adicionar {count} jogos"
+  "library.folder.add_other": "Adicionar {count} jogos",
+  "library.toolbar.group.genre": "Género",
+  "library.filters.section.genre": "Género",
+  "library.group.no_genre": "Sem género",
+  "library.menu.combine": "Juntar com cópias de outras lojas…",
+  "library.combine.hint": "Escolha as outras cópias de «{title}» e depois Juntar num só jogo.",
+  "library.bulk.combine": "Juntar num só jogo",
+  "library.bulk.combine_tooltip": "Mostrar os jogos escolhidos como cópias de um só jogo, das suas lojas",
+  "library.bulk.done.combined": "{count} jogos são agora uma só entrada"
 }

@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Dichtheid",
   "settings.field.ui_font_family.help": "Elk lettertype dat op deze computer is geïnstalleerd. In de lijst wordt elk lettertype in zijn eigen letter getoond.",
   "settings.field.ui_font_family.label": "Lettertype van de interface",
-  "settings.field.ui_font_size.help": "Schaalt tekst, witruimte en bedieningselementen samen.",
+  "settings.field.ui_font_size.help": "Schaalt tekst, witruimte en bedieningselementen samen, bovenop de tekstgrootte van het systeem.",
   "settings.field.ui_font_size.label": "Interfacegrootte",
   "settings.field.ui_language.help": "Taal van de interface.",
   "settings.field.ui_language.label": "Taal",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: werkt, maar vaak met problemen. Probeer Proton Experimental of GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: werkt volgens de rapporten niet. Lees de rapporten voordat je een andere tool probeert.",
   "settings.steam_compat.protondb.pending": "Pending: nog te weinig rapporten voor een beoordeling.",
-  "settings.steam_compat.protondb.reports": "Rapporten"
+  "settings.steam_compat.protondb.reports": "Rapporten",
+  "settings.field.ui_cover_categories.label": "Categorieën op covers tonen",
+  "settings.field.ui_cover_categories.help": "De categorieën van elke game onderaan de cover in het raster: de eerste twee en hoeveel er nog meer zijn.",
+  "settings.field.ui_group_copies.label": "Exemplaren uit meerdere winkels als één game tonen",
+  "settings.field.ui_group_copies.help": "Een game die je op Steam, Epic Games en GOG hebt, staat er één keer en start het geïnstalleerde exemplaar. Op de pagina wissel je tussen de exemplaren; elk houdt zijn eigen speeltijd en prestaties."
 }

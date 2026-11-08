@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::paths::{expand_home, sanitize};
-use irori_core::process::{CommandSpec, split_program_args};
+use irori_core::process::{CommandSpec, program_command, split_program_args};
 use irori_core::{
     GameWatch, InstallPlatform, LaunchEnvironment, LaunchOption, LaunchPlan, LaunchRequest,
 };
@@ -258,9 +258,11 @@ fn working_dir(exe: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// Native launch: wrappers + exe + args, environment from the runtime.
+/// Native launch: wrappers + exe + args, environment from the runtime. On
+/// Windows a PowerShell or Windows Script Host script runs through its
+/// interpreter, which `CreateProcess` can't skip.
 pub(crate) fn native_plan(exe: &Path, args: Vec<String>, env: &LaunchEnvironment) -> LaunchPlan {
-    let mut cmd = CommandSpec::new(exe).args(args).envs(env.env.clone());
+    let mut cmd = program_command(exe).args(args).envs(env.env.clone());
     if let Some(dir) = working_dir(exe) {
         cmd = cmd.cwd(dir);
     }
@@ -473,6 +475,30 @@ mod tests {
         assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/games/g")));
         assert_eq!(plan.command.env.get("FOO").map(String::as_str), Some("1"));
         assert!(!plan.track_wineserver);
+    }
+
+    #[test]
+    fn native_scripts_run_through_their_interpreter_on_windows() {
+        let env = LaunchEnvironment::default();
+        let plan = native_plan(Path::new("/g/start.ps1"), vec!["-x".into()], &env);
+        if cfg!(windows) {
+            assert_eq!(plan.command.program, PathBuf::from("powershell.exe"));
+            assert_eq!(
+                plan.command.args,
+                os(&[
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "/g/start.ps1",
+                    "-x"
+                ])
+            );
+        } else {
+            assert_eq!(plan.command.program, PathBuf::from("/g/start.ps1"));
+            assert_eq!(plan.command.args, os(&["-x"]));
+        }
+        assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/g")));
     }
 
     #[test]

@@ -772,5 +772,13 @@
   "library.folder.find_art": "Cerca le copertine online (PCGamingWiki e Steam)",
   "library.folder.skipped_hint": "Installer, programmi di disinstallazione, redistribuibili e gestori di crash non sono elencati. Puoi cambiare il programma di un gioco più tardi con Modifica.",
   "library.folder.add_one": "Aggiungi 1 gioco",
-  "library.folder.add_other": "Aggiungi {count} giochi"
+  "library.folder.add_other": "Aggiungi {count} giochi",
+  "library.toolbar.group.genre": "Genere",
+  "library.filters.section.genre": "Genere",
+  "library.group.no_genre": "Nessun genere",
+  "library.menu.combine": "Unisci alle copie di altri negozi…",
+  "library.combine.hint": "Scegli le altre copie di «{title}», poi Unisci in un solo gioco.",
+  "library.bulk.combine": "Unisci in un solo gioco",
+  "library.bulk.combine_tooltip": "Mostra i giochi scelti come copie di un unico gioco, dai loro negozi",
+  "library.bulk.done.combined": "{count} giochi sono ora una sola voce"
 }

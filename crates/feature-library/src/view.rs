@@ -27,10 +27,11 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, BoxShadow, ClickEvent, Context, ElementId, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyDownEvent,
-    ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy, SharedString, Size,
-    SpringAnimation, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
-    WeakEntity, Window, canvas, div, linear_color_stop, linear_gradient, point, px, rems, size,
+    EventEmitter, ExternalPaths, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    KeyDownEvent, Keystroke, ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy,
+    SharedString, Size, SpringAnimation, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Subscription, WeakEntity, Window, canvas, div, linear_color_stop,
+    linear_gradient, point, px, rems, size,
 };
 use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
@@ -193,6 +194,10 @@ pub struct LibraryView {
     menu_open: Option<GameId>,
     /// Games picked for bulk actions.
     selection: crate::selection::Selection,
+    /// What the bulk bar offers for the picks, worked out once per change.
+    bulk: bulk::BulkCache,
+    /// The stores the library has games of, once per library revision.
+    stores_with_games: filter::PerRevision<HashSet<Runner>>,
     launching: HashSet<GameId>,
     /// Games whose next launch skips the store's update check ("Play now").
     skip_version_check: HashSet<GameId>,
@@ -321,6 +326,8 @@ impl LibraryView {
             menu_open: None,
             selection: crate::selection::Selection::default(),
             launching: HashSet::new(),
+            bulk: Default::default(),
+            stores_with_games: Default::default(),
             skip_version_check: HashSet::new(),
             availability: Availability::default(),
             shortcuts: HashMap::new(),
@@ -354,7 +361,7 @@ impl LibraryView {
             .iter()
             .filter_map(|g| match g.kind {
                 GroupKind::Status(s) => Some(s),
-                GroupKind::Mode(_) => None,
+                GroupKind::Mode(_) | GroupKind::Genre(_) => None,
             })
             .collect()
     }
@@ -432,6 +439,50 @@ impl LibraryView {
         self.search.update(cx, |s, cx| s.focus(window, cx));
     }
 
+    /// A file or folder dropped on the library: the Add game dialog filled in
+    /// from the file, or the games found in the folder. Only the first of
+    /// several dropped paths is added.
+    fn on_paths_dropped(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = paths.paths().first().cloned() else {
+            return;
+        };
+        let bundle = cfg!(target_os = "macos")
+            && path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("app"));
+        if path.is_dir() && !bundle {
+            crate::dialogs::folder::open_add_dropped_folder_dialog(path, window, cx);
+        } else {
+            crate::dialogs::sideload::open_add_dropped_file_dialog(path, window, cx);
+        }
+    }
+
+    /// Type to search: a printable key the grid or list doesn't use itself
+    /// moves to the search field and adds its character to the query.
+    fn type_to_search(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(text) = typed_search_text(&event.keystroke) else {
+            return;
+        };
+        cx.stop_propagation();
+        self.search.update(cx, |s, cx| {
+            // Puts the caret at the end, where the character goes.
+            let query = s.value();
+            s.set_value(query, window, cx);
+            s.focus(window, cx);
+            s.insert(text, window, cx);
+        });
+    }
+
     // ---- frame derivation ------------------------------------------------
 
     fn prepare_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -443,7 +494,10 @@ impl LibraryView {
         let app = m.settings.read(cx).app.clone();
         let stores = {
             let accounts = m.accounts.read(cx);
-            filter::offered_stores(&snapshot, &|r| accounts.is_logged_in(r), &app.ui.stores)
+            let with_games = self
+                .stores_with_games
+                .get(&snapshot, filter::stores_with_games);
+            filter::offered_stores(with_games, &|r| accounts.is_logged_in(r), &app.ui.stores)
         };
         let filter = self.filters.read(cx).filter().clone();
         self.check_availability(&snapshot, cx);
@@ -506,7 +560,10 @@ impl LibraryView {
         let key = FrameKey {
             count: games.len(),
             top: top.as_ref().map(|(k, g)| (*k, g.len())),
-            groups: groups.iter().map(|g| (g.kind, g.range.len())).collect(),
+            groups: groups
+                .iter()
+                .map(|g| (g.kind.clone(), g.range.len()))
+                .collect(),
             layout: self.layout,
             list_rem: (list_rem * 16.0).round() as u32,
             metrics,
@@ -552,7 +609,9 @@ impl LibraryView {
         }
         // Picks a filter or search now hides are dropped: bulk actions only
         // ever touch games on screen.
-        self.selection.keep_shown(&games);
+        if !Arc::ptr_eq(&self.frame.games, &games) {
+            self.selection.keep_shown(&games);
+        }
         self.frame.games = games;
         self.frame.groups = groups;
         self.frame.top = top;
@@ -1185,7 +1244,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Status => Grouping::None,
-                    Grouping::None | Grouping::Mode => Grouping::Status,
+                    Grouping::None | Grouping::Mode | Grouping::Genre => Grouping::Status,
                 }
             },
             cx,
@@ -1198,7 +1257,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Mode => Grouping::None,
-                    Grouping::None | Grouping::Status => Grouping::Mode,
+                    Grouping::None | Grouping::Status | Grouping::Genre => Grouping::Mode,
                 }
             },
             cx,
@@ -1397,6 +1456,7 @@ fn game_menu(
             let after_hidden = command == GameCommand::ToggleHidden;
             menu = menu.item(command_item(view, &id, command, &state));
             if after_hidden {
+                let copies_view = view.clone();
                 let view = view.clone();
                 let id = id.clone();
                 menu = menu.submenu_with_icon(
@@ -1414,10 +1474,48 @@ fn game_menu(
                     cx,
                     move |sub, _, cx| irori_ui::play_status::menu(sub, &status_id, cx),
                 );
+                menu = copies_menu(menu, &copies_view, game, window, cx);
             }
         }
     }
     menu
+}
+
+/// The game's copies on other stores: a submenu to open, prefer or
+/// separate them, or, for a game of one copy, combining it with others
+/// (picked in selection mode, then combined from the bar).
+fn copies_menu(
+    menu: PopupMenu,
+    view: &WeakEntity<LibraryView>,
+    game: &Arc<GameInfo>,
+    window: &mut Window,
+    cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+    let id = game.id();
+    if irori_ui::copies::of(&id, cx).len() > 1 {
+        return menu.submenu_with_icon(
+            Some(Icon::new(IconName::Layers)),
+            t("ui.copies.title"),
+            window,
+            cx,
+            move |sub, _, cx| irori_ui::copies::menu_items(sub, &id, cx),
+        );
+    }
+    let (view, title) = (view.clone(), game.title.clone());
+    menu.item(
+        PopupMenuItem::new(t("library.menu.combine"))
+            .icon(IconName::Combine)
+            .on_click(move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| this.start_combining(&id, cx));
+                window.push_notification(
+                    gpui_kit::component::notification::Notification::info(t_args(
+                        "library.combine.hint",
+                        &[("title", &title)],
+                    )),
+                    cx,
+                );
+            }),
+    )
 }
 
 fn categories_menu(
@@ -1778,6 +1876,7 @@ impl LibraryView {
                                 (Grouping::None, "library.toolbar.group.none"),
                                 (Grouping::Status, "library.toolbar.group.status"),
                                 (Grouping::Mode, "library.toolbar.group.mode"),
+                                (Grouping::Genre, "library.toolbar.group.genre"),
                             ];
                             options.into_iter().fold(menu, |menu, (option, key)| {
                                 let model = model.clone();
@@ -1975,6 +2074,7 @@ impl LibraryView {
             .id("library-content")
             .key_context(GRID_CONTEXT)
             .track_focus(&self.grid_focus)
+            .on_key_down(cx.listener(Self::type_to_search))
             .on_action(
                 cx.listener(|this, _: &SelectLeft, w, cx| this.move_focus(Move::Left, w, cx)),
             )
@@ -2067,7 +2167,7 @@ impl LibraryView {
             return div().into_any_element();
         };
         let theme = cx.theme();
-        let (mark, name): (AnyElement, SharedString) = match group.kind {
+        let (mark, name): (AnyElement, SharedString) = match group.kind.clone() {
             GroupKind::Status(status) => (
                 div()
                     .flex_none()
@@ -2087,6 +2187,16 @@ impl LibraryView {
                 mode.map_or_else(
                     irori_ui::game_mode::unknown_label,
                     irori_ui::game_mode::label,
+                ),
+            ),
+            GroupKind::Genre(genre) => (
+                Icon::new(IconName::Tag)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                genre.map_or_else(
+                    || t("library.group.no_genre"),
+                    |g| SharedString::from(g.to_string()),
                 ),
             ),
         };
@@ -2159,7 +2269,15 @@ impl LibraryView {
         let key = id.key();
         let state = self.state_for(game, in_recent, cx);
         let status = models(cx).statuses.read(cx).get(&id).cloned();
-        let show_badges = models(cx).settings.read(cx).app.ui.show_store_badges;
+        let (show_badges, cover_categories) = {
+            let ui = &models(cx).settings.read(cx).app.ui;
+            (ui.show_store_badges, ui.cover_categories)
+        };
+        let focus_view = self.layout == LibraryLayout::Focus;
+        // The user's categories, at the cover's foot while nothing else is.
+        let categories = (cover_categories && !focus_view)
+            .then(|| models(cx).library.read(cx).categories_of(&id))
+            .filter(|c| !c.is_empty());
         let keyboard =
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
         let active =
@@ -2167,7 +2285,6 @@ impl LibraryView {
         // The game the drawer or the Focus page shows keeps its ring.
         let selected =
             !in_recent && self.panel_kind().is_some() && self.focused.as_ref() == Some(&id);
-        let focus_view = self.layout == LibraryLayout::Focus;
         let busy = status.as_ref().filter(|s| {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
@@ -2176,11 +2293,26 @@ impl LibraryView {
         let muted = theme.muted_foreground;
         let radius = theme.radius_lg;
 
+        // An entry of several stores' copies says so.
+        let copies = models(cx).library.read(cx).snapshot.copies_of(&id).len();
         let markers = h_flex()
             .absolute()
             .top_2()
             .right_2()
             .gap_1()
+            .when(copies > 1, |el| {
+                el.child(
+                    h_flex()
+                        .gap_0p5()
+                        .px_1()
+                        .py_0p5()
+                        .rounded_full()
+                        .bg(scrim)
+                        .text_xs()
+                        .child(Icon::new(IconName::Layers).xsmall())
+                        .child(copies.to_string()),
+                )
+            })
             .when(
                 state.has_update && state.installed && !state.sideload,
                 |el| {
@@ -2331,6 +2463,12 @@ impl LibraryView {
                 )
             })
             .child(markers)
+            .when(actions.is_none() && status_overlay.is_none(), |el| {
+                el.children(categories.map(|names| {
+                    // A cover Irori draws itself has the title at its foot.
+                    category_chips(names, game.cover_art().is_some(), scrim)
+                }))
+            })
             .when(actions.is_none(), |el| el.children(status_overlay))
             .children(actions)
             // Selection mode: a ring and a tick on picked covers, an empty
@@ -3050,6 +3188,7 @@ impl Render for LibraryView {
                 cx.listener(|this, _: &ToggleStatusGroups, _, cx| this.toggle_status_groups(cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleModeGroups, _, cx| this.toggle_mode_groups(cx)))
+            .on_drop(cx.listener(Self::on_paths_dropped))
             .size_full()
             .min_h_0()
             .text_color(cx.theme().foreground)
@@ -3057,5 +3196,89 @@ impl Render for LibraryView {
             .child(self.render_header(window, cx))
             .child(self.render_body(window, cx))
             .children(bulk_bar)
+            .child(
+                // Shows where a dragged file lands; it takes no clicks.
+                div()
+                    .id("library-drop-target")
+                    .absolute()
+                    .inset_0()
+                    .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target)),
+            )
+    }
+}
+
+/// The text a key press types into the search field when the grid or list
+/// has focus: a printable character without Ctrl, Cmd or Fn (shortcuts),
+/// and not whitespace, which starts nothing.
+pub(crate) fn typed_search_text(keystroke: &Keystroke) -> Option<String> {
+    let m = &keystroke.modifiers;
+    if m.control || m.platform || m.function {
+        return None;
+    }
+    let text = keystroke.key_char.as_deref()?;
+    (!text.is_empty() && text.chars().all(|c| !c.is_control() && !c.is_whitespace()))
+        .then(|| text.to_string())
+}
+
+/// The categories shown on a cover: the first two, then how many more, so
+/// the line stays on the cover however many there are.
+const COVER_CATEGORIES: usize = 2;
+
+/// A game's categories as small chips along its cover's foot, or its top
+/// when the cover is drawn with the title at its foot.
+fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> AnyElement {
+    let more = names.len().saturating_sub(COVER_CATEGORIES);
+    h_flex()
+        .absolute()
+        .map(|el| if at_foot { el.bottom_2() } else { el.top_2() })
+        .left_2()
+        .right_2()
+        .gap_1()
+        .min_w_0()
+        .overflow_hidden()
+        .children(names.into_iter().take(COVER_CATEGORIES).map(|name| {
+            div()
+                .min_w_0()
+                .px_1p5()
+                .rounded_md()
+                .bg(scrim)
+                .text_xs()
+                .truncate()
+                .child(name)
+        }))
+        .when(more > 0, |el| {
+            el.child(
+                div()
+                    .flex_none()
+                    .px_1p5()
+                    .rounded_md()
+                    .bg(scrim)
+                    .text_xs()
+                    .child(format!("+{more}")),
+            )
+        })
+        .into_any_element()
+}
+
+#[cfg(test)]
+mod type_to_search_tests {
+    use super::*;
+
+    #[test]
+    fn only_plain_printable_keys_start_a_search() {
+        let key = |s: &str| typed_search_text(&Keystroke::parse(s).unwrap().with_simulated_ime());
+        assert_eq!(key("h").as_deref(), Some("h"));
+        assert_eq!(key("shift-h").as_deref(), Some("H"));
+        assert_eq!(key("ctrl-h"), None);
+        assert_eq!(key("cmd-h"), None);
+        assert_eq!(key("space"), None);
+        assert_eq!(key("enter"), None);
+        assert_eq!(key("left"), None);
+        let accented = Keystroke {
+            key: "e".into(),
+            key_char: Some("é".into()),
+            modifiers: Default::default(),
+        };
+        assert_eq!(typed_search_text(&accented).as_deref(), Some("é"));
     }
 }

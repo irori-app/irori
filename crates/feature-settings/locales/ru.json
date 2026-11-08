@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "Плотность",
   "settings.field.ui_font_family.help": "Любой шрифт, установленный на этом компьютере. Каждый шрифт в списке показан собственным начертанием.",
   "settings.field.ui_font_family.label": "Шрифт интерфейса",
-  "settings.field.ui_font_size.help": "Масштабирует текст, отступы и элементы управления вместе.",
+  "settings.field.ui_font_size.help": "Масштабирует текст, отступы и элементы управления вместе, поверх размера текста в системе.",
   "settings.field.ui_font_size.label": "Размер интерфейса",
   "settings.field.ui_language.help": "Язык интерфейса.",
   "settings.field.ui_language.label": "Язык",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze: работает, но часто с проблемами. Попробуйте Proton Experimental или GE-Proton.",
   "settings.steam_compat.protondb.borked": "Borked: по отчётам не работает. Прочитайте отчёты, прежде чем пробовать другой инструмент.",
   "settings.steam_compat.protondb.pending": "Pending: пока слишком мало отчётов для оценки.",
-  "settings.steam_compat.protondb.reports": "Отчёты"
+  "settings.steam_compat.protondb.reports": "Отчёты",
+  "settings.field.ui_cover_categories.label": "Показывать категории на обложках",
+  "settings.field.ui_cover_categories.help": "Категории каждой игры внизу её обложки в сетке: первые две и сколько ещё.",
+  "settings.field.ui_group_copies.label": "Показывать копии из нескольких магазинов как одну игру",
+  "settings.field.ui_group_copies.help": "Игра, купленная в Steam, Epic Games и GOG, показывается один раз и запускает установленную копию. На её странице можно переключаться между копиями; у каждой своё время в игре и свои достижения."
 }

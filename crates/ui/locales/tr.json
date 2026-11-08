@@ -210,5 +210,10 @@
   "ui.playnite.reason.hidden": "Playnite’ta gizli.",
   "ui.playnite.reason.no_install_folder": "Playnite bunun için bir kurulum klasörü bilmiyor, bu yüzden Irori ne zaman çalıştığını anlayamaz.",
   "ui.playnite.reason.folder_missing": "Kurulum klasörü yok: {path}",
-  "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları"
+  "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları",
+  "ui.copies.title": "Kopyalar",
+  "ui.copies.open": "{store} kopyasını aç",
+  "ui.copies.make_default": "Bu kopyayı varsayılan yap",
+  "ui.copies.separate": "Bu kopyayı ayrı göster",
+  "ui.copies.separate_all": "Her kopyayı ayrı göster"
 }

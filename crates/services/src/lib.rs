@@ -14,6 +14,7 @@ pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
 pub mod capture;
+pub mod copies;
 mod discord;
 mod downloads;
 mod engines;
@@ -345,8 +346,8 @@ impl Backend {
             b.run_automatic_updates().await;
         });
 
-        // Rebuild the aggregated library when stores or user data change, or
-        // the user shows or hides a store.
+        // Rebuild the aggregated library when stores or user data change, the
+        // user shows or hides a store, or turns grouping copies on or off.
         let b = self.clone();
         self.spawn(async move {
             let mut rx = b.subscribe();
@@ -354,6 +355,7 @@ impl Backend {
             // Opt-in stores show their account and games only while on.
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
+            let mut copies = b.settings.app().ui.group_copies;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -378,9 +380,10 @@ impl Backend {
                                 b.bus.emit(Event::AccountChanged(runner));
                             }
                         }
-                        if app.ui.stores != shown || now != on {
+                        if app.ui.stores != shown || now != on || app.ui.group_copies != copies {
                             shown = app.ui.stores;
                             on = now;
+                            copies = app.ui.group_copies;
                             b.rebuild_library();
                         }
                     }

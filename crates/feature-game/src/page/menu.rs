@@ -384,6 +384,9 @@ pub(super) fn build_menu(
         )
         .on_click(move |_, _, cx| ops::set_hidden(&i, !hidden, cx)),
     );
+    if irori_ui::copies::of(id, cx).len() > 1 {
+        menu = irori_ui::copies::menu_items(menu.separator(), id, cx).separator();
+    }
     if client {
         let i = id.clone();
         menu = menu.item(

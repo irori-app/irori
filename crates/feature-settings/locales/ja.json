@@ -559,7 +559,7 @@
   "settings.field.ui_density.label": "表示密度",
   "settings.field.ui_font_family.help": "このコンピューターにインストールされている任意のフォントを使えます。一覧の各フォントは、そのフォント自体で表示されます。",
   "settings.field.ui_font_family.label": "インターフェースのフォント",
-  "settings.field.ui_font_size.help": "文字、余白、コントロールをまとめて拡大・縮小します。",
+  "settings.field.ui_font_size.help": "システムの文字サイズに加えて、文字、余白、コントロールをまとめて拡大・縮小します。",
   "settings.field.ui_font_size.label": "インターフェースのサイズ",
   "settings.field.ui_language.help": "インターフェースの言語です。",
   "settings.field.ui_language.label": "言語",
@@ -1111,5 +1111,9 @@
   "settings.steam_compat.protondb.bronze": "Bronze：動作しますが、問題が多めです。Proton Experimental や GE-Proton を試してください。",
   "settings.steam_compat.protondb.borked": "Borked：動作しないと報告されています。別のツールを試す前にレポートを読んでください。",
   "settings.steam_compat.protondb.pending": "Pending：評価に必要なレポートがまだ足りません。",
-  "settings.steam_compat.protondb.reports": "レポート"
+  "settings.steam_compat.protondb.reports": "レポート",
+  "settings.field.ui_cover_categories.label": "カバーにカテゴリーを表示",
+  "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。",
+  "settings.field.ui_group_copies.label": "複数のストアのコピーを 1 つのゲームとして表示",
+  "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。"
 }

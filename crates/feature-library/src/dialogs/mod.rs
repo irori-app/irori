@@ -13,7 +13,7 @@ pub mod views;
 
 use std::collections::BTreeSet;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::h_flex;
@@ -38,6 +38,17 @@ pub(crate) fn pick_path(
         prompt: Some(prompt),
     });
     async move { rx.await.ok()?.ok()??.into_iter().next() }
+}
+
+/// Whether a file is a picture usable as cover art (themed icon names and
+/// SVGs are not).
+pub(crate) fn is_picture(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        matches!(
+            e.to_ascii_lowercase().as_str(),
+            "png" | "jpg" | "jpeg" | "webp"
+        )
+    })
 }
 
 /// Trimmed text of an input.

@@ -260,7 +260,7 @@ impl Backend {
     /// Emulated games in the library per system id.
     pub fn emulated_counts(&self) -> std::collections::BTreeMap<String, usize> {
         let mut out = std::collections::BTreeMap::new();
-        for g in self.library().games.iter() {
+        for g in self.library().all_games() {
             if let Some(system) = &g.system {
                 *out.entry(system.clone()).or_insert(0) += 1;
             }

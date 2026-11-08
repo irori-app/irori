@@ -21,6 +21,7 @@ use irori_core::{GameId, GameInfo, Runner};
 use irori_library::InstallFilter;
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
+use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
 /// What confirming a palette row does.
@@ -47,6 +48,8 @@ enum PaletteTarget {
     QuickControls(bool),
     /// Group the library by game mode (`true`) or stop, and show it.
     GroupByMode(bool),
+    /// Group the library by genre (`true`) or stop, and show it.
+    GroupByGenre(bool),
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -67,6 +70,8 @@ enum PaletteTarget {
     Sync,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Make the interface larger, smaller or its default size.
+    InterfaceSize(SizeStep),
 }
 
 /// The library's state that its palette commands change.
@@ -77,6 +82,8 @@ struct LibraryCommands<'a> {
     /// Whether the library groups by game mode, while a library view
     /// exists.
     grouped_by_mode: Option<bool>,
+    /// Whether the library groups by genre, while a library view exists.
+    grouped_by_genre: Option<bool>,
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -122,6 +129,7 @@ impl Palette {
         let LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views,
             layout,
             install,
@@ -279,6 +287,32 @@ impl Palette {
             PaletteTarget::Route(Route::YearInReview(None)),
             targets,
         );
+        for (step, label, icon) in [
+            (
+                SizeStep::Larger,
+                "shell.palette.interface_larger",
+                IconName::ZoomIn,
+            ),
+            (
+                SizeStep::Smaller,
+                "shell.palette.interface_smaller",
+                IconName::ZoomOut,
+            ),
+            (
+                SizeStep::Reset,
+                "shell.palette.interface_reset",
+                IconName::RotateCcw,
+            ),
+        ] {
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.interface_size_keywords")])
+                    .icon(icon),
+                PaletteTarget::InterfaceSize(step),
+                targets,
+            );
+        }
         push(
             CommandItem::new()
                 .label(t("shell.palette.storage"))
@@ -399,6 +433,21 @@ impl Palette {
                     ])
                     .icon(IconName::Users),
                 PaletteTarget::GroupByMode(!grouped),
+                targets,
+            );
+        }
+        if let Some(grouped) = grouped_by_genre {
+            let label = if grouped {
+                "shell.palette.ungroup_by_genre"
+            } else {
+                "shell.palette.group_by_genre"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.genre_keywords")])
+                    .icon(IconName::Tag),
+                PaletteTarget::GroupByGenre(!grouped),
                 targets,
             );
         }
@@ -528,6 +577,7 @@ impl Palette {
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
+        let grouped_by_genre = irori_library::groups_by_genre(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -538,6 +588,7 @@ impl Palette {
         let library = LibraryCommands {
             grouped,
             grouped_by_mode,
+            grouped_by_genre,
             views: &views,
             layout,
             install,
@@ -624,6 +675,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
@@ -643,6 +695,10 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::GroupByMode(on) => {
             irori_library::set_groups_by_mode(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupByGenre(on) => {
+            irori_library::set_groups_by_genre(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
         PaletteTarget::LibraryView(layout) => {
@@ -709,6 +765,7 @@ mod tests {
         let library = LibraryCommands {
             grouped: install.map(|_| false),
             grouped_by_mode: install.map(|_| true),
+            grouped_by_genre: None,
             views: &[],
             layout: LibraryLayout::Grid,
             install,
