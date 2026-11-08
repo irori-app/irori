@@ -777,6 +777,67 @@ user installed on the host therefore run there through `flatpak-spawn --host`
   `~/.var/app/app.irori.Irori`, which its sandbox hides; a path holding `:` can't be
   passed that way.
 
+### NixOS
+Using flakes.
+
+**How to update the repo? (for repo maintainer)**
+
+Update the `version` inside `flake.nix`. E.g. `version = "1.0.0";`
+```
+printf '%s' "<YOUR_HEX_HASH>" | xxd -r -p | base64 -w0
+```
+Replace `<YOUR_HEX_HASH>` with the sha256 hash of the tarballs ( `Irori-${version}-linux.tar.gz` and `Irori-${version}-linux-arm64.tar.gz` ). 
+
+This generates a new hash which will be used to replace the value inside `flake.nix`.e.g.
+
+`sha256 = 8a711415c9e54280ae8cd3d82014fed89609ab102d28a1dbf02d92ed25e068bc` gives
+`hash = inEUFcnlQoCujNPYIBT+2JYJqxAtKKHb8C2S7SXgaLw=`
+```
+sources = {
+  x86_64-linux = {
+    suffix = "";
+    hash = "sha256-inEUFcnlQoCujNPYIBT+2JYJqxAtKKHb8C2S7SXgaLw=";
+  };
+  aarch64-linux = {
+    suffix = "-arm64";
+    hash = "sha256-w7xXXIWGBLuwQneWBpVEGPH9A30cpXbcghxoOVuLEI0=";
+  };
+};
+```
+Repeat the last step for the other tarball.
+
+To update `flake.lock` (if needed): run `nix flake update` in the repo root.
+
+**How to add the flake to NixOS configuration (flakes)? (for system/user installation)**
+
+Add this to `flake.nix`
+```
+# flake.nix
+{
+	
+	inputs = {
+		nixpkgs.url = "nixpkgs/nixos-unstable";
+		
+		irori = {
+			url = "github:irori-app/irori";
+			inputs.nixpkgs.follows = "nixpkgs";
+		};
+	};
+	outputs = { self, nixpkgs, irori, ... }@inputs:
+
+}
+```
+Add this to your configuration file (e.g. `pkgs.nix`):
+```
+{ inputs, pkgs, ... }:{
+
+	environment.systemPackages = [
+		inputs.irori.packages.${pkgs.stdenv.hostPlatform.system}.default
+	];
+}
+```
+Rebuild.
+
 ### Backups and sync
 
 Settings › Backup and sync backs up on its own, daily or weekly (weekly unless changed),
