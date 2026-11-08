@@ -26,7 +26,7 @@ use crate::widgets::{RowState, field_row, group_panel, muted};
 enum Load {
     Idle,
     Loading,
-    Ready(ReshadeStatus),
+    Ready(Box<ReshadeStatus>),
     Failed(SharedString),
 }
 
@@ -124,7 +124,7 @@ impl ReshadePanel {
             let result = task.await;
             this.update(cx, |this, cx| {
                 this.load = match result {
-                    Ok(status) => Load::Ready(status),
+                    Ok(status) => Load::Ready(Box::new(status)),
                     Err(e) => Load::Failed(error_text(&e)),
                 };
                 cx.notify();
