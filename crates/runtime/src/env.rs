@@ -163,6 +163,13 @@ pub fn wrapper_env(id: &GameId) -> EnvMap {
     let mut env = EnvMap::new();
     env.insert("HEROIC_APP_NAME".into(), id.app_name.to_string());
     env.insert("HEROIC_APP_RUNNER".into(), id.runner.id().into());
+    // Irori's own name for the game (`<runner>/<app>`, as `irori list --json`
+    // and `--launch` write it), so other tools can tell its processes apart
+    // from Heroic's, which set the same `HEROIC_APP_*` variables.
+    env.insert(
+        "IRORI_GAME_ID".into(),
+        format!("{}/{}", id.runner.id(), id.app_name),
+    );
     env.insert("GAMEID".into(), "umu-0".into());
     env.insert("HEROIC_APP_SOURCE".into(), app_source(id.runner).into());
     if let Some(store) = umu_store(id.runner) {
@@ -702,6 +709,7 @@ mod tests {
         let env = wrapper_env(&GameId::new(Runner::Legendary, "Fortnite"));
         assert_eq!(env["HEROIC_APP_NAME"], "Fortnite");
         assert_eq!(env["HEROIC_APP_RUNNER"], "legendary");
+        assert_eq!(env["IRORI_GAME_ID"], "legendary/Fortnite");
         assert_eq!(env["HEROIC_APP_SOURCE"], "epic");
         assert_eq!(env["STORE"], "egs");
         assert_eq!(env["GAMEID"], "umu-0");
