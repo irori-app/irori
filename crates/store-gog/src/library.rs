@@ -298,6 +298,42 @@ pub fn link_dlcs(entries: &mut [MappedRelease]) {
     }
 }
 
+/// Keep the previous entries of owned releases whose metadata couldn't be
+/// read this time (`failed`), so a passing GamesDB or product API outage
+/// doesn't drop a game, installed or not, from the library. A kept DLC stays
+/// listed under its base game.
+fn keep_failed(
+    catalogue: &mut HashMap<String, Arc<GameInfo>>,
+    previous: &HashMap<String, Arc<GameInfo>>,
+    failed: &[String],
+) {
+    for id in failed {
+        let Some(old) = previous.get(id) else {
+            continue;
+        };
+        if catalogue.contains_key(id) {
+            continue;
+        }
+        tracing::warn!("keeping the last known GOG metadata of {id}");
+        catalogue.insert(id.clone(), old.clone());
+        if !old.is_dlc {
+            continue;
+        }
+        let Some(base) = previous
+            .values()
+            .find(|b| b.dlcs.iter().any(|d| &d.app_name == id))
+        else {
+            continue;
+        };
+        if let Some(new_base) = catalogue.get_mut(&base.app_name)
+            && !new_base.dlcs.iter().any(|d| &d.app_name == id)
+            && let Some(dlc) = base.dlcs.iter().find(|d| &d.app_name == id)
+        {
+            Arc::make_mut(new_base).dlcs.push(dlc.clone());
+        }
+    }
+}
+
 /// One cached GamesDB answer.
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -311,6 +347,17 @@ fn gamesdb_cache_file(dir: &Path, id: &str) -> PathBuf {
     dir.join(format!("{}.json", irori_core::paths::sanitize(id)))
 }
 
+/// What looking up one owned release found.
+#[derive(Debug)]
+enum Lookup {
+    Found(Box<MappedRelease>),
+    /// GOG has nothing to list for it (no entry, or a hidden one).
+    Gone,
+    /// Every source failed and nothing was cached: the game is still owned,
+    /// so the library keeps what it had for it.
+    Failed,
+}
+
 /// Look up one release: cached GamesDB, conditional request with retries,
 /// then the product API.
 async fn fetch_release(
@@ -319,11 +366,32 @@ async fn fetch_release(
     token: String,
     locale: String,
     full: bool,
-) -> Option<MappedRelease> {
+) -> Lookup {
     let id = id_string(&item.external_id);
     if id.is_empty() {
-        return None;
+        return Lookup::Gone;
     }
+    let mut failed = false;
+    let found = lookup_release(&id, item, cache_dir, token, locale, full, &mut failed).await;
+    match found {
+        Some(m) => Lookup::Found(Box::new(m)),
+        None if failed => Lookup::Failed,
+        None => Lookup::Gone,
+    }
+}
+
+/// [`fetch_release`]'s sources; sets `failed` when the last of them could not
+/// be reached and nothing was cached.
+async fn lookup_release(
+    id: &str,
+    item: api::GalaxyItem,
+    cache_dir: PathBuf,
+    token: String,
+    locale: String,
+    full: bool,
+    failed: &mut bool,
+) -> Option<MappedRelease> {
+    let id = id.to_string();
     let file = gamesdb_cache_file(&cache_dir, &id);
     let cached: Option<CachedGamesDb> = {
         let f = file.clone();
@@ -404,6 +472,7 @@ async fn fetch_release(
                 return gamesdb_to_game_info(&c.data);
             }
             tracing::error!("no metadata for GOG game {id}: {e:#}");
+            *failed = true;
             None
         }
     }
@@ -449,20 +518,30 @@ impl GogStore {
 
         let cache_dir = self.paths.gamesdb_cache_dir();
         let locale = self.api_locale();
-        let mut entries: Vec<MappedRelease> = futures::stream::iter(items)
+        let lookups: Vec<(String, Lookup)> = futures::stream::iter(items)
             .map(|item| {
-                fetch_release(
+                let id = id_string(&item.external_id);
+                let lookup = fetch_release(
                     item,
                     cache_dir.clone(),
                     creds.access_token.clone(),
                     locale.clone(),
                     full,
-                )
+                );
+                async move { (id, lookup.await) }
             })
             .buffer_unordered(CONCURRENCY)
-            .filter_map(|m| async move { m })
             .collect()
             .await;
+        let mut entries = Vec::new();
+        let mut failed = Vec::new();
+        for (id, lookup) in lookups {
+            match lookup {
+                Lookup::Found(m) => entries.push(*m),
+                Lookup::Failed => failed.push(id),
+                Lookup::Gone => {}
+            }
+        }
         link_dlcs(&mut entries);
 
         let previous = self.state.read().catalogue.clone();
@@ -486,6 +565,7 @@ impl GogStore {
             }
             catalogue.insert(info.app_name.clone(), Arc::new(info));
         }
+        keep_failed(&mut catalogue, &previous, &failed);
 
         self.update_cloud_save_locations(&mut catalogue).await;
         self.reconcile_installs().await;
@@ -642,6 +722,52 @@ mod tests {
         assert_eq!(entries[0].info.dlcs.len(), 1);
         assert_eq!(entries[0].info.dlcs[0].app_name, "1256837418");
         assert!(entries[0].info.dlcs[0].owned);
+    }
+
+    #[test]
+    fn games_whose_metadata_failed_stay_in_the_library() {
+        let mut base = gamesdb_to_game_info(&cyberpunk()).unwrap().info;
+        let dlc = GameInfo {
+            app_name: "1256837418".into(),
+            title: "Phantom Liberty".into(),
+            is_dlc: true,
+            ..Default::default()
+        };
+        let other = GameInfo {
+            app_name: "2".into(),
+            title: "Gone".into(),
+            ..Default::default()
+        };
+        base.dlcs.push(DlcInfo {
+            app_name: dlc.app_name.clone(),
+            title: dlc.title.clone(),
+            is_installed: false,
+            owned: true,
+        });
+        let previous: HashMap<String, Arc<GameInfo>> = [base.clone(), dlc.clone(), other]
+            .into_iter()
+            .map(|g| (g.app_name.clone(), Arc::new(g)))
+            .collect();
+
+        // This refresh read the base game, but not its DLC; "2" is no longer
+        // owned, and "3" failed without an earlier entry.
+        let mut fresh = base.clone();
+        fresh.dlcs.clear();
+        let mut catalogue: HashMap<String, Arc<GameInfo>> =
+            [(fresh.app_name.clone(), Arc::new(fresh))].into();
+        keep_failed(
+            &mut catalogue,
+            &previous,
+            &["1256837418".to_string(), "3".to_string()],
+        );
+        assert_eq!(catalogue.len(), 2);
+        assert_eq!(catalogue["1256837418"].title, "Phantom Liberty");
+        assert_eq!(catalogue["1423049311"].dlcs.len(), 1);
+
+        // A failed base game is kept too.
+        let mut catalogue = HashMap::new();
+        keep_failed(&mut catalogue, &previous, &["1423049311".to_string()]);
+        assert_eq!(catalogue["1423049311"].title, base.title);
     }
 
     #[test]
