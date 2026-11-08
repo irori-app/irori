@@ -781,6 +781,7 @@ user installed on the host therefore run there through `flatpak-spawn --host`
 Using flakes.
 
 **How to update the repo? (for repo maintainer)**
+
 Update the `version` inside `flake.nix`. E.g. `version = "1.0.0";`
 ```
 printf '%s' "<YOUR_HEX_HASH>" | xxd -r -p | base64 -w0
