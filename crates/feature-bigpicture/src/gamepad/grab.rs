@@ -64,7 +64,8 @@ impl Grab {
 
 #[cfg(not(target_os = "linux"))]
 impl Grab {
-    /// Other systems have no grab yet: the game sees the overlay's presses.
+    /// Windows and macOS offer no grab a program may use (see
+    /// `overlay::support`): the game sees the overlay's presses too.
     pub(crate) fn start(
         _devices: Vec<(PathBuf, ControllerKind)>,
         _shared: Arc<SharedConfig>,

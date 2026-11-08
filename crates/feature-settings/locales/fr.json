@@ -363,6 +363,8 @@
   "settings.field.gamepad_repeat_delay.label": "Intervalle de répétition",
   "settings.field.overlay.label": "Overlay en jeu (bêta)",
   "settings.field.overlay.help": "Le bouton Guide de la manette, pendant un jeu lancé par Irori, ouvre par-dessus le jeu le volume, les captures, les succès et la note du jour, et soustrait la manette au jeu tant qu’il est ouvert. Guide + RB fait une capture et Guide + haut ou bas change le volume. Fonctionne au mieux sur les bureaux Wayland avec layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Le bouton Guide de la manette ou Ctrl+Maj+O au-dessus d’un jeu lancé par Irori ouvre le volume, les captures d’écran, les succès et la note du jour par-dessus le jeu. Le jeu reçoit aussi les appuis de la manette pendant ce temps. Windows réserve le bouton Guide des manettes Xbox à la Xbox Game Bar : utilisez Ctrl+Maj+O avec elles. Les jeux en plein écran exclusif ne peuvent pas être recouverts : passez-les en fenêtre sans bordure.",
+  "settings.field.overlay.help_macos": "Le bouton Guide de la manette ou Contrôle+Maj+O au-dessus d’un jeu lancé par Irori ouvre le volume, les captures d’écran, les succès et la note du jour par-dessus le jeu. Le jeu reçoit aussi les appuis de la manette pendant ce temps, et seul le volume du système peut être modifié. Les captures d’écran demandent l’autorisation d’enregistrement de l’écran, sollicitée la première fois.",
   "settings.field.gamescope_additional_options.label": "Options supplémentaires de gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Garder le curseur dans la fenêtre",
   "settings.field.gamescope_enable_limiter.label": "Limiteur d’images",

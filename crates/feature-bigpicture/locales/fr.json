@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Muet",
   "bigpicture.overlay.no_game_sound": "Pas encore de son",
   "bigpicture.overlay.volume_unavailable": "Indisponible",
+  "bigpicture.overlay.game_volume_unsupported": "Indisponible sur macOS",
   "bigpicture.overlay.volume_hint": "Gauche et droite changent le volume ; {button} le coupe.",
   "bigpicture.overlay.audio_failed": "Impossible de changer le volume : {error}",
   "bigpicture.overlay.screenshot": "Faire une capture",

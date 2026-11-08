@@ -1,13 +1,23 @@
 //! Screenshots Irori takes for the player: Guide + RB on a controller and
 //! the in-game overlay's Screenshot.
 //!
-//! On Linux the picture comes from the desktop portal's Screenshot
-//! interface without its dialog (GNOME, KDE Plasma and the wlroots portal
-//! answer it; Plasma asks once whether Irori may), else from `grim` on
-//! wlroots desktops without a portal. It is saved in the desktop's
-//! screenshot folder as `<game> <date> <time>.png`, where the screenshot
-//! index finds it for the session it was taken in. Inside gamescope
-//! neither works: Steam's own screenshot is the one to use there.
+//! - **Linux** (`linux.rs`): the desktop portal's Screenshot interface
+//!   without its dialog (GNOME, KDE Plasma and the wlroots portal answer
+//!   it; Plasma asks once whether Irori may), else `grim` on wlroots
+//!   desktops without a portal. Inside gamescope neither works: Steam's own
+//!   screenshot is the one to use there.
+//! - **Windows** (`windows.rs`): the monitor the foreground window (the
+//!   game) is on, copied from the desktop with GDI. That is what the
+//!   desktop composes, so borderless and windowed games are captured; a
+//!   game in exclusive fullscreen may come out black.
+//! - **macOS** (`macos.rs`): `screencapture` of the main display, once
+//!   Irori has the Screen Recording permission (asked for the first time a
+//!   screenshot is taken; without it the picture would hold only the
+//!   desktop).
+//!
+//! The picture is saved in the desktop's screenshot folder as
+//! `<game> <date> <time>.png`, where the screenshot index finds it for the
+//! session it was taken in.
 
 use std::path::{Path, PathBuf};
 
@@ -15,6 +25,34 @@ use anyhow::Result;
 use irori_core::{GameId, Notice, NoticeLevel};
 
 use crate::Backend;
+
+#[cfg(target_os = "linux")]
+#[path = "linux.rs"]
+mod platform;
+#[cfg(target_os = "macos")]
+#[path = "macos.rs"]
+mod platform;
+#[cfg(windows)]
+#[path = "windows.rs"]
+mod platform;
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+mod platform {
+    use super::*;
+
+    pub(super) async fn capture(_target: &Path) -> Result<PathBuf> {
+        anyhow::bail!("Screenshots aren't available on this system")
+    }
+}
+
+/// Turn GDI's rows of blue, green, red and unused bytes into RGBA, opaque.
+// Used on Windows; tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn bgrx_to_rgba(pixels: &mut [u8]) {
+    for px in pixels.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
+        px[3] = 255;
+    }
+}
 
 /// `file://` URI as the portal returns it, as a path: percent escapes
 /// decoded, `None` for anything that isn't a local file.
@@ -96,8 +134,8 @@ impl Backend {
 }
 
 /// Move what the portal wrote to `target`; it stays where it is when it
-/// can't be moved (another disk and no copy either). Only Linux takes
-/// screenshots, so elsewhere only the tests call it.
+/// can't be moved (another disk and no copy either). Only the Linux portal
+/// writes elsewhere, so on other systems only the tests call it.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn settle(from: &Path, target: &Path) -> PathBuf {
     if from == target {
@@ -118,54 +156,6 @@ fn settle(from: &Path, target: &Path) -> PathBuf {
             tracing::debug!("keeping the screenshot at {}: {e}", from.display());
             from.to_path_buf()
         }
-    }
-}
-
-#[cfg(target_os = "linux")]
-mod platform {
-    use super::*;
-    use anyhow::{Context as _, bail};
-    use irori_core::process::{self, CommandSpec, RunOptions};
-
-    async fn portal() -> Result<PathBuf> {
-        use ashpd::desktop::screenshot::Screenshot;
-        let response = Screenshot::request()
-            .interactive(false)
-            .modal(false)
-            .send()
-            .await?
-            .response()?;
-        file_uri_path(response.uri().as_str()).context("The desktop saved the screenshot elsewhere")
-    }
-
-    pub(super) async fn capture(target: &Path) -> Result<PathBuf> {
-        let portal_error = match portal().await {
-            Ok(path) => {
-                let target = target.to_path_buf();
-                return tokio::task::spawn_blocking(move || settle(&path, &target))
-                    .await
-                    .context("Could not save the screenshot");
-            }
-            Err(e) => e,
-        };
-        let Some(grim) = irori_core::host::find_program("grim").await else {
-            bail!("The desktop took no screenshot: {portal_error:#}");
-        };
-        if let Some(dir) = target.parent() {
-            tokio::fs::create_dir_all(dir).await?;
-        }
-        let spec = irori_core::host::command(CommandSpec::new(grim).arg(target));
-        process::run(&spec, RunOptions::default()).await?.check()?;
-        Ok(target.to_path_buf())
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-mod platform {
-    use super::*;
-
-    pub(super) async fn capture(_target: &Path) -> Result<PathBuf> {
-        anyhow::bail!("Screenshots aren't available on this system yet")
     }
 }
 
@@ -204,6 +194,13 @@ mod tests {
                 irori_core::paths::sanitize("Hades: II")
             )
         );
+    }
+
+    #[test]
+    fn turns_gdi_pixels_into_opaque_rgba() {
+        let mut pixels = [1, 2, 3, 0, 10, 20, 30, 7];
+        bgrx_to_rgba(&mut pixels);
+        assert_eq!(pixels, [3, 2, 1, 255, 30, 20, 10, 255]);
     }
 
     #[test]

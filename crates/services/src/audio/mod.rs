@@ -1,23 +1,79 @@
 //! The system's volume and a running game's own, for the in-game overlay.
 //!
-//! Both go through PulseAudio's `pactl`, which PipeWire's `pipewire-pulse`
-//! answers too, so one client covers every Linux desktop. The system volume
-//! is the default output's. A game's volume is that of its streams ("sink
-//! inputs"): a stream belongs to the game when the process that opened it
-//! is in the game's process group or descends from the process Irori
-//! started, which is how Wine's and Proton's helper processes are found.
-//! Every command runs with `LC_ALL=C`, because `pactl` translates its
-//! output. Only Linux has this; elsewhere every call fails plainly.
+//! - **Linux** (`linux.rs`): PulseAudio's `pactl`, which PipeWire's
+//!   `pipewire-pulse` answers too, so one client covers every desktop. The
+//!   system volume is the default output's. A game's volume is that of its
+//!   streams ("sink inputs"): a stream belongs to the game when the process
+//!   that opened it is in the game's process group or descends from the
+//!   process Irori started, which is how Wine's and Proton's helper
+//!   processes are found. Every command runs with `LC_ALL=C`, because
+//!   `pactl` translates its output.
+//! - **Windows** (`windows.rs`): Core Audio. The system volume is the
+//!   default output's endpoint volume; a game's is that of its audio
+//!   sessions on every active output, a session belonging to the game when
+//!   its process is the one Irori started or descends from it, started
+//!   since the session began (`session_pids`: Windows reuses process ids
+//!   and has no process groups).
+//! - **macOS** (`macos.rs`): the system volume only, the default output's,
+//!   through `osascript` (`get volume settings`). macOS has no per-program
+//!   volume, so the game's can't be changed there ([`PER_GAME`]).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
-#[cfg(target_os = "linux")]
-use anyhow::{Context as _, bail};
 use irori_core::GameId;
 use serde_json::Value;
 
 use crate::Backend;
+use crate::follow::Proc;
+
+#[cfg(target_os = "linux")]
+#[path = "linux.rs"]
+mod platform;
+#[cfg(target_os = "macos")]
+#[path = "macos.rs"]
+mod platform;
+#[cfg(windows)]
+#[path = "windows.rs"]
+mod platform;
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+mod platform {
+    use super::*;
+
+    pub(super) async fn audio(_game: Option<GameProcess>) -> Result<GameAudio> {
+        anyhow::bail!("Volume control isn't available on this system")
+    }
+
+    pub(super) async fn change(
+        _game: Option<GameProcess>,
+        _target: VolumeTarget,
+        _change: Change,
+    ) -> Result<()> {
+        anyhow::bail!("Volume control isn't available on this system")
+    }
+}
+
+/// Whether a game's own volume can be changed on this system (macOS has no
+/// per-program volume).
+pub const PER_GAME: bool = !cfg!(target_os = "macos");
+
+/// The process Irori started for a running game, as the platforms look for
+/// its sound.
+#[derive(Debug, Clone)]
+pub(crate) struct GameProcess {
+    // macOS has no per-program volume, so it reads no field.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    pub pid: u32,
+    /// Unix time a second before the session started: a process started
+    /// earlier is another program that reused one of the game's ids.
+    // Only Windows needs it; Linux has the process group.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub since: u64,
+    /// What the started program left running when it handed over and
+    /// exited, which keeps track of steps that exited since.
+    #[cfg(windows)]
+    pub handoff: Option<std::sync::Arc<crate::follow::Handoff>>,
+}
 
 /// How far one press of the volume controls moves a volume, in percent.
 pub const VOLUME_STEP: i32 = 5;
@@ -246,11 +302,22 @@ pub fn game_streams<'a>(
 
 /// The game's streams as one volume: the loudest, muted when all are.
 pub fn combined(streams: &[&SinkInput]) -> Option<Volume> {
-    let percent = streams.iter().map(|s| s.volume.percent).max()?;
-    Some(Volume {
-        percent,
-        muted: streams.iter().all(|s| s.volume.muted),
-    })
+    combine(streams.iter().map(|s| s.volume))
+}
+
+/// Several volumes as one: the loudest, muted when all are.
+pub fn combine(volumes: impl IntoIterator<Item = Volume>) -> Option<Volume> {
+    let mut out: Option<Volume> = None;
+    for v in volumes {
+        out = Some(match out {
+            None => v,
+            Some(o) => Volume {
+                percent: o.percent.max(v.percent),
+                muted: o.muted && v.muted,
+            },
+        });
+    }
+    out
 }
 
 /// `current` moved by `step`, kept within `0..=MAX_VOLUME`.
@@ -259,10 +326,73 @@ pub fn stepped(current: u32, step: i32) -> u32 {
     next.clamp(0, i64::from(MAX_VOLUME)) as u32
 }
 
+/// A Core Audio level (0.0 to 1.0) in percent.
+pub fn level_percent(level: f32) -> u32 {
+    (level.clamp(0.0, 1.0) * 100.0).round() as u32
+}
+
+/// The processes of the game started as `root` (Windows, which has no
+/// process groups): `root` itself and everything descending from it,
+/// through processes that exited too, started at `since` or later, so a
+/// process id another program reused doesn't count.
+// Used on Windows; the selection itself is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn session_pids(table: &[Proc], root: u32, since: u64) -> HashSet<u32> {
+    let mut known: HashMap<u32, Option<u64>> = [(root, None)].into();
+    let mut pids: HashSet<u32> = crate::follow::descendants(table, &mut known, since)
+        .into_iter()
+        .collect();
+    if table.iter().any(|p| p.pid == root && p.start >= since) {
+        pids.insert(root);
+    }
+    pids
+}
+
+/// The game's own volume, from `osascript`'s `get volume settings`
+/// (`output volume:44, input volume:50, alert volume:100, output
+/// muted:false`). `None` when the output has no volume (`missing value`,
+/// as for some digital outputs).
+// Used on macOS; the parser is tested everywhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn parse_volume_settings(text: &str) -> Option<Volume> {
+    let mut percent = None;
+    let mut muted = false;
+    for part in text.trim().split(',') {
+        let Some((key, value)) = part.split_once(':') else {
+            continue;
+        };
+        match key.trim() {
+            "output volume" => percent = value.trim().parse().ok(),
+            "output muted" => muted = value.trim() == "true",
+            _ => {}
+        }
+    }
+    Some(Volume {
+        percent: percent?,
+        muted,
+    })
+}
+
 impl Backend {
+    /// The process Irori started for the running game `id`.
+    fn game_process(&self, id: &GameId) -> Option<GameProcess> {
+        let pid = self.running_pid(id)?;
+        let elapsed = self.playing_for(id).unwrap_or_default();
+        let since = std::time::SystemTime::now()
+            .checked_sub(elapsed)
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs().saturating_sub(1));
+        Some(GameProcess {
+            pid,
+            since,
+            #[cfg(windows)]
+            handoff: self.running.lock().get(id).and_then(|r| r.handoff.clone()),
+        })
+    }
+
     /// The system's volume and the running game's.
     pub async fn audio(&self, id: &GameId) -> Result<GameAudio> {
-        platform::audio(self.running_pid(id)).await
+        platform::audio(self.game_process(id)).await
     }
 
     /// Move a volume by `step` percent (a game's streams all together) and
@@ -273,15 +403,15 @@ impl Backend {
         target: VolumeTarget,
         step: i32,
     ) -> Result<GameAudio> {
-        let game = self.running_pid(id);
-        platform::change(game, target, Change::Step(step)).await?;
+        let game = self.game_process(id);
+        platform::change(game.clone(), target, Change::Step(step)).await?;
         platform::audio(game).await
     }
 
     /// Mute a volume, or unmute it when it is muted.
     pub async fn toggle_mute(&self, id: &GameId, target: VolumeTarget) -> Result<GameAudio> {
-        let game = self.running_pid(id);
-        platform::change(game, target, Change::ToggleMute).await?;
+        let game = self.game_process(id);
+        platform::change(game.clone(), target, Change::ToggleMute).await?;
         platform::audio(game).await
     }
 
@@ -305,162 +435,10 @@ impl Backend {
     }
 }
 
-// Only Linux reads what a change asks for.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #[derive(Debug, Clone, Copy)]
 enum Change {
     Step(i32),
     ToggleMute,
-}
-
-#[cfg(target_os = "linux")]
-mod platform {
-    use super::*;
-    use irori_core::process::{self, CommandSpec, RunOptions};
-
-    async fn pactl(args: &[&str]) -> Result<String> {
-        let program = irori_core::host::find_program("pactl")
-            .await
-            .context("pactl isn't installed (it comes with PulseAudio's or PipeWire's tools)")?;
-        let spec = irori_core::host::command(
-            CommandSpec::new(program)
-                .args(args.iter().copied())
-                .env("LC_ALL", "C"),
-        );
-        let out = process::run(&spec, RunOptions::default()).await?;
-        if !out.success() {
-            bail!("pactl: {}", out.error_summary());
-        }
-        Ok(out.stdout)
-    }
-
-    async fn sink_inputs() -> Result<Vec<SinkInput>> {
-        if let Ok(text) = pactl(&["-f", "json", "list", "sink-inputs"]).await
-            && let Some(list) = parse_sink_inputs_json(&text)
-        {
-            return Ok(list);
-        }
-        Ok(parse_sink_inputs_text(
-            &pactl(&["list", "sink-inputs"]).await?,
-        ))
-    }
-
-    /// Every process's parent and group, from `/proc`.
-    fn process_table() -> HashMap<u32, (u32, u32)> {
-        let Ok(dir) = std::fs::read_dir("/proc") else {
-            return HashMap::new();
-        };
-        dir.flatten()
-            .filter_map(|entry| {
-                let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
-                let stat = std::fs::read_to_string(entry.path().join("stat")).ok()?;
-                Some((pid, parse_stat(&stat)?))
-            })
-            .collect()
-    }
-
-    async fn streams_of(game: u32) -> Result<Vec<SinkInput>> {
-        let inputs = sink_inputs().await?;
-        let procs = tokio::task::spawn_blocking(process_table)
-            .await
-            .unwrap_or_default();
-        Ok(game_streams(&inputs, game, &procs)
-            .into_iter()
-            .cloned()
-            .collect())
-    }
-
-    async fn system() -> Result<Volume> {
-        let volume = pactl(&["get-sink-volume", "@DEFAULT_SINK@"]).await?;
-        let mute = pactl(&["get-sink-mute", "@DEFAULT_SINK@"]).await?;
-        Ok(Volume {
-            percent: parse_sink_volume(&volume).context("Could not read the volume")?,
-            muted: parse_mute(&mute).unwrap_or(false),
-        })
-    }
-
-    pub(super) async fn audio(game: Option<u32>) -> Result<GameAudio> {
-        let system = system().await;
-        let streams = match game {
-            Some(game) => streams_of(game).await.unwrap_or_default(),
-            None => Vec::new(),
-        };
-        if let (Err(e), true) = (&system, streams.is_empty()) {
-            bail!("{e:#}");
-        }
-        let refs: Vec<&SinkInput> = streams.iter().collect();
-        Ok(GameAudio {
-            system: system.ok(),
-            game: combined(&refs),
-        })
-    }
-
-    pub(super) async fn change(
-        game: Option<u32>,
-        target: VolumeTarget,
-        change: Change,
-    ) -> Result<()> {
-        match target {
-            VolumeTarget::System => {
-                let sink = "@DEFAULT_SINK@";
-                match change {
-                    Change::Step(step) => {
-                        let now = system().await?;
-                        let next = format!("{}%", stepped(now.percent, step));
-                        pactl(&["set-sink-volume", sink, &next]).await?;
-                        if now.muted {
-                            pactl(&["set-sink-mute", sink, "0"]).await?;
-                        }
-                    }
-                    Change::ToggleMute => {
-                        pactl(&["set-sink-mute", sink, "toggle"]).await?;
-                    }
-                }
-            }
-            VolumeTarget::Game => {
-                let game = game.context("The game isn't running")?;
-                let streams = streams_of(game).await?;
-                let refs: Vec<&SinkInput> = streams.iter().collect();
-                let Some(now) = combined(&refs) else {
-                    bail!("The game isn't playing any sound");
-                };
-                for stream in &streams {
-                    let index = stream.index.to_string();
-                    match change {
-                        Change::Step(step) => {
-                            let next = format!("{}%", stepped(now.percent, step));
-                            pactl(&["set-sink-input-volume", &index, &next]).await?;
-                            if stream.volume.muted {
-                                pactl(&["set-sink-input-mute", &index, "0"]).await?;
-                            }
-                        }
-                        Change::ToggleMute => {
-                            let mute = if now.muted { "0" } else { "1" };
-                            pactl(&["set-sink-input-mute", &index, mute]).await?;
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-mod platform {
-    use super::*;
-
-    pub(super) async fn audio(_game: Option<u32>) -> Result<GameAudio> {
-        anyhow::bail!("Volume control isn't available on this system yet")
-    }
-
-    pub(super) async fn change(
-        _game: Option<u32>,
-        _target: VolumeTarget,
-        _change: Change,
-    ) -> Result<()> {
-        anyhow::bail!("Volume control isn't available on this system yet")
-    }
 }
 
 #[cfg(test)]
@@ -584,5 +562,71 @@ Sink Input #7
         assert_eq!(stepped(3, -VOLUME_STEP), 0);
         assert_eq!(stepped(98, VOLUME_STEP), MAX_VOLUME);
         assert_eq!(stepped(120, -VOLUME_STEP), MAX_VOLUME);
+    }
+
+    #[test]
+    fn windows_sessions_follow_the_games_process_tree() {
+        let proc = |pid, parent: Option<u32>, start| Proc { pid, parent, start };
+        // The session began at 1000. 10 is the launcher Irori started; 20, the
+        // game, came from a step (15) that already exited, so nothing names
+        // it any more. 40 reused the id of an older process and names 10 as
+        // its parent, but started before the session; 50 is unrelated.
+        let table = [
+            proc(10, Some(1), 1000),
+            proc(20, Some(15), 1002),
+            proc(30, Some(20), 1003),
+            proc(40, Some(10), 900),
+            proc(50, Some(2), 1001),
+        ];
+        let pids = session_pids(&table, 10, 1000);
+        assert_eq!(pids, HashSet::from([10]));
+
+        // 15 still runs: the chain through it is found.
+        let table = [
+            proc(15, Some(10), 1001),
+            proc(20, Some(15), 1002),
+            proc(30, Some(20), 1003),
+        ];
+        assert_eq!(session_pids(&table, 10, 1000), HashSet::from([15, 20, 30]));
+
+        // The id Irori started now belongs to an older program.
+        let table = [proc(10, Some(1), 500), proc(11, Some(10), 600)];
+        assert!(session_pids(&table, 10, 1000).is_empty());
+
+        // The game's sessions as one volume.
+        let v = |percent, muted| Volume { percent, muted };
+        assert_eq!(combine([v(30, true), v(70, false)]), Some(v(70, false)));
+        assert_eq!(combine([v(30, true), v(20, true)]), Some(v(30, true)));
+        assert_eq!(combine([]), None);
+        assert_eq!(level_percent(0.456), 46);
+        assert_eq!(level_percent(1.5), 100);
+        assert_eq!(level_percent(-0.1), 0);
+    }
+
+    #[test]
+    fn reads_the_macos_volume_settings() {
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:44, input volume:50, alert volume:100, output muted:false\n"
+            ),
+            Some(Volume {
+                percent: 44,
+                muted: false
+            })
+        );
+        assert_eq!(
+            parse_volume_settings("output volume:0, output muted:true"),
+            Some(Volume {
+                percent: 0,
+                muted: true
+            })
+        );
+        assert_eq!(
+            parse_volume_settings(
+                "output volume:missing value, input volume:50, alert volume:100, output muted:missing value"
+            ),
+            None
+        );
+        assert_eq!(parse_volume_settings(""), None);
     }
 }

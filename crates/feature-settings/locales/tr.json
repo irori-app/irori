@@ -363,6 +363,8 @@
   "settings.field.gamepad_repeat_delay.label": "Tekrar aralığı",
   "settings.field.overlay.label": "Oyun içi katman (beta)",
   "settings.field.overlay.help": "Irori’nin başlattığı bir oyun sırasında denetleyicinin Guide düğmesi, oyunun üstünde ses düzeyini, ekran görüntülerini, başarımları ve bugünün notunu açar; açık kaldığı sürece denetleyiciyi oyundan ayırır. Guide + RB ekran görüntüsü alır, Guide + yukarı veya aşağı ses düzeyini değiştirir. En iyi layer-shell destekli Wayland masaüstlerinde çalışır (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Irori’nin başlattığı bir oyunun üzerinde kumandanın Guide düğmesi veya Ctrl+Shift+O, oyunun üstünde ses düzeyini, ekran görüntülerini, başarımları ve bugünün notunu açar. Açıkken oyun da kumandanın basışlarını görür. Windows, Xbox kumandalarının Guide düğmesini Xbox Game Bar için ayırır; bu kumandalarda Ctrl+Shift+O kullanın. Özel tam ekrandaki oyunların üstü kapatılamaz: onları kenarlıksız pencereye alın.",
+  "settings.field.overlay.help_macos": "Irori’nin başlattığı bir oyunun üzerinde kumandanın Guide düğmesi veya Control+Shift+O, oyunun üstünde ses düzeyini, ekran görüntülerini, başarımları ve bugünün notunu açar. Açıkken oyun da kumandanın basışlarını görür ve yalnızca sistem ses düzeyi değiştirilebilir. Ekran görüntüleri, ilk seferde istenen Ekran Kaydı iznini gerektirir.",
   "settings.field.gamescope_additional_options.label": "Ek gamescope seçenekleri",
   "settings.field.gamescope_enable_force_grab_cursor.label": "İmleci pencerede tut",
   "settings.field.gamescope_enable_limiter.label": "Kare sınırlayıcı",

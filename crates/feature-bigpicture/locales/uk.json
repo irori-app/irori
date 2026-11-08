@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Без звуку",
   "bigpicture.overlay.no_game_sound": "Звуку поки немає",
   "bigpicture.overlay.volume_unavailable": "Недоступно",
+  "bigpicture.overlay.game_volume_unsupported": "Недоступно в macOS",
   "bigpicture.overlay.volume_hint": "Ліворуч і праворуч змінюють гучність, {button} вимикає звук.",
   "bigpicture.overlay.audio_failed": "Не вдається змінити гучність: {error}",
   "bigpicture.overlay.screenshot": "Зробити знімок екрана",

@@ -308,7 +308,7 @@ pub fn install(cx: &mut App) {
 
 /// Whether the overlay's controller shortcuts are on.
 fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> bool {
-    cfg!(target_os = "linux") && app.overlay.enabled
+    crate::overlay::support::Support::current().available && app.overlay.enabled
 }
 
 /// Hold the controllers from the game while the overlay is open (see

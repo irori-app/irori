@@ -135,6 +135,8 @@
   "shell.notice.screenshot_saved": "Знімок екрана {title} збережено",
   "shell.notice.screenshot_failed": "Знімок екрана не зроблено",
   "shell.notice.volume_failed": "Гучність не змінено",
+  "shell.notice.overlay_fullscreen": "Оверлей не може з’явитися над цією грою",
+  "shell.notice.overlay_fullscreen_message": "Гра працює в ексклюзивному повноекранному режимі. Перемкніть її у вікно без рамки або віконний режим, щоб користуватися оверлеєм.",
   "shell.palette.year_in_review": "Відкрити підсумки року",
   "shell.palette.year_in_review_keywords": "підсумки рік огляд",
   "shell.nav.views": "Вигляди",

@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "Stumm",
   "bigpicture.overlay.no_game_sound": "Noch kein Ton",
   "bigpicture.overlay.volume_unavailable": "Nicht verfügbar",
+  "bigpicture.overlay.game_volume_unsupported": "Unter macOS nicht verfügbar",
   "bigpicture.overlay.volume_hint": "Links und rechts ändern die Lautstärke, {button} schaltet sie stumm.",
   "bigpicture.overlay.audio_failed": "Die Lautstärke lässt sich nicht ändern: {error}",
   "bigpicture.overlay.screenshot": "Screenshot aufnehmen",

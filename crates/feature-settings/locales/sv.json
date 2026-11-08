@@ -363,6 +363,8 @@
   "settings.field.gamepad_repeat_delay.label": "Upprepningsintervall",
   "settings.field.overlay.label": "Överlägg i spelet (beta)",
   "settings.field.overlay.help": "Handkontrollens Guide-knapp över ett spel som Irori startat öppnar volym, skärmbilder, prestationer och dagens anteckning ovanpå spelet och håller handkontrollen borta från spelet medan överlägget är öppet. Guide + RB tar en skärmbild och Guide + upp eller ner ändrar volymen. Fungerar bäst på Wayland-skrivbord med layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Handkontrollens Guide-knapp eller Ctrl+Skift+O över ett spel som Irori startat öppnar volym, skärmbilder, prestationer och dagens anteckning ovanpå spelet. Spelet ser också handkontrollens tryck medan det är öppet. Windows behåller Guide-knappen på Xbox-handkontroller för Xbox Game Bar, så använd Ctrl+Skift+O med dem. Spel i exklusiv helskärm kan inte täckas: byt till kantlöst fönster.",
+  "settings.field.overlay.help_macos": "Handkontrollens Guide-knapp eller Kontroll+Skift+O över ett spel som Irori startat öppnar volym, skärmbilder, prestationer och dagens anteckning ovanpå spelet. Spelet ser också handkontrollens tryck medan det är öppet, och bara systemvolymen kan ändras. Skärmbilder kräver behörighet för skärminspelning, som efterfrågas första gången.",
   "settings.field.gamescope_additional_options.label": "Extra gamescope-alternativ",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Håll muspekaren i fönstret",
   "settings.field.gamescope_enable_limiter.label": "Bildfrekvensbegränsare",

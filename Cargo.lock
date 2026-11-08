@@ -4381,6 +4381,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4985,6 +4986,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "which 8.0.6",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
 ]
 

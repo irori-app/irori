@@ -135,6 +135,8 @@
   "shell.notice.screenshot_saved": "Captura de {title} guardada",
   "shell.notice.screenshot_failed": "No se ha hecho la captura",
   "shell.notice.volume_failed": "No se ha cambiado el volumen",
+  "shell.notice.overlay_fullscreen": "La superposición no puede mostrarse sobre este juego",
+  "shell.notice.overlay_fullscreen_message": "Se ejecuta en pantalla completa exclusiva. Cambia el juego a ventana sin bordes o a modo ventana para usar la superposición.",
   "shell.palette.year_in_review": "Abrir el Resumen del año",
   "shell.palette.year_in_review_keywords": "resumen recap anual",
   "shell.nav.views": "Vistas",

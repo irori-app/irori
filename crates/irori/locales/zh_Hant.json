@@ -135,6 +135,8 @@
   "shell.notice.screenshot_saved": "已儲存 {title} 的螢幕截圖",
   "shell.notice.screenshot_failed": "未能擷取螢幕畫面",
   "shell.notice.volume_failed": "未能變更音量",
+  "shell.notice.overlay_fullscreen": "覆蓋層無法顯示在此遊戲上方",
+  "shell.notice.overlay_fullscreen_message": "遊戲正以獨佔全螢幕執行。請將遊戲切換為無邊框或視窗模式以使用覆蓋層。",
   "shell.palette.year_in_review": "開啟年度回顧",
   "shell.palette.year_in_review_keywords": "回顧 總結 年度",
   "shell.nav.views": "檢視",

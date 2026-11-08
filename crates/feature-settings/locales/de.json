@@ -363,6 +363,8 @@
   "settings.field.gamepad_repeat_delay.label": "Wiederholungsintervall",
   "settings.field.overlay.label": "In-Game-Overlay (Beta)",
   "settings.field.overlay.help": "Die Guide-Taste des Controllers öffnet über einem von Irori gestarteten Spiel Lautstärke, Screenshots, Erfolge und die Notiz von heute und hält den Controller vom Spiel fern, solange das Overlay offen ist. Guide + RB nimmt einen Screenshot auf, Guide + Hoch oder Runter ändert die Lautstärke. Funktioniert am besten auf Wayland-Desktops mit Layer-Shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Die Guide-Taste des Controllers oder Strg+Umschalt+O öffnet über einem von Irori gestarteten Spiel Lautstärke, Screenshots, Erfolge und die Notiz von heute. Das Spiel sieht die Eingaben des Controllers dabei ebenfalls. Windows behält die Guide-Taste von Xbox-Controllern der Xbox Game Bar vor, nutze dort Strg+Umschalt+O. Spiele im exklusiven Vollbild lassen sich nicht überdecken: stelle sie auf randloses Fenster um.",
+  "settings.field.overlay.help_macos": "Die Guide-Taste des Controllers oder Control+Umschalt+O öffnet über einem von Irori gestarteten Spiel Lautstärke, Screenshots, Erfolge und die Notiz von heute. Das Spiel sieht die Eingaben des Controllers dabei ebenfalls, und nur die Systemlautstärke lässt sich ändern. Screenshots brauchen die Berechtigung zur Bildschirmaufnahme, die beim ersten Mal erfragt wird.",
   "settings.field.gamescope_additional_options.label": "Weitere gamescope-Optionen",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Mauszeiger im Fenster halten",
   "settings.field.gamescope_enable_limiter.label": "Bildratenbegrenzer",

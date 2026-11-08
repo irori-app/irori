@@ -233,6 +233,7 @@
   "bigpicture.overlay.muted": "已靜音",
   "bigpicture.overlay.no_game_sound": "尚無聲音",
   "bigpicture.overlay.volume_unavailable": "無法使用",
+  "bigpicture.overlay.game_volume_unsupported": "macOS 上無法使用",
   "bigpicture.overlay.volume_hint": "左右鍵調整音量，{button} 靜音。",
   "bigpicture.overlay.audio_failed": "無法變更音量：{error}",
   "bigpicture.overlay.screenshot": "擷取螢幕畫面",

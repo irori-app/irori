@@ -363,6 +363,8 @@
   "settings.field.gamepad_repeat_delay.label": "Interval opakování",
   "settings.field.overlay.label": "Překryv ve hře (beta)",
   "settings.field.overlay.help": "Tlačítko Guide na ovladači nad hrou spuštěnou z Irori otevře nad hrou hlasitost, snímky obrazovky, úspěchy a dnešní poznámku a po dobu otevření drží ovladač mimo hru. Guide + RB pořídí snímek obrazovky, Guide + nahoru nebo dolů mění hlasitost. Nejlépe funguje na plochách Wayland s layer-shell (KDE Plasma, sway, Hyprland, COSMIC).",
+  "settings.field.overlay.help_windows": "Tlačítko Guide na ovladači nebo Ctrl+Shift+O nad hrou spuštěnou z Irori otevře nad hrou hlasitost, snímky obrazovky, úspěchy a dnešní poznámku. Hra mezitím vidí i stisky ovladače. Tlačítko Guide ovladače Xbox si Windows ponechávají pro herní panel Xbox, proto u něj použijte Ctrl+Shift+O. Hry ve výhradním režimu celé obrazovky nelze překrýt: přepněte je do režimu bez okrajů.",
+  "settings.field.overlay.help_macos": "Tlačítko Guide na ovladači nebo Control+Shift+O nad hrou spuštěnou z Irori otevře nad hrou hlasitost, snímky obrazovky, úspěchy a dnešní poznámku. Hra mezitím vidí i stisky ovladače a měnit lze jen hlasitost systému. Snímky obrazovky vyžadují oprávnění k nahrávání obrazovky, o které se požádá napoprvé.",
   "settings.field.gamescope_additional_options.label": "Další volby gamescope",
   "settings.field.gamescope_enable_force_grab_cursor.label": "Držet kurzor v okně",
   "settings.field.gamescope_enable_limiter.label": "Omezovač snímků",
