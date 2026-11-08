@@ -28,9 +28,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, BoxShadow, ClickEvent, Context, ElementId, Entity,
     EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyDownEvent,
-    ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy, SharedString, Size,
-    SpringAnimation, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
-    WeakEntity, Window, canvas, div, linear_color_stop, linear_gradient, point, px, rems, size,
+    Keystroke, ObjectFit, ParentElement as _, Pixels, Rems, Render, ScrollStrategy, SharedString,
+    Size, SpringAnimation, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    Subscription, WeakEntity, Window, canvas, div, linear_color_stop, linear_gradient, point, px,
+    rems, size,
 };
 use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
@@ -430,6 +431,27 @@ impl LibraryView {
     /// Move keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |s, cx| s.focus(window, cx));
+    }
+
+    /// Type to search: a printable key the grid or list doesn't use itself
+    /// moves to the search field and adds its character to the query.
+    fn type_to_search(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(text) = typed_search_text(&event.keystroke) else {
+            return;
+        };
+        cx.stop_propagation();
+        self.search.update(cx, |s, cx| {
+            // Puts the caret at the end, where the character goes.
+            let query = s.value();
+            s.set_value(query, window, cx);
+            s.focus(window, cx);
+            s.insert(text, window, cx);
+        });
     }
 
     // ---- frame derivation ------------------------------------------------
@@ -1975,6 +1997,7 @@ impl LibraryView {
             .id("library-content")
             .key_context(GRID_CONTEXT)
             .track_focus(&self.grid_focus)
+            .on_key_down(cx.listener(Self::type_to_search))
             .on_action(
                 cx.listener(|this, _: &SelectLeft, w, cx| this.move_focus(Move::Left, w, cx)),
             )
@@ -3057,5 +3080,41 @@ impl Render for LibraryView {
             .child(self.render_header(window, cx))
             .child(self.render_body(window, cx))
             .children(bulk_bar)
+    }
+}
+
+/// The text a key press types into the search field when the grid or list
+/// has focus: a printable character without Ctrl, Cmd or Fn (shortcuts),
+/// and not whitespace, which starts nothing.
+pub(crate) fn typed_search_text(keystroke: &Keystroke) -> Option<String> {
+    let m = &keystroke.modifiers;
+    if m.control || m.platform || m.function {
+        return None;
+    }
+    let text = keystroke.key_char.as_deref()?;
+    (!text.is_empty() && text.chars().all(|c| !c.is_control() && !c.is_whitespace()))
+        .then(|| text.to_string())
+}
+
+#[cfg(test)]
+mod type_to_search_tests {
+    use super::*;
+
+    #[test]
+    fn only_plain_printable_keys_start_a_search() {
+        let key = |s: &str| typed_search_text(&Keystroke::parse(s).unwrap().with_simulated_ime());
+        assert_eq!(key("h").as_deref(), Some("h"));
+        assert_eq!(key("shift-h").as_deref(), Some("H"));
+        assert_eq!(key("ctrl-h"), None);
+        assert_eq!(key("cmd-h"), None);
+        assert_eq!(key("space"), None);
+        assert_eq!(key("enter"), None);
+        assert_eq!(key("left"), None);
+        let accented = Keystroke {
+            key: "e".into(),
+            key_char: Some("é".into()),
+            modifiers: Default::default(),
+        };
+        assert_eq!(typed_search_text(&accented).as_deref(), Some("é"));
     }
 }

@@ -227,6 +227,27 @@ fn keyboard_navigation_filters_and_search(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "end");
     assert_eq!(focused(cx), Some(GameId::new(Runner::Gog, "5")));
 
+    // Typing a letter in the grid starts a search with it, in the field.
+    cx.simulate_keystrokes(window, "c");
+    draw(cx);
+    let search_focused = cx
+        .update_window(window, |_, window, cx| {
+            view.read(cx).search_focus_handle(cx).is_focused(window)
+        })
+        .unwrap();
+    assert!(search_focused, "typing moves to the search field");
+    cx.simulate_input(window, "eleste");
+    draw(cx);
+    assert_eq!(titles(cx), vec!["Celeste"]);
+    cx.simulate_keystrokes(window, "escape");
+    draw(cx);
+    assert_eq!(titles(cx).len(), 5);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+
     // "/" moves focus to the search field; typing filters instantly.
     cx.simulate_keystrokes(window, "/");
     draw(cx);
