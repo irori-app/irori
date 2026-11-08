@@ -1824,6 +1824,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["badge", "store", "label"]),
     app(
+        "iroriUi.groupCopies",
+        "settings.field.ui_group_copies.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_group_copies.help")
+    .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
         "iroriUi.coverCategories",
         "settings.field.ui_cover_categories.label",
         Appearance,

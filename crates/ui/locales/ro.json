@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "Ascuns în Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite nu îi cunoaște dosarul de instalare, așa că Irori n-ar ști când rulează.",
   "ui.playnite.reason.folder_missing": "Dosarul său de instalare a dispărut: {path}",
-  "ui.import.summary.warnings": "Fișiere {launcher} pe care Irori nu le-a putut citi"
+  "ui.import.summary.warnings": "Fișiere {launcher} pe care Irori nu le-a putut citi",
+  "ui.copies.title": "Copii",
+  "ui.copies.open": "Deschide copia de pe {store}",
+  "ui.copies.make_default": "Folosește această copie implicit",
+  "ui.copies.separate": "Afișează această copie separat",
+  "ui.copies.separate_all": "Afișează fiecare copie separat"
 }

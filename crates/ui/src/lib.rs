@@ -7,6 +7,7 @@ pub mod age_rating;
 pub mod art;
 pub mod art_picker;
 pub mod components;
+pub mod copies;
 mod cosmic;
 mod desktop_accent;
 mod desktop_theme;

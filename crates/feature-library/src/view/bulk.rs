@@ -123,6 +123,29 @@ impl LibraryView {
         cx.notify();
     }
 
+    /// "Combine with other copies…" on `id`: selection mode with it picked,
+    /// so the user picks its other copies and combines them from the bar.
+    pub(super) fn start_combining(&mut self, id: &GameId, cx: &mut Context<Self>) {
+        self.selection.end();
+        self.selection.toggle(id);
+        cx.notify();
+    }
+
+    /// Make the picked games one entry, and leave selection mode.
+    fn combine_picked(&mut self, ids: Vec<GameId>, window: &mut Window, cx: &mut Context<Self>) {
+        let count = ids.len();
+        irori_ui::copies::combine(ids, cx);
+        self.selection.end();
+        window.push_notification(
+            Notification::success(t_args(
+                "library.bulk.done.combined",
+                &[("count", &count.to_string())],
+            )),
+            cx,
+        );
+        cx.notify();
+    }
+
     /// Escape: leave selection mode, else close the drawer.
     pub(super) fn end_selection(&mut self, cx: &mut Context<Self>) {
         if self.selection.is_active() {
@@ -442,6 +465,19 @@ impl LibraryView {
                     this.add_picked_to_steam(games.to_vec(), window, cx)
                 }))
         };
+        let combine = {
+            let ids = ids.clone();
+            Button::new("bulk-combine")
+                .small()
+                .outline()
+                .icon(IconName::Combine)
+                .label(t("library.bulk.combine"))
+                .tooltip(t("library.bulk.combine_tooltip"))
+                .disabled(count < 2)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.combine_picked(ids.to_vec(), window, cx)
+                }))
+        };
         let category_ids = ids.clone();
         let view = cx.entity().downgrade();
         let categories_button = Button::new("bulk-categories")
@@ -604,6 +640,7 @@ impl LibraryView {
                             bar.child(install)
                                 .child(uninstall)
                                 .child(steam)
+                                .child(combine)
                                 .child(categories_button)
                                 .child(status_button)
                                 .child(favourite)

@@ -46,6 +46,22 @@ pub struct UserData {
     pub journal: Journal,
 }
 
+/// Store `o` as the overrides of `key`, or none when it is empty.
+fn put_overrides(d: &mut UserData, key: &str, o: GameOverrides) {
+    if o.is_empty() {
+        d.overrides.remove(key);
+    } else {
+        d.overrides.insert(key.to_string(), o);
+    }
+}
+
+/// Change the overrides of `key` in place.
+fn edit_overrides(d: &mut UserData, key: &str, f: impl FnOnce(&mut GameOverrides)) {
+    let mut o = d.overrides.get(key).cloned().unwrap_or_default();
+    f(&mut o);
+    put_overrides(d, key, o);
+}
+
 /// Most stars a game can be rated.
 pub const MAX_RATING: u8 = 5;
 
@@ -513,12 +529,95 @@ impl UserDataService {
         self.update(None, |d| d.recent.clear());
     }
 
-    pub fn set_overrides(&self, id: &GameId, o: GameOverrides) {
+    /// Replace a game's title, art and game modes. How it joins other
+    /// stores' copies stays: [`UserDataService::combine_copies`] and its
+    /// siblings change that.
+    pub fn set_overrides(&self, id: &GameId, mut o: GameOverrides) {
         self.update(Some(id), |d| {
-            if o.is_empty() {
-                d.overrides.remove(&id.key());
-            } else {
-                d.overrides.insert(id.key(), o);
+            if let Some(old) = d.overrides.get(&id.key()) {
+                o.copy_of = old.copy_of.clone();
+                o.default_copy = old.default_copy;
+            }
+            put_overrides(d, &id.key(), o);
+        });
+    }
+
+    /// Make `ids` (two or more games, from different stores) one library
+    /// entry: each joins the first. The first stays the default copy unless
+    /// another one is installed.
+    pub fn combine_copies(&self, ids: &[GameId]) {
+        let Some((first, rest)) = ids.split_first() else {
+            return;
+        };
+        // A game's event, so the library is rebuilt with the new entry.
+        self.update(Some(first), |d| {
+            let target = first.key();
+            edit_overrides(d, &target, |o| {
+                if o.copy_of.as_deref() == Some("") {
+                    o.copy_of = None;
+                }
+                o.default_copy = true;
+            });
+            for id in rest {
+                edit_overrides(d, &id.key(), |o| {
+                    o.copy_of = Some(target.clone());
+                    o.default_copy = false;
+                });
+            }
+        });
+    }
+
+    /// Take `id` out of the entry it shares with `group` (every copy of
+    /// the entry, `id` among them): it stands alone from now on, and the
+    /// others stay together.
+    pub fn separate_copy(&self, id: &GameId, group: &[GameId]) {
+        let key = id.key();
+        let rest: Vec<String> = group
+            .iter()
+            .map(GameId::key)
+            .filter(|k| *k != key)
+            .collect();
+        self.update(Some(id), |d| {
+            edit_overrides(d, &key, |o| {
+                o.copy_of = Some(String::new());
+                o.default_copy = false;
+            });
+            // Copies joined to this one join another of the rest instead.
+            if let Some(anchor) = rest.first() {
+                for other in &rest {
+                    edit_overrides(d, other, |o| {
+                        if o.copy_of.as_deref() == Some(key.as_str()) {
+                            o.copy_of = (other != anchor).then(|| anchor.clone());
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    /// Show every copy of `group` as an entry of its own.
+    pub fn separate_copies(&self, group: &[GameId]) {
+        let Some(first) = group.first() else {
+            return;
+        };
+        self.update(Some(first), |d| {
+            for id in group {
+                edit_overrides(d, &id.key(), |o| {
+                    o.copy_of = Some(String::new());
+                    o.default_copy = false;
+                });
+            }
+        });
+    }
+
+    /// Make `id` the copy its entry plays and installs (when no other copy
+    /// is installed instead).
+    pub fn set_default_copy(&self, id: &GameId, group: &[GameId]) {
+        let key = id.key();
+        self.update(Some(id), |d| {
+            for other in group {
+                let k = other.key();
+                edit_overrides(d, &k, |o| o.default_copy = k == key);
             }
         });
     }

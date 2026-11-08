@@ -160,6 +160,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the
   selected game's whole page over its art. Arrow keys move the selection in each.
+- **One entry per game**, however many stores you own it on: it plays the installed
+  copy, its page switches between the Steam, Epic Games or GOG copies, and you can
+  combine or separate copies yourself. Each keeps its own playtime and achievements.
 - **Add any game** yourself, with its own description, developer, release date, genres
   and art from SteamGridDB, or drop its program, shortcut or folder onto the library.
 - **Your own art for any game:** a cover, background and logo from a file, SteamGridDB

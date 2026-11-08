@@ -1040,6 +1040,9 @@ pub struct UiPrefs {
     /// The game's categories on its cover in the grid (`coverCategories`,
     /// off unless turned on).
     pub cover_categories: bool,
+    /// Copies of one game from several stores are one library entry
+    /// (`groupCopies`, on unless turned off).
+    pub group_copies: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1182,6 +1185,7 @@ impl Default for UiPrefs {
             reduce_motion: false,
             show_store_badges: true,
             cover_categories: false,
+            group_copies: true,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1216,6 +1220,7 @@ mod tests {
         assert_eq!(ui.accent_rgb(), None);
         assert!(ui.library_quick_controls);
         assert!(!ui.cover_categories);
+        assert!(ui.group_copies);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {

@@ -775,5 +775,10 @@
   "library.folder.add_other": "{count} 本を追加",
   "library.toolbar.group.genre": "ジャンル",
   "library.filters.section.genre": "ジャンル",
-  "library.group.no_genre": "ジャンルなし"
+  "library.group.no_genre": "ジャンルなし",
+  "library.menu.combine": "ほかのストアのコピーとまとめる…",
+  "library.combine.hint": "「{title}」のほかのコピーを選んでから、「1 つのゲームにまとめる」を選んでください。",
+  "library.bulk.combine": "1 つのゲームにまとめる",
+  "library.bulk.combine_tooltip": "選んだゲームを、それぞれのストアにある 1 つのゲームのコピーとして表示します",
+  "library.bulk.done.combined": "{count} 本のゲームを 1 つの項目にまとめました"
 }

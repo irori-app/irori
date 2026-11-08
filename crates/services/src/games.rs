@@ -113,7 +113,7 @@ impl Backend {
         // wins over another store's copy of the same game.
         let library = self.library();
         let mut titles = std::collections::HashMap::new();
-        for g in library.games.iter().filter(|g| !g.is_dlc) {
+        for g in library.all_games().filter(|g| !g.is_dlc) {
             let name = irori_core::paths::sanitize(g.title.trim());
             if g.is_installed || !titles.contains_key(&name) {
                 titles.insert(name, g.id().key());

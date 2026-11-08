@@ -775,5 +775,10 @@
   "library.folder.add_other": "Lägg till {count} spel",
   "library.toolbar.group.genre": "Genre",
   "library.filters.section.genre": "Genre",
-  "library.group.no_genre": "Ingen genre"
+  "library.group.no_genre": "Ingen genre",
+  "library.menu.combine": "Slå ihop med kopior från andra butiker…",
+  "library.combine.hint": "Välj de andra kopiorna av ”{title}” och sedan Slå ihop till ett spel.",
+  "library.bulk.combine": "Slå ihop till ett spel",
+  "library.bulk.combine_tooltip": "Visa de valda spelen som kopior av ett spel, från sina butiker",
+  "library.bulk.done.combined": "{count} spel är nu en post"
 }

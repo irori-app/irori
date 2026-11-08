@@ -699,7 +699,7 @@ impl<T> PerRevision<T> {
 
 /// The stores the library has games of.
 pub fn stores_with_games(library: &LibrarySnapshot) -> HashSet<Runner> {
-    library.games.iter().map(|g| g.runner()).collect()
+    library.all_games().map(|g| g.runner()).collect()
 }
 
 /// The systems the library has games of, in the systems catalogue's order.

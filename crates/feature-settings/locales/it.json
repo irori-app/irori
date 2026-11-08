@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: ancora troppo pochi resoconti per una valutazione.",
   "settings.steam_compat.protondb.reports": "Resoconti",
   "settings.field.ui_cover_categories.label": "Mostra le categorie sulle copertine",
-  "settings.field.ui_cover_categories.help": "Le categorie di ogni gioco in fondo alla sua copertina nella griglia: le prime due e quante altre."
+  "settings.field.ui_cover_categories.help": "Le categorie di ogni gioco in fondo alla sua copertina nella griglia: le prime due e quante altre.",
+  "settings.field.ui_group_copies.label": "Mostra le copie di più negozi come un solo gioco",
+  "settings.field.ui_group_copies.help": "Un gioco posseduto su Steam, Epic Games e GOG compare una volta sola e avvia la copia installata. La sua pagina passa da una copia all’altra; ognuna conserva il proprio tempo di gioco e i propri obiettivi."
 }

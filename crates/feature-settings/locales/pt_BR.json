@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: ainda há poucos relatórios para uma classificação.",
   "settings.steam_compat.protondb.reports": "Relatórios",
   "settings.field.ui_cover_categories.label": "Mostrar categorias nas capas",
-  "settings.field.ui_cover_categories.help": "As categorias de cada jogo na parte de baixo da capa na grade: as duas primeiras e quantas mais."
+  "settings.field.ui_cover_categories.help": "As categorias de cada jogo na parte de baixo da capa na grade: as duas primeiras e quantas mais.",
+  "settings.field.ui_group_copies.label": "Mostrar cópias de várias lojas como um único jogo",
+  "settings.field.ui_group_copies.help": "Um jogo que você tem na Steam, na Epic Games e na GOG aparece uma vez e abre a cópia instalada. A página dele alterna entre as cópias; cada uma mantém seu próprio tempo de jogo e suas conquistas."
 }

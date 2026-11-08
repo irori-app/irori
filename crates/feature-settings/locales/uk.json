@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: поки що замало звітів для оцінки.",
   "settings.steam_compat.protondb.reports": "Звіти",
   "settings.field.ui_cover_categories.label": "Показувати категорії на обкладинках",
-  "settings.field.ui_cover_categories.help": "Категорії кожної гри внизу її обкладинки в сітці: перші дві й скільки ще."
+  "settings.field.ui_cover_categories.help": "Категорії кожної гри внизу її обкладинки в сітці: перші дві й скільки ще.",
+  "settings.field.ui_group_copies.label": "Показувати копії з кількох крамниць як одну гру",
+  "settings.field.ui_group_copies.help": "Гра, придбана у Steam, Epic Games і GOG, показується один раз і запускає встановлену копію. На її сторінці можна перемикатися між копіями; кожна зберігає власний час гри й досягнення."
 }

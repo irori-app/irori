@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "In Playnite ausgeblendet.",
   "ui.playnite.reason.no_install_folder": "Playnite kennt keinen Installationsordner dafür, daher kann Irori nicht erkennen, wann es läuft.",
   "ui.playnite.reason.folder_missing": "Sein Installationsordner ist weg: {path}",
-  "ui.import.summary.warnings": "Dateien von {launcher}, die Irori nicht lesen konnte"
+  "ui.import.summary.warnings": "Dateien von {launcher}, die Irori nicht lesen konnte",
+  "ui.copies.title": "Kopien",
+  "ui.copies.open": "Kopie von {store} öffnen",
+  "ui.copies.make_default": "Diese Kopie als Standard verwenden",
+  "ui.copies.separate": "Diese Kopie einzeln anzeigen",
+  "ui.copies.separate_all": "Jede Kopie einzeln anzeigen"
 }

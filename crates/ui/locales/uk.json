@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "Прихована в Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite не знає її теки встановлення, тож Irori не зможе зрозуміти, коли вона запущена.",
   "ui.playnite.reason.folder_missing": "Її теку встановлення видалено: {path}",
-  "ui.import.summary.warnings": "Файли {launcher}, які Irori не зміг прочитати"
+  "ui.import.summary.warnings": "Файли {launcher}, які Irori не зміг прочитати",
+  "ui.copies.title": "Копії",
+  "ui.copies.open": "Відкрити копію з {store}",
+  "ui.copies.make_default": "Зробити цю копію основною",
+  "ui.copies.separate": "Показувати цю копію окремо",
+  "ui.copies.separate_all": "Показувати кожну копію окремо"
 }

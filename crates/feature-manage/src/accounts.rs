@@ -103,7 +103,7 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
     let app = &m.settings.read(cx).app;
     let shown = app.ui.stores;
     let mut counts: BTreeMap<Runner, usize> = BTreeMap::new();
-    for g in &library.snapshot.games {
+    for g in library.snapshot.all_games() {
         *counts.entry(g.runner()).or_default() += 1;
     }
     ACCOUNT_STORES

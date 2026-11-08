@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: too few reports for a rating yet.",
   "settings.steam_compat.protondb.reports": "Reports",
   "settings.field.ui_cover_categories.label": "Show categories on covers",
-  "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more."
+  "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more.",
+  "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
+  "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements."
 }

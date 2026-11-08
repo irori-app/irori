@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: prea puține rapoarte pentru o evaluare deocamdată.",
   "settings.steam_compat.protondb.reports": "Rapoarte",
   "settings.field.ui_cover_categories.label": "Afișează categoriile pe coperți",
-  "settings.field.ui_cover_categories.help": "Categoriile fiecărui joc în partea de jos a copertei în grilă: primele două și câte mai sunt."
+  "settings.field.ui_cover_categories.help": "Categoriile fiecărui joc în partea de jos a copertei în grilă: primele două și câte mai sunt.",
+  "settings.field.ui_group_copies.label": "Afișează copiile din mai multe magazine ca un singur joc",
+  "settings.field.ui_group_copies.help": "Un joc deținut pe Steam, Epic Games și GOG apare o singură dată și pornește copia instalată. Pagina lui comută între copii; fiecare își păstrează timpul de joc și realizările."
 }

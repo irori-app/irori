@@ -623,8 +623,8 @@ fn is_web(art: &Option<String>) -> bool {
         .is_some_and(|a| a.starts_with("https://") || a.starts_with("http://"))
 }
 
-/// The part of a game's custom title, game modes and art other computers
-/// can use: art from files on this computer stays here.
+/// The part of a game's custom title, game modes, copies and art other
+/// computers can use: art from files on this computer stays here.
 pub fn shared_overrides(o: &GameOverrides) -> Option<GameOverrides> {
     let web = |art: &Option<String>| art.clone().filter(|_| is_web(art));
     let shared = GameOverrides {
@@ -634,6 +634,8 @@ pub fn shared_overrides(o: &GameOverrides) -> Option<GameOverrides> {
         art_background: web(&o.art_background),
         art_logo: web(&o.art_logo),
         game_modes: o.game_modes.clone(),
+        copy_of: o.copy_of.clone(),
+        default_copy: o.default_copy,
     };
     (!shared.is_empty()).then_some(shared)
 }
@@ -652,6 +654,8 @@ fn with_local_art(shared: GameOverrides, local: &GameOverrides) -> GameOverrides
         art_background: pick(shared.art_background, &local.art_background),
         art_logo: pick(shared.art_logo, &local.art_logo),
         game_modes: shared.game_modes,
+        copy_of: shared.copy_of,
+        default_copy: shared.default_copy,
     }
 }
 

@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: 등급을 매기기에 아직 보고서가 부족합니다.",
   "settings.steam_compat.protondb.reports": "보고서",
   "settings.field.ui_cover_categories.label": "표지에 카테고리 표시",
-  "settings.field.ui_cover_categories.help": "그리드에서 각 게임 표지 아래쪽에 카테고리를 처음 두 개와 나머지 개수로 표시합니다."
+  "settings.field.ui_cover_categories.help": "그리드에서 각 게임 표지 아래쪽에 카테고리를 처음 두 개와 나머지 개수로 표시합니다.",
+  "settings.field.ui_group_copies.label": "여러 스토어의 사본을 하나의 게임으로 표시",
+  "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다."
 }

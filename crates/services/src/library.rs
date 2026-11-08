@@ -14,12 +14,22 @@ use crate::userdata::UserData;
 static REVISION: AtomicU64 = AtomicU64::new(0);
 
 /// All visible (non-DLC) games of every store the user shows, sorted by
-/// title.
+/// title. Copies of one game from several stores are one entry
+/// ([`crate::copies`]): `games` holds its default copy and `other_copies`
+/// the rest, and every copy keeps its own [`GameId`] for whatever is done
+/// with it.
 #[derive(Default)]
 pub struct LibrarySnapshot {
     pub revision: u64,
+    /// One game per library entry.
     pub games: Vec<Arc<GameInfo>>,
+    /// The copies an entry in `games` stands for.
+    pub other_copies: Vec<Arc<GameInfo>>,
     index: HashMap<GameId, usize>,
+    /// Positions in `other_copies`.
+    copy_index: HashMap<GameId, usize>,
+    /// Every copy of each entry of several, the default one first.
+    copies: HashMap<GameId, Arc<[GameId]>>,
     /// Account ids owning each game, for stores with several signed-in
     /// accounts (see [`irori_core::Store::game_owners`]).
     pub owners: HashMap<GameId, Vec<String>>,
@@ -28,13 +38,79 @@ pub struct LibrarySnapshot {
 }
 
 impl LibrarySnapshot {
+    /// A snapshot of `grouped` entries (tests and the library rebuild).
+    pub fn new(
+        revision: u64,
+        grouped: crate::copies::Grouped,
+        owners: HashMap<GameId, Vec<String>>,
+    ) -> Self {
+        let crate::copies::Grouped {
+            entries,
+            others,
+            groups,
+        } = grouped;
+        let index = entries
+            .iter()
+            .enumerate()
+            .map(|(ix, g)| (g.id(), ix))
+            .collect();
+        let copy_index = others
+            .iter()
+            .enumerate()
+            .map(|(ix, g)| (g.id(), ix))
+            .collect();
+        let copies = groups
+            .iter()
+            .flat_map(|ids| ids.iter().map(move |id| (id.clone(), ids.clone())))
+            .collect();
+        Self {
+            revision,
+            games: entries,
+            other_copies: others,
+            index,
+            copy_index,
+            copies,
+            owners,
+            search: Default::default(),
+        }
+    }
+
+    /// Every game, each copy of an entry included.
+    pub fn all_games(&self) -> impl Iterator<Item = &Arc<GameInfo>> {
+        self.games.iter().chain(&self.other_copies)
+    }
+
+    /// Every copy of the entry `id` belongs to, the default one first;
+    /// empty when it is the only one.
+    pub fn copies_of(&self, id: &GameId) -> &[GameId] {
+        self.copies.get(id).map_or(&[], |c| c)
+    }
+
+    /// The game `id`'s entry shows: its default copy.
+    pub fn entry_of(&self, id: &GameId) -> Option<&Arc<GameInfo>> {
+        match self.copies.get(id) {
+            Some(copies) => self.get(copies.first()?),
+            None => self.get(id),
+        }
+    }
+
+    /// The copy of `id`'s entry from `runner`, when it has one.
+    pub fn copy_on(&self, id: &GameId, runner: Runner) -> Option<&Arc<GameInfo>> {
+        let copy = self.copies_of(id).iter().find(|c| c.runner == runner)?;
+        self.get(copy)
+    }
+
     /// The search index of these games, built on first use.
     pub fn search(&self) -> &SearchIndex {
         self.search.get_or_init(|| SearchIndex::build(&self.games))
     }
 
+    /// Any game of the library, a copy an entry stands for too.
     pub fn get(&self, id: &GameId) -> Option<&Arc<GameInfo>> {
-        self.index.get(id).map(|&ix| &self.games[ix])
+        match self.index.get(id) {
+            Some(&ix) => Some(&self.games[ix]),
+            None => self.copy_index.get(id).map(|&ix| &self.other_copies[ix]),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -51,8 +127,9 @@ impl LibrarySnapshot {
         self.owners.get(id).map_or(&[], Vec::as_slice)
     }
 
+    /// How many games of `runner` the library has, each copy counted.
     pub fn count(&self, runner: Runner) -> usize {
-        self.games.iter().filter(|g| g.runner() == runner).count()
+        self.all_games().filter(|g| g.runner() == runner).count()
     }
 }
 
@@ -142,6 +219,14 @@ impl LibraryFilter {
         let query = Query::new(&parsed.text);
         let index = query.as_ref().map(|_| library.search());
         for (ix, g) in library.games.iter().enumerate() {
+            // Shown by store, an entry is that store's copy.
+            let g = match self.store {
+                StoreFilter::Store(r) if g.runner() != r => match library.copy_on(&g.id(), r) {
+                    Some(copy) => copy,
+                    None => continue,
+                },
+                _ => g,
+            };
             let key = g.id().key();
             let hidden = user.hidden.contains(&key);
             if self.hidden_only {
@@ -375,15 +460,17 @@ impl Backend {
                 }
             });
         }
-        games.sort_by(|a, b| {
+        let mut grouped = crate::copies::group(games, &user, self.settings.app().ui.group_copies);
+        grouped.entries.sort_by(|a, b| {
             a.sort_title
                 .cmp(&b.sort_title)
                 .then(a.runner().cmp(&b.runner()))
         });
-        let index: HashMap<GameId, usize> = games
+        let known: std::collections::HashSet<GameId> = grouped
+            .entries
             .iter()
-            .enumerate()
-            .map(|(ix, g)| (g.id(), ix))
+            .chain(&grouped.others)
+            .map(|g| g.id())
             .collect();
         let owners = self
             .stores
@@ -394,16 +481,10 @@ impl Backend {
                     .into_iter()
                     .map(move |(app, ids)| (GameId::new(runner, app), ids))
             })
-            .filter(|(id, _)| index.contains_key(id))
+            .filter(|(id, _)| known.contains(id))
             .collect();
         let revision = REVISION.fetch_add(1, Ordering::Relaxed) + 1;
-        *self.library.write() = Arc::new(LibrarySnapshot {
-            revision,
-            games,
-            index,
-            owners,
-            search: Default::default(),
-        });
+        *self.library.write() = Arc::new(LibrarySnapshot::new(revision, grouped, owners));
         self.bus.emit(Event::LibraryUpdated(revision));
     }
 }
@@ -427,14 +508,57 @@ mod tests {
     }
 
     fn snapshot(games: Vec<Arc<GameInfo>>) -> LibrarySnapshot {
-        let index = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
-        LibrarySnapshot {
-            revision: 1,
-            games,
-            index,
-            owners: HashMap::new(),
-            search: Default::default(),
-        }
+        LibrarySnapshot::new(
+            1,
+            crate::copies::Grouped {
+                entries: games,
+                ..Default::default()
+            },
+            HashMap::new(),
+        )
+    }
+
+    #[test]
+    fn an_entry_of_several_copies_shows_each_by_its_store() {
+        let games = vec![
+            game(Runner::Steam, "620", "Portal 2", false),
+            game(Runner::Legendary, "p2", "Portal 2", true),
+            game(Runner::Gog, "1", "Celeste", false),
+        ];
+        let lib = LibrarySnapshot::new(
+            1,
+            crate::copies::group(games, &UserData::default(), true),
+            HashMap::new(),
+        );
+        let (steam, epic) = (
+            GameId::new(Runner::Steam, "620"),
+            GameId::new(Runner::Legendary, "p2"),
+        );
+        assert_eq!(lib.len(), 2);
+        assert_eq!(lib.all_games().count(), 3);
+        assert_eq!(lib.count(Runner::Steam), 1);
+        // The installed copy leads; both are found, each by its own id.
+        assert_eq!(lib.copies_of(&steam), [epic.clone(), steam.clone()]);
+        assert_eq!(lib.entry_of(&steam).unwrap().id(), epic);
+        assert_eq!(lib.get(&steam).unwrap().id(), steam);
+        assert!(lib.copies_of(&GameId::new(Runner::Gog, "1")).is_empty());
+        let none = HashSet::new();
+        let shown = |store| -> Vec<String> {
+            LibraryFilter {
+                store,
+                ..Default::default()
+            }
+            .apply(&lib, &UserData::default(), &none)
+            .iter()
+            .map(|g| g.id().key())
+            .collect()
+        };
+        assert_eq!(shown(StoreFilter::All), ["legendary:p2", "gog:1"]);
+        assert_eq!(shown(StoreFilter::Store(Runner::Steam)), ["steam:620"]);
+        assert_eq!(
+            shown(StoreFilter::Store(Runner::Legendary)),
+            ["legendary:p2"]
+        );
     }
 
     #[test]

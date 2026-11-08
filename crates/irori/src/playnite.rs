@@ -37,16 +37,10 @@ pub async fn import(
     };
     summary.warnings.extend(plan.warnings);
     let library = backend.library();
+    let games: Vec<Arc<GameInfo>> = library.all_games().cloned().collect();
     for game in plan.games {
         summary.found += 1;
-        apply_game(
-            backend,
-            sideload.as_deref(),
-            &library.games,
-            game,
-            &mut summary,
-        )
-        .await;
+        apply_game(backend, sideload.as_deref(), &games, game, &mut summary).await;
     }
     backend.refresh_all(false).await;
     Ok(summary)

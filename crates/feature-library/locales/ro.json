@@ -775,5 +775,10 @@
   "library.folder.add_other": "Adaugă jocuri: {count}",
   "library.toolbar.group.genre": "Gen",
   "library.filters.section.genre": "Gen",
-  "library.group.no_genre": "Fără gen"
+  "library.group.no_genre": "Fără gen",
+  "library.menu.combine": "Combină cu copii din alte magazine…",
+  "library.combine.hint": "Alege celelalte copii ale „{title}”, apoi Combină într-un singur joc.",
+  "library.bulk.combine": "Combină într-un singur joc",
+  "library.bulk.combine_tooltip": "Afișează jocurile alese drept copii ale aceluiași joc, din magazinele lor",
+  "library.bulk.done.combined": "Jocuri combinate într-o singură intrare: {count}"
 }

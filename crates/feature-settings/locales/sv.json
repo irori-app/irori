@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: än så länge för få rapporter för ett betyg.",
   "settings.steam_compat.protondb.reports": "Rapporter",
   "settings.field.ui_cover_categories.label": "Visa kategorier på omslag",
-  "settings.field.ui_cover_categories.help": "Varje spels kategorier längs omslagets nederkant i rutnätet: de två första och hur många fler."
+  "settings.field.ui_cover_categories.help": "Varje spels kategorier längs omslagets nederkant i rutnätet: de två första och hur många fler.",
+  "settings.field.ui_group_copies.label": "Visa kopior från flera butiker som ett spel",
+  "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer."
 }

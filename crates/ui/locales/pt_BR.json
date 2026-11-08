@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "Oculto no Playnite.",
   "ui.playnite.reason.no_install_folder": "O Playnite não conhece a pasta de instalação dele, então o Irori não saberia quando ele está rodando.",
   "ui.playnite.reason.folder_missing": "A pasta de instalação sumiu: {path}",
-  "ui.import.summary.warnings": "Arquivos do {launcher} que o Irori não conseguiu ler"
+  "ui.import.summary.warnings": "Arquivos do {launcher} que o Irori não conseguiu ler",
+  "ui.copies.title": "Cópias",
+  "ui.copies.open": "Abrir a cópia da {store}",
+  "ui.copies.make_default": "Usar esta cópia como padrão",
+  "ui.copies.separate": "Mostrar esta cópia separadamente",
+  "ui.copies.separate_all": "Mostrar cada cópia separadamente"
 }

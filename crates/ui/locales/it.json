@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "Nascosto in Playnite.",
   "ui.playnite.reason.no_install_folder": "Playnite non conosce la sua cartella di installazione, quindi Irori non potrebbe sapere quando è in esecuzione.",
   "ui.playnite.reason.folder_missing": "La sua cartella di installazione non c’è più: {path}",
-  "ui.import.summary.warnings": "File di {launcher} che Irori non è riuscito a leggere"
+  "ui.import.summary.warnings": "File di {launcher} che Irori non è riuscito a leggere",
+  "ui.copies.title": "Copie",
+  "ui.copies.open": "Apri la copia di {store}",
+  "ui.copies.make_default": "Usa questa copia come predefinita",
+  "ui.copies.separate": "Mostra questa copia a parte",
+  "ui.copies.separate_all": "Mostra ogni copia a parte"
 }

@@ -775,5 +775,10 @@
   "library.folder.add_other": "Add {count} games",
   "library.toolbar.group.genre": "Genre",
   "library.filters.section.genre": "Genre",
-  "library.group.no_genre": "No genre"
+  "library.group.no_genre": "No genre",
+  "library.menu.combine": "Combine with copies from other stores…",
+  "library.combine.hint": "Pick the other copies of “{title}”, then choose Combine as one game.",
+  "library.bulk.combine": "Combine as one game",
+  "library.bulk.combine_tooltip": "Show the picked games as copies of one game, from their stores",
+  "library.bulk.done.combined": "{count} games are now one entry"
 }

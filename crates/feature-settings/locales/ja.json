@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending：評価に必要なレポートがまだ足りません。",
   "settings.steam_compat.protondb.reports": "レポート",
   "settings.field.ui_cover_categories.label": "カバーにカテゴリーを表示",
-  "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。"
+  "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。",
+  "settings.field.ui_group_copies.label": "複数のストアのコピーを 1 つのゲームとして表示",
+  "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。"
 }

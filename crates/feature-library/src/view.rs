@@ -1456,6 +1456,7 @@ fn game_menu(
             let after_hidden = command == GameCommand::ToggleHidden;
             menu = menu.item(command_item(view, &id, command, &state));
             if after_hidden {
+                let copies_view = view.clone();
                 let view = view.clone();
                 let id = id.clone();
                 menu = menu.submenu_with_icon(
@@ -1473,10 +1474,48 @@ fn game_menu(
                     cx,
                     move |sub, _, cx| irori_ui::play_status::menu(sub, &status_id, cx),
                 );
+                menu = copies_menu(menu, &copies_view, game, window, cx);
             }
         }
     }
     menu
+}
+
+/// The game's copies on other stores: a submenu to open, prefer or
+/// separate them, or, for a game of one copy, combining it with others
+/// (picked in selection mode, then combined from the bar).
+fn copies_menu(
+    menu: PopupMenu,
+    view: &WeakEntity<LibraryView>,
+    game: &Arc<GameInfo>,
+    window: &mut Window,
+    cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+    let id = game.id();
+    if irori_ui::copies::of(&id, cx).len() > 1 {
+        return menu.submenu_with_icon(
+            Some(Icon::new(IconName::Layers)),
+            t("ui.copies.title"),
+            window,
+            cx,
+            move |sub, _, cx| irori_ui::copies::menu_items(sub, &id, cx),
+        );
+    }
+    let (view, title) = (view.clone(), game.title.clone());
+    menu.item(
+        PopupMenuItem::new(t("library.menu.combine"))
+            .icon(IconName::Combine)
+            .on_click(move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| this.start_combining(&id, cx));
+                window.push_notification(
+                    gpui_kit::component::notification::Notification::info(t_args(
+                        "library.combine.hint",
+                        &[("title", &title)],
+                    )),
+                    cx,
+                );
+            }),
+    )
 }
 
 fn categories_menu(
@@ -2254,11 +2293,26 @@ impl LibraryView {
         let muted = theme.muted_foreground;
         let radius = theme.radius_lg;
 
+        // An entry of several stores' copies says so.
+        let copies = models(cx).library.read(cx).snapshot.copies_of(&id).len();
         let markers = h_flex()
             .absolute()
             .top_2()
             .right_2()
             .gap_1()
+            .when(copies > 1, |el| {
+                el.child(
+                    h_flex()
+                        .gap_0p5()
+                        .px_1()
+                        .py_0p5()
+                        .rounded_full()
+                        .bg(scrim)
+                        .text_xs()
+                        .child(Icon::new(IconName::Layers).xsmall())
+                        .child(copies.to_string()),
+                )
+            })
             .when(
                 state.has_update && state.installed && !state.sideload,
                 |el| {

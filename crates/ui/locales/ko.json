@@ -206,5 +206,10 @@
   "ui.playnite.reason.hidden": "Playnite에서 숨겨져 있습니다.",
   "ui.playnite.reason.no_install_folder": "Playnite가 설치 폴더를 알지 못해 Irori가 실행 여부를 알 수 없습니다.",
   "ui.playnite.reason.folder_missing": "설치 폴더가 없습니다: {path}",
-  "ui.import.summary.warnings": "Irori가 읽지 못한 {launcher} 파일"
+  "ui.import.summary.warnings": "Irori가 읽지 못한 {launcher} 파일",
+  "ui.copies.title": "사본",
+  "ui.copies.open": "{store} 사본 열기",
+  "ui.copies.make_default": "이 사본을 기본으로 설정",
+  "ui.copies.separate": "이 사본을 따로 표시",
+  "ui.copies.separate_all": "모든 사본을 따로 표시"
 }

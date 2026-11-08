@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending: na razie za mało raportów na ocenę.",
   "settings.steam_compat.protondb.reports": "Raporty",
   "settings.field.ui_cover_categories.label": "Pokazuj kategorie na okładkach",
-  "settings.field.ui_cover_categories.help": "Kategorie każdej gry u dołu jej okładki w siatce: pierwsze dwie i liczba pozostałych."
+  "settings.field.ui_cover_categories.help": "Kategorie każdej gry u dołu jej okładki w siatce: pierwsze dwie i liczba pozostałych.",
+  "settings.field.ui_group_copies.label": "Pokazuj kopie z kilku sklepów jako jedną grę",
+  "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia."
 }

@@ -1066,5 +1066,7 @@
   "settings.steam_compat.protondb.pending": "Pending：报告太少，暂无评级。",
   "settings.steam_compat.protondb.reports": "报告",
   "settings.field.ui_cover_categories.label": "在封面上显示分类",
-  "settings.field.ui_cover_categories.help": "在网格中每个游戏封面的底部显示其分类：前两个以及其余的数量。"
+  "settings.field.ui_cover_categories.help": "在网格中每个游戏封面的底部显示其分类：前两个以及其余的数量。",
+  "settings.field.ui_group_copies.label": "将多个商店的副本显示为一个游戏",
+  "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都拥有的游戏只显示一次，并启动已安装的副本。其页面可在各副本之间切换；每个副本保留各自的游戏时间和成就。"
 }

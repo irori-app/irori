@@ -775,5 +775,10 @@
   "library.folder.add_other": "{count} games toevoegen",
   "library.toolbar.group.genre": "Genre",
   "library.filters.section.genre": "Genre",
-  "library.group.no_genre": "Geen genre"
+  "library.group.no_genre": "Geen genre",
+  "library.menu.combine": "Samenvoegen met exemplaren uit andere winkels…",
+  "library.combine.hint": "Kies de andere exemplaren van ‘{title}’ en daarna Samenvoegen tot één game.",
+  "library.bulk.combine": "Samenvoegen tot één game",
+  "library.bulk.combine_tooltip": "De gekozen games tonen als exemplaren van één game, uit hun winkels",
+  "library.bulk.done.combined": "{count} games zijn nu één item"
 }
