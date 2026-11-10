@@ -1300,6 +1300,19 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   only a file it created (Decky Loader relies on its own), restarts Steam only after
   asking and never in Game Mode, and logs counts only. The expression must stay read-only
   (a test guards it); an unknown client shape answers `Unsupported`, never an exception.
+- **Hidden games** (`hidden.rs`): games hidden in Steam stay in the library with
+  `GameInfo::store_hidden` set, which `UserDataService` turns into Irori's own hidden flag
+  once (`store_hidden_imported`): the user's own choice in Irori wins, and unhiding a game in
+  Steam unhides it here only while Irori hid it because of Steam. Steam's Web API has no
+  call for collections, so the hidden collection is read from
+  `userdata/<account>/config/cloudstorage/cloud-storage-namespace-1.json` (and its
+  `.modified.json`, whose entries win): `user-collections.hidden`, `added` minus `removed`.
+  A signed-in account reads only its own folder; without one, the user `loginusers.vdf`
+  marks `MostRecent`, else the latest `localconfig.vdf`. The client library's expression
+  also reads `collectionStore.GetCollection("hidden")` and adds its games (the "All games"
+  collection may leave them out). When neither can say, the Steam card says so
+  (`SteamStore::hidden_games`, `irori_manage` `steam_library::hidden_games_text`); it
+  shows no count while hidden games are locked behind their PIN.
 - **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
   through `IAuthenticationService` (protobuf over the Web API). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then

@@ -400,6 +400,19 @@ fn steam_card_reads_the_library_from_the_client(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("steam-library-read").is_some());
     assert!(vcx.debug_bounds("steam-library-forget").is_none());
     assert!(vcx.debug_bounds("steam-library-off").is_none());
+    // Steam keeps no collections here, so the card says Irori can't see
+    // the games hidden in Steam.
+    assert!(vcx.debug_bounds("steam-hidden-note").is_some());
+    let note = vcx.update(|_, cx| {
+        crate::accounts::store_cards(cx)
+            .into_iter()
+            .find(|c| c.runner == Runner::Steam)
+            .and_then(|c| c.steam_hidden)
+    });
+    assert_eq!(
+        note,
+        Some(irori_ui::i18n::t("manage.steam_hidden.unknown_local"))
+    );
 }
 
 /// The Rockstar card of a prefix adopted with a game and a signed-in

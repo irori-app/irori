@@ -97,6 +97,10 @@ pub(crate) struct LibraryGame {
     /// The family member sharing it (SteamID64), for games the account
     /// doesn't own itself.
     pub shared_by: Option<String>,
+    /// The user hid it in Steam, as the Steam client said
+    /// ([`crate::client_library`]); the Web API doesn't say.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
 }
 
 /// Store-page art of one app, from Steam's store (newer apps keep their art
@@ -238,6 +242,7 @@ fn merge(owned: Vec<OwnedGame>, shared: Vec<SharedApp>, steamid: u64) -> Vec<Lib
             playtime_minutes: g.playtime_forever,
             last_played: g.rtime_last_played,
             shared_by: None,
+            hidden: false,
         })
         .collect();
     let known: std::collections::HashSet<String> = games.iter().map(|g| g.app_id.clone()).collect();
@@ -256,6 +261,7 @@ fn merge(owned: Vec<OwnedGame>, shared: Vec<SharedApp>, steamid: u64) -> Vec<Lib
                 playtime_minutes: 0,
                 last_played: 0,
                 shared_by: a.owner_steamids.into_iter().next(),
+                hidden: false,
             }),
     );
     games.sort_by(|a, b| a.app_id.cmp(&b.app_id));

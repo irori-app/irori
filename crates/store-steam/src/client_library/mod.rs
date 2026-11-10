@@ -5,7 +5,8 @@
 //! computer when `.cef-enable-remote-debugging` exists at its start
 //! ([`marker`]). While it does, one read-only expression evaluated in the
 //! client's shared page lists the games of its library with their names,
-//! ownership and install state ([`devtools`], [`EXPRESSION`]). The games are
+//! ownership and install state, and the games the user hid in Steam
+//! ([`devtools`], [`EXPRESSION`]). The games are
 //! kept in `client-games.json` in Steam's cache folder and listed like the
 //! games a signed-in account adds; a signed-in account wins over them.
 //!
@@ -158,6 +159,17 @@ pub(crate) struct ClientCache {
     /// Unix time; 0 when never read.
     pub read_at: u64,
     pub games: Vec<LibraryGame>,
+    /// The client said which games are hidden (older clients can't).
+    pub hidden_known: bool,
+}
+
+/// What one read of the client found.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct ClientRead {
+    pub games: Vec<LibraryGame>,
+    /// The client's hidden collection was found, so `LibraryGame::hidden`
+    /// is meaningful.
+    pub hidden_known: bool,
 }
 
 /// Where the feature keeps its files.
@@ -194,9 +206,11 @@ impl ClientFiles {
 
 /// Evaluated in Steam's shared page. It only reads the client's library
 /// collection (`collectionStore.allGamesCollection.allApps`, app overviews)
-/// and calls nothing but its ownership getters. Every step checks what it
-/// finds, so a client that moved things answers `missing` instead of
-/// throwing.
+/// and its hidden collection (`collectionStore.GetCollection("hidden")`,
+/// whose games the library collection may leave out), and calls nothing
+/// but that lookup and the apps' ownership getters. Every step checks what
+/// it finds, so a client that moved things answers `missing` instead of
+/// throwing; one without the hidden collection says `hiddenKnown: false`.
 pub(crate) const EXPRESSION: &str = r#"(() => {
   const cs = globalThis.collectionStore;
   const all = cs && (cs.allGamesCollection || cs.allAppsCollection);
@@ -205,9 +219,13 @@ pub(crate) const EXPRESSION: &str = r#"(() => {
     const started = document.readyState === "complete" && !!globalThis.appStore;
     return { v: 1, state: cs || started ? "missing" : "loading" };
   }
+  const hiddenCollection = typeof cs.GetCollection === "function" ? cs.GetCollection("hidden") : null;
+  const hiddenApps =
+    hiddenCollection && Array.isArray(hiddenCollection.allApps) ? hiddenCollection.allApps : null;
+  const hidden = new Set((hiddenApps || []).map((a) => a && a.appid));
   const ask = (a, f) => (typeof a[f] === "function" ? !!a[f]() : null);
   const out = [];
-  for (const a of apps) {
+  for (const a of apps.concat(hiddenApps || [])) {
     if (!a || typeof a.appid !== "number" || a.app_type !== 1) continue;
     if (ask(a, "BIsShortcut")) continue;
     const local = a.local_per_client_data || {};
@@ -220,9 +238,10 @@ pub(crate) const EXPRESSION: &str = r#"(() => {
       installed: local.installed === true,
       minutes: Number(a.minutes_playtime_forever) || 0,
       lastPlayed: Number(a.rt_last_time_played) || 0,
+      hidden: hidden.has(a.appid),
     });
   }
-  return { v: 1, state: apps.length ? "ready" : "loading", apps: out };
+  return { v: 1, state: apps.length ? "ready" : "loading", apps: out, hiddenKnown: hiddenApps !== null };
 })()"#;
 
 /// One app as [`EXPRESSION`] lists it.
@@ -242,22 +261,25 @@ struct ClientApp {
     minutes: f64,
     #[serde(default)]
     last_played: f64,
+    #[serde(default)]
+    hidden: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Answer {
     v: u32,
     state: String,
     #[serde(default)]
     apps: Vec<ClientApp>,
+    #[serde(default)]
+    hidden_known: bool,
 }
 
 /// The games in [`EXPRESSION`]'s value: the account's own and those its
 /// family lends, without Steam's own apps and non-Steam shortcuts, by app
 /// ID.
-pub(crate) fn parse_answer(
-    value: serde_json::Value,
-) -> Result<Vec<LibraryGame>, ClientLibraryError> {
+pub(crate) fn parse_answer(value: serde_json::Value) -> Result<ClientRead, ClientLibraryError> {
     let answer: Answer =
         serde_json::from_value(value).map_err(|_| ClientLibraryError::Unsupported)?;
     if answer.v != 1 {
@@ -297,16 +319,20 @@ pub(crate) fn parse_answer(
                 } else {
                     None
                 },
+                hidden: a.hidden,
             }
         })
         .collect();
     games.sort_by(|a, b| a.app_id.cmp(&b.app_id));
-    Ok(games)
+    Ok(ClientRead {
+        games,
+        hidden_known: answer.hidden_known,
+    })
 }
 
 /// Read the client's library once: find its debugging port, the shared
 /// page, and evaluate [`EXPRESSION`] there.
-async fn read_once(steam_dir: &Path) -> Result<Vec<LibraryGame>> {
+async fn read_once(steam_dir: &Path) -> Result<ClientRead> {
     let probe = devtools::probe().await?;
     if !probe.running {
         return Err(ClientLibraryError::NotRunning.into());
@@ -324,7 +350,7 @@ async fn read_once(steam_dir: &Path) -> Result<Vec<LibraryGame>> {
 
 /// Evaluate [`EXPRESSION`] in the shared page that `list`, the page list of
 /// the endpoint on `port`, names.
-async fn read_page_list(list: &str, port: u16) -> Result<Vec<LibraryGame>> {
+async fn read_page_list(list: &str, port: u16) -> Result<ClientRead> {
     let websocket = devtools::shared_context(list, port)?;
     let value = devtools::evaluate(&websocket, EXPRESSION).await?;
     Ok(parse_answer(value)?)
@@ -332,7 +358,7 @@ async fn read_page_list(list: &str, port: u16) -> Result<Vec<LibraryGame>> {
 
 /// Read the client on `port`, which must answer (tests).
 #[cfg(test)]
-async fn read_port(port: u16) -> Result<Vec<LibraryGame>> {
+async fn read_port(port: u16) -> Result<ClientRead> {
     let list = devtools::list(port).await?.context("nothing listens")?;
     read_page_list(&list, port).await
 }
@@ -513,7 +539,7 @@ impl SteamStore {
 
     /// Read the client once it has come up, trying every [`START_POLL`]
     /// for [`START_TIMEOUT`].
-    async fn wait_for_client(&self, dir: &Path) -> Result<Vec<LibraryGame>> {
+    async fn wait_for_client(&self, dir: &Path) -> Result<ClientRead> {
         let deadline = tokio::time::Instant::now() + START_TIMEOUT;
         loop {
             tokio::time::sleep(START_POLL).await;
@@ -527,11 +553,12 @@ impl SteamStore {
 
     /// Keep what was read, list it, and in [`ClientLibraryMode::Once`] remove
     /// the debugging file Irori created.
-    async fn keep_client_games(&self, games: Vec<LibraryGame>) -> Result<usize> {
-        let count = games.len();
+    async fn keep_client_games(&self, read: ClientRead) -> Result<usize> {
+        let count = read.games.len();
         let cache = ClientCache {
             read_at: irori_core::util::unix_now(),
-            games,
+            games: read.games,
+            hidden_known: read.hidden_known,
         };
         let files = self.client_files.clone();
         let to_write = cache.clone();
@@ -567,9 +594,9 @@ impl SteamStore {
         };
         let before = self.client_cache.read().games.clone();
         match read_once(&self.steam_dir()).await {
-            Ok(games) => {
-                let changed = games != before;
-                if let Err(e) = self.keep_client_games(games).await {
+            Ok(read) => {
+                let changed = read.games != before;
+                if let Err(e) = self.keep_client_games(read).await {
                     tracing::warn!("keeping the Steam client's library: {e:#}");
                 }
                 changed

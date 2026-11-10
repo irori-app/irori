@@ -148,6 +148,7 @@ pub(crate) fn same(a: &GameInfo, b: &GameInfo) -> bool {
     a.app_name == b.app_name
         && a.title == b.title
         && a.is_installed == b.is_installed
+        && a.store_hidden == b.store_hidden
         && (&a.art_cover, &a.art_background, &a.art_logo, &a.art_square)
             == (&b.art_cover, &b.art_background, &b.art_logo, &b.art_square)
         && a.install

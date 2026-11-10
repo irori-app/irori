@@ -19,6 +19,8 @@
 //! game's entry of Steam's settings is written, and only while Steam is
 //! closed. Without an account, the user can let Irori read the whole
 //! library from the running Steam client instead ([`client_library`]).
+//! Games the user hid in Steam stay in the library, flagged
+//! `store_hidden` so Irori hides them its own way ([`hidden`]).
 
 mod account;
 mod achievements;
@@ -27,6 +29,7 @@ mod client_library;
 mod compat;
 mod entries;
 mod friends;
+mod hidden;
 mod scan;
 pub mod signin;
 mod stats_file;
@@ -81,6 +84,23 @@ struct Library {
     manifests: HashMap<String, PathBuf>,
     /// Games Steam's cache has no cover for.
     missing_art: Vec<String>,
+    /// Irori could read which games are hidden in Steam.
+    hidden_known: bool,
+}
+
+/// What Irori knows about the games hidden in Steam, for the Steam card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SteamHiddenGames {
+    /// Irori could read which games the user hid in Steam: from Steam's
+    /// files on this computer, or from the Steam client.
+    pub known: bool,
+    /// Library games hidden in Steam.
+    pub count: usize,
+    /// A Steam account is signed in to Irori: its hidden games are read
+    /// from its own files only.
+    pub signed_in: bool,
+    /// Steam's folder exists on this computer.
+    pub steam_found: bool,
 }
 
 /// The Steam library store.
@@ -234,8 +254,11 @@ impl SteamStore {
         let dir = self.steam_dir();
         let account = self.account_library.read().clone();
         let client = self.client_games();
-        let (found, apps, art) = tokio::task::spawn_blocking(move || {
+        let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
+        let (found, apps, art, hidden) = tokio::task::spawn_blocking(move || {
             let found = dir.join("steamapps").is_dir();
+            let hidden =
+                hidden::user_dir(&dir, steamid.as_deref()).and_then(|u| hidden::hidden_apps(&u));
             let apps = scan::installed_apps(&dir);
             let ids = apps
                 .iter()
@@ -245,24 +268,39 @@ impl SteamStore {
             let art: HashMap<String, LocalArt> = ids
                 .map(|id| (id.to_string(), scan::local_art(&dir, id)))
                 .collect();
-            (found, apps, art)
+            (found, apps, art, hidden)
         })
         .await?;
-        Ok(self.publish(found, &apps, &art))
+        Ok(self.publish(found, &apps, &art, hidden.as_ref()))
     }
 
-    fn publish(&self, found: bool, apps: &[InstalledApp], art: &HashMap<String, LocalArt>) -> bool {
+    /// Build and keep the library. `hidden` is what Steam's files say the
+    /// user hid, `None` when they couldn't say.
+    fn publish(
+        &self,
+        found: bool,
+        apps: &[InstalledApp],
+        art: &HashMap<String, LocalArt>,
+        hidden: Option<&HashSet<String>>,
+    ) -> bool {
         let account = self.account_library.read().clone();
         let client = self.client_games();
         let remote = &account.art;
+        let client_hidden: HashSet<&str> = client
+            .games
+            .iter()
+            .filter(|g| g.hidden)
+            .map(|g| g.app_id.as_str())
+            .collect();
+        let is_hidden =
+            |id: &str| hidden.is_some_and(|h| h.contains(id)) || client_hidden.contains(id);
+        let hidden_known = hidden.is_some() || (client.hidden_known && !client.games.is_empty());
         let mut games: Vec<Arc<GameInfo>> = apps
             .iter()
             .map(|a| {
-                Arc::new(entries::installed(
-                    a,
-                    art.get(&a.app_id),
-                    remote.get(&a.app_id),
-                ))
+                let mut game = entries::installed(a, art.get(&a.app_id), remote.get(&a.app_id));
+                game.store_hidden = is_hidden(&a.app_id);
+                Arc::new(game)
             })
             .collect();
         let installed: HashSet<&str> = apps.iter().map(|a| a.app_id.as_str()).collect();
@@ -274,7 +312,11 @@ impl SteamStore {
                 .iter()
                 .chain(client.games.iter())
                 .filter(|g| !installed.contains(g.app_id.as_str()))
-                .map(|g| Arc::new(entries::owned(g, art.get(&g.app_id), remote.get(&g.app_id)))),
+                .map(|g| {
+                    let mut game = entries::owned(g, art.get(&g.app_id), remote.get(&g.app_id));
+                    game.store_hidden = is_hidden(&g.app_id);
+                    Arc::new(game)
+                }),
         );
         games.sort_by(|a, b| a.app_name.cmp(&b.app_name));
         let missing_art = games
@@ -285,6 +327,7 @@ impl SteamStore {
         let changed = {
             let old = self.library.read();
             old.found != found
+                || old.hidden_known != hidden_known
                 || old.games.len() != games.len()
                 || old
                     .games
@@ -306,8 +349,21 @@ impl SteamStore {
             by_app,
             manifests,
             missing_art,
+            hidden_known,
         });
         changed
+    }
+
+    /// Whether Irori could read the games hidden in Steam, and how many of
+    /// the library's are. Reads memory only.
+    pub fn hidden_games(&self) -> SteamHiddenGames {
+        let library = self.library.read();
+        SteamHiddenGames {
+            known: library.hidden_known,
+            count: library.games.iter().filter(|g| g.store_hidden).count(),
+            signed_in: self.session.read().is_some(),
+            steam_found: library.found,
+        }
     }
 
     /// Fetch the signed-in account's games (and art the cache lacks) when
@@ -1006,6 +1062,78 @@ mod tests {
         assert!(s.accounts().is_empty());
         assert_eq!(s.user().unwrap().account_id, "local");
         assert!(s.login("a pasted code").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn flags_the_games_hidden_in_steam() {
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        write_manifest(&steam, "620", "Portal 2");
+        write_manifest(&steam, "400", "Portal");
+        let user = steam.join("userdata/5/config");
+        std::fs::create_dir_all(user.join("cloudstorage")).unwrap();
+        std::fs::write(user.join("localconfig.vdf"), "\"UserLocalConfigStore\" { }").unwrap();
+        let write_hidden = |ids: &str| {
+            let value = serde_json::to_string(&format!(
+                r#"{{"id":"hidden","added":[{ids}],"removed":[]}}"#
+            ))
+            .unwrap();
+            std::fs::write(
+                user.join("cloudstorage/cloud-storage-namespace-1.json"),
+                format!(
+                    r#"[["user-collections.hidden", {{"key": "user-collections.hidden", "timestamp": 1, "value": {value}, "version": "1"}}]]"#
+                ),
+            )
+            .unwrap();
+        };
+
+        // Without the files Irori can't tell, and says so.
+        let s = store(&steam, AppSettings::default());
+        s.init().await.unwrap();
+        assert!(s.games().iter().all(|g| !g.store_hidden));
+        assert!(!s.hidden_games().known);
+
+        write_hidden("620");
+        let mut events = s.bus.subscribe();
+        s.refresh(false).await.unwrap();
+        assert!(s.game("620").unwrap().store_hidden, "still listed, flagged");
+        assert!(!s.game("400").unwrap().store_hidden);
+        assert_eq!(
+            s.hidden_games(),
+            SteamHiddenGames {
+                known: true,
+                count: 1,
+                signed_in: false,
+                steam_found: true,
+            }
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::LibraryChanged(Runner::Steam))
+        ));
+
+        // Unhidden in Steam: the flag goes, and the library changes.
+        write_hidden("");
+        s.refresh(false).await.unwrap();
+        assert!(!s.game("620").unwrap().store_hidden);
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::LibraryChanged(Runner::Steam))
+        ));
+
+        // A signed-in account never takes another user's hidden games.
+        write_hidden("620");
+        *s.session.write() = Some(
+            account::parse_login_input(&format!(
+                r#"{{"accountName":"a","steamid":"{}","refreshToken":"r","accessToken":"x"}}"#,
+                76_561_197_960_265_728u64 + 9
+            ))
+            .unwrap(),
+        );
+        s.scan().await.unwrap();
+        assert!(!s.game("620").unwrap().store_hidden);
+        let state = s.hidden_games();
+        assert!(!state.known && state.signed_in);
     }
 
     #[tokio::test]
