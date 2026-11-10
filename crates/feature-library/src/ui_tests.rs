@@ -386,6 +386,11 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
     assert_eq!(state(cx).0.len(), 5);
+    // The bar offers to take the picked games out of Steam too.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("bulk-steam-remove").is_some());
+    }
     // Redrawing with everything picked doesn't work out the bar again.
     let computes = cx.read(|cx| view.read(cx).bulk_computes());
     draw(cx);

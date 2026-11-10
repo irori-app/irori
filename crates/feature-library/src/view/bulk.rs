@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
@@ -321,6 +321,83 @@ impl LibraryView {
         .detach();
     }
 
+    /// Ask, then remove Irori's Steam shortcuts of every picked game in one
+    /// pass (other programs' shortcuts stay).
+    fn confirm_remove_from_steam(
+        &mut self,
+        games: Vec<Arc<GameInfo>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let count = games.len();
+        let heading = if count == 1 {
+            t_args(
+                "library.bulk.steam_remove_title_one",
+                &[("title", &games[0].title)],
+            )
+        } else {
+            t_args(
+                "library.bulk.steam_remove_title_other",
+                &[("count", &count.to_string())],
+            )
+        };
+        let view = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let (games, view) = (games.clone(), view.clone());
+            alert
+                .title(heading.clone())
+                .description(t("library.bulk.steam_remove_description"))
+                .show_cancel(true)
+                .cancel_text(t("library.bulk.cancel"))
+                .ok_text(t("library.bulk.steam_remove_confirm"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let games = games.clone();
+                    // The dialog is still open here; act once it has closed.
+                    let view = view.clone();
+                    window.defer(cx, move |window, cx| {
+                        let _ = view.update(cx, |this, cx| {
+                            this.remove_picked_from_steam(games, window, cx)
+                        });
+                    });
+                    true
+                })
+        });
+    }
+
+    fn remove_picked_from_steam(
+        &mut self,
+        games: Vec<Arc<GameInfo>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let app = backend(cx).settings.app();
+        let ids: std::collections::HashSet<_> = games.iter().map(|g| g.id()).collect();
+        let task = irori_ui::run(cx, async move {
+            irori_extras::shortcuts::remove_from_steam(Some(&ids), &app).await
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                match result {
+                    Ok(report) => window.push_notification(
+                        Notification::success(t_args(
+                            "library.bulk.steam_removed",
+                            &[("count", &report.removed.to_string())],
+                        )),
+                        cx,
+                    ),
+                    Err(e) => {
+                        crate::notify_error(t("library.bulk.steam_remove_failed"), &e, window, cx)
+                    }
+                }
+                this.selection.end();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Ask, then uninstall every picked installed game one after another.
     fn confirm_uninstall(
         &mut self,
@@ -463,6 +540,22 @@ impl LibraryView {
                 .disabled(for_steam.is_empty())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.add_picked_to_steam(games.to_vec(), window, cx)
+                }))
+        };
+        let steam_remove = {
+            let games = for_steam.clone();
+            Button::new("bulk-steam-remove")
+                .debug_selector(|| "bulk-steam-remove".into())
+                .small()
+                .outline()
+                .icon(IconName::CircleMinus)
+                .label(t_args(
+                    "library.bulk.remove_from_steam",
+                    &[("count", &for_steam.len().to_string())],
+                ))
+                .disabled(for_steam.is_empty())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.confirm_remove_from_steam(games.to_vec(), window, cx)
                 }))
         };
         let combine = {
@@ -640,6 +733,7 @@ impl LibraryView {
                             bar.child(install)
                                 .child(uninstall)
                                 .child(steam)
+                                .child(steam_remove)
                                 .child(combine)
                                 .child(categories_button)
                                 .child(status_button)

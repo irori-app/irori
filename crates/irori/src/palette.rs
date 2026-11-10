@@ -81,6 +81,10 @@ enum PaletteTarget {
     Troubleshoot(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
+    /// Add a game to Steam as a non-Steam shortcut.
+    AddToSteam(GameId),
+    /// Remove Irori's Steam shortcut of a game.
+    RemoveFromSteam(GameId),
     BackUp,
     Sync,
     /// Save a clip of the replay buffer.
@@ -235,6 +239,31 @@ impl Palette {
                         .keywords([t("shell.palette.steam_play_keywords")])
                         .icon(IconName::Wine),
                     PaletteTarget::SteamPlay(game.id()),
+                    targets,
+                );
+            }
+            if game.runner() != Runner::Steam && (game.is_installed || game.installable) {
+                let keywords = [t("shell.palette.steam_shortcut_keywords")];
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.add_to_steam",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords(keywords.clone())
+                        .icon(IconName::Gamepad2),
+                    PaletteTarget::AddToSteam(game.id()),
+                    targets,
+                );
+                push(
+                    CommandItem::new()
+                        .label(t_args(
+                            "shell.palette.remove_from_steam",
+                            &[("title", &game.title)],
+                        ))
+                        .keywords(keywords)
+                        .icon(IconName::CircleMinus),
+                    PaletteTarget::RemoveFromSteam(game.id()),
                     targets,
                 );
             }
@@ -824,6 +853,12 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
+        PaletteTarget::AddToSteam(id) => {
+            irori_game::ops::add_shortcuts(&id, true, window, cx).detach()
+        }
+        PaletteTarget::RemoveFromSteam(id) => {
+            irori_game::ops::remove_from_steam(&id, window, cx).detach()
+        }
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);

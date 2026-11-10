@@ -87,6 +87,7 @@ irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C stops; rerun resumes
 irori uninstall <runner>/<app> [--keep-files]
 irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
+irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date (Steam closed), or take them out
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
@@ -666,6 +667,23 @@ commands without a window.
     channel to `LaunchParams::stream`. The game gets the same variables; with
     `iroriSunshine.matchClient`, a game in gamescope takes the client's output size,
     frame limit and HDR where its own settings leave them empty.
+- **Steam shortcuts** (`irori-extras::shortcuts::steam`, its `sync.rs`): non-Steam
+  shortcuts in every Steam user's `userdata/<id>/config/shortcuts.vdf`, started with
+  `irori --launch <runner>/<app> --wait` and filed in the "Irori" collection. Sunshine's
+  rules apply: an entry is Irori's when it carries `IroriId` (`<runner>/<app>`), or, when
+  that key was dropped, when its command starts a game through Irori; only Irori's
+  entries are changed, and in them only `Exe`, `StartDir`, `LaunchOptions`, `IroriId` and
+  an icon Irori made (the name, collections and the rest stay the user's; an entry
+  without `appid` gets the one Steam computed, so its art stays). The file is edited only
+  while Steam is closed, copied to `shortcuts.vdf.irori-backup` first and read back after
+  every write (a bad read-back puts the previous file back). Art goes to `grid/`
+  (portrait, wide, hero, logo; existing pictures stay): Irori's own art first, from the art
+  store's originals (`Paths::art_original`), then Steam's CDN for slots it lacks (and the
+  wide capsule). UI: "Add to Steam" and "Remove from Steam" in the game menu, the
+  library's context menu, its selection bar and the palette. `irori steam-shortcuts`
+  adds or updates every installed game (not Steam's own, DLCs, or hidden games while
+  locked) and removes Irori's entries of games that left the library, except games of a
+  signed-out store; with games named, only those; `--remove` takes them out.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of

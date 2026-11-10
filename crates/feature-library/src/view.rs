@@ -951,6 +951,30 @@ impl LibraryView {
                 })
                 .detach();
             }
+            GameCommand::RemoveFromSteam => {
+                let app = b.settings.app();
+                let ids = std::collections::HashSet::from([id.clone()]);
+                let task = irori_ui::run(cx, async move {
+                    irori_extras::shortcuts::remove_from_steam(Some(&ids), &app).await
+                });
+                let failed = t_args("library.error.remove_from_steam", &[("title", &title)]);
+                let done = t_args("library.steam_removed", &[("title", &title)]);
+                let absent = t_args("library.steam_absent", &[("title", &title)]);
+                cx.spawn_in(window, async move |_, cx| {
+                    let result = task.await;
+                    cx.update(|window, cx| match result {
+                        Ok(report) => window.push_notification(
+                            gpui_kit::component::notification::Notification::success(
+                                if report.removed > 0 { done } else { absent },
+                            ),
+                            cx,
+                        ),
+                        Err(e) => crate::notify_error(failed, &e, window, cx),
+                    })
+                    .ok();
+                })
+                .detach();
+            }
             GameCommand::OpenFolder => {
                 if let Some(path) = game.install_path() {
                     cx.open_with_system(&path);

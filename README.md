@@ -206,7 +206,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Proton prefix, with a list of backups to restore from and a word on which of Ludusavi
   and the store's cloud saves keeps each game.
 - **"Add to Steam"** for any game, installed or not; Steam starts Irori, which offers to
-  install a game that isn't installed yet.
+  install a game that isn't installed yet, and follows the whole session. "Remove from
+  Steam" takes them out again (one game or a selection), and `irori steam-shortcuts`
+  brings every installed game's shortcut and artwork up to date. Irori touches only the
+  shortcuts it made, backs Steam's file up first and edits it only while Steam is closed.
 - **Discord Rich Presence**, sleep held off while you play, and the game's log, which
   can open by itself when the game starts and keeps or hides the lines you filter for.
 

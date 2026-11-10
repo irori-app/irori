@@ -131,6 +131,12 @@ pub(super) fn build_menu(
                         move |_, window, cx| ops::add_shortcuts(&i, true, window, cx).detach(),
                     ),
                 );
+                let i = id.clone();
+                menu = menu.item(
+                    item("game.menu.remove_from_steam", IconName::CircleMinus).on_click(
+                        move |_, window, cx| ops::remove_from_steam(&i, window, cx).detach(),
+                    ),
+                );
             }
         }
     } else {
@@ -350,6 +356,11 @@ pub(super) fn build_menu(
                 menu.item(item("game.menu.add_to_steam", IconName::Gamepad2).on_click(
                     move |_, window, cx| ops::add_shortcuts(&i, true, window, cx).detach(),
                 ));
+            let i = id.clone();
+            menu = menu.item(
+                item("game.menu.remove_from_steam", IconName::CircleMinus)
+                    .on_click(move |_, window, cx| ops::remove_from_steam(&i, window, cx).detach()),
+            );
         }
     }
 

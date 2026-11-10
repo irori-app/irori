@@ -144,6 +144,12 @@ impl Paths {
         self.cache.join("images")
     }
 
+    /// Where Irori's art store keeps the original image of `url`, downloaded
+    /// once and shared by every screen and by shortcuts' art.
+    pub fn art_original(&self, url: &str) -> PathBuf {
+        self.images_dir().join("orig").join(art_digest(url))
+    }
+
     /// Where the user's screenshots are, by folder (rebuilt when missing).
     pub fn screenshot_index_file(&self) -> PathBuf {
         self.cache.join("screenshots.json")
@@ -218,6 +224,13 @@ fn portable_root_of(exe: &Path) -> Option<PathBuf> {
 pub fn is_portable() -> bool {
     static PORTABLE: OnceCell<bool> = OnceCell::new();
     *PORTABLE.get_or_init(|| portable_root().is_some())
+}
+
+/// The art store's name for the files it keeps for `url`: the first
+/// 12 bytes of its SHA-256, in hex.
+pub fn art_digest(url: &str) -> String {
+    use sha2::{Digest as _, Sha256};
+    hex::encode(&Sha256::digest(url.as_bytes())[..12])
 }
 
 /// Replace characters that are unsafe in file names. The result is always a
@@ -307,6 +320,20 @@ fn pick_heroic_dir(candidates: &[PathBuf]) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn art_store_names_stay_stable() {
+        // Files already in users' caches carry these names.
+        assert_eq!(
+            art_digest("https://example.com/cover.jpg"),
+            "f8ebf6e202ed59a990ae6254"
+        );
+        let paths = Paths::under(Path::new("/r"));
+        assert_eq!(
+            paths.art_original("https://example.com/cover.jpg"),
+            Path::new("/r/cache/images/orig/f8ebf6e202ed59a990ae6254")
+        );
+    }
 
     #[test]
     fn the_heroic_folder_used_last_wins() {
