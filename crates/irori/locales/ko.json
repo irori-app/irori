@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "{title}의 세이브 백업 목록",
   "shell.palette.troubleshoot": "{title} 실행 문제 해결",
   "shell.palette.troubleshoot_keywords": "문제 해결 문제 충돌 오류 수정 dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "{title}의 ReShade 및 RenoDX",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr 셰이더 그래픽 모드 필터",
   "shell.duration.minutes": "{minutes}분",
   "shell.duration.hours": "{hours}시간",
   "shell.duration.hours_minutes": "{hours}시간 {minutes}분",

@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "Säkerhetskopior av sparfiler för {title}",
   "shell.palette.troubleshoot": "Felsök start av {title}",
   "shell.palette.troubleshoot_keywords": "felsök problem krasch fel åtgärda dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "ReShade och RenoDX för {title}",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr shaders grafik moddar filter",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

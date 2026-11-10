@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "Zálohy uložených pozic hry {title}",
   "shell.palette.troubleshoot": "Řešit potíže se spuštěním hry {title}",
   "shell.palette.troubleshoot_keywords": "řešení potíží problém pád chyba oprava dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "ReShade a RenoDX pro {title}",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr shadery grafika mody filtry",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

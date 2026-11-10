@@ -168,3 +168,27 @@ fn library_filters_and_quick_controls_are_offered_as_toggles() {
     // Without a library view only the setting can change.
     assert_eq!(targets(None, None, true), ["quick false"]);
 }
+
+#[test]
+fn installed_windows_games_offer_reshade_and_renodx() {
+    let game = |installed: bool, platform: irori_core::InstallPlatform| GameInfo {
+        runner: Some(Runner::Gog),
+        app_name: "1".into(),
+        title: "Hades".into(),
+        is_installed: installed,
+        install: installed.then(|| irori_core::InstalledInfo {
+            install_path: "/games/hades".into(),
+            platform,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let offers = |g: GameInfo| {
+        game::rows(&g, None)
+            .into_iter()
+            .any(|(_, target)| matches!(target, PaletteTarget::GraphicsMods(_)))
+    };
+    assert!(offers(game(true, irori_core::InstallPlatform::Windows)));
+    assert!(!offers(game(true, irori_core::InstallPlatform::Linux)));
+    assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
+}

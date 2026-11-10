@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "{title} kayıt yedekleri",
   "shell.palette.troubleshoot": "{title} başlatma sorunlarını gider",
   "shell.palette.troubleshoot_keywords": "sorun giderme sorun çökme hata düzelt dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "{title} için ReShade ve RenoDX",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr gölgelendirici grafik mod filtre",
   "shell.duration.minutes": "{minutes} dk",
   "shell.duration.hours": "{hours} sa",
   "shell.duration.hours_minutes": "{hours} sa {minutes} dk",

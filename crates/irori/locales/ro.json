@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "Copiile salvărilor {title}",
   "shell.palette.troubleshoot": "Depanează pornirea pentru {title}",
   "shell.palette.troubleshoot_keywords": "depanare problemă blocare eroare remediu dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "ReShade și RenoDX pentru {title}",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr shadere grafică moduri filtre",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

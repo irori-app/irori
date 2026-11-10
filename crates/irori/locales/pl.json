@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "Kopie zapisów gry {title}",
   "shell.palette.troubleshoot": "Rozwiąż problemy z uruchomieniem gry {title}",
   "shell.palette.troubleshoot_keywords": "rozwiązywanie problem awaria błąd napraw dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "ReShade i RenoDX dla {title}",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr shadery grafika mody filtry",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} godz.",
   "shell.duration.hours_minutes": "{hours} godz. {minutes} min",

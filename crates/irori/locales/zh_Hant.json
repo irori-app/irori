@@ -69,6 +69,8 @@
   "shell.palette.save_backups": "{title} 的存檔備份",
   "shell.palette.troubleshoot": "疑難排解 {title} 的啟動問題",
   "shell.palette.troubleshoot_keywords": "疑難排解 問題 當機 錯誤 修正 dll wine proton winetricks troubleshoot",
+  "shell.palette.graphics_mods": "{title} 的 ReShade 和 RenoDX",
+  "shell.palette.graphics_mods_keywords": "reshade renodx hdr 著色器 圖形 模組 濾鏡",
   "shell.duration.minutes": "{minutes} 分鐘",
   "shell.duration.hours": "{hours} 小時",
   "shell.duration.hours_minutes": "{hours} 小時 {minutes} 分鐘",

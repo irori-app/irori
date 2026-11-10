@@ -1,5 +1,6 @@
 //! The command palette's rows for the game whose page is open: its play
-//! status, troubleshooting, Steam Play, Steam shortcuts and save backups.
+//! status, troubleshooting, Steam Play, ReShade and RenoDX, Steam shortcuts
+//! and save backups.
 
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
@@ -69,6 +70,18 @@ pub(super) fn rows(
                 .keywords([t("shell.palette.steam_play_keywords")])
                 .icon(IconName::Wine),
             PaletteTarget::SteamPlay(game.id()),
+        );
+    }
+    if irori_services::supports_reshade(game) {
+        push(
+            CommandItem::new()
+                .label(t_args(
+                    "shell.palette.graphics_mods",
+                    &[("title", &game.title)],
+                ))
+                .keywords([t("shell.palette.graphics_mods_keywords")])
+                .icon(IconName::Sparkles),
+            PaletteTarget::GraphicsMods(game.id()),
         );
     }
     if game.runner() != Runner::Steam && (game.is_installed || game.installable) {

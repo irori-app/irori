@@ -83,6 +83,8 @@ enum PaletteTarget {
     SaveBackups(GameId),
     /// Check why a game's last run failed.
     Troubleshoot(GameId),
+    /// Show a game's ReShade and RenoDX (its settings' Tools section).
+    GraphicsMods(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
@@ -782,6 +784,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
+        PaletteTarget::GraphicsMods(id) => irori_game::ops::open_settings(&id, "reshade", cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),

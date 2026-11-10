@@ -1502,7 +1502,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 
 - **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
   natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
-  section (`irori_settings` `ReshadePanel`, route id `reshade`). Direct3D 9,
+  section (`irori_settings` `ReshadePanel`, route id `reshade`), also reached from the
+  command palette's "ReShade and RenoDX for …" row of the open game. Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
 - **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
