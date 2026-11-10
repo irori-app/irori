@@ -2,6 +2,10 @@
 //! small pill at the bottom of the window whose bar fills over the hold.
 //! With reduced motion the bar is left out (GPUI would draw it full at once,
 //! which reads as done) and only the words show.
+//!
+//! Living in the main window, it also tells the controller reader when that
+//! window gains or loses the focus, so a Guide button whose release another
+//! program took is let go (see `GuideTap`).
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme as _, Icon, h_flex, v_flex};
@@ -19,13 +23,16 @@ use super::{GamepadModel, HoldHint};
 pub struct HoldHintView {
     pub(super) hint: Option<HoldHint>,
     _subscription: Option<Subscription>,
+    _focus: Subscription,
 }
 
 impl HoldHintView {
-    /// The hint view, following the controller model when controller
-    /// support is installed (it never shows otherwise).
-    pub fn new(cx: &mut App) -> Entity<Self> {
+    /// The hint view for `window`, following the controller model when
+    /// controller support is installed (it never shows otherwise) and the
+    /// window's focus.
+    pub fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
         cx.new(|cx: &mut Context<Self>| {
+            let focus = cx.observe_window_activation(window, |_, _, cx| super::focus_changed(cx));
             let subscription = super::model(cx).map(|model| {
                 cx.observe(
                     &model,
@@ -41,6 +48,7 @@ impl HoldHintView {
             Self {
                 hint: None,
                 _subscription: subscription,
+                _focus: focus,
             }
         })
     }

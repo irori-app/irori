@@ -45,7 +45,10 @@
 //! it brings Irori to the front in Big Picture instead of acting on input
 //! meant for a game (with the overlay on, it opens the overlay while a game
 //! runs, whichever window is active). Guide acts on a short press, so
-//! holding it to switch a controller off does nothing.
+//! holding it to switch a controller off does nothing. A Guide whose release
+//! never came (another program took it) is let go after a while, when
+//! controllers come or go and when Irori's window gains or loses the focus,
+//! so later presses are not taken for chords.
 //!
 //! Steam Input must not make a press count twice: controllers Steam lists in
 //! `SDL_GAMECONTROLLER_IGNORE_DEVICES` (it drives them through a virtual
@@ -367,6 +370,14 @@ pub fn install(cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// One of Irori's windows gained or lost the focus: the reader lets go of a
+/// held Guide, whose release another program may have taken.
+fn focus_changed(cx: &App) {
+    if let Some(global) = cx.try_global::<GamepadGlobal>() {
+        global.shared.focus_changes.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 /// Whether the overlay's controller shortcuts are on.
@@ -783,12 +794,14 @@ mod tests {
             });
             model
         });
-        let hint = cx.update(HoldHintView::new);
         let window = cx.add_window(|_, cx| Plain {
             first: cx.focus_handle().tab_stop(true),
             second: cx.focus_handle().tab_stop(true),
         });
         cx.update_window(window.into(), |_, window, _| window.activate_window())
+            .unwrap();
+        let hint = cx
+            .update_window(window.into(), |_, window, cx| HoldHintView::new(window, cx))
             .unwrap();
         cx.run_until_parked();
         let held = |cx: &mut TestAppContext| cx.read(|cx| model.read(cx).hold().is_some());
@@ -820,6 +833,26 @@ mod tests {
         // Inside Big Picture the button keeps its own meaning.
         cx.update(|cx| on_hold(HoldEvent::Started(second), false, &model, cx));
         assert!(!held(cx));
+
+        // Another window taking the focus tells the reader to let go of a
+        // held Guide.
+        let changes = |cx: &mut TestAppContext| {
+            cx.read(|cx| {
+                cx.global::<GamepadGlobal>()
+                    .shared
+                    .focus_changes
+                    .load(Ordering::Relaxed)
+            })
+        };
+        let before = changes(cx);
+        let other = cx.add_window(|_, cx| Plain {
+            first: cx.focus_handle(),
+            second: cx.focus_handle(),
+        });
+        cx.update_window(other.into(), |_, window, _| window.activate_window())
+            .unwrap();
+        cx.run_until_parked();
+        assert!(changes(cx) > before, "the focus moved");
     }
 
     #[test]

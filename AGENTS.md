@@ -1027,7 +1027,11 @@ it on every platform, and CI's Windows install test runs it.
   the library grid does), or a controller is stuck in it. Menu opens the palette,
   which reaches every screen.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
-  Enter and Escape, because that is how controllers reach it.
+  Enter and Escape, because that is how controllers reach it. Guide's release may
+  never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of
+  a held Guide after 5 s without a chord, with its controller, and when controllers
+  come or go or Irori's window gains or loses the focus (`gamepad::HoldHintView`
+  reports that to the reader); a later press is never taken for a chord.
 - Holding Start (or Select, `iroriUi.bigPictureHoldButton`; `off` turns it off) for
   `iroriUi.bigPictureHoldMs` (1000 by default, 300–3000) opens Big Picture while Irori's
   window is active and no game runs. The reader thread times the hold

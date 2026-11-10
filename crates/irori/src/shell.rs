@@ -161,7 +161,7 @@ impl AppShell {
             narrow_expanded: false,
             recent: cx.new(sidebar::RecentGames::new),
             saved_views: cx.new(sidebar::SavedViewsNav::new),
-            hold_hint: irori_bigpicture::gamepad::HoldHintView::new(cx),
+            hold_hint: irori_bigpicture::gamepad::HoldHintView::new(window, cx),
             autostart,
             minimized_for: None,
             log_shown_for: None,

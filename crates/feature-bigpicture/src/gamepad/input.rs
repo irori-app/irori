@@ -407,40 +407,80 @@ fn parse_ids(list: &str) -> Vec<(u16, u16)> {
 /// another button it makes a chord (Guide + X saves a clip), and then its
 /// release does nothing. Guide stays held through a chord, so holding it and
 /// pressing a button again makes another (Guide + Up, Up: louder twice).
+///
+/// Guide's release may never arrive: Steam or the system takes the button
+/// for itself, or the controller goes away while it is held. A held Guide
+/// is therefore forgotten after [`Self::STALE`] without a chord, with its
+/// controller ([`Self::forget`]), and when controllers come or go or Irori's
+/// window gains or loses the focus ([`Self::reset`]), so a later press is
+/// never taken for a chord.
 #[derive(Debug, Default)]
 pub struct GuideTap {
-    /// Devices holding Guide: since when, and whether it made a chord.
-    pressed: Vec<(usize, Instant, bool)>,
+    pressed: Vec<HeldGuide>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HeldGuide {
+    device: usize,
+    since: Instant,
+    /// The press or the latest chord.
+    last: Instant,
+    chorded: bool,
 }
 
 impl GuideTap {
     /// Longest hold that still counts as a press.
     pub const MAX_HOLD: Duration = Duration::from_millis(600);
+    /// How long a held Guide lasts without a chord.
+    pub const STALE: Duration = Duration::from_secs(5);
 
     pub fn press(&mut self, device: usize, now: Instant) {
-        self.pressed.retain(|(d, ..)| *d != device);
-        self.pressed.push((device, now, false));
+        self.expire(now);
+        self.pressed.retain(|held| held.device != device);
+        self.pressed.push(HeldGuide {
+            device,
+            since: now,
+            last: now,
+            chorded: false,
+        });
     }
 
     /// Whether the release at `now` ends a short press on `device`.
     pub fn release(&mut self, device: usize, now: Instant) -> bool {
-        let Some(ix) = self.pressed.iter().position(|(d, ..)| *d == device) else {
+        let Some(ix) = self.pressed.iter().position(|held| held.device == device) else {
             return false;
         };
-        let (_, at, chorded) = self.pressed.swap_remove(ix);
-        !chorded && now.saturating_duration_since(at) <= Self::MAX_HOLD
+        let held = self.pressed.swap_remove(ix);
+        !held.chorded && now.saturating_duration_since(held.since) <= Self::MAX_HOLD
     }
 
-    /// Whether a button pressed on `device` makes a chord with Guide held
-    /// there. Guide's release then no longer counts as a press.
-    pub fn chord(&mut self, device: usize) -> bool {
-        match self.pressed.iter_mut().find(|(d, ..)| *d == device) {
+    /// Whether a button pressed on `device` at `now` makes a chord with
+    /// Guide held there. Guide's release then no longer counts as a press.
+    pub fn chord(&mut self, device: usize, now: Instant) -> bool {
+        self.expire(now);
+        match self.pressed.iter_mut().find(|held| held.device == device) {
             Some(held) => {
-                held.2 = true;
+                held.chorded = true;
+                held.last = now;
                 true
             }
             None => false,
         }
+    }
+
+    /// Forget Guide on a controller that went away.
+    pub fn forget(&mut self, device: usize) {
+        self.pressed.retain(|held| held.device != device);
+    }
+
+    /// Forget every held Guide (see the type's docs).
+    pub fn reset(&mut self) {
+        self.pressed.clear();
+    }
+
+    fn expire(&mut self, now: Instant) {
+        self.pressed
+            .retain(|held| now.saturating_duration_since(held.last) <= Self::STALE);
     }
 }
 
@@ -737,10 +777,10 @@ mod tests {
     fn a_chord_with_guide_does_not_toggle_on_release() {
         let t0 = Instant::now();
         let mut tap = GuideTap::default();
-        assert!(!tap.chord(0));
+        assert!(!tap.chord(0, t0));
         tap.press(0, t0);
-        assert!(!tap.chord(1));
-        assert!(tap.chord(0));
+        assert!(!tap.chord(1, t0));
+        assert!(tap.chord(0, t0));
         assert!(!tap.release(0, t0 + ms(200)));
         tap.press(0, t0);
         assert!(tap.release(0, t0 + ms(200)));
@@ -751,10 +791,13 @@ mod tests {
         let t0 = Instant::now();
         let mut tap = GuideTap::default();
         tap.press(0, t0);
-        assert!(tap.chord(0));
-        assert!(tap.chord(0), "a second chord while Guide is still held");
+        assert!(tap.chord(0, t0));
+        assert!(
+            tap.chord(0, t0 + ms(50)),
+            "a second chord while Guide is still held"
+        );
         assert!(!tap.release(0, t0 + ms(100)));
-        assert!(!tap.chord(0), "released");
+        assert!(!tap.chord(0, t0 + ms(150)), "released");
     }
 
     fn pad(vendor: u16, product: u16, name: &str) -> PadIdentity {
@@ -916,6 +959,67 @@ mod tests {
             Some(PadButton::Start)
         );
         assert_eq!(hold_button(irori_core::settings::HoldButton::Off), None);
+    }
+
+    #[test]
+    fn a_guide_whose_release_never_came_expires() {
+        // Steam (or the system) took Guide's release: Irori saw the press
+        // only. A later X must be a plain press, not Guide + X.
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        let later = t0 + GuideTap::STALE + ms(1);
+        assert!(!tap.chord(0, later), "X long after: no clip");
+        assert!(!tap.chord(0, later + ms(10)), "and none after that either");
+        assert!(
+            !tap.release(0, later + ms(20)),
+            "a late release toggles nothing"
+        );
+    }
+
+    #[test]
+    fn chords_keep_a_held_guide_alive() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        let step = GuideTap::STALE - ms(500);
+        assert!(tap.chord(0, t0 + step), "Guide + Up");
+        assert!(tap.chord(0, t0 + step * 2), "Up again, still held");
+        assert!(
+            !tap.chord(0, t0 + step * 3 + ms(600)),
+            "then nothing for long"
+        );
+    }
+
+    #[test]
+    fn a_held_guide_goes_with_its_controller() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        tap.press(1, t0);
+        tap.forget(0);
+        assert!(!tap.chord(0, t0 + ms(10)), "disconnected while held");
+        assert!(tap.chord(1, t0 + ms(10)), "the other pad still holds it");
+        // Pressed again after reconnecting: a fresh press.
+        tap.press(0, t0 + ms(20));
+        assert!(tap.release(0, t0 + ms(100)));
+    }
+
+    #[test]
+    fn device_changes_and_focus_changes_let_go_of_guide() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        // Guide down, another program takes the focus (and the release),
+        // focus comes back: the next X is a press.
+        tap.press(0, t0);
+        tap.press(3, t0);
+        tap.reset();
+        assert!(!tap.chord(0, t0 + ms(50)));
+        assert!(!tap.chord(3, t0 + ms(50)));
+        assert!(!tap.release(0, t0 + ms(60)), "its release does nothing");
+        // Guide works as before afterwards.
+        tap.press(0, t0 + ms(100));
+        assert!(tap.chord(0, t0 + ms(150)));
     }
 
     #[test]

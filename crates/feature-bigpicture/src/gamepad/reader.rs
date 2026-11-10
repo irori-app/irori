@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedSender;
@@ -38,6 +38,10 @@ pub(crate) struct SharedConfig {
     pub hold_ms: AtomicU32,
     /// Big Picture is showing, so holding the button does nothing special.
     pub big_picture: AtomicBool,
+    /// Counts the times one of Irori's windows gained or lost the focus: a
+    /// Guide held across that may have had its release taken by another
+    /// program.
+    pub focus_changes: AtomicU64,
 }
 
 impl SharedConfig {
@@ -51,6 +55,7 @@ impl SharedConfig {
             hold_button: AtomicU8::new(0),
             hold_ms: AtomicU32::new(1000),
             big_picture: AtomicBool::new(false),
+            focus_changes: AtomicU64::new(0),
         }
     }
 
@@ -134,6 +139,8 @@ struct Reader {
     dedupe: Deduper,
     guide: GuideTap,
     hold: HoldTimer,
+    /// [`SharedConfig::focus_changes`] when last looked at.
+    focus_seen: u64,
     /// The button the hold under way is on.
     holding: Option<PadButton>,
     steam_ignored: SteamIgnoreList,
@@ -160,6 +167,7 @@ pub(crate) fn run(shared: Arc<SharedConfig>, tx: UnboundedSender<Message>) {
         dedupe: Deduper::default(),
         guide: GuideTap::default(),
         hold: HoldTimer::default(),
+        focus_seen: 0,
         holding: None,
         steam_ignored: SteamIgnoreList::from_env(),
         controllers: Vec::new(),
@@ -335,8 +343,16 @@ impl Reader {
     }
 
     fn handle(&mut self, id: GamepadId, event: EventType, gilrs: &Gilrs) {
+        // A Guide whose release may have gone elsewhere is let go (see
+        // `GuideTap`): the focus moved, or controllers came or went.
+        let focus = self.shared.focus_changes.load(Ordering::Relaxed);
+        if focus != self.focus_seen {
+            self.focus_seen = focus;
+            self.guide.reset();
+        }
         match event {
             EventType::Connected | EventType::Disconnected => {
+                self.guide.reset();
                 self.refresh_devices(gilrs);
             }
             EventType::ButtonPressed(button, _) => {
@@ -370,7 +386,7 @@ impl Reader {
                 // while a game has the window.
                 let overlay = self.shared.overlay.load(Ordering::Relaxed);
                 if let Some(chord) = Chord::of(input, overlay)
-                    && self.guide.chord(usize::from(id))
+                    && self.guide.chord(usize::from(id), Instant::now())
                 {
                     if self.enabled() {
                         let _ = self.tx.unbounded_send(Message::Chord(chord));
