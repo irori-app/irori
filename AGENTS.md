@@ -691,6 +691,16 @@ commands without a window.
   `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
+- **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
+  only): Windows' own per-program choice in
+  `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the
+  `.exe` the plan starts inside the install folder (`game_program`), only its
+  `GpuPreference` pair, with what was there before kept in `state/gpu-preferences.json`.
+  A changed or cleared setting, or a program that is gone, is applied at once from
+  `SettingsChanged`/`GameSettingsChanged` (`reconcile_gpu_preferences`); a pair the
+  user changed in Windows meanwhile is theirs. The registry sits behind
+  `GpuPreferenceRegistry`, so the rules are tested on every system. The settings show
+  it in place of `iroriGpu`, which stays Linux only.
 - **Launch troubleshooting** (`troubleshoot/`): `Backend::troubleshoot_launch` reads
   the game's last log (without Irori's header), its program's imports
   (`troubleshoot::pe`, a headers-only PE reader under `#![forbid(unsafe_code)]`),

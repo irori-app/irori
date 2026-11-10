@@ -254,6 +254,13 @@ pub struct GameSettings {
     /// precedence over `nvidiaPrime`. Linux only; Irori-only.
     #[serde(rename = "iroriGpu")]
     pub gpu: String,
+    /// Windows' own graphics preference for the game's program, written to
+    /// `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`: `auto` (let
+    /// Windows decide), `powerSaving` or `highPerformance`; empty (or a value
+    /// this Irori doesn't know) leaves Windows' setting alone. Windows only;
+    /// Irori-only.
+    #[serde(rename = "iroriWindowsGpu")]
+    pub windows_gpu: String,
     /// NVIDIA Smooth Motion frame generation
     /// (`NVPRESENT_ENABLE_SMOOTH_MOTION`). Linux only; Irori-only.
     #[serde(rename = "iroriSmoothMotion")]
@@ -464,6 +471,7 @@ impl Default for GameSettings {
             fsr4_upgrade: false,
             xess_upgrade: false,
             gpu: String::new(),
+            windows_gpu: String::new(),
             smooth_motion: false,
             nvidia_reflex: false,
             lsfg: LsfgSettings::default(),
@@ -1401,6 +1409,10 @@ mod tests {
         assert_eq!(gs.lsfg.flow_scale, 100, "missing keys keep their defaults");
         let json = serde_json::to_value(GameSettings::default()).unwrap();
         assert_eq!(json["iroriGpu"], "");
+        assert_eq!(json["iroriWindowsGpu"], "");
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriWindowsGpu": "highPerformance"}"#).unwrap();
+        assert_eq!(gs.windows_gpu, "highPerformance");
         assert_eq!(json["iroriLsfg"]["multiplier"], 2);
         assert_eq!(json["iroriLsfg"]["performanceMode"], false);
     }

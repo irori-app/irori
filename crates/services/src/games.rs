@@ -357,6 +357,23 @@ impl Backend {
         };
         let plan = store.launch(&id.app_name, &request, ctx).await?;
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
+        // Windows' own graphics preference, for a program Irori starts.
+        if id.runner.manages_installs()
+            && plan.watch.is_none()
+            && target.platform != InstallPlatform::Browser
+            && let Some(note) = self
+                .apply_gpu_preference(
+                    id,
+                    game.install
+                        .as_ref()
+                        .map_or("", |i| i.install_path.as_str()),
+                    &settings,
+                    &plan.command,
+                )
+                .await
+        {
+            append_log(&log_file, &note);
+        }
 
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).

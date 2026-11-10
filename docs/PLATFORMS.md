@@ -185,6 +185,22 @@ The Graphics settings of a game are Linux only; on macOS and Windows they show w
 Variables a game's own settings set always win over them; the host environment's
 don't, since these are chosen per game.
 
+On Windows the graphics card chooser is replaced by Windows' own **graphics
+preference** (`iroriWindowsGpu`: not set, `auto` "Let Windows decide", `powerSaving`,
+`highPerformance`), the value Settings › System › Display › Graphics keeps under
+`HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, named after the program's full
+path (`GpuPreference=2;`). Irori writes it when the game starts, for the `.exe` the
+launch command starts inside the install folder (never a store client or a wrapper
+outside it), because only the launch says which program that is; it stays afterwards,
+so starting the program another way gets the same card. Irori changes only the
+`GpuPreference` pair and keeps the others Windows put there (`SwapEffectUpgradeEnable`,
+`AutoHDREnable`…). What was there before is noted in `<state>/gpu-preferences.json`:
+clearing the setting (or uninstalling the game) puts it back at once, removing the value
+when Irori created it, and a choice the user changed in Windows meanwhile is left as it
+is. A game that starts through a launcher that hands over to another program gets the
+preference on the program Irori starts only. Steam and the third-party launchers start
+their own games, so their games don't show it.
+
 - **Graphics card** (`iroriGpu`, a PCI address): cards come from `/sys/class/drm`,
   named from `pci.ids`. A Mesa card gets `DRI_PRIME=pci-…` and
   `MESA_VK_DEVICE_SELECT=<vendor>:<device>!` (left out when two cards are the same

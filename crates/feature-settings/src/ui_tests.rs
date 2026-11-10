@@ -396,3 +396,41 @@ fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
     .unwrap();
     cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Artwork));
 }
+
+#[gpui_kit::test]
+fn windows_graphics_preference_is_stored_per_game(cx: &mut TestAppContext) {
+    use crate::registry::FieldSection;
+
+    let id = GameId::new(Runner::Sideload, "ui-test-windows-gpu");
+    let target = FormTarget::Game(id.clone());
+    let (handle, form) = open(cx, move |window, cx| SettingsForm::new(target, window, cx));
+    let backend = cx.update(|cx| irori_ui::backend(cx));
+    cx.update_window(handle, |_, window, cx| {
+        form.update(cx, |f, cx| {
+            f.set_sections(vec![FieldSection::Gpu], cx);
+            f.write_for_test(
+                "iroriWindowsGpu",
+                Value::from("highPerformance"),
+                window,
+                cx,
+            )
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(backend.settings.game(&id).windows_gpu, "highPerformance");
+    assert!(
+        backend
+            .settings
+            .overrides(&id)
+            .is_overridden("iroriWindowsGpu")
+    );
+    // Only Windows shows it; the card chooser stays everywhere else.
+    cx.update(|cx| {
+        form.update(cx, |f, cx| f.set_query("graphics card", cx));
+        let visible = form.read(cx).visible_count();
+        assert!(visible >= 1, "{visible}");
+    });
+}

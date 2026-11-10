@@ -23,6 +23,7 @@ pub mod file_achievements;
 mod files;
 mod follow;
 mod games;
+pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
 mod inhibit;
@@ -411,6 +412,29 @@ impl Backend {
                 }
             }
         });
+
+        // Windows' graphics preference follows a changed or cleared setting
+        // at once, not only at the game's next launch (`gpu_preference`).
+        if interactive && gpu_preference::system_registry().is_some() {
+            let b = self.clone();
+            self.spawn(async move {
+                let mut rx = b.subscribe();
+                b.reconcile_gpu_preferences().await;
+                loop {
+                    match rx.recv().await {
+                        Ok(Event::SettingsChanged | Event::GameSettingsChanged(_))
+                        | Err(broadcast::error::RecvError::Lagged(_)) => {
+                            // Coalesce a burst (a preset applied to many games).
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            while rx.try_recv().is_ok() {}
+                            b.reconcile_gpu_preferences().await;
+                        }
+                        Ok(_) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+        }
 
         // File downloads (offline installers, goodies).
         let b = self.clone();

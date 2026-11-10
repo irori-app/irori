@@ -75,6 +75,9 @@ windows = { version = "0.62", features = [
     "Win32_System_Variant",
     "Win32_UI_Shell_PropertiesSystem",
 ] }
+# Windows' per-program graphics preference (`gpu_preference`); the version is
+# already in Cargo.lock.
+windows-registry = "0.6"
 # `IPolicyConfig` (switching the sound output) is declared with
 # `windows::core::interface`, whose expansion names this crate.
 windows-core = "0.62"

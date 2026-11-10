@@ -252,7 +252,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Graphics tab per game (Linux):** pick which graphics card a game runs on when the
   computer has more than one, turn on NVIDIA Smooth Motion, NVIDIA Reflex for Vulkan
   games, or Lossless Scaling frame generation through lsfg-vk. Every option says why
-  it's greyed out when your hardware or drivers can't use it.
+  it's greyed out when your hardware or drivers can't use it. On Windows the tab sets
+  Windows' own graphics preference (power saving or high performance) for the game's
+  program, and puts back what was there when you clear it.
 - **Your folders, your shader cache:** choose where downloaded Wine and Proton builds
   go, and games get 10 GB of shader cache on NVIDIA and Mesa, so big games don't
   compile their shaders again at every start.

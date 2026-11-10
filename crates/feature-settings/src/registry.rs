@@ -533,6 +533,13 @@ impl FieldSpec {
         if mac_only && host != HostPlatform::Mac {
             return false;
         }
+        // Windows' own graphics preference stands in for the card chooser
+        // there, which only Linux can apply.
+        match self.path {
+            "iroriWindowsGpu" => return host == HostPlatform::Windows,
+            "iroriGpu" if host == HostPlatform::Windows => return false,
+            _ => {}
+        }
         // A portable Irori never adds itself to the Start menu.
         if self.path == "addStartMenuShortcuts" && irori_core::paths::is_portable() {
             return false;
@@ -683,6 +690,26 @@ static LANGUAGES: [ChoiceOption; UI_LANGUAGES.len()] = {
     }
     out
 };
+
+/// `iroriWindowsGpu`: Windows' graphics preference for the game's program.
+const WINDOWS_GPU: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.windows_gpu.unset"),
+    ),
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.windows_gpu.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("powerSaving"),
+        Key("settings.option.windows_gpu.power_saving"),
+    ),
+    opt(
+        ChoiceValue::Str("highPerformance"),
+        Key("settings.option.windows_gpu.high_performance"),
+    ),
+];
 
 const TOP_SECTION: &[ChoiceOption] = &[
     opt(
@@ -2635,6 +2662,25 @@ pub static FIELDS: &[FieldSpec] = &[
         "discrete",
     ])
     .needs(&[Need::Linux, Need::SeveralGpus]),
+    // Windows' own per-program choice, in place of `iroriGpu` there.
+    game(
+        "iroriWindowsGpu",
+        "settings.field.windows_gpu.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Choice(WINDOWS_GPU),
+    )
+    .help("settings.field.windows_gpu.help")
+    .keywords(&[
+        "gpu",
+        "graphics card",
+        "graphics preference",
+        "high performance",
+        "power saving",
+        "integrated",
+        "discrete",
+        "UserGpuPreferences",
+    ]),
     game(
         "nvidiaPrime",
         "settings.field.nvidia_prime.label",
@@ -3312,7 +3358,22 @@ mod tests {
         assert!(paths("frame generation").contains(&"iroriLsfg.enabled"));
         assert!(paths("frame generation").contains(&"iroriSmoothMotion"));
         assert!(paths("lossless").contains(&"iroriLsfg.multiplier"));
-        assert!(paths("graphics card").contains(&"iroriGpu"));
+        // Each system shows one of the two card choosers.
+        assert!(find("iroriGpu").unwrap().matches("graphics card"));
+        let windows = find("iroriWindowsGpu").unwrap();
+        assert!(windows.matches("graphics card") && windows.matches("high performance"));
+        assert_eq!(
+            paths("graphics card").contains(&"iroriWindowsGpu"),
+            cfg!(windows)
+        );
+        assert_eq!(windows.section, FieldSection::Gpu);
+        assert_eq!(windows.scope, Scope::Shared);
+        assert_eq!(windows.supported_on_host(), cfg!(windows));
+        assert_eq!(
+            find("iroriGpu").unwrap().supported_on_host(),
+            !cfg!(windows)
+        );
+        assert!(!windows.applies_to_steam());
         assert!(paths("steamgriddb").contains(&"panel.artwork"));
         assert!(paths("cover").contains(&"panel.artwork"));
     }
