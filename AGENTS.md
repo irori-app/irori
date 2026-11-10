@@ -1250,9 +1250,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   the game page in Irori's language.
 - **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`, the window
   `irori_manage::open_steam_friends_dialog`, from the Steam account card and the
-  palette): `ISteamUser/GetFriendList` and `GetPlayerSummaries` with the account's
-  access token (Valve documents them with a Web API key, which Irori must not ship). A
-  401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
+  palette): `IFriendsListService/GetFriendsList` and `IPlayerService/GetPlayerLinkDetails`
+  with the account's access token. The older `ISteamUser/GetFriendList` and
+  `GetPlayerSummaries` take only a Web API key, which Irori must not ship, and answer a
+  token with HTTP 400. A 401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
   user out. Read only while the window is open (on open, Refresh and every 3 minutes),
   kept a minute, dropped at sign-out. Actions are Steam's own links: `steam://open/friends`
   (Steam has no link that invites to a game; its friends list does, while the game runs),
