@@ -252,7 +252,7 @@
   "settings.field.big_picture_in_game_mode.help": "När Steam Decks spelläge eller Steam Big Picture startar Irori öppnas det i Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Öppna Big Picture i Steams spelläge",
   "settings.field.big_picture_on_controller.label": "Öppna Big Picture när en handkontroll ansluts",
-  "settings.field.big_picture_on_controller.help": "När du ansluter eller parkopplar en handkontroll medan Irori körs visas Irori i Big Picture. Inget ändras medan ett spel körs.",
+  "settings.field.big_picture_on_controller.help": "Om du ansluter eller parkopplar en handkontroll medan Irori körs, eller startar Irori med en ansluten, kommer Irori fram i Big Picture. Inget ändras medan ett spel körs.",
   "settings.field.check_for_updates_on_startup.label": "Sök efter speluppdateringar vid start",
   "settings.field.check_for_app_updates.help": "En gång om dagen, på GitHub. Flatpak och distributionspaket uppdaterar Irori tillsammans med resten av systemet.",
   "settings.field.check_for_app_updates.label": "Sök efter nya versioner av Irori",

@@ -20,7 +20,7 @@ use irori_ui::motion::{QUICK, rise_in};
 
 use super::home::SCROLL_SPRING;
 use super::{BigPictureView, Colors};
-use crate::layout::{Metrics, list_scroll};
+use crate::layout::{Metrics, end_scroll, list_scroll};
 use crate::model::{
     GameAction, GameState, PageRow, click_acts, default_platform, disabled_reason,
     install_platforms, page_rows,
@@ -70,7 +70,12 @@ impl BigPictureView {
         // Padding and gaps around the header and list.
         let list_h = m.height - m.top_bar - m.hints - header_h - 2.75;
         let caption_before = rows.iter().position(|r| r.starts_manage());
-        let scroll = list_scroll(focused, caption_before, row_h, CAPTION_H, list_h);
+        let content = rows.len() as f32 * row_h + caption_before.map_or(0.0, |_| CAPTION_H);
+        let scroll = end_scroll(
+            list_scroll(focused, caption_before, row_h, CAPTION_H, list_h),
+            content,
+            list_h,
+        );
 
         let mut list = Vec::with_capacity(rows.len() + 1);
         let mut captioned = false;
@@ -345,6 +350,7 @@ impl BigPictureView {
             .cursor_pointer()
             .text_xl()
             .text_color(fg)
+            .when(!focused, |d| d.hover(|s| s.bg(c.foreground.opacity(0.08))))
             .when(disabled, |d| d.opacity(0.5))
             .child(Icon::new(icon))
             .child(div().flex_1().min_w_0().truncate().child(label))

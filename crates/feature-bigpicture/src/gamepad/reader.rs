@@ -323,6 +323,8 @@ impl Reader {
                 name: pad.name().to_string(),
                 kind: self.devices.get(&id).map(|d| d.kind).unwrap_or_default(),
                 battery: battery(pad.power_info()),
+                vendor: pad.vendor_id(),
+                product: pad.product_id(),
             })
             .collect();
         if controllers != self.controllers {

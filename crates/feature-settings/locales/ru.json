@@ -252,7 +252,7 @@
   "settings.field.big_picture_in_game_mode.help": "Если Irori запускается из игрового режима Steam Deck или из Steam Big Picture, он открывается в Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Открывать Big Picture в игровом режиме Steam",
   "settings.field.big_picture_on_controller.label": "Открывать Big Picture при подключении контроллера",
-  "settings.field.big_picture_on_controller.help": "Если подключить или сопрячь контроллер, пока Irori запущен, Irori откроется на переднем плане в Big Picture. Во время игры ничего не меняется.",
+  "settings.field.big_picture_on_controller.help": "Если подключить или сопрячь контроллер, пока Irori запущен, или запустить Irori с подключённым контроллером, Irori выйдет на передний план в режиме Big Picture. Пока идёт игра, ничего не меняется.",
   "settings.field.check_for_updates_on_startup.label": "Проверять обновления игр при запуске",
   "settings.field.check_for_app_updates.help": "Раз в день, на GitHub. Flatpak и пакеты дистрибутива обновляют Irori вместе с остальной системой.",
   "settings.field.check_for_app_updates.label": "Проверять новые версии Irori",

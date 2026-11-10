@@ -575,6 +575,74 @@ fn a_click_opens_a_cover_and_buttons_act_on_their_own_game(cx: &mut TestAppConte
     assert_eq!(focused_title(&view, cx), "Alpha");
 }
 
+/// A mouse wheel over the window: `dy` toward the bottom when negative,
+/// `dx` toward the right.
+fn wheel(cx: &mut TestAppContext, handle: AnyWindowHandle, dx: f32, dy: f32) {
+    use gpui_kit::{PlatformInput, ScrollDelta, ScrollWheelEvent, TouchPhase, point};
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+        window.dispatch_event(
+            PlatformInput::ScrollWheel(ScrollWheelEvent {
+                position: point(px(640.), px(400.)),
+                delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
+                modifiers: Default::default(),
+                touch_phase: TouchPhase::Moved,
+            }),
+            cx,
+        );
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn the_wheel_moves_through_every_layout_the_library_and_the_page(cx: &mut TestAppContext) {
+    use crate::layout::HomeLayout;
+
+    let (handle, view) = open(cx);
+    for layout in HomeLayout::ALL {
+        view.update(cx, |v, cx| {
+            v.look.layout = layout;
+            cx.notify();
+        });
+        assert_eq!(focused_title(&view, cx), "Alpha", "{layout:?}");
+        // Along the shelf: sideways on Shelves and the Wall, and the way
+        // the shelf runs on the others.
+        let (dx, dy) = match layout {
+            HomeLayout::Shelves | HomeLayout::Wall => (-60., 0.),
+            _ => (0., -60.),
+        };
+        wheel(cx, handle, dx / 2., dy / 2.);
+        assert_eq!(focused_title(&view, cx), "Alpha", "{layout:?}: half a step");
+        wheel(cx, handle, dx / 2., dy / 2.);
+        assert_eq!(focused_title(&view, cx), "Charlie", "{layout:?}");
+        // Further on there is nothing, and turning back answers at once.
+        wheel(cx, handle, dx * 4., dy * 4.);
+        assert_eq!(focused_title(&view, cx), "Charlie", "{layout:?}: the end");
+        wheel(cx, handle, -dx, -dy);
+        assert_eq!(focused_title(&view, cx), "Alpha", "{layout:?}: back");
+    }
+    view.update(cx, |v, _| v.look.layout = HomeLayout::Shelves);
+
+    // The Library's grid: one row of three.
+    cx.simulate_keystrokes(handle, "pagedown");
+    cx.read(|cx| assert_eq!(view.read(cx).tab, Tab::Library));
+    wheel(cx, handle, -60., 0.);
+    assert_eq!(focused_title(&view, cx), "Bravo");
+
+    // A game's page goes through its rows, and only vertically.
+    cx.simulate_keystrokes(handle, "enter");
+    cx.read(|cx| assert!(view.read(cx).is_page_open()));
+    let row = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).page.as_ref().unwrap().ix);
+    wheel(cx, handle, -600., 0.);
+    assert_eq!(row(cx), 0, "sideways would change a row's value");
+    wheel(cx, handle, 0., -60.);
+    assert_eq!(row(cx), 1);
+    wheel(cx, handle, 0., 60.);
+    assert_eq!(row(cx), 0);
+}
+
 #[gpui_kit::test]
 fn every_layout_draws_and_moves_and_the_editor_changes_them_live(cx: &mut TestAppContext) {
     use crate::layout::HomeLayout;

@@ -36,8 +36,9 @@
 //! comes when it is let go, unless Big Picture opened.
 //!
 //! With `iroriUi.bigPictureOnController` on, a controller connecting while
-//! Irori runs (not one already there when it starts) brings Irori to the
-//! front in Big Picture, unless a game is running.
+//! Irori runs, or one there when it starts, brings Irori to the front in Big
+//! Picture unless a game is running ([`ConnectWatch`] tells new controllers
+//! from those a system hid while Irori was in the background).
 //!
 //! Input is ignored while `disable_controller` is set. When Irori is not the
 //! active window only Guide is honoured, and only while no game is running:
@@ -78,9 +79,9 @@ use parking_lot::RwLock;
 
 pub use hint::HoldHintView;
 pub use input::{
-    Chord, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, HoldRelease, HoldTimer,
-    InputSource, PadButton, Repeater, SteamIgnoreList, StickAxis, hold_button, is_ignored_device,
-    keyboard_equivalent, map_button,
+    Chord, ConnectWatch, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, HoldRelease,
+    HoldTimer, InputSource, PadButton, PadIdentity, Repeater, SteamIgnoreList, StickAxis,
+    hold_button, is_ignored_device, keyboard_equivalent, map_button,
 };
 use reader::{HoldEvent, Message, SharedConfig};
 
@@ -159,6 +160,20 @@ pub struct ControllerInfo {
     pub name: String,
     pub kind: ControllerKind,
     pub battery: Battery,
+    /// USB ids, when the system reports them.
+    pub vendor: Option<u16>,
+    pub product: Option<u16>,
+}
+
+impl ControllerInfo {
+    /// Who this controller is, to tell a new one from one already there.
+    pub fn identity(&self) -> PadIdentity {
+        PadIdentity {
+            vendor: self.vendor,
+            product: self.product,
+            name: self.name.clone(),
+        }
+    }
 }
 
 static CONNECTED: RwLock<Vec<ControllerInfo>> = RwLock::new(Vec::new());
@@ -344,11 +359,11 @@ pub fn install(cx: &mut App) {
         })
         .detach();
     }
-    let started = Instant::now();
+    let watch = RefCell::new(ConnectWatch::default());
     cx.spawn(async move |cx| {
         while let Some(message) = rx.next().await {
             let disabled = shared.disabled.load(Ordering::Relaxed);
-            cx.update(|cx| on_message(message, disabled, started, &model, &echoes, cx));
+            cx.update(|cx| on_message(message, disabled, &watch, &model, &echoes, cx));
         }
     })
     .detach();
@@ -367,32 +382,28 @@ pub(crate) fn start_grab(cx: &App) -> Option<grab::Grab> {
     grab::Grab::start(devices, global.shared.clone(), global.tx.clone())
 }
 
-/// Controllers found this soon after start were there already; connecting
-/// them does not open Big Picture.
-const STARTUP_SCAN: std::time::Duration = std::time::Duration::from_secs(3);
-
-/// Whether a change in the controllers from `before` to `after` connected
-/// ones opens Big Picture (see the module docs).
-fn opens_big_picture(
-    enabled: bool,
-    before: usize,
-    after: usize,
-    since_start: std::time::Duration,
-    busy: bool,
-) -> bool {
-    enabled && after > before && since_start >= STARTUP_SCAN && !busy
+/// Whether a controller connecting opens Big Picture: when the user asked
+/// for that and Irori isn't `busy` (see [`open_for_controller`]).
+fn opens_big_picture(enabled: bool, connected: bool, busy: bool) -> bool {
+    enabled && connected && !busy
 }
 
 /// Bring Irori to the front in Big Picture for a controller that just
-/// connected, when the user asked for that.
-fn open_for_controller(before: usize, after: usize, started: Instant, cx: &mut App) {
+/// connected (see [`ConnectWatch`]), when the user asked for that. Not while
+/// a game runs, Big Picture or the welcome flow shows, or Irori sits in the
+/// tray without a window.
+fn open_for_controller(cx: &mut App) {
     let enabled = cx
         .try_global::<irori_ui::Models>()
         .is_some_and(|m| m.settings.read(cx).app.ui.big_picture_on_controller);
     let busy = game_running(cx)
+        || cx.windows().is_empty()
         || !cx.has_global::<irori_ui::nav::NavigatorHandle>()
-        || navigator(cx).read(cx).current() == &Route::BigPicture;
-    if !opens_big_picture(enabled, before, after, started.elapsed(), busy) {
+        || matches!(
+            navigator(cx).read(cx).current(),
+            Route::BigPicture | Route::Onboarding
+        );
+    if !opens_big_picture(enabled, true, busy) {
         return;
     }
     if let Some(handle) = cx.windows().into_iter().next() {
@@ -410,14 +421,16 @@ thread_local! {
 fn on_message(
     message: Message,
     disabled: bool,
-    started: Instant,
+    watch: &RefCell<ConnectWatch>,
     model: &Entity<GamepadModel>,
     echoes: &RefCell<EchoFilter>,
     cx: &mut App,
 ) {
     match message {
         Message::Controllers(list) => {
-            let (before, after) = (model.read(cx).controllers.len(), list.len());
+            let pads: Vec<PadIdentity> = list.iter().map(ControllerInfo::identity).collect();
+            let active = cx.active_window().is_some();
+            let connected = watch.borrow_mut().update(&pads, active, Instant::now());
             model.update(cx, |m, cx| {
                 if list.is_empty() {
                     m.last_kind = None;
@@ -425,8 +438,8 @@ fn on_message(
                 m.controllers = list;
                 cx.notify();
             });
-            if !disabled {
-                open_for_controller(before, after, started, cx);
+            if connected && !disabled {
+                open_for_controller(cx);
             }
         }
         Message::Chord(chord) => on_chord(chord, cx),
@@ -811,21 +824,10 @@ mod tests {
 
     #[test]
     fn a_new_controller_opens_big_picture_only_when_asked() {
-        use super::{STARTUP_SCAN, opens_big_picture};
-        use std::time::Duration;
-        let later = STARTUP_SCAN + Duration::from_secs(1);
-        assert!(opens_big_picture(true, 0, 1, later, false));
-        assert!(opens_big_picture(true, 1, 2, later, false));
-        assert!(!opens_big_picture(false, 0, 1, later, false), "off");
-        assert!(!opens_big_picture(true, 1, 1, later, false), "no new one");
-        assert!(!opens_big_picture(true, 2, 1, later, false), "disconnected");
-        assert!(
-            !opens_big_picture(true, 0, 1, Duration::ZERO, false),
-            "at start"
-        );
-        assert!(
-            !opens_big_picture(true, 0, 1, later, true),
-            "playing or open"
-        );
+        use super::opens_big_picture;
+        assert!(opens_big_picture(true, true, false));
+        assert!(!opens_big_picture(false, true, false), "off");
+        assert!(!opens_big_picture(true, false, false), "no new one");
+        assert!(!opens_big_picture(true, true, true), "playing or open");
     }
 }

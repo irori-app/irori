@@ -61,6 +61,7 @@ use look::{Colors, Look};
 use crate::gamepad::{self, GamepadInput};
 use crate::grid::FocusGrid;
 use crate::layout::home::{Dir, grid_move, wall_step};
+use crate::layout::wheel::{WheelTravel, WheelView};
 use crate::layout::{GridStep, HomeLayout, Metrics, grid_step};
 use crate::model::{
     Chip, GameAction, GameState, LibraryFilter, PageRow, Row, Show, StatusFilter, build_rows,
@@ -75,8 +76,6 @@ use irori_services::{LibrarySnapshot, UserData};
 const HERO_DELAY: Duration = Duration::from_millis(250);
 /// Decoded cover images kept in memory.
 const IMAGE_CACHE: usize = 128;
-/// Pixels of wheel or touchpad travel that move the focus by one item.
-const WHEEL_STEP: f32 = 60.0;
 
 /// Big Picture's top-level tabs, switched with the shoulder buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,7 +169,7 @@ pub struct BigPictureView {
     grid: FocusGrid,
     library: LibraryTab,
     /// Wheel travel not yet turned into a focus move.
-    wheel: f32,
+    wheel: WheelTravel,
     /// The cover under the mouse (its element id), which shows its button.
     hovered_cover: Option<SharedString>,
     pending: HashSet<GameId>,
@@ -303,7 +302,7 @@ impl BigPictureView {
                 search,
                 searching: false,
             },
-            wheel: 0.0,
+            wheel: WheelTravel::default(),
             hovered_cover: None,
             show_options: None,
             show_option_computes: 0,
@@ -970,34 +969,37 @@ impl BigPictureView {
         }));
     }
 
-    /// Wheel or touchpad travel: vertical moves between shelves or grid
-    /// rows, horizontal along a shelf. On a game's page and in the quick
-    /// menu it moves through their rows (vertical only: sideways there
-    /// would change a row's value).
+    /// Wheel or touchpad travel, turned into the moves the controller
+    /// makes (see [`crate::layout::wheel`]), so the view scrolls by the
+    /// spring that follows the focus and never past an end. On a game's
+    /// page and in the quick menu it moves through their rows (vertical
+    /// only: sideways there would change a row's value).
     fn on_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.look.editor.is_some() {
+        if self.look.editor.is_some() || self.settings.is_some() {
             return;
         }
-        let rows_only = self.page.is_some() || self.overlay.is_some();
-        let delta = event.delta.pixel_delta(window.line_height());
-        let (amount, along) = if !rows_only && f32::from(delta.x.abs()) > f32::from(delta.y.abs()) {
-            (f32::from(delta.x), true)
+        let view = if self.page.is_some() || self.overlay.is_some() {
+            WheelView::Rows
         } else {
-            (f32::from(delta.y), false)
+            match self.tab {
+                Tab::Home => WheelView::Home(self.look.layout()),
+                Tab::Library => WheelView::Grid,
+            }
         };
-        self.wheel += amount;
-        while self.wheel.abs() >= WHEEL_STEP {
-            let back = self.wheel > 0.0;
-            self.wheel -= WHEEL_STEP.copysign(self.wheel);
-            let input = match (along, back) {
-                (true, true) => GamepadInput::Left,
-                (true, false) => GamepadInput::Right,
-                (false, true) => GamepadInput::Up,
-                (false, false) => GamepadInput::Down,
-            };
-            if !rows_only && self.tab == Tab::Library && self.library.focus != LibraryFocus::Grid {
+        let delta = event.delta.pixel_delta(window.line_height());
+        for dir in self
+            .wheel
+            .feed(view, f32::from(delta.x), f32::from(delta.y))
+        {
+            if view == WheelView::Grid && self.library.focus != LibraryFocus::Grid {
                 break;
             }
+            let input = match dir {
+                Dir::Up => GamepadInput::Up,
+                Dir::Down => GamepadInput::Down,
+                Dir::Left => GamepadInput::Left,
+                Dir::Right => GamepadInput::Right,
+            };
             self.on_input(input, window, cx);
         }
     }

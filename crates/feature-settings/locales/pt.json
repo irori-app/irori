@@ -252,7 +252,7 @@
   "settings.field.big_picture_in_game_mode.help": "Quando o modo de jogo do Steam Deck ou o Steam Big Picture inicia o Irori, ele abre no Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Abrir o Big Picture no modo de jogo do Steam",
   "settings.field.big_picture_on_controller.label": "Abrir o Big Picture quando um comando é ligado",
-  "settings.field.big_picture_on_controller.help": "Ligar ou emparelhar um comando com o Irori aberto traz o Irori para a frente em Big Picture. Enquanto um jogo está a correr, nada muda.",
+  "settings.field.big_picture_on_controller.help": "Ligar ou emparelhar um comando com o Irori aberto, ou abrir o Irori com um ligado, traz o Irori para a frente em Big Picture. Nada muda enquanto um jogo está a correr.",
   "settings.field.check_for_updates_on_startup.label": "Procurar atualizações de jogos ao arrancar",
   "settings.field.check_for_app_updates.help": "Uma vez por dia, no GitHub. O Flatpak e os pacotes da distribuição atualizam o Irori juntamente com o resto do sistema.",
   "settings.field.check_for_app_updates.label": "Procurar novas versões do Irori",

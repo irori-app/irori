@@ -252,7 +252,7 @@
   "settings.field.big_picture_in_game_mode.help": "从 Steam Deck 游戏模式或 Steam Big Picture 启动 Irori 时，直接打开 Big Picture。",
   "settings.field.big_picture_in_game_mode.label": "在 Steam 游戏模式中打开 Big Picture",
   "settings.field.big_picture_on_controller.label": "连接手柄时打开 Big Picture",
-  "settings.field.big_picture_on_controller.help": "Irori 运行时插入或配对手柄，Irori 会以 Big Picture 显示在最前面。游戏运行时不会有任何变化。",
+  "settings.field.big_picture_on_controller.help": "在 Irori 运行时插入或配对手柄，或在已连接手柄时启动 Irori，会将 Irori 以 Big Picture 模式切换到前台。游戏运行时不会有任何变化。",
   "settings.field.check_for_updates_on_startup.label": "启动时检查游戏更新",
   "settings.field.check_for_app_updates.help": "每天一次，从 GitHub 检查。Flatpak 和发行版软件包会随系统其余部分一起更新 Irori。",
   "settings.field.check_for_app_updates.label": "检查 Irori 新版本",

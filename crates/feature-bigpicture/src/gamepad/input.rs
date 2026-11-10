@@ -444,6 +444,77 @@ impl GuideTap {
     }
 }
 
+/// A controller as [`ConnectWatch`] tells them apart. A controller that
+/// changes mode (an 8BitDo pad switched between XInput, DInput and Switch)
+/// reports other ids and another name, so it counts as another controller.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PadIdentity {
+    pub vendor: Option<u16>,
+    pub product: Option<u16>,
+    pub name: String,
+}
+
+/// Decides when a controller connecting opens Big Picture
+/// (`iroriUi.bigPictureOnController`): whenever one is listed that wasn't,
+/// those already there when Irori starts included, whatever their family.
+/// Controllers are compared by identity, not counted, so one leaving and
+/// another arriving between two looks (a pad switching mode) still counts.
+///
+/// Some systems stop reporting controllers to a program in the background
+/// and list them again when it comes back (Windows.Gaming.Input does for a
+/// window without focus). A controller that went away while Irori's window
+/// wasn't active and returns within [`Self::RETURN_WAIT`] of it becoming
+/// active again is the same one coming back, not news.
+#[derive(Debug, Default)]
+pub struct ConnectWatch {
+    connected: Vec<PadIdentity>,
+    hidden: Vec<PadIdentity>,
+    active: bool,
+    activated: Option<Instant>,
+}
+
+impl ConnectWatch {
+    /// How long after Irori's window became active a controller hidden in
+    /// the background may come back without counting as connected.
+    pub const RETURN_WAIT: Duration = Duration::from_secs(5);
+
+    /// The controllers listed now; `active` is whether Irori's window is.
+    /// Returns whether a controller connected.
+    pub fn update(&mut self, list: &[PadIdentity], active: bool, now: Instant) -> bool {
+        if active && !self.active {
+            self.activated = Some(now);
+        }
+        self.active = active;
+        if !active {
+            self.activated = None;
+        }
+        let returning = |activated: Option<Instant>| {
+            activated.is_none_or(|at| now.saturating_duration_since(at) <= Self::RETURN_WAIT)
+        };
+        if !returning(self.activated) {
+            self.hidden.clear();
+        }
+
+        let mut before = std::mem::take(&mut self.connected);
+        let mut news = false;
+        for pad in list {
+            if let Some(ix) = before.iter().position(|p| p == pad) {
+                before.swap_remove(ix);
+            } else if let Some(ix) = self.hidden.iter().position(|p| p == pad) {
+                self.hidden.swap_remove(ix);
+            } else {
+                news = true;
+            }
+        }
+        // What is left of `before` went away.
+        if !active {
+            self.hidden.extend(before);
+        }
+        self.connected = list.to_vec();
+        news
+    }
+}
+
 /// Holding a button (Start or Select, `iroriUi.bigPictureHoldButton`) for
 /// a while opens Big Picture. Its usual input waits for the release, so a
 /// short press still does what it always did and a long one only opens
@@ -684,6 +755,112 @@ mod tests {
         assert!(tap.chord(0), "a second chord while Guide is still held");
         assert!(!tap.release(0, t0 + ms(100)));
         assert!(!tap.chord(0), "released");
+    }
+
+    fn pad(vendor: u16, product: u16, name: &str) -> PadIdentity {
+        PadIdentity {
+            vendor: Some(vendor),
+            product: Some(product),
+            name: name.into(),
+        }
+    }
+
+    #[test]
+    fn controllers_there_at_start_and_every_family_count_as_connected() {
+        let t0 = Instant::now();
+        let dualsense = pad(0x054c, 0x0ce6, "DualSense Wireless Controller");
+        let mut watch = ConnectWatch::default();
+        assert!(!watch.update(&[], true, t0), "none at start");
+        let mut watch = ConnectWatch::default();
+        assert!(
+            watch.update(std::slice::from_ref(&dualsense), false, t0),
+            "there at start"
+        );
+        assert!(
+            !watch.update(std::slice::from_ref(&dualsense), true, t0),
+            "no news"
+        );
+        for other in [
+            pad(0x045e, 0x0b12, "Xbox Wireless Controller"),
+            pad(0x057e, 0x2009, "Pro Controller"),
+            pad(0x28de, 0x1205, "Steam Deck"),
+            pad(0x2dc8, 0x6012, "8BitDo Ultimate 2C Wireless"),
+            PadIdentity {
+                vendor: None,
+                product: None,
+                name: "Generic USB Joystick".into(),
+            },
+        ] {
+            let both = [dualsense.clone(), other.clone()];
+            assert!(watch.update(&both, true, t0), "{other:?}");
+            assert!(!watch.update(&both, true, t0));
+            assert!(
+                !watch.update(std::slice::from_ref(&dualsense), true, t0),
+                "left"
+            );
+        }
+        // Two of one model: the second still counts.
+        let two = [dualsense.clone(), dualsense.clone()];
+        assert!(watch.update(&two, true, t0));
+        assert!(!watch.update(std::slice::from_ref(&dualsense), true, t0));
+    }
+
+    #[test]
+    fn an_8bitdo_pad_switching_mode_counts_even_between_two_looks() {
+        let t0 = Instant::now();
+        let xinput = pad(0x045e, 0x028e, "Xbox 360 Controller");
+        let dinput = pad(0x2dc8, 0x3106, "8BitDo Pro 2");
+        let switch = pad(0x057e, 0x2009, "Pro Controller");
+        let mut watch = ConnectWatch::default();
+        watch.update(std::slice::from_ref(&xinput), true, t0);
+        // Gone and back as another device before the reader looked again:
+        // as many controllers as before, but a new one.
+        assert!(watch.update(std::slice::from_ref(&dinput), true, t0));
+        assert!(!watch.update(&[], true, t0));
+        assert!(watch.update(std::slice::from_ref(&switch), true, t0));
+        assert!(!watch.update(&[], true, t0), "unplugged");
+        assert!(
+            watch.update(std::slice::from_ref(&switch), true, t0),
+            "plugged in again"
+        );
+    }
+
+    #[test]
+    fn controllers_hidden_while_irori_is_in_the_background_are_no_news() {
+        let t0 = Instant::now();
+        let xbox = pad(0x045e, 0x0b12, "Xbox Wireless Controller");
+        let mut watch = ConnectWatch::default();
+        watch.update(std::slice::from_ref(&xbox), true, t0);
+        // The window lost focus and the system stopped listing the pad;
+        // with focus back it is listed again.
+        assert!(!watch.update(&[], false, t0 + Duration::from_secs(1)));
+        assert!(!watch.update(
+            std::slice::from_ref(&xbox),
+            true,
+            t0 + Duration::from_secs(60)
+        ));
+        // After that round trip a new controller still counts.
+        let pro = pad(0x057e, 0x2009, "Pro Controller");
+        assert!(watch.update(
+            &[xbox.clone(), pro.clone()],
+            true,
+            t0 + Duration::from_secs(61)
+        ));
+        // One that comes back long after Irori is active again connected
+        // anew.
+        assert!(!watch.update(
+            std::slice::from_ref(&pro),
+            false,
+            t0 + Duration::from_secs(62)
+        ));
+        assert!(!watch.update(
+            std::slice::from_ref(&pro),
+            true,
+            t0 + Duration::from_secs(63)
+        ));
+        let later =
+            t0 + Duration::from_secs(63) + ConnectWatch::RETURN_WAIT + Duration::from_secs(1);
+        assert!(watch.update(&[pro, xbox], true, later));
     }
 
     #[test]

@@ -252,7 +252,7 @@
   "settings.field.big_picture_in_game_mode.help": "Když Irori spustí herní režim Steam Decku nebo Steam Big Picture, otevře se v Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Ve herním režimu Steamu otevřít Big Picture",
   "settings.field.big_picture_on_controller.label": "Otevřít Big Picture po připojení ovladače",
-  "settings.field.big_picture_on_controller.help": "Když během běhu Irori připojíte nebo spárujete ovladač, Irori se zobrazí v popředí v režimu Big Picture. Během hraní se nic nezmění.",
+  "settings.field.big_picture_on_controller.help": "Připojení nebo spárování ovladače za běhu Irori, nebo spuštění Irori s připojeným ovladačem, přenese Irori do popředí v režimu Big Picture. Během hraní se nic nemění.",
   "settings.field.check_for_updates_on_startup.label": "Kontrolovat aktualizace her při spuštění",
   "settings.field.check_for_app_updates.help": "Jednou denně na GitHubu. Flatpak a balíčky distribuce aktualizují Irori spolu se zbytkem systému.",
   "settings.field.check_for_app_updates.label": "Hledat nové verze Irori",

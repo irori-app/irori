@@ -1063,7 +1063,16 @@ it on every platform, and CI's Windows install test runs it.
   can't name anything outside that folder. The editor (`view/editor.rs`, quick
   menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
   close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
-  `bigPictureOnController` (open Big Picture when a controller connects).
+  `bigPictureOnController` (open Big Picture when a controller connects, or is
+  connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
+  name, so a pad switching mode counts, and one a system hid while Irori was in the
+  background is no news when it returns).
+- The mouse works on every screen: covers, rows, chips and switchers take hover and
+  clicks, and the wheel goes through `layout/wheel.rs`, which turns travel into the
+  controller's moves (per layout: along the strip on Spotlight, Cinema and Carousel), so
+  the springs that follow the focus scroll and nothing passes an end. Its tests run the
+  travel through each layout's offset. Lists that scroll a row at a time stop at their
+  end (`layout::end_scroll`).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
 - **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a

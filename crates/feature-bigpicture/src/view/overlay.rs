@@ -51,7 +51,9 @@ impl BigPictureView {
                 if focused {
                     d.bg(accent).text_color(c.background)
                 } else {
+                    // The row under the pointer shows it will take a click.
                     d.text_color(if danger { c.danger } else { c.foreground })
+                        .hover(|s| s.bg(c.foreground.opacity(0.08)))
                 }
             })
             .child(Icon::new(icon))
