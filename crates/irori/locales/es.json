@@ -86,6 +86,8 @@
   "shell.palette.set_up_emulation_keywords": "emulador ROM consola retro BIOS RetroArch",
   "shell.palette.steam_friends": "Mostrar amigos de Steam",
   "shell.palette.steam_friends_keywords": "amigos conectados jugando unirse invitar chat",
+  "shell.palette.xbox_friends": "Mostrar amigos de Xbox",
+  "shell.palette.xbox_friends_keywords": "amigos en línea jugando xbox gamertag",
   "shell.palette.open_store": "Abrir la tienda de {store}",
   "shell.palette.lutris_script": "Instalar con un script de Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script instalador lutris.net comunidad",

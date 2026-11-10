@@ -35,6 +35,7 @@ enum PaletteTarget {
     SetUpEmulation,
     /// The Steam friends window.
     SteamFriends,
+    XboxFriends,
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -137,8 +138,8 @@ impl Palette {
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
-    /// on. `stores` have a store window. `steam_friends`: a Steam account can
-    /// show its friends.
+    /// on. `stores` have a store window. `friends`: a Steam and an Xbox
+    /// account can show their friends.
     #[allow(clippy::too_many_arguments)] // One row source per argument, all needed.
     fn items(
         games: &[Arc<GameInfo>],
@@ -147,7 +148,7 @@ impl Palette {
         library: LibraryCommands<'_>,
         sync: bool,
         stores: &[Runner],
-        steam_friends: bool,
+        friends: (bool, bool),
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let LibraryCommands {
@@ -361,6 +362,7 @@ impl Palette {
                 targets,
             );
         }
+        let (steam_friends, xbox_friends) = friends;
         if steam_friends {
             push(
                 CommandItem::new()
@@ -368,6 +370,16 @@ impl Palette {
                     .keywords([t("shell.palette.steam_friends_keywords")])
                     .icon(IconName::Users),
                 PaletteTarget::SteamFriends,
+                targets,
+            );
+        }
+        if xbox_friends {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.xbox_friends"))
+                    .keywords([t("shell.palette.xbox_friends_keywords")])
+                    .icon(IconName::Users),
+                PaletteTarget::XboxFriends,
                 targets,
             );
         }
@@ -716,7 +728,10 @@ impl Palette {
             library,
             sync,
             &irori_manage::store_window_stores(cx),
-            irori_manage::steam_friends_available(cx),
+            (
+                irori_manage::steam_friends_available(cx),
+                irori_manage::xbox_friends_available(cx),
+            ),
             &mut targets,
         );
         if irori_manage::steam_client_library_state(cx)
@@ -784,6 +799,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
+        PaletteTarget::XboxFriends => {
+            irori_manage::open_friends_dialog(irori_manage::FriendsSource::Xbox, window, cx)
+        }
         PaletteTarget::OpenStore(runner) => {
             irori_manage::open_store_window(runner, None, window, cx)
         }
@@ -918,7 +936,16 @@ mod tests {
             quick_controls: quick,
             hidden_pin: None,
         };
-        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
+        Palette::items(
+            &[],
+            None,
+            None,
+            library,
+            false,
+            &[],
+            (false, false),
+            &mut targets,
+        );
         targets
             .into_iter()
             .filter_map(|t| match t {
@@ -960,7 +987,7 @@ mod tests {
             quick_controls: false,
             hidden_pin: None,
         };
-        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
+        Palette::items(&[], None, None, library, false, &[], (false, false), &mut targets);
         let shown: Vec<String> = targets
             .into_iter()
             .filter_map(|t| match t {
@@ -993,7 +1020,16 @@ mod tests {
                 quick_controls: false,
                 hidden_pin,
             };
-            Palette::items(&[], None, None, library, false, &[], false, &mut targets);
+            Palette::items(
+                &[],
+                None,
+                None,
+                library,
+                false,
+                &[],
+                (false, false),
+                &mut targets,
+            );
             targets
                 .into_iter()
                 .filter_map(|t| match t {

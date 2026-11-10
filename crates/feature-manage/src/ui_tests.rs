@@ -551,7 +551,15 @@ fn steam_friends_window_lists_friends_and_offers_only_real_joins(cx: &mut TestAp
     );
     let (handle, view) = cx.update(|cx| {
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            cx.new(|cx| crate::friends::FriendsDialog::new(store, window, cx))
+            cx.new(|cx| {
+                crate::friends::FriendsDialog::new(
+                    Some(store),
+                    None,
+                    crate::FriendsSource::Steam,
+                    window,
+                    cx,
+                )
+            })
         })
         .expect("window opens")
     });
@@ -602,4 +610,99 @@ fn steam_friends_window_lists_friends_and_offers_only_real_joins(cx: &mut TestAp
     assert!(vcx.debug_bounds("friend-join-1").is_some());
     assert!(vcx.debug_bounds("friend-join-2").is_none());
     assert!(vcx.debug_bounds("friend-join-3").is_none());
+
+    // Without the launchers store there is no Xbox tab; the other sources
+    // explain themselves.
+    let (tabs, shown) = vcx.update(|_, cx| view.read(cx).shown_tabs());
+    assert_eq!(
+        (tabs, shown),
+        (
+            vec![crate::FriendsSource::Steam, crate::FriendsSource::Other],
+            crate::FriendsSource::Steam
+        )
+    );
+    vcx.update(|_, cx| view.update(cx, |v, cx| v.show_tab(crate::FriendsSource::Other, cx)));
+    vcx.run_until_parked();
+    for selector in [
+        "friends-other-discord",
+        "friends-other-epic",
+        "friends-other-gog",
+        "friends-other-launchers",
+    ] {
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector} is shown");
+    }
+    assert!(vcx.debug_bounds("friend-1").is_none());
+}
+
+#[gpui_kit::test]
+fn xbox_friends_have_a_tab_of_their_own(cx: &mut TestAppContext) {
+    use irori_core::{AppSettings, EventBus};
+    use irori_launchers::{LaunchersStore, XboxFriend, XboxFriends, XboxOnlineState};
+
+    setup(cx);
+    if std::env::var_os(irori_launchers::XBOX_CLIENT_ID_VAR).is_some() {
+        // A packager's build may turn the Xbox account off.
+        return;
+    }
+    let dir = tempfile::tempdir().expect("temp dir").keep();
+    let app = Arc::new(AppSettings::default());
+    let store = LaunchersStore::with_dirs(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        dir.join("config"),
+        dir.join("cache"),
+    );
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                crate::friends::FriendsDialog::new(
+                    None,
+                    Some(store),
+                    crate::FriendsSource::Xbox,
+                    window,
+                    cx,
+                )
+            })
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    let mut explained = false;
+    for _ in 0..200 {
+        vcx.run_until_parked();
+        if vcx.update(|_, cx| view.read(cx).failure()).is_some() {
+            explained = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert!(explained, "signed out explains itself");
+    let (tabs, shown) = vcx.update(|_, cx| view.read(cx).shown_tabs());
+    assert_eq!(
+        (tabs, shown),
+        (
+            vec![crate::FriendsSource::Xbox, crate::FriendsSource::Other],
+            crate::FriendsSource::Xbox
+        )
+    );
+
+    let friend = |xuid: &str, playing: Option<&str>| XboxFriend {
+        xuid: xuid.into(),
+        gamertag: format!("Tag {xuid}"),
+        picture: String::new(),
+        state: XboxOnlineState::Online,
+        playing: playing.map(str::to_string),
+        follows_back: true,
+        favorite: false,
+    };
+    let friends = XboxFriends {
+        list: vec![friend("31", Some("Halo Infinite")), friend("32", None)],
+        read_at: None,
+    };
+    vcx.update(|_, cx| view.update(cx, |v, cx| v.show_xbox(friends, cx)));
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("xbox-friend-31").is_some());
+    assert!(vcx.debug_bounds("xbox-friend-32").is_some());
+    // Read only: nothing to join or message.
+    assert!(vcx.debug_bounds("friend-join-31").is_none());
 }

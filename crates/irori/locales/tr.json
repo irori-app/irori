@@ -86,6 +86,8 @@
   "shell.palette.set_up_emulation_keywords": "emülatör ROM konsol retro BIOS RetroArch",
   "shell.palette.steam_friends": "Steam arkadaşlarını göster",
   "shell.palette.steam_friends_keywords": "arkadaşlar çevrimiçi oynuyor katıl davet sohbet",
+  "shell.palette.xbox_friends": "Xbox arkadaşlarını göster",
+  "shell.palette.xbox_friends_keywords": "arkadaşlar çevrimiçi oynuyor xbox oyuncu etiketi",
   "shell.palette.open_store": "{store} mağazasını aç",
   "shell.palette.lutris_script": "Lutris betiğiyle kur",
   "shell.palette.lutris_script_keywords": "Lutris betik kurulum lutris.net topluluk",

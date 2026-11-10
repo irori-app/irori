@@ -53,7 +53,7 @@ pub fn install_launchers_store(store: Arc<LaunchersStore>, cx: &mut App) {
     cx.set_global(LaunchersHandle(store));
 }
 
-fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
+pub(crate) fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
     cx.try_global::<LaunchersHandle>().map(|h| h.0.clone())
 }
 
@@ -507,6 +507,21 @@ impl LaunchersSection {
                                     )),
                             )
                             .child(div().text_xs().text_color(muted).truncate().child(played)),
+                    )
+                    .child(
+                        Button::new("launcher-xbox-friends")
+                            .debug_selector(|| "launcher-xbox-friends".to_string())
+                            .ghost()
+                            .small()
+                            .icon(IconName::Users)
+                            .label(t("manage.friends.button"))
+                            .on_click(|_, window, cx| {
+                                crate::friends::open_friends_dialog(
+                                    crate::friends::FriendsSource::Xbox,
+                                    window,
+                                    cx,
+                                )
+                            }),
                     )
                     .child(
                         Button::new("launcher-xbox-sign-out")

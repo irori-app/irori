@@ -33,7 +33,10 @@ pub use emulators::{
     EmulatorsView, InstallTarget, choice_name, open_emulation_setup, open_engine_settings,
     start_install,
 };
-pub use friends::{install_steam_store, open_steam_friends_dialog, steam_friends_available};
+pub use friends::{
+    FriendsSource, friends_available, install_steam_store, open_friends_dialog,
+    open_steam_friends_dialog, steam_friends_available, xbox_friends_available,
+};
 pub use launchers::install_launchers_store;
 pub use login::{open_account_login_dialog, open_login_dialog};
 pub use onboarding::{

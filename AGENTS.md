@@ -1281,7 +1281,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   Data: the title history (`titlehub`: last played, achievement counts, store art
   and details), `MinutesPlayed` per title (`userstats` batch, asked again only for
   titles whose last-played time moved) and achievements (`achievements` v2), cached
-  in `<cache>/xbox/` for 15 minutes. Titles played on a PC with a package family
+  in `<cache>/xbox/` for 15 minutes. Friends (`irori_xbox_api::friends`, the Friends
+  window's Xbox tab): the people the account follows (`social`
+  `/users/xuid(<xuid>)/people`), their gamertags and gamerpics (`profile`
+  `/users/batch/profile/settings`) and presence (`userpresence` `/users/batch`),
+  services Microsoft documents in its Xbox Live REST reference; read only while the
+  window shows them, kept a minute in memory, dropped at sign-out. Titles played on a PC with a package family
   name match installed packages (`xbox:<family name>`) and add their art, details,
   playtime (`remote_playtime`), last played (`remote_last_played`) and achievements;
   played PC titles that aren't installed are listed as not installed on every OS,
@@ -1361,9 +1366,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
-- **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`, the window
-  `irori_manage::open_steam_friends_dialog`, from the Steam account card and the
-  palette): `IFriendsListService/GetFriendsList` and `IPlayerService/GetPlayerLinkDetails`
+- **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`; the window
+  is `irori_manage::open_friends_dialog`, with a tab per source: Steam, Xbox (see 4.9)
+  and "Other sources"; Steam's opens from the Steam account card and the palette): `IFriendsListService/GetFriendsList` and `IPlayerService/GetPlayerLinkDetails`
   with the account's access token. The older `ISteamUser/GetFriendList` and
   `GetPlayerSummaries` take only a Web API key, which Irori must not ship, and answer a
   token with HTTP 400. A 401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
@@ -1373,6 +1378,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `steam://friends/message/<id>`, and Join only when Steam reports a lobby
   (`steam://joinlobby/<app>/<lobby>/<friend>`) or a server (`steam://connect/<ip:port>`),
   built from parsed numbers only.
+  "Other sources" (`irori_manage` `friends/other.rs`) says why other friends aren't
+  listed, and nothing there is fetched: Discord's RPC `GET_RELATIONSHIPS` needs the
+  `relationships.read` scope, which Discord grants only to apps it approves; Epic's
+  friends service answers only the Epic Games Launcher's own client; GOG publishes no
+  friends API (Galaxy keeps it); the other launchers keep friends in their apps. A new
+  source needs an API its service documents for other programs, read only, loaded
+  only while its tab shows and dropped at sign-out.
 
 ### 4.11 Mods
 

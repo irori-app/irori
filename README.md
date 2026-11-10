@@ -149,6 +149,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
   open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
   game with, next to its ProtonDB rating.
+- **Friends:** see who of your Steam and Xbox friends is online and what they play,
+  join a Steam friend's game or message them through Steam. Irori only reads them,
+  and only while the window is open. (Discord, Epic Games and GOG offer other
+  programs no way to read your friends; the window says so.)
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size; start typing anywhere in
   the grid or list to search. Filter by genre, and group by play status, game mode,
