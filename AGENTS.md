@@ -1784,6 +1784,13 @@ building and the release checklist.
   - The installer installs per user under `%LOCALAPPDATA%\Programs\Irori` and
     registers the URL handler and a Start-menu shortcut.
   - `--portable` adds a zip without `install.ps1` and with the `portable` marker.
+- Package channels (`packaging/release_manifests.py`, `.github/workflows/publish.yml`,
+  `docs/RELEASING.md`): the AUR, Homebrew, Scoop, winget (with `/CHANNEL=winget`),
+  Fedora COPR (`copr/irori.spec`, repackaging both tarballs) and Flathub (the Flatpak
+  manifest pinned to the tag). Each publishing job runs only when its `PUBLISH_*`
+  variable is `true`; `release.yml` checks each on pull requests (`packaging/copr/build.sh`,
+  `packaging/arch/build.sh`). Installs from a channel are updated by its package manager
+  (`irori-services::app_update`), never by Irori.
 
 **Desktop behaviour to keep working**
 

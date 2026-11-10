@@ -132,7 +132,9 @@ Windows builds aren't signed yet, so SmartScreen may warn the first time: choose
 
 </details>
 
-Flathub, winget and the AUR are planned. To build Irori yourself, see [Building](#building).
+Flathub, winget, Fedora COPR and the AUR are planned: the release workflow is ready to
+publish to each once its account is set up ([docs/RELEASING.md](docs/RELEASING.md)). To
+build Irori yourself, see [Building](#building).
 
 ---
 

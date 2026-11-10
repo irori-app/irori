@@ -748,14 +748,14 @@ how it was installed when it starts:
 
 | Install | Recognised by | Irori |
 | --- | --- | --- |
-| Flatpak | `FLATPAK_ID` or `/.flatpak-info` | Never checks |
-| apt, dnf, pacman, AUR | the program lives under `/usr` (not `/usr/local`) | Never checks |
+| Flatpak (Flathub or the bundle) | `FLATPAK_ID` or `/.flatpak-info` | Never checks |
+| apt, dnf (Irori's repository or Fedora COPR), pacman (Irori's repository or the AUR) | the program lives under `/usr` (not `/usr/local`) | Never checks |
 | Nix | the program lives under `/nix/store` | Never checks |
 | Built from source | the program lives in a Cargo `target` folder | Never checks |
 | Any build with `IRORI_UPDATE_EXPLANATION` | the variable, at build or run time | Never checks; Settings › About shows its text |
 | Homebrew | `Caskroom/irori` under `/opt/homebrew` or `/usr/local` | Checks; offers `brew upgrade --cask irori` |
-| Scoop | `scoop/apps/irori` in the program's path | Checks; offers `scoop update irori` |
-| winget | `install.ini` beside the program says `Channel=winget` | Checks; offers `winget upgrade Irori.Irori` |
+| Scoop | `scoop/apps/irori` in the program's path, or `apps/irori` with Scoop's `manifest.json` and `install.json` beside the program (a moved `SCOOP` root) | Checks; offers `scoop update irori` |
+| winget | `install.ini` beside the program says `Channel=winget` (the `/CHANNEL=winget` switch in Irori's winget manifest) | Checks; offers `winget upgrade Irori.Irori` |
 | Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; links to the release page |
 
 The check asks GitHub's `releases/latest` for `irori-app/irori` (which leaves out drafts

@@ -7,7 +7,22 @@ Two workflows ship Irori:
   tag runs it and leaves a **draft** GitHub release with every package, a
   `SHA256SUMS` file and build attestations.
 - **`publish.yml`** runs when you publish that draft. It sends the release to each
-  package channel that is switched on.
+  package channel that is switched on. Each channel is off until its repository
+  variable is `true`, so forks and repositories without the secrets skip it.
+
+`packaging/release_manifests.py` writes every channel's manifest from the release's
+files (the AUR's PKGBUILD, the Homebrew cask, the Scoop manifest, the COPR spec, the
+winget manifests and, given the tag's commit, the Flathub manifest), and
+`packaging/test_release_manifests.py` tests them. Pull requests that touch packaging
+also run, in `release.yml`: the COPR source package rebuilt and installed in Fedora
+(`packaging/copr/build.sh`), the AUR PKGBUILD read by `makepkg --printsrcinfo`
+(`packaging/arch/build.sh`), the Windows setup installed with winget's
+`/CHANNEL=winget` switch, the Flatpak built from the manifest Flathub gets, and the
+Windows zip Scoop unpacks.
+
+Irori never updates itself: a package a channel installed is updated by that
+channel's package manager (`irori-services::app_update` tells them apart; see
+[PLATFORMS.md](PLATFORMS.md#new-versions-of-irori)).
 
 ## Cutting a release
 
@@ -111,7 +126,8 @@ replaces the repositories, which hold the latest version only.
 ### AUR (`irori-bin`, `irori-sign-in-bin`)
 
 Off for now: AUR registration is closed, and Arch users install from the pacman
-repository above. The `aur` job in `publish.yml` stays ready for when it reopens.
+repository above. The `aur` job in `publish.yml` stays ready for when it reopens, and
+pull requests check its PKGBUILD with `makepkg --printsrcinfo`.
 
 1. Create an AUR account and add an SSH key to it.
 2. Secret `AUR_SSH_PRIVATE_KEY`: that key's private half.
@@ -131,29 +147,49 @@ Users install with `brew install --cask <owner>/tap/irori` and
 
 ### winget
 
-winget accepts automated updates only for packages it already lists.
+`release_manifests.py` writes all three manifests of each version (`Irori.Irori`, both
+setups, the setup's uninstall key as `ProductCode`) with
+`InstallerSwitches: Custom: /CHANNEL=winget`, so the setup writes `Channel=winget` to
+`install.ini` and Irori offers `winget upgrade` instead of the release page. The `winget`
+job submits them with Microsoft's `wingetcreate submit`, which opens the pull request on
+`microsoft/winget-pkgs`, for the first version too; winget's moderators review new
+packages before they are listed.
 
-1. Submit the first version by hand: `wingetcreate new <installer URL>`, with the
-   identifier `Irori.Irori`, and add `InstallerSwitches: Custom: /CHANNEL=winget`
-   to its installer manifest. The setup then writes `Channel=winget` to
-   `install.ini`, so Irori offers `winget upgrade` instead of the release page.
-   The releaser below starts each update from the previous manifest; check that
-   the first automated update still has the switch.
-2. Fork `microsoft/winget-pkgs` to the account that owns the token below.
-3. Secret `WINGET_TOKEN`: a classic token with the `public_repo` scope.
-4. Variable `PUBLISH_WINGET` = `true`.
+1. Fork `microsoft/winget-pkgs` to the account that owns the token below.
+2. Secret `WINGET_TOKEN`: a classic token with the `public_repo` scope.
+3. Variable `PUBLISH_WINGET` = `true`.
+
+### Fedora COPR
+
+The `copr` job builds a source package holding both Linux tarballs and the spec
+`release_manifests.py` writes (`irori` and `irori-sign-in`, repackaging the release as
+the AUR's `irori-bin` does), and sends it to COPR, which builds it for each chroot.
+
+1. Create a COPR project (for example `irori/irori`) with the `fedora-*-x86_64` and
+   `fedora-*-aarch64` chroots you want to serve.
+2. Secret `COPR_CONFIG`: the contents of the API token file from
+   <https://copr.fedorainfracloud.org/api/> (`~/.config/copr`).
+3. Variable `COPR_PROJECT`: `<owner>/<project>`.
+4. Variable `PUBLISH_COPR` = `true`.
+
+Users install with `sudo dnf copr enable <owner>/<project> && sudo dnf install irori`.
 
 ### Flathub
 
-Flathub builds Irori itself from a repository it hosts, so `publish.yml` doesn't
-publish there.
+Flathub builds Irori itself from its repository `flathub/app.irori.Irori`. For each
+release the `flathub` job takes the manifest `release_manifests.py` writes (the tag's
+`packaging/flatpak/app.irori.Irori.yml` with its `dir` source replaced by a `git` source
+pinned to the tag and its commit) and a `cargo-sources.json` generated from the tag's
+`Cargo.lock`, and opens a pull request there; Flathub's bot builds it, and merging it
+publishes.
 
-1. Submit `packaging/flatpak/app.irori.Irori.yml` following
-   [Flathub's submission guide](https://docs.flathub.org/docs/for-app-authors/submission).
-   Replace its `dir` source with a `git` source pinned to the release tag, and add
-   the generated `cargo-sources.json` (`release.yml` shows the command).
+1. Submit the first version by hand following
+   [Flathub's submission guide](https://docs.flathub.org/docs/for-app-authors/submission),
+   with the files the `manifests` artifact of a **Publish** run holds
+   (`flathub/app.irori.Irori.yml`) and a `cargo-sources.json` made as the job does.
 2. Verify the app id: Flathub gives `app.irori.Irori` a token to publish at
    `https://irori.app/.well-known/org.flathub.VerifiedApps.txt`. Add it to
    `website/public/.well-known/` and deploy the site.
-3. For each release, update the tag and `cargo-sources.json` in the Flathub
-   repository; Flathub's bot builds and publishes it.
+3. Secret `FLATHUB_TOKEN`: a token of an account with write access to
+   `flathub/app.irori.Irori` (`repo` scope), which Flathub grants the app's maintainers.
+4. Variable `PUBLISH_FLATHUB` = `true`.
