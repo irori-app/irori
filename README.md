@@ -316,7 +316,8 @@ build Irori yourself, see [Building](#building).
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
   Steam Deck's Game Mode, from anywhere when you hold Start for a second, and reads
-  each press once alongside Steam Input.
+  each press once alongside Steam Input. Its quick menu powers off, restarts, sleeps or
+  logs out, after closing running games and syncing their saves.
 - **Game modes** (single player, co-op, split screen and local, online, MMO) from
   Steam, GOG and PCGamingWiki, as chips on each game's page and as a library filter,
   grouping (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>G</kbd>), saved views and search

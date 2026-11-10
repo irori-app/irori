@@ -975,6 +975,26 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+### Power off, restart, sleep and log out (Big Picture)
+
+Big Picture's quick menu ends with Power off, Restart, Sleep and Log out, each
+asking first and naming the action. Only the actions the system allows are
+listed, asked again whenever the menu opens. Irori uses each system's own,
+unprivileged way and never `sudo` (`irori_services::power`):
+
+| System | Asked | Done with |
+| --- | --- | --- |
+| Linux | logind's `CanPowerOff`, `CanReboot`, `CanSuspend` (`yes` or `challenge`); Log out when a session manager or a logind desktop session is found | logind's `PowerOff`, `Reboot`, `Suspend` (interactive, so polkit may ask for a password); Log out through GNOME's (and MATE's and Cinnamon's) `org.gnome.SessionManager`, Plasma's `org.kde.Shutdown` or `org.kde.ksmserver`, or Xfce's session manager, else logind ends the session (programs get no chance to save then) |
+| Windows | Sleep only when `IsPwrSuspendAllowed` and the PC isn't a Modern Standby one | `ExitWindowsEx` with the shutdown privilege enabled; `SetSuspendState` |
+| macOS | All four | System Events through `osascript`; macOS asks once whether Irori may control System Events (Privacy & Security → Automation) |
+
+Inside the Flatpak the system bus is the host's, reached through
+`--system-talk-name=org.freedesktop.login1`; the session managers are allowed
+by name in the manifest. A running game is stopped first and its session ended
+in full (recorded, saves uploaded, mods restored) before the system is asked;
+a game that hasn't finished closing after five minutes leaves the computer on
+with a notice. In Steam's Game Mode, Log out ends the gamescope session.
+
 ## Streaming with Sunshine
 
 Irori finds Sunshine by its configuration folder: `~/.config/sunshine` on Linux and

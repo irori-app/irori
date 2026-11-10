@@ -1,13 +1,15 @@
 //! Big Picture driven end to end in a test window over an in-memory store:
 //! keyboard and gamepad actions through Home, the Library tab's chips and
 //! search, a game's page, the quick menu and the uninstall question, and
-//! mouse clicks on covers.
+//! mouse clicks on covers. A fake power system stands in for the computer,
+//! so the power menu never asks the real one.
 
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
+use futures::future::BoxFuture;
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions,
     px, size,
@@ -17,13 +19,13 @@ use irori_core::{
     InstallRequest, LaunchPlan, LaunchRequest, LoginFlow, OpContext, Outcome, Paths, RemoveArgs,
     Runner, Store, UpdateRequest, UserInfo, async_trait,
 };
-use irori_services::Backend;
+use irori_services::{Backend, Permission, PowerAction, PowerSystem};
 use irori_ui::models;
 
 use super::tile::CoverSlot;
 use super::{BigPictureView, LibraryFocus, Overlay, Tab};
 use crate::gamepad;
-use crate::model::{GameAction, PageRow, RowKind, Sort, StatusFilter};
+use crate::model::{GameAction, MenuItem, PageRow, RowKind, Sort, StatusFilter};
 
 struct FakeStore {
     runner: Runner,
@@ -96,6 +98,25 @@ impl Store for FakeStore {
     }
 }
 
+/// A computer that allows `offers` and records what it was asked to do.
+#[derive(Default)]
+pub(crate) struct FakePower {
+    offers: Vec<PowerAction>,
+    done: parking_lot::Mutex<Vec<PowerAction>>,
+}
+
+impl PowerSystem for FakePower {
+    fn permissions(&self) -> BoxFuture<'_, Vec<(PowerAction, Permission)>> {
+        let offers = self.offers.iter().map(|a| (*a, Permission::Yes)).collect();
+        Box::pin(async move { offers })
+    }
+
+    fn perform(&self, action: PowerAction) -> BoxFuture<'_, Result<()>> {
+        self.done.lock().push(action);
+        Box::pin(async { Ok(()) })
+    }
+}
+
 fn game(runner: Runner, app: &str, title: &str, installed: bool) -> Arc<GameInfo> {
     Arc::new(
         GameInfo {
@@ -136,6 +157,8 @@ pub(crate) fn start_backend() -> Backend {
         vec![store(Runner::Gog), store(Runner::Legendary)]
     })
     .expect("backend starts");
+    // Never ask the real computer what it allows, let alone power it off.
+    backend.set_power_system(Arc::new(FakePower::default()));
     let deadline = Instant::now() + Duration::from_secs(15);
     while backend.library().len() != 3 {
         assert!(Instant::now() < deadline, "test library did not load");
@@ -868,4 +891,74 @@ fn game_settings_open_inside_big_picture(cx: &mut TestAppContext) {
         assert!(v.is_page_open());
     });
     assert_eq!(route(cx), before);
+}
+
+#[gpui_kit::test]
+fn power_actions_ask_first_and_wait_for_the_backend(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx);
+    // The harness's computer allows nothing: the menu offers nothing.
+    cx.simulate_keystrokes(handle, "m");
+    cx.read(|cx| {
+        let items = view.read(cx).menu(cx);
+        assert!(!items.iter().any(|i| matches!(i, MenuItem::Power(_))));
+    });
+    cx.dispatch_action(handle, gamepad::Back);
+
+    let power = Arc::new(FakePower {
+        offers: vec![PowerAction::Sleep, PowerAction::PowerOff],
+        ..Default::default()
+    });
+    cx.update(|cx| irori_ui::backend(cx).set_power_system(power.clone()));
+    // Opening the menu asks again; the allowed actions come last, in order.
+    cx.simulate_keystrokes(handle, "m");
+    wait_for(cx, |cx| !view.read(cx).power.is_empty());
+    let items = cx.read(|cx| view.read(cx).menu(cx));
+    let n = items.len();
+    assert_eq!(
+        items[n - 2..],
+        [
+            MenuItem::Power(PowerAction::PowerOff),
+            MenuItem::Power(PowerAction::Sleep)
+        ]
+    );
+
+    // Power off asks first, with Cancel focused; Cancel does nothing.
+    for _ in 0..n {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.dispatch_action(handle, gamepad::Up);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        assert_eq!(
+            view.read(cx).overlay,
+            Some(Overlay::Power {
+                action: PowerAction::PowerOff,
+                choice: 0
+            })
+        )
+    });
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| assert!(!view.read(cx).is_overlay_open()));
+    assert!(power.done.lock().is_empty(), "Cancel took no action");
+
+    // Confirming takes it, through the backend.
+    cx.simulate_keystrokes(handle, "m");
+    for _ in 0..n {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        assert_eq!(
+            view.read(cx).overlay,
+            Some(Overlay::Power {
+                action: PowerAction::Sleep,
+                choice: 0
+            })
+        )
+    });
+    cx.dispatch_action(handle, gamepad::Right);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    wait_for(cx, |cx| view.read(cx).power_pending.is_none());
+    assert_eq!(*power.done.lock(), [PowerAction::Sleep]);
+    cx.read(|cx| assert!(!view.read(cx).is_overlay_open()));
 }

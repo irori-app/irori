@@ -39,6 +39,12 @@ finish-args:
   - --talk-name=org.freedesktop.ScreenSaver
   - --talk-name=org.freedesktop.PowerManagement.Inhibit
   - --system-talk-name=org.freedesktop.login1
+  # Big Picture's Log out, through the desktop's session manager (GNOME,
+  # MATE and Cinnamon answer as org.gnome.SessionManager; Plasma; Xfce).
+  - --talk-name=org.gnome.SessionManager
+  - --talk-name=org.kde.Shutdown
+  - --talk-name=org.kde.ksmserver
+  - --talk-name=org.xfce.SessionManager
   # Steam, Ludusavi, Lutris and other tools installed on the host, started
   # with `flatpak-spawn --host` (irori_core::host).
   - --talk-name=org.freedesktop.Flatpak

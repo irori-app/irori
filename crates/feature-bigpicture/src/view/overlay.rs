@@ -245,6 +245,21 @@ impl BigPictureView {
                     cx,
                 )
             }
+            Overlay::Power { action, choice } => Self::confirm_dialog(
+                "bp-power",
+                super::system::power_title(action),
+                self.power_description(action, cx),
+                (
+                    t(crate::model::power_label(action)),
+                    crate::model::MenuItem::Power(action).icon(),
+                    self.power_pending == Some(action),
+                ),
+                choice,
+                c,
+                m,
+                move |this, window, cx| this.power(action, window, cx),
+                cx,
+            ),
             Overlay::DeleteTheme { id, choice } => {
                 let name = self
                     .look

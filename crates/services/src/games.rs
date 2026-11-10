@@ -408,6 +408,8 @@ impl Backend {
             .then(|| crate::follow::Handoff::new(pid));
         let started = Instant::now();
         let started_at = util::now_rfc3339();
+        // Open until everything after the session is done, below.
+        let open = crate::power::OpenSession::new(self);
         self.running.lock().insert(
             id.clone(),
             RunningGame {
@@ -472,6 +474,7 @@ impl Backend {
         let b = self.clone();
         let id = id.clone();
         self.spawn(async move {
+            let _open = open;
             let status = match probe {
                 Some(probe) => crate::follow::follow(&mut child, probe).await,
                 None => {

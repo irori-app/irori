@@ -756,6 +756,16 @@ commands without a window.
   user changed in Windows meanwhile is theirs. The registry sits behind
   `GpuPreferenceRegistry`, so the rules are tested on every system. The settings show
   it in place of `iroriGpu`, which stays Linux only.
+- **Power** (`power/`, Big Picture's quick menu): `Backend::power_actions` lists what
+  the system allows (logind's `Can*` answers on Linux, `IsPwrSuspendAllowed` for sleep
+  on Windows, everything on macOS) and `Backend::power` takes one: logind on the system
+  bus (the desktop's session manager on the session bus for Log out) on Linux,
+  `ExitWindowsEx`/`SetSuspendState` on Windows, System Events through `osascript` on
+  macOS; never `sudo`. It first stops every running game and waits until no session is
+  open (`power::OpenSession`, held from a launch until after `GameExited`, so the
+  session is recorded and the saves uploaded), giving up after five minutes. The
+  system is reached through the `PowerSystem` trait; tests install a fake one with
+  `Backend::set_power_system`, so no test powers anything off.
 - **Launch troubleshooting** (`troubleshoot/`): `Backend::troubleshoot_launch` reads
   the game's last log (without Irori's header), its program's imports
   (`troubleshoot::pe`, a headers-only PE reader under `#![forbid(unsafe_code)]`),
@@ -1064,7 +1074,8 @@ it on every platform, and CI's Windows install test runs it.
   `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
   `settings` (the game's settings over its page, outside the `BigPicture` key context so
   keys reach their controls; Escape returns to the page),
-  `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  `overlay` (quick menu, uninstall question), `system` (the power actions), `tile`
+  (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
   focus and build only the items near the view, so nothing animates once the focus

@@ -35,6 +35,7 @@ pub mod ludusavi;
 pub mod mods;
 mod network;
 pub mod play_status;
+pub mod power;
 mod programs;
 pub mod related;
 pub mod renodx;
@@ -86,6 +87,7 @@ pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use renodx::{RenodxChoice, RenodxStatus};
+pub use power::{Permission, PowerAction, PowerSystem};
 pub use replay::{Recorder, ReplayInfo, ShortcutState};
 pub use reshade::{ReshadeStatus, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
@@ -137,6 +139,11 @@ pub struct Inner {
     files: Mutex<files::FilesState>,
     files_wake: Notify,
     running: Mutex<BTreeMap<irori_core::GameId, games::RunningGame>>,
+    /// Game sessions running or still ending (saves, mods), which powering
+    /// off waits for ([`power::OpenSession`]).
+    open_sessions: tokio::sync::watch::Sender<usize>,
+    /// What powers the computer off ([`power`]).
+    power_system: RwLock<Arc<dyn power::PowerSystem>>,
     updates: RwLock<Arc<std::collections::HashSet<irori_core::GameId>>>,
     /// Stores whose last update check failed; their earlier answer stands.
     update_check_failed: RwLock<Vec<Runner>>,
@@ -232,6 +239,8 @@ impl Backend {
             files: Mutex::new(files::FilesState::default()),
             files_wake: Notify::new(),
             running: Mutex::new(BTreeMap::new()),
+            open_sessions: tokio::sync::watch::Sender::new(0),
+            power_system: RwLock::new(Arc::new(power::ThisSystem)),
             updates: RwLock::new(Arc::default()),
             update_check_failed: RwLock::new(Vec::new()),
             components: updates::ComponentUpdates::load(),

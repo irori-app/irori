@@ -280,7 +280,9 @@ impl BigPictureView {
             ];
         }
         match &self.overlay {
-            Some(Overlay::Uninstall { .. } | Overlay::DeleteTheme { .. }) => {
+            Some(
+                Overlay::Uninstall { .. } | Overlay::DeleteTheme { .. } | Overlay::Power { .. },
+            ) => {
                 return vec![
                     one(Confirm, "bigpicture.hint.select"),
                     one(Back, "bigpicture.hint.cancel"),

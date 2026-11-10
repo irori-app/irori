@@ -13,7 +13,9 @@ use irori_core::{
     BIG_PICTURE_SCALES, GameId, GameInfo, InstallInfo, InstallPlatform, InstallRequest, Runner,
     StatusKind,
 };
-use irori_services::{CategoryIndex, CategoryRef, LibrarySnapshot, PlayStatus, UserData};
+use irori_services::{
+    CategoryIndex, CategoryRef, LibrarySnapshot, PlayStatus, PowerAction, UserData,
+};
 use irori_ui::i18n::{t, t_args};
 
 use crate::layout::HomeLayout;
@@ -685,6 +687,8 @@ pub enum MenuItem {
     SetUpEmulation,
     ExitBigPicture,
     QuitIrori,
+    /// Powers off, restarts, sleeps or logs out, after asking.
+    Power(PowerAction),
 }
 
 impl MenuItem {
@@ -711,6 +715,7 @@ impl MenuItem {
             MenuItem::SetUpEmulation => "bigpicture.menu.set_up_emulation",
             MenuItem::ExitBigPicture => "bigpicture.exit",
             MenuItem::QuitIrori => "bigpicture.menu.quit",
+            MenuItem::Power(action) => power_label(action),
         })
     }
 
@@ -725,6 +730,10 @@ impl MenuItem {
             MenuItem::SetUpEmulation => IconName::Joystick,
             MenuItem::ExitBigPicture => IconName::LogOut,
             MenuItem::QuitIrori => IconName::Power,
+            MenuItem::Power(PowerAction::PowerOff) => IconName::PowerOff,
+            MenuItem::Power(PowerAction::Restart) => IconName::RotateCcw,
+            MenuItem::Power(PowerAction::Sleep) => IconName::Moon,
+            MenuItem::Power(PowerAction::LogOut) => IconName::DoorOpen,
         }
     }
 
@@ -739,19 +748,36 @@ impl MenuItem {
             MenuItem::SetUpEmulation => "bp-menu-emulation",
             MenuItem::ExitBigPicture => "bp-menu-exit",
             MenuItem::QuitIrori => "bp-menu-quit",
+            MenuItem::Power(PowerAction::PowerOff) => "bp-menu-power-off",
+            MenuItem::Power(PowerAction::Restart) => "bp-menu-restart",
+            MenuItem::Power(PowerAction::Sleep) => "bp-menu-sleep",
+            MenuItem::Power(PowerAction::LogOut) => "bp-menu-log-out",
         }
     }
 }
 
+/// The catalog key naming a power action, on its menu entry and its
+/// confirmation's button.
+pub fn power_label(action: PowerAction) -> &'static str {
+    match action {
+        PowerAction::PowerOff => "bigpicture.menu.power_off",
+        PowerAction::Restart => "bigpicture.menu.restart",
+        PowerAction::Sleep => "bigpicture.menu.sleep",
+        PowerAction::LogOut => "bigpicture.menu.log_out",
+    }
+}
+
 /// Quick menu entries given the download queue state, the interface size
-/// in percent and Home's layout.
+/// in percent, Home's layout and the power actions the system allows (last,
+/// after leaving Big Picture and quitting Irori).
 pub fn menu_items(
     has_downloads: bool,
     paused: bool,
     scale: u32,
     layout: HomeLayout,
+    power: &[PowerAction],
 ) -> Vec<MenuItem> {
-    let mut out = Vec::with_capacity(9);
+    let mut out = Vec::with_capacity(9 + power.len());
     if has_downloads {
         out.push(if paused {
             MenuItem::ResumeDownloads
@@ -768,6 +794,7 @@ pub fn menu_items(
         MenuItem::ExitBigPicture,
         MenuItem::QuitIrori,
     ]);
+    out.extend(power.iter().copied().map(MenuItem::Power));
     out
 }
 
@@ -1334,21 +1361,51 @@ mod tests {
     #[test]
     fn menu_offers_download_control_only_with_downloads() {
         assert_eq!(
-            menu_items(false, false, 100, HomeLayout::Shelves)[0],
+            menu_items(false, false, 100, HomeLayout::Shelves, &[])[0],
             MenuItem::InterfaceSize(100)
         );
         assert_eq!(
-            menu_items(true, false, 100, HomeLayout::Shelves)[0],
+            menu_items(true, false, 100, HomeLayout::Shelves, &[])[0],
             MenuItem::PauseDownloads
         );
         assert_eq!(
-            menu_items(true, true, 150, HomeLayout::Shelves)[0],
+            menu_items(true, true, 150, HomeLayout::Shelves, &[])[0],
             MenuItem::ResumeDownloads
         );
-        let items = menu_items(true, true, 150, HomeLayout::Wall);
+        let items = menu_items(true, true, 150, HomeLayout::Wall, &[]);
         assert_eq!(items[1], MenuItem::InterfaceSize(150));
         assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
         assert_eq!(items[3], MenuItem::Themes);
+        assert_eq!(items.last(), Some(&MenuItem::QuitIrori));
+    }
+
+    #[test]
+    fn menu_offers_the_power_actions_the_system_allows_last() {
+        let items = menu_items(
+            false,
+            false,
+            100,
+            HomeLayout::Shelves,
+            &[PowerAction::PowerOff, PowerAction::Sleep],
+        );
+        let quit = items
+            .iter()
+            .position(|i| *i == MenuItem::QuitIrori)
+            .unwrap();
+        assert_eq!(
+            items[quit + 1..],
+            [
+                MenuItem::Power(PowerAction::PowerOff),
+                MenuItem::Power(PowerAction::Sleep)
+            ]
+        );
+        let none = menu_items(false, false, 100, HomeLayout::Shelves, &[]);
+        assert!(!none.iter().any(|i| matches!(i, MenuItem::Power(_))));
+        let ids: std::collections::HashSet<_> = PowerAction::ALL
+            .map(|a| MenuItem::Power(a).id())
+            .into_iter()
+            .collect();
+        assert_eq!(ids.len(), 4, "every entry has its own id");
     }
 
     #[test]

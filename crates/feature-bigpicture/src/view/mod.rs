@@ -14,7 +14,8 @@
 //! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
 //! page), `log` (its log panel) and `settings` (its settings), `overlay`
 //! (quick menu and confirmations), `editor` (the theme editor), `tile`
-//! (covers) and `commands` (what the backend runs). `look` holds the theme
+//! (covers), `commands` (what the backend runs) and `system` (the computer's
+//! power actions). `look` holds the theme
 //! and layout in use and the colours they give.
 
 mod backdrop;
@@ -32,6 +33,7 @@ mod overlay;
 mod page;
 mod settings;
 mod spotlight;
+mod system;
 mod tile;
 mod wall;
 
@@ -121,6 +123,11 @@ enum Overlay {
         id: String,
         choice: usize,
     },
+    /// "Power off this computer?" and the like, the same way.
+    Power {
+        action: irori_services::PowerAction,
+        choice: usize,
+    },
 }
 
 /// Where the Library tab's focus is.
@@ -173,6 +180,10 @@ pub struct BigPictureView {
     /// The cover under the mouse (its element id), which shows its button.
     hovered_cover: Option<SharedString>,
     pending: HashSet<GameId>,
+    /// The power actions the system allows, asked when the menu opens.
+    power: Vec<irori_services::PowerAction>,
+    /// The power action under way (games stopping first).
+    power_pending: Option<irori_services::PowerAction>,
     image_cache: Entity<LruImageCache>,
     /// The game whose art is behind everything, the one it replaced (fading
     /// out), and a counter that restarts the crossfade.
@@ -307,6 +318,8 @@ impl BigPictureView {
             show_options: None,
             show_option_computes: 0,
             pending: HashSet::new(),
+            power: Vec::new(),
+            power_pending: None,
             image_cache: LruImageCache::new(IMAGE_CACHE, cx),
             hero: None,
             hero_prev: None,
@@ -317,6 +330,7 @@ impl BigPictureView {
             _subscriptions: subscriptions,
         };
         this.load_user_themes(window, cx);
+        this.refresh_power(cx);
         this.refresh(cx);
         this.show_requested_game(cx);
         this.hero = this.focused_game().cloned();
@@ -527,8 +541,7 @@ impl BigPictureView {
         } else if self.look.editor.is_some() {
             self.editor_input(input, window, cx);
         } else if input == GamepadInput::Menu {
-            self.overlay = Some(Overlay::Menu { ix: 0 });
-            cx.notify();
+            self.open_menu(cx);
         } else if self.page.is_some() {
             self.page_input(input, window, cx);
         } else if matches!(input, GamepadInput::PrevPage | GamepadInput::NextPage) {
@@ -546,6 +559,13 @@ impl BigPictureView {
                 Tab::Library => self.library_input(input, window, cx),
             }
         }
+    }
+
+    /// Open the quick menu, asking again what the system allows.
+    fn open_menu(&mut self, cx: &mut Context<Self>) {
+        self.overlay = Some(Overlay::Menu { ix: 0 });
+        self.refresh_power(cx);
+        cx.notify();
     }
 
     fn set_tab(&mut self, tab: Tab, cx: &mut Context<Self>) {
@@ -793,6 +813,27 @@ impl BigPictureView {
         cx: &mut Context<Self>,
     ) {
         match overlay {
+            Overlay::Power { action, choice } => match input {
+                GamepadInput::Up
+                | GamepadInput::Down
+                | GamepadInput::Left
+                | GamepadInput::Right => {
+                    self.overlay = Some(Overlay::Power {
+                        action,
+                        choice: 1 - choice.min(1),
+                    });
+                }
+                GamepadInput::Confirm | GamepadInput::Alt => {
+                    if choice == 1 {
+                        // The question stays, busy, until the games stopped.
+                        self.power(action, window, cx);
+                    } else {
+                        self.overlay = None;
+                    }
+                }
+                GamepadInput::Back | GamepadInput::Menu => self.overlay = None,
+                _ => {}
+            },
             Overlay::DeleteTheme { id, choice } => match input {
                 GamepadInput::Up
                 | GamepadInput::Down

@@ -65,6 +65,10 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WinSock",
     "Win32_System_LibraryLoader",
     "Win32_System_Power",
+    # Big Picture's power menu: the shutdown privilege and `ExitWindowsEx`.
+    "Win32_Security",
+    "Win32_System_Shutdown",
+    "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
 # The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI
