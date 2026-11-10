@@ -426,3 +426,33 @@ async fn nothing_listening_is_not_an_error_of_its_own() {
     drop(listener);
     assert!(devtools::list(port).await.unwrap().is_none());
 }
+
+/// Another program holding Steam's debugging port is told apart from
+/// Steam, however it answers, so the user hears why and what helps.
+#[tokio::test]
+async fn another_program_on_the_port_is_not_steam() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let answers: [&[u8]; 4] = [
+        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>Router</html>",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n[]\r\n0\r\n\r\n",
+        b"SSH-2.0-OpenSSH_9.6\r\n",
+    ];
+    for answer in answers {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 4096];
+            let _ = socket.read(&mut buf).await;
+            let _ = socket.write_all(answer).await;
+        });
+        let e = read_port(port).await.unwrap_err();
+        assert_eq!(
+            e.downcast_ref::<ClientLibraryError>(),
+            Some(&ClientLibraryError::NotSteam { port }),
+            "{}: {e:#}",
+            String::from_utf8_lossy(answer)
+        );
+    }
+}

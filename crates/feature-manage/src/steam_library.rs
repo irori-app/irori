@@ -216,6 +216,7 @@ fn start(mode: ClientLibraryMode, restart: bool, window: &mut Window, cx: &mut A
                     Some(ClientLibraryError::DebuggingOff { millennium: false }) if !restart => {
                         ask_to_restart(mode, window, cx)
                     }
+                    Some(kind) if offers_sign_in(kind) => offer_sign_in(kind, window, cx),
                     Some(kind) => notify_error(
                         t("manage.steam_library.read_failed"),
                         &anyhow::anyhow!(error_text(kind)),
@@ -228,6 +229,38 @@ fn start(mode: ClientLibraryMode, restart: bool, window: &mut Window, cx: &mut A
         });
     })
     .detach();
+}
+
+/// Whether the client can't be read for a reason restarting Steam doesn't
+/// fix (another program holds the port), so signing in to Steam in Irori,
+/// which needs no port, is the way to the whole library.
+pub(crate) fn offers_sign_in(error: &ClientLibraryError) -> bool {
+    matches!(error, ClientLibraryError::NotSteam { .. })
+}
+
+/// Explain why the client can't be read and offer Steam's own sign-in (a
+/// QR code the Steam Mobile App scans) instead.
+fn offer_sign_in(error: &ClientLibraryError, window: &mut Window, cx: &mut App) {
+    let reason = error_text(error);
+    window.open_alert_dialog(cx, move |alert, _, _| {
+        alert
+            .title(t("manage.steam_library.sign_in_instead.title"))
+            .description(format!(
+                "{reason} {}",
+                t("manage.steam_library.sign_in_instead.description")
+            ))
+            .show_cancel(true)
+            .cancel_text(t("manage.steam_library.dialog.cancel"))
+            .ok_text(t("manage.steam_library.sign_in_instead.ok"))
+            .on_ok(|_, window, cx| {
+                // The dialog is still open here; open the sign-in once it
+                // has closed.
+                window.defer(cx, |window, cx| {
+                    crate::login::open_login_dialog(irori_core::Runner::Steam, window, cx)
+                });
+                true
+            })
+    });
 }
 
 /// Steam runs without remote debugging: ask before restarting it.
@@ -453,6 +486,21 @@ mod tests {
             assert!(!error_text(&e).starts_with("manage."), "{e:?}");
         }
         assert!(error_text(&ClientLibraryError::NotSteam { port: 8080 }).contains("8080"));
+    }
+
+    #[test]
+    fn offers_the_qr_sign_in_when_the_port_is_taken() {
+        assert!(offers_sign_in(&ClientLibraryError::NotSteam { port: 8080 }));
+        // Restarting Steam, waiting or Millennium's settings help there.
+        for e in [
+            ClientLibraryError::NotRunning,
+            ClientLibraryError::DebuggingOff { millennium: false },
+            ClientLibraryError::DebuggingOff { millennium: true },
+            ClientLibraryError::Starting,
+            ClientLibraryError::SteamSession,
+        ] {
+            assert!(!offers_sign_in(&e), "{e:?}");
+        }
     }
 
     #[test]

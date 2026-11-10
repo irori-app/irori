@@ -199,7 +199,9 @@ fn is_loopback_ws(address: &str, port: u16) -> bool {
     url.scheme() == "ws" && loopback && url.port() == Some(port)
 }
 
-/// The page list of the endpoint on `port`. `None` when nothing listens.
+/// The page list of the endpoint on `port`. `None` when nothing listens;
+/// [`ClientLibraryError::NotSteam`] when what answers isn't a DevTools
+/// endpoint (another program holds the port).
 pub(crate) async fn list(port: u16) -> Result<Option<String>> {
     match tokio::time::timeout(REQUEST_TIMEOUT, get(port, "/json")).await {
         Ok(Ok(body)) => Ok(Some(body)),
@@ -220,7 +222,8 @@ pub(crate) async fn list(port: u16) -> Result<Option<String>> {
 }
 
 /// A plain HTTP GET of `path` on `127.0.0.1:port`, written by hand so no
-/// proxy setting can send it anywhere else.
+/// proxy setting can send it anywhere else. An answer that isn't a plain
+/// HTTP 200, as Steam gives, means another program holds the port.
 async fn get(port: u16, path: &str) -> Result<String> {
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await?;
     let request =
@@ -231,11 +234,13 @@ async fn get(port: u16, path: &str) -> Result<String> {
         .take(MAX_LIST_BYTES as u64 + 1)
         .read_to_end(&mut raw)
         .await?;
-    anyhow::ensure!(
-        raw.len() <= MAX_LIST_BYTES,
-        "Steam's page list is too large"
-    );
-    parse_response(&raw)
+    if raw.len() > MAX_LIST_BYTES {
+        return Err(ClientLibraryError::NotSteam { port }.into());
+    }
+    parse_response(&raw).map_err(|e| {
+        tracing::debug!("port {port} doesn't answer like Steam: {e:#}");
+        ClientLibraryError::NotSteam { port }.into()
+    })
 }
 
 /// The body of an HTTP response with status 200.

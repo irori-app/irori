@@ -1360,6 +1360,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   only a file it created (Decky Loader relies on its own), restarts Steam only after
   asking and never in Game Mode, and logs counts only. The expression must stay read-only
   (a test guards it); an unknown client shape answers `Unsupported`, never an exception.
+  Anything on the port that isn't Steam's page list (a web server's 404 or page, another
+  protocol, a chunked answer) is `ClientLibraryError::NotSteam`: restarting Steam can't
+  free the port, so the Steam card offers the QR sign-in instead
+  (`steam_library::offers_sign_in`).
 - **Hidden games** (`hidden.rs`): games hidden in Steam stay in the library with
   `GameInfo::store_hidden` set, which `UserDataService` turns into Irori's own hidden flag
   once (`store_hidden_imported`): the user's own choice in Irori wins, and unhiding a game in
