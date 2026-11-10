@@ -1,6 +1,7 @@
 //! Launcher-owned per-user library data: favourites, hidden games, recently
-//! played, custom categories, playtime, play statuses, backlog goals,
-//! title/art overrides and the play journal.
+//! played, custom categories (manual and smart, with their pins and
+//! colours), playtime, play statuses, backlog goals, title/art overrides and
+//! the play journal.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::journal::{self, Journal, JournalEntry};
 use crate::play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+use crate::smart_categories::{CategoryLook, CategoryRef, SmartCategory};
 
 /// Persisted shape. Game keys are `GameId::key()` strings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -44,6 +46,13 @@ pub struct UserData {
     /// The user's notes, per game and day played.
     #[serde(default)]
     pub journal: Journal,
+    /// Categories filled from rules, by id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub smart_categories: BTreeMap<String, SmartCategory>,
+    /// Pin and colour of manual categories, by name. Smart categories keep
+    /// theirs in themselves.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub category_looks: BTreeMap<String, CategoryLook>,
 }
 
 /// Store `o` as the overrides of `key`, or none when it is empty.
@@ -108,6 +117,48 @@ impl UserData {
             }
             None => EffectiveStatus::NotPlayed,
         }
+    }
+
+    /// The name of a category of either kind, while it exists.
+    pub fn category_name(&self, category: &CategoryRef) -> Option<&str> {
+        match category {
+            CategoryRef::Manual(name) => {
+                self.categories.get_key_value(name).map(|(n, _)| n.as_str())
+            }
+            CategoryRef::Smart(id) => self.smart_categories.get(id).map(|c| c.name.as_str()),
+        }
+    }
+
+    /// The pin and colour of a category of either kind.
+    pub fn category_look(&self, category: &CategoryRef) -> CategoryLook {
+        match category {
+            CategoryRef::Manual(name) => self.category_looks.get(name).cloned(),
+            CategoryRef::Smart(id) => self.smart_categories.get(id).map(|c| c.look.clone()),
+        }
+        .unwrap_or_default()
+    }
+
+    /// Every category of both kinds with its name: pinned ones first, then
+    /// by name (ignoring case), the kinds mixed.
+    pub fn categories_in_order(&self) -> Vec<(CategoryRef, String)> {
+        let mut all: Vec<(CategoryRef, String)> = self
+            .categories
+            .keys()
+            .map(|n| (CategoryRef::Manual(n.clone()), n.clone()))
+            .chain(
+                self.smart_categories
+                    .iter()
+                    .map(|(id, c)| (CategoryRef::Smart(id.clone()), c.name.clone())),
+            )
+            .collect();
+        all.sort_by_cached_key(|(r, name)| {
+            (
+                !self.category_look(r).pinned,
+                name.to_lowercase(),
+                r.clone(),
+            )
+        });
+        all
     }
 
     /// The user's note on a game for one day, if they wrote one.
@@ -278,6 +329,45 @@ fn later_last_played(
         .collect();
     later.sort();
     later
+}
+
+/// Rename manual category `from` to `to`, merging into `to` when it exists,
+/// and follow it in its look and in smart categories' rules.
+fn rename_category(d: &mut UserData, from: &str, to: &str) {
+    let Some(set) = d.categories.remove(from) else {
+        return;
+    };
+    d.categories.entry(to.to_string()).or_default().extend(set);
+    if let Some(look) = d.category_looks.remove(from) {
+        d.category_looks.entry(to.to_string()).or_insert(look);
+    }
+    for smart in d.smart_categories.values_mut() {
+        smart.rename_category(from, to);
+    }
+}
+
+/// Set a category's look; false when it doesn't exist or nothing changed.
+fn set_look(d: &mut UserData, category: &CategoryRef, look: CategoryLook) -> bool {
+    match category {
+        CategoryRef::Manual(name) => {
+            if !d.categories.contains_key(name) || d.category_look(category) == look {
+                return false;
+            }
+            if look.is_empty() {
+                d.category_looks.remove(name);
+            } else {
+                d.category_looks.insert(name.clone(), look);
+            }
+            true
+        }
+        CategoryRef::Smart(id) => match d.smart_categories.get_mut(id) {
+            Some(smart) if smart.look != look => {
+                *smart = smart.with_look(look);
+                true
+            }
+            _ => false,
+        },
+    }
 }
 
 fn rate(d: &mut UserData, key: String, stars: Option<u8>) {
@@ -487,17 +577,34 @@ impl UserDataService {
         if to.is_empty() || from == to {
             return;
         }
-        self.update(None, |d| {
-            if let Some(set) = d.categories.remove(from) {
-                d.categories.entry(to.to_string()).or_default().extend(set);
-            }
-        });
+        self.update(None, |d| rename_category(d, from, to));
     }
 
     pub fn delete_category(&self, name: &str) {
         self.update(None, |d| {
             d.categories.remove(name);
+            d.category_looks.remove(name);
         });
+    }
+
+    /// Save a smart category: a new one with `id` `None` (its id is
+    /// returned), else the one of `id` replaced.
+    pub fn save_smart_category(&self, id: Option<&str>, category: SmartCategory) -> String {
+        let id = id.map_or_else(crate::smart_categories::new_id, str::to_owned);
+        let key = id.clone();
+        self.update(None, move |d| {
+            d.smart_categories.insert(key, category);
+        });
+        id
+    }
+
+    pub fn delete_smart_category(&self, id: &str) {
+        self.update_if(None, |d| d.smart_categories.remove(id).is_some());
+    }
+
+    /// Pin, unpin or colour a category of either kind.
+    pub fn set_category_look(&self, category: &CategoryRef, look: CategoryLook) {
+        self.update_if(None, |d| set_look(d, category, look));
     }
 
     /// Set a game's play status, or clear it with `None`.
@@ -1033,5 +1140,72 @@ mod tests {
         let plan = LibrarySync::plan(&data, &[game("1", false)]);
         assert!(plan.unhide.is_empty());
         assert!(data.hidden.contains("gog:1"));
+    }
+
+    #[test]
+    fn category_looks_follow_renames_and_order_pinned_categories_first() {
+        use crate::smart_categories::{Match, Rule};
+        let mut d = UserData::default();
+        d.categories.insert("RPG".into(), BTreeSet::new());
+        d.categories.insert("Arcade".into(), BTreeSet::new());
+        let smart = SmartCategory::new(
+            "Big RPGs",
+            Match::All,
+            vec![Rule::Category {
+                names: ["RPG".to_string()].into(),
+            }],
+            vec![],
+        );
+        d.smart_categories.insert("s-1".into(), smart);
+        let pinned = CategoryLook {
+            pinned: true,
+            colour: Some("green".into()),
+            ..Default::default()
+        };
+        assert!(set_look(
+            &mut d,
+            &CategoryRef::Manual("RPG".into()),
+            pinned.clone()
+        ));
+        assert!(!set_look(
+            &mut d,
+            &CategoryRef::Manual("RPG".into()),
+            pinned.clone()
+        ));
+        assert!(!set_look(
+            &mut d,
+            &CategoryRef::Manual("Gone".into()),
+            pinned.clone()
+        ));
+        assert!(set_look(
+            &mut d,
+            &CategoryRef::Smart("s-1".into()),
+            pinned.clone()
+        ));
+        let order: Vec<String> = d
+            .categories_in_order()
+            .into_iter()
+            .map(|(_, n)| n)
+            .collect();
+        assert_eq!(order, ["Big RPGs", "RPG", "Arcade"]);
+
+        rename_category(&mut d, "RPG", "Role-playing");
+        assert_eq!(d.category_looks["Role-playing"], pinned);
+        assert!(!d.category_looks.contains_key("RPG"));
+        assert_eq!(
+            d.smart_categories["s-1"].rules[0].rule,
+            Some(Rule::Category {
+                names: ["Role-playing".to_string()].into()
+            })
+        );
+        // Taking the look off removes the entry.
+        let manual = CategoryRef::Manual("Role-playing".into());
+        assert!(set_look(&mut d, &manual, CategoryLook::default()));
+        assert!(d.category_looks.is_empty());
+        assert_eq!(d.category_name(&manual), Some("Role-playing"));
+        assert_eq!(
+            d.category_name(&CategoryRef::Smart("s-1".into())),
+            Some("Big RPGs")
+        );
     }
 }

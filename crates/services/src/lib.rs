@@ -41,6 +41,7 @@ pub mod scripts;
 pub mod search;
 pub mod sessions;
 pub mod settings;
+pub mod smart_categories;
 pub mod status;
 mod steam_tags;
 pub mod storage;
@@ -85,6 +86,9 @@ pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
 pub use settings::SettingsService;
+pub use smart_categories::{
+    CategoryIndex, CategoryLook, CategoryRef, Condition, HltbTimes, Match, Rule, SmartCategory,
+};
 pub use status::StatusRegistry;
 pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{

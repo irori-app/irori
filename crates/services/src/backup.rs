@@ -63,6 +63,12 @@ pub struct LibraryBackup {
     pub backlog_goals: BTreeMap<i32, u32>,
     pub ratings: BTreeMap<String, u8>,
     pub journal: Journal,
+    /// Categories filled from rules, by id.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub smart_categories: BTreeMap<String, crate::SmartCategory>,
+    /// Pins and colours of manual categories.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub category_looks: BTreeMap<String, crate::CategoryLook>,
 }
 
 /// Playtime totals and the session history.
@@ -194,6 +200,8 @@ impl Backend {
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
+                smart_categories: user.smart_categories.clone(),
+                category_looks: user.category_looks.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
@@ -277,7 +285,7 @@ impl Backend {
             let before = self.userdata.snapshot().favourites.len();
             self.userdata.update(None, |d| merge_library(d, lib));
             summary.favourites_added = self.userdata.snapshot().favourites.len() - before;
-            summary.categories = lib.categories.len();
+            summary.categories = lib.categories.len() + lib.smart_categories.len();
         }
         if parts.playtime
             && let Some(pt) = &backup.playtime
@@ -365,7 +373,8 @@ impl Backend {
 /// the backup replace the current ones of the same game. A play status is
 /// taken when it was set later than the current one, and a goal only for a
 /// year without one. A day's journal note is taken when it was written later
-/// than the current one.
+/// than the current one. Smart categories and the looks of manual ones come
+/// back where none of that id or name is left; ones edited since are kept.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
     d.hidden.extend(lib.hidden.iter().cloned());
@@ -399,6 +408,18 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
         }
     }
     crate::journal::merge(&mut d.journal, &lib.journal);
+    for (id, smart) in &lib.smart_categories {
+        d.smart_categories
+            .entry(id.clone())
+            .or_insert_with(|| smart.clone());
+    }
+    for (name, look) in &lib.category_looks {
+        if d.categories.contains_key(name) {
+            d.category_looks
+                .entry(name.clone())
+                .or_insert_with(|| look.clone());
+        }
+    }
 }
 
 /// Whether RFC 3339 time `a` is after `b`; unreadable times are never later.
@@ -533,6 +554,50 @@ mod tests {
         assert_eq!(d.overrides["gog:1"].title.as_deref(), Some("Mine"));
         assert_eq!(d.ratings["gog:1"], 4);
         assert_eq!(d.ratings["gog:2"], crate::userdata::MAX_RATING);
+    }
+
+    #[test]
+    fn smart_categories_and_looks_survive_a_backup_and_restore() {
+        let smart: crate::SmartCategory = serde_json::from_str(
+            r#"{"name": "Short", "match": "any", "colour": "blue",
+                "rules": [{"rule": "hltb", "maxHours": 8},
+                          {"rule": "moonPhase", "phase": "full"}],
+                "leaveOut": [], "sharedWith": ["friend"]}"#,
+        )
+        .unwrap();
+        let mut user = crate::UserData::default();
+        user.categories.insert("RPG".into(), BTreeSet::new());
+        user.smart_categories.insert("s-1".into(), smart.clone());
+        let look = crate::CategoryLook {
+            pinned: true,
+            ..Default::default()
+        };
+        user.category_looks.insert("RPG".into(), look.clone());
+        let lib = LibraryBackup {
+            categories: user.categories.clone(),
+            smart_categories: user.smart_categories.clone(),
+            category_looks: user.category_looks.clone(),
+            ..Default::default()
+        };
+        let text = serde_json::to_string(&lib).unwrap();
+        let back: LibraryBackup = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, lib);
+
+        let mut d = crate::UserData::default();
+        // One edited since the backup stays as it is now.
+        let mut edited = smart.clone();
+        edited.name = "Shorter".into();
+        d.smart_categories.insert("s-1".into(), edited.clone());
+        merge_library(&mut d, &back);
+        assert_eq!(d.smart_categories["s-1"], edited);
+        assert_eq!(d.category_looks["RPG"], look);
+
+        let mut d = crate::UserData::default();
+        merge_library(&mut d, &back);
+        assert_eq!(d.smart_categories["s-1"], smart);
+        let again = serde_json::to_value(&d.smart_categories["s-1"]).unwrap();
+        assert_eq!(again["sharedWith"][0], "friend");
+        assert_eq!(again["rules"][1]["phase"], "full");
     }
 
     #[test]

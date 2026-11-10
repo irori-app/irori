@@ -1,5 +1,5 @@
-//! Facts learned from store pages and PCGamingWiki: age ratings and game
-//! modes. Steam's and GOG's store pages and the wiki page are read only
+//! Facts learned from store pages, PCGamingWiki and HowLongToBeat: age
+//! ratings, game modes and main-story times. Steam's and GOG's store pages and the wiki page are read only
 //! when a game's page opens; what they say is kept here, in
 //! `<cache>/store-facts.json`, so the library can filter by it afterwards
 //! without asking anyone again in the background. Facts a store's own
@@ -17,7 +17,7 @@ use irori_extras::wiki::{self, StoreIds, WikiInfo};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::Backend;
+use crate::{Backend, HltbTimes};
 
 /// What is known of one game.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,11 +38,24 @@ pub struct Learned {
         deserialize_with = "game_mode::lenient"
     )]
     pub wiki_modes: Vec<GameMode>,
+    /// HowLongToBeat's main-story time in hours, for smart categories.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hltb_main_hours: Option<u32>,
 }
 
 pub struct StoreFactsService {
     /// Facts by game key (`runner:app`).
     known: RwLock<HashMap<String, Learned>>,
+    /// The main-story times of `known` alone, so rules read one number per
+    /// game instead of a whole wiki entry.
+    hltb: RwLock<HltbTimes>,
+}
+
+fn hltb_of(known: &HashMap<String, Learned>) -> HashMap<String, u32> {
+    known
+        .iter()
+        .filter_map(|(key, l)| Some((key.clone(), l.hltb_main_hours?)))
+        .collect()
 }
 
 fn file() -> PathBuf {
@@ -73,9 +86,20 @@ fn load_known() -> HashMap<String, Learned> {
 
 impl StoreFactsService {
     pub fn load() -> Self {
+        let known = load_known();
+        let hltb = HltbTimes {
+            revision: 0,
+            hours: Arc::new(hltb_of(&known)),
+        };
         Self {
-            known: RwLock::new(load_known()),
+            known: RwLock::new(known),
+            hltb: RwLock::new(hltb),
         }
+    }
+
+    /// The HowLongToBeat main-story times known so far.
+    pub fn hltb_times(&self) -> HltbTimes {
+        self.hltb.read().clone()
     }
 
     /// Add what was learned to a library entry: ratings of boards its own
@@ -107,7 +131,15 @@ impl StoreFactsService {
             if after == before {
                 return false;
             }
+            let hltb_changed = after.hltb_main_hours != before.hltb_main_hours;
             known.insert(key, after);
+            if hltb_changed {
+                let mut hltb = self.hltb.write();
+                *hltb = HltbTimes {
+                    revision: hltb.revision + 1,
+                    hours: Arc::new(hltb_of(&known)),
+                };
+            }
             known.clone()
         };
         if let Err(e) = json_store::write(&file(), &snapshot) {
@@ -130,6 +162,17 @@ impl StoreFactsService {
                 l.game_modes = game_mode::normalized(modes.to_vec());
             }
         })
+    }
+
+    /// Remember HowLongToBeat's main-story time: `None` keeps what was known
+    /// (the site may just have been out of reach), unless the user chose
+    /// no match (`cleared`).
+    fn learn_hltb(&self, key: String, hours: Option<u32>, cleared: bool) -> bool {
+        let hours = hours.filter(|h| *h > 0);
+        if hours.is_none() && !cleared {
+            return false;
+        }
+        self.learn(key, |l| l.hltb_main_hours = hours)
     }
 
     /// Remember the game modes PCGamingWiki names.
@@ -173,10 +216,21 @@ impl Backend {
             .as_ref()
             .map(|p| p.game_modes.as_slice())
             .unwrap_or_default();
-        if self.store_facts.learn_wiki(game.id().key(), modes) {
+        let learned_modes = self.store_facts.learn_wiki(game.id().key(), modes);
+        let main_story = info.howlongtobeat.as_ref().map(|h| h.main_story);
+        let no_match = chosen.trim() == "none";
+        let learned_hltb = self
+            .store_facts
+            .learn_hltb(game.id().key(), main_story, no_match);
+        if learned_modes || learned_hltb {
             self.rebuild_library();
         }
         Ok(info)
+    }
+
+    /// HowLongToBeat main-story times known so far, for smart categories.
+    pub fn hltb_times(&self) -> crate::HltbTimes {
+        self.store_facts.hltb_times()
     }
 
     /// HowLongToBeat's games named like `query`, for "Change match".
@@ -209,9 +263,36 @@ mod tests {
     use irori_core::{RatingSystem, Runner};
 
     fn service() -> StoreFactsService {
+        // Learning writes the facts file.
+        crate::tests::isolate_paths();
         StoreFactsService {
             known: RwLock::new(HashMap::new()),
+            hltb: RwLock::new(HltbTimes::default()),
         }
+    }
+
+    #[test]
+    fn main_story_times_are_kept_apart_and_counted_by_revision() {
+        let service = service();
+        let key = "gog:7".to_string();
+        assert!(!service.learn_hltb(key.clone(), None, false));
+        assert!(!service.learn_hltb(key.clone(), Some(0), false));
+        assert!(service.learn_hltb(key.clone(), Some(12), false));
+        let times = service.hltb_times();
+        assert_eq!(times.revision, 1);
+        assert_eq!(times.hours.get(&key), Some(&12));
+        // Out of reach keeps the time; the same time again changes nothing.
+        assert!(!service.learn_hltb(key.clone(), None, false));
+        assert!(!service.learn_hltb(key.clone(), Some(12), false));
+        assert_eq!(service.hltb_times().revision, 1);
+        // Other facts leave the times' revision alone.
+        assert!(service.learn_wiki(key.clone(), &[GameMode::Single]));
+        assert_eq!(service.hltb_times().revision, 1);
+        // Choosing no match forgets the time.
+        assert!(service.learn_hltb(key.clone(), None, true));
+        let times = service.hltb_times();
+        assert_eq!(times.revision, 2);
+        assert!(times.hours.is_empty());
     }
 
     #[test]

@@ -457,6 +457,36 @@ commands without a window.
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store
   playtime merges by keeping the larger total and counts games only, never their DLC.
+- **Categories** (`smart_categories/`): one concept, two kinds, and saved views
+  beside them.
+  - *Manual* categories (`UserData::categories`, name → game keys) hold the games
+    the user puts in them.
+  - *Smart* categories (`UserData::smart_categories`, by an id that survives
+    renames) are filled from rules: store, tags, game mode, play status, age
+    rating, installed, playtime range, last played (local calendar days ago),
+    HowLongToBeat main story, system, manual category, search text, favourite,
+    genre. Rows combine with All or Any, plus "Leave out" rows; an empty All
+    or Any takes every game. An entry is in one when any of its copies is.
+  - Both kinds can be pinned and coloured (`CategoryLook`: in the smart
+    category, else `UserData::category_looks` by name) and are named by a
+    `CategoryRef`. `UserData::categories_in_order` lists both, pinned first.
+  - *Saved views* (`irori-library`'s `views.rs`) are a whole library view
+    (filters, grouping, sort) under a name; a view can become a smart
+    category, never the other way round.
+  - Evaluation (`smart_categories/eval.rs`) is three-valued: a rule, match mode
+    or entry this version can't read is unknown, leaving it out keeps it
+    unknown, and a game whose answer is unknown isn't shown. `CategoryIndex`
+    holds every category's games and counts (hidden games not counted), built
+    once per library revision, user-data change, HowLongToBeat change and day
+    (`IndexKey`), never per frame. HowLongToBeat rules read
+    `Backend::hltb_times` (main-story hours learned with a game's wiki info,
+    kept in `store-facts.json`), never a wiki entry.
+  - Smart categories are read the way they were written: unknown keys stay on
+    the category and on every row (`extra`), unknown rules stay as rows, and an
+    entry that can't be read at all is kept whole. Backups carry both kinds and
+    their looks; sync has one register per smart category and per manual look,
+    compared as read, so a computer that can't read a category never notes it
+    as changed or gone.
 - **Journal** (`journal.rs`): one note per game per local calendar day (optional
   title, text, paths of that day's screenshots), written with
   `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
