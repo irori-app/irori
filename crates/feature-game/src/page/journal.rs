@@ -1,5 +1,5 @@
-//! The play history's Journal view: every day the game was played (and any
-//! day with a note), newest first, with the user's note for it: its title,
+//! The play history's Journal view: today, every day the game was played
+//! and any day with a note, newest first, with the user's note for it: its title,
 //! the start of its text and the screenshots it links. A day without a note
 //! offers to write one. A row opens the note editor on click or Enter; the
 //! rows are virtualized like the timeline's, at fixed heights.
@@ -54,12 +54,22 @@ impl JournalRow {
     }
 }
 
-/// The days played and the days with a note, newest first.
+/// Today, the days played and the days with a note, newest first. Today is
+/// always there, so a game not played yet (or not today) can get a note.
 pub(crate) fn rows(
     timeline: &Timeline,
     notes: Option<&BTreeMap<NaiveDate, JournalEntry>>,
+    today: NaiveDate,
 ) -> Vec<JournalRow> {
     let mut days: BTreeMap<NaiveDate, JournalRow> = BTreeMap::new();
+    days.insert(
+        today,
+        JournalRow {
+            day: today,
+            seconds: 0,
+            entry: None,
+        },
+    );
     for row in &timeline.rows {
         if let TimelineRow::Day(d) = row {
             days.insert(
@@ -230,7 +240,7 @@ mod tests {
         };
         // A note restored for a day the history no longer has.
         let notes = BTreeMap::from([(day(3), note.clone()), (day(1), note.clone())]);
-        let list = rows(&timeline, Some(&notes));
+        let list = rows(&timeline, Some(&notes), day(11));
         let shape: Vec<(u32, u64, bool)> = list
             .iter()
             .map(|r| (r.day.day(), r.seconds, r.entry.is_some()))
@@ -246,6 +256,28 @@ mod tests {
             ..list[1].clone()
         };
         assert_eq!(with_shots.rem(), NOTE_ROW_REM + SHOTS_REM);
-        assert!(rows(&Timeline::default(), None).is_empty());
+    }
+
+    #[test]
+    fn a_game_never_played_offers_todays_note() {
+        let list = rows(&Timeline::default(), None, day(20));
+        assert_eq!(
+            list,
+            [JournalRow {
+                day: day(20),
+                seconds: 0,
+                entry: None,
+            }]
+        );
+        let note = JournalEntry {
+            text: "Bought it".into(),
+            ..Default::default()
+        };
+        let notes = BTreeMap::from([(day(18), note)]);
+        let days: Vec<u32> = rows(&Timeline::default(), Some(&notes), day(20))
+            .iter()
+            .map(|r| r.day.day())
+            .collect();
+        assert_eq!(days, [20, 18]);
     }
 }
