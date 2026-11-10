@@ -75,6 +75,8 @@ enum PaletteTarget {
     LibraryView(LibraryLayout),
     /// Sync a game's cloud saves now.
     SyncSaves(GameId),
+    /// Remove the games picked in the library from it, after asking.
+    RemovePicked,
     /// Back up a game's saves with Ludusavi now.
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
@@ -782,6 +784,18 @@ impl Palette {
             );
             targets.push(PaletteTarget::SyncSaves(game.id()));
         }
+        if let Some(count) = irori_library::removable_picks(cx) {
+            items.push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.remove_picked",
+                        &[("count", &count.to_string())],
+                    ))
+                    .keywords([t("shell.palette.remove_picked_keywords")])
+                    .icon(IconName::ListX),
+            );
+            targets.push(PaletteTarget::RemovePicked);
+        }
         if irori_manage::steam_client_library_state(cx)
             .is_some_and(|s| s.steam_found && !s.signed_in)
         {
@@ -865,6 +879,8 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             window.defer(cx, irori_library::open_save_view_dialog);
         }
         PaletteTarget::SyncSaves(id) => irori_game::sync_saves_now(&id, window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)

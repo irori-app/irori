@@ -1,5 +1,6 @@
 //! Bulk actions on the games picked in selection mode (install, uninstall,
-//! add to Steam, categories, play status, favourite and hide), from a bar
+//! remove from the library, add to Steam, categories, play status, favourite
+//! and hide), from a bar
 //! floating over the library. Edits of library data say what they did in a
 //! notification with an Undo that puts every game back as it was.
 
@@ -31,7 +32,7 @@ use crate::commands::GameState;
 use crate::layouts::{self, Click};
 
 /// Titles listed in the uninstall confirmation before "and N more".
-const LISTED: usize = 8;
+pub(super) const LISTED: usize = 8;
 
 /// What the bulk bar offers for the picked games.
 #[derive(Clone, Default)]
@@ -39,6 +40,8 @@ pub(super) struct BulkSummary {
     count: usize,
     installable: Rc<Vec<Arc<GameInfo>>>,
     removable: Rc<Vec<Arc<GameInfo>>>,
+    /// What "Remove from library" would do with the picks.
+    to_remove: Rc<super::remove::RemovalPlan>,
     for_steam: Rc<Vec<Arc<GameInfo>>>,
     ids: Rc<Vec<GameId>>,
     all_favourite: bool,
@@ -207,6 +210,15 @@ impl LibraryView {
                 && g.third_party_managed_app.is_none()
         });
         let removable = pick(&|_, s| s.installed && !s.external && !s.is_playing() && !s.is_busy());
+        let to_remove = {
+            let busy: std::collections::HashSet<GameId> = picked
+                .iter()
+                .zip(&states)
+                .filter(|(_, s)| s.is_playing() || s.is_busy())
+                .map(|(g, _)| g.id())
+                .collect();
+            Rc::new(super::remove::plan_removal(&picked, |id| busy.contains(id)))
+        };
         let for_steam = pick(&|_, s| !s.browser && !s.external && (s.installed || s.installable));
         let ids: Vec<GameId> = picked.iter().map(|g| g.id()).collect();
         let keys: Vec<String> = ids.iter().map(GameId::key).collect();
@@ -226,6 +238,7 @@ impl LibraryView {
             count: picked.len(),
             installable,
             removable,
+            to_remove,
             for_steam,
             ids: Rc::new(ids),
             all_favourite,
@@ -483,6 +496,7 @@ impl LibraryView {
             count,
             installable,
             removable,
+            to_remove,
             for_steam,
             ids,
             all_favourite,
@@ -525,6 +539,22 @@ impl LibraryView {
                 .disabled(removable.is_empty())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.confirm_uninstall(games.to_vec(), window, cx)
+                }))
+        };
+        let remove = {
+            let plan = to_remove.clone();
+            Button::new("bulk-remove")
+                .small()
+                .outline()
+                .icon(IconName::ListX)
+                .label(t_args(
+                    "library.bulk.remove",
+                    &[("count", &to_remove.remove.len().to_string())],
+                ))
+                .tooltip(t("library.bulk.remove_tooltip"))
+                .disabled(to_remove.remove.is_empty())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.confirm_remove((*plan).clone(), window, cx)
                 }))
         };
         let steam = {
@@ -732,6 +762,7 @@ impl LibraryView {
                         .when(!nothing, |bar| {
                             bar.child(install)
                                 .child(uninstall)
+                                .child(remove)
                                 .child(steam)
                                 .child(steam_remove)
                                 .child(combine)
@@ -762,7 +793,7 @@ impl LibraryView {
 
 /// The `_one` or `_other` key of `keys` for `count`, with `count` and
 /// `args` filled in.
-fn counted(keys: (&str, &str), count: usize, args: &[(&str, &str)]) -> SharedString {
+pub(super) fn counted(keys: (&str, &str), count: usize, args: &[(&str, &str)]) -> SharedString {
     let count_text = count.to_string();
     let mut all: Vec<(&str, &str)> = vec![("count", &count_text)];
     all.extend_from_slice(args);

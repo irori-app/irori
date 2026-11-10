@@ -63,6 +63,7 @@ pub use random::open_random_game;
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
+pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
 /// Requests for actions owned by other features. The shell routes them (for
@@ -100,6 +101,9 @@ gpui_kit::actions!(
         ActivateSelected,
         /// Pick every shown game for bulk actions.
         SelectAllGames,
+        /// Remove the picked games (or the focused one) from the library,
+        /// after asking: added games and ROMs only.
+        RemovePicked,
         /// Leave selection mode.
         EndSelection,
         /// Turn grouping the library by play status on or off.
@@ -158,6 +162,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("space", ActivateSelected, grid),
         KeyBinding::new("ctrl-enter", ActivateSelected, grid),
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
+        KeyBinding::new("delete", RemovePicked, grid),
         KeyBinding::new("escape", EndSelection, grid),
     ]);
 }

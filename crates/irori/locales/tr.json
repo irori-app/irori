@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Hem burada hem de bulutta değişti. Hangilerini koruyacağınızı seçmek için oyunun bulut kayıtlarını açın.",
   "shell.notice.saves_upload_failed_message": "Irori buluta ulaşamadı. Daha sonra oyunun bulut kayıtlarından yükleyin.",
   "shell.notice.ludusavi_backup_failed": "{title} kayıtları tam olarak yedeklenemedi",
+  "shell.palette.remove_picked": "Seçilen oyunları kitaplıktan kaldır ({count})",
+  "shell.palette.remove_picked_keywords": "sil unut eklenen oyunlar romlar seçim",
   "shell.palette.sync_saves": "{title} kayıtlarını eşitle",
   "shell.palette.sync_saves_keywords": "bulut kayıtlar yükle indir",
   "shell.palette.back_up_saves": "{title} kayıtlarını yedekle",

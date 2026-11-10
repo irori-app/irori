@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Elles ont changé ici et dans le cloud. Ouvrez les sauvegardes cloud du jeu pour choisir celles à garder.",
   "shell.notice.saves_upload_failed_message": "Irori n’a pas pu joindre le cloud. Envoyez-les plus tard depuis les sauvegardes cloud du jeu.",
   "shell.notice.ludusavi_backup_failed": "Les sauvegardes de {title} n’ont pas toutes été copiées",
+  "shell.palette.remove_picked": "Retirer les jeux choisis de la bibliothèque ({count})",
+  "shell.palette.remove_picked_keywords": "supprimer oublier jeux ajoutés roms sélection",
   "shell.palette.sync_saves": "Synchroniser les sauvegardes de {title}",
   "shell.palette.sync_saves_keywords": "cloud sauvegardes envoyer télécharger",
   "shell.palette.back_up_saves": "Copier les sauvegardes de {title}",

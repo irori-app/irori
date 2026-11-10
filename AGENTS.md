@@ -525,6 +525,12 @@ commands without a window.
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
   Picture's options, the palette, `visible_sessions` (stats, Year in review),
   `Backend::concealed` (CLI, Discord). New screens that list games must too.
+- **Removing games from the library** (`irori-library` `view/remove.rs`): the bulk bar,
+  a picked game's context menu, the palette and Delete take the picked added games
+  and ROMs out through `Backend::uninstall` after one confirmation; store games,
+  and games running or busy, stay and the result says how many and why. An added
+  game's folder goes only when the user ticks the box (the store checks it with
+  `fs_guard::ensure_deletable`); a ROM is only hidden.
 - **HowLongToBeat** (`irori-extras::wiki::hltb`): GOG's store box, else PCGamingWiki's
   HLTB id, else HLTB's site search (a token from `/api/search/site/init`), taken only
   when a result's folded name is the title (`best_match`). The user's choice

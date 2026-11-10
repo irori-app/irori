@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Sono cambiati qui e nel cloud. Apri i salvataggi cloud del gioco per scegliere quali tenere.",
   "shell.notice.saves_upload_failed_message": "Irori non è riuscito a raggiungere il cloud. Caricali più tardi dai salvataggi cloud del gioco.",
   "shell.notice.ludusavi_backup_failed": "Il backup dei salvataggi di {title} non è completo",
+  "shell.palette.remove_picked": "Rimuovi i giochi scelti dalla libreria ({count})",
+  "shell.palette.remove_picked_keywords": "eliminare dimenticare giochi aggiunti rom selezione",
   "shell.palette.sync_saves": "Sincronizza i salvataggi di {title}",
   "shell.palette.sync_saves_keywords": "cloud salvataggi caricare scaricare",
   "shell.palette.back_up_saves": "Fai il backup dei salvataggi di {title}",

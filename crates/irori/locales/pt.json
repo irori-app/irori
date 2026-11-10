@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Mudaram aqui e na nuvem. Abra as gravações na nuvem do jogo para escolher quais manter.",
   "shell.notice.saves_upload_failed_message": "O Irori não conseguiu contactar a nuvem. Envie-as mais tarde a partir das gravações na nuvem do jogo.",
   "shell.notice.ludusavi_backup_failed": "A cópia dos jogos guardados de {title} não ficou completa",
+  "shell.palette.remove_picked": "Remover os jogos escolhidos da biblioteca ({count})",
+  "shell.palette.remove_picked_keywords": "eliminar esquecer jogos adicionados roms seleção",
   "shell.palette.sync_saves": "Sincronizar gravações de {title}",
   "shell.palette.sync_saves_keywords": "nuvem gravações enviar transferir",
   "shell.palette.back_up_saves": "Fazer cópia dos jogos guardados de {title}",

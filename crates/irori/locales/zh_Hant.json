@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "此處和雲端的存檔都已變更。請開啟遊戲的雲端存檔，選擇要保留的一方。",
   "shell.notice.saves_upload_failed_message": "Irori 無法連線到雲端。請稍後在遊戲的雲端存檔中上傳。",
   "shell.notice.ludusavi_backup_failed": "{title} 的存檔未完整備份",
+  "shell.palette.remove_picked": "從遊戲庫移除所選遊戲（{count}）",
+  "shell.palette.remove_picked_keywords": "刪除 移除 新增的遊戲 ROM 選擇",
   "shell.palette.sync_saves": "同步 {title} 的存檔",
   "shell.palette.sync_saves_keywords": "雲端 存檔 上傳 下載",
   "shell.palette.back_up_saves": "備份 {title} 的存檔",

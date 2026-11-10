@@ -3,6 +3,7 @@
 mod bulk;
 mod panel;
 mod quick;
+pub(crate) mod remove;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -61,9 +62,9 @@ use crate::layouts;
 use crate::top::{TopCache, TopKind};
 use crate::{
     ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
-    NextLibraryView, OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft,
-    SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus, ShowGrid, ShowList,
-    ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
+    NextLibraryView, OpenSelected, RemovePicked, SelectAllGames, SelectDown, SelectFirst,
+    SelectLast, SelectLeft, SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus,
+    ShowGrid, ShowList, ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -228,6 +229,7 @@ impl LibraryView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t("library.search.placeholder")));
         let filters = cx.new(|_| FilterModel::new(filter::load()));
         set_active_filters(&filters, cx);
+        remove::set_active_library(cx.entity().downgrade(), cx);
         // After the saved criteria, so a change asked for before the view
         // existed (a game page's mode chip) wins over them.
         crate::filters_panel::apply_pending(&filters, cx);
@@ -1574,6 +1576,27 @@ fn game_menu(
             }
         }
     }
+    // A picked game's menu removes every picked game it can.
+    let picked_removable = view.upgrade().and_then(|v| {
+        let v = v.read(cx);
+        (v.selection.is_active() && v.selection.contains(&id))
+            .then(|| v.removal_plan(cx).remove.len())
+            .filter(|n| *n > 0)
+    });
+    if let Some(count) = picked_removable {
+        let view = view.clone();
+        menu = menu.separator().item(
+            PopupMenuItem::new(t_args(
+                "library.bulk.remove",
+                &[("count", &count.to_string())],
+            ))
+            .icon(Icon::new(IconName::ListX))
+            .on_click(move |_, window, cx| {
+                view.update(cx, |this, cx| this.remove_picked(window, cx))
+                    .ok();
+            }),
+        );
+    }
     menu
 }
 
@@ -2292,6 +2315,7 @@ impl LibraryView {
             .on_action(cx.listener(|this, _: &OpenSelected, w, cx| this.open_focused(w, cx)))
             .on_action(cx.listener(|this, _: &ToggleDrawer, w, cx| this.toggle_drawer(w, cx)))
             .on_action(cx.listener(|this, _: &SelectAllGames, _, cx| this.select_all(cx)))
+            .on_action(cx.listener(|this, _: &RemovePicked, w, cx| this.remove_picked(w, cx)))
             .on_action(cx.listener(|this, _: &EndSelection, _, cx| this.end_selection(cx)))
             .on_action(
                 cx.listener(|this, _: &ActivateSelected, w, cx| this.activate_focused(w, cx)),

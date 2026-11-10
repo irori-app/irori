@@ -588,6 +588,162 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     assert_eq!(route(cx), irori_ui::Route::Game(game("2")));
 }
 
+/// An added-games or ROM store whose removal of `fails` is refused, and
+/// which records every removal with whether its files were to go.
+struct RemovableStore {
+    runner: Runner,
+    games: Vec<Arc<GameInfo>>,
+    fails: &'static str,
+    removed: parking_lot::Mutex<Vec<(String, bool)>>,
+}
+
+impl RemovableStore {
+    fn new(runner: Runner, apps: &[&str], fails: &'static str) -> Arc<Self> {
+        let games = apps
+            .iter()
+            .map(|app| {
+                Arc::new(
+                    GameInfo {
+                        runner: Some(runner),
+                        app_name: (*app).into(),
+                        title: (*app).into(),
+                        is_installed: true,
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )
+            })
+            .collect();
+        Arc::new(Self {
+            runner,
+            games,
+            fails,
+            removed: Default::default(),
+        })
+    }
+}
+
+#[async_trait]
+impl Store for RemovableStore {
+    fn runner(&self) -> Runner {
+        self.runner
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        None
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("no accounts")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.games.clone()
+    }
+    fn game(&self, app_name: &str) -> Option<Arc<GameInfo>> {
+        self.games.iter().find(|g| g.app_name == app_name).cloned()
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not installable")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn uninstall(&self, app_name: &str, args: RemoveArgs) -> Result<()> {
+        if app_name == self.fails {
+            bail!("{app_name} is in use");
+        }
+        self.removed
+            .lock()
+            .push((app_name.to_string(), args.delete_files));
+        Ok(())
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not installable")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not installable")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not playable")
+    }
+}
+
+#[test]
+fn removing_several_games_reports_the_ones_that_failed() {
+    use crate::view::remove::{plan_removal, remove_games};
+    isolate_paths();
+    let added = RemovableStore::new(Runner::Sideload, &["notes", "tool"], "");
+    let roms = RemovableStore::new(Runner::Emulation, &["zelda", "mario"], "mario");
+    let stores: Vec<DynStore> = vec![MemoryStore::new(), added.clone(), roms.clone()];
+    let b = Backend::start_headless(move |_, _| stores).expect("backend starts");
+    let picked: Vec<Arc<GameInfo>> = [
+        b.game(&GameId::new(Runner::Gog, "2")),
+        b.game(&GameId::new(Runner::Sideload, "notes")),
+        b.game(&GameId::new(Runner::Emulation, "zelda")),
+        b.game(&GameId::new(Runner::Emulation, "mario")),
+        b.game(&GameId::new(Runner::Sideload, "tool")),
+    ]
+    .into_iter()
+    .map(|g| g.expect("the game is known"))
+    .collect();
+    let plan = plan_removal(&picked, |_| false);
+    assert_eq!((plan.remove.len(), plan.stores), (4, 1));
+
+    let outcome = b
+        .runtime()
+        .block_on(remove_games(&b, plan.remove.clone(), true));
+    assert_eq!(outcome.removed, 3);
+    assert_eq!(outcome.failed.len(), 1);
+    assert_eq!(outcome.failed[0].0, "mario");
+    assert!(
+        outcome.failed[0].1.contains("in use"),
+        "{:?}",
+        outcome.failed
+    );
+    // Added games' files go only because the box was ticked; ROMs never.
+    assert_eq!(
+        *added.removed.lock(),
+        [("notes".to_string(), true), ("tool".to_string(), true)]
+    );
+    assert_eq!(*roms.removed.lock(), [("zelda".to_string(), false)]);
+
+    let kept = b
+        .runtime()
+        .block_on(remove_games(&b, vec![picked[1].clone()], false));
+    assert_eq!(kept.removed, 1);
+    assert_eq!(
+        added.removed.lock().last(),
+        Some(&("notes".to_string(), false))
+    );
+}
+
 #[gpui_kit::test]
 fn the_list_opens_at_its_top_and_its_scrollbar_knows_every_row(cx: &mut TestAppContext) {
     use irori_core::settings::LibraryLayout;

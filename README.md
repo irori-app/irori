@@ -171,6 +171,10 @@ build Irori yourself, see [Building](#building).
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the
   selected game's whole page over its art. Arrow keys move the selection in each.
+- **Act on many games at once**: pick them (<kbd>Ctrl</kbd>-click, <kbd>Shift</kbd>-click,
+  <kbd>Ctrl</kbd> <kbd>A</kbd>) to install, uninstall, hide, categorize, add to Steam or
+  remove added games and ROMs from the library (<kbd>Delete</kbd>; ROM files are never
+  deleted, and an added game's files only when you ask).
 - **One entry per game**, however many stores you own it on: it plays the installed
   copy, its page switches between the Steam, Epic Games or GOG copies, and you can
   combine or separate copies yourself. Each keeps its own playtime and achievements.

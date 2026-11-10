@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Cambiaron aquí y en la nube. Abre las partidas en la nube del juego para elegir cuáles conservar.",
   "shell.notice.saves_upload_failed_message": "Irori no pudo conectar con la nube. Súbelas más tarde desde las partidas en la nube del juego.",
   "shell.notice.ludusavi_backup_failed": "La copia de las partidas de {title} no se completó",
+  "shell.palette.remove_picked": "Quitar los juegos elegidos de la biblioteca ({count})",
+  "shell.palette.remove_picked_keywords": "eliminar olvidar juegos añadidos roms selección",
   "shell.palette.sync_saves": "Sincronizar partidas de {title}",
   "shell.palette.sync_saves_keywords": "nube partidas subir descargar",
   "shell.palette.back_up_saves": "Hacer copia de las partidas de {title}",

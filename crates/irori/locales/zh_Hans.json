@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "此处和云端的存档都已更改。请打开游戏的云存档，选择要保留的一方。",
   "shell.notice.saves_upload_failed_message": "Irori 无法连接到云端。请稍后在游戏的云存档中上传。",
   "shell.notice.ludusavi_backup_failed": "{title} 的存档未完全备份",
+  "shell.palette.remove_picked": "从库中移除所选游戏（{count}）",
+  "shell.palette.remove_picked_keywords": "删除 移除 添加的游戏 ROM 选择",
   "shell.palette.sync_saves": "同步 {title} 的存档",
   "shell.palette.sync_saves_keywords": "云 存档 上传 下载",
   "shell.palette.back_up_saves": "备份 {title} 的存档",
