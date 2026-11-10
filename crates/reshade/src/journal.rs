@@ -75,9 +75,32 @@ pub struct Manifest {
     /// Folders created, relative to [`Self::dir`], parents first.
     #[serde(default)]
     pub created_dirs: Vec<PathBuf>,
+    /// ReShade only: the build with full add-on support, which RenoDX
+    /// needs. Left out for the standard build.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub addon: bool,
+    /// Where an add-on came from: the RenoDX mod, or nothing for a file the
+    /// user chose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<ModSource>,
+}
+
+/// The official mod an add-on install came from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModSource {
+    /// The mod's id in its catalog (`1000xresist`).
+    pub id: String,
+    /// Its title, shown without asking the catalog again.
+    pub title: String,
 }
 
 impl Manifest {
+    /// The record of the switch file.
+    pub fn switch_record(&self) -> Option<&FileRecord> {
+        self.files.iter().find(|f| f.path == Path::new(&self.dll))
+    }
+
     /// Path of the switch file, under its current name.
     pub fn dll_path(&self) -> PathBuf {
         if self.enabled {
@@ -379,6 +402,8 @@ mod tests {
             overrides: vec!["dxgi".into(), "d3dcompiler_47".into()],
             files: Vec::new(),
             created_dirs: Vec::new(),
+            addon: false,
+            source: None,
         }
     }
 
@@ -572,6 +597,31 @@ mod tests {
             back,
             serde_json::from_str::<serde_json::Value>(OLD_MANIFEST).unwrap()
         );
+    }
+
+    #[test]
+    fn an_addon_install_round_trips() {
+        let game = tempfile::tempdir().unwrap();
+        let mut m = base(game.path());
+        m.kind = GraphicsMod::Renodx;
+        m.dll = "renodx-game.addon64".into();
+        m.overrides.clear();
+        m.source = Some(ModSource {
+            id: "game".into(),
+            title: "Game".into(),
+        });
+        let json = serde_json::to_value(&m).unwrap();
+        assert_eq!(json["kind"], "renodx");
+        assert_eq!(json["source"]["id"], "game");
+        assert!(json.get("addon").is_none());
+        assert_eq!(serde_json::from_value::<Manifest>(json).unwrap(), m);
+
+        let mut reshade = base(game.path());
+        reshade.addon = true;
+        let json = serde_json::to_value(&reshade).unwrap();
+        assert_eq!(json["addon"], true);
+        assert!(json.get("kind").is_none());
+        assert_eq!(serde_json::from_value::<Manifest>(json).unwrap(), reshade);
     }
 
     #[test]

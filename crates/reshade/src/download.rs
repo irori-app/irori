@@ -5,8 +5,10 @@
 //!   (`/downloads/ReShade_Setup_<version>.exe`); that link is where the
 //!   version is read. The setup program is a Windows program with a zip of
 //!   `ReShade32.dll` and `ReShade64.dll` appended, which its own installer
-//!   extracts the same way. The builds with add-on support (`_Addon`) are
-//!   meant for single-player games only and are left out.
+//!   extracts the same way. The build with full add-on support
+//!   (`ReShade_Setup_<version>_Addon.exe`, the same layout) is meant for
+//!   single-player games only; it is downloaded only for add-ons that need
+//!   it (RenoDX), for the version the standard build's link names.
 //! - **Shaders**: the `slim` branch of crosire/reshade-shaders, the
 //!   "Standard effects" package ReShade's installer always installs.
 //! - **Compatibility list**: see [`crate::compat`].
@@ -78,6 +80,12 @@ pub fn latest_version(html: &str) -> Option<String> {
 /// Where the setup program of `version` is downloaded from.
 pub fn setup_url(version: &str) -> String {
     format!("{RESHADE_SITE}/downloads/ReShade_Setup_{version}.exe")
+}
+
+/// Where the setup program of `version` with full add-on support is
+/// downloaded from.
+pub fn addon_setup_url(version: &str) -> String {
+    format!("{RESHADE_SITE}/downloads/ReShade_Setup_{version}_Addon.exe")
 }
 
 /// `ReShade32.dll` and `ReShade64.dll` from a setup program's appended zip,
@@ -240,17 +248,23 @@ pub async fn shaders(
     .await
 }
 
-/// ReShade's DLL for `machine`, downloading the release once.
+/// ReShade's DLL for `machine`, downloading the release once. `addon`
+/// takes the build with full add-on support.
 pub async fn reshade_dll(
     version: &str,
     machine: Machine,
+    addon: bool,
     progress: &ProgressSink,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>> {
     if !VERSION.is_match(version) {
         bail!("{version} is not a ReShade version");
     }
-    let dir = crate::cache_dir().join(version);
+    let dir = crate::cache_dir().join(if addon {
+        format!("{version}-addon")
+    } else {
+        version.to_string()
+    });
     let name = match machine {
         Machine::X86 => "ReShade32.dll",
         Machine::X64 => "ReShade64.dll",
@@ -261,7 +275,12 @@ pub async fn reshade_dll(
     {
         return Ok(bytes);
     }
-    let setup = fetch_bytes(&setup_url(version), progress, cancel)
+    let url = if addon {
+        addon_setup_url(version)
+    } else {
+        setup_url(version)
+    };
+    let setup = fetch_bytes(&url, progress, cancel)
         .await
         .with_context(|| format!("Could not download ReShade {version}"))?;
     let (x86, x64) = tokio::task::spawn_blocking(move || extract_dlls(&setup)).await??;
@@ -342,6 +361,10 @@ mod tests {
         assert_eq!(
             setup_url("6.8.0"),
             "https://reshade.me/downloads/ReShade_Setup_6.8.0.exe"
+        );
+        assert_eq!(
+            addon_setup_url("6.8.0"),
+            "https://reshade.me/downloads/ReShade_Setup_6.8.0_Addon.exe"
         );
     }
 

@@ -649,6 +649,36 @@ need ReShade's layer registered), Direct3D 8 and DirectDraw games are not
 supported, and neither are games other launchers manage (Steam, third-party
 launchers).
 
+### RenoDX HDR mods
+
+Below ReShade (game settings → Tools → RenoDX HDR), a
+Windows game Irori installed can get a RenoDX HDR mod: a ReShade add-on
+(`renodx-<game>.addon64`, or `.addon32` for 32-bit games) that ReShade's build with
+add-on support loads from its folder. Irori offers the mods of RenoDX's official
+rolling release on GitHub (clshortfuse/renodx, `snapshot`): its own catalog
+(`games-index.json`) names each mod's game, aliases and files, and GitHub's listing of
+the release gives each file's SHA-256 and build date. The game's mod is preselected
+when the catalog names its title or program; any other can be picked, or a mod file
+the user downloaded (for mods RenoDX's wiki links on other sites) chosen instead.
+Lists are cached a day in `<cache>/reshade/renodx`; an install asks again, checks the
+file against the release's digest and the game's architecture, and caches it by
+digest. Nothing is bundled.
+
+Installing replaces a standard ReShade with its build with add-on support
+(`ReShade_Setup_<version>_Addon.exe` from reshade.me, the same version), or installs
+it, then writes the add-on beside ReShade, recorded in
+`<data>/reshade/renodx/<runner>/<app>.json`. It is refused when ReShade's list bans
+the game, when a file of the same name that Irori didn't write is there, and when
+another RenoDX add-on is in the folder; Irori asks first when the game has anticheat
+(the add-on build is meant for single-player games). Turning RenoDX off renames the
+add-on to `<file>.irori-disabled`; removing it deletes the file if unchanged and
+keeps ReShade; removing ReShade removes RenoDX too. Update appears when RenoDX
+rebuilt the installed mod.
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| HDR output | Only when the display, the session (an HDR-capable compositor or gamescope) and the Wine build pass HDR through, e.g. `DXVK_HDR=1` for DXVK; Irori sets nothing and the panel says so | Same note; Wine on macOS rarely passes HDR through | Windows HDR on |
+
 ### Storage
 
 Settings → Storage (`irori://settings/storage`) groups what Irori measures by the disk

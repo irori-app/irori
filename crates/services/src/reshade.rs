@@ -1,7 +1,8 @@
 //! Graphics mods per game ([`irori_reshade`]) behind [`Backend`]: what is
 //! installed, installing ReShade (refusing games ReShade's list bans),
 //! turning a mod on and off, removing it, and the DLL overrides a Wine
-//! launch needs.
+//! launch needs. RenoDX's add-ons ([`crate::renodx`]) go beside ReShade's
+//! build with add-on support; removing ReShade removes them too.
 //!
 //! One operation per game at a time, whichever the mod, and none while the
 //! game runs: files can't be renamed or replaced under a running game.
@@ -33,6 +34,8 @@ pub struct ReshadeStatus {
     /// Anticheat AreWeAntiCheatYet lists for the game (ask before
     /// installing).
     pub anticheat: Vec<String>,
+    /// The RenoDX mod installed beside ReShade, which goes with it.
+    pub renodx: Option<Manifest>,
 }
 
 impl ReshadeStatus {
@@ -61,7 +64,7 @@ pub fn supports_reshade(game: &GameInfo) -> bool {
 /// Games with a graphics mod operation running.
 static BUSY: Lazy<Mutex<HashSet<String>>> = Lazy::new(Default::default);
 
-struct Busy(String);
+pub(crate) struct Busy(String);
 
 impl Busy {
     fn take(id: &GameId, kind: GraphicsMod) -> Result<Self> {
@@ -79,13 +82,30 @@ impl Drop for Busy {
     }
 }
 
-async fn load(kind: GraphicsMod, id: &GameId) -> Result<Option<Manifest>> {
+/// Anticheat AreWeAntiCheatYet lists for the game; nothing for games the
+/// user added, whose titles name no store's game.
+pub(crate) async fn anticheat_of(game: &GameInfo) -> Vec<String> {
+    if game.runner() == Runner::Sideload {
+        return Vec::new();
+    }
+    let query = AntiCheatQuery {
+        title: &game.title,
+        epic_namespace: game.namespace.as_deref().filter(|n| !n.is_empty()),
+        steam_app_id: None,
+    };
+    anticheat::lookup(&query)
+        .await
+        .map(|i| i.anticheats)
+        .unwrap_or_default()
+}
+
+pub(crate) async fn load(kind: GraphicsMod, id: &GameId) -> Result<Option<Manifest>> {
     let path = kind.journal_path(id);
     tokio::task::spawn_blocking(move || journal::load(&path)).await?
 }
 
 impl Backend {
-    fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+    pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
         let game = self.installed_game(id)?;
         if !supports_reshade(&game) {
             bail!("ReShade can only be installed into Windows games Irori installed");
@@ -93,7 +113,7 @@ impl Backend {
         Ok(game)
     }
 
-    fn graphics_mod_ready(&self, id: &GameId, kind: GraphicsMod) -> Result<Busy> {
+    pub(crate) fn graphics_mod_ready(&self, id: &GameId, kind: GraphicsMod) -> Result<Busy> {
         if self.is_running(id) {
             bail!("Close the game first");
         }
@@ -101,7 +121,7 @@ impl Backend {
     }
 
     /// The program the store or the user's settings start.
-    fn configured_exe(&self, id: &GameId, game: &GameInfo) -> Option<PathBuf> {
+    pub(crate) fn configured_exe(&self, id: &GameId, game: &GameInfo) -> Option<PathBuf> {
         let root = game.install_path()?;
         let settings = self.settings.game(id);
         let exe = [settings.target_exe.as_str()]
@@ -129,29 +149,20 @@ impl Backend {
                 None
             }
         };
-        let anticheat = if id.runner == Runner::Sideload {
-            Vec::new()
-        } else {
-            let query = AntiCheatQuery {
-                title: &game.title,
-                epic_namespace: game.namespace.as_deref().filter(|n| !n.is_empty()),
-                steam_app_id: None,
-            };
-            anticheat::lookup(&query)
-                .await
-                .map(|i| i.anticheats)
-                .unwrap_or_default()
-        };
+        let anticheat = anticheat_of(&game).await;
+        let renodx = load(GraphicsMod::Renodx, id).await?;
         Ok(ReshadeStatus {
             manifest,
             latest,
             anticheat,
+            renodx,
         })
     }
 
     /// Install ReShade, or replace an installed one with the newest
     /// (keeping the files the user changed). `chosen_exe` overrides the
-    /// program found in the game folder.
+    /// program found in the game folder. A ReShade with add-on support
+    /// stays one.
     pub async fn install_reshade(
         &self,
         id: &GameId,
@@ -162,20 +173,40 @@ impl Backend {
     ) -> Result<Manifest> {
         let game = self.reshade_game(id)?;
         let _busy = self.graphics_mod_ready(id, GraphicsMod::Reshade)?;
+        self.install_reshade_build(id, &game, chosen_exe, false, step, progress, cancel)
+            .await
+    }
+
+    /// [`Self::install_reshade`] with the game's operation already taken;
+    /// `addon` asks for the build with add-on support.
+    #[allow(clippy::too_many_arguments)] // Two callers; a struct would only rename them.
+    pub(crate) async fn install_reshade_build(
+        &self,
+        id: &GameId,
+        game: &GameInfo,
+        chosen_exe: Option<PathBuf>,
+        addon: bool,
+        step: Arc<dyn Fn(Step) + Send + Sync>,
+        progress: ProgressSink,
+        cancel: CancellationToken,
+    ) -> Result<Manifest> {
         let root = game.install_path().context("The game has no folder")?;
         let journal = irori_reshade::journal_path(id);
         let previous = load(GraphicsMod::Reshade, id).await?;
-        // An update or a reinstall keeps the program chosen before.
+        // An update or a reinstall keeps the program chosen before, and the
+        // build with add-on support.
         let chosen = chosen_exe.or_else(|| previous.as_ref().map(|m| m.exe.clone()));
+        let addon = addon || previous.as_ref().is_some_and(|m| m.addon);
         if let Some(previous) = previous {
             self.remove_files(&journal, previous).await?;
         }
         let request = InstallRequest {
             game_root: root,
-            configured_exe: self.configured_exe(id, &game),
+            configured_exe: self.configured_exe(id, game),
             chosen_exe: chosen,
             wine: irori_core::HostPlatform::current().needs_wine(InstallPlatform::Windows),
             journal,
+            addon,
         };
         let manifest = irori_reshade::install(request, step, progress, cancel).await?;
         tracing::info!(
@@ -187,7 +218,11 @@ impl Backend {
         Ok(manifest)
     }
 
-    async fn remove_files(&self, journal: &Path, manifest: Manifest) -> Result<RemoveReport> {
+    pub(crate) async fn remove_files(
+        &self,
+        journal: &Path,
+        manifest: Manifest,
+    ) -> Result<RemoveReport> {
         let app = self.settings.app();
         let journal = journal.to_path_buf();
         tokio::task::spawn_blocking(move || {
@@ -227,7 +262,7 @@ impl Backend {
     }
 
     /// Remove a graphics mod: the files Irori wrote and nobody changed
-    /// since.
+    /// since. Removing ReShade removes the add-ons it loads first.
     pub async fn remove_graphics_mod(
         &self,
         id: &GameId,
@@ -237,7 +272,18 @@ impl Backend {
         let manifest = load(kind, id)
             .await?
             .with_context(|| format!("{} is not installed", kind.name()))?;
-        let report = self.remove_files(&kind.journal_path(id), manifest).await?;
+        let mut report = RemoveReport::default();
+        // An add-on can't load without ReShade, so it goes first.
+        if kind == GraphicsMod::Reshade
+            && let Some(addon) = load(GraphicsMod::Renodx, id).await?
+        {
+            report = self
+                .remove_files(&GraphicsMod::Renodx.journal_path(id), addon)
+                .await?;
+        }
+        let own = self.remove_files(&kind.journal_path(id), manifest).await?;
+        report.removed += own.removed;
+        report.kept.extend(own.kept);
         tracing::info!(
             "removed {} from {id}: {} files, {} kept",
             kind.name(),
@@ -312,6 +358,8 @@ mod tests {
             overrides: vec!["dxgi".into(), "d3dcompiler_47".into()],
             files: Vec::new(),
             created_dirs: Vec::new(),
+            addon: false,
+            source: None,
         }
     }
 

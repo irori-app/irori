@@ -168,7 +168,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, plus the optional Xbox account, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
-| `crates/reshade` | `irori-reshade` | ReShade per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, downloads from the official sources, journaled installs |
+| `crates/reshade` | `irori-reshade` | Graphics mods per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, ReShade and RenoDX downloads from the official sources, journaled installs |
 | `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
@@ -1363,7 +1363,7 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 
-### 4.12 ReShade
+### 4.12 ReShade and RenoDX
 
 - **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
   natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
@@ -1375,7 +1375,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
   services run one graphics mod operation per game at a time
   (`Backend::set_graphics_mod_enabled`, `remove_graphics_mod`). A manifest without
-  `kind` is ReShade's, so manifests written before the layer keep reading.
+  `kind` is ReShade's, so manifests written before the layer keep reading; ReShade's
+  manifest records `addon: true` for the build with add-on support.
 - **Detection** (`irori_reshade::detect`): the configured program (`targetExe`, else
   the store's executable) when its PE imports name an API; otherwise the game folder is
   searched (installers, redistributables, crash reporters, launchers and anticheat
@@ -1402,6 +1403,24 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `d3dcompiler_47=n,b` for Direct3D) to `WINEDLLOVERRIDES` through
   `irori_runtime::env::add_dll_overrides`, replacing only those DLLs' entries in the
   user's value, while the install is complete, on, and its DLL is there.
+- **RenoDX** (`irori_reshade::renodx`, services `renodx.rs`, UI `irori_settings`
+  `RenodxPanel` below ReShade, route ids `renodx`/`hdr`): HDR mods as ReShade add-ons
+  (`renodx-<game>.addon64`, `.addon32`), loaded by ReShade's build with full add-on
+  support (`ReShade_Setup_<version>_Addon.exe`, same layout and version as the
+  standard one). Only the official `snapshot` release of clshortfuse/renodx is used:
+  its `games-index.json` (titles, aliases, programs, mods and their files) joined with
+  GitHub's listing of the release (each file's SHA-256 and build date, the version);
+  a file without a digest or served from elsewhere is not offered, and forks the wiki
+  links are left to the user's "Choose file…". Both lists are cached a day under
+  `<cache>/reshade/renodx`; an install asks again and checks the download against
+  the digest and the game's architecture. The game's mod is preselected by folded
+  title, alias or program name. Installing takes ReShade along (installed or switched
+  to the add-on build, keeping its program), refuses what ReShade's list bans, a file of
+  the same name and any other RenoDX add-on in the folder (`AddonTaken`), and is
+  journaled as `GraphicsMod::Renodx` in `<data>/reshade/renodx/<runner>/<app>.json`;
+  off renames the add-on, and removing ReShade removes RenoDX first. The UI asks first
+  when the game has anticheat, offers Update when the release's digest differs, and
+  says under Wine that HDR also needs the display, session and Wine build.
 
 ## 5. Rust conventions
 

@@ -31,7 +31,30 @@ pub async fn cached<T>(
     fetch: impl AsyncFnOnce() -> Result<Vec<u8>>,
     parse: impl Fn(&[u8]) -> Result<T>,
 ) -> Result<T> {
-    if fresh(&path)
+    load(what, path, true, fetch, parse).await
+}
+
+/// [`cached`], but asking the source even when the cached copy is fresh:
+/// for data an install checks downloads against. The cached copy still
+/// stands in when the source can't be reached.
+pub async fn refreshed<T>(
+    what: &str,
+    path: PathBuf,
+    fetch: impl AsyncFnOnce() -> Result<Vec<u8>>,
+    parse: impl Fn(&[u8]) -> Result<T>,
+) -> Result<T> {
+    load(what, path, false, fetch, parse).await
+}
+
+async fn load<T>(
+    what: &str,
+    path: PathBuf,
+    use_fresh: bool,
+    fetch: impl AsyncFnOnce() -> Result<Vec<u8>>,
+    parse: impl Fn(&[u8]) -> Result<T>,
+) -> Result<T> {
+    if use_fresh
+        && fresh(&path)
         && let Ok(bytes) = tokio::fs::read(&path).await
         && let Ok(value) = parse(&bytes)
     {

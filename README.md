@@ -266,6 +266,11 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   their games join your library.
 - **Lutris install scripts**, run with your consent for every download, write and
   command, confined to the game's folder.
+- **ReShade and RenoDX HDR** per Windows game, from their official sources only:
+  ReShade with its standard shaders, and RenoDX's HDR mod for the game (picked from
+  RenoDX's own list, checked against its release's digests) with ReShade's add-on
+  build. Every file Irori writes is recorded with its hash; removing deletes only
+  what it wrote and you didn't change.
 - Winetricks browser, Protontricks for Steam games, the Steam runtime and umu.
 
 ## Emulators

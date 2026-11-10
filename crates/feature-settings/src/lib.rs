@@ -35,6 +35,7 @@ mod launch_presets;
 mod launch_programs;
 mod logs;
 pub mod registry;
+mod renodx;
 mod replay;
 mod reshade;
 mod saves;

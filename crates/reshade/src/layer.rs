@@ -22,6 +22,8 @@ pub enum GraphicsMod {
     /// no mod and are ReShade's.
     #[default]
     Reshade,
+    /// A RenoDX HDR add-on, loaded by ReShade's build with add-on support.
+    Renodx,
 }
 
 impl GraphicsMod {
@@ -29,6 +31,7 @@ impl GraphicsMod {
     pub fn name(self) -> &'static str {
         match self {
             GraphicsMod::Reshade => "ReShade",
+            GraphicsMod::Renodx => "RenoDX",
         }
     }
 
@@ -44,6 +47,7 @@ impl GraphicsMod {
         let base = Paths::get().data.join("reshade");
         match self {
             GraphicsMod::Reshade => base.join(id.runner.id()).join(file),
+            GraphicsMod::Renodx => base.join("renodx").join(id.runner.id()).join(file),
         }
     }
 
@@ -52,6 +56,7 @@ impl GraphicsMod {
         let base = Paths::get().cache.join("reshade");
         match self {
             GraphicsMod::Reshade => base,
+            GraphicsMod::Renodx => base.join("renodx"),
         }
     }
 }
@@ -64,9 +69,14 @@ mod tests {
     fn names_and_serializes_the_mods() {
         assert_eq!(GraphicsMod::default(), GraphicsMod::Reshade);
         assert_eq!(GraphicsMod::Reshade.name(), "ReShade");
+        assert_eq!(GraphicsMod::Renodx.name(), "RenoDX");
         assert_eq!(
             serde_json::to_string(&GraphicsMod::Reshade).unwrap(),
             "\"reshade\""
+        );
+        assert_eq!(
+            serde_json::from_str::<GraphicsMod>("\"renodx\"").unwrap(),
+            GraphicsMod::Renodx
         );
     }
 }

@@ -296,11 +296,11 @@ fn unanswered_script_questions_cancel_and_roll_back() {
 
 /// An added Linux game that runs a shell command.
 #[cfg(unix)]
-struct PlayStore {
-    game: Arc<GameInfo>,
-    command: irori_core::process::CommandSpec,
+pub(crate) struct PlayStore {
+    pub(crate) game: Arc<GameInfo>,
+    pub(crate) command: irori_core::process::CommandSpec,
     /// Has cloud saves, and the cloud can't be reached.
-    saves_fail: bool,
+    pub(crate) saves_fail: bool,
 }
 
 #[cfg(unix)]

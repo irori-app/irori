@@ -18,6 +18,9 @@
 //!   Irori wrote that are still unchanged, so the user's `ReShade.ini` and
 //!   presets stay. A failed or cancelled install undoes its writes.
 //! - [`install`] puts these together.
+//! - [`renodx`] adds RenoDX's HDR add-ons beside ReShade's build with
+//!   add-on support: its official catalog and builds, checked against the
+//!   digests its release lists, through the same journal.
 //! - [`fetch`] holds the download helpers the mods share.
 
 #![forbid(unsafe_code)]
@@ -30,6 +33,7 @@ pub mod install;
 pub mod journal;
 pub mod layer;
 pub mod pe;
+pub mod renodx;
 
 use std::path::PathBuf;
 
@@ -39,7 +43,7 @@ use serde::{Deserialize, Serialize};
 pub use compat::{CompatEntry, CompatList};
 pub use detect::Detection;
 pub use install::{InstallRequest, Step, install};
-pub use journal::{FileRecord, Manifest, RemoveReport};
+pub use journal::{FileRecord, Manifest, ModSource, RemoveReport};
 pub use layer::GraphicsMod;
 pub use pe::{Machine, PeInfo};
 
@@ -101,6 +105,14 @@ pub enum ReshadeError {
     DllTaken { name: String },
     #[error("The chosen program is not inside the game folder")]
     OutsideGame,
+    #[error("The chosen file is not a ReShade add-on")]
+    NotAddon,
+    #[error("The add-on is built for another processor architecture than the game")]
+    AddonArch,
+    #[error("RenoDX has no build of this mod for the game's processor architecture")]
+    NoAddonBuild,
+    #[error("Another RenoDX mod, {name}, is already in the game folder")]
+    AddonTaken { name: String },
 }
 
 impl ReshadeError {

@@ -4840,6 +4840,7 @@ dependencies = [
  "anyhow",
  "hex",
  "irori-core",
+ "irori-depot",
  "irori-runtime",
  "once_cell",
  "regex",

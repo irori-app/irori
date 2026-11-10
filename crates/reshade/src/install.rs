@@ -20,6 +20,8 @@ pub enum Step {
     DownloadingReshade,
     DownloadingShaders,
     DownloadingCompiler,
+    /// Downloading an add-on (a RenoDX mod).
+    DownloadingAddon,
     Writing,
 }
 
@@ -37,6 +39,8 @@ pub struct InstallRequest {
     pub wine: bool,
     /// The game's manifest file ([`crate::journal_path`]).
     pub journal: PathBuf,
+    /// Install the build with full add-on support (for RenoDX).
+    pub addon: bool,
 }
 
 /// Find the program and API, refusing what ReShade or Irori can't do.
@@ -83,7 +87,8 @@ pub async fn install(
     let version = download::latest().await?;
 
     step(Step::DownloadingReshade);
-    let reshade = download::reshade_dll(&version, found.machine, &progress, &cancel).await?;
+    let reshade =
+        download::reshade_dll(&version, found.machine, req.addon, &progress, &cancel).await?;
     step(Step::DownloadingShaders);
     let shaders = download::shaders(&progress, &cancel).await?;
     // OpenGL effects compile to GLSL; Direct3D ones need the HLSL compiler,
@@ -132,6 +137,8 @@ pub async fn install(
         },
         files: Vec::new(),
         created_dirs: Vec::new(),
+        addon: req.addon,
+        source: None,
     };
     if !found.dir.is_dir() {
         bail!(

@@ -537,3 +537,35 @@ fn system_info_lists_the_displays(cx: &mut TestAppContext) {
         "{text:?}"
     );
 }
+
+#[gpui_kit::test]
+fn renodx_links_open_the_tools_section_with_both_graphics_mod_panels(cx: &mut TestAppContext) {
+    use crate::game_view::{GameSection, GameSettingsView};
+    assert_eq!(GameSection::from_id("renodx"), Some(GameSection::Tools));
+    assert_eq!(GameSection::from_id("hdr"), Some(GameSection::Tools));
+    // A game the backend doesn't know: the panels explain that the mods are
+    // for Windows games Irori installed, and ask nothing of the network.
+    let id = GameId::new(Runner::Sideload, "renodx-ui-test");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "renodx".into(), window, cx)
+    });
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Tools));
+    cx.update_window(handle, |_, window, cx| {
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn the_renodx_panel_draws_for_a_game_it_cannot_change(cx: &mut TestAppContext) {
+    let id = GameId::new(Runner::Sideload, "renodx-panel-test");
+    let (handle, panel) = open(cx, move |window, cx| {
+        crate::renodx::RenodxPanel::new(id, window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.activate(window, cx));
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
