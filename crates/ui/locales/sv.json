@@ -111,6 +111,8 @@
   "ui.cover.no_art": "Ingen bild",
   "ui.notify.failed_start": "”{title}” startade inte",
   "ui.notify.failed_start_body": "Öppna Irori för att se vad som gick fel.",
+  "ui.appearance.invalid": "Din utseendefil användes inte",
+  "ui.appearance.invalid_detail": "Irori behåller sitt nuvarande utseende tills {file} har rättats: {error}",
   "ui.engine.missing_title": "{engine} är inte installerad",
   "ui.engine.missing": "”{title}” spelas med {engine}, som inte finns på den här datorn än. Irori kan ladda ned den från projektet och starta spelet.",
   "ui.engine.core_missing_title": "Kärnan {core} är inte installerad",

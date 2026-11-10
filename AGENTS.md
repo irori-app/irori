@@ -869,6 +869,11 @@ cx.spawn_in(window, async move |this, cx| {
 - An accent the user picks (`iroriUi.accentColor`) tints whichever theme shows, held
   legible like the system's; `iroriUi.fontFamily` replaces Manrope while that family is
   installed (`theme::font_names`).
+- `<config>/appearance.json` (`irori_ui::appearance`) lays a theme file's keys over
+  whichever theme shows, after the picked accent and never over Windows high contrast.
+  It is followed with `notify` and applied after 200 ms of quiet; a file that can't be
+  used keeps the current look and raises `ui.appearance.invalid` once per mistake. The
+  watch starts before the first read, so no save is lost between them.
 - The library's background (`iroriUi.libraryBackground`: the focused, last played or
   first shown game's art, or a picture) goes through `components::library_backdrop`,
   which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art)

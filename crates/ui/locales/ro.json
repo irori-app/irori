@@ -111,6 +111,8 @@
   "ui.cover.no_art": "Fără imagine",
   "ui.notify.failed_start": "„{title}” nu a pornit",
   "ui.notify.failed_start_body": "Deschide Irori ca să vezi ce nu a mers.",
+  "ui.appearance.invalid": "Fișierul de aspect nu a fost aplicat",
+  "ui.appearance.invalid_detail": "Irori își păstrează aspectul actual până când {file} este corectat: {error}",
   "ui.engine.missing_title": "{engine} nu este instalat",
   "ui.engine.missing": "„{title}” rulează cu {engine}, care nu este încă pe acest computer. Irori îl poate descărca de la proiectul său și poate porni jocul.",
   "ui.engine.core_missing_title": "Nucleul {core} nu este instalat",

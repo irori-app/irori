@@ -111,6 +111,8 @@
   "ui.cover.no_art": "이미지 없음",
   "ui.notify.failed_start": "‘{title}’을(를) 시작하지 못했습니다",
   "ui.notify.failed_start_body": "Irori를 열어 무엇이 잘못되었는지 확인하세요.",
+  "ui.appearance.invalid": "모양 파일을 적용하지 못했습니다",
+  "ui.appearance.invalid_detail": "{file}을(를) 고칠 때까지 Irori는 현재 모양을 유지합니다: {error}",
   "ui.engine.missing_title": "{engine}이(가) 설치되지 않음",
   "ui.engine.missing": "‘{title}’은(는) {engine}(으)로 플레이하지만 이 컴퓨터에는 아직 없습니다. Irori가 프로젝트에서 다운로드한 후 게임을 시작할 수 있습니다.",
   "ui.engine.core_missing_title": "{core} 코어가 설치되지 않음",

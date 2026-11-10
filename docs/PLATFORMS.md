@@ -1240,6 +1240,33 @@ colours changed. Nothing polls. Text and icons are held to Irori's contrast mini
 Settings → Appearance → Theme shows this as “Wallpaper colors (default)”; picking any
 other theme stops following them, and “Follow system” takes its mode from them.
 
+## Appearance file
+
+`appearance.json` in Irori's configuration folder (the Settings/credentials row of
+[Paths and desktop behavior](#paths-and-desktop-behavior), so
+`~/.config/irori/appearance.json` on Linux) lays a theme's keys over whichever theme
+shows: a picked one, the desktop's, the wallpaper's or Irori's own, on every system.
+The keys are those of a theme in `assets/themes/*.json` (`colors`, `radius`,
+`radius.lg`, `shadow`, `font.family`…); keys at the top apply in both modes, and
+`light` and `dark` objects hold what applies in one. `name` and `mode` stay the theme's
+own, and `null` keeps the theme's value.
+
+```json
+{
+  "radius": 4,
+  "colors": { "primary.background": "#e0457b", "ring": "#e0457b" },
+  "dark": { "colors": { "background": "#101014" } }
+}
+```
+
+Irori watches the file (`notify`, no polling) and applies a save once the file has been
+still for 200 ms, so an editor's truncate-and-write never shows half a theme. A file it
+can't use (bad JSON, a key no theme has, a colour that doesn't parse, more than 1 MiB)
+changes nothing: the look stays as it was and a notice names the mistake, once per
+mistake. Removing or emptying the file takes the overrides away. Windows high contrast
+replaces every theme and is never overridden; a picked accent colour is applied first,
+so the file's colours win over it. `irori_ui::appearance` reads and follows it.
+
 ## System accent colour
 
 Wherever Irori doesn't follow a desktop's whole theme, macOS and Windows included, the

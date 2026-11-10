@@ -22,6 +22,9 @@
 //! shows, the desktop's included, held legible on its surfaces the way the
 //! system's accent is. The interface typeface is Manrope unless the user picks
 //! another installed family.
+//!
+//! Last, the user's `appearance.json` (see [`crate::appearance`]) is laid over
+//! whichever theme shows, and followed as it is saved.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -38,7 +41,7 @@ use crate::desktop_accent::{Accent, ContrastColors, SystemColors};
 pub use crate::desktop_theme::Desktop;
 use crate::desktop_theme::{DesktopThemes, Frost, accented, high_contrast, system_accented};
 use crate::style::{ICON_CONTRAST, TEXT_CONTRAST, contrast, legible_towards};
-use crate::{cosmic, desktop_accent, kde, omarchy, wallpaper};
+use crate::{appearance, cosmic, desktop_accent, kde, omarchy, wallpaper};
 
 pub const DEFAULT_DARK: &str = "Irori Night";
 pub const DEFAULT_LIGHT: &str = "Irori Day";
@@ -159,6 +162,8 @@ struct Applied {
     /// The accent the user picked, if any.
     picked_accent: Option<u32>,
     font_family: SharedString,
+    /// The user's appearance file, by revision. Zero while there is none.
+    appearance: u64,
 }
 
 impl Global for Applied {}
@@ -704,9 +709,15 @@ fn set_wallpaper(themes: DesktopThemes, cx: &mut App) {
 
 /// Apply the user's preferences again, after a theme they decide between
 /// changed.
-fn reapply(cx: &mut App) {
+pub(crate) fn reapply(cx: &mut App) {
     let prefs = crate::backend(cx).settings.app().ui.clone();
     apply(&prefs, None, cx);
+}
+
+/// The bundled theme files.
+#[cfg(test)]
+pub(crate) fn bundled() -> &'static [&'static str] {
+    BUNDLED
 }
 
 /// Names and modes of the themes in one bundled file.
@@ -794,7 +805,7 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
         }
     };
     let (light, dark) = (for_mode(false), for_mode(true));
-    match prefs.accent_rgb() {
+    let (light, dark) = match prefs.accent_rgb() {
         Some(picked) => {
             let picked = gpui_kit::rgb(picked);
             let tint = |theme: Option<Rc<ThemeConfig>>| {
@@ -802,6 +813,15 @@ fn pair(prefs: &UiPrefs, cx: &App) -> (Option<Rc<ThemeConfig>>, Option<Rc<ThemeC
                 Some(accented(&theme, picked).map(Rc::new).unwrap_or(theme))
             };
             (tint(light), tint(dark))
+        }
+        None => (light, dark),
+    };
+    // The user's appearance file has the last word.
+    match cx.try_global::<appearance::Override>() {
+        Some(o) => {
+            let over =
+                |theme: Option<Rc<ThemeConfig>>| theme.map(|t| Rc::new(o.appearance.over(&t)));
+            (over(light), over(dark))
         }
         None => (light, dark),
     }
@@ -864,6 +884,10 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
             .accent_rgb()
             .filter(|_| high_contrast_theme(cx).is_none()),
         font_family: font_family.clone(),
+        appearance: cx
+            .try_global::<appearance::Override>()
+            .filter(|_| high_contrast_theme(cx).is_none())
+            .map_or(0, |o| o.revision),
     };
     let previous = cx.try_global::<Applied>().cloned();
     if previous.as_ref() == Some(&next) {

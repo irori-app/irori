@@ -4,6 +4,7 @@
 //! notifications ([`system_notify`]) and domain components.
 
 pub mod age_rating;
+pub mod appearance;
 pub mod art;
 pub mod art_picker;
 pub mod categories;
@@ -68,4 +69,5 @@ pub fn init(backend: Backend, cx: &mut App) {
     nav::install(cx);
     models::install(cx);
     theme::follow_wallpaper(cx);
+    appearance::follow(cx);
 }

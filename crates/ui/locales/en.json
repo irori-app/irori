@@ -111,6 +111,8 @@
   "ui.cover.no_art": "No artwork",
   "ui.notify.failed_start": "“{title}” didn’t start",
   "ui.notify.failed_start_body": "Open Irori to see what went wrong.",
+  "ui.appearance.invalid": "Your appearance file wasn’t applied",
+  "ui.appearance.invalid_detail": "Irori keeps its current look until {file} is fixed: {error}",
   "ui.engine.missing_title": "{engine} isn’t installed",
   "ui.engine.missing": "“{title}” plays with {engine}, which isn’t on this computer yet. Irori can download it from its project and start the game.",
   "ui.engine.core_missing_title": "The {core} core isn’t installed",

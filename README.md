@@ -344,8 +344,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Mica or the Linux compositor's blur. On KDE Plasma, COSMIC and Omarchy Irori follows
   your desktop's theme; elsewhere it takes the system's accent colour (GNOME and other
   Linux desktops, macOS, Windows), live as you change it. Turn it on and it follows the
-  colours pywal, wallust or matugen take from your wallpaper. It honours Increase contrast,
-  Reduce transparency and Windows high contrast.
+  colours pywal, wallust or matugen take from your wallpaper. An `appearance.json` in the
+  config folder lays your own colours over any theme, live as you save it. It honours
+  Increase contrast, Reduce transparency and Windows high contrast.
 - **Any interface size**, with <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>
   or in Settings, on top of the text size your system asks for.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload

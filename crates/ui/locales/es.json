@@ -111,6 +111,8 @@
   "ui.cover.no_art": "Sin imagen",
   "ui.notify.failed_start": "«{title}» no se inició",
   "ui.notify.failed_start_body": "Abre Irori para ver qué ha fallado.",
+  "ui.appearance.invalid": "No se aplicó tu archivo de apariencia",
+  "ui.appearance.invalid_detail": "Irori mantiene su aspecto actual hasta que se corrija {file}: {error}",
   "ui.engine.missing_title": "{engine} no está instalado",
   "ui.engine.missing": "«{title}» se juega con {engine}, que aún no está en este equipo. Irori puede descargarlo de su proyecto e iniciar el juego.",
   "ui.engine.core_missing_title": "El núcleo {core} no está instalado",
