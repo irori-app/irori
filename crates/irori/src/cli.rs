@@ -37,6 +37,12 @@ pub struct Cli {
     pub wait: bool,
     /// Start hidden in the tray.
     pub minimized: bool,
+    /// Ask the running Irori to save a clip of the replay buffer
+    /// (`--save-clip`, for a compositor's key binding). Never starts Irori.
+    pub save_clip: bool,
+    /// Ask the running Irori to take a screenshot of the game
+    /// (`--screenshot`, for a compositor's key binding). Never starts Irori.
+    pub screenshot: bool,
     pub version: bool,
     pub help: bool,
 }
@@ -51,6 +57,8 @@ impl Cli {
                 "--big-picture" | "--console" => cli.big_picture = true,
                 "--minimized" | "--tray" => cli.minimized = true,
                 "--wait" => cli.wait = true,
+                "--save-clip" => cli.save_clip = true,
+                "--screenshot" => cli.screenshot = true,
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
@@ -160,6 +168,13 @@ impl Cli {
             || self.windows_file.is_some()
             || self.windows_uri.is_some()
             || self.big_picture
+            || self.capture()
+    }
+
+    /// Whether this invocation asks the running Irori for a clip or a
+    /// screenshot, which only a running Irori can take.
+    pub fn capture(&self) -> bool {
+        self.save_clip || self.screenshot
     }
 }
 
@@ -252,6 +267,9 @@ Options:
       --wait                    With --launch or --big-picture: stay until the game
                                 (or Big Picture) ends, and end it when stopped (Sunshine)
       --minimized               Start in the tray
+      --save-clip               Ask the running Irori to save a clip of the replay buffer
+      --screenshot              Ask the running Irori to take a screenshot of the game
+                                (bind both to keys in your compositor; see Settings)
   -V, --version                 Print the version
   -h, --help                    Print this help
 
@@ -273,6 +291,18 @@ mod tests {
 
     fn parse(args: &[&str]) -> Cli {
         Cli::parse(args.iter().map(|s| s.to_string()))
+    }
+
+    #[test]
+    fn capture_flags_are_requests_for_the_running_instance() {
+        let clip = parse(&["--save-clip"]);
+        assert!(clip.save_clip && !clip.screenshot);
+        assert!(clip.capture() && clip.has_request());
+        let shot = parse(&["--screenshot"]);
+        assert!(shot.screenshot && shot.capture() && shot.has_request());
+        let none = parse(&["--minimized"]);
+        assert!(!none.capture() && !none.has_request());
+        assert!(HELP.contains("--save-clip") && HELP.contains("--screenshot"));
     }
 
     #[test]

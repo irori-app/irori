@@ -93,7 +93,11 @@ irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam short
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
-  `-V/--version` and `-h/--help`.
+  `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
+  the replay buffer, take a screenshot of the running game) for a key binding in the
+  user's compositor; they never start Irori and exit 1 when none runs
+  (`instance::forward`; see `docs/PLATFORMS.md`, "Clip and screenshot keys").
 - `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
   invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
   the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
@@ -728,7 +732,11 @@ commands without a window.
   folder, which also finds the Flatpak's); the path it prints is renamed to
   `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
-  palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
+  palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
+  one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
+  `XGrabKey` (`replay/x11.rs`), else the settings show the lines that bind
+  `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
+  pure and tested). Never read keyboards from `/dev/input`.
 - **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
   the modes offered and HDR (on, capable), kept until a refresh. Linux reads
   `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool

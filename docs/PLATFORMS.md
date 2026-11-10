@@ -465,10 +465,47 @@ saving. Ways to save:
   read by Irori's controller thread also while the game has the window; Guide's release
   then does not toggle Big Picture;
 - the tray menu's "Save clip" and the command palette, while the buffer records;
-- a key from the XDG GlobalShortcuts portal (KDE Plasma 6, GNOME 48, Hyprland). Irori
-  registers as `app.irori.Irori` through the host app registry, suggests Alt+F10 and lets
-  the desktop assign and change the keys. Where the portal is missing the settings say
-  that keys pressed in a game cannot reach Irori and point to the other ways.
+- a keyboard shortcut, set up with a second one that takes a screenshot (see
+  [Clip and screenshot keys](#clip-and-screenshot-keys));
+- `irori --save-clip`, which hands the request to the running Irori.
+
+### Clip and screenshot keys
+
+Only the desktop sees keys pressed in another program's window, and Irori never reads
+keyboards from `/dev/input`. Settings → Performance → Replay buffer → "Set up shortcuts"
+(or turning the buffer on) tries, in order (`irori_services::replay::bindings::sources`):
+
+1. **The XDG GlobalShortcuts portal** (KDE Plasma 6, GNOME 48, Hyprland). Irori
+   registers as `app.irori.Irori` through the host app registry, asks for two shortcuts,
+   "save-clip" (Alt+F10 suggested) and "screenshot" (Alt+F12), and lets the desktop
+   assign and change the keys. The settings show each one's keys.
+2. **X11 sessions** without it (i3, Xfce, Openbox, bspwm…): Irori grabs Alt+F10 and
+   Alt+F12 on the root window with `XGrabKey` (x11rb's own connection, with Caps Lock and
+   Num Lock on or off), and a thread blocked on the X server hears them, a held key
+   counting once. Never under Wayland, where XWayland only sees keys while one of its
+   windows has the focus. A key another program holds fails the grab, and Irori goes on
+   to the commands.
+3. **Commands** everywhere else (Sway, river, niri, Wayfire, labwc and other wlroots
+   compositors): `irori --save-clip` and `irori --screenshot` reach the running Irori
+   through its single-instance channel (they never start Irori; with none running they
+   exit 1). The settings name the compositor (from `XDG_CURRENT_DESKTOP`, `SWAYSOCK`,
+   `HYPRLAND_INSTANCE_SIGNATURE`, `NIRI_SOCKET`) and show the exact lines for its file,
+   with a Copy button, for example in `~/.config/sway/config`:
+
+   ```text
+   bindsym Mod1+F10 exec irori --save-clip
+   bindsym Mod1+F12 exec irori --screenshot
+   ```
+
+   The command is `flatpak run app.irori.Irori` inside Irori's Flatpak, the AppImage's
+   path from an AppImage, `irori` when `PATH` finds this program, else its full path.
+   An unknown desktop gets the two commands to bind in its keyboard settings.
+
+The clip key saves while the buffer records; the screenshot key takes one of the running
+game (`Backend::take_screenshot`), or of the desktop when none runs. The shortcuts are
+set up only while the replay buffer is on, so Alt+F10 and Alt+F12 stay free otherwise.
+macOS and Windows have no replay buffer; there the commands still work, and the in-game
+overlay's Ctrl+Shift+O and its screenshot button take screenshots.
 
 Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
 after its title, which is how the Album finds the game; a folder whose game left the
