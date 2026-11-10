@@ -3,10 +3,6 @@
 use std::io;
 
 use base64_23::prelude::*;
-#[cfg(any(target_os = "macos", target_os = "ios", target_family = "windows"))]
-use smbioslib::raw_smbios_from_device;
-#[cfg(not(target_os = "linux"))]
-use smbioslib::{SMBiosSystemInformation, SystemUuidData, table_load_from_device};
 
 use crate::clep;
 use crate::models::devicecredential::Component;
@@ -73,44 +69,12 @@ pub fn probe_provision_components() -> Vec<Component> {
     components
 }
 
-#[cfg(target_os = "linux")]
 fn load_smbios_fields(raw: Option<&[u8]>) -> io::Result<(Vec<u8>, Vec<u8>, [u8; 16])> {
     let smbios =
         raw.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "missing raw SMBIOS data"))?;
     parse_smbios(smbios)
 }
 
-#[cfg(not(target_os = "linux"))]
-fn load_smbios_fields(_raw: Option<&[u8]>) -> io::Result<(Vec<u8>, Vec<u8>, [u8; 16])> {
-    let data = table_load_from_device()?;
-    let system_info = data
-        .first::<SMBiosSystemInformation>()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "missing SMBIOS Type 1"))?;
-
-    let version = system_info
-        .version()
-        .to_utf8_lossy()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing SMBIOS version"))?
-        .into_bytes();
-    let serial = system_info
-        .serial_number()
-        .to_utf8_lossy()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing SMBIOS serial"))?
-        .into_bytes();
-    let uuid = match system_info.uuid() {
-        Some(SystemUuidData::Uuid(uuid)) => uuid.raw,
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "missing SMBIOS UUID",
-            ));
-        }
-    };
-
-    Ok((version, serial, uuid))
-}
-
-#[cfg(target_os = "linux")]
 fn parse_smbios(smbios: &[u8]) -> io::Result<(Vec<u8>, Vec<u8>, [u8; 16])> {
     let invalid = || io::Error::new(io::ErrorKind::InvalidData, "malformed SMBIOS Type 1 table");
     let length = *smbios.get(1).ok_or_else(invalid)? as usize;
@@ -131,11 +95,6 @@ fn parse_smbios(smbios: &[u8]) -> io::Result<(Vec<u8>, Vec<u8>, [u8; 16])> {
         .collect();
     let string = |index: usize| strings.get(index).map(|s| s.to_vec()).unwrap_or_default();
     Ok((string(version), string(serial), uuid))
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios", target_family = "windows"))]
-fn load_raw_smbios() -> io::Result<Vec<u8>> {
-    raw_smbios_from_device()
 }
 
 #[cfg(target_os = "linux")]
@@ -189,15 +148,12 @@ mod smbios_tests {
     }
 }
 
-#[cfg(not(any(
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "ios",
-    target_family = "windows"
-)))]
+// The Xbox store plays games on Linux only; elsewhere the fields are sent as
+// unavailable, as on Linux without permission to read the table.
+#[cfg(not(target_os = "linux"))]
 fn load_raw_smbios() -> io::Result<Vec<u8>> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "raw SMBIOS loading is unsupported on this platform",
+        "SMBIOS is read on Linux only",
     ))
 }

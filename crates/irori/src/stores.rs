@@ -113,6 +113,7 @@ pub static GOG: once_cell::sync::OnceCell<Arc<MultiAccountStore<irori_gog::GogSt
     once_cell::sync::OnceCell::new();
 
 /// The concrete Xbox store (Linux): offline PC, Store browsing, social.
+#[cfg(target_os = "linux")]
 pub static XBOX: once_cell::sync::OnceCell<std::sync::Arc<irori_xbox::XboxStore>> =
     once_cell::sync::OnceCell::new();
 

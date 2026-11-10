@@ -20,6 +20,10 @@
 // The streaming installer ported from Xodus walks fixed-size pages with
 // `chunks_exact`; `as_chunks` would change every loop for no behaviour change.
 #![allow(clippy::chunks_exact_to_as_chunks)]
+// Microsoft Store games play on Linux only: Windows has the Xbox app and
+// macOS no runtime for them. Elsewhere this crate is empty, so the Unix
+// file identity checks and socket service never need a port.
+#![cfg(target_os = "linux")]
 
 pub mod config;
 pub mod credentials;
