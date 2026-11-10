@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "Hry od EA, včetně těch, které vlastníte na Steam nebo Epic a které vyžadují EA app.",
   "manage.launchers.about.ubisoft": "Hry od Ubisoft, včetně těch, které ke spuštění potřebují Ubisoft Connect.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption a další hry od Rockstar.",
+  "manage.launchers.ea.installed_only": "Zobrazují se jen hry nainstalované v EA app. Hry, které vlastníte, ale nemáte nainstalované, zůstávají v EA app: ta jejich seznam uchovává šifrovaný a EA jiným programům neumožňuje ho číst. Nainstalujte hru v EA app a objeví se zde.",
   "manage.retro.description": "Úspěchy pro hry ve vašich složkách s ROM, rozpoznané podle otisku každého souboru hry, který používá RetroAchievements.",
   "manage.retro.key_hint": "Irori čte vaše úspěchy pomocí uživatelského jména a klíče Web API. Klíč najdete v nastavení RetroAchievements v části Authentication.",
   "manage.retro.key_link": "Otevřít nastavení RetroAchievements",

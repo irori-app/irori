@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA-spel, även de du äger på Steam eller Epic som kräver EA app.",
   "manage.launchers.about.ubisoft": "Ubisoft-spel, även de som behöver Ubisoft Connect för att starta.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption och andra Rockstar-spel.",
+  "manage.launchers.ea.installed_only": "Bara spel som är installerade i EA app visas. Spel du äger men inte har installerat stannar i EA app: den sparar den listan krypterad och EA erbjuder inget sätt för andra program att läsa den. Installera ett spel i EA app så dyker det upp här.",
   "manage.retro.description": "Prestationer för spelen i dina ROM-mappar, igenkända med den hash som RetroAchievements beräknar för varje spelfil.",
   "manage.retro.key_hint": "Irori läser dina prestationer med ditt användarnamn och din Web API-nyckel. Nyckeln finns under Authentication i dina RetroAchievements-inställningar.",
   "manage.retro.key_link": "Öppna RetroAchievements-inställningar",

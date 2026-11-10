@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "Jocuri EA, inclusiv cele pe care le ai pe Steam sau Epic și care au nevoie de EA app.",
   "manage.launchers.about.ubisoft": "Jocuri Ubisoft, inclusiv cele care au nevoie de Ubisoft Connect ca să pornească.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption și alte jocuri Rockstar.",
+  "manage.launchers.ea.installed_only": "Sunt afișate doar jocurile instalate în EA app. Jocurile pe care le ai, dar nu le-ai instalat, rămân în EA app: aceasta păstrează lista criptată, iar EA nu oferă altor programe nicio cale de a o citi. Instalează un joc în EA app și va apărea aici.",
   "manage.retro.description": "Realizări pentru jocurile din folderele cu ROM-uri, recunoscute după amprenta pe care RetroAchievements o calculează pentru fiecare fișier.",
   "manage.retro.key_hint": "Irori citește realizările cu numele de utilizator și cheia Web API, pe care o găsești în secțiunea Authentication din setările RetroAchievements.",
   "manage.retro.key_link": "Deschide setările RetroAchievements",

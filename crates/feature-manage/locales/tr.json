@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA oyunları; Steam veya Epic'te sahip olduğun ve EA app gerektirenler de dahil.",
   "manage.launchers.about.ubisoft": "Ubisoft oyunları; başlamak için Ubisoft Connect gerektirenler de dahil.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption ve diğer Rockstar oyunları.",
+  "manage.launchers.ea.installed_only": "Yalnızca EA app’te yüklü oyunlar listelenir. Sahip olduğun ama yüklemediğin oyunlar EA app’te kalır: bu listeyi şifreli tutar ve EA diğer programlara onu okumanın bir yolunu sunmaz. Bir oyunu EA app’te yükle, burada görünsün.",
   "manage.retro.description": "ROM klasörlerinizdeki oyunların başarımları; her oyun dosyası RetroAchievements’ın hesapladığı özetle eşleştirilir.",
   "manage.retro.key_hint": "Irori, başarımlarınızı kullanıcı adınız ve Web API anahtarınızla okur. Anahtarı RetroAchievements ayarlarındaki Authentication bölümünde bulabilirsiniz.",
   "manage.retro.key_link": "RetroAchievements ayarlarını aç",

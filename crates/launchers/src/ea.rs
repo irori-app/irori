@@ -8,6 +8,13 @@
 //!
 //! Games launch through the client with
 //! `origin2://game/launch?offerIds=<ids>&autoDownload=1`.
+//!
+//! Only installed games can be listed. The EA app keeps what an account
+//! owns in its encrypted installation state (`ProgramData/EA Desktop/<hash>/IS`,
+//! a key derived from the machine) and behind EA's own private GraphQL
+//! service, which takes the EA app's client identity and the user's token.
+//! EA publishes no API or readable file for other programs, so Irori neither
+//! decrypts that file nor calls that service; the Stores page says so.
 
 use std::path::{Path, PathBuf};
 

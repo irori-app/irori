@@ -267,7 +267,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   compile their shaders again at every start.
 - **Third-party launchers on Linux:** Battle.net, the EA app, Ubisoft Connect and
   Rockstar each get a prefix of their own (or bring the prefix you already have), and
-  their games join your library.
+  their installed games join your library. (The EA app keeps the games you own but
+  haven't installed encrypted, with no way for other programs to read them, so those
+  stay in the EA app.)
 - **Lutris install scripts**, run with your consent for every download, write and
   command, confined to the game's folder.
 - **ReShade and RenoDX HDR** per Windows game, from their official sources only:

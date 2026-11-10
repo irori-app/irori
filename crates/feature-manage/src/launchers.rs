@@ -25,7 +25,7 @@ use gpui_kit::component::select::{Select, SelectItem, SelectState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -826,6 +826,27 @@ impl LaunchersSection {
                 Launcher::Ubisoft => t("manage.launchers.about.ubisoft"),
                 Launcher::Rockstar => t("manage.launchers.about.rockstar"),
             }))
+            // The EA app keeps the games an account owns only encrypted and
+            // behind EA's own service, so only installed ones can be listed.
+            .when(launcher == Launcher::EaApp, |card| {
+                card.child(
+                    h_flex()
+                        .debug_selector(|| "launcher-ea-installed-only".to_string())
+                        .w_full()
+                        .min_w_0()
+                        .gap_2()
+                        .items_start()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(Icon::new(IconName::Info).xsmall().flex_shrink_0())
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(t("manage.launchers.ea.installed_only")),
+                        ),
+                )
+            })
             .child(h_flex().justify_end().child(actions))
             .into_any_element()
     }

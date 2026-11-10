@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA 的游戏，包括你在 Steam 或 Epic 上拥有但需要 EA app 的游戏。",
   "manage.launchers.about.ubisoft": "Ubisoft 的游戏，包括需要 Ubisoft Connect 才能启动的游戏。",
   "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption 及其他 Rockstar 游戏。",
+  "manage.launchers.ea.installed_only": "这里只列出在 EA app 中安装的游戏。你拥有但尚未安装的游戏只会留在 EA app 里：它加密保存这份列表，而 EA 没有为其他程序提供读取它的方法。在 EA app 中安装游戏后，它就会出现在这里。",
   "manage.retro.description": "ROM 文件夹中游戏的成就，按 RetroAchievements 为每个游戏文件计算的哈希识别。",
   "manage.retro.key_hint": "Irori 使用你的用户名和 Web API 密钥读取成就。密钥位于 RetroAchievements 设置的 Authentication 部分。",
   "manage.retro.key_link": "打开 RetroAchievements 设置",

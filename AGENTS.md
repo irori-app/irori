@@ -1218,6 +1218,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
   launcher's flags or URI; Irori never installs, updates or removes them.
+- **EA app: installed games only.** The EA app keeps what an account owns in its
+  encrypted installation state (`ProgramData/EA Desktop/<hash>/IS`) and behind EA's
+  private GraphQL service, which takes the EA app's own client identity. EA publishes no
+  API or readable file, so Irori decrypts nothing and calls no EA service: owned but
+  uninstalled EA games aren't listed, and the EA card says why
+  (`manage.launchers.ea.installed_only`).
 - **Rescans.** The launchers' local data is read again every `iroriLaunchersRescan`
   minutes (5 by default, 0 = only on refresh) from the periodic task while
   `iroriThirdPartyLaunchers` is on, so games installed in a launcher show up on their

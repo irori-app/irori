@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA 게임. Steam이나 Epic에서 보유했지만 EA app이 필요한 게임도 포함됩니다.",
   "manage.launchers.about.ubisoft": "Ubisoft 게임. 실행에 Ubisoft Connect가 필요한 게임도 포함됩니다.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption 및 기타 Rockstar 게임.",
+  "manage.launchers.ea.installed_only": "EA app에 설치된 게임만 표시됩니다. 보유했지만 설치하지 않은 게임은 EA app에만 있습니다. EA app은 그 목록을 암호화해 보관하며, EA는 다른 프로그램이 이를 읽을 방법을 제공하지 않습니다. EA app에서 게임을 설치하면 여기에 나타납니다.",
   "manage.retro.description": "ROM 폴더에 있는 게임의 업적입니다. 각 게임 파일은 RetroAchievements 해시로 식별합니다.",
   "manage.retro.key_hint": "Irori는 사용자 이름과 Web API 키로 업적을 읽습니다. 키는 RetroAchievements 설정의 Authentication 항목에 있습니다.",
   "manage.retro.key_link": "RetroAchievements 설정 열기",

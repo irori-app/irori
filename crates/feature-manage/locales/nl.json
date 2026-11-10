@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA-games, ook die je op Steam of Epic bezit en die de EA app nodig hebben.",
   "manage.launchers.about.ubisoft": "Ubisoft-games, ook die Ubisoft Connect nodig hebben om te starten.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption en andere Rockstar-games.",
+  "manage.launchers.ea.installed_only": "Alleen games die in de EA app zijn geïnstalleerd staan hier. Games die je bezit maar niet hebt geïnstalleerd, blijven in de EA app: die bewaart die lijst versleuteld en EA biedt andere programma’s geen manier om hem te lezen. Installeer een game in de EA app en hij verschijnt hier.",
   "manage.retro.description": "Prestaties voor de games in je ROM-mappen, herkend aan de hash die RetroAchievements van elk gamebestand maakt.",
   "manage.retro.key_hint": "Irori leest je prestaties met je gebruikersnaam en Web API-sleutel. Die vind je bij Authentication in je RetroAchievements-instellingen.",
   "manage.retro.key_link": "RetroAchievements-instellingen openen",

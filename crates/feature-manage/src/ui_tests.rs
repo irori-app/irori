@@ -481,6 +481,10 @@ fn rockstar_card_after_adopting_a_prefix(cx: &mut TestAppContext) {
         vcx.debug_bounds("launcher-xbox-windows-only").is_some(),
         "the Xbox app's card says it is Windows-only"
     );
+    assert!(
+        vcx.debug_bounds("launcher-ea-installed-only").is_some(),
+        "the EA app's card says why owned games it hasn't installed aren't listed"
+    );
     // The note takes the card's width, so its text wraps there instead of
     // keeping its own length and running over the neighbouring card. (The
     // test platform's glyphs are too narrow for the text to overflow, so

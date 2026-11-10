@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "Игры EA, в том числе купленные в Steam или Epic, которым нужен EA app.",
   "manage.launchers.about.ubisoft": "Игры Ubisoft, в том числе те, которым для запуска нужен Ubisoft Connect.",
   "manage.launchers.about.rockstar": "Grand Theft Auto, Red Dead Redemption и другие игры Rockstar.",
+  "manage.launchers.ea.installed_only": "Показываются только игры, установленные в EA app. Игры, которые у вас есть, но не установлены, остаются в EA app: он хранит их список в зашифрованном виде, а EA не даёт другим программам способа его прочитать. Установите игру в EA app, и она появится здесь.",
   "manage.retro.description": "Достижения для игр из ваших папок с ROM: игры узнаются по хешу файла, который вычисляет RetroAchievements.",
   "manage.retro.key_hint": "Irori читает ваши достижения по имени пользователя и ключу Web API. Ключ находится в разделе Authentication настроек RetroAchievements.",
   "manage.retro.key_link": "Открыть настройки RetroAchievements",

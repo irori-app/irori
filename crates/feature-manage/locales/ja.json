@@ -551,6 +551,7 @@
   "manage.launchers.about.ea": "EA のゲーム。Steam や Epic で所有していて EA app が必要なゲームも含みます。",
   "manage.launchers.about.ubisoft": "Ubisoft のゲーム。起動に Ubisoft Connect が必要なゲームも含みます。",
   "manage.launchers.about.rockstar": "Grand Theft Auto、Red Dead Redemption などの Rockstar のゲーム。",
+  "manage.launchers.ea.installed_only": "表示されるのは EA app にインストールされたゲームだけです。所有していてもインストールしていないゲームは EA app にとどまります。EA app はその一覧を暗号化して保存しており、EA は他のプログラムがそれを読み取る方法を提供していません。EA app でゲームをインストールすると、ここに表示されます。",
   "manage.retro.description": "ROM フォルダーのゲームの実績です。各ゲームファイルは RetroAchievements のハッシュで照合されます。",
   "manage.retro.key_hint": "Irori はユーザー名と Web API キーで実績を読み取ります。キーは RetroAchievements の設定の Authentication にあります。",
   "manage.retro.key_link": "RetroAchievements の設定を開く",
