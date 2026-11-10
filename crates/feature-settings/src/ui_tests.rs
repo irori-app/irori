@@ -434,3 +434,106 @@ fn windows_graphics_preference_is_stored_per_game(cx: &mut TestAppContext) {
         assert!(visible >= 1, "{visible}");
     });
 }
+
+fn sample_displays() -> irori_services::displays::DisplayReport {
+    use irori_services::displays::{Display, DisplayMode, DisplayReport};
+    let main = Display {
+        connector: "DP-1".into(),
+        name: Some("Test Monitor".into()),
+        primary: true,
+        enabled: true,
+        current: Some(DisplayMode {
+            width: 2560,
+            height: 1440,
+            refresh_mhz: Some(165_000),
+        }),
+        modes: vec![
+            DisplayMode {
+                width: 2560,
+                height: 1440,
+                refresh_mhz: Some(165_000),
+            },
+            DisplayMode {
+                width: 1920,
+                height: 1080,
+                refresh_mhz: Some(60_000),
+            },
+        ],
+        hdr_on: Some(false),
+        hdr_capable: Some(true),
+    };
+    let off = Display {
+        connector: "HDMI-A-1".into(),
+        enabled: false,
+        ..Default::default()
+    };
+    DisplayReport {
+        displays: vec![main, off],
+        source: "test".into(),
+        lists_modes: true,
+    }
+}
+
+#[gpui_kit::test]
+fn hdr_and_gamescope_fields_mention_the_displays(cx: &mut TestAppContext) {
+    use crate::registry::FieldSection;
+
+    let (handle, form) = open(cx, |window, cx| {
+        SettingsForm::new(FormTarget::Defaults, window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        form.update(cx, |f, cx| {
+            f.set_displays_for_test(sample_displays(), cx);
+            f.set_sections(vec![FieldSection::Wine, FieldSection::Performance], cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let form = form.read(cx);
+        let hdr = form.help_for_test("enableHDR");
+        assert!(hdr.contains("Test Monitor") && hdr.contains("HDR"), "{hdr}");
+        let width = form.help_for_test("gamescope.upscaleWidth");
+        assert!(
+            width.contains("Test Monitor") && width.contains("2560") && width.contains("165"),
+            "{width}"
+        );
+        assert!(!form.help_for_test("wineVersion").contains("Test Monitor"));
+    });
+}
+
+#[gpui_kit::test]
+fn system_info_lists_the_displays(cx: &mut TestAppContext) {
+    use std::sync::Arc;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.show_sysinfo_for_test(
+                Arc::new(irori_runtime::sysinfo::SystemInfo::default()),
+                Arc::new(sample_displays()),
+                window,
+                cx,
+            )
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(view.read(cx).section(), SettingsSection::SystemInfo));
+    let rows = crate::displays::rows(&sample_displays());
+    let text: Vec<String> = rows.iter().map(|(k, v)| format!("{k}: {v}")).collect();
+    assert_eq!(rows.len(), 3, "{text:?}");
+    assert!(
+        text[0].contains("Test Monitor (DP-1)") && text[0].contains("HDR"),
+        "{text:?}"
+    );
+    assert!(text[1].contains("1920"), "{text:?}");
+    assert!(
+        text[2].starts_with("Display 2") && !text[2].contains("HDR"),
+        "{text:?}"
+    );
+}

@@ -18,6 +18,8 @@ use gpui_kit::{
 };
 use irori_core::Paths;
 use irori_runtime::sysinfo::{self, SystemInfo};
+use irori_services::displays::DisplayReport;
+use irori_ui::backend;
 use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::i18n::{t, t_args};
 
@@ -174,6 +176,8 @@ impl SettingsSection {
 #[derive(Default)]
 struct SysInfoState {
     info: Option<Arc<SystemInfo>>,
+    /// Read with the rest; the displays' modes and HDR.
+    displays: Option<Arc<DisplayReport>>,
     loading: bool,
     copied: bool,
 }
@@ -328,12 +332,16 @@ impl SettingsView {
             return;
         }
         self.sysinfo.loading = true;
-        let task = irori_ui::run(cx, async move { Ok(sysinfo::get(true).await) });
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            Ok(tokio::join!(sysinfo::get(true), b.displays(true)))
+        });
         cx.spawn_in(window, async move |this, cx| {
-            let info = task.await.ok();
+            let (info, displays) = task.await.ok().unzip();
             this.update(cx, |this, cx| {
                 this.sysinfo.loading = false;
                 this.sysinfo.info = info;
+                this.sysinfo.displays = displays;
                 cx.notify();
             })
             .ok();
@@ -342,11 +350,30 @@ impl SettingsView {
         cx.notify();
     }
 
+    /// Show this information instead of reading the computer's.
+    #[cfg(test)]
+    pub(crate) fn show_sysinfo_for_test(
+        &mut self,
+        info: Arc<SystemInfo>,
+        displays: Arc<DisplayReport>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.sysinfo.info = Some(info);
+        self.sysinfo.displays = Some(displays);
+        self.open(SettingsSection::SystemInfo, window, cx);
+    }
+
     fn copy_sysinfo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(info) = &self.sysinfo.info else {
             return;
         };
-        cx.write_to_clipboard(ClipboardItem::new_string(sysinfo::format(info)));
+        let mut text = sysinfo::format(info);
+        if let Some(displays) = &self.sysinfo.displays {
+            text.push('\n');
+            text.push_str(&irori_services::displays::format(displays));
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.sysinfo.copied = true;
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
@@ -492,6 +519,9 @@ impl SettingsView {
                 _ => t("settings.sysinfo.no_driver"),
             };
             rows.push((label, format!("{name} · {driver}").into()));
+        }
+        if let Some(displays) = &self.sysinfo.displays {
+            rows.extend(crate::displays::rows(displays));
         }
         let os = format!(
             "{} {}",

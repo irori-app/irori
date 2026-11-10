@@ -16,6 +16,7 @@ pub mod backup_schedule;
 pub mod capture;
 pub mod copies;
 mod discord;
+pub mod displays;
 mod downloads;
 mod engines;
 mod facts;

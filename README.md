@@ -255,6 +255,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   it's greyed out when your hardware or drivers can't use it. On Windows the tab sets
   Windows' own graphics preference (power saving or high performance) for the game's
   program, and puts back what was there when you clear it.
+- **Your displays, known:** System info lists each display's mode, the modes it offers
+  and whether HDR is on, and the HDR and gamescope settings tell you which display has
+  HDR and what it runs at.
 - **Your folders, your shader cache:** choose where downloaded Wine and Proton builds
   go, and games get 10 GB of shader cache on NVIDIA and Mesa, so big games don't
   compile their shaders again at every start.

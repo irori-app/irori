@@ -691,6 +691,15 @@ commands without a window.
   `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
+- **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
+  the modes offered and HDR (on, capable), kept until a refresh. Linux reads
+  `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool
+  (`kscreen-doctor`, `hyprctl`, `wlr-randr`, `xrandr`; `irori_core::host` inside the
+  Flatpak), merged by connector name (`merge`); Windows uses `QueryDisplayConfig` and
+  advanced colour info; macOS `system_profiler`. Every parser is pure and tested in
+  `displays/parse.rs`; unknown stays `None`, never a guess. Settings › System info lists
+  them (`irori_settings` `displays.rs`), and the HDR and gamescope fields' help adds a
+  hint from them (`displays::hint`).
 - **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
   only): Windows' own per-program choice in
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the

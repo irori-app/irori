@@ -54,6 +54,8 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "g
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
+    # The displays, their modes and HDR (`displays`).
+    "Win32_Devices_Display",
     "Win32_Foundation",
     # The in-game overlay's screenshot (GDI, the game's monitor).
     "Win32_Graphics_Gdi",

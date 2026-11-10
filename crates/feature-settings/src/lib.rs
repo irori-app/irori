@@ -25,6 +25,7 @@ mod appearance;
 mod artwork;
 mod backup;
 mod controllers;
+mod displays;
 mod epic;
 mod form;
 mod game_view;

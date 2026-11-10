@@ -670,6 +670,24 @@ Cleanups delete only what the rebuilt report offers at that moment, each item th
 | Art thumbnails | `<cache>/images/thumbs` | Downloaded originals |
 | Logs | Everything under the logs folder except the current `irori.log` | On Windows a log a running game holds open is skipped and goes next time |
 
+### Displays
+
+Settings › System info (`irori://settings/system`) lists every display: its name, the
+mode it runs in, the modes it offers and whether HDR is on, and "Copy" adds the same as
+text. Nothing is asked with privileges, and tools run with a 5-second timeout on the
+backend, never the interface thread; the answer is kept until Refresh.
+
+| System | Where it comes from | What stays unknown |
+| --- | --- | --- |
+| Linux | The kernel's connectors (`/sys/class/drm/card*-*`: `status`, `enabled`, `modes`, and `edid` for the monitor's name and whether its HDR static metadata lists PQ or HLG), then the compositor: `kscreen-doctor -j` on KDE Plasma (mode in use, HDR on), `hyprctl -j monitors all` on Hyprland, `wlr-randr --json` on other wlroots compositors, `xrandr --query` on X11 (where HDR is always off). Inside the Flatpak the tools run on the host | GNOME and other compositors without such a tool: the mode in use and whether HDR is on (the kernel's modes carry no refresh rates) |
+| Windows | `QueryDisplayConfig` (active displays, exact refresh rate), `DisplayConfigGetDeviceInfo` (monitor name, advanced colour: HDR supported and on), `EnumDisplaySettingsW` (the modes, in full colour) | — |
+| macOS | `system_profiler SPDisplaysDataType -json`: the resolution in use and its refresh rate | Other modes, and HDR beyond the XDR displays being capable |
+
+The Linux settings use it too: the HDR switch and gamescope's extra options say which
+display has HDR on, could have it (and that it's off in the system's display settings),
+or that none reports it; gamescope's output size and frame limit say which mode the
+main display runs at. Nothing is said when the system doesn't tell.
+
 ### Interface font
 
 The font list is the system's: fontconfig on Linux, Core Text on macOS and DirectWrite on
