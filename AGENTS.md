@@ -1020,8 +1020,12 @@ it on every platform, and CI's Windows install test runs it.
   program switched to their full HID report still read nothing there.
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
-  keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K) when the element doesn't
-  handle them.
+  keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K, Page Up/Down) when the element
+  doesn't handle them. An arrow nobody handles moves to the previous/next Tab stop, and
+  so do the shoulders where nothing pages. So a view that binds the arrows (a grid, a
+  list) must leave one that moves nothing at its edge unhandled (`cx.propagate()`, as
+  the library grid does), or a controller is stuck in it. Menu opens the palette,
+  which reaches every screen.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it.
 - Holding Start (or Select, `iroriUi.bigPictureHoldButton`; `off` turns it off) for

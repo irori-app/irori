@@ -15,7 +15,13 @@
 //!    keyboard) and fall back to moving focus to the previous/next Tab stop;
 //!    Confirm presses Enter (activating the focused control), Back presses
 //!    Escape and falls back to navigating back, Alt sends Ctrl+Enter (play),
-//!    Menu opens the command palette (Ctrl+K) and the shoulders page.
+//!    Menu opens the command palette (Ctrl+K) and the shoulders page (Page
+//!    Up and Down), else move to the previous/next Tab stop like Shift+Tab
+//!    and Tab. A list or grid leaves an arrow at its edge unhandled, so the
+//!    directions move on to the controls around it; the shoulders get out of
+//!    one that keeps every arrow. Every screen is reachable through Menu
+//!    (the palette lists them all) and left with Back. The keys typed this
+//!    way count as keyboard input, so focus rings show.
 //! 3. Guide toggles Big Picture from anywhere. With the in-game overlay on
 //!    (`iroriOverlay`), Guide while a game Irori started runs opens the
 //!    overlay instead, and every input goes to it while it is open.
@@ -593,10 +599,14 @@ pub fn route_in_window(input: GamepadInput, window: &mut Window, cx: &mut App) {
             press(window, "ctrl-k", cx);
         }
         GamepadInput::PrevPage => {
-            press(window, "pageup", cx);
+            if !press(window, "pageup", cx) {
+                window.focus_prev(cx);
+            }
         }
         GamepadInput::NextPage => {
-            press(window, "pagedown", cx);
+            if !press(window, "pagedown", cx) {
+                window.focus_next(cx);
+            }
         }
     }
 }
@@ -698,6 +708,25 @@ mod tests {
         assert!(focused(cx, true));
         cx.update_window(window.into(), |_, window, cx| {
             route_in_window(GamepadInput::Up, window, cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(focused(cx, false));
+        // Nothing pages here: the shoulders move like Tab and Shift+Tab.
+        cx.update_window(window.into(), |_, window, cx| {
+            route_in_window(GamepadInput::NextPage, window, cx)
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(focused(cx, true));
+        let keyboard = cx
+            .update_window(window.into(), |_, window, _| {
+                window.last_input_was_keyboard()
+            })
+            .unwrap();
+        assert!(keyboard, "focus rings show for controller moves");
+        cx.update_window(window.into(), |_, window, cx| {
+            route_in_window(GamepadInput::PrevPage, window, cx)
         })
         .unwrap();
         cx.run_until_parked();

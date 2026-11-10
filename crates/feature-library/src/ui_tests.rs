@@ -313,6 +313,69 @@ fn keyboard_navigation_filters_and_search(cx: &mut TestAppContext) {
     let _ = cx.read(|cx| view.read(cx).focus_handle(cx));
 }
 
+/// A controller's directions are these arrow keys: at the grid's edges they
+/// must be left unhandled, so the controller moves on to the controls
+/// around the grid instead of getting stuck in it.
+#[gpui_kit::test]
+fn arrows_at_the_grid_edges_are_left_to_the_window(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+    let press = |cx: &mut TestAppContext, key: &str| -> bool {
+        let handled = cx
+            .update_window(window, |_, window, cx| {
+                window.dispatch_keystroke(gpui_kit::Keystroke::parse(key).unwrap(), cx)
+            })
+            .unwrap();
+        draw(cx);
+        handled
+    };
+    let focused = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).focused_game().cloned());
+    let first = GameId::new(Runner::Gog, "1");
+    let last = GameId::new(Runner::Gog, "5");
+
+    assert!(press(cx, "down"), "the first key focuses the first game");
+    assert_eq!(focused(cx), Some(first.clone()));
+    assert!(!press(cx, "left"), "nothing left of the first game");
+    assert!(!press(cx, "up"), "nothing above the first row");
+    assert!(!press(cx, "pageup"));
+    assert_eq!(focused(cx), Some(first));
+    assert!(press(cx, "end"));
+    assert_eq!(focused(cx), Some(last.clone()));
+    assert!(!press(cx, "right"), "nothing right of the last game");
+    assert!(!press(cx, "down"), "nothing below the last row");
+    assert_eq!(focused(cx), Some(last));
+    assert!(press(cx, "left"), "inside the grid the keys still move");
+    assert_eq!(focused(cx), Some(GameId::new(Runner::Gog, "4")));
+}
+
 #[gpui_kit::test]
 fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     let _backend = start(cx);

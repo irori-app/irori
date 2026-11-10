@@ -1187,7 +1187,14 @@ impl LibraryView {
             Move::PageDown(_) => Move::PageDown(page_rows),
             other => other,
         };
-        if let Some(ix) = grid::move_in_sections(current, &self.sections(), self.columns(), step) {
+        let target = grid::move_in_sections(current, &self.sections(), self.columns(), step);
+        if current.is_some() && target == current {
+            // At the edge the key is left to others, so a controller (whose
+            // arrows are these keys) moves on to the controls around the grid.
+            cx.propagate();
+            return;
+        }
+        if let Some(ix) = target {
             let id = games[ix].id();
             self.check_shortcut(&id, cx);
             self.focused = Some(id);
