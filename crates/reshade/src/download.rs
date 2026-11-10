@@ -20,7 +20,6 @@
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 
 use anyhow::{Context as _, Result, bail};
 use irori_core::archive_guard::relative_entry_path;
@@ -32,6 +31,7 @@ use regex::Regex;
 use sha2::{Digest as _, Sha256};
 
 use crate::compat::{COMPATIBILITY_URL, CompatList};
+use crate::fetch;
 use crate::pe::{self, Machine};
 
 /// Page that links the current ReShade release.
@@ -52,8 +52,6 @@ const D3DCOMPILER_32: (&str, &str) = (
     "2ad0d4987fc4624566b190e747c9d95038443956ed816abfd1e2d389b5ec0851",
 );
 
-/// How long a downloaded list is used before asking again.
-const LIST_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// Limits on the shaders' archive, which is a few megabytes.
 const MAX_SHADER_FILES: usize = 10_000;
 const MAX_SHADER_BYTES: u64 = 256 << 20;
@@ -165,45 +163,13 @@ PresetPath=.\\ReShadePreset.ini\r\n"
         .to_vec()
 }
 
-fn fresh(path: &Path) -> bool {
-    std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .is_some_and(|age| age < LIST_MAX_AGE)
-}
-
-/// A daily-refreshed download: the cached copy while it is fresh, else a
-/// new one, else the stale copy.
+/// A daily-refreshed ReShade list under [`crate::cache_dir`].
 async fn cached<T>(
     path: PathBuf,
     fetch: impl AsyncFnOnce() -> Result<Vec<u8>>,
     parse: impl Fn(&[u8]) -> Result<T>,
 ) -> Result<T> {
-    if fresh(&path)
-        && let Ok(bytes) = tokio::fs::read(&path).await
-        && let Ok(value) = parse(&bytes)
-    {
-        return Ok(value);
-    }
-    match fetch().await.and_then(|bytes| Ok((parse(&bytes)?, bytes))) {
-        Ok((value, bytes)) => {
-            let path = path.clone();
-            if let Err(e) =
-                tokio::task::spawn_blocking(move || json_store::write_bytes(&path, &bytes)).await?
-            {
-                tracing::warn!("caching ReShade data: {e:#}");
-            }
-            Ok(value)
-        }
-        Err(e) => match tokio::fs::read(&path).await {
-            Ok(bytes) => {
-                tracing::warn!("using ReShade data cached earlier: {e:#}");
-                parse(&bytes)
-            }
-            Err(_) => Err(e),
-        },
-    }
+    fetch::cached("ReShade", path, fetch, parse).await
 }
 
 async fn fetch_bytes(
@@ -211,19 +177,7 @@ async fn fetch_bytes(
     progress: &ProgressSink,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>> {
-    // Two games may download the same file at once; each gets its own name.
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = crate::cache_dir().join("downloads");
-    let dest = dir.join(format!(
-        "{:x}-{}-{n}",
-        Sha256::digest(url.as_bytes()),
-        std::process::id()
-    ));
-    irori_runtime::download::download(url, &dest, progress, cancel).await?;
-    let bytes = tokio::fs::read(&dest).await?;
-    let _ = tokio::fs::remove_file(&dest).await;
-    Ok(bytes)
+    fetch::fetch_bytes(url, &crate::cache_dir().join("downloads"), progress, cancel).await
 }
 
 /// The newest ReShade version, asked of reshade.me once a day.

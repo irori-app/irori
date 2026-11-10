@@ -10,6 +10,7 @@ use irori_core::process::CancellationToken;
 
 use crate::detect::{self, Detection};
 use crate::journal::{self, Existing, Manifest, Planned};
+use crate::layer::GraphicsMod;
 use crate::{Api, ReshadeError, download};
 
 /// Where an install is.
@@ -115,6 +116,7 @@ pub async fn install(
     );
     let stem = dll.trim_end_matches(".dll").to_string();
     let base = Manifest {
+        kind: GraphicsMod::Reshade,
         version,
         exe: found.exe.clone(),
         machine: found.machine,

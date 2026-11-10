@@ -1,4 +1,5 @@
-//! Installing into a game folder with a record of every write.
+//! Installing a graphics mod into a game folder with a record of every
+//! write. Every mod ([`GraphicsMod`]) keeps its own manifest.
 //!
 //! The manifest lists each file Irori writes (path relative to the install
 //! folder, SHA-256, size) and each folder it creates, and is saved before
@@ -6,10 +7,13 @@
 //!
 //! - Files are written through [`json_store::write_bytes`] (a temporary
 //!   sibling renamed into place), so each is either absent or complete.
-//! - A file that already exists is never replaced: the ReShade DLL refuses
-//!   the install ([`ReshadeError::DllTaken`]); `ReShade.ini`,
-//!   `d3dcompiler_47.dll` and shaders the folder already has are left as
-//!   they are and stay out of the manifest.
+//! - A file that already exists is never replaced: the mod's own file (the
+//!   ReShade DLL) refuses the install ([`ReshadeError::DllTaken`]);
+//!   `ReShade.ini`, `d3dcompiler_47.dll` and shaders the folder already has
+//!   are left as they are and stay out of the manifest.
+//! - [`set_enabled`] turns a mod off by renaming its one switch file
+//!   ([`Manifest::dll`]) with [`DISABLED_SUFFIX`], and on by renaming it
+//!   back.
 //! - [`remove`] deletes only recorded files whose hash still matches, then
 //!   the recorded folders that are empty. ReShade rewrites `ReShade.ini` and
 //!   writes presets as the user plays, so those are kept.
@@ -23,10 +27,11 @@ use irori_core::json_store;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
+use crate::layer::GraphicsMod;
 use crate::pe::Machine;
 use crate::{Api, ReshadeError};
 
-/// Suffix of the DLL while ReShade is turned off.
+/// Suffix of the switch file while its mod is turned off.
 pub const DISABLED_SUFFIX: &str = ".irori-disabled";
 
 /// A file Irori wrote.
@@ -39,17 +44,22 @@ pub struct FileRecord {
     pub size: u64,
 }
 
-/// One game's ReShade install.
+/// One game's install of one graphics mod.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
-    /// ReShade's version (`6.8.0`).
+    /// Which mod this is. ReShade's manifests leave it out, as they did
+    /// before Irori knew other mods.
+    #[serde(default, skip_serializing_if = "GraphicsMod::is_reshade")]
+    pub kind: GraphicsMod,
+    /// The mod's version (ReShade's `6.8.0`).
     pub version: String,
-    /// The program ReShade was installed for.
+    /// The program the mod was installed for.
     pub exe: PathBuf,
     pub machine: Machine,
     pub api: Api,
-    /// The DLL ReShade is installed as (`dxgi.dll`), in [`Self::dir`].
+    /// The switch file, in [`Self::dir`]: renamed to turn the mod off. For
+    /// ReShade, the DLL it is installed as (`dxgi.dll`).
     pub dll: String,
     /// The install folder.
     pub dir: PathBuf,
@@ -68,7 +78,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Path of the DLL, under its current name.
+    /// Path of the switch file, under its current name.
     pub fn dll_path(&self) -> PathBuf {
         if self.enabled {
             self.dir.join(&self.dll)
@@ -82,18 +92,25 @@ impl Manifest {
     /// a removal reaches).
     fn checked(&self) -> Result<()> {
         if !self.dir.is_absolute() {
-            bail!("The ReShade install record names no game folder");
+            bail!(
+                "The {} install record names no game folder",
+                self.kind.name()
+            );
         }
         for p in self.files.iter().map(|f| &f.path).chain(&self.created_dirs) {
             if relative_entry_path(p).as_deref() != Some(p.as_path()) {
                 bail!(
-                    "The ReShade install record names {} outside the game folder",
+                    "The {} install record names {} outside the game folder",
+                    self.kind.name(),
                     p.display()
                 );
             }
         }
         if relative_entry_path(Path::new(&self.dll)).as_deref() != Some(Path::new(&self.dll)) {
-            bail!("The ReShade install record names an invalid DLL");
+            bail!(
+                "The {} install record names an invalid file",
+                self.kind.name()
+            );
         }
         Ok(())
     }
@@ -149,7 +166,7 @@ fn exists(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok()
 }
 
-/// Read a game's manifest; `None` when ReShade isn't installed.
+/// Read a game's manifest; `None` when the mod isn't installed.
 pub fn load(journal: &Path) -> Result<Option<Manifest>> {
     let manifest: Option<Manifest> = json_store::read(journal)?;
     if let Some(m) = &manifest {
@@ -159,7 +176,8 @@ pub fn load(journal: &Path) -> Result<Option<Manifest>> {
 }
 
 fn save(journal: &Path, manifest: &Manifest) -> Result<()> {
-    json_store::write(journal, manifest).context("Could not save the ReShade install record")
+    json_store::write(journal, manifest)
+        .with_context(|| format!("Could not save the {} install record", manifest.kind.name()))
 }
 
 /// Write `files` into `base.dir`, recording them in `base` and saving it at
@@ -239,7 +257,11 @@ pub fn apply(
     })();
     if let Err(e) = written {
         if let Err(undo) = remove_files(&base) {
-            tracing::warn!("undoing the ReShade install in {}: {undo:#}", dir.display());
+            tracing::warn!(
+                "undoing the {} install in {}: {undo:#}",
+                base.kind.name(),
+                dir.display()
+            );
         }
         let _ = std::fs::remove_file(journal);
         return Err(e);
@@ -249,7 +271,7 @@ pub fn apply(
     Ok(base)
 }
 
-/// Rename the DLL to turn ReShade on or off. Blocking.
+/// Rename the switch file to turn the mod on or off. Blocking.
 pub fn set_enabled(journal: &Path, manifest: &mut Manifest, enabled: bool) -> Result<()> {
     manifest.checked()?;
     if manifest.enabled == enabled {
@@ -269,7 +291,11 @@ pub fn set_enabled(journal: &Path, manifest: &mut Manifest, enabled: bool) -> Re
         });
     }
     if !exists(&from) {
-        bail!("ReShade's {} is no longer in the game folder", manifest.dll);
+        bail!(
+            "{}'s {} is no longer in the game folder",
+            manifest.kind.name(),
+            manifest.dll
+        );
     }
     std::fs::rename(&from, &to).with_context(|| format!("Could not rename {}", from.display()))?;
     if let Err(e) = save(journal, &next) {
@@ -323,7 +349,14 @@ pub fn remove(
     match std::fs::remove_file(journal) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e).context("Could not delete the ReShade install record"),
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!(
+                    "Could not delete the {} install record",
+                    manifest.kind.name()
+                )
+            });
+        }
     }
     Ok(report)
 }
@@ -334,6 +367,7 @@ mod tests {
 
     fn base(dir: &Path) -> Manifest {
         Manifest {
+            kind: GraphicsMod::Reshade,
             version: "6.8.0".into(),
             exe: dir.join("Game.exe"),
             machine: Machine::X64,
@@ -508,5 +542,43 @@ mod tests {
         assert!(remove(&journal, &m, &refuse).is_err());
         assert!(game.path().join("dxgi.dll").exists());
         assert!(journal.exists());
+    }
+
+    /// A manifest Irori wrote before it knew other graphics mods.
+    const OLD_MANIFEST: &str = r#"{
+  "version": "6.7.3",
+  "exe": "/games/Game/Game.exe",
+  "machine": "x64",
+  "api": "dxgi",
+  "dll": "dxgi.dll",
+  "dir": "/games/Game",
+  "enabled": true,
+  "complete": true,
+  "overrides": ["dxgi", "d3dcompiler_47"],
+  "files": [{"path": "dxgi.dll", "sha256": "ab", "size": 2}],
+  "createdDirs": ["reshade-shaders"]
+}"#;
+
+    #[test]
+    fn manifests_written_before_other_mods_read_as_reshade() {
+        let m: Manifest = serde_json::from_str(OLD_MANIFEST).unwrap();
+        assert_eq!(m.kind, GraphicsMod::Reshade);
+        assert_eq!(m.version, "6.7.3");
+        assert_eq!(m.dll, "dxgi.dll");
+        assert_eq!(m.files.len(), 1);
+        // Written back, a ReShade manifest keeps the shape it had.
+        let back = serde_json::to_value(&m).unwrap();
+        assert_eq!(
+            back,
+            serde_json::from_str::<serde_json::Value>(OLD_MANIFEST).unwrap()
+        );
+    }
+
+    #[test]
+    fn unknown_fields_of_a_newer_irori_are_ignored() {
+        let mut v: serde_json::Value = serde_json::from_str(OLD_MANIFEST).unwrap();
+        v["somethingNew"] = serde_json::json!({"a": 1});
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.kind, GraphicsMod::Reshade);
     }
 }

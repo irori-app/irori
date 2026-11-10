@@ -3,7 +3,6 @@
 //! install's steps and download progress shown in place.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
@@ -21,6 +20,7 @@ use irori_services::{ReshadeStatus, supports_reshade};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
 
+use crate::graphics_mods::{Report, progress_channel, removed_notification};
 use crate::widgets::{RowState, field_row, group_panel, muted};
 
 enum Load {
@@ -35,12 +35,6 @@ enum Busy {
     Installing,
     Toggling,
     Removing,
-}
-
-/// What a running install reports.
-enum Report {
-    Step(Step),
-    Percent(Option<f32>),
 }
 
 /// The ReShade rows of one game.
@@ -213,14 +207,7 @@ impl ReshadePanel {
         self.percent = None;
         let cancel = CancellationToken::new();
         self.cancel = Some(cancel.clone());
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Report>();
-        let step_tx = tx.clone();
-        let step: Arc<dyn Fn(Step) + Send + Sync> = Arc::new(move |s| {
-            let _ = step_tx.send(Report::Step(s));
-        });
-        let progress: irori_core::install::ProgressSink = Arc::new(move |p| {
-            let _ = tx.send(Report::Percent(p.percent));
-        });
+        let (step, progress, mut rx) = progress_channel();
         let b = backend(cx);
         let id = self.id.clone();
         let task = irori_ui::run(cx, async move {
@@ -338,33 +325,9 @@ impl ReshadePanel {
                 this.busy = None;
                 match result {
                     Ok(report) => {
-                        let mut note = Notification::success(t_args(
-                            "settings.reshade.removed_notice",
-                            &[("title", &title)],
-                        ));
-                        if !report.kept.is_empty() {
-                            let files = report
-                                .kept
-                                .iter()
-                                .map(|p| p.to_string_lossy().into_owned())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            let count = report.kept.len().to_string();
-                            let key = if report.kept.len() == 1 {
-                                "settings.reshade.kept_one"
-                            } else {
-                                "settings.reshade.kept_other"
-                            };
-                            note = Notification::success(t_args(
-                                key,
-                                &[("count", &count), ("files", &files)],
-                            ))
-                            .title(t_args(
-                                "settings.reshade.removed_notice",
-                                &[("title", &title)],
-                            ));
-                        }
-                        window.push_notification(note, cx);
+                        let removed =
+                            t_args("settings.reshade.removed_notice", &[("title", &title)]);
+                        window.push_notification(removed_notification(removed, &report), cx);
                     }
                     Err(e) => window.push_notification(
                         Notification::error(error_text(&e)).title(t("settings.reshade.failed")),

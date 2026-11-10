@@ -1370,6 +1370,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   section (`irori_settings` `ReshadePanel`, route id `reshade`). Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
+  Irori puts into a game folder, its manifest's path and its cache folder. Detection,
+  cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
+  services run one graphics mod operation per game at a time
+  (`Backend::set_graphics_mod_enabled`, `remove_graphics_mod`). A manifest without
+  `kind` is ReShade's, so manifests written before the layer keep reading.
 - **Detection** (`irori_reshade::detect`): the configured program (`targetExe`, else
   the store's executable) when its PE imports name an API; otherwise the game folder is
   searched (installers, redistributables, crash reporters, launchers and anticheat

@@ -1,11 +1,12 @@
-//! ReShade per game ([`irori_reshade`]) behind [`Backend`]: what is
-//! installed, installing (refusing games ReShade's list bans), turning it on
-//! and off, removing it, and the DLL overrides a Wine launch needs.
+//! Graphics mods per game ([`irori_reshade`]) behind [`Backend`]: what is
+//! installed, installing ReShade (refusing games ReShade's list bans),
+//! turning a mod on and off, removing it, and the DLL overrides a Wine
+//! launch needs.
 //!
-//! One operation per game at a time, and none while the game runs: the DLL
-//! can't be renamed or replaced under a running game. Removing first vets
-//! the install folder with `fs_guard`, and deletes only files Irori wrote
-//! that are unchanged.
+//! One operation per game at a time, whichever the mod, and none while the
+//! game runs: files can't be renamed or replaced under a running game.
+//! Removing first vets the install folder with `fs_guard`, and deletes only
+//! files Irori wrote that are unchanged.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -16,7 +17,7 @@ use irori_core::install::ProgressSink;
 use irori_core::process::CancellationToken;
 use irori_core::{GameId, GameInfo, InstallPlatform, Runner, fs_guard};
 use irori_extras::anticheat::{self, AntiCheatQuery};
-use irori_reshade::{InstallRequest, Manifest, RemoveReport, Step, journal};
+use irori_reshade::{GraphicsMod, InstallRequest, Manifest, RemoveReport, Step, journal};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
@@ -57,16 +58,16 @@ pub fn supports_reshade(game: &GameInfo) -> bool {
         && game.install_path().is_some()
 }
 
-/// Games with a ReShade operation running.
+/// Games with a graphics mod operation running.
 static BUSY: Lazy<Mutex<HashSet<String>>> = Lazy::new(Default::default);
 
 struct Busy(String);
 
 impl Busy {
-    fn take(id: &GameId) -> Result<Self> {
+    fn take(id: &GameId, kind: GraphicsMod) -> Result<Self> {
         let key = id.key();
         if !BUSY.lock().insert(key.clone()) {
-            bail!("ReShade is already being changed for this game");
+            bail!("{} is already being changed for this game", kind.name());
         }
         Ok(Self(key))
     }
@@ -78,8 +79,8 @@ impl Drop for Busy {
     }
 }
 
-async fn load(id: &GameId) -> Result<Option<Manifest>> {
-    let path = irori_reshade::journal_path(id);
+async fn load(kind: GraphicsMod, id: &GameId) -> Result<Option<Manifest>> {
+    let path = kind.journal_path(id);
     tokio::task::spawn_blocking(move || journal::load(&path)).await?
 }
 
@@ -92,11 +93,11 @@ impl Backend {
         Ok(game)
     }
 
-    fn reshade_ready(&self, id: &GameId) -> Result<Busy> {
+    fn graphics_mod_ready(&self, id: &GameId, kind: GraphicsMod) -> Result<Busy> {
         if self.is_running(id) {
             bail!("Close the game first");
         }
-        Busy::take(id)
+        Busy::take(id, kind)
     }
 
     /// The program the store or the user's settings start.
@@ -120,7 +121,7 @@ impl Backend {
     /// anticheat.
     pub async fn reshade_status(&self, id: &GameId) -> Result<ReshadeStatus> {
         let game = self.reshade_game(id)?;
-        let manifest = load(id).await?;
+        let manifest = load(GraphicsMod::Reshade, id).await?;
         let latest = match irori_reshade::download::latest().await {
             Ok(v) => Some(v),
             Err(e) => {
@@ -160,10 +161,10 @@ impl Backend {
         cancel: CancellationToken,
     ) -> Result<Manifest> {
         let game = self.reshade_game(id)?;
-        let _busy = self.reshade_ready(id)?;
+        let _busy = self.graphics_mod_ready(id, GraphicsMod::Reshade)?;
         let root = game.install_path().context("The game has no folder")?;
         let journal = irori_reshade::journal_path(id);
-        let previous = load(id).await?;
+        let previous = load(GraphicsMod::Reshade, id).await?;
         // An update or a reinstall keeps the program chosen before.
         let chosen = chosen_exe.or_else(|| previous.as_ref().map(|m| m.exe.clone()));
         if let Some(previous) = previous {
@@ -199,23 +200,47 @@ impl Backend {
 
     /// Turn ReShade on or off by renaming its DLL.
     pub async fn set_reshade_enabled(&self, id: &GameId, enabled: bool) -> Result<()> {
+        self.set_graphics_mod_enabled(id, GraphicsMod::Reshade, enabled)
+            .await
+    }
+
+    /// Turn a graphics mod on or off by renaming its switch file.
+    pub async fn set_graphics_mod_enabled(
+        &self,
+        id: &GameId,
+        kind: GraphicsMod,
+        enabled: bool,
+    ) -> Result<()> {
         self.reshade_game(id)?;
-        let _busy = self.reshade_ready(id)?;
-        let mut manifest = load(id).await?.context("ReShade is not installed")?;
-        let journal = irori_reshade::journal_path(id);
+        let _busy = self.graphics_mod_ready(id, kind)?;
+        let mut manifest = load(kind, id)
+            .await?
+            .with_context(|| format!("{} is not installed", kind.name()))?;
+        let journal = kind.journal_path(id);
         tokio::task::spawn_blocking(move || journal::set_enabled(&journal, &mut manifest, enabled))
             .await?
     }
 
     /// Remove ReShade: the files Irori wrote and nobody changed since.
     pub async fn remove_reshade(&self, id: &GameId) -> Result<RemoveReport> {
-        let _busy = self.reshade_ready(id)?;
-        let manifest = load(id).await?.context("ReShade is not installed")?;
-        let report = self
-            .remove_files(&irori_reshade::journal_path(id), manifest)
-            .await?;
+        self.remove_graphics_mod(id, GraphicsMod::Reshade).await
+    }
+
+    /// Remove a graphics mod: the files Irori wrote and nobody changed
+    /// since.
+    pub async fn remove_graphics_mod(
+        &self,
+        id: &GameId,
+        kind: GraphicsMod,
+    ) -> Result<RemoveReport> {
+        let _busy = self.graphics_mod_ready(id, kind)?;
+        let manifest = load(kind, id)
+            .await?
+            .with_context(|| format!("{} is not installed", kind.name()))?;
+        let report = self.remove_files(&kind.journal_path(id), manifest).await?;
         tracing::info!(
-            "removed ReShade from {id}: {} files, {} kept",
+            "removed {} from {id}: {} files, {} kept",
+            kind.name(),
             report.removed,
             report.kept.len()
         );
@@ -229,7 +254,7 @@ impl Backend {
         id: &GameId,
         env: &mut std::collections::BTreeMap<String, String>,
     ) {
-        let manifest = match load(id).await {
+        let manifest = match load(GraphicsMod::Reshade, id).await {
             Ok(Some(m)) => m,
             Ok(None) => return,
             Err(e) => {
@@ -275,6 +300,7 @@ mod tests {
 
     fn manifest() -> Manifest {
         Manifest {
+            kind: GraphicsMod::Reshade,
             version: "6.7.3".into(),
             exe: PathBuf::from("/g/Game.exe"),
             machine: irori_reshade::Machine::X64,
