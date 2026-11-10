@@ -191,10 +191,16 @@ mod tests {
         let env = runtime.launch_env(Path::new("/pfx"));
         assert_eq!(env["UMU_USE_STEAM"], "0");
         assert!(!env["UMU_ID"].is_empty());
-        assert_eq!(env["STEAM_COMPAT_SHADER_PATH"], "/pfx/shadercache");
+        // Joined like the code does, so the test also holds where the
+        // separator is `\` (the crate's tests run on Windows too).
+        let joined = |p: PathBuf| p.to_string_lossy().into_owned();
+        assert_eq!(
+            env["STEAM_COMPAT_SHADER_PATH"],
+            joined(Path::new("/pfx").join("shadercache"))
+        );
         assert_eq!(
             env["MEDIACONV_BLANK_VIDEO_FILE"],
-            "/rt/files/share/media/blank.mkv"
+            joined(Path::new("/rt").join("files/share/media").join("blank.mkv"))
         );
         assert_eq!(
             XboxRuntime::windows_path(Path::new("/games/Halo/x.exe")),

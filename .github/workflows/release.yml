@@ -78,6 +78,17 @@ jobs:
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: cargo-deb,cargo-generate-rpm
+      # Irori's fat-LTO link needs more memory than the arm64 runners have;
+      # without swap the runner is killed while linking.
+      - name: Swap for the release link
+        if: matrix.arch == 'aarch64'
+        run: |
+          swap=/irori-swap
+          sudo fallocate -l 16G "$swap"
+          sudo chmod 600 "$swap"
+          sudo mkswap "$swap"
+          sudo swapon "$swap"
+          free -h
       - run: cargo build --locked --release -p irori -p irori-sign-in
       # Pinned and checked, so a release never packs a runtime nobody reviewed.
       - name: AppImage tools
@@ -308,6 +319,18 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
+      # Irori's fat-LTO link needs more memory than the arm64 runners have.
+      # The container is privileged and RUNNER_TEMP is the host's disk, so
+      # swap can be added here (not in the checkout, which the build copies).
+      - name: Swap for the release link
+        if: matrix.arch == 'aarch64'
+        run: |
+          swap="$RUNNER_TEMP/irori-swap"
+          fallocate -l 16G "$swap"
+          chmod 600 "$swap"
+          mkswap "$swap"
+          swapon "$swap"
+          free -h
       - uses: actions/download-artifact@v4
         with:
           name: cargo-sources

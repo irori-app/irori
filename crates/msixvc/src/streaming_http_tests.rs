@@ -203,13 +203,20 @@ async fn streaming_http_retries_are_bounded_and_keep_actual_status() {
     let address = listener.local_addr().unwrap();
     drop(listener);
     let url = format!("http://{address}/?SECRET");
-    assert_eq!(
-        collect(&mut RangeReader::new(&client, &url, 0, 9, policy()))
-            .await
-            .unwrap_err()
-            .stage,
-        "transfer-request"
-    );
+    let stage = collect(&mut RangeReader::new(&client, &url, 0, 9, policy()))
+        .await
+        .unwrap_err()
+        .stage;
+    // Windows retries a refused connection for about two seconds before
+    // failing it, so the 80 ms test timeout can end the attempt first.
+    if cfg!(windows) {
+        assert!(
+            ["transfer-request", "transfer-headers-timeout"].contains(&stage),
+            "{stage}"
+        );
+    } else {
+        assert_eq!(stage, "transfer-request");
+    }
 }
 #[tokio::test]
 async fn streaming_http_idle_timeout_is_distinct_from_header_timeout() {
