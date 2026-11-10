@@ -307,6 +307,11 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriHltbId")]
     pub hltb_id: String,
+    /// The game's IGDB id, when the user chose its match ("Change match"),
+    /// or `none` for no match; empty finds one by title. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriIgdbId")]
+    pub igdb_id: String,
     /// The game's Steam app id for its achievements read from game files,
     /// when the user chose one; empty finds it in the game's files and
     /// variables. Per game only. Irori-only.
@@ -488,6 +493,7 @@ impl Default for GameSettings {
             ludusavi_interval: 0,
             ludusavi_title: String::new(),
             hltb_id: String::new(),
+            igdb_id: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
         }
@@ -738,6 +744,12 @@ pub struct AppSettings {
     /// their own executable. Irori-only.
     #[serde(rename = "iroriFileAchievements")]
     pub file_achievements: bool,
+    /// Fill what store pages leave out (descriptions, genres, release
+    /// dates, screenshots) from IGDB, and offer its art in the art picker.
+    /// Needs the user's own Twitch application, kept with `irori_secrets`;
+    /// off by default. Irori-only.
+    #[serde(rename = "iroriIgdb")]
+    pub igdb: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -790,6 +802,7 @@ impl Default for AppSettings {
             show_log_on_launch: false,
             achievement_notices: false,
             file_achievements: false,
+            igdb: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

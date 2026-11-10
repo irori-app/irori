@@ -31,6 +31,7 @@ mod form;
 mod game_view;
 mod graphics_mods;
 mod i18n;
+mod igdb;
 mod launch_presets;
 mod launch_programs;
 mod logs;

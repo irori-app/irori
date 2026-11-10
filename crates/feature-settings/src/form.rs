@@ -36,6 +36,7 @@ use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
+use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
 use crate::registry::{
@@ -678,6 +679,7 @@ impl SettingsForm {
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
+            PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);

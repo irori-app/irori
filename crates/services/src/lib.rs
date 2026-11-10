@@ -27,6 +27,7 @@ mod games;
 pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
+mod igdb;
 mod inhibit;
 pub mod journal;
 mod library;
@@ -78,6 +79,7 @@ pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadS
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
+pub use igdb::IgdbStatus;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
@@ -164,6 +166,8 @@ pub struct Inner {
     sunshine: sunshine::SunshineService,
     /// Fixes tried and exit codes, for launch troubleshooting.
     troubleshoot: troubleshoot::TroubleshootState,
+    /// The user's IGDB application.
+    igdb: igdb::IgdbState,
 }
 
 impl Deref for Backend {
@@ -244,6 +248,7 @@ impl Backend {
             sync: sync::SyncService::load(),
             sunshine: Default::default(),
             troubleshoot: Default::default(),
+            igdb: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {

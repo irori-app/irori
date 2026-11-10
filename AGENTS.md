@@ -169,7 +169,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/reshade` | `irori-reshade` | Graphics mods per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, ReShade and RenoDX downloads from the official sources, journaled installs |
-| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
+| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
 | `crates/feature-library` | `irori-library` | Library grid/list, search, filters, categories, stats page, sideload dialogs, the Lutris script installer |
@@ -529,6 +529,20 @@ commands without a window.
   when a result's folded name is the title (`best_match`). The user's choice
   ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
   no match) and part of the wiki cache's file name.
+- **IGDB** (`igdb.rs`, client in `irori-extras::igdb`, opt-in `iroriIgdb`): the user's
+  own Twitch application (client ID and secret in `<config>/igdb.json` through
+  `irori_secrets`, checked with Twitch before it is saved; Settings → Advanced →
+  Artwork) gets an app token (client credentials, memory only). Queries go to
+  `api.igdb.com/v4/games`, spaced to IGDB's four a second; a 401 renews the token
+  once. A game's record is the user's choice (per-game `iroriIgdbId`, `none` for no
+  match; "Change IGDB match" on the game page, `irori_game::igdb_match`), else the
+  search result whose folded name is the title (the release year decides between
+  several), cached in `<cache>/igdb` (a month, a week for "not found").
+  `Backend::extra_info` fills only what the store page left empty (description,
+  genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
+  art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
+  asked while the setting is off; the Modify dialog's title and art overrides win
+  over everything.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with

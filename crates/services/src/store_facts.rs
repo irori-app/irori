@@ -193,7 +193,8 @@ impl Backend {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner.store_name()))?;
-        let info = store.extra_info(&id.app_name).await?;
+        let mut info = store.extra_info(&id.app_name).await?;
+        self.fill_from_igdb(id, &mut info).await;
         if self
             .store_facts
             .learn_store_page(id.key(), &info.age_ratings, &info.game_modes)

@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use gpui_kit::{
-    AppContext as _, Bounds, Focusable as _, TestAppContext, WindowBounds, WindowOptions, px, size,
+    AppContext as _, Bounds, Entity, Focusable as _, TestAppContext, WindowBounds, WindowOptions,
+    px, size,
 };
 use irori_core::{
     DynStore, ExtraInfo, GameId, GameInfo, InstallInfo, InstallInfoQuery, InstallPlatform,
@@ -905,4 +906,35 @@ fn smart_categories_filter_the_library_and_reopen_as_saved(cx: &mut TestAppConte
     backend.userdata.delete_smart_category(&id);
     wait_for(cx, &|cx| titles(cx).len() == 5);
     assert!(cx.read(|cx| view.read(cx).filter(cx).smart_categories.is_empty()));
+}
+
+#[gpui_kit::test]
+fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let _backend = start(cx);
+    let open = |igdb_on: bool, cx: &mut TestAppContext| {
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        cx.read(|cx| picker.read(cx).source())
+    };
+
+    // Off: SteamGridDB only, asking for its key.
+    let picker = open(false, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+
+    // On without a SteamGridDB key: IGDB first; SteamGridDB still asks.
+    let picker = open(true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
 }

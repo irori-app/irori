@@ -898,3 +898,70 @@ fn third_party_launchers_are_rescanned_on_their_own_timer() {
         "0 is off"
     );
 }
+
+#[test]
+fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Sideload,
+            &[("igdb-lone", "IGDB: Lone Game")],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| match req.path.as_str() {
+        "/token" => Resp::json(serde_json::json!({"access_token": "t", "expires_in": 3600})),
+        "/v4/games" => {
+            let body = String::from_utf8_lossy(&req.body).to_string();
+            if body.contains("where id = 7;") {
+                Resp::json(serde_json::json!([{"id": 7, "name": "Chosen", "summary": "Picked."}]))
+            } else {
+                Resp::json(serde_json::json!([
+                    {"id": 1, "name": "IGDB: Lone Game", "summary": "Found by title.",
+                     "genres": [{"id": 1, "name": "Puzzle"}]}
+                ]))
+            }
+        }
+        _ => Resp::status(404),
+    });
+    b.set_igdb_endpoints(irori_extras::igdb::Endpoints {
+        token: server.url("/token"),
+        api: server.url("/v4"),
+    });
+    b.rebuild_library();
+    let id = GameId::new(Runner::Sideload, "igdb-lone");
+    let creds = irori_extras::igdb::Credentials::new("client", "secret").unwrap();
+    let rt = b.runtime();
+    rt.block_on(b.set_igdb_credentials(Some(creds))).unwrap();
+    assert_eq!(
+        rt.block_on(b.igdb_status()).client_id.as_deref(),
+        Some("client")
+    );
+
+    // Off: nothing is asked, nothing filled.
+    let asked = server.requests().len();
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!((info.description, info.details_from), (None, None));
+    assert_eq!(server.requests().len(), asked);
+
+    b.settings.update_app(|s| s.igdb = true);
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.description.as_deref(), Some("Found by title."));
+    assert_eq!(info.genres, ["Puzzle"]);
+    assert_eq!(info.details_from.as_deref(), Some("IGDB"));
+
+    // The user's match wins over the title search.
+    b.set_igdb_match(&id, Some("7".into()));
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.description.as_deref(), Some("Picked."));
+    b.set_igdb_match(&id, Some(irori_extras::igdb::IGDB_NONE.into()));
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.details_from, None);
+
+    rt.block_on(b.set_igdb_credentials(None)).unwrap();
+    assert_eq!(rt.block_on(b.igdb_status()).client_id, None);
+    b.settings.update_app(|s| s.igdb = false);
+}

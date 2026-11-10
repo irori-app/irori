@@ -235,6 +235,10 @@ pub struct ExtraInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// The source that filled what the store page lacked (`"IGDB"`), named
+    /// on the game page; `None` when everything is the store's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details_from: Option<String>,
 }
 
 /// One row of system requirements.

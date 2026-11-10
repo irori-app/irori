@@ -253,6 +253,8 @@ pub enum PanelKind {
     Replay,
     /// Sunshine: found or not, its login, syncing now, the last sync.
     Sunshine,
+    /// IGDB: the user's Twitch application, saving and forgetting it.
+    Igdb,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -2084,6 +2086,32 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.steam_grid_db_api_key.help")
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
+    app(
+        "iroriIgdb",
+        "settings.field.igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.igdb.help")
+    .keywords(&[
+        "igdb",
+        "twitch",
+        "metadata",
+        "description",
+        "genres",
+        "artwork",
+        "cover",
+        "screenshots",
+    ]),
+    app(
+        "panel.igdb",
+        "settings.field.panel_igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::Igdb),
+    )
+    .keywords(&["igdb", "twitch", "client id", "client secret"]),
     app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",

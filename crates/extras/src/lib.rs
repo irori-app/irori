@@ -1,6 +1,6 @@
 //! Integrations beyond the stores: desktop/menu/Steam shortcuts, the
 //! `irori://` / `heroic://` URL protocol, extra game information from wikis,
-//! AreWeAntiCheatYet data, Heroic's known fixes, SteamGridDB, store discounts,
+//! AreWeAntiCheatYet data, Heroic's known fixes, SteamGridDB, IGDB, store discounts,
 //! log helpers and importing launcher-level data from Heroic, Lutris,
 //! Bottles, Faugus Launcher and Playnite.
 //!
@@ -14,6 +14,7 @@
 pub mod anticheat;
 pub mod discounts;
 pub mod heroic_import;
+pub mod igdb;
 pub mod known_fixes;
 pub mod logs;
 pub mod lutris_import;

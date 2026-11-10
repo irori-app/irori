@@ -4553,6 +4553,7 @@ dependencies = [
  "futures",
  "image",
  "irori-core",
+ "irori-depot",
  "md5",
  "once_cell",
  "parking_lot",

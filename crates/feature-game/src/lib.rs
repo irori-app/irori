@@ -22,6 +22,7 @@ mod dlc;
 mod hltb_match;
 mod hooks;
 mod i18n;
+mod igdb_match;
 mod import_installers;
 mod install;
 mod launch_options;
