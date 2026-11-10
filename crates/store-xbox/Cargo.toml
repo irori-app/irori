@@ -1,0 +1,41 @@
+[package]
+name = "irori-xbox"
+description = "Xbox store backend for Irori: Microsoft Store and PC Game Pass games on Linux (account, library, MSIXVC installs and updates, licensed launches, the in-game account service)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+irori-core.workspace = true
+irori-runtime.workspace = true
+irori-secrets.workspace = true
+irori-msixvc.workspace = true
+irori-msstore-api.workspace = true
+irori-xbox-api.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["net"] }
+tokio-util.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+reqwest.workspace = true
+uuid.workspace = true
+base64.workspace = true
+thiserror.workspace = true
+time.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+tempfile = "3"
+# The streaming installer ported from Xodus uses these names.
+futures-util = "0.3"
+quick-xml = { version = "0.42", features = ["serialize"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["poll"] }
+
+[dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }

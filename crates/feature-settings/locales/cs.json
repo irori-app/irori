@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Zobrazovat kategorie na obalech",
   "settings.field.ui_cover_categories.help": "Kategorie každé hry při spodním okraji jejího obalu v mřížce: první dvě a kolik dalších.",
   "settings.field.ui_group_copies.label": "Zobrazovat kopie z více obchodů jako jednu hru",
-  "settings.field.ui_group_copies.help": "Hra vlastněná na Steamu, v Epic Games a na GOG se zobrazí jednou a spouští nainstalovanou kopii. Na její stránce lze přepínat mezi kopiemi; každá si ponechává vlastní herní čas i úspěchy."
+  "settings.field.ui_group_copies.help": "Hra vlastněná na Steamu, v Epic Games a na GOG se zobrazí jednou a spouští nainstalovanou kopii. Na její stránce lze přepínat mezi kopiemi; každá si ponechává vlastní herní čas i úspěchy.",
+  "settings.field.xbox.label": "Obchod Xbox",
+  "settings.field.xbox.help": "Přihlaste se účtem Microsoft a instalujte a hrajte své hry z Microsoft Storu a PC Game Pass. Běží přes Nexus Runtime ze správce Wine.",
+  "settings.field.xbox_market.label": "Oblast Microsoft Storu",
+  "settings.field.xbox_market.help": "Dvoupísmenný kód země (US, DE, GB…) pro knihovnu, katalog a licence. Prázdné pole se řídí jazykem rozhraní.",
+  "settings.field.xbox_market.off": "Nejprve zapněte obchod Xbox."
 }

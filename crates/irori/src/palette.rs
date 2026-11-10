@@ -35,6 +35,7 @@ enum PaletteTarget {
     SetUpEmulation,
     /// The Steam friends window.
     SteamFriends,
+    XboxOfflinePlay,
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -676,6 +677,15 @@ impl Palette {
             );
             targets.push(PaletteTarget::SteamClientLibrary);
         }
+        if irori_manage::xbox_offline_available(cx) {
+            items.push(
+                CommandItem::new()
+                    .label(t("shell.palette.xbox_offline_play"))
+                    .keywords([t("shell.palette.xbox_offline_play_keywords")])
+                    .icon(IconName::HardDrive),
+            );
+            targets.push(PaletteTarget::XboxOfflinePlay);
+        }
         let items = Rc::new(items);
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
@@ -730,6 +740,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
+        PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
         PaletteTarget::OpenStore(runner) => {
             irori_manage::open_store_window(runner, None, window, cx)
         }

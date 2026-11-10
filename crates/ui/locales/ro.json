@@ -231,5 +231,14 @@
   "ui.hidden_lock.unlock": "Deblochează",
   "ui.hidden_lock.unlock_description": "Introdu PIN-ul ca să afișezi jocurile ascunse până închizi Irori sau le blochezi din nou.",
   "ui.hidden_lock.unlock_title": "Afișează jocurile ascunse",
-  "ui.hidden_lock.wrong_pin": "PIN-ul nu este corect"
+  "ui.hidden_lock.wrong_pin": "PIN-ul nu este corect",
+  "ui.xbox.runtime_title": "Este nevoie de un mediu pentru jocurile din Microsoft Store",
+  "ui.xbox.runtime_body": "{title} are nevoie de o versiune Wine cu xgameruntime.dll, pe care Wine și Proton obișnuite nu o au. Instalează Nexus Runtime în managerul Wine, apoi alege-l în setările Wine ale jocului.",
+  "ui.xbox.runtime_hint": "Jocul nu a fost pornit.",
+  "ui.xbox.device_limit_title": "Limita de dispozitive Microsoft Store a fost atinsă",
+  "ui.xbox.device_limit_body": "Microsoft a refuzat acest computer pentru {title}: contul are deja 10 dispozitive legate de Microsoft Store. Deconectează unul pe care nu-l mai folosești din pagina de dispozitive Microsoft, apoi încearcă din nou.",
+  "ui.xbox.device_limit_hint": "Nu trebuie să te deconectezi din Irori.",
+  "ui.xbox.open_wine_manager": "Deschide managerul Wine",
+  "ui.xbox.game_settings": "Setări Wine",
+  "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft"
 }

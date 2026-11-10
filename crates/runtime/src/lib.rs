@@ -24,6 +24,7 @@ pub mod vdf;
 pub mod windows_file;
 pub mod windows_uri;
 pub mod wrappers;
+pub mod xbox;
 
 use std::collections::HashMap;
 use std::hash::{Hash as _, Hasher as _};

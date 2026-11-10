@@ -60,9 +60,16 @@ pub(crate) fn store_site(runner: Runner) -> Option<StoreSite> {
             host: "itch.io",
             blurb: t("manage.stores.blurb.itch"),
         },
+        Runner::Xbox => StoreSite {
+            url: "https://www.xbox.com/games/store",
+            host: "xbox.com",
+            blurb: t("manage.stores.blurb.xbox"),
+        },
         // Steam's games come from its own client; Irori has nothing to
         // offer there beyond the library.
-        Runner::Steam | Runner::Sideload | Runner::Emulation | Runner::Launchers => return None,
+        Runner::Steam | Runner::Sideload | Runner::Emulation | Runner::Launchers => {
+            return None;
+        }
     })
 }
 

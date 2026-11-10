@@ -47,6 +47,35 @@ impl SessionExpired {
     }
 }
 
+/// Microsoft wants the user to approve a sign-in on a page of its own before
+/// it hands out the account's tokens. [`Store::login`] returns it (anywhere in
+/// an `anyhow` chain) for [`LoginFlow::MicrosoftAccount`]: the login dialog
+/// opens the sign-in window at `url` and calls `login` again with what that
+/// window captured. The store keeps whatever the second call needs.
+#[derive(Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Microsoft needs you to approve this sign-in")]
+pub struct LoginApproval {
+    /// The approval page. It may carry a sign-in token: never log it.
+    pub url: String,
+}
+
+impl LoginApproval {
+    pub fn new(url: impl Into<String>) -> Self {
+        Self { url: url.into() }
+    }
+
+    /// The approval behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&LoginApproval> {
+        error.downcast_ref()
+    }
+}
+
+impl std::fmt::Debug for LoginApproval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoginApproval").finish_non_exhaustive()
+    }
+}
+
 /// The login slot every store has: its own config and cache directories.
 pub const MAIN_ACCOUNT: &str = "main";
 
@@ -87,6 +116,13 @@ pub enum LoginFlow {
     /// app, or the password with Steam Guard) and passes its result to
     /// [`Store::login`].
     InApp,
+    /// A Microsoft account, signed in the way Windows does it: Microsoft's
+    /// page at `url` (`InlineLogin.srf`) in the sign-in window's
+    /// CloudExperienceHost mode (`irori-sign-in --microsoft-account`), which
+    /// hands the account's `DAProperty` JSON to [`Store::login`]. There is no
+    /// browser fallback: the page needs the window's host bridge. `login`
+    /// may return [`LoginApproval`] to ask for a second window.
+    MicrosoftAccount { url: String },
     /// The store needs no account.
     None,
 }
@@ -405,5 +441,16 @@ mod tests {
         assert_eq!(found.runner, Runner::Gog);
         let other: anyhow::Result<()> = Err(anyhow::anyhow!("timed out")).context("refreshing");
         assert!(SessionExpired::of(&other.unwrap_err()).is_none());
+    }
+
+    #[test]
+    fn finds_an_approval_under_context_and_keeps_its_url_out_of_debug() {
+        let url = "https://login.live.com/ppsecure/InlineConnect.srf?token=secret";
+        let e = anyhow::Error::new(LoginApproval::new(url)).context("Signing in to Xbox");
+        let found = LoginApproval::of(&e).expect("still visible under context");
+        assert_eq!(found.url, url);
+        assert!(!format!("{found:?}").contains("secret"));
+        assert!(!format!("{e:#}").contains("secret"));
+        assert!(LoginApproval::of(&anyhow::anyhow!("timed out")).is_none());
     }
 }

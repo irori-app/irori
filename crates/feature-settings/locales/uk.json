@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Показувати категорії на обкладинках",
   "settings.field.ui_cover_categories.help": "Категорії кожної гри внизу її обкладинки в сітці: перші дві й скільки ще.",
   "settings.field.ui_group_copies.label": "Показувати копії з кількох крамниць як одну гру",
-  "settings.field.ui_group_copies.help": "Гра, придбана у Steam, Epic Games і GOG, показується один раз і запускає встановлену копію. На її сторінці можна перемикатися між копіями; кожна зберігає власний час гри й досягнення."
+  "settings.field.ui_group_copies.help": "Гра, придбана у Steam, Epic Games і GOG, показується один раз і запускає встановлену копію. На її сторінці можна перемикатися між копіями; кожна зберігає власний час гри й досягнення.",
+  "settings.field.xbox.label": "Крамниця Xbox",
+  "settings.field.xbox.help": "Увійдіть з обліковим записом Microsoft, щоб установлювати ігри з Microsoft Store і PC Game Pass та грати в них. Вони запускаються через Nexus Runtime з менеджера Wine.",
+  "settings.field.xbox_market.label": "Регіон Microsoft Store",
+  "settings.field.xbox_market.help": "Двобуквений код країни (US, DE, GB…) для бібліотеки, каталогу й ліцензій. Якщо порожньо — за мовою інтерфейсу.",
+  "settings.field.xbox_market.off": "Спочатку ввімкніть крамницю Xbox."
 }

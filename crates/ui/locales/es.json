@@ -231,5 +231,14 @@
   "ui.hidden_lock.unlock": "Desbloquear",
   "ui.hidden_lock.unlock_description": "Introduce el PIN para mostrar los juegos ocultos hasta que cierres Irori o vuelvas a bloquearlos.",
   "ui.hidden_lock.unlock_title": "Mostrar juegos ocultos",
-  "ui.hidden_lock.wrong_pin": "Ese PIN no es correcto"
+  "ui.hidden_lock.wrong_pin": "Ese PIN no es correcto",
+  "ui.xbox.runtime_title": "Se necesita un entorno para juegos de Microsoft Store",
+  "ui.xbox.runtime_body": "{title} necesita una versión de Wine con xgameruntime.dll, que Wine y Proton normales no tienen. Instala Nexus Runtime en el gestor de Wine y elígelo en los ajustes de Wine del juego.",
+  "ui.xbox.runtime_hint": "El juego no se inició.",
+  "ui.xbox.device_limit_title": "Se alcanzó el límite de dispositivos de Microsoft Store",
+  "ui.xbox.device_limit_body": "Microsoft rechazó este equipo para {title}: la cuenta ya tiene 10 dispositivos vinculados a Microsoft Store. Desvincula uno que ya no uses en la página de dispositivos de Microsoft y vuelve a intentarlo.",
+  "ui.xbox.device_limit_hint": "No necesitas cerrar sesión en Irori.",
+  "ui.xbox.open_wine_manager": "Abrir el gestor de Wine",
+  "ui.xbox.game_settings": "Ajustes de Wine",
+  "ui.xbox.open_devices": "Abrir la página de dispositivos de Microsoft"
 }

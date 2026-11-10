@@ -162,6 +162,9 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-amazon` | `irori-amazon` | Amazon `Store` (`Runner::Nile`) |
 | `crates/store-zoom` | `irori-zoom` | ZOOM Platform `Store`, opt-in through a setting |
 | `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo` |
+| `crates/msstore` | `irori-msstore-api` | Microsoft Store and Xbox Live protocol (port of Xodus): device registration, RST2 with XML-DSig, CLEP and SPLicense secrets, SISU and XSTS, the display catalog and Store browsing, package plans, content licences and offline leases, entitlements, Game Pass, offline PC |
+| `crates/msixvc` | `irori-msixvc` | MSIXVC packages (port of Xodus): XVD and its NTFS volume, AES-XTS, hash tree, streaming downloads with resume checkpoints |
+| `crates/store-xbox` | `irori-xbox` | Xbox `Store` (`Runner::Xbox`, Linux), opt-in through `iroriXbox`: Microsoft Store and PC Game Pass installs, licensed launches through a decrypted launch view, the in-game account service |
 | `crates/store-steam` | `irori-steam` | Steam `Store` (`Runner::Steam`): local library, optional account, game watch, the login API the UI draws |
 | `crates/store-sideload` | `irori-sideload` | Apps the user adds (native, Windows, browser) |
 | `crates/launchers` | `irori-launchers-data` | Reads third-party launchers' local data (Battle.net `product.db`, Ubisoft cache and registry, EA manifests, Rockstar registry) and Xbox app packages (`.GamingRoot`, `MicrosoftGame.config`, `AppxManifest.xml`, Gaming Services) |
@@ -213,10 +216,12 @@ irori-core                        (depends on nothing internal)
   ├─ irori-mods      (core, depot; knows nothing of stores or the UI)
   ├─ irori-reshade   (core, runtime; knows nothing of stores or the UI)
   ├─ protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
-  │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api
+  │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api,
+  │                   irori-msstore-api, irori-msixvc
   │                   (depot and secrets only, not core)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
-  │                   irori-steam, irori-sideload, irori-emulation (+ engines,
+  │                   irori-steam, irori-sideload, irori-xbox (+ runtime, irori-msstore-api,
+  │                   irori-msixvc, irori-xbox-api), irori-emulation (+ engines,
   │                   irori-retroachievements-api),
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
@@ -284,8 +289,8 @@ and `launch.rs` before changing anything below the UI.
   - `SaveConflict`: saves changed both locally and in the cloud since the last sync.
     Return it for every direction except the forced ones; the launch stops and the UI
     asks which saves to keep (`irori_ui::save_conflict`).
-- `Runner` values are Legendary, Gog, Nile, Zoom, Itch, Steam, Sideload, Emulation and
-  Launchers. Their
+- `Runner` values are Legendary, Gog, Nile, Zoom, Itch, Xbox, Steam, Sideload, Emulation
+  and Launchers. Their
   serialized ids are Heroic's (`legendary`, `gog`, `nile`, …); `from_id` also accepts
   `epic` and `amazon`. Irori-only runners use their store's plain name (`itch`,
   `steam`).
@@ -713,8 +718,9 @@ which runs one instance per account ("slot") and merges them into one `Store`:
 The shell registers the stores in `crates/irori/src/stores.rs`, in this order: Epic,
 GOG, Amazon, ZOOM (only when `settings.zoom_platform` is on), itch.io (always
 registered; empty and signed out while `settings.itch_io` is off, so its account card
-can turn it on), Steam, Launchers (always registered; empty while
-`iroriThirdPartyLaunchers` is off), Emulation (the ROM library), then Sideload. Adding a
+can turn it on), Xbox (Linux only; empty while `iroriXbox` is off), Steam, Launchers
+(always registered; empty while `iroriThirdPartyLaunchers` is off), Emulation (the ROM
+library), then Sideload. Adding a
 store means:
 
 1. A protocol crate, if the store has a protocol.
@@ -882,6 +888,15 @@ So never make `irori` link WebKitGTK on Linux.
 
 `irori-sign-in` stays a standalone program with a stable command line. Packages ship
 it on every platform, and CI's Windows install test runs it.
+
+**Microsoft account mode** (`crates/sign-in/src/microsoft.rs`, first argument
+`--microsoft-account`, with `--url`, `--title`, `--profile`): Microsoft's
+`InlineLogin.srf` as Windows shows it in CloudExperienceHost. The window sends the
+`cxh-*` headers, bridges `window.external.notify` to its IPC on Microsoft's hosts only,
+answers `CloudExperienceHost.getContext`, reads the page's `ServerData` once `post.srf`
+loaded and prints its `DAProperty` as `{"text": …}`. `LoginFlow::MicrosoftAccount`
+uses it; there is no browser fallback, and `LoginApproval { url }` opens it again at
+Microsoft's approval page (`irori_manage::login`).
 
 **Store window** (`crates/sign-in/src/store.rs`, `irori_manage::store_window`):
 
@@ -1327,6 +1342,52 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `d3dcompiler_47=n,b` for Direct3D) to `WINEDLLOVERRIDES` through
   `irori_runtime::env::add_dll_overrides`, replacing only those DLLs' entries in the
   user's value, while the install is complete, on, and its DLL is there.
+
+### 4.13 Xbox (Microsoft Store and PC Game Pass, Linux)
+
+- **Native, no helpers.** Irori is its own Xodus and Nexus Launcher: the protocol is
+  `irori-msstore-api` (a port of Xodus' `xodus` crate and its CLI's operations), the
+  package format `irori-msixvc`, the store `irori-xbox`. Nothing shells out; the only
+  external piece is the game-side runtime.
+- **Runtime.** GDK games need Proton with `xgameruntime.dll`: the Wine manager's
+  `ReleaseKind::NexusRuntime` (`github.com/domsvoboda/nexus-runtime`). `irori_runtime::xbox`
+  detects such a build, keeps it off umu (`runtimes::is_umu_supported`) and gives the
+  Proton session its variables (`UMU_ID`, `UMU_USE_STEAM=0`: the plain Wine route).
+  Without one, `launch` fails with `irori_core::XboxUnavailable` (`RuntimeMissing`) and
+  `irori_ui::xbox_problem` leads to the Wine manager.
+- **Accounts.** `LoginFlow::MicrosoftAccount`: the sign-in window's CloudExperienceHost
+  mode hands over the page's `DAProperty`; `login` registers the device on first use
+  (`deviceaddcredential.srf`, never with a password prompt), exchanges it through RST2 and
+  may answer `LoginApproval { url }` for Microsoft's approval page. Slot `main` is the
+  Store account (library, licences), slot `player` an optional separate Xbox account.
+  Everything lives in `credentials.json` through `irori_secrets`
+  (`irori_xbox::credentials::SecretsBackend` behind Xodus' `TokenManager`).
+- **Library.** Entitlements resolved to owned or Game Pass (`library::resolve`; rows that
+  are trials, shared, expired or depend on such are never access), plus every PC Game Pass
+  game while the account has PC Game Pass or Ultimate; details from the display catalog.
+- **Installs** (`install`): `Remote::open` reads the package header over HTTP, the licence
+  gives the content key, `Remote::install` writes the files with resume checkpoints;
+  updates stage one file at a time and reuse verified pages. Encrypted files stay
+  encrypted on disk. Use `irori_msixvc::http_client()` for package transfers: the
+  workspace's `reqwest` decodes gzip and would hide an encoded range. A product with
+  several installable packages (PC and Xbox builds, editions) lists them as
+  `InstallInfo::builds` (`packages::builds`, the PC game first); the install sheet shows
+  them as "Package" and passes the content ID back as `InstallRequest::build`. The
+  global `maxDownloadSpeed` sets `irori_msixvc::bandwidth` before each install.
+- **Launch** (`launch_unix`): the licence online, or the stored offline one when offline
+  (`ops::license::Grant` says which), the encrypted files decrypted into a private
+  launch view (`launch_view`, 0700, removed in `after_exit`, swept at `init`), the
+  account service (`service`, per session) and `proton waitforexitandrun Z:\…`.
+  `XboxUnavailable` (`DeviceLimit`) explains licensing code 501. The per-game
+  `language` setting becomes `XODUS_PACKAGE_LOCALE`, `WINEUSERLOCALE` and the Unix
+  locale (`locale::environment`); left empty, only the package resources follow the
+  interface language.
+- **Offline PC** (`XboxStore::offline_pc`, `irori_manage::open_offline_play_dialog`, the
+  Xbox card's "Offline play" and the palette): shows and, after a confirmation, changes
+  whether this computer is the account's designated offline PC; Microsoft limits changes.
+- **Playtime and achievements**: `remote_playtime` asks `ops::game_activity` per installed
+  title; `achievements` asks `ops::achievements`.
+- **Tests** never reach Microsoft; the live checks are manual.
 
 ## 5. Rust conventions
 

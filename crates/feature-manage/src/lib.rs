@@ -26,6 +26,7 @@ mod store_window;
 mod stores;
 mod updates;
 mod wine;
+mod xbox;
 
 pub use accounts::AccountsView;
 pub use downloads::DownloadsView;
@@ -47,6 +48,7 @@ pub use store_window::{open_store_window, store_window_stores};
 pub use stores::StoresView;
 pub use updates::UpdatesView;
 pub use wine::WineManagerView;
+pub use xbox::{install_xbox_store, open_offline_play_dialog, xbox_offline_available};
 
 pub use i18n::CATALOGS;
 

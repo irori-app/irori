@@ -141,6 +141,50 @@ impl SandboxUnavailable {
     }
 }
 
+/// Why a Microsoft Store game can't start or install, in a way the UI
+/// explains with its fix. Stores return it anywhere in an `anyhow` chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{}", self.problem.message())]
+pub struct XboxUnavailable {
+    pub problem: XboxProblem,
+}
+
+/// What stands in the way of a Microsoft Store game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum XboxProblem {
+    /// The game's Wine build has no `xgameruntime.dll`: the Nexus Runtime
+    /// from the Wine manager is needed.
+    RuntimeMissing,
+    /// Microsoft refused this device: the account's Store device limit is
+    /// reached (licensing code 501).
+    DeviceLimit,
+}
+
+impl XboxProblem {
+    /// English text for logs and the command line; the UI shows its own.
+    pub fn message(self) -> &'static str {
+        match self {
+            XboxProblem::RuntimeMissing => {
+                "Microsoft Store games need a Wine build with xgameruntime.dll. Install the Nexus Runtime in the Wine manager and choose it for this game."
+            }
+            XboxProblem::DeviceLimit => {
+                "Microsoft Store device limit reached. Unlink a device you no longer use at account.microsoft.com/devices/content, then try again."
+            }
+        }
+    }
+}
+
+impl XboxUnavailable {
+    pub fn new(problem: XboxProblem) -> Self {
+        Self { problem }
+    }
+
+    /// The problem behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&XboxUnavailable> {
+        error.chain().find_map(|e| e.downcast_ref())
+    }
+}
+
 impl fmt::Debug for dyn GameWatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("GameWatch")

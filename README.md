@@ -141,6 +141,13 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io:** log in and install,
   update, repair, move or import games from one download queue, with several accounts
   per store. Each installed game launches with the account it was installed with.
+- **Microsoft Store and PC Game Pass on Linux:** turn on the Xbox store, sign in with
+  your Microsoft account, and your Store games join the library, with every PC Game Pass
+  game while your membership lasts. Irori installs them itself (resumable, with updates
+  that reuse unchanged data), checks each licence and decrypts the game for each session,
+  and runs it through the open-source Nexus Runtime (Proton with `xgameruntime.dll`) from
+  the Wine manager. Built natively on what Xodus and Nexus Launcher worked out; neither
+  needs to be installed.
 - **Xbox app and PC Game Pass on Windows:** games the Xbox app or the Microsoft Store
   installed show up by themselves once "Other launchers" is on, with their own art and
   size, and start in one click. No sign-in.

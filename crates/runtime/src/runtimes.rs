@@ -261,6 +261,11 @@ pub fn is_umu_supported(settings: &GameSettings, check_installed: bool) -> bool 
     if !cfg!(target_os = "linux") {
         return false;
     }
+    // Microsoft Store runtimes bring their host libraries and must start
+    // their games through Proton directly (see `crate::xbox`).
+    if crate::xbox::XboxRuntime::inspect(&settings.wine_version).is_some() {
+        return false;
+    }
     settings.wine_version.kind == WineKind::Proton
         && !settings.disable_umu
         && (!check_installed || umu_path().is_file())

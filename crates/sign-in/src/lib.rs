@@ -12,7 +12,9 @@
 //! Usage: irori-sign-in --url <url> --capture <regex> [--title <window title>]
 //!
 //! With [`store::STORE_FLAG`] first it shows a store's website instead; see
-//! [`store`].
+//! [`store`]. With [`microsoft::MICROSOFT_ACCOUNT_FLAG`] first it shows the
+//! Microsoft account sign-in, which needs a host bridge rather than a
+//! capture pattern; see [`microsoft`].
 
 use std::io::Write as _;
 use std::time::{Duration, Instant};
@@ -25,6 +27,7 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
 use tao::window::WindowBuilder;
 use wry::{PageLoadEvent, WebViewBuilder};
 
+pub mod microsoft;
 pub mod store;
 
 /// Reads the visible text of the page.
@@ -94,6 +97,13 @@ pub fn main(args: impl IntoIterator<Item = String>) -> u8 {
     if args.peek().is_some_and(|a| a == store::STORE_FLAG) {
         args.next();
         return store::main(args);
+    }
+    if args
+        .peek()
+        .is_some_and(|a| a == microsoft::MICROSOFT_ACCOUNT_FLAG)
+    {
+        args.next();
+        return microsoft::main(args);
     }
     let args = match parse_args(args) {
         Ok(args) => args,

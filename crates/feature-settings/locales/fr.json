@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Afficher les catégories sur les jaquettes",
   "settings.field.ui_cover_categories.help": "Les catégories de chaque jeu au bas de sa jaquette dans la grille : les deux premières et le nombre des autres.",
   "settings.field.ui_group_copies.label": "Afficher les copies de plusieurs boutiques comme un seul jeu",
-  "settings.field.ui_group_copies.help": "Un jeu possédé sur Steam, Epic Games et GOG n’apparaît qu’une fois et lance la copie installée. Sa page passe d’une copie à l’autre ; chacune garde son temps de jeu et ses succès."
+  "settings.field.ui_group_copies.help": "Un jeu possédé sur Steam, Epic Games et GOG n’apparaît qu’une fois et lance la copie installée. Sa page passe d’une copie à l’autre ; chacune garde son temps de jeu et ses succès.",
+  "settings.field.xbox.label": "Boutique Xbox",
+  "settings.field.xbox.help": "Connectez-vous avec un compte Microsoft pour installer et jouer à vos jeux du Microsoft Store et du PC Game Pass. Ils tournent avec Nexus Runtime du gestionnaire Wine.",
+  "settings.field.xbox_market.label": "Région du Microsoft Store",
+  "settings.field.xbox_market.help": "Code pays à deux lettres (US, DE, GB…) pour la bibliothèque, le catalogue et les licences. Vide : suit la langue de l’interface.",
+  "settings.field.xbox_market.off": "Activez d’abord la boutique Xbox."
 }

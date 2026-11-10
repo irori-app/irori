@@ -79,6 +79,14 @@ pub fn build(bus: EventBus, settings: SettingsFn) -> Vec<DynStore> {
         &settings,
         irori_itch::ItchStore::for_account,
     ));
+    // Microsoft Store games play only on Linux here; Windows has the Xbox
+    // app (listed by the launchers store) and macOS has no runtime for them.
+    #[cfg(target_os = "linux")]
+    {
+        let xbox = irori_xbox::XboxStore::new(bus.clone(), settings.clone());
+        let _ = XBOX.set(xbox.clone());
+        stores.push(xbox);
+    }
     let steam = irori_steam::SteamStore::new(bus.clone(), settings.clone());
     let _ = STEAM.set(steam.clone());
     stores.push(steam);
@@ -102,6 +110,10 @@ pub static EPIC: once_cell::sync::OnceCell<Arc<MultiAccountStore<irori_epic::Epi
 
 /// The concrete GOG store (private-branch passwords, REDmod).
 pub static GOG: once_cell::sync::OnceCell<Arc<MultiAccountStore<irori_gog::GogStore>>> =
+    once_cell::sync::OnceCell::new();
+
+/// The concrete Xbox store (Linux): offline PC, Store browsing, social.
+pub static XBOX: once_cell::sync::OnceCell<std::sync::Arc<irori_xbox::XboxStore>> =
     once_cell::sync::OnceCell::new();
 
 /// The concrete Steam store (the compatibility tool choice of its games).

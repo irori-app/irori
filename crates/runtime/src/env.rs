@@ -140,6 +140,7 @@ pub fn app_source(runner: Runner) -> &'static str {
         Runner::Sideload => "sideload",
         Runner::Zoom => "zoom",
         Runner::Itch => "itch",
+        Runner::Xbox => "xbox",
         Runner::Steam => "steam",
         Runner::Emulation => "emulation",
         Runner::Launchers => "launchers",
@@ -154,7 +155,9 @@ pub fn umu_store(runner: Runner) -> Option<&'static str> {
         Runner::Nile => Some("amazon"),
         Runner::Zoom => Some("zoomplatform"),
         Runner::Itch => Some("itchio"),
-        Runner::Steam | Runner::Sideload | Runner::Emulation | Runner::Launchers => None,
+        Runner::Xbox | Runner::Steam | Runner::Sideload | Runner::Emulation | Runner::Launchers => {
+            None
+        }
     }
 }
 

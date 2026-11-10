@@ -258,6 +258,7 @@
   "game.install.password_placeholder": "Contraseña de la rama privada",
   "game.install.path_placeholder": "Carpeta para el juego",
   "game.install.pin": "Mantener el juego en una versión concreta",
+  "game.install.package": "Paquete",
   "game.install.pin_failed": "No se pudo cambiar la fijación de versión",
   "game.install.skip_updates": "No actualizar este juego",
   "game.install.size_on_disk": "Tamaño en disco",

@@ -258,6 +258,7 @@
   "game.install.password_placeholder": "Passwort für privaten Branch",
   "game.install.path_placeholder": "Ordner für das Spiel",
   "game.install.pin": "Spiel auf einer bestimmten Version halten",
+  "game.install.package": "Paket",
   "game.install.pin_failed": "Die Versionsfixierung konnte nicht geändert werden",
   "game.install.skip_updates": "Dieses Spiel nicht aktualisieren",
   "game.install.size_on_disk": "Größe auf dem Datenträger",

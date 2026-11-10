@@ -289,6 +289,9 @@ pub fn is_secret_var(name: &str) -> bool {
         "AUTH",
         "KEY",
         "AMAZON_GAMES_FUEL",
+        // Xbox: the PlayFab XSTS header and the opaque per-account key.
+        "XSTS",
+        "ACCOUNT_HASH",
     ]
     .iter()
     .any(|s| name.contains(s))
@@ -1129,9 +1132,13 @@ mod tests {
         let spec = CommandSpec::new("game")
             .env("MY_API_KEY", "k1")
             .env("AMAZON_GAMES_FUEL_ENTITLEMENT_ID", "k2")
+            .env("XODUS_XSTS_PLAYFAB", "XBL3.0 x=1;k3")
+            .env("XODUS_ACCOUNT_HASH", "k4")
             .env("DXVK_HUD", "fps");
         let shown = spec.to_string();
-        assert!(!shown.contains("k1") && !shown.contains("k2"), "{shown}");
+        for secret in ["k1", "k2", "k3", "k4"] {
+            assert!(!shown.contains(secret), "{shown}");
+        }
         assert!(shown.contains("DXVK_HUD=fps"), "{shown}");
     }
 

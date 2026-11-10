@@ -86,6 +86,8 @@
   "shell.palette.set_up_emulation_keywords": "эмулятор ROM консоль ретро BIOS RetroArch",
   "shell.palette.steam_friends": "Показать друзей в Steam",
   "shell.palette.steam_friends_keywords": "друзья в сети играет присоединиться пригласить чат",
+  "shell.palette.xbox_offline_play": "Игра Xbox офлайн",
+  "shell.palette.xbox_offline_play_keywords": "microsoft store game pass офлайн пк лицензия",
   "shell.palette.open_store": "Открыть магазин {store}",
   "shell.palette.lutris_script": "Установить по скрипту Lutris",
   "shell.palette.lutris_script_keywords": "Lutris скрипт установщик lutris.net сообщество",

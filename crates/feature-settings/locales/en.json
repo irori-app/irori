@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Show categories on covers",
   "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more.",
   "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
-  "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements."
+  "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements.",
+  "settings.field.xbox.label": "Xbox store",
+  "settings.field.xbox.help": "Sign in with a Microsoft account to install and play your Microsoft Store and PC Game Pass games. They run through the Nexus Runtime from the Wine manager.",
+  "settings.field.xbox_market.label": "Microsoft Store region",
+  "settings.field.xbox_market.help": "Two-letter country code (US, DE, GB…) for the library, catalog and licences. Empty follows the interface language.",
+  "settings.field.xbox_market.off": "Turn on the Xbox store first."
 }

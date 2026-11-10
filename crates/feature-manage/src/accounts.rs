@@ -30,12 +30,13 @@ use crate::login::{open_account_login_dialog, open_login_dialog};
 
 /// Stores with a card on the accounts page, in display order. Steam has no
 /// login: its card reports what Irori found on this computer.
-pub(crate) const ACCOUNT_STORES: [Runner; 6] = [
+pub(crate) const ACCOUNT_STORES: [Runner; 7] = [
     Runner::Legendary,
     Runner::Gog,
     Runner::Nile,
     Runner::Zoom,
     Runner::Itch,
+    Runner::Xbox,
     Runner::Steam,
 ];
 
@@ -50,6 +51,7 @@ pub(crate) fn store_icon(runner: Runner) -> IconName {
         Runner::Nile => IconName::ShoppingBag,
         Runner::Zoom => IconName::Package,
         Runner::Itch => IconName::Gem,
+        Runner::Xbox => IconName::GamepadDirectional,
         Runner::Steam => IconName::Joystick,
         Runner::Sideload => IconName::FolderOpen,
         Runner::Emulation => IconName::Gamepad,
@@ -62,6 +64,7 @@ pub(crate) fn store_enabled(app: &irori_core::AppSettings, runner: Runner) -> bo
     match runner {
         Runner::Zoom => app.zoom_platform,
         Runner::Itch => app.itch_io,
+        Runner::Xbox => app.xbox,
         _ => true,
     }
 }
@@ -70,6 +73,7 @@ fn set_store_enabled(app: &mut irori_core::AppSettings, runner: Runner, on: bool
     match runner {
         Runner::Zoom => app.zoom_platform = on,
         Runner::Itch => app.itch_io = on,
+        Runner::Xbox => app.xbox = on,
         _ => {}
     }
 }
@@ -561,6 +565,23 @@ impl AccountsView {
             let slot = account.slot.clone();
             h_flex()
                 .gap_1()
+                .when(
+                    runner == Runner::Xbox
+                        && account.slot == irori_core::store::MAIN_ACCOUNT
+                        && crate::xbox::xbox_offline_available(cx),
+                    |row| {
+                        row.child(
+                            Button::new("xbox-offline-play")
+                                .small()
+                                .ghost()
+                                .icon(IconName::HardDrive)
+                                .label(t("manage.xbox.offline.button"))
+                                .on_click(|_, window, cx| {
+                                    crate::xbox::open_offline_play_dialog(window, cx)
+                                }),
+                        )
+                    },
+                )
                 .child(
                     Button::new("refresh")
                         .small()

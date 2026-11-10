@@ -231,5 +231,14 @@
   "ui.hidden_lock.unlock": "ロック解除",
   "ui.hidden_lock.unlock_description": "PIN を入力すると、Irori を終了するか再びロックするまで非表示のゲームが表示されます。",
   "ui.hidden_lock.unlock_title": "非表示のゲームを表示",
-  "ui.hidden_lock.wrong_pin": "PIN が正しくありません"
+  "ui.hidden_lock.wrong_pin": "PIN が正しくありません",
+  "ui.xbox.runtime_title": "Microsoft Store のゲームにはランタイムが必要です",
+  "ui.xbox.runtime_body": "{title} には、通常の Wine や Proton にはない xgameruntime.dll を含む Wine ビルドが必要です。Wine マネージャーで Nexus Runtime をインストールし、ゲームの Wine 設定で選んでください。",
+  "ui.xbox.runtime_hint": "ゲームは起動されませんでした。",
+  "ui.xbox.device_limit_title": "Microsoft Store のデバイス上限に達しました",
+  "ui.xbox.device_limit_body": "Microsoft は {title} についてこのコンピューターを拒否しました。アカウントにはすでに 10 台のデバイスが Microsoft Store にリンクされています。Microsoft のデバイス ページで使わなくなったものをリンク解除して、もう一度お試しください。",
+  "ui.xbox.device_limit_hint": "Irori からサインアウトする必要はありません。",
+  "ui.xbox.open_wine_manager": "Wine マネージャーを開く",
+  "ui.xbox.game_settings": "Wine の設定",
+  "ui.xbox.open_devices": "Microsoft のデバイス ページを開く"
 }

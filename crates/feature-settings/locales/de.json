@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Kategorien auf Covern anzeigen",
   "settings.field.ui_cover_categories.help": "Die Kategorien jedes Spiels am unteren Rand seines Covers im Raster: die ersten beiden und wie viele weitere.",
   "settings.field.ui_group_copies.label": "Kopien aus mehreren Stores als ein Spiel anzeigen",
-  "settings.field.ui_group_copies.help": "Ein Spiel, das du auf Steam, bei Epic Games und GOG besitzt, erscheint einmal und startet die installierte Kopie. Auf seiner Seite wechselst du zwischen den Kopien; jede behält ihre eigene Spielzeit und ihre Erfolge."
+  "settings.field.ui_group_copies.help": "Ein Spiel, das du auf Steam, bei Epic Games und GOG besitzt, erscheint einmal und startet die installierte Kopie. Auf seiner Seite wechselst du zwischen den Kopien; jede behält ihre eigene Spielzeit und ihre Erfolge.",
+  "settings.field.xbox.label": "Xbox-Store",
+  "settings.field.xbox.help": "Melde dich mit einem Microsoft-Konto an, um deine Spiele aus dem Microsoft Store und PC Game Pass zu installieren und zu spielen. Sie laufen mit der Nexus Runtime aus der Wine-Verwaltung.",
+  "settings.field.xbox_market.label": "Region des Microsoft Store",
+  "settings.field.xbox_market.help": "Zweistelliger Ländercode (US, DE, GB…) für Bibliothek, Katalog und Lizenzen. Leer folgt der Sprache der Oberfläche.",
+  "settings.field.xbox_market.off": "Schalte zuerst den Xbox-Store ein."
 }

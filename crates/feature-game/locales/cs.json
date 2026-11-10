@@ -258,6 +258,7 @@
   "game.install.password_placeholder": "Heslo soukromé větve",
   "game.install.path_placeholder": "Složka pro hru",
   "game.install.pin": "Ponechat hru na konkrétní verzi",
+  "game.install.package": "Balíček",
   "game.install.pin_failed": "Připnutí verze se nepodařilo změnit",
   "game.install.skip_updates": "Tuto hru neaktualizovat",
   "game.install.size_on_disk": "Velikost na disku",

@@ -258,6 +258,7 @@
   "game.install.password_placeholder": "Hasło gałęzi prywatnej",
   "game.install.path_placeholder": "Folder na grę",
   "game.install.pin": "Zachowaj określoną wersję gry",
+  "game.install.package": "Pakiet",
   "game.install.pin_failed": "Nie udało się zmienić przypięcia wersji",
   "game.install.skip_updates": "Nie aktualizuj tej gry",
   "game.install.size_on_disk": "Rozmiar na dysku",

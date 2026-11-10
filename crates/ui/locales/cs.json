@@ -231,5 +231,14 @@
   "ui.hidden_lock.unlock": "Odemknout",
   "ui.hidden_lock.unlock_description": "Zadejte PIN, aby se skryté hry zobrazovaly, dokud Irori neukončíte nebo je znovu nezamknete.",
   "ui.hidden_lock.unlock_title": "Zobrazit skryté hry",
-  "ui.hidden_lock.wrong_pin": "Tento PIN není správný"
+  "ui.hidden_lock.wrong_pin": "Tento PIN není správný",
+  "ui.xbox.runtime_title": "Je potřeba prostředí pro hry z Microsoft Storu",
+  "ui.xbox.runtime_body": "{title} potřebuje sestavení Wine s xgameruntime.dll, které běžné Wine a Proton nemají. Nainstalujte Nexus Runtime ve správci Wine a pak ho vyberte v nastavení Wine této hry.",
+  "ui.xbox.runtime_hint": "Hra nebyla spuštěna.",
+  "ui.xbox.device_limit_title": "Dosažen limit zařízení Microsoft Storu",
+  "ui.xbox.device_limit_body": "Microsoft odmítl tento počítač pro {title}: účet už má k Microsoft Storu propojeno 10 zařízení. Odpojte jedno, které už nepoužíváte, na stránce zařízení Microsoftu a zkuste to znovu.",
+  "ui.xbox.device_limit_hint": "Z Irori se nemusíte odhlašovat.",
+  "ui.xbox.open_wine_manager": "Otevřít správce Wine",
+  "ui.xbox.game_settings": "Nastavení Wine",
+  "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu"
 }

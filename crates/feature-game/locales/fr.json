@@ -258,6 +258,7 @@
   "game.install.password_placeholder": "Mot de passe de la branche privée",
   "game.install.path_placeholder": "Dossier du jeu",
   "game.install.pin": "Conserver le jeu dans une version précise",
+  "game.install.package": "Paquet",
   "game.install.pin_failed": "Impossible de modifier l’épinglage de version",
   "game.install.skip_updates": "Ne pas mettre à jour ce jeu",
   "game.install.size_on_disk": "Taille sur le disque",

@@ -7,6 +7,11 @@
 //! instructions on what to copy, accepts the pasted code or address, and
 //! watches the clipboard, signing in as soon as the user copies something
 //! matching the store's capture pattern.
+//!
+//! A Microsoft account ([`LoginFlow::MicrosoftAccount`]) signs in only in the
+//! window, whose CloudExperienceHost mode the page needs. When the store
+//! answers with [`LoginApproval`], the window opens again at Microsoft's
+//! approval page and its result goes to the store's login once more.
 
 mod capture;
 mod steam;
@@ -28,7 +33,7 @@ use gpui_kit::{
     AnyElement, App, AppContext as _, ClipboardItem, Context, Entity, Focusable as _, IntoElement,
     ParentElement as _, Render, SharedString, Styled as _, Subscription, Task, Window, div,
 };
-use irori_core::{DynStore, LoginFlow, Runner};
+use irori_core::{DynStore, LoginApproval, LoginFlow, Paths, Runner};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
 use regex::Regex;
@@ -41,6 +46,17 @@ use crate::common::notify_success;
 
 /// How often the clipboard is checked while the dialog is open.
 const CLIPBOARD_POLL: Duration = Duration::from_millis(700);
+
+/// How many approval pages one Microsoft sign-in may ask for before the
+/// dialog gives up (Microsoft asks for one).
+const MAX_APPROVALS: u8 = 3;
+
+/// Where the Microsoft sign-in window keeps the session's cookies between the
+/// sign-in and its approval page. Emptied when a sign-in starts and when the
+/// dialog closes.
+fn microsoft_profile() -> std::path::PathBuf {
+    Paths::get().cache.join("microsoft-sign-in")
+}
 
 /// The account the dialog signs in to: the store's, except for the other
 /// launchers, whose only account is the Xbox one (their launchers keep
@@ -102,6 +118,11 @@ enum FlowState {
     },
     /// Irori draws the store's own sign-in (Steam).
     InApp(Entity<steam::SteamSignInView>),
+    /// A Microsoft account: Microsoft's page at `url` in the sign-in window's
+    /// CloudExperienceHost mode. There is no browser fallback.
+    Microsoft {
+        url: String,
+    },
     /// Sign-in cannot start; `title` (when set) heads the message.
     Unavailable {
         title: Option<SharedString>,
@@ -149,6 +170,11 @@ pub(crate) struct LoginDialog {
     submitting: bool,
     error: Option<SharedString>,
     poll: Option<Task<()>>,
+    /// The approval page Microsoft asked for; the window shows it instead of
+    /// the sign-in page until the sign-in finishes or starts over.
+    approval: Option<String>,
+    /// Approval pages shown for this sign-in.
+    approvals: u8,
     _load: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -188,6 +214,8 @@ impl LoginDialog {
             submitting: false,
             error: None,
             poll: None,
+            approval: None,
+            approvals: 0,
             _load: None,
             _subscriptions: subscriptions,
         };
@@ -248,6 +276,23 @@ impl LoginDialog {
                     &[("store", login_name(self.runner))],
                 ));
             }
+            LoginFlow::MicrosoftAccount { url } => {
+                if window::helper().is_none() {
+                    // The page needs the window's host bridge: a browser
+                    // can't sign in to it.
+                    tracing::warn!("No sign-in window (irori-sign-in is not installed)");
+                    self.flow = FlowState::Unavailable {
+                        title: Some(t("manage.login.microsoft.no_window_title")),
+                        message: t_args(
+                            "manage.login.microsoft.no_window",
+                            &[("store", login_name(self.runner))],
+                        ),
+                    };
+                    return;
+                }
+                self.flow = FlowState::Microsoft { url };
+                self.open_window(window, cx);
+            }
             LoginFlow::Browser {
                 url,
                 capture,
@@ -276,32 +321,54 @@ impl LoginDialog {
         }
     }
 
-    /// Open the sign-in window; its result signs in, closing it offers the choice
-    /// again, and a failure falls back to the browser.
+    /// Open the sign-in window; its result signs in and closing it offers the
+    /// choice again. A failure falls back to the browser, except for a
+    /// Microsoft account, which can only sign in in the window.
     fn open_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let FlowState::Ready {
-            url,
-            capture: Some(re),
-            ..
-        } = &self.flow
-        else {
-            return;
-        };
-        let (url, pattern) = (url.clone(), re.as_str().to_string());
-        let Some(helper) = window::helper() else {
-            tracing::warn!("No sign-in window (irori-sign-in is not installed), using the browser");
-            self.fallback = Some(t("manage.login.window.missing"));
-            self.use_browser(window, cx);
-            return;
+        let cancel = CancellationToken::new();
+        let title = t_args("manage.login.title", &[("store", login_name(self.runner))]).to_string();
+        let task = match &self.flow {
+            FlowState::Ready {
+                url,
+                capture: Some(re),
+                ..
+            } => {
+                let (url, pattern) = (url.clone(), re.as_str().to_string());
+                let Some(helper) = window::helper() else {
+                    tracing::warn!(
+                        "No sign-in window (irori-sign-in is not installed), using the browser"
+                    );
+                    self.fallback = Some(t("manage.login.window.missing"));
+                    self.use_browser(window, cx);
+                    return;
+                };
+                irori_ui::run(
+                    cx,
+                    window::sign_in(helper, url, pattern, title, cancel.clone()),
+                )
+            }
+            FlowState::Microsoft { url } => {
+                let Some(helper) = window::helper() else {
+                    return;
+                };
+                // A new sign-in starts from an empty session; the approval page
+                // continues the sign-in's.
+                let fresh = self.approval.is_none();
+                let url = self.approval.clone().unwrap_or_else(|| url.clone());
+                let profile = microsoft_profile();
+                let cancel = cancel.clone();
+                irori_ui::run(cx, async move {
+                    if fresh {
+                        remove_profile(&profile).await;
+                    }
+                    window::sign_in_microsoft(helper, url, title, profile, cancel).await
+                })
+            }
+            _ => return,
         };
         self.close_window();
         self.fallback = None;
-        let cancel = CancellationToken::new();
-        let title = t_args("manage.login.title", &[("store", login_name(self.runner))]);
-        let task = irori_ui::run(
-            cx,
-            window::sign_in(helper, url, pattern, title.to_string(), cancel.clone()),
-        );
+        self.error = None;
         let task = cx.spawn_in(window, async move |this, cx| {
             let outcome = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -314,6 +381,11 @@ impl LoginDialog {
                         this.submit(text, window, cx);
                     }
                     Ok(WindowOutcome::Closed) => this.window = SignInWindow::Closed,
+                    Err(e) if matches!(this.flow, FlowState::Microsoft { .. }) => {
+                        tracing::warn!("Sign-in window failed: {e:#}");
+                        this.window = SignInWindow::Closed;
+                        this.error = Some(format!("{e:#}").into());
+                    }
                     Err(e) => {
                         tracing::warn!("Sign-in window unavailable, using the browser: {e:#}");
                         this.fallback = Some(t("manage.login.window.failed"));
@@ -352,10 +424,21 @@ impl LoginDialog {
         cx.notify();
     }
 
-    /// The dialog closed: close the sign-in window and stop watching the clipboard.
+    /// The dialog closed: close the sign-in window, stop watching the
+    /// clipboard and drop a Microsoft sign-in's session.
     pub(crate) fn close(&mut self) {
         self.close_window();
         self.stop_watching();
+        if matches!(self.flow, FlowState::Microsoft { .. }) {
+            let profile = microsoft_profile();
+            std::thread::spawn(move || {
+                if let Err(e) = std::fs::remove_dir_all(&profile)
+                    && e.kind() != std::io::ErrorKind::NotFound
+                {
+                    tracing::warn!("Could not remove {}: {e}", profile.display());
+                }
+            });
+        }
     }
 
     fn start_watching(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -434,6 +517,13 @@ impl LoginDialog {
                         irori_ui::models::refresh_library(false, cx);
                     }
                     Err(e) => {
+                        if this.ask_for_approval(&e, window, cx) {
+                            cx.notify();
+                            return;
+                        }
+                        // The next window starts the sign-in over.
+                        this.approval = None;
+                        this.approvals = 0;
                         this.error = Some(format!("{e:#}").into());
                     }
                 }
@@ -441,6 +531,33 @@ impl LoginDialog {
             });
         })
         .detach();
+    }
+
+    /// Microsoft asked to approve the sign-in: show its page in the window.
+    /// False when `error` is something else or approvals keep coming.
+    fn ask_for_approval(
+        &mut self,
+        error: &anyhow::Error,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(approval) = LoginApproval::of(error) else {
+            return false;
+        };
+        if !matches!(self.flow, FlowState::Microsoft { .. }) {
+            return false;
+        }
+        if self.approvals >= MAX_APPROVALS {
+            tracing::warn!("Microsoft asked for approval {MAX_APPROVALS} times; giving up");
+            self.approval = None;
+            self.approvals = 0;
+            self.error = Some(t("manage.login.microsoft.approval_loop"));
+            return true;
+        }
+        self.approvals += 1;
+        self.approval = Some(approval.url.clone());
+        self.open_window(window, cx);
+        true
     }
 
     fn copy_link(&mut self, cx: &mut Context<Self>) {
@@ -454,6 +571,15 @@ impl LoginDialog {
         if let FlowState::Ready { url, .. } = &self.flow {
             cx.open_url(url);
         }
+    }
+}
+
+/// Empty the Microsoft sign-in's session folder.
+async fn remove_profile(profile: &std::path::Path) {
+    if let Err(e) = tokio::fs::remove_dir_all(profile).await
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("Could not remove {}: {e}", profile.display());
     }
 }
 
@@ -515,6 +641,43 @@ impl Render for LoginDialog {
             FlowState::Unavailable { title, message } => {
                 Alert::error("login-unavailable", message.clone())
                     .when_some(title.clone(), |a, title| a.title(title))
+                    .into_any_element()
+            }
+            FlowState::Microsoft { .. } => {
+                let open = matches!(self.window, SignInWindow::Open { .. });
+                let store = login_name(self.runner);
+                let status = if self.submitting {
+                    t("manage.login.window.finishing")
+                } else if open && self.approval.is_some() {
+                    t("manage.login.microsoft.approving")
+                } else if open {
+                    t_args("manage.login.window.waiting", &[("store", store)])
+                } else {
+                    t("manage.login.window.closed")
+                };
+                v_flex()
+                    .gap_4()
+                    .child(
+                        h_flex()
+                            .gap_3()
+                            .items_start()
+                            .when(open || self.submitting, |row| {
+                                row.child(div().pt_0p5().child(Spinner::new().small()))
+                            })
+                            .child(div().flex_1().min_w_0().text_sm().child(status)),
+                    )
+                    .when(!open && !self.submitting, |this| {
+                        this.child(
+                            h_flex().child(
+                                Button::new("reopen-window")
+                                    .primary()
+                                    .label(t("manage.login.window.reopen"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_window(window, cx)
+                                    })),
+                            ),
+                        )
+                    })
                     .into_any_element()
             }
             FlowState::Ready { .. } if !matches!(self.window, SignInWindow::None) => {
@@ -658,8 +821,8 @@ impl Render for LoginDialog {
                 .into_any_element(),
         };
         let ready = matches!(self.flow, FlowState::Ready { .. });
-        let browser =
-            matches!(self.window, SignInWindow::None) && !matches!(self.flow, FlowState::InApp(_));
+        let browser = matches!(self.window, SignInWindow::None)
+            && !matches!(self.flow, FlowState::InApp(_) | FlowState::Microsoft { .. });
         let has_input = !self.input.read(cx).value().trim().is_empty();
         v_flex()
             .gap_4()

@@ -1,0 +1,50 @@
+[package]
+name = "irori-msstore-api"
+description = "Microsoft Store and Xbox Live protocol: device registration, RST2 tokens, CLEP and SPLicense secrets, content licences, SISU and XSTS, catalog and packages"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Versions follow the Xodus code this crate ports (its XML-DSig, AES and
+# HMAC code uses these APIs); only this crate needs them.
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid = { workspace = true, features = ["serde"] }
+url.workspace = true
+tokio = { workspace = true, features = ["time"] }
+base64-23 = { package = "base64", version = "0.23" }
+base64.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+quick-xml = { version = "0.42", features = ["serialize", "overlapped-lists"] }
+rand = "0.10"
+aes = "0.9"
+cbc = "0.2"
+aes-keywrap = "0.9"
+hmac = "0.13"
+sha2-11 = { package = "sha2", version = "0.11" }
+rsa = { version = "0.9", features = ["serde", "sha2"] }
+zerocopy = { version = "0.8", features = ["derive"] }
+num_enum = "0.7"
+num-bigint-dig = "0.9"
+num-integer = "0.1"
+bergshamra = "0.8"
+bergshamra-c14n = "0.8"
+kryptering = "0.5"
+p256 = { version = "0.13", features = ["ecdsa"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+tempfile = "3"
+futures.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
+[dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+ed25519-dalek = "3"

@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "표지에 카테고리 표시",
   "settings.field.ui_cover_categories.help": "그리드에서 각 게임 표지 아래쪽에 카테고리를 처음 두 개와 나머지 개수로 표시합니다.",
   "settings.field.ui_group_copies.label": "여러 스토어의 사본을 하나의 게임으로 표시",
-  "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다."
+  "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다.",
+  "settings.field.xbox.label": "Xbox 스토어",
+  "settings.field.xbox.help": "Microsoft 계정으로 로그인하면 Microsoft Store 및 PC Game Pass 게임을 설치하고 플레이할 수 있습니다. 게임은 Wine 관리자의 Nexus Runtime으로 실행됩니다.",
+  "settings.field.xbox_market.label": "Microsoft Store 지역",
+  "settings.field.xbox_market.help": "라이브러리, 카탈로그, 라이선스에 사용할 두 글자 국가 코드(US, DE, GB…)입니다. 비워 두면 인터페이스 언어를 따릅니다.",
+  "settings.field.xbox_market.off": "먼저 Xbox 스토어를 켜세요."
 }

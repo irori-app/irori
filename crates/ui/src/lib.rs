@@ -36,6 +36,7 @@ pub mod system_notify;
 mod text_scale;
 pub mod theme;
 mod wallpaper;
+mod xbox_problem;
 
 pub use models::{Models, models};
 pub use nav::{Route, navigate};

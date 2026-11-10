@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "Pokazuj kategorie na okładkach",
   "settings.field.ui_cover_categories.help": "Kategorie każdej gry u dołu jej okładki w siatce: pierwsze dwie i liczba pozostałych.",
   "settings.field.ui_group_copies.label": "Pokazuj kopie z kilku sklepów jako jedną grę",
-  "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia."
+  "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia.",
+  "settings.field.xbox.label": "Sklep Xbox",
+  "settings.field.xbox.help": "Zaloguj się kontem Microsoft, aby instalować i grać w gry z Microsoft Store i PC Game Pass. Działają przez Nexus Runtime z menedżera Wine.",
+  "settings.field.xbox_market.label": "Region Microsoft Store",
+  "settings.field.xbox_market.help": "Dwuliterowy kod kraju (US, DE, GB…) dla biblioteki, katalogu i licencji. Puste pole oznacza język interfejsu.",
+  "settings.field.xbox_market.off": "Najpierw włącz sklep Xbox."
 }

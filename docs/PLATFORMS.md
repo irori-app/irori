@@ -861,6 +861,41 @@ the store logins (see [Saved logins](#saved-logins)) in `<config>/sync/webdav.js
 `state/sync.json` keeps the device id and what was last synced. How values merge is
 described in `crates/services/src/sync/merge.rs`.
 
+### Microsoft Store and PC Game Pass (Linux)
+
+The Xbox store (`iroriXbox`, Settings → General → Integrations) is Linux only: Windows
+has the Xbox app, which "Other launchers" lists, and macOS has no runtime for GDK games.
+
+- **Files.** `<config>/stores/xbox/credentials.json` holds the device registration and
+  the Microsoft account tokens (through `irori_secrets`); `installed.json` the installed
+  games; `licenses/` the device-bound offline licences. The library is cached in
+  `<cache>/stores/xbox/library.json`. A game folder keeps its package metadata in
+  `.irori-xbox.msixvc`, download checkpoints in `.irori-xbox-journal.jsonl`, an update
+  in progress in `.irori-xbox-update/` and `.irori-xbox-update-incomplete` until it
+  finishes. A folder Nexus Launcher installed (`.xodus-streaming.msixvc`) can be imported.
+- **Runtime.** Games need Proton with `xgameruntime.dll`: the Wine manager's Nexus Runtime
+  tab downloads the open-source Nexus Runtime build from
+  `github.com/domsvoboda/nexus-runtime` (SHA-512 checked). It runs on the host, never under
+  umu, through `proton waitforexitandrun` with `UMU_ID` set and `UMU_USE_STEAM=0`.
+- **Launch view.** Executables stay encrypted on disk. Each session decrypts them into a
+  folder only the user can open (`.irori-xbox-launch-*` beside the game, else in `/tmp`)
+  with links to everything else; it is removed when the game exits, and leftovers from a
+  crash at the next start.
+- **Account service.** Each session runs the service `xgameruntime.dll` talks to inside
+  Irori: a Unix socket in a private folder under `<cache>/stores/xbox/service` and a
+  keyed loopback port (`XODUS_SOCKET`, `XODUS_BRIDGE_PORT`, `XODUS_BRIDGE_KEY`).
+- **Device registration** sends hardware identifiers as Windows does. Irori reads the
+  SMBIOS table only when the user may (it never asks for a password); otherwise those
+  fields are sent as unavailable.
+- **Sign-in** needs the sign-in window (`irori-sign-in`, WebKitGTK 4.1): Microsoft's page
+  only works inside its host bridge, so there is no browser fallback.
+- **Game language.** A game's "Game language" setting sets the package language and the
+  Windows and Unix locale of its session; empty, only the package's resources follow
+  Irori's language.
+- **Offline play.** Accounts → Xbox → "Offline play" makes this computer the account's
+  offline PC (Microsoft allows one, and a few changes a year), so licensed games start
+  without a connection.
+
 ### Steam Deck and Steam Input
 
 When Steam's controller interface starts Irori (`XDG_CURRENT_DESKTOP=gamescope`

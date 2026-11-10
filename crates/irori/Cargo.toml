@@ -29,6 +29,7 @@ irori-emulation.workspace = true
 irori-launchers.workspace = true
 irori-steam.workspace = true
 irori-itch.workspace = true
+irori-xbox.workspace = true
 irori-manage.workspace = true
 irori-settings.workspace = true
 irori-bigpicture.workspace = true

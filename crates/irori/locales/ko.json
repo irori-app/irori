@@ -86,6 +86,8 @@
   "shell.palette.set_up_emulation_keywords": "에뮬레이터 ROM 콘솔 레트로 BIOS RetroArch",
   "shell.palette.steam_friends": "Steam 친구 보기",
   "shell.palette.steam_friends_keywords": "친구 온라인 플레이 참가 초대 채팅",
+  "shell.palette.xbox_offline_play": "Xbox 오프라인 플레이",
+  "shell.palette.xbox_offline_play_keywords": "microsoft store game pass 오프라인 pc 라이선스",
   "shell.palette.open_store": "{store} 스토어 열기",
   "shell.palette.lutris_script": "Lutris 스크립트로 설치",
   "shell.palette.lutris_script_keywords": "Lutris 스크립트 설치 프로그램 lutris.net 커뮤니티",

@@ -1121,5 +1121,10 @@
   "settings.field.ui_cover_categories.label": "カバーにカテゴリーを表示",
   "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。",
   "settings.field.ui_group_copies.label": "複数のストアのコピーを 1 つのゲームとして表示",
-  "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。"
+  "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。",
+  "settings.field.xbox.label": "Xbox ストア",
+  "settings.field.xbox.help": "Microsoft アカウントでサインインすると、Microsoft Store と PC Game Pass のゲームをインストールして遊べます。ゲームは Wine マネージャーの Nexus Runtime で動作します。",
+  "settings.field.xbox_market.label": "Microsoft Store の地域",
+  "settings.field.xbox_market.help": "ライブラリ、カタログ、ライセンスに使う 2 文字の国コード (US、DE、GB…)。空欄の場合はインターフェイスの言語に従います。",
+  "settings.field.xbox_market.off": "先に Xbox ストアをオンにしてください。"
 }

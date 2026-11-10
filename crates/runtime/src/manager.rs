@@ -29,12 +29,16 @@ pub enum ReleaseKind {
     WineCrossover,
     WineStagingMac,
     GamePortingToolkit,
+    /// The open-source Proton build with `xgameruntime.dll` that Microsoft
+    /// Store (GDK) games need; the Xbox store asks for it.
+    NexusRuntime,
 }
 
 impl ReleaseKind {
-    pub const ALL: [ReleaseKind; 7] = [
+    pub const ALL: [ReleaseKind; 8] = [
         ReleaseKind::GeProton,
         ReleaseKind::ProtonCachyOs,
+        ReleaseKind::NexusRuntime,
         ReleaseKind::WineGe,
         ReleaseKind::WineKron4ek,
         ReleaseKind::GamePortingToolkit,
@@ -51,6 +55,7 @@ impl ReleaseKind {
             irori_core::HostPlatform::Linux => &[
                 Self::GeProton,
                 Self::ProtonCachyOs,
+                Self::NexusRuntime,
                 Self::WineGe,
                 Self::WineKron4ek,
             ],
@@ -76,6 +81,7 @@ impl ReleaseKind {
             Self::WineCrossover => "Wine-Crossover",
             Self::WineStagingMac => "Wine-Staging-macOS",
             Self::GamePortingToolkit => "Game-Porting-Toolkit",
+            Self::NexusRuntime => "Nexus-Runtime",
         }
     }
 
@@ -103,13 +109,17 @@ impl ReleaseKind {
             Self::GamePortingToolkit => {
                 "https://api.github.com/repos/Gcenx/game-porting-toolkit/releases"
             }
+            Self::NexusRuntime => "https://api.github.com/repos/domsvoboda/nexus-runtime/releases",
         }
     }
 
     /// Whether builds of this source are Proton (installed into the Proton
     /// directory) rather than Wine.
     pub fn is_proton(self) -> bool {
-        matches!(self, ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs)
+        matches!(
+            self,
+            ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs | ReleaseKind::NexusRuntime
+        )
     }
 }
 
@@ -242,6 +252,15 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
             (url.ends_with(".tar.gz") || url.ends_with(".tar.xz")) && ARM_ASSET.is_match(url) == arm
         }
         Some(ReleaseKind::WineKron4ek) => !arm,
+        Some(ReleaseKind::NexusRuntime) => {
+            let name = file_name_of(url);
+            let suffix = if arm {
+                "-aarch64.tar.xz"
+            } else {
+                "-x86_64.tar.xz"
+            };
+            name.starts_with("nexus-runtime-") && name.ends_with(suffix)
+        }
         Some(ReleaseKind::GamePortingToolkit) => arm,
         _ => true,
     }
@@ -266,7 +285,7 @@ fn checksum_name(asset: &str) -> String {
 fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Option<&'a GhAsset> {
     let ty = kind.type_str();
     match kind {
-        ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs => assets
+        ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs | ReleaseKind::NexusRuntime => assets
             .iter()
             .find(|a| is_compatible_download(ty, &a.browser_download_url, arch)),
         ReleaseKind::WineCrossover => assets
@@ -304,6 +323,12 @@ fn version_of(kind: ReleaseKind, tag: &str) -> String {
         ReleaseKind::WineKron4ek => format!("Wine-Kron4ek-{tag}-staging"),
         ReleaseKind::WineCrossover => format!("Wine-Crossover-{tag}"),
         ReleaseKind::WineStagingMac => format!("Wine-Staging-macOS-{tag}"),
+        ReleaseKind::NexusRuntime => {
+            format!(
+                "Nexus-Runtime-{}",
+                tag.strip_prefix("runtime-").unwrap_or(tag)
+            )
+        }
         k if k.type_str().contains("Wine") => format!("Wine-{tag}"),
         _ => tag.to_string(),
     }
@@ -1182,6 +1207,45 @@ mod tests {
         assert_eq!(rel[1].version, "cachyos-11.0-20261015-slr");
         assert!(rel[1].download.ends_with("-slr-x86_64.tar.xz"));
         assert!(rel[1].checksum.ends_with("-slr-x86_64.sha512sum"));
+    }
+
+    #[test]
+    fn nexus_runtime_takes_the_host_build_never_the_source() {
+        let list = parse(serde_json::json!([
+            gh(
+                "runtime-11.0-20261102-g76c6dd13",
+                "2026-11-02",
+                &[
+                    "candidate.json",
+                    "nexus-runtime-11.0-experimental-g76c6dd13-source.tar.xz",
+                    "nexus-runtime-11.0-experimental-g76c6dd13-source.sha512sum",
+                    "nexus-runtime-11.0-experimental-g76c6dd13-x86_64.tar.xz",
+                    "nexus-runtime-11.0-experimental-g76c6dd13-x86_64.sha512sum",
+                ]
+            ),
+            gh(
+                "runtime-11.0-20261102-arm64-gfb9b0ec8",
+                "2026-11-02",
+                &["nexus-runtime-11.0-experimental-arm64-gfb9b0ec8-aarch64.tar.xz"]
+            )
+        ]));
+        let rel = releases_from_github(ReleaseKind::NexusRuntime, list.clone(), "x86_64");
+        assert_eq!(rel.len(), 2);
+        assert_eq!(rel[0].version, "Nexus-Runtime-latest");
+        assert_eq!(rel[1].version, "Nexus-Runtime-11.0-20261102-g76c6dd13");
+        assert!(rel[1].download.ends_with("-g76c6dd13-x86_64.tar.xz"));
+        assert!(rel[1].checksum.ends_with("-g76c6dd13-x86_64.sha512sum"));
+        let arm = releases_from_github(ReleaseKind::NexusRuntime, list, "aarch64");
+        assert_eq!(
+            arm[1].version,
+            "Nexus-Runtime-11.0-20261102-arm64-gfb9b0ec8"
+        );
+        assert!(ReleaseKind::NexusRuntime.is_proton());
+        assert!(!is_compatible_download(
+            "Nexus-Runtime",
+            "x/nexus-runtime-11.0-g1-source.tar.xz",
+            "x86_64"
+        ));
     }
 
     #[test]
