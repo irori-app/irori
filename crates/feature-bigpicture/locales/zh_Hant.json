@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level}%",
   "bigpicture.battery.charging": "充電中 {level}%",
   "bigpicture.battery.full": "已充飽",
+  "bigpicture.hold.hint": "繼續按住以開啟 Big Picture",
   "bigpicture.clock.am": "上午",
   "bigpicture.clock.pm": "下午",
   "bigpicture.clock.time_12h": "{period}{time}",

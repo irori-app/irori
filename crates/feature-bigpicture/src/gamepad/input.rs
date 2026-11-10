@@ -444,6 +444,114 @@ impl GuideTap {
     }
 }
 
+/// Holding a button (Start or Select, `iroriUi.bigPictureHoldButton`) for
+/// a while opens Big Picture. Its usual input waits for the release, so a
+/// short press still does what it always did and a long one only opens
+/// Big Picture. One hold at a time: pressing the button on a second
+/// controller starts over there.
+#[derive(Debug, Default)]
+pub struct HoldTimer {
+    held: Option<Hold>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Hold {
+    device: usize,
+    since: Instant,
+    duration: Duration,
+    fired: bool,
+}
+
+/// What letting go of the held button meant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldRelease {
+    /// The button wasn't being held for Big Picture.
+    NotHeld,
+    /// Let go too early: a press, whose input is due now.
+    Tap,
+    /// Held long enough, and the release arrived before the timer was
+    /// looked at: Big Picture opens now.
+    Completed,
+    /// Big Picture already opened for this hold; the release does nothing.
+    AfterOpening,
+}
+
+impl HoldTimer {
+    /// Start holding on `device` for `duration`.
+    pub fn press(&mut self, device: usize, now: Instant, duration: Duration) {
+        self.held = Some(Hold {
+            device,
+            since: now,
+            duration,
+            fired: false,
+        });
+    }
+
+    /// The button was let go on `device` at `now`.
+    pub fn release(&mut self, device: usize, now: Instant) -> HoldRelease {
+        let Some(hold) = self.held.filter(|h| h.device == device) else {
+            return HoldRelease::NotHeld;
+        };
+        self.held = None;
+        if hold.fired {
+            HoldRelease::AfterOpening
+        } else if now.saturating_duration_since(hold.since) >= hold.duration {
+            HoldRelease::Completed
+        } else {
+            HoldRelease::Tap
+        }
+    }
+
+    /// When the hold completes, while one is under way.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.held.filter(|h| !h.fired).map(|h| h.since + h.duration)
+    }
+
+    /// Whether the hold completes at `now`. It completes once; the button
+    /// stays held until its release.
+    pub fn poll(&mut self, now: Instant) -> bool {
+        match &mut self.held {
+            Some(hold) if !hold.fired && now >= hold.since + hold.duration => {
+                hold.fired = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Since when the button is held, while the hold is under way.
+    pub fn progress(&self) -> Option<(Instant, Duration)> {
+        self.held
+            .filter(|h| !h.fired)
+            .map(|h| (h.since, h.duration))
+    }
+
+    /// Give up the hold (its controller went away, input was turned off).
+    /// Returns whether one was under way.
+    pub fn cancel(&mut self) -> bool {
+        self.held.take().is_some_and(|h| !h.fired)
+    }
+
+    /// Give up the hold when it is on `device`.
+    pub fn cancel_device(&mut self, device: usize) -> bool {
+        if self.held.is_some_and(|h| h.device == device) {
+            self.cancel()
+        } else {
+            false
+        }
+    }
+}
+
+/// The button [`HoldTimer`] watches for a setting, `None` when off.
+pub fn hold_button(setting: irori_core::settings::HoldButton) -> Option<PadButton> {
+    use irori_core::settings::HoldButton;
+    match setting {
+        HoldButton::Off => None,
+        HoldButton::Start => Some(PadButton::Start),
+        HoldButton::Select => Some(PadButton::Select),
+    }
+}
+
 /// What a button pressed with Guide held does without opening anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chord {
@@ -576,6 +684,61 @@ mod tests {
         assert!(tap.chord(0), "a second chord while Guide is still held");
         assert!(!tap.release(0, t0 + ms(100)));
         assert!(!tap.chord(0), "released");
+    }
+
+    #[test]
+    fn a_long_hold_opens_once_and_a_short_one_is_a_press() {
+        let t0 = Instant::now();
+        let mut hold = HoldTimer::default();
+        assert_eq!(hold.release(0, t0), HoldRelease::NotHeld);
+        assert_eq!(hold.deadline(), None);
+        hold.press(0, t0, ms(1000));
+        assert_eq!(hold.deadline(), Some(t0 + ms(1000)));
+        assert_eq!(hold.progress(), Some((t0, ms(1000))));
+        assert!(!hold.poll(t0 + ms(999)));
+        assert_eq!(
+            hold.release(1, t0 + ms(500)),
+            HoldRelease::NotHeld,
+            "other pad"
+        );
+        assert_eq!(hold.release(0, t0 + ms(500)), HoldRelease::Tap);
+        assert!(!hold.poll(t0 + ms(2000)), "let go");
+
+        hold.press(0, t0, ms(1000));
+        assert!(hold.poll(t0 + ms(1000)));
+        assert!(!hold.poll(t0 + ms(1500)), "fires once");
+        assert_eq!(hold.deadline(), None, "nothing more to wait for");
+        assert_eq!(hold.progress(), None);
+        assert_eq!(hold.release(0, t0 + ms(3000)), HoldRelease::AfterOpening);
+
+        // The release beat the timer: it completes the hold itself.
+        hold.press(2, t0, ms(800));
+        assert_eq!(hold.release(2, t0 + ms(900)), HoldRelease::Completed);
+    }
+
+    #[test]
+    fn a_hold_is_given_up_with_its_controller() {
+        let t0 = Instant::now();
+        let mut hold = HoldTimer::default();
+        hold.press(3, t0, ms(1000));
+        assert!(!hold.cancel_device(1));
+        assert!(hold.cancel_device(3));
+        assert!(!hold.poll(t0 + ms(5000)));
+        assert_eq!(hold.release(3, t0 + ms(5000)), HoldRelease::NotHeld);
+        hold.press(3, t0, ms(1000));
+        hold.press(4, t0 + ms(100), ms(1000));
+        assert_eq!(
+            hold.release(3, t0 + ms(200)),
+            HoldRelease::NotHeld,
+            "moved on"
+        );
+        assert!(hold.cancel());
+        assert!(!hold.cancel());
+        assert_eq!(
+            hold_button(irori_core::settings::HoldButton::Start),
+            Some(PadButton::Start)
+        );
+        assert_eq!(hold_button(irori_core::settings::HoldButton::Off), None);
     }
 
     #[test]

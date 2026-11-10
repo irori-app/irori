@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level}%",
   "bigpicture.battery.charging": "충전 중 {level}%",
   "bigpicture.battery.full": "충전 완료",
+  "bigpicture.hold.hint": "계속 누르고 있으면 Big Picture가 열립니다",
   "bigpicture.clock.am": "오전",
   "bigpicture.clock.pm": "오후",
   "bigpicture.clock.time_12h": "{period} {time}",

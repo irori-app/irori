@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use futures::channel::mpsc::UnboundedSender;
@@ -14,8 +14,8 @@ use gilrs::LinuxGamepadExt as _;
 use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
-    AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, PadButton, Repeater,
-    SteamIgnoreList, StickAxis, is_ignored_device, map_button,
+    AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease, HoldTimer,
+    PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
 };
 use super::{Battery, ControllerInfo};
 use parking_lot::Mutex;
@@ -33,6 +33,11 @@ pub(crate) struct SharedConfig {
     /// The event devices of the controllers read (Linux), which the overlay
     /// holds from the game while it is open.
     pub devices: Mutex<Vec<(PathBuf, ControllerKind)>>,
+    /// The button held to open Big Picture: 0 none, 1 Start, 2 Select.
+    pub hold_button: AtomicU8,
+    pub hold_ms: AtomicU32,
+    /// Big Picture is showing, so holding the button does nothing special.
+    pub big_picture: AtomicBool,
 }
 
 impl SharedConfig {
@@ -43,7 +48,36 @@ impl SharedConfig {
             repeat_ms: AtomicU32::new(repeat_ms),
             overlay: AtomicBool::new(overlay),
             devices: Mutex::new(Vec::new()),
+            hold_button: AtomicU8::new(0),
+            hold_ms: AtomicU32::new(1000),
+            big_picture: AtomicBool::new(false),
         }
+    }
+
+    /// Follow `iroriUi.bigPictureHoldButton` and `bigPictureHoldMs`.
+    pub(crate) fn set_hold(&self, ui: &irori_core::settings::UiPrefs) {
+        let code = match super::input::hold_button(ui.big_picture_hold_button) {
+            None => 0,
+            Some(PadButton::Select) => 2,
+            Some(_) => 1,
+        };
+        self.hold_button.store(code, Ordering::Relaxed);
+        self.hold_ms
+            .store(ui.big_picture_hold().as_millis() as u32, Ordering::Relaxed);
+    }
+
+    /// The button held to open Big Picture, unless it is showing.
+    fn hold(&self) -> Option<(PadButton, Duration)> {
+        if self.big_picture.load(Ordering::Relaxed) {
+            return None;
+        }
+        let button = match self.hold_button.load(Ordering::Relaxed) {
+            1 => PadButton::Start,
+            2 => PadButton::Select,
+            _ => return None,
+        };
+        let ms = self.hold_ms.load(Ordering::Relaxed);
+        Some((button, Duration::from_millis(u64::from(ms))))
     }
 
     pub(crate) fn timing(&self) -> (Duration, Duration) {
@@ -63,6 +97,19 @@ pub(crate) enum Message {
     Controllers(Vec<ControllerInfo>),
     /// A button pressed with Guide held.
     Chord(Chord),
+    /// Holding the button that opens Big Picture.
+    Hold(HoldEvent),
+}
+
+/// How holding the button that opens Big Picture goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HoldEvent {
+    /// Held: Big Picture opens after this long unless it is let go.
+    Started(Duration),
+    /// Let go too early, or its controller went away.
+    Cancelled,
+    /// Held long enough: open Big Picture.
+    Completed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +133,9 @@ struct Reader {
     repeater: Repeater,
     dedupe: Deduper,
     guide: GuideTap,
+    hold: HoldTimer,
+    /// The button the hold under way is on.
+    holding: Option<PadButton>,
     steam_ignored: SteamIgnoreList,
     controllers: Vec<ControllerInfo>,
     last_battery: Instant,
@@ -109,6 +159,8 @@ pub(crate) fn run(shared: Arc<SharedConfig>, tx: UnboundedSender<Message>) {
         repeater: Repeater::new(initial, interval),
         dedupe: Deduper::default(),
         guide: GuideTap::default(),
+        hold: HoldTimer::default(),
+        holding: None,
         steam_ignored: SteamIgnoreList::from_env(),
         controllers: Vec::new(),
         last_battery: Instant::now(),
@@ -125,10 +177,14 @@ pub(crate) fn run(shared: Arc<SharedConfig>, tx: UnboundedSender<Message>) {
         let now = Instant::now();
         let battery_due =
             (!reader.controllers.is_empty()).then(|| reader.last_battery + BATTERY_REFRESH);
-        let deadline = match (reader.repeater.deadline(), battery_due) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
+        let deadline = [
+            reader.repeater.deadline(),
+            battery_due,
+            reader.hold.deadline(),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
         let timeout = deadline.map(|d| d.saturating_duration_since(now));
 
         let started = Instant::now();
@@ -146,6 +202,9 @@ pub(crate) fn run(shared: Arc<SharedConfig>, tx: UnboundedSender<Message>) {
         if let Some(input) = reader.repeater.poll(now) {
             let kind = reader.held_kind();
             reader.emit(input, kind);
+        }
+        if reader.hold.poll(now) {
+            reader.send_hold(HoldEvent::Completed);
         }
         if battery_due.is_some_and(|due| now >= due) {
             reader.last_battery = now;
@@ -204,6 +263,10 @@ impl Reader {
         let _ = self.tx.unbounded_send(Message::Input { input, kind });
     }
 
+    fn send_hold(&self, event: HoldEvent) {
+        let _ = self.tx.unbounded_send(Message::Hold(event));
+    }
+
     fn refresh_devices(&mut self, gilrs: &Gilrs) {
         let mut devices = HashMap::new();
         for (id, pad) in gilrs.gamepads() {
@@ -219,6 +282,12 @@ impl Reader {
                     stick_y: previous.as_ref().map(|d| d.stick_y).unwrap_or_default(),
                 },
             );
+        }
+        for gone in self.devices.keys() {
+            if !devices.contains_key(gone) && self.hold.cancel_device(usize::from(*gone)) {
+                self.holding = None;
+                self.send_hold(HoldEvent::Cancelled);
+            }
         }
         self.devices = devices;
         self.publish_paths(gilrs);
@@ -283,6 +352,17 @@ impl Reader {
                     self.guide.press(usize::from(id), Instant::now());
                     return;
                 }
+                // The button that opens Big Picture when held: its own input
+                // waits for the release.
+                if self.enabled()
+                    && let Some((hold, duration)) = self.shared.hold()
+                    && hold == button
+                {
+                    self.hold.press(usize::from(id), Instant::now(), duration);
+                    self.holding = Some(button);
+                    self.send_hold(HoldEvent::Started(duration));
+                    return;
+                }
                 // A chord with Guide held (X: a clip; with the overlay's
                 // shortcuts RB: a screenshot, Up/Down: the volume), even
                 // while a game has the window.
@@ -305,6 +385,26 @@ impl Reader {
                     return;
                 };
                 let input = map_button(button, device.kind);
+                if self.holding == Some(button) {
+                    match self.hold.release(usize::from(id), Instant::now()) {
+                        HoldRelease::NotHeld => {}
+                        HoldRelease::Tap => {
+                            self.holding = None;
+                            self.send_hold(HoldEvent::Cancelled);
+                            self.press(id, Source::DPad, input);
+                            return;
+                        }
+                        HoldRelease::Completed => {
+                            self.holding = None;
+                            self.send_hold(HoldEvent::Completed);
+                            return;
+                        }
+                        HoldRelease::AfterOpening => {
+                            self.holding = None;
+                            return;
+                        }
+                    }
+                }
                 if input == GamepadInput::Guide {
                     if self.guide.release(usize::from(id), Instant::now()) {
                         self.press(id, Source::DPad, input);

@@ -161,8 +161,9 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_sections(vec![FieldSection::General], cx));
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
-        // The in-game overlay's switch is among the controller rows.
-        assert_eq!(app_form.read(cx).visible_count(), 6);
+        // The in-game overlay's switch is among the controller rows, and so
+        // are the button held to open Big Picture and how long.
+        assert_eq!(app_form.read(cx).visible_count(), 8);
         assert!(general > 20);
     });
 }

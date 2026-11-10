@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level}%",
   "bigpicture.battery.charging": "Заряджання {level}%",
   "bigpicture.battery.full": "Заряджено",
+  "bigpicture.hold.hint": "Утримуйте, щоб відкрити Big Picture",
   "bigpicture.clock.am": "дп",
   "bigpicture.clock.pm": "пп",
   "bigpicture.clock.time_12h": "{time} {period}",

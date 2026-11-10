@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level} %",
   "bigpicture.battery.charging": "Se încarcă {level} %",
   "bigpicture.battery.full": "Încărcat",
+  "bigpicture.hold.hint": "Țineți apăsat în continuare pentru a deschide Big Picture",
   "bigpicture.clock.am": "a.m.",
   "bigpicture.clock.pm": "p.m.",
   "bigpicture.clock.time_12h": "{time} {period}",

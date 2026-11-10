@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "%{level}",
   "bigpicture.battery.charging": "Şarj oluyor %{level}",
   "bigpicture.battery.full": "Şarj dolu",
+  "bigpicture.hold.hint": "Big Picture'ı açmak için basılı tutmaya devam edin",
   "bigpicture.clock.am": "ÖÖ",
   "bigpicture.clock.pm": "ÖS",
   "bigpicture.clock.time_12h": "{period} {time}",

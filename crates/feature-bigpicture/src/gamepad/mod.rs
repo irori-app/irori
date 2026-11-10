@@ -23,6 +23,12 @@
 //!    also while a game has the window. With the overlay on, Guide + RB takes
 //!    a screenshot and Guide + Up/Down change the system's volume.
 //!
+//! Holding Start (or Select, `iroriUi.bigPictureHoldButton`) for
+//! `iroriUi.bigPictureHoldMs` (a second unless changed) opens Big Picture
+//! from anywhere in Irori's window while no game runs; a hint shows how long
+//! is left ([`HoldHintView`]). That button's usual input (the palette) then
+//! comes when it is let go, unless Big Picture opened.
+//!
 //! With `iroriUi.bigPictureOnController` on, a controller connecting while
 //! Irori runs (not one already there when it starts) brings Irori to the
 //! front in Big Picture, unless a game is running.
@@ -44,6 +50,7 @@
 #[cfg(any(target_os = "linux", test))]
 mod evdev;
 pub(crate) mod grab;
+mod hint;
 mod input;
 mod reader;
 
@@ -63,11 +70,13 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::nav::{self, navigator};
 use parking_lot::RwLock;
 
+pub use hint::HoldHintView;
 pub use input::{
-    Chord, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, InputSource, PadButton,
-    Repeater, SteamIgnoreList, StickAxis, is_ignored_device, keyboard_equivalent, map_button,
+    Chord, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, HoldRelease, HoldTimer,
+    InputSource, PadButton, Repeater, SteamIgnoreList, StickAxis, hold_button, is_ignored_device,
+    keyboard_equivalent, map_button,
 };
-use reader::{Message, SharedConfig};
+use reader::{HoldEvent, Message, SharedConfig};
 
 actions!(
     irori_gamepad,
@@ -169,6 +178,15 @@ pub fn controllers() -> Vec<ControllerInfo> {
 pub struct GamepadModel {
     controllers: Vec<ControllerInfo>,
     last_kind: Option<ControllerKind>,
+    hold: Option<HoldHint>,
+}
+
+/// A button being held to open Big Picture: since when, and for how long
+/// it must be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HoldHint {
+    pub since: Instant,
+    pub duration: std::time::Duration,
 }
 
 impl GamepadModel {
@@ -189,6 +207,11 @@ impl GamepadModel {
         }
         self.last_kind
             .or_else(|| self.controllers.first().map(|c| c.kind))
+    }
+
+    /// The hold under way that opens Big Picture, for its hint.
+    pub fn hold(&self) -> Option<HoldHint> {
+        self.hold
     }
 
     /// The controller to show in status indicators.
@@ -240,12 +263,31 @@ pub fn install(cx: &mut App) {
                 )
             })
             .unwrap_or((false, 300, 50, false));
-        Arc::new(SharedConfig::new(disabled, initial, repeat, overlay))
+        let shared = SharedConfig::new(disabled, initial, repeat, overlay);
+        if let Some(settings) = &settings {
+            shared.set_hold(&settings.read(cx).app.ui);
+        }
+        Arc::new(shared)
     };
+    if let Some(nav) = cx.try_global::<irori_ui::nav::NavigatorHandle>() {
+        let nav = nav.0.clone();
+        let shared = shared.clone();
+        let showing = |nav: &irori_ui::nav::Navigator| nav.current() == &Route::BigPicture;
+        shared
+            .big_picture
+            .store(showing(nav.read(cx)), Ordering::Relaxed);
+        cx.observe(&nav, move |nav, cx| {
+            shared
+                .big_picture
+                .store(showing(nav.read(cx)), Ordering::Relaxed);
+        })
+        .detach();
+    }
     if let Some(settings) = settings {
         let shared = shared.clone();
         cx.observe(&settings, move |settings, cx| {
             let app = &settings.read(cx).app;
+            shared.set_hold(&app.ui);
             shared
                 .disabled
                 .store(app.disable_controller, Ordering::Relaxed);
@@ -382,6 +424,7 @@ fn on_message(
             }
         }
         Message::Chord(chord) => on_chord(chord, cx),
+        Message::Hold(event) => on_hold(event, disabled, model, cx),
         Message::Input { input, kind } => {
             if disabled
                 || !echoes
@@ -405,6 +448,34 @@ fn on_message(
             }
             dispatch_input(input, cx);
         }
+    }
+}
+
+/// Holding the button that opens Big Picture (see the module docs). It
+/// counts only while Irori's window is active, outside Big Picture and with
+/// no game running, as a press of Start in another program or a game is
+/// none of Irori's business.
+fn on_hold(event: HoldEvent, disabled: bool, model: &Entity<GamepadModel>, cx: &mut App) {
+    let applies = !disabled
+        && !game_running(cx)
+        && cx.active_window().is_some()
+        && cx.has_global::<irori_ui::nav::NavigatorHandle>()
+        && navigator(cx).read(cx).current() != &Route::BigPicture;
+    let hint = match event {
+        HoldEvent::Started(duration) if applies => Some(HoldHint {
+            since: Instant::now(),
+            duration,
+        }),
+        _ => None,
+    };
+    model.update(cx, |m, cx| {
+        if m.hold != hint {
+            m.hold = hint;
+            cx.notify();
+        }
+    });
+    if event == HoldEvent::Completed && applies {
+        nav::navigate(Route::BigPicture, cx);
     }
 }
 
@@ -648,6 +719,65 @@ mod tests {
         cx.run_until_parked();
         let downs = window.update(cx, |aware, _, _| aware.downs).unwrap();
         assert_eq!(downs, 1);
+    }
+
+    #[gpui_kit::test]
+    fn holding_the_button_shows_its_hint_then_opens_big_picture(cx: &mut TestAppContext) {
+        use std::time::Duration;
+        cx.executor().allow_parking();
+        let backend = crate::view::tests::start_backend();
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            irori_ui::init(backend, cx);
+            crate::register_catalogs();
+        });
+        let model = cx.update(|cx| {
+            let model = cx.new(|_| GamepadModel::default());
+            let (tx, _rx) = futures::channel::mpsc::unbounded();
+            cx.set_global(GamepadGlobal {
+                model: model.clone(),
+                shared: Arc::new(SharedConfig::new(false, 300, 50, false)),
+                tx,
+            });
+            model
+        });
+        let hint = cx.update(HoldHintView::new);
+        let window = cx.add_window(|_, cx| Plain {
+            first: cx.focus_handle().tab_stop(true),
+            second: cx.focus_handle().tab_stop(true),
+        });
+        cx.update_window(window.into(), |_, window, _| window.activate_window())
+            .unwrap();
+        cx.run_until_parked();
+        let held = |cx: &mut TestAppContext| cx.read(|cx| model.read(cx).hold().is_some());
+        let route =
+            |cx: &mut TestAppContext| cx.read(|cx| navigator(cx).read(cx).current().clone());
+        let second = Duration::from_secs(1);
+
+        // Input turned off: no hint.
+        cx.update(|cx| on_hold(HoldEvent::Started(second), true, &model, cx));
+        assert!(!held(cx));
+
+        cx.update(|cx| on_hold(HoldEvent::Started(second), false, &model, cx));
+        cx.run_until_parked();
+        assert!(held(cx), "the hint shows while the button is held");
+        assert!(
+            cx.read(|cx| hint.read(cx).hint.is_some()),
+            "the view follows"
+        );
+        cx.update(|cx| on_hold(HoldEvent::Cancelled, false, &model, cx));
+        assert!(!held(cx), "let go early");
+        assert_ne!(route(cx), Route::BigPicture);
+
+        cx.update(|cx| on_hold(HoldEvent::Started(second), false, &model, cx));
+        cx.update(|cx| on_hold(HoldEvent::Completed, false, &model, cx));
+        cx.run_until_parked();
+        assert!(!held(cx));
+        assert_eq!(route(cx), Route::BigPicture, "held long enough");
+
+        // Inside Big Picture the button keeps its own meaning.
+        cx.update(|cx| on_hold(HoldEvent::Started(second), false, &model, cx));
+        assert!(!held(cx));
     }
 
     #[test]

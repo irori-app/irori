@@ -992,6 +992,13 @@ it on every platform, and CI's Windows install test runs it.
   handle them.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it.
+- Holding Start (or Select, `iroriUi.bigPictureHoldButton`; `off` turns it off) for
+  `iroriUi.bigPictureHoldMs` (1000 by default, 300–3000) opens Big Picture while Irori's
+  window is active and no game runs. The reader thread times the hold
+  (`input::HoldTimer`) and holds back the button's own input until its release, so a
+  short press still opens the palette; the shell draws `gamepad::HoldHintView`, whose
+  bar fills over the hold (words only with reduced motion). Inside Big Picture the
+  button keeps its own meaning.
 - Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
   game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
   controller family), `home` (shelves), `library` (chips and grid), `page` (a game's

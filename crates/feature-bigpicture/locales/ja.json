@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level}%",
   "bigpicture.battery.charging": "充電中 {level}%",
   "bigpicture.battery.full": "充電完了",
+  "bigpicture.hold.hint": "押し続けると Big Picture が開きます",
   "bigpicture.clock.am": "午前",
   "bigpicture.clock.pm": "午後",
   "bigpicture.clock.time_12h": "{period}{time}",

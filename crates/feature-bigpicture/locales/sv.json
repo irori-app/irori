@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level} %",
   "bigpicture.battery.charging": "Laddar {level} %",
   "bigpicture.battery.full": "Fulladdad",
+  "bigpicture.hold.hint": "Fortsätt hålla in för att öppna Big Picture",
   "bigpicture.clock.am": "fm",
   "bigpicture.clock.pm": "em",
   "bigpicture.clock.time_12h": "{time} {period}",

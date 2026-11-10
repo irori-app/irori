@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level} %",
   "bigpicture.battery.charging": "Nabíjení {level} %",
   "bigpicture.battery.full": "Nabito",
+  "bigpicture.hold.hint": "Podržte dál pro otevření Big Picture",
   "bigpicture.clock.am": "dop.",
   "bigpicture.clock.pm": "odp.",
   "bigpicture.clock.time_12h": "{time} {period}",

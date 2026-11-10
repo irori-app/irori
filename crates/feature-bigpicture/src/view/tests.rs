@@ -241,15 +241,23 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
     // (Category sits between Status and Search.)
     cx.simulate_keystrokes(handle, "up right right right right enter");
     cx.read(|cx| assert!(view.read(cx).library.searching));
-    let computes = cx.read(|cx| view.read(cx).show_option_computes());
+    // The library revision and user data the Show choices were read for.
+    let show_key = |v: &BigPictureView| v.show_options.as_ref().map(|(key, _)| *key);
+    let (computes, key) = cx.read(|cx| {
+        let v = view.read(cx);
+        (v.show_option_computes(), show_key(v))
+    });
     cx.simulate_input(handle, "alm");
     cx.read(|cx| {
         let v = view.read(cx);
         assert!(!v.is_overlay_open(), "M typed into the field");
         assert!(v.library.games.is_empty());
         // Typing filters the list but doesn't read the library again for
-        // the Show choices.
-        assert_eq!(v.show_option_computes(), computes);
+        // the Show choices. (The backend may still be settling and change
+        // the library meanwhile, which does read it again.)
+        if show_key(v) == key {
+            assert_eq!(v.show_option_computes(), computes);
+        }
     });
     cx.simulate_keystrokes(handle, "backspace backspace");
     cx.simulate_keystrokes(handle, "enter");

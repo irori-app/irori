@@ -787,6 +787,21 @@ const LIBRARY_LAYOUT: &[ChoiceOption] = &[
     ),
 ];
 
+const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("start"),
+        Key("settings.option.big_picture_hold.start"),
+    ),
+    opt(
+        ChoiceValue::Str("select"),
+        Key("settings.option.big_picture_hold.select"),
+    ),
+    opt(
+        ChoiceValue::Str("off"),
+        Key("settings.option.big_picture_hold.off"),
+    ),
+];
+
 const DENSITY: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("compact"),
@@ -1745,6 +1760,37 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.gamepad_repeat_delay.help")
     .keywords(&["gamepad", "controller", "repeat", "frequency"])
+    .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriUi.bigPictureHoldButton",
+        "settings.field.big_picture_hold_button.label",
+        General,
+        "settings.group.controller",
+        Choice(BIG_PICTURE_HOLD),
+    )
+    .help("settings.field.big_picture_hold_button.help")
+    .keywords(&[
+        "gamepad",
+        "controller",
+        "hold",
+        "start",
+        "select",
+        "console",
+        "big picture",
+    ])
+    .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriUi.bigPictureHoldMs",
+        "settings.field.big_picture_hold_ms.label",
+        General,
+        "settings.group.controller",
+        Text(TextKind::Number {
+            min: 300,
+            max: 3000,
+        }),
+    )
+    .help("settings.field.big_picture_hold_ms.help")
+    .keywords(&["gamepad", "controller", "hold", "delay", "big picture"])
     .requires(NEEDS_CONTROLLER),
     app(
         "iroriOverlay.enabled",
@@ -3499,6 +3545,8 @@ mod tests {
             "disableController",
             "gamepadInitialRepeatDelay",
             "gamepadRepeatDelay",
+            "iroriUi.bigPictureHoldButton",
+            "iroriUi.bigPictureHoldMs",
         ] {
             assert!(pads.contains(&p), "{p}");
             assert_eq!(find(p).unwrap().section, FieldSection::General);

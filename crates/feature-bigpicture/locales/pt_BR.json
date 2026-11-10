@@ -75,6 +75,7 @@
   "bigpicture.battery.level": "{level}%",
   "bigpicture.battery.charging": "Carregando {level}%",
   "bigpicture.battery.full": "Carregado",
+  "bigpicture.hold.hint": "Continue segurando para abrir o Big Picture",
   "bigpicture.clock.am": "AM",
   "bigpicture.clock.pm": "PM",
   "bigpicture.clock.time_12h": "{time} {period}",
