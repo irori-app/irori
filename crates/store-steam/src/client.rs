@@ -57,6 +57,21 @@ pub(crate) async fn steam_program(steam_dir: &Path) -> Option<CommandSpec> {
         .map(CommandSpec::new)
 }
 
+/// The arguments a Steam game gets: the game's launch options in Irori, then
+/// `extra`. They are split by the rules of the program that reads them
+/// (`split_program_args`): a Windows build, which every game is on Windows
+/// and a game Steam runs through Proton is elsewhere, reads Windows
+/// quoting, so `C:\Users\me\saves` keeps its backslashes on every system.
+pub(crate) fn game_args(
+    launcher_args: &str,
+    extra: &[String],
+    windows_program: bool,
+) -> Vec<String> {
+    let mut args = irori_core::process::split_program_args(windows_program, launcher_args);
+    args.extend(extra.iter().cloned());
+    args
+}
+
 /// The command starting `app_id` with `args`. Without arguments Steam's
 /// `rungameid` link is enough. With them, `-applaunch` passes them silently;
 /// the `steam://run` link is the fallback, for which Steam asks the user to
@@ -65,10 +80,27 @@ pub(crate) async fn launch_command(steam_dir: &Path, app_id: &str, args: &[Strin
     if args.is_empty() {
         return open_url(&format!("steam://rungameid/{app_id}"));
     }
-    if let Some(steam) = steam_program(steam_dir).await {
+    launch_command_with(steam_program(steam_dir).await, app_id, args)
+}
+
+/// [`launch_command`] with arguments, given Steam's program when found.
+/// Each argument stays one argument: the program gets them as a list, and
+/// the link quotes those with blanks or quotes.
+fn launch_command_with(steam: Option<CommandSpec>, app_id: &str, args: &[String]) -> CommandSpec {
+    if let Some(steam) = steam {
         return steam.arg("-applaunch").arg(app_id).args(args.iter());
     }
-    let joined = args.join(" ");
+    let joined = args
+        .iter()
+        .map(|a| {
+            if a.is_empty() || a.chars().any(|c| c.is_whitespace() || c == '"') {
+                irori_core::process::windows_arg(a)
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
     let encoded: String = url::form_urlencoded::byte_serialize(joined.as_bytes())
         .collect::<String>()
         .replace('+', "%20");
@@ -123,9 +155,81 @@ mod tests {
         } else {
             assert_eq!(
                 v.last().unwrap(),
-                "steam://run/620//-novid%20%2Bmap%20test/"
+                "steam://run/620//-novid%20%22%2Bmap%20test%22/"
             );
         }
+    }
+
+    /// Launch options with a Windows path and a quoted value, as a user
+    /// types them for a Windows build.
+    const OPTIONS: &str = r#"-savedir C:\Users\me\saves "+connect 10.0.0.2:27015""#;
+
+    fn expected() -> Vec<String> {
+        [
+            "-savedir",
+            r"C:\Users\me\saves",
+            "+connect 10.0.0.2:27015",
+            "-novid",
+        ]
+        .map(String::from)
+        .to_vec()
+    }
+
+    #[test]
+    fn windows_builds_get_their_launch_options_as_written_everywhere() {
+        let extra = ["-novid".to_string()];
+        let args = game_args(OPTIONS, &extra, true);
+        assert_eq!(args, expected());
+        // The command line steam.exe gets on Windows, and the one Steam's
+        // program gets elsewhere, carry the same arguments.
+        let windows = launch_command_with(
+            Some(CommandSpec::new(r"C:\Program Files (x86)\Steam\steam.exe")),
+            "620",
+            &args,
+        );
+        let linux = launch_command_with(Some(CommandSpec::new("/usr/bin/steam")), "620", &args);
+        assert_eq!(
+            windows.program,
+            std::path::PathBuf::from(r"C:\Program Files (x86)\Steam\steam.exe")
+        );
+        let mut want = vec!["-applaunch".to_string(), "620".to_string()];
+        want.extend(expected());
+        assert_eq!(argv(&windows), want);
+        assert_eq!(argv(&linux), want);
+        // Quoted the way Windows programs read their command line, each
+        // argument comes back whole.
+        let command_line = argv(&windows)
+            .iter()
+            .map(|a| irori_core::process::windows_arg(a))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(
+            irori_core::process::split_program_args(true, &command_line),
+            want
+        );
+        // A native build reads this system's quoting.
+        if !cfg!(windows) {
+            assert_eq!(game_args("-x 'two words'", &[], false), ["-x", "two words"]);
+        }
+    }
+
+    #[test]
+    fn the_link_keeps_each_argument_whole() {
+        let link = launch_command_with(None, "620", &expected());
+        let link = argv(&link).last().unwrap().clone();
+        let encoded = link
+            .strip_prefix("steam://run/620//")
+            .and_then(|l| l.strip_suffix('/'))
+            .unwrap();
+        let joined: String = url::form_urlencoded::parse(format!("a={encoded}").as_bytes())
+            .next()
+            .unwrap()
+            .1
+            .into_owned();
+        assert_eq!(
+            irori_core::process::split_program_args(true, &joined),
+            expected()
+        );
     }
 
     #[test]

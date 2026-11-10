@@ -82,6 +82,8 @@ struct Library {
     by_app: HashMap<String, Arc<GameInfo>>,
     /// Manifest of each installed game, by app ID.
     manifests: HashMap<String, PathBuf>,
+    /// Installed games Steam runs as Windows builds through Proton.
+    windows_builds: HashSet<String>,
     /// Games Steam's cache has no cover for.
     missing_art: Vec<String>,
     /// Irori could read which games are hidden in Steam.
@@ -343,11 +345,17 @@ impl SteamStore {
             .iter()
             .map(|a| (a.app_id.clone(), a.manifest.clone()))
             .collect();
+        let windows_builds = apps
+            .iter()
+            .filter(|a| a.windows_build)
+            .map(|a| a.app_id.clone())
+            .collect();
         *self.library.write() = Arc::new(Library {
             found,
             games,
             by_app,
             manifests,
+            windows_builds,
             missing_art,
             hidden_known,
         });
@@ -838,15 +846,18 @@ impl Store for SteamStore {
         if !game.is_installed {
             bail!("{} isn't installed. Install it in Steam first.", game.title);
         }
-        let mut args = irori_core::process::split_args(&request.settings.launcher_args);
-        args.extend(request.extra_args.iter().cloned());
-        let manifest = self
-            .library
-            .read()
-            .manifests
-            .get(app_name)
-            .cloned()
-            .unwrap_or_default();
+        let (manifest, windows_build) = {
+            let library = self.library.read();
+            (
+                library.manifests.get(app_name).cloned().unwrap_or_default(),
+                library.windows_builds.contains(app_name),
+            )
+        };
+        let args = client::game_args(
+            &request.settings.launcher_args,
+            &request.extra_args,
+            cfg!(windows) || windows_build,
+        );
         let install_path = game.install.as_ref().map(|i| i.install_path.clone());
         Ok(LaunchPlan {
             command: client::launch_command(&self.steam_dir(), &game.app_name, &args).await,
@@ -1062,6 +1073,71 @@ mod tests {
         assert!(s.accounts().is_empty());
         assert_eq!(s.user().unwrap().account_id, "local");
         assert!(s.login("a pasted code").await.is_err());
+    }
+
+    /// The arguments after `-applaunch <id>` of a launch plan, or those of
+    /// Steam's `run` link when Steam's program isn't found.
+    fn launched_args(plan: &LaunchPlan) -> Vec<String> {
+        let argv: Vec<String> = plan
+            .command
+            .args
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        if let Some(i) = argv.iter().position(|a| a == "-applaunch") {
+            return argv[i + 2..].to_vec();
+        }
+        let link = argv.last().unwrap();
+        let encoded = link
+            .strip_prefix("steam://run/620//")
+            .and_then(|l| l.strip_suffix('/'))
+            .unwrap_or_else(|| panic!("{link}"));
+        let joined: String = url::form_urlencoded::parse(format!("a={encoded}").as_bytes())
+            .next()
+            .unwrap()
+            .1
+            .into_owned();
+        irori_core::process::split_program_args(true, &joined)
+    }
+
+    #[tokio::test]
+    async fn launch_options_reach_a_windows_build_as_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        std::fs::create_dir_all(steam.join("steamapps/common/Portal 2")).unwrap();
+        // A game Steam runs through Proton, as its manifest says.
+        std::fs::write(
+            steam.join("steamapps/appmanifest_620.acf"),
+            "\"AppState\" { \"appid\" \"620\" \"name\" \"Portal 2\" \"StateFlags\" \"4\" \"installdir\" \"Portal 2\" \"UserConfig\" { \"platform_override_dest\" \"linux\" \"platform_override_source\" \"windows\" } }",
+        )
+        .unwrap();
+        let s = store(&steam, AppSettings::default());
+        s.init().await.unwrap();
+        let request = LaunchRequest {
+            settings: irori_core::GameSettings {
+                launcher_args: r#"-savedir C:\Users\me\saves "+connect 10.0.0.2:27015""#.into(),
+                ..Default::default()
+            },
+            environment: Default::default(),
+            option: None,
+            extra_args: vec!["-novid".into()],
+            offline: false,
+            skip_version_check: false,
+            log_file: dir.path().join("log"),
+        };
+        let plan = s
+            .launch("620", &request, OpContext::detached())
+            .await
+            .unwrap();
+        assert_eq!(
+            launched_args(&plan),
+            [
+                "-savedir",
+                r"C:\Users\me\saves",
+                "+connect 10.0.0.2:27015",
+                "-novid"
+            ]
+        );
     }
 
     #[tokio::test]

@@ -1383,7 +1383,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes `SessionExpired`.
   Never log tokens, passwords or codes; the API crate's types redact them in `Debug`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
-  game's `launcherArgs`; a `SteamGameWatch` follows the reaper (Linux), the game folder's
+  game's `launcherArgs`, split with `split_program_args` (`client::game_args`): Windows
+  quoting for a Windows build, which every game is on Windows and a game whose manifest
+  records Proton (`platform_override_source` `windows`) is elsewhere, so the same options
+  reach the game alike on every system; the `steam://run` fallback quotes arguments with
+  blanks. A `SteamGameWatch` follows the reaper (Linux), the game folder's
   processes and the manifest's launch flags, re-checking known PIDs before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
