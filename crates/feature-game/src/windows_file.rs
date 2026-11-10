@@ -96,12 +96,7 @@ impl WindowsFilePicker {
     fn new(opened: Opened, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let library = irori_ui::models(cx).library.read(cx).snapshot.clone();
         let recent = backend(cx).userdata.snapshot().recent.clone();
-        let mut games: Vec<Arc<GameInfo>> = library
-            .games
-            .iter()
-            .filter(|g| irori_services::opens_windows_files(g))
-            .cloned()
-            .collect();
+        let mut games = pickable_games(&library);
         games.sort_by_cached_key(|g| {
             let key = g.id().key();
             (
@@ -308,6 +303,16 @@ impl Render for WindowsFilePicker {
                 ),
             )
     }
+}
+
+/// The games a Windows file can open in, each copy of an entry on its
+/// own: the entry shows one copy, and the file may be meant for another.
+fn pickable_games(library: &irori_services::LibrarySnapshot) -> Vec<Arc<GameInfo>> {
+    library
+        .all_games()
+        .filter(|g| irori_services::opens_windows_files(g))
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]

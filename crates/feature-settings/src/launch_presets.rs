@@ -431,13 +431,7 @@ struct ApplyPresetDialog {
 
 impl ApplyPresetDialog {
     fn new(preset: LaunchPreset, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let games: Vec<(GameId, String)> = backend(cx)
-            .library()
-            .games
-            .iter()
-            .filter(|g| g.is_installed)
-            .map(|g| (g.id(), g.title.clone()))
-            .collect();
+        let games = installed_games(&backend(cx).library());
         let search = cx
             .new(|cx| InputState::new(window, cx).placeholder(t("settings.presets.dialog.search")));
         let subscription = cx.subscribe_in(
@@ -651,6 +645,16 @@ impl Render for ApplyPresetDialog {
     }
 }
 
+/// Installed games a preset can apply to, each installed copy of an entry
+/// on its own: settings belong to a copy, not to the entry.
+fn installed_games(library: &irori_services::LibrarySnapshot) -> Vec<(GameId, String)> {
+    library
+        .all_games()
+        .filter(|g| g.is_installed)
+        .map(|g| (g.id(), g.title.clone()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -703,5 +707,37 @@ mod tests {
         assert_eq!(filter_games(&games, ""), vec![0, 1, 2]);
         assert_eq!(filter_games(&games, " hades "), vec![0, 1]);
         assert!(filter_games(&games, "zelda").is_empty());
+    }
+
+    #[test]
+    fn offers_every_installed_copy_of_an_entry() {
+        let copy = |runner, app: &str| {
+            let g = irori_core::GameInfo {
+                runner: Some(runner),
+                app_name: app.into(),
+                title: "Hades".into(),
+                is_installed: true,
+                ..Default::default()
+            };
+            std::sync::Arc::new(g.finalize())
+        };
+        let grouped = irori_services::copies::group(
+            vec![copy(Runner::Legendary, "e"), copy(Runner::Gog, "g")],
+            &irori_services::UserData::default(),
+            true,
+        );
+        let library = irori_services::LibrarySnapshot::new(1, grouped, Default::default());
+        assert_eq!(library.games.len(), 1);
+        let ids: Vec<GameId> = installed_games(&library)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                GameId::new(Runner::Legendary, "e"),
+                GameId::new(Runner::Gog, "g")
+            ]
+        );
     }
 }

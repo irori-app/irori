@@ -309,13 +309,54 @@ fn title_of(id: &GameId, cx: &App) -> String {
 /// Owned GOG games that are not installed, by title, for assigning an
 /// unrecognised installer.
 fn uninstalled_games(cx: &App) -> Vec<(String, String)> {
-    let library = models(cx).library.read(cx).snapshot.clone();
+    uninstalled_gog_games(&models(cx).library.read(cx).snapshot)
+}
+
+/// Every GOG copy that isn't installed, a copy behind another store's entry
+/// included: an entry shows its default copy, and the GOG one may not be it.
+fn uninstalled_gog_games(library: &irori_services::LibrarySnapshot) -> Vec<(String, String)> {
     let mut games: Vec<(String, String)> = library
-        .games
-        .iter()
+        .all_games()
         .filter(|g| g.runner() == Runner::Gog && !g.is_installed)
         .map(|g| (g.app_name.clone(), g.title.clone()))
         .collect();
     games.sort_by_key(|g| g.1.to_lowercase());
     games
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use irori_core::GameInfo;
+
+    use super::*;
+
+    fn game(runner: Runner, app: &str, title: &str) -> Arc<GameInfo> {
+        let g = GameInfo {
+            runner: Some(runner),
+            app_name: app.into(),
+            title: title.into(),
+            ..Default::default()
+        };
+        Arc::new(g.finalize())
+    }
+
+    #[test]
+    fn offers_the_gog_copy_behind_another_stores_entry() {
+        let epic = game(Runner::Legendary, "e", "Hades");
+        let gog = game(Runner::Gog, "g", "Hades");
+        let grouped = irori_services::copies::group(
+            vec![epic, gog],
+            &irori_services::UserData::default(),
+            true,
+        );
+        let library = irori_services::LibrarySnapshot::new(1, grouped, Default::default());
+        // Epic comes first in Irori's order, so the entry shows its copy.
+        assert_eq!(library.games[0].runner(), Runner::Legendary);
+        assert_eq!(
+            uninstalled_gog_games(&library),
+            [("g".to_string(), "Hades".to_string())]
+        );
+    }
 }
