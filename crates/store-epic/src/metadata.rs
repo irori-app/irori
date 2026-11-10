@@ -161,11 +161,13 @@ pub(crate) struct CatalogEntry {
 /// `https://www.epicgames.com/store/product/<clean title>`.
 ///
 /// Heroic's character class also kept `(`, `)` and `|`, producing broken
-/// URLs; those are removed here.
+/// URLs; those are removed here. Heroic also dropped the letter after an
+/// apostrophe ("Assassin's" became `assassin`), where Epic's slugs keep it
+/// (`assassins-creed-unity`): an apostrophe, straight or curly, is only
+/// removed.
 pub(crate) fn store_url(title: &str) -> String {
     static CLEAN: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r#"('[A-Za-z0-9_])|(\\[A-Za-z0-9_]{5})|(\\"(\\.|[^"])*")|[^0-9a-zA-Z\s]"#)
-            .expect("regex")
+        Regex::new(r#"(\\[A-Za-z0-9_]{5})|(\\"(\\.|[^"])*")|[^0-9a-zA-Z\s]"#).expect("regex")
     });
     let cleaned = CLEAN
         .replace_all(title, "")
@@ -586,11 +588,15 @@ mod tests {
     fn store_urls() {
         assert_eq!(
             store_url("Assassin's Creed® Unity"),
-            "https://www.epicgames.com/store/product/assassin-creed-unity"
+            "https://www.epicgames.com/store/product/assassins-creed-unity"
         );
         assert_eq!(
             store_url("Death Stranding Director's Cut"),
-            "https://www.epicgames.com/store/product/death-stranding-director-cut"
+            "https://www.epicgames.com/store/product/death-stranding-directors-cut"
+        );
+        assert_eq!(
+            store_url("Tom Clancy’s Rainbow Six® Siege"),
+            "https://www.epicgames.com/store/product/tom-clancys-rainbow-six-siege"
         );
         assert_eq!(
             store_url("Game (Beta)"),
