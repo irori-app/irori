@@ -48,9 +48,15 @@ pub fn string(bytes: &[u8], key: &str) -> Option<String> {
         if format != UTF8 && format != UTF8_SPECIAL {
             return None;
         }
-        let len = u32_at(bytes, entry + 4)?;
+        let used = u32_at(bytes, entry + 4)?;
+        let max = u32_at(bytes, entry + 8)?;
+        // A NUL-terminated value is read to its NUL within the field: some
+        // tools write the used length in characters, not bytes, which cuts
+        // a title with accents short or inside a letter.
+        let len = if format == UTF8 { used.max(max) } else { used };
         let start = data.checked_add(u32_at(bytes, entry + 12)?)?;
-        let value = bytes.get(start..start.checked_add(len)?)?;
+        let field = |len: usize| bytes.get(start..start.checked_add(len)?);
+        let value = field(len).or_else(|| field(used))?;
         let value = match value.iter().position(|&b| b == 0) {
             Some(end) => &value[..end],
             None => value,
@@ -133,6 +139,18 @@ mod tests {
             Some("METAL GEAR SOLID 4 GUNS OF THE PATRIOTS")
         );
         assert!(title(&build(&[("TITLE", "  \n ")])).is_none());
+    }
+
+    #[test]
+    fn reads_titles_with_accents_whose_length_counts_characters() {
+        let accented = build(&[("TITLE", "Ōkami Café"), ("TITLE_ID", "PCSE00001")]);
+        assert_eq!(title(&accented).as_deref(), Some("Ōkami Café"));
+        // The used length written as 11 (characters and the NUL) where the
+        // value takes 13 bytes.
+        let mut short = accented.clone();
+        short[HEADER_LEN + 4..HEADER_LEN + 8].copy_from_slice(&11u32.to_le_bytes());
+        assert_eq!(title(&short).as_deref(), Some("Ōkami Café"));
+        assert_eq!(string(&short, "TITLE_ID").as_deref(), Some("PCSE00001"));
     }
 
     #[test]
