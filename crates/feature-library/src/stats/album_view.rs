@@ -123,7 +123,7 @@ impl StatsView {
         let width = if self.album_width > px(0.) {
             self.album_width
         } else {
-            window.viewport_size().width
+            irori_ui::style::visible_size(window).width
         };
         // The page keeps its padding on both sides of the grid.
         let layout = GridLayout::for_width(f32::from(width) / f32::from(rem) - 2. * PAD_REM);

@@ -917,6 +917,9 @@ cx.spawn_in(window, async move |this, cx| {
 - On Linux `cx.theme().overlay` is transparent and the shell paints the dim behind
   dialogs and sheets (`theme::modal_dim`), because gpui-kit would dim the window's
   shadow margin too. Read the dim from there, not from the theme.
+- `Window::viewport_size` includes that shadow margin (20 px a side on Linux unless
+  tiled). Size layouts and window-covering overlays to `style::visible_bounds` /
+  `visible_size`, which leave it out, so nothing is drawn over the decorations.
 - The available backdrops differ per platform; see the table in `docs/PLATFORMS.md`.
 
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,

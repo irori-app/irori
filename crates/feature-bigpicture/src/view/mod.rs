@@ -399,7 +399,7 @@ impl BigPictureView {
 
     fn metrics(&self, window: &Window) -> Metrics {
         let rem = window.rem_size();
-        let size = window.viewport_size();
+        let size = irori_ui::style::visible_size(window);
         Metrics::styled(
             size.width / rem,
             size.height / rem,

@@ -296,7 +296,7 @@ impl AppShell {
 
     /// Whether the window is too narrow for the full sidebar beside the page.
     fn is_narrow(window: &Window) -> bool {
-        window.viewport_size().width / window.rem_size() < sidebar::NARROW_WINDOW_REM
+        irori_ui::style::visible_size(window).width / window.rem_size() < sidebar::NARROW_WINDOW_REM
     }
 
     /// Whether the sidebar shows collapsed right now: the saved choice, except

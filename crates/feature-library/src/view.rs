@@ -551,12 +551,12 @@ impl LibraryView {
         let width = if self.viewport.width > px(0.) {
             self.viewport.width
         } else {
-            window.viewport_size().width
+            irori_ui::style::visible_size(window).width
         };
         let height = if self.viewport.height > px(0.) {
             self.viewport.height
         } else {
-            window.viewport_size().height
+            irori_ui::style::visible_size(window).height
         };
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.

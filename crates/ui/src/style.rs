@@ -4,8 +4,8 @@
 
 use gpui_kit::component::{ActiveTheme as _, StyledExt as _, v_flex};
 use gpui_kit::{
-    App, BoxShadow, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _, Rgba,
-    SharedString, Styled as _, div, point, px,
+    App, Bounds, BoxShadow, Div, Edges, Hsla, InteractiveElement, IntoElement, ParentElement as _,
+    Pixels, Rgba, SharedString, Size, Styled as _, div, point, px, size,
 };
 
 use crate::models;
@@ -191,9 +191,54 @@ pub trait KeyboardFocusable: InteractiveElement {
 
 impl<E: InteractiveElement> KeyboardFocusable for E {}
 
+/// The window as the user sees it, in window coordinates: its surface less
+/// the margin client-side decorations keep around it for their shadow
+/// (Linux), where nothing may be laid out or drawn. Size layouts and
+/// window-covering overlays to this, not to `Window::viewport_size`.
+pub fn visible_bounds(window: &gpui_kit::Window) -> Bounds<Pixels> {
+    inside(
+        window.viewport_size(),
+        gpui_kit::component::window_paddings(window),
+    )
+}
+
+/// The size of [`visible_bounds`].
+pub fn visible_size(window: &gpui_kit::Window) -> Size<Pixels> {
+    visible_bounds(window).size
+}
+
+/// `surface` less `paddings`, never below zero.
+fn inside(surface: Size<Pixels>, paddings: Edges<Pixels>) -> Bounds<Pixels> {
+    let width = (surface.width - paddings.left - paddings.right).max(px(0.));
+    let height = (surface.height - paddings.top - paddings.bottom).max(px(0.));
+    Bounds::new(point(paddings.left, paddings.top), size(width, height))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_visible_window_leaves_out_the_shadow_margin() {
+        let shadowed = inside(size(px(1440.), px(900.)), Edges::all(px(20.)));
+        assert_eq!(shadowed.origin, point(px(20.), px(20.)));
+        assert_eq!(shadowed.size, size(px(1400.), px(860.)));
+        // Tiled to the left half: no margin on the tiled sides.
+        let tiled = Edges {
+            top: px(0.),
+            bottom: px(0.),
+            left: px(0.),
+            right: px(20.),
+        };
+        let half = inside(size(px(960.), px(1080.)), tiled);
+        assert_eq!(half.origin, point(px(0.), px(0.)));
+        assert_eq!(half.size, size(px(940.), px(1080.)));
+        // Server decorations (and macOS, Windows) have none.
+        let plain = inside(size(px(800.), px(600.)), Edges::all(px(0.)));
+        assert_eq!(plain.size, size(px(800.), px(600.)));
+        let tiny = inside(size(px(10.), px(10.)), Edges::all(px(20.)));
+        assert_eq!(tiny.size, size(px(0.), px(0.)));
+    }
 
     fn hex(rgb: u32) -> Hsla {
         gpui_kit::rgb(rgb).into()

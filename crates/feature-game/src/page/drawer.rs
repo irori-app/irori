@@ -13,7 +13,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnchoredPositionMode, AnyElement, Context, InteractiveElement as _, IntoElement, ObjectFit,
     ParentElement, SharedString, StatefulInteractiveElement as _, Styled, StyledImage as _, Window,
-    anchored, deferred, div, linear_color_stop, linear_gradient, point, px, rems,
+    anchored, deferred, div, linear_color_stop, linear_gradient, rems,
 };
 use irori_core::GameInfo;
 use irori_core::util::unix_now;
@@ -58,12 +58,20 @@ impl GamePage {
         let viewer = self.render_viewer(window, cx).map(|viewer| {
             // The drawer is too narrow for screenshots: the viewer covers the
             // window instead.
-            let size = window.viewport_size();
+            // Inside the visible window: client-side decorations keep a
+            // margin around it for their shadow.
+            let frame = irori_ui::style::visible_bounds(window);
             deferred(
                 anchored()
                     .position_mode(AnchoredPositionMode::Window)
-                    .position(point(px(0.), px(0.)))
-                    .child(div().relative().w(size.width).h(size.height).child(viewer)),
+                    .position(frame.origin)
+                    .child(
+                        div()
+                            .relative()
+                            .w(frame.size.width)
+                            .h(frame.size.height)
+                            .child(viewer),
+                    ),
             )
             .with_priority(1)
         });
