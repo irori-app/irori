@@ -86,8 +86,8 @@ pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
-pub use renodx::{RenodxChoice, RenodxStatus};
 pub use power::{Permission, PowerAction, PowerSystem};
+pub use renodx::{RenodxChoice, RenodxStatus};
 pub use replay::{Recorder, ReplayInfo, ShortcutState};
 pub use reshade::{ReshadeStatus, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
@@ -150,6 +150,9 @@ pub struct Inner {
     /// New versions of Wine builds, translation layers and emulators.
     components: updates::ComponentUpdates,
     online: AtomicBool,
+    /// Started for tests ([`Backend::start_for_tests`]): nothing reaches the
+    /// network, the desktop or the system's settings.
+    isolated: bool,
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
     presence: discord::Presence,
@@ -192,7 +195,19 @@ impl Backend {
     pub fn start(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
     ) -> anyhow::Result<Self> {
-        Self::start_with(make_stores, true)
+        Self::start_with(make_stores, true, false)
+    }
+
+    /// Like [`Backend::start`] for UI tests: the app's state, models and
+    /// workers, without what would reach outside the test. No connectivity
+    /// probe (the backend counts as online), no update, compatibility-data,
+    /// sync or store refresh at start, no periodic tasks, no clip shortcut,
+    /// Sunshine or graphics-preference watch. The first library build is the
+    /// only one, so a test sees no second rebuild racing its assertions.
+    pub fn start_for_tests(
+        make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
+    ) -> anyhow::Result<Self> {
+        Self::start_with(make_stores, true, true)
     }
 
     /// Like [`Backend::start`] for one-shot command-line use: no startup
@@ -200,13 +215,16 @@ impl Backend {
     pub fn start_headless(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
     ) -> anyhow::Result<Self> {
-        Self::start_with(make_stores, false)
+        Self::start_with(make_stores, false, false)
     }
 
     fn start_with(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
         interactive: bool,
+        isolated: bool,
     ) -> anyhow::Result<Self> {
+        // This crate's own tests never reach the network either.
+        let isolated = isolated || cfg!(test);
         let rt: &'static Runtime = Box::leak(Box::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(3)
@@ -245,6 +263,7 @@ impl Backend {
             update_check_failed: RwLock::new(Vec::new()),
             components: updates::ComponentUpdates::load(),
             online: AtomicBool::new(true),
+            isolated,
             auto_paused: AtomicBool::new(false),
             presence: discord::Presence::default(),
             replay: replay::ReplayState::default(),
@@ -346,10 +365,12 @@ impl Backend {
             for item in b.downloads().active {
                 b.statuses.set(&item.id, irori_core::StatusKind::Queued);
             }
-            b.check_connectivity().await;
-            b.rebuild_library();
+            if !b.isolated {
+                b.check_connectivity().await;
+                b.rebuild_library();
+            }
             b.downloads_wake.notify_one();
-            if !interactive {
+            if !interactive || b.isolated {
                 return;
             }
             // The clip shortcut works from the first game on.
@@ -432,7 +453,7 @@ impl Backend {
 
         // Windows' graphics preference follows a changed or cleared setting
         // at once, not only at the game's next launch (`gpu_preference`).
-        if interactive && gpu_preference::system_registry().is_some() {
+        if interactive && !self.isolated && gpu_preference::system_registry().is_some() {
             let b = self.clone();
             self.spawn(async move {
                 let mut rx = b.subscribe();
@@ -462,7 +483,7 @@ impl Backend {
         self.spawn(async move { b.download_worker().await });
 
         // Periodic update checks and connectivity.
-        if interactive {
+        if interactive && !self.isolated {
             let b = self.clone();
             self.spawn(async move { b.periodic_tasks().await });
             self.watch_for_sunshine();
@@ -585,6 +606,9 @@ impl Backend {
     }
 
     pub async fn check_connectivity(&self) -> bool {
+        if self.isolated {
+            return self.is_online();
+        }
         let ok = irori_core::http::client()
             .head("https://www.gstatic.com/generate_204")
             .timeout(Duration::from_secs(5))

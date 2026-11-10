@@ -37,7 +37,7 @@ fn setup_with(cx: &mut TestAppContext, stores: impl FnOnce() -> Vec<DynStore>) {
         let dir = tempfile::tempdir().expect("temp dir").keep();
         Paths::init(Paths::under(&dir));
     });
-    let backend = Backend::start(|_, _| stores()).expect("backend starts");
+    let backend = Backend::start_for_tests(|_, _| stores()).expect("backend starts");
     cx.update(|cx| {
         gpui_kit::init(cx);
         irori_ui::init(backend, cx);

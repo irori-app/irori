@@ -150,7 +150,7 @@ fn start(cx: &mut TestAppContext) -> Backend {
     isolate_paths();
     cx.executor().allow_parking();
     let store: DynStore = MemoryStore::new();
-    let backend = Backend::start(move |_, _| vec![store]).expect("backend starts");
+    let backend = Backend::start_for_tests(move |_, _| vec![store]).expect("backend starts");
     cx.update(|cx| {
         gpui_kit::init(cx);
         irori_ui::init(backend.clone(), cx);
@@ -702,7 +702,7 @@ fn removing_several_games_reports_the_ones_that_failed() {
     let added = RemovableStore::new(Runner::Sideload, &["notes", "tool"], "");
     let roms = RemovableStore::new(Runner::Emulation, &["zelda", "mario"], "mario");
     let stores: Vec<DynStore> = vec![MemoryStore::new(), added.clone(), roms.clone()];
-    let b = Backend::start_headless(move |_, _| stores).expect("backend starts");
+    let b = Backend::start_for_tests(move |_, _| stores).expect("backend starts");
     let picked: Vec<Arc<GameInfo>> = [
         b.game(&GameId::new(Runner::Gog, "2")),
         b.game(&GameId::new(Runner::Sideload, "notes")),

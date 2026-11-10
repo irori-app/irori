@@ -22,7 +22,7 @@ fn test_backend() -> Backend {
         Paths::init(Paths::under(&root));
         root
     });
-    Backend::start(|_, _| Vec::new()).expect("backend")
+    Backend::start_for_tests(|_, _| Vec::new()).expect("backend")
 }
 
 fn open<V: gpui_kit::Render>(

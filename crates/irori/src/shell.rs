@@ -924,7 +924,7 @@ mod title_bar_tests {
         cx.executor().allow_parking();
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
         let slot = made.clone();
-        let backend = Backend::start(move |bus, settings| {
+        let backend = Backend::start_for_tests(move |bus, settings| {
             let store = SideloadStore::new(bus, settings);
             *slot.lock().expect("the store slot") = Some(store.clone());
             vec![store]

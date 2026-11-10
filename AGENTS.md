@@ -421,7 +421,9 @@ delete of a game or prefix directory.
 commands without a window.
 
 - `Backend::start(make_stores)` is for the app; `start_headless` is for CLI commands
-  (no periodic tasks).
+  (no periodic tasks); `start_for_tests` is for UI tests (the app's state and workers,
+  but no connectivity probe, no update, sync or refresh at start and no periodic
+  tasks, so nothing reaches the network and the library is built once).
 - It owns a Tokio runtime named `irori-io`: 3 workers, 16 blocking threads. Use
   `backend.spawn` and `backend.spawn_blocking`.
 - Public parts: `bus`, `settings` (`SettingsService`), `userdata`, `statuses`, plus
@@ -1766,7 +1768,7 @@ are no `tests/` directories or fixture folders. Fixtures are small inline JSON s
 **UI tests**
 
 - `#[gpui_kit::test]` with `TestAppContext`. See `crates/feature-library/src/ui_tests.rs`
-  for the harness: isolated `Paths`, `Backend::start` over an in-memory `Store`,
+  for the harness: isolated `Paths`, `Backend::start_for_tests` over an in-memory `Store`,
   `run_until_parked`, then open and draw a window.
 - They need a display on Linux; CI uses `xvfb-run -a`.
 

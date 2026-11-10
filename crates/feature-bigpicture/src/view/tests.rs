@@ -142,7 +142,7 @@ fn library() -> Vec<Arc<GameInfo>> {
 pub(crate) fn start_backend() -> Backend {
     let root = std::env::temp_dir().join(format!("irori-bigpicture-test-{}", std::process::id()));
     Paths::init(Paths::under(&root));
-    let backend = Backend::start_headless(|_, _| {
+    let backend = Backend::start_for_tests(|_, _| {
         let games = library();
         let store = |runner: Runner| -> DynStore {
             Arc::new(FakeStore {
