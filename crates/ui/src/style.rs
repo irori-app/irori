@@ -14,13 +14,16 @@ use crate::models;
 /// saturation and lightness pulled into a band that reads on the theme's
 /// background without competing with the content.
 pub fn art_tint(rgb: [u8; 3], cx: &App) -> Hsla {
+    art_tint_in(rgb, cx.theme().mode.is_dark())
+}
+
+/// [`art_tint`] for a dark or light theme. Saturation is only ever lowered
+/// and lightness held to a middle band, so the tint can't make light art
+/// lighter or any art more vivid.
+fn art_tint_in(rgb: [u8; 3], dark: bool) -> Hsla {
     let [r, g, b] = rgb.map(|c| c as f32 / 255.0);
     let color: Hsla = Rgba { r, g, b, a: 1.0 }.into();
-    let (min_l, max_l) = if cx.theme().mode.is_dark() {
-        (0.45, 0.62)
-    } else {
-        (0.38, 0.52)
-    };
+    let (min_l, max_l) = if dark { (0.45, 0.62) } else { (0.38, 0.52) };
     Hsla {
         h: color.h,
         s: color.s.min(0.7),
@@ -242,6 +245,31 @@ mod tests {
 
     fn hex(rgb: u32) -> Hsla {
         gpui_kit::rgb(rgb).into()
+    }
+
+    #[test]
+    fn art_tint_never_brightens_light_art_or_adds_colour() {
+        let art = |rgb: [u8; 3]| -> Hsla {
+            let [r, g, b] = rgb.map(|c| c as f32 / 255.0);
+            Rgba { r, g, b, a: 1.0 }.into()
+        };
+        for dark in [true, false] {
+            for rgb in [
+                [255, 255, 255],
+                [250, 240, 200],
+                [255, 40, 40],
+                [120, 200, 255],
+                [30, 30, 30],
+                [0, 0, 0],
+            ] {
+                let (a, tint) = (art(rgb), art_tint_in(rgb, dark));
+                assert!(tint.s <= a.s + 1e-4, "{rgb:?}: more vivid than the art");
+                assert!(tint.l <= 0.62 + 1e-4, "{rgb:?}: past the band");
+                if a.l >= 0.62 {
+                    assert!(tint.l <= a.l, "{rgb:?}: lighter than light art");
+                }
+            }
+        }
     }
 
     #[test]

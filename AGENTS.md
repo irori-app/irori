@@ -932,8 +932,12 @@ cx.spawn_in(window, async move |this, cx| {
   watch starts before the first read, so no save is lost between them.
 - The library's background (`iroriUi.libraryBackground`: the focused, last played or
   first shown game's art, or a picture) goes through `components::library_backdrop`,
-  which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art)
-  and stays off while `theme::reduce_transparency` holds.
+  which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art:
+  strength caps the legible weight, never moves the search for it) and stays off while
+  `theme::reduce_transparency` holds. Big Picture's game-art backdrop is held to the same
+  measure (`strongest_legible_weight` against its top bar's text). No backdrop filter
+  brightens, saturates or adds contrast: every layer is the art or the page colour laid
+  over it at an opacity, and `style::art_tint` only lowers saturation; tests pin this.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,
@@ -1067,7 +1071,7 @@ it on every platform, and CI's Windows install test runs it.
   bar fills over the hold (words only with reduced motion). Inside Big Picture the
   button keeps its own meaning.
 - Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
-  game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
+  game's blurred art, crossfading, as strong as its top bar's text still reads over), `chrome` (top bar, button hints drawn per
   controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
   action list and details), `log` (the page's live game log, in place of the details;
   the shoulders page through it, and rows under Show log filter it with
