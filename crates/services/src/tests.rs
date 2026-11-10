@@ -36,6 +36,8 @@ pub(crate) fn isolate_paths() {
 struct LoginStore {
     refused: AtomicBool,
     updates: parking_lot::Mutex<Vec<String>>,
+    /// The games removed, and whether their files went too.
+    removed: parking_lot::Mutex<Vec<(String, bool)>>,
 }
 
 #[async_trait]
@@ -97,8 +99,11 @@ impl Store for LoginStore {
     async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
         bail!("not supported")
     }
-    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
-        bail!("not supported")
+    async fn uninstall(&self, app: &str, args: RemoveArgs) -> Result<()> {
+        self.removed
+            .lock()
+            .push((app.to_string(), args.delete_files));
+        Ok(())
     }
     async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
         bail!("not supported")
@@ -109,6 +114,43 @@ impl Store for LoginStore {
     async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
         bail!("not supported")
     }
+}
+
+#[test]
+fn canceling_a_stopped_install_deletes_what_it_downloaded() {
+    isolate_paths();
+    let store = Arc::new(LoginStore::default());
+    let dyn_store: irori_core::DynStore = store.clone();
+    let b = Backend::start_headless(move |_, _| vec![dyn_store]).unwrap();
+    // Paused, so the items wait as a paused download (or one a restart left
+    // queued) does, with whatever it wrote already on disk.
+    b.pause_downloads();
+    let install = |app: &str| {
+        let id = irori_core::GameId::new(Runner::Gog, app);
+        b.enqueue_install(id.clone(), app.into(), InstallRequest::default(), 0);
+        id
+    };
+    let (kept, deleted) = (install("kept"), install("deleted"));
+    b.enqueue_update(
+        irori_core::GameId::new(Runner::Gog, "updated"),
+        "updated".into(),
+        UpdateRequest::default(),
+    );
+    b.cancel_download(&kept, true);
+    b.cancel_download(&deleted, false);
+    b.cancel_download(&irori_core::GameId::new(Runner::Gog, "updated"), false);
+    let removed = b.runtime().block_on(async {
+        for _ in 0..200 {
+            if !store.removed.lock().is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        store.removed.lock().clone()
+    });
+    assert_eq!(removed, [("deleted".to_string(), true)]);
+    b.resume_downloads();
 }
 
 /// Title keys of the notices sent on `rx` so far.
