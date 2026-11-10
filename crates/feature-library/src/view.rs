@@ -400,6 +400,21 @@ impl LibraryView {
         self.click_game(id, modifiers, count, window, cx)
     }
 
+    /// Scroll `y` down from the top, as the wheel would.
+    #[cfg(test)]
+    pub(crate) fn scroll_for_test(&mut self, y: Pixels, cx: &mut Context<Self>) {
+        self.scroll.set_offset(point(px(0.), -y));
+        cx.notify();
+    }
+
+    /// Forget the selected game, as a fresh library has none.
+    #[cfg(test)]
+    pub(crate) fn clear_focus_for_test(&mut self, cx: &mut Context<Self>) {
+        self.focused = None;
+        self.focused_ix = None;
+        cx.notify();
+    }
+
     /// Switch views without remembering it (tests share one settings file).
     #[cfg(test)]
     pub(crate) fn show_layout_for_test(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
@@ -428,6 +443,25 @@ impl LibraryView {
             self.layout,
             self.panels.drawer_open,
             self.drawer_rem(window),
+        )
+    }
+
+    /// The list's scroll offset (down from the top), the content height its
+    /// scrollbar knows, the height of every item laid end to end, and the
+    /// height of the list's viewport.
+    #[cfg(test)]
+    pub(crate) fn scroll_state(&self) -> (Pixels, Pixels, Pixels, Pixels) {
+        use gpui_kit::component::scroll::ScrollbarHandle as _;
+        let items = self
+            .frame
+            .sizes
+            .iter()
+            .fold(px(0.), |sum, size| sum + size.height);
+        (
+            -self.scroll.offset().y,
+            self.scroll.content_size().height,
+            items,
+            self.scroll.viewport_bounds().size.height,
         )
     }
 
@@ -645,10 +679,13 @@ impl LibraryView {
         self.frame.list_columns = grid::list_columns(available);
         self.frame.focus_rem = focus_rem;
         self.follow_selection();
-        if std::mem::take(&mut self.scroll_pending)
-            && let Some(item) = self.focused_ix.and_then(|ix| self.item_of_game(ix))
-        {
-            self.scroll.scroll_to_item(item, ScrollStrategy::Center);
+        if std::mem::take(&mut self.scroll_pending) {
+            // A new view keeps the selected game in view, else it opens at
+            // its top: the old view's offset means nothing in its rows.
+            match self.focused_ix.and_then(|ix| self.item_of_game(ix)) {
+                Some(item) => self.scroll.scroll_to_item(item, ScrollStrategy::Center),
+                None => self.scroll.scroll_to_item(0, ScrollStrategy::Top),
+            }
         }
 
         // Continue-playing cards show art and a logo each.

@@ -589,6 +589,58 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_list_opens_at_its_top_and_its_scrollbar_knows_every_row(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(820.), px(380.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        for _ in 0..2 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let scroll = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).scroll_state());
+    draw(cx);
+    // Scrolled down the grid with nothing selected…
+    cx.update(|cx| view.update(cx, |v, cx| v.scroll_for_test(px(100.), cx)));
+    draw(cx);
+    assert!(scroll(cx).0 > px(0.), "the grid scrolled: {:?}", scroll(cx));
+    cx.update(|cx| view.update(cx, |v, cx| v.clear_focus_for_test(cx)));
+    draw(cx);
+    // …the list opens at its top, and its scrollbar spans every row.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::List, cx)));
+    draw(cx);
+    let (offset, content, items, viewport) = scroll(cx);
+    assert!(
+        items > viewport,
+        "the list scrolls: {items:?} in {viewport:?}"
+    );
+    assert_eq!(offset, px(0.), "the list opens at its top");
+    assert!(
+        (content - items).abs() < px(1.),
+        "the scrollbar knows {content:?} of {items:?}"
+    );
+}
+
+#[gpui_kit::test]
 fn a_mode_chosen_before_the_library_opens_filters_it(cx: &mut TestAppContext) {
     use irori_core::GameMode;
     start(cx);
