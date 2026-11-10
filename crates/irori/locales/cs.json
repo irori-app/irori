@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "rekapitulace shrnutí roku",
   "shell.nav.views": "Zobrazení",
   "shell.palette.show_view": "Zobrazit: {name}",
+  "shell.palette.show_category": "Zobrazit kategorii: {name}",
+  "shell.palette.new_smart_category": "Nová chytrá kategorie…",
   "shell.palette.views_keywords": "zobrazení uložené filtr",
   "shell.palette.save_view": "Uložit aktuální zobrazení knihovny…",
   "shell.palette.add_folder": "Přidat hry ze složky…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Zobrazení",
   "shell.palette.group_by_genre": "Seskupit knihovnu podle žánru",
   "shell.palette.ungroup_by_genre": "Přestat seskupovat knihovnu podle žánru",
+  "shell.palette.group_by_category": "Seskupit knihovnu podle kategorie",
+  "shell.palette.ungroup_by_category": "Přestat seskupovat knihovnu podle kategorie",
+  "shell.palette.category_keywords": "kategorie chytrá štítek skupina sbírka",
   "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka"
 }

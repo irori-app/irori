@@ -151,8 +151,13 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   game with, next to its ProtonDB rating.
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size; start typing anywhere in
-  the grid or list to search. Filter by genre, and group by play status, game mode or
-  genre. "Continue playing", installed
+  the grid or list to search. Filter by genre, and group by play status, game mode,
+  genre or category. Categories are manual (you put games in them) or smart (filled
+  from rules: store, tags, game mode, play status, age rating, installed, playtime, last
+  played, HowLongToBeat length, system, another category or a search, with All/Any and
+  "Leave out" rows); both can be pinned (pinned ones get a Big Picture shelf) and
+  coloured, show their counts in the Views menu, and travel with backups and sync. A
+  saved view can become a smart category. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
   On a wide window the header adds one-click sort, installed, favourites and grouping
   controls, as many as fit (Settings → Appearance turns them off).

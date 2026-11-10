@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "振り返り まとめ 年間",
   "shell.nav.views": "ビュー",
   "shell.palette.show_view": "ビューを表示：{name}",
+  "shell.palette.show_category": "カテゴリーを表示：{name}",
+  "shell.palette.new_smart_category": "新しいスマートカテゴリー…",
   "shell.palette.views_keywords": "ビュー 保存 フィルター",
   "shell.palette.save_view": "ライブラリの現在のビューを保存…",
   "shell.palette.add_folder": "フォルダーからゲームを追加…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "表示",
   "shell.palette.group_by_genre": "ライブラリをジャンルでグループ化",
   "shell.palette.ungroup_by_genre": "ライブラリのジャンル別グループ化をやめる",
+  "shell.palette.group_by_category": "ライブラリをカテゴリーでグループ化",
+  "shell.palette.ungroup_by_category": "ライブラリのカテゴリー別グループ化をやめる",
+  "shell.palette.category_keywords": "カテゴリー スマート タグ グループ コレクション",
   "shell.palette.genre_keywords": "ジャンル アクション アドベンチャー ストラテジー パズル RPG シューティング"
 }

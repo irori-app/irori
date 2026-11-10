@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "bilan récap annuel",
   "shell.nav.views": "Vues",
   "shell.palette.show_view": "Afficher la vue : {name}",
+  "shell.palette.show_category": "Afficher la catégorie : {name}",
+  "shell.palette.new_smart_category": "Nouvelle catégorie intelligente…",
   "shell.palette.views_keywords": "vue enregistrée filtre",
   "shell.palette.save_view": "Enregistrer la vue actuelle de la bibliothèque…",
   "shell.palette.add_folder": "Ajouter les jeux d’un dossier…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Présentation",
   "shell.palette.group_by_genre": "Regrouper la bibliothèque par genre",
   "shell.palette.ungroup_by_genre": "Ne plus regrouper la bibliothèque par genre",
+  "shell.palette.group_by_category": "Regrouper la bibliothèque par catégorie",
+  "shell.palette.ungroup_by_category": "Ne plus regrouper la bibliothèque par catégorie",
+  "shell.palette.category_keywords": "catégorie intelligente étiquette groupe collection",
   "shell.palette.genre_keywords": "genre action aventure stratégie réflexion jeu de rôle tir"
 }

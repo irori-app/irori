@@ -818,3 +818,91 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
     }
     assert!(off, "the setting turns them off");
 }
+
+#[gpui_kit::test]
+fn smart_categories_filter_the_library_and_reopen_as_saved(cx: &mut TestAppContext) {
+    use irori_services::{CategoryRef, Match, Rule, SmartCategory};
+
+    let backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    let titles = |cx: &mut TestAppContext| -> Vec<String> {
+        cx.read(|cx| {
+            view.read(cx)
+                .visible_games()
+                .iter()
+                .map(|g| g.title.clone())
+                .collect()
+        })
+    };
+    let wait_for = |cx: &mut TestAppContext, done: &dyn Fn(&mut TestAppContext) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(cx) {
+            assert!(Instant::now() < deadline, "the library never caught up");
+            std::thread::sleep(Duration::from_millis(10));
+            draw(cx);
+        }
+    };
+    draw(cx);
+
+    // "Any" with no rules and a "Leave out" row: every game but Hades.
+    let rest = SmartCategory::new(
+        "Not Hades",
+        Match::Any,
+        Vec::new(),
+        vec![Rule::Query {
+            query: "hades".into(),
+        }],
+    );
+    let id = backend.userdata.save_smart_category(None, rest.clone());
+    let smart = CategoryRef::Smart(id.clone());
+    wait_for(cx, &|cx| {
+        cx.read(|cx| models(cx).library.read(cx).categories.count(&smart) == 4)
+    });
+    cx.update(|cx| view.update(cx, |v, cx| v.update_filter(|f| f.toggle(&smart), cx)));
+    draw(cx);
+    assert_eq!(
+        titles(cx),
+        vec!["Alan Wake", "Celeste", "Inside", "Outer Wilds"]
+    );
+
+    // The editor shows it as it was saved: "any", the row left out.
+    let editor = cx
+        .update_window(window, |_, window, cx| {
+            cx.new(|cx| {
+                crate::dialogs::smart::SmartEditor::new(Some(id.clone()), rest.clone(), window, cx)
+            })
+        })
+        .unwrap();
+    cx.read(|cx| {
+        let editor = editor.read(cx);
+        assert_eq!(editor.matching(), &Match::Any);
+        assert_eq!(editor.draft(cx), rest);
+    });
+
+    // Deleted, it leaves the filter: every game again.
+    backend.userdata.delete_smart_category(&id);
+    wait_for(cx, &|cx| titles(cx).len() == 5);
+    assert!(cx.read(|cx| view.read(cx).filter(cx).smart_categories.is_empty()));
+}

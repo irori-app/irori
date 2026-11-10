@@ -1,4 +1,5 @@
-//! Dialogs owned by the library: categories, adding or editing a manually
+//! Dialogs owned by the library: categories (and the smart category
+//! editor), adding or editing a manually
 //! added app or a whole folder of games, editing a game's title, art and
 //! game modes,
 //! installing with a Lutris script, and saving and managing library views.
@@ -8,6 +9,7 @@ pub mod edit_game;
 pub mod folder;
 pub mod lutris;
 pub mod sideload;
+pub mod smart;
 pub mod steamgrid;
 pub mod views;
 

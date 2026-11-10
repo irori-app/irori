@@ -203,7 +203,7 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
         .unwrap();
     assert!(fullscreen, "Big Picture enters fullscreen");
     cx.read(|cx| {
-        let kinds: Vec<RowKind> = view.read(cx).rows.iter().map(|r| r.kind).collect();
+        let kinds: Vec<RowKind> = view.read(cx).rows.iter().map(|r| r.kind.clone()).collect();
         assert_eq!(kinds, vec![RowKind::Installed]);
     });
     assert_eq!(focused_title(&view, cx), "Alpha");
@@ -238,7 +238,8 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
 
     // Search: letters go to the field (M doesn't open the menu), Enter
     // returns to the results.
-    cx.simulate_keystrokes(handle, "up right right right enter");
+    // (Category sits between Status and Search.)
+    cx.simulate_keystrokes(handle, "up right right right right enter");
     cx.read(|cx| assert!(view.read(cx).library.searching));
     let computes = cx.read(|cx| view.read(cx).show_option_computes());
     cx.simulate_input(handle, "alm");
@@ -311,7 +312,7 @@ fn home_library_page_and_overlays_follow_keyboard_and_gamepad(cx: &mut TestAppCo
     cx.read(|cx| {
         let v = view.read(cx);
         assert_eq!(v.tab, Tab::Home);
-        let kinds: Vec<RowKind> = v.rows.iter().map(|r| r.kind).collect();
+        let kinds: Vec<RowKind> = v.rows.iter().map(|r| r.kind.clone()).collect();
         assert_eq!(kinds, vec![RowKind::Favourites, RowKind::Installed]);
     });
 }

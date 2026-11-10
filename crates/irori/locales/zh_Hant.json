@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "回顧 總結 年度",
   "shell.nav.views": "檢視",
   "shell.palette.show_view": "顯示檢視：{name}",
+  "shell.palette.show_category": "顯示分類：{name}",
+  "shell.palette.new_smart_category": "新增智慧分類…",
   "shell.palette.views_keywords": "檢視 儲存 篩選",
   "shell.palette.save_view": "儲存遊戲庫目前檢視…",
   "shell.palette.add_folder": "從資料夾新增遊戲…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "顯示方式",
   "shell.palette.group_by_genre": "依類型將遊戲庫分組",
   "shell.palette.ungroup_by_genre": "停止依類型將遊戲庫分組",
+  "shell.palette.group_by_category": "依分類將遊戲庫分組",
+  "shell.palette.ungroup_by_category": "停止依分類將遊戲庫分組",
+  "shell.palette.category_keywords": "分類 智慧 標籤 分組 收藏",
   "shell.palette.genre_keywords": "類型 動作 冒險 策略 解謎 角色扮演 射擊"
 }

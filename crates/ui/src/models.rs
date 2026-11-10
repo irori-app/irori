@@ -13,7 +13,8 @@ use irori_core::{
     AppSettings, Event, GameId, GameStatus, Notice, Runner, StatusKind, StoreAccount, UserInfo,
 };
 use irori_services::{
-    AppUpdateStatus, ComponentReport, DownloadQueueSnapshot, LibrarySnapshot, UserData,
+    AppUpdateStatus, CategoryIndex, ComponentReport, DownloadQueueSnapshot, LibrarySnapshot,
+    UserData,
 };
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
@@ -24,6 +25,9 @@ pub struct LibraryModel {
     pub snapshot: Arc<LibrarySnapshot>,
     pub user: Arc<UserData>,
     pub updates: Arc<HashSet<GameId>>,
+    /// The games and counts of every category, worked out when the library,
+    /// the user data, HowLongToBeat times or the day change.
+    pub categories: Arc<CategoryIndex>,
     /// A store refresh is in progress.
     pub refreshing: bool,
 }
@@ -61,14 +65,10 @@ impl LibraryModel {
             .and_then(|p| p.last_played.as_deref())
     }
 
-    pub fn categories_of(&self, id: &GameId) -> Vec<String> {
-        let key = id.key();
-        self.user
-            .categories
-            .iter()
-            .filter(|(_, set)| set.contains(&key))
-            .map(|(name, _)| name.clone())
-            .collect()
+    /// The categories of both kinds the game is in, as (name, colour),
+    /// pinned first.
+    pub fn categories_of(&self, id: &GameId) -> Vec<(String, Option<String>)> {
+        crate::categories::badges(id, &self.user, &self.categories)
     }
 }
 
@@ -241,10 +241,13 @@ fn accounts_now(cx: &App) -> AccountsNow {
 
 pub(crate) fn install(cx: &mut App) {
     let b = backend(cx);
+    let (snapshot, user) = (b.library(), b.userdata.snapshot());
+    let categories = crate::categories::index_for(None, &snapshot, &user, &b.hltb_times());
     let library = cx.new(|_| LibraryModel {
-        snapshot: b.library(),
-        user: b.userdata.snapshot(),
+        snapshot,
+        user,
         updates: b.updates(),
+        categories,
         refreshing: false,
     });
     let statuses = cx.new(|_| StatusModel {
@@ -423,7 +426,10 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
     }
     if library {
         let (snapshot, user, updates) = (b.library(), b.userdata.snapshot(), b.updates());
+        let hltb = b.hltb_times();
         m.library.update(cx, |l, cx| {
+            l.categories =
+                crate::categories::index_for(Some(&l.categories), &snapshot, &user, &hltb);
             l.snapshot = snapshot;
             l.user = user;
             l.updates = updates;

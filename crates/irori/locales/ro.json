@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "rezumat recapitulare an",
   "shell.nav.views": "Vizualizări",
   "shell.palette.show_view": "Arată vizualizarea: {name}",
+  "shell.palette.show_category": "Arată categoria: {name}",
+  "shell.palette.new_smart_category": "Categorie inteligentă nouă…",
   "shell.palette.views_keywords": "vizualizare salvată filtru",
   "shell.palette.save_view": "Salvează vizualizarea curentă a bibliotecii…",
   "shell.palette.add_folder": "Adaugă jocuri dintr-un dosar…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Vizualizare",
   "shell.palette.group_by_genre": "Grupează biblioteca după gen",
   "shell.palette.ungroup_by_genre": "Nu mai grupa biblioteca după gen",
+  "shell.palette.group_by_category": "Grupează biblioteca după categorie",
+  "shell.palette.ungroup_by_category": "Nu mai grupa biblioteca după categorie",
+  "shell.palette.category_keywords": "categorie inteligentă etichetă grup colecție",
   "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter"
 }

@@ -487,6 +487,25 @@ commands without a window.
     their looks; sync has one register per smart category and per manual look,
     compared as read, so a computer that can't read a category never notes it
     as changed or gone.
+  - Screens list both kinds through `irori_ui::categories` (`entries`: pinned
+    first, counted from `LibraryModel::categories`, the index the event pump
+    rebuilds only when its `IndexKey` changes). The library's Views menu has one
+    Categories section (smart ones marked, each counted), the Filters popover
+    ticks both, Group by → Category puts each game in its first category's
+    section (`irori-library`'s `categories.rs`), covers show both with their
+    colours, and the context menu has "Add to ▸" for manual categories and a
+    read-only "In: …" for smart ones. The category manager creates, pins,
+    colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
+    (`open_smart_category_editor`), also opened from Manage views to turn a
+    view into a smart category (`categories::smart_from_view`, which says
+    which criteria no rule holds). The palette shows any category and groups by
+    category. Big Picture adds a shelf per pinned category after the theme's
+    shelves and a Category chip on the Library tab that keeps its category by
+    `CategoryRef` (only that category's deletion resets it to "Any").
+  - The library view remembers picked smart categories in `ViewFilter`'s
+    `smart_categories`, written only while one is picked, and drops ids that
+    no longer exist as soon as the user data says so. Every list respects
+    hidden games and their PIN like the rest of the library.
 - **Journal** (`journal.rs`): one note per game per local calendar day (optional
   title, text, paths of that day's screenshots), written with
   `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the

@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "overzicht recap jaar",
   "shell.nav.views": "Weergaven",
   "shell.palette.show_view": "Weergave tonen: {name}",
+  "shell.palette.show_category": "Categorie tonen: {name}",
+  "shell.palette.new_smart_category": "Nieuwe slimme categorie…",
   "shell.palette.views_keywords": "weergave opgeslagen filter",
   "shell.palette.save_view": "Huidige weergave van de bibliotheek opslaan…",
   "shell.palette.add_folder": "Games uit een map toevoegen…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Weergave",
   "shell.palette.group_by_genre": "Bibliotheek groeperen op genre",
   "shell.palette.ungroup_by_genre": "Bibliotheek niet meer groeperen op genre",
+  "shell.palette.group_by_category": "Bibliotheek groeperen op categorie",
+  "shell.palette.ungroup_by_category": "Bibliotheek niet meer groeperen op categorie",
+  "shell.palette.category_keywords": "categorie slim label groep collectie",
   "shell.palette.genre_keywords": "genre actie avontuur strategie puzzel rpg shooter"
 }

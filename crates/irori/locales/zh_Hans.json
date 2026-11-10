@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "回顾 总结 年度",
   "shell.nav.views": "视图",
   "shell.palette.show_view": "显示视图：{name}",
+  "shell.palette.show_category": "显示分类：{name}",
+  "shell.palette.new_smart_category": "新建智能分类…",
   "shell.palette.views_keywords": "视图 保存 筛选",
   "shell.palette.save_view": "保存游戏库当前视图…",
   "shell.palette.add_folder": "从文件夹添加游戏…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "显示",
   "shell.palette.group_by_genre": "按类型对游戏库分组",
   "shell.palette.ungroup_by_genre": "停止按类型对游戏库分组",
+  "shell.palette.group_by_category": "按分类对游戏库分组",
+  "shell.palette.ungroup_by_category": "停止按分类对游戏库分组",
+  "shell.palette.category_keywords": "分类 智能 标签 分组 收藏",
   "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击"
 }

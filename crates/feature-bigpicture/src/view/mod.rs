@@ -412,20 +412,29 @@ impl BigPictureView {
     /// keeping focus on the same game when it still exists.
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let m = models(cx);
-        let (snapshot, user) = {
+        let (snapshot, user, categories) = {
             let lib = m.library.read(cx);
-            (lib.snapshot.clone(), lib.user.clone())
+            (
+                lib.snapshot.clone(),
+                lib.user.clone(),
+                lib.categories.clone(),
+            )
         };
         let max_recent = m.settings.read(cx).app.max_recent_games;
-        let user_ptr = Arc::as_ptr(&user) as usize;
+        // The category index is new whenever the user data is, and with new
+        // HowLongToBeat times or a new day.
+        let user_ptr = Arc::as_ptr(&categories) as usize;
 
         let shelves = self.look.theme().shelves.clone();
         let key = (snapshot.revision, user_ptr, max_recent, shelves);
         if self.rows_key.as_ref() != Some(&key) {
             let previous = self.grid.focused(&self.lens()).and_then(|(r, c)| {
-                Some((self.rows.get(r)?.kind, self.rows.get(r)?.games.get(c)?.id()))
+                Some((
+                    self.rows.get(r)?.kind.clone(),
+                    self.rows.get(r)?.games.get(c)?.id(),
+                ))
             });
-            self.rows = build_rows(&snapshot, &user, max_recent as usize, &key.3);
+            self.rows = build_rows(&snapshot, &user, max_recent as usize, &key.3, &categories);
             self.rows_key = Some(key);
             let lens = self.lens();
             self.grid.clamp(&lens);
@@ -443,10 +452,12 @@ impl BigPictureView {
         if !options.contains(&lib.filter.show) {
             lib.filter.show = Default::default();
         }
+        // Only a deleted category gives way; others coming or going don't.
+        lib.filter.category = crate::model::live_category(&user, &lib.filter);
         let key = (snapshot.revision, user_ptr, lib.filter.clone());
         if lib.key.as_ref() != Some(&key) {
             let previous = lib.games.get(lib.ix).map(|g| g.id());
-            lib.games = library_games(&snapshot, &user, &lib.filter);
+            lib.games = library_games(&snapshot, &user, &lib.filter, &categories);
             lib.key = Some(key);
             lib.ix = previous
                 .and_then(|id| lib.games.iter().position(|g| g.id() == id))
@@ -676,6 +687,11 @@ impl BigPictureView {
             Chip::Status => {
                 let filter = &mut self.library.filter;
                 filter.status = cycle(&StatusFilter::ALL, filter.status)
+            }
+            Chip::Category => {
+                let user = models(cx).library.read(cx).user.clone();
+                let filter = &mut self.library.filter;
+                filter.category = crate::model::next_category(&user, filter.category.as_ref());
             }
             Chip::Search => {
                 self.library.searching = true;

@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "sammanfattning år recap",
   "shell.nav.views": "Vyer",
   "shell.palette.show_view": "Visa vy: {name}",
+  "shell.palette.show_category": "Visa kategori: {name}",
+  "shell.palette.new_smart_category": "Ny smart kategori …",
   "shell.palette.views_keywords": "vy sparad filter",
   "shell.palette.save_view": "Spara bibliotekets aktuella vy…",
   "shell.palette.add_folder": "Lägg till spel från en mapp…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Visa",
   "shell.palette.group_by_genre": "Gruppera biblioteket efter genre",
   "shell.palette.ungroup_by_genre": "Sluta gruppera biblioteket efter genre",
+  "shell.palette.group_by_category": "Gruppera biblioteket efter kategori",
+  "shell.palette.ungroup_by_category": "Sluta gruppera biblioteket efter kategori",
+  "shell.palette.category_keywords": "kategori smart tagg grupp samling",
   "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel"
 }

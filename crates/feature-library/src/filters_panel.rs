@@ -146,29 +146,53 @@ impl FiltersPanel {
 }
 
 impl FiltersPanel {
-    /// Category checkboxes: games in any checked category are shown.
+    /// Category checkboxes, both kinds (smart ones marked): games in any
+    /// checked category are shown.
     fn render_categories(
         &self,
         f: &ViewFilter,
-        categories: &[String],
+        categories: &[irori_ui::categories::CategoryEntry],
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let mut entries = Vec::with_capacity(categories.len() + 1);
+        let mut boxes: Vec<AnyElement> = Vec::with_capacity(categories.len() + 1);
         if !categories.is_empty() {
-            entries.push(CategoryFilter::Uncategorized);
+            let entry = CategoryFilter::Uncategorized;
+            boxes.push(
+                Checkbox::new("filter-category-none")
+                    .label(entry.label())
+                    .checked(f.categories.contains(&entry))
+                    .on_change(cx.listener(move |this, _: &bool, _, cx| {
+                        let entry = entry.clone();
+                        this.set(move |f| f.toggle_category(entry), cx)
+                    }))
+                    .into_any_element(),
+            );
         }
-        entries.extend(categories.iter().cloned().map(CategoryFilter::Named));
-        let boxes = entries.into_iter().enumerate().map(|(ix, entry)| {
-            let checked = f.categories.contains(&entry);
-            Checkbox::new(SharedString::from(format!("filter-category-{ix}")))
-                .label(entry.label())
-                .checked(checked)
+        for (ix, entry) in categories.iter().enumerate() {
+            let category = entry.category.clone();
+            let check = Checkbox::new(SharedString::from(format!("filter-category-{ix}")))
+                .label(entry.name.clone())
+                .checked(f.shows_category(&category))
                 .on_change(cx.listener(move |this, _: &bool, _, cx| {
-                    let entry = entry.clone();
-                    this.set(move |f| f.toggle_category(entry), cx)
-                }))
-        });
+                    let category = category.clone();
+                    this.set(move |f| f.toggle(&category), cx)
+                }));
+            boxes.push(
+                h_flex()
+                    .gap_1p5()
+                    .min_w_0()
+                    .child(check)
+                    .when(entry.is_smart(), |el| {
+                        el.child(
+                            Icon::new(irori_ui::categories::icon(&entry.category))
+                                .xsmall()
+                                .text_color(muted),
+                        )
+                    })
+                    .into_any_element(),
+            );
+        }
         v_flex()
             .gap_2()
             .child(
@@ -178,14 +202,14 @@ impl FiltersPanel {
                     .child(
                         h_flex()
                             .gap_1()
-                            .when(!f.categories.is_empty(), |el| {
+                            .when(f.has_categories(), |el| {
                                 el.child(
                                     Button::new("filter-categories-clear")
                                         .xsmall()
                                         .ghost()
                                         .label(t("library.filters.categories.show_all"))
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            this.set(|f| f.categories.clear(), cx)
+                                            this.set(|f| f.clear_categories(), cx)
                                         })),
                                 )
                             })
@@ -582,14 +606,10 @@ impl Render for FiltersPanel {
         let systems = self.render_systems(&f, cx);
         let genres = self.render_genres(&f, cx);
         let tags = self.render_tags(&f, cx);
-        let categories: Vec<String> = models(cx)
-            .library
-            .read(cx)
-            .user
-            .categories
-            .keys()
-            .cloned()
-            .collect();
+        let categories = {
+            let lib = models(cx).library.read(cx);
+            irori_ui::categories::entries(&lib.user, &lib.categories)
+        };
         let muted = cx.theme().muted_foreground;
 
         let platforms: [(Option<InstallPlatform>, SharedString); 5] = [

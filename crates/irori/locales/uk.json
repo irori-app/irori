@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "підсумки рік огляд",
   "shell.nav.views": "Вигляди",
   "shell.palette.show_view": "Показати вигляд: {name}",
+  "shell.palette.show_category": "Показати категорію: {name}",
+  "shell.palette.new_smart_category": "Нова розумна категорія…",
   "shell.palette.views_keywords": "вигляд збережений фільтр",
   "shell.palette.save_view": "Зберегти поточний вигляд бібліотеки…",
   "shell.palette.add_folder": "Додати ігри з теки…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Вигляд",
   "shell.palette.group_by_genre": "Групувати бібліотеку за жанром",
   "shell.palette.ungroup_by_genre": "Не групувати бібліотеку за жанром",
+  "shell.palette.group_by_category": "Групувати бібліотеку за категорією",
+  "shell.palette.ungroup_by_category": "Не групувати бібліотеку за категорією",
+  "shell.palette.category_keywords": "категорія розумна мітка група колекція",
   "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер"
 }

@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "podsumowanie rok recap",
   "shell.nav.views": "Widoki",
   "shell.palette.show_view": "Pokaż widok: {name}",
+  "shell.palette.show_category": "Pokaż kategorię: {name}",
+  "shell.palette.new_smart_category": "Nowa inteligentna kategoria…",
   "shell.palette.views_keywords": "widok zapisany filtr",
   "shell.palette.save_view": "Zapisz bieżący widok biblioteki…",
   "shell.palette.add_folder": "Dodaj gry z folderu…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Widok",
   "shell.palette.group_by_genre": "Grupuj bibliotekę według gatunku",
   "shell.palette.ungroup_by_genre": "Przestań grupować bibliotekę według gatunku",
+  "shell.palette.group_by_category": "Grupuj bibliotekę według kategorii",
+  "shell.palette.ungroup_by_category": "Przestań grupować bibliotekę według kategorii",
+  "shell.palette.category_keywords": "kategoria inteligentna etykieta grupa kolekcja",
   "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka"
 }

@@ -58,6 +58,12 @@ enum PaletteTarget {
     GroupByMode(bool),
     /// Group the library by genre (`true`) or stop, and show it.
     GroupByGenre(bool),
+    /// Group the library by category (`true`) or stop, and show it.
+    GroupByCategory(bool),
+    /// Show the library's games in one category of either kind.
+    Category(irori_services::CategoryRef),
+    /// Make a smart category.
+    NewSmartCategory,
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -92,6 +98,10 @@ struct LibraryCommands<'a> {
     grouped_by_mode: Option<bool>,
     /// Whether the library groups by genre, while a library view exists.
     grouped_by_genre: Option<bool>,
+    /// Whether the library groups by category, while a library view exists.
+    grouped_by_category: Option<bool>,
+    /// Every category of both kinds, to show one.
+    categories: &'a [irori_ui::categories::CategoryEntry],
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -144,6 +154,8 @@ impl Palette {
             grouped,
             grouped_by_mode,
             grouped_by_genre,
+            grouped_by_category,
+            categories,
             views,
             layout,
             install,
@@ -496,6 +508,44 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(grouped) = grouped_by_category {
+            let label = if grouped {
+                "shell.palette.ungroup_by_category"
+            } else {
+                "shell.palette.group_by_category"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Tags),
+                PaletteTarget::GroupByCategory(!grouped),
+                targets,
+            );
+        }
+        if grouped_by_category.is_some() {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.new_smart_category"))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Sparkles),
+                PaletteTarget::NewSmartCategory,
+                targets,
+            );
+        }
+        for entry in categories {
+            push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.show_category",
+                        &[("name", &entry.name)],
+                    ))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(irori_ui::categories::icon(&entry.category)),
+                PaletteTarget::Category(entry.category.clone()),
+                targets,
+            );
+        }
         for (id, name) in views {
             push(
                 CommandItem::new()
@@ -635,6 +685,8 @@ impl Palette {
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
         let grouped_by_genre = irori_library::groups_by_genre(cx);
+        let grouped_by_category = irori_library::groups_by_category(cx);
+        let categories = irori_library::category_list(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -648,6 +700,8 @@ impl Palette {
             grouped,
             grouped_by_mode,
             grouped_by_genre,
+            grouped_by_category,
+            categories: &categories,
             views: &views,
             layout,
             install,
@@ -778,6 +832,18 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_library::set_groups_by_genre(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
+        PaletteTarget::GroupByCategory(on) => {
+            irori_library::set_groups_by_category(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::Category(category) => irori_library::show_category(category, cx),
+        PaletteTarget::NewSmartCategory => {
+            irori_ui::navigate(Route::Library, cx);
+            // After the palette's own dialog has closed.
+            window.defer(cx, |window, cx| {
+                irori_library::open_smart_category_editor(None, None, window, cx)
+            });
+        }
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -843,6 +909,8 @@ mod tests {
             grouped: install.map(|_| false),
             grouped_by_mode: install.map(|_| true),
             grouped_by_genre: None,
+            grouped_by_category: None,
+            categories: &[],
             views: &[],
             layout: LibraryLayout::Grid,
             install,
@@ -864,6 +932,51 @@ mod tests {
     }
 
     #[test]
+    fn every_category_of_both_kinds_is_offered() {
+        use irori_services::CategoryRef;
+        let entry = |category: CategoryRef, name: &str| irori_ui::categories::CategoryEntry {
+            category,
+            name: name.into(),
+            count: 1,
+            pinned: false,
+            colour: None,
+            readable: true,
+        };
+        let categories = [
+            entry(CategoryRef::Smart("s-1".into()), "Short games"),
+            entry(CategoryRef::Manual("RPG".into()), "RPG"),
+        ];
+        let mut targets = Vec::new();
+        let library = LibraryCommands {
+            grouped: Some(false),
+            grouped_by_mode: Some(false),
+            grouped_by_genre: Some(false),
+            grouped_by_category: Some(false),
+            categories: &categories,
+            views: &[],
+            layout: LibraryLayout::Grid,
+            install: None,
+            favourites: None,
+            quick_controls: false,
+            hidden_pin: None,
+        };
+        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
+        let shown: Vec<String> = targets
+            .into_iter()
+            .filter_map(|t| match t {
+                PaletteTarget::Category(c) => Some(format!("{c:?}")),
+                PaletteTarget::GroupByCategory(on) => Some(format!("group {on}")),
+                PaletteTarget::NewSmartCategory => Some("new".into()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            ["group true", "new", "Smart(\"s-1\")", "Manual(\"RPG\")"]
+        );
+    }
+
+    #[test]
     fn the_hidden_games_pin_is_offered_only_while_unlocked() {
         let offered = |hidden_pin: Option<bool>| {
             let mut targets = Vec::new();
@@ -871,6 +984,8 @@ mod tests {
                 grouped: None,
                 grouped_by_mode: None,
                 grouped_by_genre: None,
+                grouped_by_category: None,
+                categories: &[],
                 views: &[],
                 layout: LibraryLayout::Grid,
                 install: None,

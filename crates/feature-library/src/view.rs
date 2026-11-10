@@ -244,7 +244,14 @@ impl LibraryView {
         let saved_views = crate::views::saved_views(cx);
 
         let subscriptions = vec![
-            cx.observe(&m.library, |_, _, cx| cx.notify()),
+            cx.observe(&m.library, |this: &mut Self, library, cx| {
+                // A smart category deleted here or on another computer
+                // leaves the filter, and the saved view state, at once.
+                let user = library.read(cx).user.clone();
+                this.filters
+                    .update(cx, |m, cx| m.update(|f| f.forget_missing_smart(&user), cx));
+                cx.notify();
+            }),
             cx.observe(&m.statuses, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&art, |_, _, cx| cx.notify()),
@@ -361,7 +368,7 @@ impl LibraryView {
             .iter()
             .filter_map(|g| match g.kind {
                 GroupKind::Status(s) => Some(s),
-                GroupKind::Mode(_) | GroupKind::Genre(_) => None,
+                GroupKind::Mode(_) | GroupKind::Genre(_) | GroupKind::Category(_) => None,
             })
             .collect()
     }
@@ -487,9 +494,14 @@ impl LibraryView {
 
     fn prepare_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let m = models(cx).clone();
-        let (snapshot, user, updates) = {
+        let (snapshot, user, updates, categories) = {
             let lib = m.library.read(cx);
-            (lib.snapshot.clone(), lib.user.clone(), lib.updates.clone())
+            (
+                lib.snapshot.clone(),
+                lib.user.clone(),
+                lib.updates.clone(),
+                lib.categories.clone(),
+            )
         };
         let app = m.settings.read(cx).app.clone();
         let stores = {
@@ -503,9 +515,15 @@ impl LibraryView {
         self.check_availability(&snapshot, cx);
         let missing = self.availability.missing().clone();
 
-        let games = self
-            .games
-            .get(&filter, &stores, &snapshot, &user, &updates, &missing);
+        let games = self.games.get_in(
+            &filter,
+            &stores,
+            &snapshot,
+            &user,
+            &categories,
+            &updates,
+            &missing,
+        );
         let groups = self.games.groups();
         if filter.group != self.grouping {
             if self.frame.key.is_some() {
@@ -616,8 +634,8 @@ impl LibraryView {
         self.frame.groups = groups;
         self.frame.top = top;
         self.frame.stores = stores;
-        self.frame.heading = if !filter.categories.is_empty() {
-            filter.category_heading().into()
+        self.frame.heading = if filter.has_categories() {
+            filter.category_heading(&user).into()
         } else if filter.favourites_only {
             t("library.heading.favourites")
         } else {
@@ -1244,7 +1262,9 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Status => Grouping::None,
-                    Grouping::None | Grouping::Mode | Grouping::Genre => Grouping::Status,
+                    Grouping::None | Grouping::Mode | Grouping::Genre | Grouping::Category => {
+                        Grouping::Status
+                    }
                 }
             },
             cx,
@@ -1257,7 +1277,9 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Mode => Grouping::None,
-                    Grouping::None | Grouping::Status | Grouping::Genre => Grouping::Mode,
+                    Grouping::None | Grouping::Status | Grouping::Genre | Grouping::Category => {
+                        Grouping::Mode
+                    }
                 }
             },
             cx,
@@ -1461,11 +1483,17 @@ fn game_menu(
                 let id = id.clone();
                 menu = menu.submenu_with_icon(
                     Some(Icon::new(IconName::Tags)),
-                    t("library.menu.categories"),
+                    t("library.menu.add_to"),
                     window,
                     cx,
                     move |sub, _, cx| categories_menu(sub, &view, &id, cx),
                 );
+                // Smart categories follow their rules: named, never ticked.
+                let smart = smart_categories_of(&game.id(), cx);
+                if !smart.is_empty() {
+                    let names = smart.join(&t("library.filter.list_separator"));
+                    menu = menu.label(t_args("library.menu.in_smart", &[("names", &names)]));
+                }
                 let status_id = game.id();
                 menu = menu.submenu_with_icon(
                     Some(Icon::new(IconName::Flag)),
@@ -1516,6 +1544,20 @@ fn copies_menu(
                 );
             }),
     )
+}
+
+/// The names of the smart categories a game is in, pinned first.
+fn smart_categories_of(id: &GameId, cx: &App) -> Vec<String> {
+    let lib = models(cx).library.read(cx);
+    lib.user
+        .categories_in_order()
+        .into_iter()
+        .filter(|(c, _)| {
+            matches!(c, irori_services::CategoryRef::Smart(_))
+                && irori_ui::categories::contains(c, id, &lib.user, &lib.categories)
+        })
+        .map(|(_, name)| name)
+        .collect()
 }
 
 fn categories_menu(
@@ -1951,6 +1993,7 @@ impl LibraryView {
                                 (Grouping::Status, "library.toolbar.group.status"),
                                 (Grouping::Mode, "library.toolbar.group.mode"),
                                 (Grouping::Genre, "library.toolbar.group.genre"),
+                                (Grouping::Category, "library.toolbar.group.category"),
                             ];
                             options.into_iter().fold(menu, |menu, (option, key)| {
                                 let model = model.clone();
@@ -2097,7 +2140,12 @@ impl LibraryView {
             let filter = self.filters.read(cx).filter().clone();
             let description = t_args(
                 "library.no_match.description",
-                &[("filters", &filter.describe().join(" · "))],
+                &[(
+                    "filters",
+                    &filter
+                        .describe(&models(cx).library.read(cx).user)
+                        .join(" · "),
+                )],
             );
             return EmptyState::new(IconName::SearchX, t("library.no_match.title"))
                 .description(description)
@@ -2273,6 +2321,26 @@ impl LibraryView {
                     |g| SharedString::from(g.to_string()),
                 ),
             ),
+            GroupKind::Category(None) => (
+                Icon::new(IconName::Tag)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                t("library.filter.uncategorized"),
+            ),
+            GroupKind::Category(Some((category, name))) => {
+                let user = &models(cx).library.read(cx).user;
+                let colour = user.category_look(&category).colour;
+                let colour = irori_ui::categories::colour(colour.as_deref(), cx)
+                    .unwrap_or(theme.muted_foreground);
+                (
+                    Icon::new(irori_ui::categories::icon(&category))
+                        .small()
+                        .text_color(colour)
+                        .into_any_element(),
+                    SharedString::from(name.to_string()),
+                )
+            }
         };
         h_flex()
             .h(rems(grid::HEADING_REM))
@@ -2350,7 +2418,15 @@ impl LibraryView {
         let focus_view = self.layout == LibraryLayout::Focus;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
-            .then(|| models(cx).library.read(cx).categories_of(&id))
+            .then(|| {
+                let badges = models(cx).library.read(cx).categories_of(&id);
+                badges
+                    .into_iter()
+                    .map(|(name, colour)| {
+                        (name, irori_ui::categories::colour(colour.as_deref(), cx))
+                    })
+                    .collect::<Vec<_>>()
+            })
             .filter(|c| !c.is_empty());
         let keyboard =
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
@@ -3300,7 +3376,11 @@ const COVER_CATEGORIES: usize = 2;
 
 /// A game's categories as small chips along its cover's foot, or its top
 /// when the cover is drawn with the title at its foot.
-fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> AnyElement {
+fn category_chips(
+    names: Vec<(String, Option<gpui_kit::Hsla>)>,
+    at_foot: bool,
+    scrim: gpui_kit::Hsla,
+) -> AnyElement {
     let more = names.len().saturating_sub(COVER_CATEGORIES);
     h_flex()
         .absolute()
@@ -3310,16 +3390,24 @@ fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> A
         .gap_1()
         .min_w_0()
         .overflow_hidden()
-        .children(names.into_iter().take(COVER_CATEGORIES).map(|name| {
-            div()
-                .min_w_0()
-                .px_1p5()
-                .rounded_md()
-                .bg(scrim)
-                .text_xs()
-                .truncate()
-                .child(name)
-        }))
+        .children(
+            names
+                .into_iter()
+                .take(COVER_CATEGORIES)
+                .map(|(name, colour)| {
+                    h_flex()
+                        .min_w_0()
+                        .gap_1()
+                        .px_1p5()
+                        .rounded_md()
+                        .bg(scrim)
+                        .text_xs()
+                        .when_some(colour, |el, colour| {
+                            el.child(div().flex_none().size_1p5().rounded_full().bg(colour))
+                        })
+                        .child(div().min_w_0().truncate().child(name))
+                }),
+        )
         .when(more > 0, |el| {
             el.child(
                 div()

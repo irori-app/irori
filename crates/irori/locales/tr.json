@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "özet yıl recap",
   "shell.nav.views": "Görünümler",
   "shell.palette.show_view": "Görünümü göster: {name}",
+  "shell.palette.show_category": "Kategoriyi göster: {name}",
+  "shell.palette.new_smart_category": "Yeni akıllı kategori…",
   "shell.palette.views_keywords": "görünüm kayıtlı filtre",
   "shell.palette.save_view": "Kütüphanenin geçerli görünümünü kaydet…",
   "shell.palette.add_folder": "Klasörden oyun ekle…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Görüntü",
   "shell.palette.group_by_genre": "Kitaplığı türe göre grupla",
   "shell.palette.ungroup_by_genre": "Kitaplığı türe göre gruplamayı bırak",
+  "shell.palette.group_by_category": "Kütüphaneyi kategoriye göre grupla",
+  "shell.palette.ungroup_by_category": "Kütüphaneyi kategoriye göre gruplamayı bırak",
+  "shell.palette.category_keywords": "kategori akıllı etiket grup koleksiyon",
   "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı"
 }

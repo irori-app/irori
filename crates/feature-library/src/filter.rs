@@ -2,13 +2,14 @@
 //!
 //! [`ViewFilter`] is what the toolbar and the Filters popover edit. It maps onto
 //! [`irori_services::LibraryFilter`] for the heavy lifting and adds what the
-//! service filter cannot express (several categories at once, an
-//! "Uncategorized" choice, play statuses, hiding games whose files are
+//! service filter cannot express (several categories of both kinds at once,
+//! an "Uncategorized" choice, play statuses, hiding games whose files are
 //! missing). The result
-//! is cached by library revision, user-data identity, update-set identity,
-//! availability identity and filter, so rendering never refilters an
-//! unchanged library. Grouping by play status or game mode reorders that
-//! result into sections ([`StatusGroup`]) in the same pass.
+//! is cached by library revision, user-data identity, category-index
+//! identity, update-set identity, availability identity and filter, so
+//! rendering never refilters an unchanged library. Grouping by play status,
+//! game mode, genre or category reorders that result into sections
+//! ([`StatusGroup`]) in the same pass.
 //!
 //! Saved views and the persisted view keep criteria this version doesn't
 //! know ([`ViewFilter::unknown`]), so a view a newer Irori saved keeps its
@@ -22,7 +23,8 @@ use irori_core::{
     GameId, GameInfo, GameMode, InstallPlatform, Paths, Runner, ShownStores, json_store,
 };
 use irori_services::{
-    EffectiveStatus, LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter, UserData,
+    CategoryIndex, CategoryRef, EffectiveStatus, LibraryFilter, LibrarySnapshot, LibrarySort,
+    StoreFilter, UserData,
 };
 use irori_ui::i18n::{t, t_args};
 use serde::{Deserialize, Serialize};
@@ -91,6 +93,10 @@ pub enum Grouping {
     /// A section per genre, alphabetically: each game in the section of its
     /// first genre, games without one last.
     Genre,
+    /// A section per category of either kind, pinned ones first, then by
+    /// name: each game in the section of its first category, games in none
+    /// last ([`crate::categories::group_by_category`]).
+    Category,
 }
 
 /// Order of the game-mode sections: playing together on one screen first,
@@ -145,6 +151,9 @@ pub enum GroupKind {
     /// Games whose first genre is this one (as the library spells it
     /// first); `None` for games without a genre.
     Genre(Option<Arc<str>>),
+    /// Games whose first category is this one, with its name; `None` for
+    /// games in no category.
+    Category(Option<(CategoryRef, Arc<str>)>),
 }
 
 /// How genres compare: stores spell the same one differently ("Action",
@@ -246,7 +255,10 @@ pub struct StatusGroup {
 
 /// Split `games`, already ordered so equal kinds sit together, into
 /// sections.
-fn sections(games: &[Arc<GameInfo>], kind: impl Fn(&GameInfo) -> GroupKind) -> Vec<StatusGroup> {
+pub(crate) fn sections(
+    games: &[Arc<GameInfo>],
+    kind: impl Fn(&GameInfo) -> GroupKind,
+) -> Vec<StatusGroup> {
     let mut groups: Vec<StatusGroup> = Vec::new();
     for (ix, game) in games.iter().enumerate() {
         let kind = kind(game);
@@ -380,6 +392,11 @@ pub struct ViewFilter {
     /// Games in any of these categories are shown; empty shows every game.
     #[serde(alias = "category", deserialize_with = "deserialize_categories")]
     pub categories: BTreeSet<CategoryFilter>,
+    /// Smart categories (by id) whose games are shown too, with those of
+    /// `categories`. Written only while one is picked: clearing the choice
+    /// leaves no key behind for a deleted category's id to come back from.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub smart_categories: BTreeSet<String>,
     pub released: ReleaseWindow,
     /// Emulated games of these systems only (systems catalog ids); empty
     /// shows every game.
@@ -451,7 +468,7 @@ impl ViewFilter {
             self.hide_third_party,
             self.updates_only,
             self.hide_unavailable,
-            !self.categories.is_empty(),
+            self.has_categories(),
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
             !self.statuses.is_empty(),
@@ -506,7 +523,8 @@ impl ViewFilter {
     }
 
     /// Short descriptions of the active criteria, for the "no results" state.
-    pub fn describe(&self) -> Vec<String> {
+    /// `user` names the smart categories.
+    pub fn describe(&self, user: &UserData) -> Vec<String> {
         let text = |key: &str| t(key).to_string();
         let mut out = Vec::new();
         if !self.query.trim().is_empty() {
@@ -588,8 +606,8 @@ impl ViewFilter {
             let names: Vec<&str> = self.tags.iter().map(String::as_str).collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
-        let heading = self.category_heading();
-        match self.categories.len() {
+        let heading = self.category_heading(user);
+        match self.category_names(user).len() {
             0 => {}
             1 => out.push(
                 t_args("library.filter.describe.category", &[("name", &heading)]).to_string(),
@@ -606,6 +624,74 @@ impl ViewFilter {
         if !self.categories.remove(&category) {
             self.categories.insert(category);
         }
+    }
+
+    /// Whether any category of either kind is picked.
+    pub fn has_categories(&self) -> bool {
+        !self.categories.is_empty() || !self.smart_categories.is_empty()
+    }
+
+    /// Whether `category` is picked.
+    pub fn shows_category(&self, category: &CategoryRef) -> bool {
+        match category {
+            CategoryRef::Manual(name) => self
+                .categories
+                .contains(&CategoryFilter::Named(name.clone())),
+            CategoryRef::Smart(id) => self.smart_categories.contains(id),
+        }
+    }
+
+    /// Add or remove a category of either kind from the selection.
+    pub fn toggle(&mut self, category: &CategoryRef) {
+        match category {
+            CategoryRef::Manual(name) => {
+                self.toggle_category(CategoryFilter::Named(name.clone()));
+            }
+            CategoryRef::Smart(id) => {
+                if !self.smart_categories.remove(id) {
+                    self.smart_categories.insert(id.clone());
+                }
+            }
+        }
+    }
+
+    /// Show `category` alone: the other filters give way, the search,
+    /// store, sort and grouping stay.
+    pub fn show_only(&mut self, category: &CategoryRef) {
+        self.reset_filters();
+        self.toggle(category);
+    }
+
+    /// Pick no category: every game again.
+    pub fn clear_categories(&mut self) {
+        self.categories.clear();
+        self.smart_categories.clear();
+    }
+
+    /// Drop a deleted smart category from the selection.
+    pub fn forget_smart(&mut self, id: &str) {
+        self.smart_categories.remove(id);
+    }
+
+    /// Drop smart categories `user` no longer has (deleted here or on
+    /// another computer).
+    pub fn forget_missing_smart(&mut self, user: &UserData) {
+        self.smart_categories
+            .retain(|id| user.smart_categories.contains_key(id));
+    }
+
+    /// The names of the picked categories: manual ones (and
+    /// "Uncategorized"), then smart ones `user` still has.
+    fn category_names(&self, user: &UserData) -> Vec<String> {
+        self.categories
+            .iter()
+            .map(CategoryFilter::label)
+            .chain(
+                self.smart_categories
+                    .iter()
+                    .filter_map(|id| Some(user.smart_categories.get(id)?.name.clone())),
+            )
+            .collect()
     }
 
     /// Follow a category rename in the selection.
@@ -628,15 +714,11 @@ impl ViewFilter {
 
     /// Title for the selected categories: the name of a single one, the
     /// names of up to three, else a count.
-    pub fn category_heading(&self) -> String {
-        match self.categories.len() {
+    pub fn category_heading(&self, user: &UserData) -> String {
+        let names = self.category_names(user);
+        match names.len() {
             0 => String::new(),
-            1..=3 => self
-                .categories
-                .iter()
-                .map(CategoryFilter::label)
-                .collect::<Vec<_>>()
-                .join(&t("library.filter.list_separator")),
+            1..=3 => names.join(&t("library.filter.list_separator")),
             n => t_args(
                 "library.filter.category_count",
                 &[("count", &n.to_string())],
@@ -775,7 +857,7 @@ pub fn passes_age_limit(game: &GameInfo, limit: u8, include_unrated: bool) -> bo
 }
 
 /// Whether `key` passes the category selection (union of the selected
-/// categories; "Uncategorized" matches games in no category).
+/// categories; "Uncategorized" matches games in no manual category).
 fn in_categories(selected: &BTreeSet<CategoryFilter>, user: &UserData, key: &str) -> bool {
     selected.iter().any(|c| match c {
         CategoryFilter::Uncategorized => !user.categories.values().any(|set| set.contains(key)),
@@ -783,8 +865,8 @@ fn in_categories(selected: &BTreeSet<CategoryFilter>, user: &UserData, key: &str
     })
 }
 
-/// Apply the criteria to a library snapshot. `missing` holds installed games
-/// whose files were not found.
+/// [`apply_in`] without smart categories (tests).
+#[cfg(test)]
 pub fn apply(
     filter: &ViewFilter,
     stores: &[Runner],
@@ -793,11 +875,37 @@ pub fn apply(
     updates: &HashSet<GameId>,
     missing: &HashSet<GameId>,
 ) -> Vec<Arc<GameInfo>> {
+    let none = CategoryIndex::default();
+    apply_in(filter, stores, library, user, &none, updates, missing)
+}
+
+/// Apply the criteria to a library snapshot. `categories` holds the smart
+/// categories' games; `missing` holds installed games whose files were not
+/// found.
+pub fn apply_in(
+    filter: &ViewFilter,
+    stores: &[Runner],
+    library: &LibrarySnapshot,
+    user: &UserData,
+    categories: &CategoryIndex,
+    updates: &HashSet<GameId>,
+    missing: &HashSet<GameId>,
+) -> Vec<Arc<GameInfo>> {
     let mut games = filter
         .to_library_filter(stores)
         .apply(library, user, updates);
-    if !filter.categories.is_empty() {
-        games.retain(|g| in_categories(&filter.categories, user, &g.id().key()));
+    // A smart category deleted since it was picked picks nothing.
+    let smart: Vec<&String> = filter
+        .smart_categories
+        .iter()
+        .filter(|id| user.smart_categories.contains_key(*id))
+        .collect();
+    if !filter.categories.is_empty() || !smart.is_empty() {
+        games.retain(|g| {
+            let id = g.id();
+            in_categories(&filter.categories, user, &id.key())
+                || smart.iter().any(|s| categories.contains(s, &id))
+        });
     }
     if let Some(account) = &filter.account
         && filter.shown_store(stores) == Some(account.runner)
@@ -848,6 +956,7 @@ pub fn apply(
 struct CacheKey {
     revision: u64,
     user: usize,
+    categories: usize,
     updates: usize,
     missing: usize,
     stores: Vec<Runner>,
@@ -867,9 +976,8 @@ pub struct FilteredGames {
 }
 
 impl FilteredGames {
-    /// Current list for these inputs, recomputed only when one changed.
-    /// `user`, `updates` and `missing` are compared by identity: a new `Arc`
-    /// is published for every change.
+    /// [`FilteredGames::get_in`] without smart categories (tests).
+    #[cfg(test)]
     pub fn get(
         &mut self,
         filter: &ViewFilter,
@@ -879,21 +987,46 @@ impl FilteredGames {
         updates: &Arc<HashSet<GameId>>,
         missing: &Arc<HashSet<GameId>>,
     ) -> Arc<[Arc<GameInfo>]> {
+        thread_local! {
+            static NONE: Arc<CategoryIndex> = Arc::default();
+        }
+        let none = NONE.with(Arc::clone);
+        self.get_in(filter, stores, library, user, &none, updates, missing)
+    }
+
+    /// Current list for these inputs, recomputed only when one changed.
+    /// `user`, `categories`, `updates` and `missing` are compared by
+    /// identity: a new `Arc` is published for every change.
+    #[allow(clippy::too_many_arguments)] // One input per argument, all compared.
+    pub fn get_in(
+        &mut self,
+        filter: &ViewFilter,
+        stores: &[Runner],
+        library: &LibrarySnapshot,
+        user: &Arc<UserData>,
+        categories: &Arc<CategoryIndex>,
+        updates: &Arc<HashSet<GameId>>,
+        missing: &Arc<HashSet<GameId>>,
+    ) -> Arc<[Arc<GameInfo>]> {
         let key = CacheKey {
             revision: library.revision,
             user: Arc::as_ptr(user) as usize,
+            categories: Arc::as_ptr(categories) as usize,
             updates: Arc::as_ptr(updates) as usize,
             missing: Arc::as_ptr(missing) as usize,
             stores: stores.to_vec(),
             filter: filter.clone(),
         };
         if self.key.as_ref() != Some(&key) {
-            let mut games = apply(filter, stores, library, user, updates, missing);
+            let mut games = apply_in(filter, stores, library, user, categories, updates, missing);
             self.groups = match filter.group {
                 Grouping::None => Arc::from(Vec::new()),
                 Grouping::Status => group_by_status(&mut games, user).into(),
                 Grouping::Mode => group_by_mode(&mut games).into(),
                 Grouping::Genre => group_by_genre(&mut games).into(),
+                Grouping::Category => {
+                    crate::categories::group_by_category(&mut games, user, categories).into()
+                }
             };
             let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
@@ -1060,7 +1193,7 @@ pub(crate) mod tests {
         shown.sort_unstable();
         assert_eq!(shown, ["Dead Cells", "Doom", "Hades"]);
         assert_eq!(f.active_count(), 1);
-        assert_eq!(f.describe(), ["ACTION"]);
+        assert_eq!(f.describe(&UserData::default()), ["ACTION"]);
 
         // Each game once, in its first genre's section; no genre last.
         let mut cache = FilteredGames::default();
@@ -1126,7 +1259,7 @@ pub(crate) mod tests {
         shown.sort_unstable();
         assert_eq!(shown, ["Guild Wars 2", "Portal 2", "Rocket League"]);
         assert_eq!(f.active_count(), 1);
-        assert_eq!(f.describe().len(), 1);
+        assert_eq!(f.describe(&UserData::default()).len(), 1);
         let mut reset = f.clone();
         reset.reset_filters();
         assert!(reset.modes.is_empty());
@@ -1348,7 +1481,10 @@ pub(crate) mod tests {
         let mut f = ViewFilter::default();
         f.toggle_category(CategoryFilter::Named("RPG".into()));
         f.toggle_category(CategoryFilter::Uncategorized);
-        assert_eq!(f.category_heading(), "Uncategorized, RPG");
+        assert_eq!(
+            f.category_heading(&UserData::default()),
+            "Uncategorized, RPG"
+        );
         f.rename_category("RPG", "Role-playing");
         assert!(
             f.categories
@@ -1360,7 +1496,7 @@ pub(crate) mod tests {
         for n in ["a", "b", "c", "d"] {
             f.toggle_category(CategoryFilter::Named(n.into()));
         }
-        assert_eq!(f.category_heading(), "4 categories");
+        assert_eq!(f.category_heading(&UserData::default()), "4 categories");
     }
 
     #[test]

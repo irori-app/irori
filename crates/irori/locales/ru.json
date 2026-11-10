@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "итоги год обзор",
   "shell.nav.views": "Виды",
   "shell.palette.show_view": "Показать вид: {name}",
+  "shell.palette.show_category": "Показать категорию: {name}",
+  "shell.palette.new_smart_category": "Новая умная категория…",
   "shell.palette.views_keywords": "вид сохранённый фильтр",
   "shell.palette.save_view": "Сохранить текущий вид библиотеки…",
   "shell.palette.add_folder": "Добавить игры из папки…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Вид",
   "shell.palette.group_by_genre": "Группировать библиотеку по жанру",
   "shell.palette.ungroup_by_genre": "Не группировать библиотеку по жанру",
+  "shell.palette.group_by_category": "Группировать библиотеку по категории",
+  "shell.palette.ungroup_by_category": "Не группировать библиотеку по категории",
+  "shell.palette.category_keywords": "категория умная метка группа коллекция",
   "shell.palette.genre_keywords": "жанр экшен приключения стратегия головоломка rpg шутер"
 }

@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "riepilogo recap annuale",
   "shell.nav.views": "Viste",
   "shell.palette.show_view": "Mostra vista: {name}",
+  "shell.palette.show_category": "Mostra categoria: {name}",
+  "shell.palette.new_smart_category": "Nuova categoria intelligente…",
   "shell.palette.views_keywords": "vista salvata filtro",
   "shell.palette.save_view": "Salva la vista attuale della libreria…",
   "shell.palette.add_folder": "Aggiungi giochi da una cartella…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "Vista",
   "shell.palette.group_by_genre": "Raggruppa la libreria per genere",
   "shell.palette.ungroup_by_genre": "Non raggruppare più la libreria per genere",
+  "shell.palette.group_by_category": "Raggruppa la libreria per categoria",
+  "shell.palette.ungroup_by_category": "Non raggruppare più la libreria per categoria",
+  "shell.palette.category_keywords": "categoria intelligente etichetta gruppo raccolta",
   "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto"
 }

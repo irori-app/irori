@@ -144,6 +144,8 @@
   "shell.palette.year_in_review_keywords": "recap wrapped annual summary",
   "shell.nav.views": "Views",
   "shell.palette.show_view": "Show view: {name}",
+  "shell.palette.show_category": "Show category: {name}",
+  "shell.palette.new_smart_category": "New smart category…",
   "shell.palette.views_keywords": "view saved filter",
   "shell.palette.save_view": "Save the library’s current view…",
   "shell.palette.add_folder": "Add games from a folder…",
@@ -157,5 +159,8 @@
   "shell.menu.view": "View",
   "shell.palette.group_by_genre": "Group the library by genre",
   "shell.palette.ungroup_by_genre": "Stop grouping the library by genre",
+  "shell.palette.group_by_category": "Group the library by category",
+  "shell.palette.ungroup_by_category": "Stop grouping the library by category",
+  "shell.palette.category_keywords": "category smart tag group collection",
   "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter"
 }

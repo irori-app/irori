@@ -6,6 +6,7 @@
 pub mod age_rating;
 pub mod art;
 pub mod art_picker;
+pub mod categories;
 pub mod components;
 pub mod copies;
 mod cosmic;
