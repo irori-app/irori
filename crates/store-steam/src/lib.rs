@@ -1017,18 +1017,19 @@ mod tests {
             let path = req.path.as_str();
             if path.starts_with("/IPlayerService/GetOwnedGames/") {
                 Resp::json(serde_json::json!({"response": {"games": []}}))
-            } else if path.starts_with("/ISteamUser/GetFriendList/") {
+            } else if path.starts_with("/IFriendsListService/GetFriendsList/") {
                 if refusing.load(std::sync::atomic::Ordering::SeqCst) {
                     return Resp::status(401);
                 }
-                Resp::json(serde_json::json!({"friendslist": {"friends": [
-                    {"steamid": "76561197960265730", "relationship": "friend"}
-                ]}}))
-            } else if path.starts_with("/ISteamUser/GetPlayerSummaries/") {
-                Resp::json(serde_json::json!({"response": {"players": [
-                    {"steamid": "76561197960265730", "personaname": "Ada", "personastate": 1,
-                     "gameid": "620", "gameextrainfo": "Portal 2"}
-                ]}}))
+                Resp::json(serde_json::json!({"response": {"friendslist": {"friends": [
+                    {"ulfriendid": "76561197960265730", "efriendrelationship": 3}
+                ]}}}))
+            } else if path.starts_with("/IPlayerService/GetPlayerLinkDetails/") {
+                Resp::json(serde_json::json!({"response": {"accounts": [{
+                    "public_data": {"steamid": "76561197960265730", "persona_name": "Ada"},
+                    "private_data": {"persona_state": 1, "game_id": "620",
+                                     "game_extra_info": "Portal 2"}
+                }]}}))
             } else {
                 Resp::json(serde_json::json!({"response": {}}))
             }
@@ -1048,7 +1049,7 @@ mod tests {
             server
                 .requests()
                 .iter()
-                .filter(|r| r.path.starts_with("/ISteamUser/GetFriendList/"))
+                .filter(|r| r.path.starts_with("/IFriendsListService/GetFriendsList/"))
                 .count()
         };
         assert_eq!(asked(&server), 0, "no account, no request");
