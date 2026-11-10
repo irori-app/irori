@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Они изменились и здесь, и в облаке. Откройте облачные сохранения игры и выберите, какие оставить.",
   "shell.notice.saves_upload_failed_message": "Irori не удалось связаться с облаком. Загрузите их позже из облачных сохранений игры.",
   "shell.notice.ludusavi_backup_failed": "Сохранения {title} скопированы не полностью",
+  "shell.palette.sync_saves": "Синхронизировать сохранения {title}",
+  "shell.palette.sync_saves_keywords": "облако сохранения загрузить скачать",
   "shell.palette.back_up_saves": "Скопировать сохранения {title}",
   "shell.palette.save_backups": "Копии сохранений {title}",
   "shell.palette.troubleshoot": "Устранить проблемы запуска {title}",

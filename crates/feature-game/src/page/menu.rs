@@ -277,6 +277,13 @@ pub(super) fn build_menu(
                 ),
             );
         }
+        if crate::sync_saves::offers_sync(&game, cx) {
+            let i = id.clone();
+            menu =
+                menu.item(item("game.menu.sync_saves", IconName::RefreshCw).on_click(
+                    move |_, window, cx| crate::sync_saves::sync_saves_now(&i, window, cx),
+                ));
+        }
         if irori_ui::save_backups::offers_backups(&game) {
             let i = id.clone();
             menu = menu.item(

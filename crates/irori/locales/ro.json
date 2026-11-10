@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "S-au schimbat aici și în cloud. Deschide salvările din cloud ale jocului ca să alegi pe care le păstrezi.",
   "shell.notice.saves_upload_failed_message": "Irori nu a putut ajunge la cloud. Încarcă-le mai târziu din salvările din cloud ale jocului.",
   "shell.notice.ludusavi_backup_failed": "Salvările {title} nu au fost copiate complet",
+  "shell.palette.sync_saves": "Sincronizează salvările pentru {title}",
+  "shell.palette.sync_saves_keywords": "cloud salvări încarcă descarcă",
   "shell.palette.back_up_saves": "Fă copie salvărilor {title}",
   "shell.palette.save_backups": "Copiile salvărilor {title}",
   "shell.palette.troubleshoot": "Depanează pornirea pentru {title}",

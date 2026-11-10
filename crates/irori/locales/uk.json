@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Вони змінилися і тут, і в хмарі. Відкрийте хмарні збереження гри й виберіть, які залишити.",
   "shell.notice.saves_upload_failed_message": "Irori не вдалося з’єднатися з хмарою. Вивантажте їх пізніше з хмарних збережень гри.",
   "shell.notice.ludusavi_backup_failed": "Збереження {title} скопійовано не повністю",
+  "shell.palette.sync_saves": "Синхронізувати збереження {title}",
+  "shell.palette.sync_saves_keywords": "хмара збереження вивантажити завантажити",
   "shell.palette.back_up_saves": "Скопіювати збереження {title}",
   "shell.palette.save_backups": "Копії збережень {title}",
   "shell.palette.troubleshoot": "Усунути проблеми запуску {title}",

@@ -73,6 +73,8 @@ enum PaletteTarget {
     AddFolder,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
+    /// Sync a game's cloud saves now.
+    SyncSaves(GameId),
     /// Back up a game's saves with Ludusavi now.
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
@@ -750,6 +752,11 @@ impl Palette {
             quick_controls,
             hidden_pin,
         };
+        // The shown game's cloud saves, when its store keeps them.
+        let syncable = open
+            .as_ref()
+            .map(|(game, _)| game.clone())
+            .filter(|game| irori_game::offers_sync(game, cx));
         let mut items = Self::items(
             &games,
             replay.as_deref(),
@@ -763,6 +770,18 @@ impl Palette {
             ),
             &mut targets,
         );
+        if let Some(game) = syncable {
+            items.push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.sync_saves",
+                        &[("title", &game.title)],
+                    ))
+                    .keywords([t("shell.palette.sync_saves_keywords")])
+                    .icon(IconName::RefreshCw),
+            );
+            targets.push(PaletteTarget::SyncSaves(game.id()));
+        }
         if irori_manage::steam_client_library_state(cx)
             .is_some_and(|s| s.steam_found && !s.signed_in)
         {
@@ -845,6 +864,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             // After the palette's own dialog has closed.
             window.defer(cx, irori_library::open_save_view_dialog);
         }
+        PaletteTarget::SyncSaves(id) => irori_game::sync_saves_now(&id, window, cx),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)

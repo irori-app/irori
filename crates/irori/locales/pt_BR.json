@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "Eles mudaram aqui e na nuvem. Abra os saves na nuvem do jogo para escolher quais manter.",
   "shell.notice.saves_upload_failed_message": "O Irori não conseguiu acessar a nuvem. Envie-os mais tarde pelos saves na nuvem do jogo.",
   "shell.notice.ludusavi_backup_failed": "O backup dos saves de {title} não ficou completo",
+  "shell.palette.sync_saves": "Sincronizar salvamentos de {title}",
+  "shell.palette.sync_saves_keywords": "nuvem salvamentos enviar baixar",
   "shell.palette.back_up_saves": "Fazer backup dos saves de {title}",
   "shell.palette.save_backups": "Backups de saves de {title}",
   "shell.palette.troubleshoot": "Resolver problemas de inicialização de {title}",

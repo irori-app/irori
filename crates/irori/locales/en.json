@@ -61,6 +61,8 @@
   "shell.notice.saves_conflict_message": "They changed here and in the cloud. Open the game’s cloud saves to choose which to keep.",
   "shell.notice.saves_upload_failed_message": "Irori couldn’t reach the cloud. Upload them later from the game’s cloud saves.",
   "shell.notice.ludusavi_backup_failed": "Saves of {title} weren’t fully backed up",
+  "shell.palette.sync_saves": "Sync saves of {title}",
+  "shell.palette.sync_saves_keywords": "cloud saves upload download",
   "shell.palette.back_up_saves": "Back up saves of {title}",
   "shell.palette.save_backups": "Save backups of {title}",
   "shell.palette.troubleshoot": "Troubleshoot launch of {title}",
