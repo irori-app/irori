@@ -962,3 +962,69 @@ fn power_actions_ask_first_and_wait_for_the_backend(cx: &mut TestAppContext) {
     assert_eq!(*power.done.lock(), [PowerAction::Sleep]);
     cx.read(|cx| assert!(!view.read(cx).is_overlay_open()));
 }
+
+#[gpui_kit::test]
+fn sound_output_entry_names_the_output_and_explains_what_it_cant_do(cx: &mut TestAppContext) {
+    use super::sound::Outputs;
+    use irori_services::audio::AudioOutput;
+    let (handle, view) = open(cx);
+    let output = |id: &str, current| AudioOutput {
+        id: id.into(),
+        name: format!("{id} speakers"),
+        current,
+    };
+    // One output: the menu and the top bar name it; switching says there
+    // is nothing to switch to, without asking the backend.
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.outputs = Outputs::Ready(vec![output("tv", true)]);
+            cx.notify();
+        })
+    });
+    cx.simulate_keystrokes(handle, "m");
+    cx.run_until_parked();
+    let ix = cx.read(|cx| {
+        let items = view.read(cx).menu(cx);
+        items
+            .iter()
+            .position(|i| *i == MenuItem::SoundOutput)
+            .unwrap()
+    });
+    for _ in 0..ix {
+        cx.dispatch_action(handle, gamepad::Down);
+    }
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(v.menu_label(MenuItem::SoundOutput).contains("tv speakers"));
+        assert!(
+            v.hints(cx).iter().any(|(inputs, _)| inputs
+                == &vec![gamepad::GamepadInput::Left, gamepad::GamepadInput::Right]),
+            "Left and Right switch it"
+        );
+    });
+    cx.dispatch_action(handle, gamepad::Right);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.switching_output, "nothing to switch to");
+        assert_eq!(v.overlay, Some(Overlay::Menu { ix }), "the menu stays");
+    });
+
+    // Outputs that couldn't be read: the entry says so and switching doesn't
+    // start.
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.outputs = Outputs::Failed("pactl is missing".into());
+            cx.notify();
+        })
+    });
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(!v.switching_output);
+        assert!(
+            v.menu_label(MenuItem::SoundOutput)
+                .contains(irori_ui::i18n::t("bigpicture.overlay.output_unavailable").as_str())
+        );
+    });
+}

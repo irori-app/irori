@@ -1074,8 +1074,9 @@ it on every platform, and CI's Windows install test runs it.
   `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
   `settings` (the game's settings over its page, outside the `BigPicture` key context so
   keys reach their controls; Escape returns to the page),
-  `overlay` (quick menu, uninstall question), `system` (the power actions), `tile`
-  (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  `overlay` (quick menu, uninstall question), `system` (the power actions), `sound`
+  (the sound output, a quick-menu entry and a top-bar control, through the overlay's
+  `audio_outputs` and `Backend::set_system_audio_output`), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
   focus and build only the items near the view, so nothing animates once the focus

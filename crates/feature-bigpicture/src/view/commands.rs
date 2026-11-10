@@ -263,6 +263,7 @@ impl BigPictureView {
                 self.overlay = None;
                 crate::exit_big_picture(cx);
             }
+            MenuItem::SoundOutput => self.switch_output(1, window, cx),
             MenuItem::QuitIrori => cx.quit(),
             MenuItem::Power(action) => self.overlay = Some(Overlay::Power { action, choice: 0 }),
         }

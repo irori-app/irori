@@ -975,6 +975,17 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+### Sound output (Big Picture)
+
+Outside a game, Big Picture switches the sound output too: the quick menu's
+"Sound output" entry (A or Right for the next output, Left for the previous)
+and the speaker in the top bar (a click for the next). It is the same switching
+as the in-game overlay's (see [In-game overlay](#in-game-overlay-beta)), on the
+same systems; a running game's sound moves along. The outputs are read when Big
+Picture and its menu open, never polled. Where outputs can't be switched or read
+(`pactl` missing, another system), the entry says "Not available" and A explains
+why; with one output it says there is nothing to switch to.
+
 ### Power off, restart, sleep and log out (Big Picture)
 
 Big Picture's quick menu ends with Power off, Restart, Sleep and Log out, each

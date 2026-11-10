@@ -170,10 +170,10 @@ impl BigPictureView {
                         Self::overlay_row(
                             item.id().into(),
                             item.icon(),
-                            item.label(),
+                            self.menu_label(item),
                             i == ix,
                             false,
-                            false,
+                            item == crate::model::MenuItem::SoundOutput && self.switching_output,
                             c,
                             move |this, window, cx| {
                                 this.overlay = Some(Overlay::Menu { ix: i });

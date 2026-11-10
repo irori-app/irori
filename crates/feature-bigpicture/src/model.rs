@@ -676,6 +676,9 @@ pub fn install_platforms(game: &GameInfo) -> Vec<InstallPlatform> {
 pub enum MenuItem {
     PauseDownloads,
     ResumeDownloads,
+    /// Switches the sound output (Left and Right too); its label names the
+    /// output in use, which the view knows.
+    SoundOutput,
     /// Cycles Big Picture's interface size; carries the current percent.
     InterfaceSize(u32),
     /// Cycles Home's layout; carries the current one.
@@ -709,6 +712,7 @@ impl MenuItem {
         t(match self {
             MenuItem::InterfaceSize(_) | MenuItem::Layout(_) => unreachable!("handled above"),
             MenuItem::Themes => "bigpicture.menu.themes",
+            MenuItem::SoundOutput => "bigpicture.overlay.output",
             MenuItem::PauseDownloads => "bigpicture.menu.pause_downloads",
             MenuItem::ResumeDownloads => "bigpicture.menu.resume_downloads",
             MenuItem::ToggleFullscreen => "bigpicture.menu.toggle_fullscreen",
@@ -723,6 +727,7 @@ impl MenuItem {
         match self {
             MenuItem::PauseDownloads => IconName::CircleStop,
             MenuItem::ResumeDownloads => IconName::Play,
+            MenuItem::SoundOutput => IconName::Volume2,
             MenuItem::InterfaceSize(_) => IconName::ZoomIn,
             MenuItem::Layout(_) => IconName::LayoutDashboard,
             MenuItem::Themes => IconName::Palette,
@@ -741,6 +746,7 @@ impl MenuItem {
         match self {
             MenuItem::PauseDownloads => "bp-menu-pause",
             MenuItem::ResumeDownloads => "bp-menu-resume",
+            MenuItem::SoundOutput => "bp-menu-sound-output",
             MenuItem::InterfaceSize(_) => "bp-menu-size",
             MenuItem::Layout(_) => "bp-menu-layout",
             MenuItem::Themes => "bp-menu-themes",
@@ -790,6 +796,7 @@ pub fn menu_items(
         MenuItem::Layout(layout),
         MenuItem::Themes,
         MenuItem::ToggleFullscreen,
+        MenuItem::SoundOutput,
         MenuItem::SetUpEmulation,
         MenuItem::ExitBigPicture,
         MenuItem::QuitIrori,
@@ -1376,6 +1383,7 @@ mod tests {
         assert_eq!(items[1], MenuItem::InterfaceSize(150));
         assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
         assert_eq!(items[3], MenuItem::Themes);
+        assert_eq!(items[5], MenuItem::SoundOutput, "after Toggle fullscreen");
         assert_eq!(items.last(), Some(&MenuItem::QuitIrori));
     }
 

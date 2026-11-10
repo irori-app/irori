@@ -189,6 +189,9 @@ impl BigPictureView {
                                 .child(div().min_w_0().truncate().child(s)),
                         )
                     })
+                    .when_some(self.render_output_control(c, cx), |d, control| {
+                        d.child(control)
+                    })
                     .when_some(controller, |d, info| {
                         let battery_icon = match info.battery {
                             gamepad::Battery::Charging(_) => Some(IconName::BatteryCharging),
@@ -288,11 +291,16 @@ impl BigPictureView {
                     one(Back, "bigpicture.hint.cancel"),
                 ];
             }
-            Some(Overlay::Menu { .. }) => {
-                return vec![
-                    one(Confirm, "bigpicture.hint.select"),
-                    one(Back, "bigpicture.hint.close"),
-                ];
+            Some(Overlay::Menu { ix }) => {
+                let mut out = vec![one(Confirm, "bigpicture.hint.select")];
+                let items = self.menu(cx);
+                if items.get((*ix).min(items.len().saturating_sub(1)))
+                    == Some(&crate::model::MenuItem::SoundOutput)
+                {
+                    out.push((vec![Left, Right], t("bigpicture.hint.change")));
+                }
+                out.push(one(Back, "bigpicture.hint.close"));
+                return out;
             }
             None => {}
         }

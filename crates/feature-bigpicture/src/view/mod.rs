@@ -14,8 +14,8 @@
 //! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
 //! page), `log` (its log panel) and `settings` (its settings), `overlay`
 //! (quick menu and confirmations), `editor` (the theme editor), `tile`
-//! (covers), `commands` (what the backend runs) and `system` (the computer's
-//! power actions). `look` holds the theme
+//! (covers), `commands` (what the backend runs), `system` (the computer's
+//! power actions) and `sound` (the sound output). `look` holds the theme
 //! and layout in use and the colours they give.
 
 mod backdrop;
@@ -32,6 +32,7 @@ mod look;
 mod overlay;
 mod page;
 mod settings;
+mod sound;
 mod spotlight;
 mod system;
 mod tile;
@@ -184,6 +185,10 @@ pub struct BigPictureView {
     power: Vec<irori_services::PowerAction>,
     /// The power action under way (games stopping first).
     power_pending: Option<irori_services::PowerAction>,
+    /// The sound outputs, read when the menu opens.
+    outputs: sound::Outputs,
+    /// A switch of the sound output is under way.
+    switching_output: bool,
     image_cache: Entity<LruImageCache>,
     /// The game whose art is behind everything, the one it replaced (fading
     /// out), and a counter that restarts the crossfade.
@@ -320,6 +325,8 @@ impl BigPictureView {
             pending: HashSet::new(),
             power: Vec::new(),
             power_pending: None,
+            outputs: Default::default(),
+            switching_output: false,
             image_cache: LruImageCache::new(IMAGE_CACHE, cx),
             hero: None,
             hero_prev: None,
@@ -331,6 +338,7 @@ impl BigPictureView {
         };
         this.load_user_themes(window, cx);
         this.refresh_power(cx);
+        this.refresh_outputs(cx);
         this.refresh(cx);
         this.show_requested_game(cx);
         this.hero = this.focused_game().cloned();
@@ -561,10 +569,12 @@ impl BigPictureView {
         }
     }
 
-    /// Open the quick menu, asking again what the system allows.
+    /// Open the quick menu, asking again what the system allows and which
+    /// sound outputs there are.
     fn open_menu(&mut self, cx: &mut Context<Self>) {
         self.overlay = Some(Overlay::Menu { ix: 0 });
         self.refresh_power(cx);
+        self.refresh_outputs(cx);
         cx.notify();
     }
 
@@ -890,6 +900,12 @@ impl BigPictureView {
                         if let Some(item) = items.get(ix) {
                             self.activate_menu_item(*item, window, cx);
                         }
+                    }
+                    GamepadInput::Left | GamepadInput::Right
+                        if items.get(ix) == Some(&crate::model::MenuItem::SoundOutput) =>
+                    {
+                        let step = if input == GamepadInput::Right { 1 } else { -1 };
+                        self.switch_output(step, window, cx);
                     }
                     GamepadInput::Back | GamepadInput::Menu => self.overlay = None,
                     _ => {}
