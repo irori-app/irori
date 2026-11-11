@@ -87,12 +87,17 @@ irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C stops; rerun resumes
 irori uninstall <runner>/<app> [--keep-files]
 irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
+irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date (Steam closed), or take them out
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
-  `-V/--version` and `-h/--help`.
+  `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
+  the replay buffer, take a screenshot of the running game) for a key binding in the
+  user's compositor; they never start Irori and exit 1 when none runs
+  (`instance::forward`; see `docs/PLATFORMS.md`, "Clip and screenshot keys").
 - `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
   invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
   the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
@@ -171,8 +176,8 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-launchers` | `irori-launchers` | Battle.net, EA app, Ubisoft Connect, Rockstar and, on Windows, Xbox app games (`Runner::Launchers`): setup and library, plus the optional Xbox account, opt-in through `iroriThirdPartyLaunchers` |
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
-| `crates/reshade` | `irori-reshade` | ReShade per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, downloads from the official sources, journaled installs |
-| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, deals, Heroic import, Lutris import planning |
+| `crates/reshade` | `irori-reshade` | Graphics mods per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, ReShade and RenoDX downloads from the official sources, journaled installs |
+| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
 | `crates/feature-library` | `irori-library` | Library grid/list, search, filters, categories, stats page, sideload dialogs, the Lutris script installer |
@@ -421,7 +426,9 @@ delete of a game or prefix directory.
 commands without a window.
 
 - `Backend::start(make_stores)` is for the app; `start_headless` is for CLI commands
-  (no periodic tasks).
+  (no periodic tasks); `start_for_tests` is for UI tests (the app's state and workers,
+  but no connectivity probe, no update, sync or refresh at start and no periodic
+  tasks, so nothing reaches the network and the library is built once).
 - It owns a Tokio runtime named `irori-io`: 3 workers, 16 blocking threads. Use
   `backend.spawn` and `backend.spawn_blocking`.
 - Public parts: `bus`, `settings` (`SettingsService`), `userdata`, `statuses`, plus
@@ -462,6 +469,55 @@ commands without a window.
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store
   playtime merges by keeping the larger total and counts games only, never their DLC.
+- **Categories** (`smart_categories/`): one concept, two kinds, and saved views
+  beside them.
+  - *Manual* categories (`UserData::categories`, name → game keys) hold the games
+    the user puts in them.
+  - *Smart* categories (`UserData::smart_categories`, by an id that survives
+    renames) are filled from rules: store, tags, game mode, play status, age
+    rating, installed, playtime range, last played (local calendar days ago),
+    HowLongToBeat main story, system, manual category, search text, favourite,
+    genre. Rows combine with All or Any, plus "Leave out" rows; an empty All
+    or Any takes every game. An entry is in one when any of its copies is.
+  - Both kinds can be pinned and coloured (`CategoryLook`: in the smart
+    category, else `UserData::category_looks` by name) and are named by a
+    `CategoryRef`. `UserData::categories_in_order` lists both, pinned first.
+  - *Saved views* (`irori-library`'s `views.rs`) are a whole library view
+    (filters, grouping, sort) under a name; a view can become a smart
+    category, never the other way round.
+  - Evaluation (`smart_categories/eval.rs`) is three-valued: a rule, match mode
+    or entry this version can't read is unknown, leaving it out keeps it
+    unknown, and a game whose answer is unknown isn't shown. `CategoryIndex`
+    holds every category's games and counts (hidden games not counted), built
+    once per library revision, user-data change, HowLongToBeat change and day
+    (`IndexKey`), never per frame. HowLongToBeat rules read
+    `Backend::hltb_times` (main-story hours learned with a game's wiki info,
+    kept in `store-facts.json`), never a wiki entry.
+  - Smart categories are read the way they were written: unknown keys stay on
+    the category and on every row (`extra`), unknown rules stay as rows, and an
+    entry that can't be read at all is kept whole. Backups carry both kinds and
+    their looks; sync has one register per smart category and per manual look,
+    compared as read, so a computer that can't read a category never notes it
+    as changed or gone.
+  - Screens list both kinds through `irori_ui::categories` (`entries`: pinned
+    first, counted from `LibraryModel::categories`, the index the event pump
+    rebuilds only when its `IndexKey` changes). The library's Views menu has one
+    Categories section (smart ones marked, each counted), the Filters popover
+    ticks both, Group by → Category puts each game in its first category's
+    section (`irori-library`'s `categories.rs`), covers show both with their
+    colours, and the context menu has "Add to ▸" for manual categories and a
+    read-only "In: …" for smart ones. The category manager creates, pins,
+    colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
+    (`open_smart_category_editor`), also opened from Manage views to turn a
+    view into a smart category (`categories::smart_from_view`, which says
+    which criteria no rule holds). The palette shows any category and groups by
+    category. Big Picture adds a shelf per pinned category after the theme's
+    shelves and a Category chip on the Library tab that keeps its category by
+    `CategoryRef` (only that category's deletion resets it to "Any").
+  - The library view remembers picked smart categories in `ViewFilter`'s
+    `smart_categories`, written only while one is picked, and drops ids that
+    no longer exist as soon as the user data says so. Every list respects
+    hidden games and their PIN like the rest of the library.
 - **Journal** (`journal.rs`): one note per game per local calendar day (optional
   title, text, paths of that day's screenshots), written with
   `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
@@ -480,11 +536,31 @@ commands without a window.
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
   Picture's options, the palette, `visible_sessions` (stats, Year in review),
   `Backend::concealed` (CLI, Discord). New screens that list games must too.
+- **Removing games from the library** (`irori-library` `view/remove.rs`): the bulk bar,
+  a picked game's context menu, the palette and Delete take the picked added games
+  and ROMs out through `Backend::uninstall` after one confirmation; store games,
+  and games running or busy, stay and the result says how many and why. An added
+  game's folder goes only when the user ticks the box (the store checks it with
+  `fs_guard::ensure_deletable`); a ROM is only hidden.
 - **HowLongToBeat** (`irori-extras::wiki::hltb`): GOG's store box, else PCGamingWiki's
   HLTB id, else HLTB's site search (a token from `/api/search/site/init`), taken only
   when a result's folded name is the title (`best_match`). The user's choice
   ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
   no match) and part of the wiki cache's file name.
+- **IGDB** (`igdb.rs`, client in `irori-extras::igdb`, opt-in `iroriIgdb`): the user's
+  own Twitch application (client ID and secret in `<config>/igdb.json` through
+  `irori_secrets`, checked with Twitch before it is saved; Settings → Advanced →
+  Artwork) gets an app token (client credentials, memory only). Queries go to
+  `api.igdb.com/v4/games`, spaced to IGDB's four a second; a 401 renews the token
+  once. A game's record is the user's choice (per-game `iroriIgdbId`, `none` for no
+  match; "Change IGDB match" on the game page, `irori_game::igdb_match`), else the
+  search result whose folded name is the title (the release year decides between
+  several), cached in `<cache>/igdb` (a month, a week for "not found").
+  `Backend::extra_info` fills only what the store page left empty (description,
+  genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
+  art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
+  asked while the setting is off; the Modify dialog's title and art overrides win
+  over everything.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -608,6 +684,23 @@ commands without a window.
     channel to `LaunchParams::stream`. The game gets the same variables; with
     `iroriSunshine.matchClient`, a game in gamescope takes the client's output size,
     frame limit and HDR where its own settings leave them empty.
+- **Steam shortcuts** (`irori-extras::shortcuts::steam`, its `sync.rs`): non-Steam
+  shortcuts in every Steam user's `userdata/<id>/config/shortcuts.vdf`, started with
+  `irori --launch <runner>/<app> --wait` and filed in the "Irori" collection. Sunshine's
+  rules apply: an entry is Irori's when it carries `IroriId` (`<runner>/<app>`), or, when
+  that key was dropped, when its command starts a game through Irori; only Irori's
+  entries are changed, and in them only `Exe`, `StartDir`, `LaunchOptions`, `IroriId` and
+  an icon Irori made (the name, collections and the rest stay the user's; an entry
+  without `appid` gets the one Steam computed, so its art stays). The file is edited only
+  while Steam is closed, copied to `shortcuts.vdf.irori-backup` first and read back after
+  every write (a bad read-back puts the previous file back). Art goes to `grid/`
+  (portrait, wide, hero, logo; existing pictures stay): Irori's own art first, from the art
+  store's originals (`Paths::art_original`), then Steam's CDN for slots it lacks (and the
+  wide capsule). UI: "Add to Steam" and "Remove from Steam" in the game menu, the
+  library's context menu, its selection bar and the palette. `irori steam-shortcuts`
+  adds or updates every installed game (not Steam's own, DLCs, or hidden games while
+  locked) and removes Irori's entries of games that left the library, except games of a
+  signed-out store; with games named, only those; `--remove` takes them out.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of
@@ -646,7 +739,40 @@ commands without a window.
   folder, which also finds the Flatpak's); the path it prints is renamed to
   `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
-  palette and a key from the XDG GlobalShortcuts portal (`replay/shortcut.rs`).
+  palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
+  one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
+  `XGrabKey` (`replay/x11.rs`), else the settings show the lines that bind
+  `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
+  pure and tested). Never read keyboards from `/dev/input`.
+- **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
+  the modes offered and HDR (on, capable), kept until a refresh. Linux reads
+  `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool
+  (`kscreen-doctor`, `hyprctl`, `wlr-randr`, `xrandr`; `irori_core::host` inside the
+  Flatpak), merged by connector name (`merge`); Windows uses `QueryDisplayConfig` and
+  advanced colour info; macOS `system_profiler`. Every parser is pure and tested in
+  `displays/parse.rs`; unknown stays `None`, never a guess. Settings › System info lists
+  them (`irori_settings` `displays.rs`), and the HDR and gamescope fields' help adds a
+  hint from them (`displays::hint`).
+- **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
+  only): Windows' own per-program choice in
+  `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the
+  `.exe` the plan starts inside the install folder (`game_program`), only its
+  `GpuPreference` pair, with what was there before kept in `state/gpu-preferences.json`.
+  A changed or cleared setting, or a program that is gone, is applied at once from
+  `SettingsChanged`/`GameSettingsChanged` (`reconcile_gpu_preferences`); a pair the
+  user changed in Windows meanwhile is theirs. The registry sits behind
+  `GpuPreferenceRegistry`, so the rules are tested on every system. The settings show
+  it in place of `iroriGpu`, which stays Linux only.
+- **Power** (`power/`, Big Picture's quick menu): `Backend::power_actions` lists what
+  the system allows (logind's `Can*` answers on Linux, `IsPwrSuspendAllowed` for sleep
+  on Windows, everything on macOS) and `Backend::power` takes one: logind on the system
+  bus (the desktop's session manager on the session bus for Log out) on Linux,
+  `ExitWindowsEx`/`SetSuspendState` on Windows, System Events through `osascript` on
+  macOS; never `sudo`. It first stops every running game and waits until no session is
+  open (`power::OpenSession`, held from a launch until after `GameExited`, so the
+  session is recorded and the saves uploaded), giving up after five minutes. The
+  system is reached through the `PowerSystem` trait; tests install a fake one with
+  `Backend::set_power_system`, so no test powers anything off.
 - **Launch troubleshooting** (`troubleshoot/`): `Backend::troubleshoot_launch` reads
   the game's last log (without Irori's header), its program's imports
   (`troubleshoot::pe`, a headers-only PE reader under `#![forbid(unsafe_code)]`),
@@ -807,10 +933,19 @@ cx.spawn_in(window, async move |this, cx| {
 - An accent the user picks (`iroriUi.accentColor`) tints whichever theme shows, held
   legible like the system's; `iroriUi.fontFamily` replaces Manrope while that family is
   installed (`theme::font_names`).
+- `<config>/appearance.json` (`irori_ui::appearance`) lays a theme file's keys over
+  whichever theme shows, after the picked accent and never over Windows high contrast.
+  It is followed with `notify` and applied after 200 ms of quiet; a file that can't be
+  used keeps the current look and raises `ui.appearance.invalid` once per mistake. The
+  watch starts before the first read, so no save is lost between them.
 - The library's background (`iroriUi.libraryBackground`: the focused, last played or
   first shown game's art, or a picture) goes through `components::library_backdrop`,
-  which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art)
-  and stays off while `theme::reduce_transparency` holds.
+  which keeps `ArtBackdrop`'s measured legibility (strength and dim only weaken the art:
+  strength caps the legible weight, never moves the search for it) and stays off while
+  `theme::reduce_transparency` holds. Big Picture's game-art backdrop is held to the same
+  measure (`strongest_legible_weight` against its top bar's text). No backdrop filter
+  brightens, saturates or adds contrast: every layer is the art or the page colour laid
+  over it at an opacity, and `style::art_tint` only lowers saturation; tests pin this.
 - Surfaces take their colours from `glass::chrome(..)`, `glass::page(..)` and
   `solid_pages()`. Never add alpha yourself.
 - `theme::apply` holds `warning`, `danger`, `info` and `success` to readable contrast,
@@ -818,6 +953,9 @@ cx.spawn_in(window, async move |this, cx| {
 - On Linux `cx.theme().overlay` is transparent and the shell paints the dim behind
   dialogs and sheets (`theme::modal_dim`), because gpui-kit would dim the window's
   shadow margin too. Read the dim from there, not from the theme.
+- `Window::viewport_size` includes that shadow margin (20 px a side on Linux unless
+  tiled). Size layouts and window-covering overlays to `style::visible_bounds` /
+  `visible_size`, which leave it out, so nothing is drawn over the decorations.
 - The available backdrops differ per platform; see the table in `docs/PLATFORMS.md`.
 
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
@@ -930,19 +1068,36 @@ Microsoft's approval page (`irori_manage::login`).
   program switched to their full HID report still read nothing there.
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
-  keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K) when the element doesn't
-  handle them.
+  keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K, Page Up/Down) when the element
+  doesn't handle them. An arrow nobody handles moves to the previous/next Tab stop, and
+  so do the shoulders where nothing pages. So a view that binds the arrows (a grid, a
+  list) must leave one that moves nothing at its edge unhandled (`cx.propagate()`, as
+  the library grid does), or a controller is stuck in it. Menu opens the palette,
+  which reaches every screen.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
-  Enter and Escape, because that is how controllers reach it.
+  Enter and Escape, because that is how controllers reach it. Guide's release may
+  never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of
+  a held Guide after 5 s without a chord, with its controller, and when controllers
+  come or go or Irori's window gains or loses the focus (`gamepad::HoldHintView`
+  reports that to the reader); a later press is never taken for a chord.
+- Holding Start (or Select, `iroriUi.bigPictureHoldButton`; `off` turns it off) for
+  `iroriUi.bigPictureHoldMs` (1000 by default, 300–3000) opens Big Picture while Irori's
+  window is active and no game runs. The reader thread times the hold
+  (`input::HoldTimer`) and holds back the button's own input until its release, so a
+  short press still opens the palette; the shell draws `gamepad::HoldHintView`, whose
+  bar fills over the hold (words only with reduced motion). Inside Big Picture the
+  button keeps its own meaning.
 - Big Picture's screen (`view/`) has a module per region: `backdrop` (the focused
-  game's blurred art, crossfading), `chrome` (top bar, button hints drawn per
+  game's blurred art, crossfading, as strong as its top bar's text still reads over), `chrome` (top bar, button hints drawn per
   controller family), `home` (shelves), `library` (chips and grid), `page` (a game's
   action list and details), `log` (the page's live game log, in place of the details;
   the shoulders page through it, and rows under Show log filter it with
   `irori_ui::game_log::visible_lines`, as the desktop log viewer does),
   `settings` (the game's settings over its page, outside the `BigPicture` key context so
   keys reach their controls; Escape returns to the page),
-  `overlay` (quick menu, uninstall question), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
+  `overlay` (quick menu, uninstall question), `system` (the power actions), `sound`
+  (the sound output, a quick-menu entry and a top-bar control, through the overlay's
+  `audio_outputs` and `Backend::set_system_audio_output`), `tile` (covers). Pure logic lives in `model.rs` (shelves, filters, page rows) and
   `layout.rs` (sizes from the window size in rem, scrolling); test it there.
 - Shelves, the grid and the page's list scroll by springing one offset toward the
   focus and build only the items near the view, so nothing animates once the focus
@@ -962,7 +1117,16 @@ Microsoft's approval page (`irori_manage::login`).
   can't name anything outside that folder. The editor (`view/editor.rs`, quick
   menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
   close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
-  `bigPictureOnController` (open Big Picture when a controller connects).
+  `bigPictureOnController` (open Big Picture when a controller connects, or is
+  connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
+  name, so a pad switching mode counts, and one a system hid while Irori was in the
+  background is no news when it returns).
+- The mouse works on every screen: covers, rows, chips and switchers take hover and
+  clicks, and the wheel goes through `layout/wheel.rs`, which turns travel into the
+  controller's moves (per layout: along the strip on Spotlight, Cinema and Carousel), so
+  the springs that follow the focus scroll and nothing passes an end. Its tests run the
+  travel through each layout's offset. Lists that scroll a row at a time stop at their
+  end (`layout::end_scroll`).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
 - **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
@@ -1139,6 +1303,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
   launcher's flags or URI; Irori never installs, updates or removes them.
+- **EA app: installed games only.** The EA app keeps what an account owns in its
+  encrypted installation state (`ProgramData/EA Desktop/<hash>/IS`) and behind EA's
+  private GraphQL service, which takes the EA app's own client identity. EA publishes no
+  API or readable file, so Irori decrypts nothing and calls no EA service: owned but
+  uninstalled EA games aren't listed, and the EA card says why
+  (`manage.launchers.ea.installed_only`).
 - **Rescans.** The launchers' local data is read again every `iroriLaunchersRescan`
   minutes (5 by default, 0 = only on refresh) from the periodic task while
   `iroriThirdPartyLaunchers` is on, so games installed in a launcher show up on their
@@ -1196,7 +1366,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   Data: the title history (`titlehub`: last played, achievement counts, store art
   and details), `MinutesPlayed` per title (`userstats` batch, asked again only for
   titles whose last-played time moved) and achievements (`achievements` v2), cached
-  in `<cache>/xbox/` for 15 minutes. Titles played on a PC with a package family
+  in `<cache>/xbox/` for 15 minutes. Friends (`irori_xbox_api::friends`, the Friends
+  window's Xbox tab): the people the account follows (`social`
+  `/users/xuid(<xuid>)/people`), their gamertags and gamerpics (`profile`
+  `/users/batch/profile/settings`) and presence (`userpresence` `/users/batch`),
+  services Microsoft documents in its Xbox Live REST reference; read only while the
+  window shows them, kept a minute in memory, dropped at sign-out. Titles played on a PC with a package family
   name match installed packages (`xbox:<family name>`) and add their art, details,
   playtime (`remote_playtime`), last played (`remote_last_played`) and achievements;
   played PC titles that aren't installed are listed as not installed on every OS,
@@ -1235,13 +1410,34 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   only a file it created (Decky Loader relies on its own), restarts Steam only after
   asking and never in Game Mode, and logs counts only. The expression must stay read-only
   (a test guards it); an unknown client shape answers `Unsupported`, never an exception.
+  Anything on the port that isn't Steam's page list (a web server's 404 or page, another
+  protocol, a chunked answer) is `ClientLibraryError::NotSteam`: restarting Steam can't
+  free the port, so the Steam card offers the QR sign-in instead
+  (`steam_library::offers_sign_in`).
+- **Hidden games** (`hidden.rs`): games hidden in Steam stay in the library with
+  `GameInfo::store_hidden` set, which `UserDataService` turns into Irori's own hidden flag
+  once (`store_hidden_imported`): the user's own choice in Irori wins, and unhiding a game in
+  Steam unhides it here only while Irori hid it because of Steam. Steam's Web API has no
+  call for collections, so the hidden collection is read from
+  `userdata/<account>/config/cloudstorage/cloud-storage-namespace-1.json` (and its
+  `.modified.json`, whose entries win): `user-collections.hidden`, `added` minus `removed`.
+  A signed-in account reads only its own folder; without one, the user `loginusers.vdf`
+  marks `MostRecent`, else the latest `localconfig.vdf`. The client library's expression
+  also reads `collectionStore.GetCollection("hidden")` and adds its games (the "All games"
+  collection may leave them out). When neither can say, the Steam card says so
+  (`SteamStore::hidden_games`, `irori_manage` `steam_library::hidden_games_text`); it
+  shows no count while hidden games are locked behind their PIN.
 - **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
   through `IAuthenticationService` (protobuf over the Web API). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then
   keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes `SessionExpired`.
   Never log tokens, passwords or codes; the API crate's types redact them in `Debug`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
-  game's `launcherArgs`; a `SteamGameWatch` follows the reaper (Linux), the game folder's
+  game's `launcherArgs`, split with `split_program_args` (`client::game_args`): Windows
+  quoting for a Windows build, which every game is on Windows and a game whose manifest
+  records Proton (`platform_override_source` `windows`) is elsewhere, so the same options
+  reach the game alike on every system; the `steam://run` fallback quotes arguments with
+  blanks. A `SteamGameWatch` follows the reaper (Linux), the game folder's
   processes and the manifest's launch flags, re-checking known PIDs before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
@@ -1263,17 +1459,25 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
-- **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`, the window
-  `irori_manage::open_steam_friends_dialog`, from the Steam account card and the
-  palette): `ISteamUser/GetFriendList` and `GetPlayerSummaries` with the account's
-  access token (Valve documents them with a Web API key, which Irori must not ship). A
-  401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
+- **Friends** (`irori-steam-api::friends`, `store-steam/src/friends.rs`; the window
+  is `irori_manage::open_friends_dialog`, with a tab per source: Steam, Xbox (see 4.9)
+  and "Other sources"; Steam's opens from the Steam account card and the palette): `IFriendsListService/GetFriendsList` and `IPlayerService/GetPlayerLinkDetails`
+  with the account's access token. The older `ISteamUser/GetFriendList` and
+  `GetPlayerSummaries` take only a Web API key, which Irori must not ship, and answer a
+  token with HTTP 400. A 401/403 there is `SteamError::NotShared`, never `SessionRejected`, so it can't sign the
   user out. Read only while the window is open (on open, Refresh and every 3 minutes),
   kept a minute, dropped at sign-out. Actions are Steam's own links: `steam://open/friends`
   (Steam has no link that invites to a game; its friends list does, while the game runs),
   `steam://friends/message/<id>`, and Join only when Steam reports a lobby
   (`steam://joinlobby/<app>/<lobby>/<friend>`) or a server (`steam://connect/<ip:port>`),
   built from parsed numbers only.
+  "Other sources" (`irori_manage` `friends/other.rs`) says why other friends aren't
+  listed, and nothing there is fetched: Discord's RPC `GET_RELATIONSHIPS` needs the
+  `relationships.read` scope, which Discord grants only to apps it approves; Epic's
+  friends service answers only the Epic Games Launcher's own client; GOG publishes no
+  friends API (Galaxy keeps it); the other launchers keep friends in their apps. A new
+  source needs an API its service documents for other programs, read only, loaded
+  only while its tab shows and dropped at sign-out.
 
 ### 4.11 Mods
 
@@ -1309,13 +1513,21 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 
-### 4.12 ReShade
+### 4.12 ReShade and RenoDX
 
 - **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
   natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
-  section (`irori_settings` `ReshadePanel`, route id `reshade`). Direct3D 9,
+  section (`irori_settings` `ReshadePanel`, route id `reshade`), also reached from the
+  command palette's "ReShade and RenoDX for …" row of the open game. Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
+  Irori puts into a game folder, its manifest's path and its cache folder. Detection,
+  cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
+  services run one graphics mod operation per game at a time
+  (`Backend::set_graphics_mod_enabled`, `remove_graphics_mod`). A manifest without
+  `kind` is ReShade's, so manifests written before the layer keep reading; ReShade's
+  manifest records `addon: true` for the build with add-on support.
 - **Detection** (`irori_reshade::detect`): the configured program (`targetExe`, else
   the store's executable) when its PE imports name an API; otherwise the game folder is
   searched (installers, redistributables, crash reporters, launchers and anticheat
@@ -1342,6 +1554,24 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `d3dcompiler_47=n,b` for Direct3D) to `WINEDLLOVERRIDES` through
   `irori_runtime::env::add_dll_overrides`, replacing only those DLLs' entries in the
   user's value, while the install is complete, on, and its DLL is there.
+- **RenoDX** (`irori_reshade::renodx`, services `renodx.rs`, UI `irori_settings`
+  `RenodxPanel` below ReShade, route ids `renodx`/`hdr`): HDR mods as ReShade add-ons
+  (`renodx-<game>.addon64`, `.addon32`), loaded by ReShade's build with full add-on
+  support (`ReShade_Setup_<version>_Addon.exe`, same layout and version as the
+  standard one). Only the official `snapshot` release of clshortfuse/renodx is used:
+  its `games-index.json` (titles, aliases, programs, mods and their files) joined with
+  GitHub's listing of the release (each file's SHA-256 and build date, the version);
+  a file without a digest or served from elsewhere is not offered, and forks the wiki
+  links are left to the user's "Choose file…". Both lists are cached a day under
+  `<cache>/reshade/renodx`; an install asks again and checks the download against
+  the digest and the game's architecture. The game's mod is preselected by folded
+  title, alias or program name. Installing takes ReShade along (installed or switched
+  to the add-on build, keeping its program), refuses what ReShade's list bans, a file of
+  the same name and any other RenoDX add-on in the folder (`AddonTaken`), and is
+  journaled as `GraphicsMod::Renodx` in `<data>/reshade/renodx/<runner>/<app>.json`;
+  off renames the add-on, and removing ReShade removes RenoDX first. The UI asks first
+  when the game has anticheat, offers Update when the release's digest differs, and
+  says under Wine that HDR also needs the display, session and Wine build.
 
 ### 4.13 Xbox (Microsoft Store and PC Game Pass, Linux)
 
@@ -1600,7 +1830,7 @@ are no `tests/` directories or fixture folders. Fixtures are small inline JSON s
 **UI tests**
 
 - `#[gpui_kit::test]` with `TestAppContext`. See `crates/feature-library/src/ui_tests.rs`
-  for the harness: isolated `Paths`, `Backend::start` over an in-memory `Store`,
+  for the harness: isolated `Paths`, `Backend::start_for_tests` over an in-memory `Store`,
   `run_until_parked`, then open and draw a window.
 - They need a display on Linux; CI uses `xvfb-run -a`.
 
@@ -1663,6 +1893,13 @@ building and the release checklist.
   - The installer installs per user under `%LOCALAPPDATA%\Programs\Irori` and
     registers the URL handler and a Start-menu shortcut.
   - `--portable` adds a zip without `install.ps1` and with the `portable` marker.
+- Package channels (`packaging/release_manifests.py`, `.github/workflows/publish.yml`,
+  `docs/RELEASING.md`): the AUR, Homebrew, Scoop, winget (with `/CHANNEL=winget`),
+  Fedora COPR (`copr/irori.spec`, repackaging both tarballs) and Flathub (the Flatpak
+  manifest pinned to the tag). Each publishing job runs only when its `PUBLISH_*`
+  variable is `true`; `release.yml` checks each on pull requests (`packaging/copr/build.sh`,
+  `packaging/arch/build.sh`). Installs from a channel are updated by its package manager
+  (`irori-services::app_update`), never by Irori.
 
 **Desktop behaviour to keep working**
 

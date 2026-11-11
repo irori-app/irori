@@ -1,6 +1,6 @@
 [package]
 name = "irori-extras"
-description = "Integrations: desktop/Steam shortcuts, game info from wikis, anticheat data, known fixes, SteamGridDB, Heroic import"
+description = "Integrations: desktop/Steam shortcuts, game info from wikis, anticheat data, known fixes, SteamGridDB, IGDB, Heroic import"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -37,3 +37,4 @@ windows-registry = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
+irori-depot = { workspace = true, features = ["test-server"] }

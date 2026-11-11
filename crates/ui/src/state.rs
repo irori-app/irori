@@ -25,6 +25,11 @@ pub fn backend(cx: &App) -> Backend {
     cx.global::<AppState>().backend.clone()
 }
 
+/// The backend, where one is installed (tests of themes run without).
+pub(crate) fn try_backend(cx: &App) -> Option<Backend> {
+    cx.try_global::<AppState>().map(|s| s.backend.clone())
+}
+
 /// Run a backend future on the backend runtime and get a GPUI task resolving
 /// to its result. Await it from `cx.spawn`/`cx.spawn_in`.
 pub fn run<T, F>(cx: &App, fut: F) -> Task<Result<T>>

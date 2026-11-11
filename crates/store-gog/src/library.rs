@@ -457,23 +457,42 @@ async fn lookup_release(
     if !unavailable {
         return None;
     }
-    match api::product(&id, &["description"], &locale, Some(&token)).await {
+    // GamesDB couldn't be reached: its last answer, though old, still names
+    // the release and links a DLC to its game, which the product API can't.
+    if let Some(stale) = cached_release(cached.as_ref()) {
+        tracing::warn!("using the last GamesDB answer for GOG game {id}");
+        return Some(stale);
+    }
+    let product = api::product(&id, &["description"], &locale, Some(&token)).await;
+    let (found, unreachable) = product_release(&id, product);
+    *failed = unreachable;
+    found
+}
+
+/// A cached GamesDB answer's entry, when it has one.
+fn cached_release(cached: Option<&CachedGamesDb>) -> Option<MappedRelease> {
+    cached
+        .filter(|c| !c.data.is_null())
+        .and_then(|c| gamesdb_to_game_info(&c.data))
+}
+
+/// The entry the product API's answer gives, and whether the API couldn't
+/// be read (the game is then still owned: see [`Lookup::Failed`]).
+fn product_release(id: &str, product: Result<Option<Value>>) -> (Option<MappedRelease>, bool) {
+    match product {
         Ok(Some(p)) => {
             tracing::warn!("using product API metadata for GOG game {id}");
-            Some(MappedRelease {
-                info: product_to_game_info(&p, &id),
+            let release = MappedRelease {
+                info: product_to_game_info(&p, id),
                 release_id: String::new(),
                 parent_release_id: None,
-            })
+            };
+            (Some(release), false)
         }
-        Ok(None) => None,
+        Ok(None) => (None, false),
         Err(e) => {
-            if let Some(c) = cached {
-                return gamesdb_to_game_info(&c.data);
-            }
             tracing::error!("no metadata for GOG game {id}: {e:#}");
-            *failed = true;
-            None
+            (None, true)
         }
     }
 }
@@ -768,6 +787,31 @@ mod tests {
         let mut catalogue = HashMap::new();
         keep_failed(&mut catalogue, &previous, &["1423049311".to_string()]);
         assert_eq!(catalogue["1423049311"].title, base.title);
+    }
+
+    #[test]
+    fn an_unreachable_gamesdb_falls_back_to_its_last_answer() {
+        let cached = CachedGamesDb {
+            etag: Some("\"e\"".into()),
+            fetched_at: 0,
+            data: cyberpunk(),
+        };
+        let stale = cached_release(Some(&cached)).unwrap();
+        assert_eq!(stale.info.app_name, "1423049311");
+        assert!(!stale.release_id.is_empty());
+        assert!(cached_release(None).is_none());
+        let empty = CachedGamesDb::default();
+        assert!(cached_release(Some(&empty)).is_none());
+
+        // Without one, an unreachable product API keeps the game as owned
+        // (`Lookup::Failed`); one that doesn't know it lets it go.
+        let (found, failed) = product_release("1", Err(anyhow::anyhow!("offline")));
+        assert!(found.is_none() && failed);
+        let (found, failed) = product_release("1", Ok(None));
+        assert!(found.is_none() && !failed);
+        let (found, failed) = product_release("1", Ok(Some(serde_json::json!({"title": "X"}))));
+        assert_eq!(found.unwrap().info.title, "X");
+        assert!(!failed);
     }
 
     #[test]

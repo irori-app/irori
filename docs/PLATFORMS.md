@@ -185,6 +185,22 @@ The Graphics settings of a game are Linux only; on macOS and Windows they show w
 Variables a game's own settings set always win over them; the host environment's
 don't, since these are chosen per game.
 
+On Windows the graphics card chooser is replaced by Windows' own **graphics
+preference** (`iroriWindowsGpu`: not set, `auto` "Let Windows decide", `powerSaving`,
+`highPerformance`), the value Settings › System › Display › Graphics keeps under
+`HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, named after the program's full
+path (`GpuPreference=2;`). Irori writes it when the game starts, for the `.exe` the
+launch command starts inside the install folder (never a store client or a wrapper
+outside it), because only the launch says which program that is; it stays afterwards,
+so starting the program another way gets the same card. Irori changes only the
+`GpuPreference` pair and keeps the others Windows put there (`SwapEffectUpgradeEnable`,
+`AutoHDREnable`…). What was there before is noted in `<state>/gpu-preferences.json`:
+clearing the setting (or uninstalling the game) puts it back at once, removing the value
+when Irori created it, and a choice the user changed in Windows meanwhile is left as it
+is. A game that starts through a launcher that hands over to another program gets the
+preference on the program Irori starts only. Steam and the third-party launchers start
+their own games, so their games don't show it.
+
 - **Graphics card** (`iroriGpu`, a PCI address): cards come from `/sys/class/drm`,
   named from `pci.ids`. A Mesa card gets `DRI_PRIME=pci-…` and
   `MESA_VK_DEVICE_SELECT=<vendor>:<device>!` (left out when two cards are the same
@@ -449,10 +465,47 @@ saving. Ways to save:
   read by Irori's controller thread also while the game has the window; Guide's release
   then does not toggle Big Picture;
 - the tray menu's "Save clip" and the command palette, while the buffer records;
-- a key from the XDG GlobalShortcuts portal (KDE Plasma 6, GNOME 48, Hyprland). Irori
-  registers as `app.irori.Irori` through the host app registry, suggests Alt+F10 and lets
-  the desktop assign and change the keys. Where the portal is missing the settings say
-  that keys pressed in a game cannot reach Irori and point to the other ways.
+- a keyboard shortcut, set up with a second one that takes a screenshot (see
+  [Clip and screenshot keys](#clip-and-screenshot-keys));
+- `irori --save-clip`, which hands the request to the running Irori.
+
+### Clip and screenshot keys
+
+Only the desktop sees keys pressed in another program's window, and Irori never reads
+keyboards from `/dev/input`. Settings → Performance → Replay buffer → "Set up shortcuts"
+(or turning the buffer on) tries, in order (`irori_services::replay::bindings::sources`):
+
+1. **The XDG GlobalShortcuts portal** (KDE Plasma 6, GNOME 48, Hyprland). Irori
+   registers as `app.irori.Irori` through the host app registry, asks for two shortcuts,
+   "save-clip" (Alt+F10 suggested) and "screenshot" (Alt+F12), and lets the desktop
+   assign and change the keys. The settings show each one's keys.
+2. **X11 sessions** without it (i3, Xfce, Openbox, bspwm…): Irori grabs Alt+F10 and
+   Alt+F12 on the root window with `XGrabKey` (x11rb's own connection, with Caps Lock and
+   Num Lock on or off), and a thread blocked on the X server hears them, a held key
+   counting once. Never under Wayland, where XWayland only sees keys while one of its
+   windows has the focus. A key another program holds fails the grab, and Irori goes on
+   to the commands.
+3. **Commands** everywhere else (Sway, river, niri, Wayfire, labwc and other wlroots
+   compositors): `irori --save-clip` and `irori --screenshot` reach the running Irori
+   through its single-instance channel (they never start Irori; with none running they
+   exit 1). The settings name the compositor (from `XDG_CURRENT_DESKTOP`, `SWAYSOCK`,
+   `HYPRLAND_INSTANCE_SIGNATURE`, `NIRI_SOCKET`) and show the exact lines for its file,
+   with a Copy button, for example in `~/.config/sway/config`:
+
+   ```text
+   bindsym Mod1+F10 exec irori --save-clip
+   bindsym Mod1+F12 exec irori --screenshot
+   ```
+
+   The command is `flatpak run app.irori.Irori` inside Irori's Flatpak, the AppImage's
+   path from an AppImage, `irori` when `PATH` finds this program, else its full path.
+   An unknown desktop gets the two commands to bind in its keyboard settings.
+
+The clip key saves while the buffer records; the screenshot key takes one of the running
+game (`Backend::take_screenshot`), or of the desktop when none runs. The shortcuts are
+set up only while the replay buffer is on, so Alt+F10 and Alt+F12 stay free otherwise.
+macOS and Windows have no replay buffer; there the commands still work, and the in-game
+overlay's Ctrl+Shift+O and its screenshot button take screenshots.
 
 Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
 after its title, which is how the Album finds the game; a folder whose game left the
@@ -633,6 +686,36 @@ need ReShade's layer registered), Direct3D 8 and DirectDraw games are not
 supported, and neither are games other launchers manage (Steam, third-party
 launchers).
 
+### RenoDX HDR mods
+
+Below ReShade (game settings → Tools → RenoDX HDR), a
+Windows game Irori installed can get a RenoDX HDR mod: a ReShade add-on
+(`renodx-<game>.addon64`, or `.addon32` for 32-bit games) that ReShade's build with
+add-on support loads from its folder. Irori offers the mods of RenoDX's official
+rolling release on GitHub (clshortfuse/renodx, `snapshot`): its own catalog
+(`games-index.json`) names each mod's game, aliases and files, and GitHub's listing of
+the release gives each file's SHA-256 and build date. The game's mod is preselected
+when the catalog names its title or program; any other can be picked, or a mod file
+the user downloaded (for mods RenoDX's wiki links on other sites) chosen instead.
+Lists are cached a day in `<cache>/reshade/renodx`; an install asks again, checks the
+file against the release's digest and the game's architecture, and caches it by
+digest. Nothing is bundled.
+
+Installing replaces a standard ReShade with its build with add-on support
+(`ReShade_Setup_<version>_Addon.exe` from reshade.me, the same version), or installs
+it, then writes the add-on beside ReShade, recorded in
+`<data>/reshade/renodx/<runner>/<app>.json`. It is refused when ReShade's list bans
+the game, when a file of the same name that Irori didn't write is there, and when
+another RenoDX add-on is in the folder; Irori asks first when the game has anticheat
+(the add-on build is meant for single-player games). Turning RenoDX off renames the
+add-on to `<file>.irori-disabled`; removing it deletes the file if unchanged and
+keeps ReShade; removing ReShade removes RenoDX too. Update appears when RenoDX
+rebuilt the installed mod.
+
+| | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| HDR output | Only when the display, the session (an HDR-capable compositor or gamescope) and the Wine build pass HDR through, e.g. `DXVK_HDR=1` for DXVK; Irori sets nothing and the panel says so | Same note; Wine on macOS rarely passes HDR through | Windows HDR on |
+
 ### Storage
 
 Settings → Storage (`irori://settings/storage`) groups what Irori measures by the disk
@@ -653,6 +736,24 @@ Cleanups delete only what the rebuilt report offers at that moment, each item th
 | Old Wine and Proton builds | Builds Irori downloaded that no installed game, the defaults or a launcher uses, removed through the Wine manager's own removal; the newest of each kind stays | System Wine, Steam's Proton, Lutris and Bottles builds, CrossOver |
 | Art thumbnails | `<cache>/images/thumbs` | Downloaded originals |
 | Logs | Everything under the logs folder except the current `irori.log` | On Windows a log a running game holds open is skipped and goes next time |
+
+### Displays
+
+Settings › System info (`irori://settings/system`) lists every display: its name, the
+mode it runs in, the modes it offers and whether HDR is on, and "Copy" adds the same as
+text. Nothing is asked with privileges, and tools run with a 5-second timeout on the
+backend, never the interface thread; the answer is kept until Refresh.
+
+| System | Where it comes from | What stays unknown |
+| --- | --- | --- |
+| Linux | The kernel's connectors (`/sys/class/drm/card*-*`: `status`, `enabled`, `modes`, and `edid` for the monitor's name and whether its HDR static metadata lists PQ or HLG), then the compositor: `kscreen-doctor -j` on KDE Plasma (mode in use, HDR on), `hyprctl -j monitors all` on Hyprland, `wlr-randr --json` on other wlroots compositors, `xrandr --query` on X11 (where HDR is always off). Inside the Flatpak the tools run on the host | GNOME and other compositors without such a tool: the mode in use and whether HDR is on (the kernel's modes carry no refresh rates) |
+| Windows | `QueryDisplayConfig` (active displays, exact refresh rate), `DisplayConfigGetDeviceInfo` (monitor name, advanced colour: HDR supported and on), `EnumDisplaySettingsW` (the modes, in full colour) | — |
+| macOS | `system_profiler SPDisplaysDataType -json`: the resolution in use and its refresh rate | Other modes, and HDR beyond the XDR displays being capable |
+
+The Linux settings use it too: the HDR switch and gamescope's extra options say which
+display has HDR on, could have it (and that it's off in the system's display settings),
+or that none reports it; gamescope's output size and frame limit say which mode the
+main display runs at. Nothing is said when the system doesn't tell.
 
 ### Interface font
 
@@ -684,14 +785,14 @@ how it was installed when it starts:
 
 | Install | Recognised by | Irori |
 | --- | --- | --- |
-| Flatpak | `FLATPAK_ID` or `/.flatpak-info` | Never checks |
-| apt, dnf, pacman, AUR | the program lives under `/usr` (not `/usr/local`) | Never checks |
+| Flatpak (Flathub or the bundle) | `FLATPAK_ID` or `/.flatpak-info` | Never checks |
+| apt, dnf (Irori's repository or Fedora COPR), pacman (Irori's repository or the AUR) | the program lives under `/usr` (not `/usr/local`) | Never checks |
 | Nix | the program lives under `/nix/store` | Never checks |
 | Built from source | the program lives in a Cargo `target` folder | Never checks |
 | Any build with `IRORI_UPDATE_EXPLANATION` | the variable, at build or run time | Never checks; Settings › About shows its text |
 | Homebrew | `Caskroom/irori` under `/opt/homebrew` or `/usr/local` | Checks; offers `brew upgrade --cask irori` |
-| Scoop | `scoop/apps/irori` in the program's path | Checks; offers `scoop update irori` |
-| winget | `install.ini` beside the program says `Channel=winget` | Checks; offers `winget upgrade Irori.Irori` |
+| Scoop | `scoop/apps/irori` in the program's path, or `apps/irori` with Scoop's `manifest.json` and `install.json` beside the program (a moved `SCOOP` root) | Checks; offers `scoop update irori` |
+| winget | `install.ini` beside the program says `Channel=winget` (the `/CHANNEL=winget` switch in Irori's winget manifest) | Checks; offers `winget upgrade Irori.Irori` |
 | Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; links to the release page |
 
 The check asks GitHub's `releases/latest` for `irori-app/irori` (which leaves out drafts
@@ -908,6 +1009,37 @@ drives them through its virtual controller, and arrow, Enter and Escape key
 presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
+
+### Sound output (Big Picture)
+
+Outside a game, Big Picture switches the sound output too: the quick menu's
+"Sound output" entry (A or Right for the next output, Left for the previous)
+and the speaker in the top bar (a click for the next). It is the same switching
+as the in-game overlay's (see [In-game overlay](#in-game-overlay-beta)), on the
+same systems; a running game's sound moves along. The outputs are read when Big
+Picture and its menu open, never polled. Where outputs can't be switched or read
+(`pactl` missing, another system), the entry says "Not available" and A explains
+why; with one output it says there is nothing to switch to.
+
+### Power off, restart, sleep and log out (Big Picture)
+
+Big Picture's quick menu ends with Power off, Restart, Sleep and Log out, each
+asking first and naming the action. Only the actions the system allows are
+listed, asked again whenever the menu opens. Irori uses each system's own,
+unprivileged way and never `sudo` (`irori_services::power`):
+
+| System | Asked | Done with |
+| --- | --- | --- |
+| Linux | logind's `CanPowerOff`, `CanReboot`, `CanSuspend` (`yes` or `challenge`); Log out when a session manager or a logind desktop session is found | logind's `PowerOff`, `Reboot`, `Suspend` (interactive, so polkit may ask for a password); Log out through GNOME's (and MATE's and Cinnamon's) `org.gnome.SessionManager`, Plasma's `org.kde.Shutdown` or `org.kde.ksmserver`, or Xfce's session manager, else logind ends the session (programs get no chance to save then) |
+| Windows | Sleep only when `IsPwrSuspendAllowed` and the PC isn't a Modern Standby one | `ExitWindowsEx` with the shutdown privilege enabled; `SetSuspendState` |
+| macOS | All four | System Events through `osascript`; macOS asks once whether Irori may control System Events (Privacy & Security → Automation) |
+
+Inside the Flatpak the system bus is the host's, reached through
+`--system-talk-name=org.freedesktop.login1`; the session managers are allowed
+by name in the manifest. A running game is stopped first and its session ended
+in full (recorded, saves uploaded, mods restored) before the system is asked;
+a game that hasn't finished closing after five minutes leaves the computer on
+with a notice. In Steam's Game Mode, Log out ends the gamescope session.
 
 ## Streaming with Sunshine
 
@@ -1210,6 +1342,33 @@ until the tool first makes it), waits for writes to settle and re-themes only wh
 colours changed. Nothing polls. Text and icons are held to Irori's contrast minimums.
 Settings → Appearance → Theme shows this as “Wallpaper colors (default)”; picking any
 other theme stops following them, and “Follow system” takes its mode from them.
+
+## Appearance file
+
+`appearance.json` in Irori's configuration folder (the Settings/credentials row of
+[Paths and desktop behavior](#paths-and-desktop-behavior), so
+`~/.config/irori/appearance.json` on Linux) lays a theme's keys over whichever theme
+shows: a picked one, the desktop's, the wallpaper's or Irori's own, on every system.
+The keys are those of a theme in `assets/themes/*.json` (`colors`, `radius`,
+`radius.lg`, `shadow`, `font.family`…); keys at the top apply in both modes, and
+`light` and `dark` objects hold what applies in one. `name` and `mode` stay the theme's
+own, and `null` keeps the theme's value.
+
+```json
+{
+  "radius": 4,
+  "colors": { "primary.background": "#e0457b", "ring": "#e0457b" },
+  "dark": { "colors": { "background": "#101014" } }
+}
+```
+
+Irori watches the file (`notify`, no polling) and applies a save once the file has been
+still for 200 ms, so an editor's truncate-and-write never shows half a theme. A file it
+can't use (bad JSON, a key no theme has, a colour that doesn't parse, more than 1 MiB)
+changes nothing: the look stays as it was and a notice names the mistake, once per
+mistake. Removing or emptying the file takes the overrides away. Windows high contrast
+replaces every theme and is never overridden; a picked accent colour is applied first,
+so the file's colours win over it. `irori_ui::appearance` reads and follows it.
 
 ## System accent colour
 

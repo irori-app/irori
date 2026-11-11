@@ -245,11 +245,38 @@ impl Backend {
         }
         if let Some(pos) = q.active.iter().position(|i| &i.id == id) {
             let item = q.active.remove(pos);
+            let install = matches!(item.kind, DownloadKind::Install(_));
             q.finish(item, DownloadState::Canceled, None);
             q.save();
             drop(q);
             self.statuses.clear(id);
             self.bus.emit(Event::DownloadQueueChanged);
+            // A paused download, or one a restart left waiting, may have
+            // written files already: they go as a running one's would.
+            if install && !keep_files {
+                let b = self.clone();
+                let id = id.clone();
+                self.spawn(async move { b.discard_partial_install(&id).await });
+            }
+        }
+    }
+
+    /// Delete what a canceled install wrote. The store finds its folder (a
+    /// GOG install keeps it as pending); a game the store has installed is
+    /// never touched.
+    async fn discard_partial_install(&self, id: &GameId) {
+        let Some(store) = self.store(id.runner) else {
+            return;
+        };
+        if store.game(&id.app_name).is_some_and(|g| g.is_installed) {
+            return;
+        }
+        let args = RemoveArgs {
+            delete_files: true,
+            ..Default::default()
+        };
+        if let Err(e) = store.uninstall(&id.app_name, args).await {
+            tracing::debug!("nothing to clean up after canceling {id}: {e:#}");
         }
     }
 
@@ -413,19 +440,8 @@ impl Backend {
             After::Paused => self.statuses.set(&id, StatusKind::Queued),
             After::Canceled { delete_files } => {
                 self.statuses.clear(&id);
-                if delete_files
-                    && matches!(item.kind, DownloadKind::Install(_))
-                    && let Some(store) = self.store(id.runner)
-                {
-                    let _ = store
-                        .uninstall(
-                            &id.app_name,
-                            RemoveArgs {
-                                delete_files: true,
-                                ..Default::default()
-                            },
-                        )
-                        .await;
+                if delete_files && matches!(item.kind, DownloadKind::Install(_)) {
+                    self.discard_partial_install(&id).await;
                 }
             }
             After::Done => {

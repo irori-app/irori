@@ -21,6 +21,12 @@ pub struct Endpoints {
     pub titlehub: String,
     pub userstats: String,
     pub achievements: String,
+    /// The people the account follows.
+    pub social: String,
+    /// Gamertags and pictures.
+    pub profile: String,
+    /// Online state and what is being played.
+    pub presence: String,
 }
 
 impl Default for Endpoints {
@@ -32,6 +38,9 @@ impl Default for Endpoints {
             titlehub: "https://titlehub.xboxlive.com".into(),
             userstats: "https://userstats.xboxlive.com".into(),
             achievements: "https://achievements.xboxlive.com".into(),
+            social: "https://social.xboxlive.com".into(),
+            profile: "https://profile.xboxlive.com".into(),
+            presence: "https://userpresence.xboxlive.com".into(),
         }
     }
 }
@@ -46,7 +55,10 @@ impl Endpoints {
             xsts: base.clone(),
             titlehub: base.clone(),
             userstats: base.clone(),
-            achievements: base,
+            achievements: base.clone(),
+            social: base.clone(),
+            profile: base.clone(),
+            presence: base,
         }
     }
 }
@@ -199,9 +211,9 @@ fn now_unix() -> i64 {
 /// cheap to clone.
 #[derive(Debug, Clone)]
 pub struct Client {
-    http: reqwest::Client,
+    pub(crate) http: reqwest::Client,
     client_id: String,
-    endpoints: Endpoints,
+    pub(crate) endpoints: Endpoints,
 }
 
 impl Client {
@@ -405,9 +417,23 @@ impl Client {
         language: &str,
         what: &str,
     ) -> Result<T> {
+        self.data_with_contract(request, session, language, what, "2")
+            .await
+    }
+
+    /// [`data`](Self::data) for a service that takes another contract
+    /// version.
+    pub(crate) async fn data_with_contract<T: DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+        session: &Session,
+        language: &str,
+        what: &str,
+        contract: &str,
+    ) -> Result<T> {
         let resp = request
             .header("Authorization", session.authorization())
-            .header("x-xbl-contract-version", "2")
+            .header("x-xbl-contract-version", contract)
             .header("Accept-Language", language)
             .header("Accept", "application/json")
             .send()

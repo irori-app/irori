@@ -1,10 +1,12 @@
-//! "Find art online": search SteamGridDB for a game and pick a cover,
-//! square or background image. Embedded in the "Add game", "Edit app" and
-//! "Edit details" dialogs in place of their form while open.
+//! "Find art online": search SteamGridDB (or, with `iroriIgdb` on, IGDB)
+//! for a game and pick a cover, square or background image. Embedded in the
+//! "Add game", "Edit app" and "Edit details" dialogs in place of their form
+//! while open.
 //!
 //! Without an API key the picker explains how to get one and where to enter
 //! it. Nothing is searched until the user opens the picker (Heroic looked up
-//! art on a third-party server whenever the title field lost focus).
+//! art on a third-party server whenever the title field lost focus). IGDB
+//! has covers, artworks and screenshots but no square art or logos.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -13,7 +15,8 @@ use gpui_kit::component::link::Link;
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, WindowExt as _,
+    h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -22,11 +25,12 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription,
     Task, Window, div, rems,
 };
+use irori_extras::igdb::{IgdbGame, ImageSize, image_url};
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
 use irori_ui::art_picker::{ArtSlot, OnPicked};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::{Route, models, navigate};
+use irori_ui::{Route, backend, models, navigate};
 
 /// Where SteamGridDB users create an API key.
 const API_KEY_PAGE: &str = "https://www.steamgriddb.com/profile/preferences/api";
@@ -92,6 +96,39 @@ impl ArtKind {
     }
 }
 
+/// Where the picker searches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtSource {
+    SteamGridDb,
+    Igdb,
+}
+
+/// IGDB's images of `game` for `kind`: its cover, or its artworks then
+/// screenshots as backgrounds. IGDB has no square art or logos.
+pub fn igdb_images(kind: ArtKind, game: &IgdbGame) -> Vec<SgdbImage> {
+    let image = |id: &str, thumb: ImageSize, full: ImageSize| {
+        Some(SgdbImage {
+            id: game.id,
+            url: image_url(id, full)?,
+            thumb: image_url(id, thumb)?,
+        })
+    };
+    match kind {
+        ArtKind::Cover => game
+            .cover
+            .iter()
+            .filter_map(|id| image(id, ImageSize::CoverBig, ImageSize::Original))
+            .collect(),
+        ArtKind::Background => game
+            .artworks
+            .iter()
+            .chain(&game.screenshots)
+            .filter_map(|id| image(id, ImageSize::ScreenshotMed, ImageSize::FullHD))
+            .collect(),
+        ArtKind::Square | ArtKind::Logo => Vec::new(),
+    }
+}
+
 /// What to do after a search returned `games`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SearchOutcome {
@@ -128,13 +165,18 @@ enum Phase {
     Message(SharedString),
 }
 
-/// The SteamGridDB search and image grid.
+/// The SteamGridDB (or IGDB) search and image grid.
 pub struct ArtPicker {
     kind: ArtKind,
     key: Option<ApiKey>,
+    /// `iroriIgdb` is on: IGDB can be searched too.
+    igdb_on: bool,
+    source: ArtSource,
     query: Entity<InputState>,
     phase: Phase,
     games: Vec<SgdbGame>,
+    /// IGDB's records of `games`, which already hold their images.
+    igdb_found: Vec<IgdbGame>,
     _task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -144,7 +186,26 @@ impl EventEmitter<ArtPickerEvent> for ArtPicker {}
 impl ArtPicker {
     /// A picker for `kind`, searching for `title` right away when a key is set.
     pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let key = ApiKey::from_settings(&models(cx).settings.read(cx).app);
+        let app = &models(cx).settings.read(cx).app;
+        let (key, igdb_on) = (ApiKey::from_settings(app), app.igdb);
+        Self::with_sources(kind, title, key, igdb_on, window, cx)
+    }
+
+    /// A picker with SteamGridDB's `key` and IGDB on or off, whatever the
+    /// settings say.
+    pub(crate) fn with_sources(
+        kind: ArtKind,
+        title: &str,
+        key: Option<ApiKey>,
+        igdb_on: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let source = if key.is_none() && igdb_on {
+            ArtSource::Igdb
+        } else {
+            ArtSource::SteamGridDb
+        };
         let query = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t("library.art.placeholder"))
@@ -160,15 +221,18 @@ impl ArtPicker {
             }),
         ];
         let mut this = Self {
-            phase: if key.is_some() {
+            phase: if key.is_some() || source == ArtSource::Igdb {
                 Phase::Idle
             } else {
                 Phase::NoKey
             },
             kind,
             key,
+            igdb_on,
+            source,
             query,
             games: Vec::new(),
+            igdb_found: Vec::new(),
             _task: None,
             _subscriptions: subscriptions,
         };
@@ -187,9 +251,37 @@ impl ArtPicker {
         self.query.focus_handle(cx).focus(window, cx);
     }
 
-    fn search(&mut self, cx: &mut Context<Self>) {
-        let Some(key) = self.key.clone() else {
+    /// Where it searches, and whether it asks for a SteamGridDB key (tests).
+    #[cfg(test)]
+    pub(crate) fn source(&self) -> (ArtSource, bool) {
+        (self.source, matches!(self.phase, Phase::NoKey))
+    }
+
+    /// Search the other source.
+    pub fn set_source(&mut self, source: ArtSource, cx: &mut Context<Self>) {
+        if source == self.source {
             return;
+        }
+        self.source = source;
+        self._task = None;
+        self.games.clear();
+        self.igdb_found.clear();
+        if source == ArtSource::SteamGridDb && self.key.is_none() {
+            self.phase = Phase::NoKey;
+            cx.notify();
+        } else {
+            self.phase = Phase::Idle;
+            self.search(cx);
+        }
+    }
+
+    fn search(&mut self, cx: &mut Context<Self>) {
+        let key = match self.source {
+            ArtSource::SteamGridDb => match self.key.clone() {
+                Some(key) => Some(key),
+                None => return,
+            },
+            ArtSource::Igdb => None,
         };
         let query = self.query.read(cx).value().trim().to_string();
         if query.is_empty() {
@@ -197,13 +289,30 @@ impl ArtPicker {
         }
         self.phase = Phase::Searching;
         cx.notify();
-        let task = irori_ui::run(
-            cx,
-            async move { steamgrid::search_games(&key, &query).await },
-        );
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            match key {
+                Some(key) => Ok((steamgrid::search_games(&key, &query).await?, Vec::new())),
+                None => {
+                    let found = b.search_igdb(&query).await?;
+                    let games = found
+                        .iter()
+                        .map(|g| SgdbGame {
+                            id: g.id,
+                            name: g.name.clone(),
+                        })
+                        .collect();
+                    Ok((games, found))
+                }
+            }
+        });
         self._task = Some(cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
+                let result = result.map(|(games, found)| {
+                    this.igdb_found = found;
+                    games
+                });
                 match result.map(search_outcome) {
                     Ok(SearchOutcome::NoMatch) => {
                         this.games.clear();
@@ -226,10 +335,25 @@ impl ArtPicker {
     }
 
     fn load_images(&mut self, game: SgdbGame, cx: &mut Context<Self>) {
+        let name: SharedString = game.name.clone().into();
+        if self.source == ArtSource::Igdb {
+            let images = self
+                .igdb_found
+                .iter()
+                .find(|g| g.id == game.id)
+                .map(|g| igdb_images(self.kind, g))
+                .unwrap_or_default();
+            self.phase = if images.is_empty() {
+                Phase::Message(self.kind.none_found(&name))
+            } else {
+                Phase::Images(name, images)
+            };
+            cx.notify();
+            return;
+        }
         let Some(key) = self.key.clone() else {
             return;
         };
-        let name: SharedString = game.name.clone().into();
         self.phase = Phase::Loading(name.clone());
         cx.notify();
         let kind = self.kind;
@@ -388,7 +512,8 @@ impl ArtPicker {
 impl Render for ArtPicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let has_key = self.key.is_some();
+        let has_key = self.key.is_some() || self.source == ArtSource::Igdb;
+        let source = self.source;
         let busy = matches!(self.phase, Phase::Searching | Phase::Loading(_));
         let can_go_back =
             matches!(self.phase, Phase::Images(..) | Phase::Loading(_)) && self.games.len() > 1;
@@ -437,6 +562,32 @@ impl Render for ArtPicker {
         v_flex()
             .id("art-picker")
             .gap_3()
+            .when(self.igdb_on, |el| {
+                el.child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            Button::new("art-source-sgdb")
+                                .ghost()
+                                .small()
+                                .label("SteamGridDB")
+                                .selected(source == ArtSource::SteamGridDb)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_source(ArtSource::SteamGridDb, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("art-source-igdb")
+                                .ghost()
+                                .small()
+                                .label("IGDB")
+                                .selected(source == ArtSource::Igdb)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_source(ArtSource::Igdb, cx)
+                                })),
+                        ),
+                )
+            })
             .when(has_key, |el| {
                 el.child(
                     h_flex()
@@ -478,7 +629,12 @@ impl Render for ArtPicker {
                             .text_xs()
                             .text_color(muted)
                             .min_w_0()
-                            .when(has_key, |el| el.child(t("library.art.attribution"))),
+                            .when(has_key, |el| {
+                                el.child(match source {
+                                    ArtSource::SteamGridDb => t("library.art.attribution"),
+                                    ArtSource::Igdb => t("library.art.attribution_igdb"),
+                                })
+                            }),
                     )
                     .child(
                         Button::new("sgdb-cancel")
@@ -547,6 +703,29 @@ mod tests {
             search_outcome(vec![game(1, "Hades"), game(2, "Hades II")]),
             SearchOutcome::Choose(vec![game(1, "Hades"), game(2, "Hades II")])
         );
+    }
+
+    #[test]
+    fn igdb_offers_covers_and_backgrounds_only() {
+        let game = IgdbGame {
+            id: 7,
+            cover: Some("co1".into()),
+            artworks: vec!["ar1".into()],
+            screenshots: vec!["sc1".into(), "bad/id".into()],
+            ..Default::default()
+        };
+        let covers = igdb_images(ArtKind::Cover, &game);
+        assert_eq!(covers.len(), 1);
+        assert!(covers[0].url.ends_with("/t_original/co1.jpg"));
+        assert!(covers[0].thumb.ends_with("/t_cover_big/co1.jpg"));
+        let backgrounds: Vec<String> = igdb_images(ArtKind::Background, &game)
+            .into_iter()
+            .map(|i| i.url)
+            .collect();
+        assert_eq!(backgrounds.len(), 2);
+        assert!(backgrounds[0].ends_with("/t_1080p/ar1.jpg"));
+        assert!(igdb_images(ArtKind::Logo, &game).is_empty());
+        assert!(igdb_images(ArtKind::Square, &game).is_empty());
     }
 
     #[test]

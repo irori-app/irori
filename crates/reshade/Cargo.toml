@@ -23,4 +23,5 @@ hex.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+irori-depot = { workspace = true, features = ["test-server"] }
 tempfile = "3"

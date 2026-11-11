@@ -48,11 +48,15 @@ use serde::{Deserialize, Serialize};
 use xbox_account::XboxAccount;
 
 mod xbox_account;
+mod xbox_friends;
 
+/// Online states of [`XboxFriend`]s.
+pub use irori_xbox_api::OnlineState as XboxOnlineState;
 pub use xbox_account::{
     AccountTitle as XboxAccountTitle, CLIENT_ID_VAR as XBOX_CLIENT_ID_VAR, XBOX_CLIENT_ID,
     XboxAccountStatus,
 };
+pub use xbox_friends::{XboxFriend, XboxFriends};
 
 pub use irori_launchers_data::Launcher as LauncherKind;
 pub use irori_launchers_data::SignIn as LauncherSignIn;
@@ -251,6 +255,18 @@ impl LaunchersStore {
     /// what it found.
     pub fn xbox_account_status(&self) -> XboxAccountStatus {
         self.xbox_account.status()
+    }
+
+    /// Whether an Xbox account is signed in, so its friends can be read.
+    pub fn has_xbox_account(&self) -> bool {
+        self.xbox_account.user().is_some()
+    }
+
+    /// The Xbox account's friends, with what they play; `None` while
+    /// signed out. A list read in the last minute is reused unless `force`.
+    pub async fn xbox_friends(&self, force: bool) -> Result<Option<XboxFriends>> {
+        let language = (self.settings)().ui_language.clone();
+        self.xbox_account.friends(force, &language).await
     }
 
     /// Fetch the Xbox account's titles again and show them. A refused

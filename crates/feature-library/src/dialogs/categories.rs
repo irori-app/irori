@@ -1,6 +1,8 @@
-//! Managing custom categories: create, rename and delete; choosing the
-//! categories of one game; and the small "New category" dialog used from a
-//! game's menu.
+//! Managing categories of both kinds: create, rename, pin, colour and
+//! delete manual ones, create, edit, pin, colour and delete smart ones
+//! (edited in [`super::smart`]); choosing the manual categories of one
+//! game; and the small "New category" dialog used from a game's menu.
+//! Names are unique across both kinds.
 //!
 //! Unlike Heroic, creating a category whose name already exists never wipes
 //! its members, renaming onto an existing name is refused instead of
@@ -14,10 +16,12 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
+use gpui_kit::component::{Icon, Selectable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
@@ -25,6 +29,9 @@ use gpui_kit::{
     Subscription, Window, div,
 };
 use irori_core::GameId;
+use irori_services::smart_categories::COLOURS;
+use irori_services::{CategoryLook, CategoryRef};
+use irori_ui::categories::CategoryEntry;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -74,14 +81,13 @@ pub fn validate_name<'a>(
     Ok(name.to_string())
 }
 
+/// Every category name of both kinds.
 fn existing_categories(cx: &App) -> Vec<String> {
-    models(cx)
-        .library
-        .read(cx)
-        .user
-        .categories
+    let user = &models(cx).library.read(cx).user;
+    user.categories
         .keys()
         .cloned()
+        .chain(user.smart_categories.values().map(|c| c.name.clone()))
         .collect()
 }
 
@@ -95,7 +101,7 @@ fn userdata(cx: &App, f: impl FnOnce(&irori_services::UserDataService) + Send + 
 pub struct CategoriesDialog {
     new_name: Entity<InputState>,
     editing: Option<(String, Entity<InputState>)>,
-    confirm_delete: Option<String>,
+    confirm_delete: Option<CategoryRef>,
     _subscriptions: Vec<Subscription>,
     _editing_subscription: Option<Subscription>,
 }
@@ -178,21 +184,155 @@ impl CategoriesDialog {
         cx.notify();
     }
 
-    fn delete(&mut self, name: String, cx: &mut Context<Self>) {
-        {
-            let name = name.clone();
-            userdata(cx, move |u| u.delete_category(&name));
-        }
-        if let Some(filters) = active_filters(cx) {
-            filters.update(cx, |m, cx| m.update(|f| f.forget_category(&name), cx));
+    fn delete(&mut self, category: CategoryRef, cx: &mut Context<Self>) {
+        let filters = active_filters(cx);
+        match category {
+            CategoryRef::Manual(name) => {
+                {
+                    let name = name.clone();
+                    userdata(cx, move |u| u.delete_category(&name));
+                }
+                if let Some(filters) = filters {
+                    filters.update(cx, |m, cx| m.update(|f| f.forget_category(&name), cx));
+                }
+            }
+            CategoryRef::Smart(id) => {
+                {
+                    let id = id.clone();
+                    userdata(cx, move |u| u.delete_smart_category(&id));
+                }
+                if let Some(filters) = filters {
+                    filters.update(cx, |m, cx| m.update(|f| f.forget_smart(&id), cx));
+                }
+            }
         }
         self.confirm_delete = None;
         cx.notify();
     }
 
-    fn render_row(&self, name: &str, count: usize, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Pin or unpin, or recolour, a category of either kind.
+    fn set_look(category: &CategoryRef, f: impl FnOnce(&mut CategoryLook), cx: &mut App) {
+        let mut look = models(cx).library.read(cx).user.category_look(category);
+        f(&mut look);
+        let category = category.clone();
+        userdata(cx, move |u| u.set_category_look(&category, look));
+    }
+
+    /// The buttons of a category's row: pin, colour, edit and delete.
+    fn row_actions(&self, entry: &CategoryEntry, cx: &mut Context<Self>) -> impl IntoElement {
+        let (pin_category, colour_category) = (entry.category.clone(), entry.category.clone());
+        let current = entry.colour.clone();
+        let edit = match &entry.category {
+            CategoryRef::Manual(name) => {
+                let name = name.clone();
+                Button::new("rename")
+                    .small()
+                    .ghost()
+                    .icon(IconName::Pencil)
+                    .tooltip(t("library.categories.rename"))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.start_rename(name.clone(), window, cx)
+                    }))
+            }
+            CategoryRef::Smart(id) => {
+                let id = id.clone();
+                Button::new("edit-smart")
+                    .small()
+                    .ghost()
+                    .icon(IconName::Pencil)
+                    .tooltip(t("library.categories.edit_rules"))
+                    .disabled(self.is_unreadable(&id, cx))
+                    .on_click(move |_, window, cx| {
+                        window.close_dialog(cx);
+                        super::smart::open_smart_category_editor(
+                            Some(id.clone()),
+                            None,
+                            window,
+                            cx,
+                        );
+                    })
+            }
+        };
+        let delete_category = entry.category.clone();
+        h_flex()
+            .gap_1()
+            .flex_shrink_0()
+            .child(
+                Button::new("pin")
+                    .small()
+                    .ghost()
+                    .icon(if entry.pinned {
+                        IconName::PinOff
+                    } else {
+                        IconName::Pin
+                    })
+                    .selected(entry.pinned)
+                    .tooltip(if entry.pinned {
+                        t("library.categories.unpin")
+                    } else {
+                        t("library.categories.pin")
+                    })
+                    .on_click(move |_, _, cx| {
+                        Self::set_look(&pin_category, |l| l.pinned = !l.pinned, cx)
+                    }),
+            )
+            .child(
+                Button::new("colour")
+                    .small()
+                    .ghost()
+                    .icon(IconName::Palette)
+                    .tooltip(t("library.categories.colour"))
+                    .dropdown_menu(move |menu, _, _| {
+                        let none = std::iter::once(None);
+                        let colours = COLOURS.iter().map(|c| Some(c.to_string()));
+                        none.chain(colours).fold(menu, |menu, colour| {
+                            let category = colour_category.clone();
+                            let label = colour.as_deref().map_or_else(
+                                || t("ui.category.colour.none"),
+                                irori_ui::categories::colour_label,
+                            );
+                            let checked = colour == current;
+                            menu.item(PopupMenuItem::new(label).checked(checked).on_click(
+                                move |_, _, cx| {
+                                    let colour = colour.clone();
+                                    Self::set_look(&category, move |l| l.colour = colour, cx)
+                                },
+                            ))
+                        })
+                    }),
+            )
+            .child(edit)
+            .child(
+                Button::new("delete")
+                    .small()
+                    .ghost()
+                    .icon(IconName::Trash)
+                    .tooltip(t("library.categories.delete"))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.confirm_delete = Some(delete_category.clone());
+                        this.editing = None;
+                        cx.notify();
+                    })),
+            )
+    }
+
+    fn is_unreadable(&self, id: &str, cx: &App) -> bool {
+        models(cx)
+            .library
+            .read(cx)
+            .user
+            .smart_categories
+            .get(id)
+            .is_some_and(|c| c.is_unreadable())
+    }
+
+    fn render_row(&self, entry: &CategoryEntry, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let row_id = SharedString::from(format!("category-{name}"));
+        let name = entry.name.as_str();
+        let row_id = SharedString::from(match &entry.category {
+            CategoryRef::Manual(name) => format!("category-{name}"),
+            CategoryRef::Smart(id) => format!("smart-category-{id}"),
+        });
         let base = h_flex()
             .id(row_id)
             .w_full()
@@ -201,7 +341,11 @@ impl CategoriesDialog {
             .border_b_1()
             .border_color(cx.theme().border);
 
-        if let Some((from, input)) = self.editing.as_ref().filter(|(n, _)| n == name) {
+        if let Some((from, input)) = self
+            .editing
+            .as_ref()
+            .filter(|(n, _)| entry.category == CategoryRef::Manual(n.clone()))
+        {
             let result = validate_name(
                 &text(input, cx),
                 &existing_categories(cx),
@@ -247,8 +391,8 @@ impl CategoriesDialog {
             );
         }
 
-        if self.confirm_delete.as_deref() == Some(name) {
-            let delete_name = name.to_string();
+        if self.confirm_delete.as_ref() == Some(&entry.category) {
+            let delete_category = entry.category.clone();
             return base.child(
                 h_flex()
                     .w_full()
@@ -278,89 +422,70 @@ impl CategoriesDialog {
                                     .danger()
                                     .label(t("library.categories.delete"))
                                     .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.delete(delete_name.clone(), cx)
+                                        this.delete(delete_category.clone(), cx)
                                     })),
                             ),
                     ),
             );
         }
 
-        let rename_name = name.to_string();
-        let delete_name = name.to_string();
+        let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
+        let detail = if entry.is_smart() && !entry.readable {
+            t("library.categories.unreadable")
+        } else {
+            match entry.count {
+                1 => t("library.common.games_one"),
+                n => t_args("library.common.games_other", &[("count", &n.to_string())]),
+            }
+        };
+        let actions = self.row_actions(entry, cx);
         base.justify_between()
             .child(
-                v_flex()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_medium()
-                            .truncate()
-                            .child(name.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .truncate()
-                            .child(match count {
-                                1 => t("library.common.games_one"),
-                                n => t_args(
-                                    "library.common.games_other",
-                                    &[("count", &n.to_string())],
-                                ),
-                            }),
-                    ),
-            )
-            .child(
                 h_flex()
-                    .gap_1()
-                    .flex_shrink_0()
+                    .min_w_0()
+                    .gap_2()
                     .child(
-                        Button::new("rename")
+                        Icon::new(irori_ui::categories::icon(&entry.category))
                             .small()
-                            .ghost()
-                            .icon(IconName::Pencil)
-                            .tooltip(t("library.categories.rename"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.start_rename(rename_name.clone(), window, cx)
-                            })),
+                            .text_color(colour.unwrap_or(muted)),
                     )
                     .child(
-                        Button::new("delete")
-                            .small()
-                            .ghost()
-                            .icon(IconName::Trash)
-                            .tooltip(t("library.categories.delete"))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.confirm_delete = Some(delete_name.clone());
-                                this.editing = None;
-                                cx.notify();
-                            })),
+                        v_flex()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_medium()
+                                    .truncate()
+                                    .child(name.to_string()),
+                            )
+                            .child(div().text_xs().text_color(muted).truncate().child(
+                                if entry.is_smart() {
+                                    t_args(
+                                        "library.categories.smart_detail",
+                                        &[("detail", &detail)],
+                                    )
+                                } else {
+                                    detail
+                                },
+                            )),
                     ),
             )
+            .child(actions)
     }
 }
 
 impl Render for CategoriesDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let categories: Vec<(String, usize)> = models(cx)
-            .library
-            .read(cx)
-            .user
-            .categories
-            .iter()
-            .map(|(n, s)| (n.clone(), s.len()))
-            .collect();
-        let candidate = validate_name(
-            &text(&self.new_name, cx),
-            categories.iter().map(|(n, _)| n),
-            None,
-        );
+        let categories = {
+            let lib = models(cx).library.read(cx);
+            irori_ui::categories::entries(&lib.user, &lib.categories)
+        };
+        let candidate = validate_name(&text(&self.new_name, cx), &existing_categories(cx), None);
         let exists = candidate == Err(NameError::Exists);
         let mut rows = Vec::with_capacity(categories.len());
-        for (name, count) in &categories {
-            rows.push(self.render_row(name, *count, cx).into_any_element());
+        for entry in &categories {
+            rows.push(self.render_row(entry, cx).into_any_element());
         }
 
         v_flex()
@@ -381,6 +506,21 @@ impl Render for CategoriesDialog {
                                         cx.listener(|this, _, window, cx| this.create(window, cx)),
                                     ),
                             ),
+                    )
+                    .child(
+                        h_flex().child(
+                            Button::new("create-smart-category")
+                                .small()
+                                .ghost()
+                                .icon(IconName::Sparkles)
+                                .label(t("library.categories.create_smart"))
+                                .on_click(|_, window, cx| {
+                                    window.close_dialog(cx);
+                                    super::smart::open_smart_category_editor(
+                                        None, None, window, cx,
+                                    );
+                                }),
+                        ),
                     )
                     .when(exists, |this| {
                         this.child(
@@ -501,6 +641,19 @@ impl Render for GameCategoriesDialog {
         );
         let muted = cx.theme().muted_foreground;
         let empty = entries.is_empty();
+        // Smart categories follow their rules: named here, not ticked.
+        let smart: Vec<String> = {
+            let lib = models(cx).library.read(cx);
+            lib.user
+                .categories_in_order()
+                .into_iter()
+                .filter(|(c, _)| {
+                    matches!(c, CategoryRef::Smart(_))
+                        && irori_ui::categories::contains(c, &self.game, &lib.user, &lib.categories)
+                })
+                .map(|(_, name)| name)
+                .collect()
+        };
         let boxes = entries.into_iter().enumerate().map(|(ix, (name, member))| {
             let game = self.game.clone();
             Checkbox::new(SharedString::from(format!("game-category-{ix}")))
@@ -529,6 +682,15 @@ impl Render for GameCategoriesDialog {
                     })
                     .children(boxes),
             )
+            .when(!smart.is_empty(), |el| {
+                let names = smart.join(&t("library.filter.list_separator"));
+                el.child(
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(t_args("library.menu.in_smart", &[("names", &names)])),
+                )
+            })
             .child(
                 v_flex()
                     .gap_1()

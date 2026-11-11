@@ -15,6 +15,8 @@
 //!   counts, images, details and last played), minutes played
 //!   (`userstats.xboxlive.com`, the `MinutesPlayed` statistic) and a
 //!   title's achievements (`achievements.xboxlive.com`, version 2).
+//! * Friends ([`friends`]): the people the account follows, their profiles
+//!   and presence, read through the services Microsoft documents.
 //!
 //! Tokens, codes and the PKCE verifier never appear in `Debug` output, logs
 //! or error messages; transport errors are stripped of their address.
@@ -25,8 +27,10 @@
 
 mod api;
 pub mod auth;
+pub mod friends;
 pub mod model;
 
 pub use api::{Client, Endpoints, Session, Tokens, XboxError};
 pub use auth::{CAPTURE, Pkce, REDIRECT_URL, SCOPES, code_from_input};
+pub use friends::{OnlineState, Person, Presence};
 pub use model::{Achievement, Title};

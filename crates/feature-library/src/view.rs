@@ -3,6 +3,7 @@
 mod bulk;
 mod panel;
 mod quick;
+pub(crate) mod remove;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -61,9 +62,9 @@ use crate::layouts;
 use crate::top::{TopCache, TopKind};
 use crate::{
     ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
-    NextLibraryView, OpenSelected, SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft,
-    SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus, ShowGrid, ShowList,
-    ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
+    NextLibraryView, OpenSelected, RemovePicked, SelectAllGames, SelectDown, SelectFirst,
+    SelectLast, SelectLeft, SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus,
+    ShowGrid, ShowList, ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -228,6 +229,7 @@ impl LibraryView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t("library.search.placeholder")));
         let filters = cx.new(|_| FilterModel::new(filter::load()));
         set_active_filters(&filters, cx);
+        remove::set_active_library(cx.entity().downgrade(), cx);
         // After the saved criteria, so a change asked for before the view
         // existed (a game page's mode chip) wins over them.
         crate::filters_panel::apply_pending(&filters, cx);
@@ -244,7 +246,14 @@ impl LibraryView {
         let saved_views = crate::views::saved_views(cx);
 
         let subscriptions = vec![
-            cx.observe(&m.library, |_, _, cx| cx.notify()),
+            cx.observe(&m.library, |this: &mut Self, library, cx| {
+                // A smart category deleted here or on another computer
+                // leaves the filter, and the saved view state, at once.
+                let user = library.read(cx).user.clone();
+                this.filters
+                    .update(cx, |m, cx| m.update(|f| f.forget_missing_smart(&user), cx));
+                cx.notify();
+            }),
             cx.observe(&m.statuses, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&art, |_, _, cx| cx.notify()),
@@ -361,7 +370,7 @@ impl LibraryView {
             .iter()
             .filter_map(|g| match g.kind {
                 GroupKind::Status(s) => Some(s),
-                GroupKind::Mode(_) | GroupKind::Genre(_) => None,
+                GroupKind::Mode(_) | GroupKind::Genre(_) | GroupKind::Category(_) => None,
             })
             .collect()
     }
@@ -393,6 +402,21 @@ impl LibraryView {
         self.click_game(id, modifiers, count, window, cx)
     }
 
+    /// Scroll `y` down from the top, as the wheel would.
+    #[cfg(test)]
+    pub(crate) fn scroll_for_test(&mut self, y: Pixels, cx: &mut Context<Self>) {
+        self.scroll.set_offset(point(px(0.), -y));
+        cx.notify();
+    }
+
+    /// Forget the selected game, as a fresh library has none.
+    #[cfg(test)]
+    pub(crate) fn clear_focus_for_test(&mut self, cx: &mut Context<Self>) {
+        self.focused = None;
+        self.focused_ix = None;
+        cx.notify();
+    }
+
     /// Switch views without remembering it (tests share one settings file).
     #[cfg(test)]
     pub(crate) fn show_layout_for_test(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
@@ -421,6 +445,25 @@ impl LibraryView {
             self.layout,
             self.panels.drawer_open,
             self.drawer_rem(window),
+        )
+    }
+
+    /// The list's scroll offset (down from the top), the content height its
+    /// scrollbar knows, the height of every item laid end to end, and the
+    /// height of the list's viewport.
+    #[cfg(test)]
+    pub(crate) fn scroll_state(&self) -> (Pixels, Pixels, Pixels, Pixels) {
+        use gpui_kit::component::scroll::ScrollbarHandle as _;
+        let items = self
+            .frame
+            .sizes
+            .iter()
+            .fold(px(0.), |sum, size| sum + size.height);
+        (
+            -self.scroll.offset().y,
+            self.scroll.content_size().height,
+            items,
+            self.scroll.viewport_bounds().size.height,
         )
     }
 
@@ -487,9 +530,14 @@ impl LibraryView {
 
     fn prepare_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let m = models(cx).clone();
-        let (snapshot, user, updates) = {
+        let (snapshot, user, updates, categories) = {
             let lib = m.library.read(cx);
-            (lib.snapshot.clone(), lib.user.clone(), lib.updates.clone())
+            (
+                lib.snapshot.clone(),
+                lib.user.clone(),
+                lib.updates.clone(),
+                lib.categories.clone(),
+            )
         };
         let app = m.settings.read(cx).app.clone();
         let stores = {
@@ -503,9 +551,15 @@ impl LibraryView {
         self.check_availability(&snapshot, cx);
         let missing = self.availability.missing().clone();
 
-        let games = self
-            .games
-            .get(&filter, &stores, &snapshot, &user, &updates, &missing);
+        let games = self.games.get_in(
+            &filter,
+            &stores,
+            &snapshot,
+            &user,
+            &categories,
+            &updates,
+            &missing,
+        );
         let groups = self.games.groups();
         if filter.group != self.grouping {
             if self.frame.key.is_some() {
@@ -533,12 +587,12 @@ impl LibraryView {
         let width = if self.viewport.width > px(0.) {
             self.viewport.width
         } else {
-            window.viewport_size().width
+            irori_ui::style::visible_size(window).width
         };
         let height = if self.viewport.height > px(0.) {
             self.viewport.height
         } else {
-            window.viewport_size().height
+            irori_ui::style::visible_size(window).height
         };
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
@@ -616,8 +670,8 @@ impl LibraryView {
         self.frame.groups = groups;
         self.frame.top = top;
         self.frame.stores = stores;
-        self.frame.heading = if !filter.categories.is_empty() {
-            filter.category_heading().into()
+        self.frame.heading = if filter.has_categories() {
+            filter.category_heading(&user).into()
         } else if filter.favourites_only {
             t("library.heading.favourites")
         } else {
@@ -627,10 +681,13 @@ impl LibraryView {
         self.frame.list_columns = grid::list_columns(available);
         self.frame.focus_rem = focus_rem;
         self.follow_selection();
-        if std::mem::take(&mut self.scroll_pending)
-            && let Some(item) = self.focused_ix.and_then(|ix| self.item_of_game(ix))
-        {
-            self.scroll.scroll_to_item(item, ScrollStrategy::Center);
+        if std::mem::take(&mut self.scroll_pending) {
+            // A new view keeps the selected game in view, else it opens at
+            // its top: the old view's offset means nothing in its rows.
+            match self.focused_ix.and_then(|ix| self.item_of_game(ix)) {
+                Some(item) => self.scroll.scroll_to_item(item, ScrollStrategy::Center),
+                None => self.scroll.scroll_to_item(0, ScrollStrategy::Top),
+            }
         }
 
         // Continue-playing cards show art and a logo each.
@@ -933,6 +990,30 @@ impl LibraryView {
                 })
                 .detach();
             }
+            GameCommand::RemoveFromSteam => {
+                let app = b.settings.app();
+                let ids = std::collections::HashSet::from([id.clone()]);
+                let task = irori_ui::run(cx, async move {
+                    irori_extras::shortcuts::remove_from_steam(Some(&ids), &app).await
+                });
+                let failed = t_args("library.error.remove_from_steam", &[("title", &title)]);
+                let done = t_args("library.steam_removed", &[("title", &title)]);
+                let absent = t_args("library.steam_absent", &[("title", &title)]);
+                cx.spawn_in(window, async move |_, cx| {
+                    let result = task.await;
+                    cx.update(|window, cx| match result {
+                        Ok(report) => window.push_notification(
+                            gpui_kit::component::notification::Notification::success(
+                                if report.removed > 0 { done } else { absent },
+                            ),
+                            cx,
+                        ),
+                        Err(e) => crate::notify_error(failed, &e, window, cx),
+                    })
+                    .ok();
+                })
+                .detach();
+            }
             GameCommand::OpenFolder => {
                 if let Some(path) = game.install_path() {
                     cx.open_with_system(&path);
@@ -1145,7 +1226,14 @@ impl LibraryView {
             Move::PageDown(_) => Move::PageDown(page_rows),
             other => other,
         };
-        if let Some(ix) = grid::move_in_sections(current, &self.sections(), self.columns(), step) {
+        let target = grid::move_in_sections(current, &self.sections(), self.columns(), step);
+        if current.is_some() && target == current {
+            // At the edge the key is left to others, so a controller (whose
+            // arrows are these keys) moves on to the controls around the grid.
+            cx.propagate();
+            return;
+        }
+        if let Some(ix) = target {
             let id = games[ix].id();
             self.check_shortcut(&id, cx);
             self.focused = Some(id);
@@ -1244,7 +1332,9 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Status => Grouping::None,
-                    Grouping::None | Grouping::Mode | Grouping::Genre => Grouping::Status,
+                    Grouping::None | Grouping::Mode | Grouping::Genre | Grouping::Category => {
+                        Grouping::Status
+                    }
                 }
             },
             cx,
@@ -1257,7 +1347,9 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Mode => Grouping::None,
-                    Grouping::None | Grouping::Status | Grouping::Genre => Grouping::Mode,
+                    Grouping::None | Grouping::Status | Grouping::Genre | Grouping::Category => {
+                        Grouping::Mode
+                    }
                 }
             },
             cx,
@@ -1461,11 +1553,17 @@ fn game_menu(
                 let id = id.clone();
                 menu = menu.submenu_with_icon(
                     Some(Icon::new(IconName::Tags)),
-                    t("library.menu.categories"),
+                    t("library.menu.add_to"),
                     window,
                     cx,
                     move |sub, _, cx| categories_menu(sub, &view, &id, cx),
                 );
+                // Smart categories follow their rules: named, never ticked.
+                let smart = smart_categories_of(&game.id(), cx);
+                if !smart.is_empty() {
+                    let names = smart.join(&t("library.filter.list_separator"));
+                    menu = menu.label(t_args("library.menu.in_smart", &[("names", &names)]));
+                }
                 let status_id = game.id();
                 menu = menu.submenu_with_icon(
                     Some(Icon::new(IconName::Flag)),
@@ -1477,6 +1575,27 @@ fn game_menu(
                 menu = copies_menu(menu, &copies_view, game, window, cx);
             }
         }
+    }
+    // A picked game's menu removes every picked game it can.
+    let picked_removable = view.upgrade().and_then(|v| {
+        let v = v.read(cx);
+        (v.selection.is_active() && v.selection.contains(&id))
+            .then(|| v.removal_plan(cx).remove.len())
+            .filter(|n| *n > 0)
+    });
+    if let Some(count) = picked_removable {
+        let view = view.clone();
+        menu = menu.separator().item(
+            PopupMenuItem::new(t_args(
+                "library.bulk.remove",
+                &[("count", &count.to_string())],
+            ))
+            .icon(Icon::new(IconName::ListX))
+            .on_click(move |_, window, cx| {
+                view.update(cx, |this, cx| this.remove_picked(window, cx))
+                    .ok();
+            }),
+        );
     }
     menu
 }
@@ -1516,6 +1635,20 @@ fn copies_menu(
                 );
             }),
     )
+}
+
+/// The names of the smart categories a game is in, pinned first.
+fn smart_categories_of(id: &GameId, cx: &App) -> Vec<String> {
+    let lib = models(cx).library.read(cx);
+    lib.user
+        .categories_in_order()
+        .into_iter()
+        .filter(|(c, _)| {
+            matches!(c, irori_services::CategoryRef::Smart(_))
+                && irori_ui::categories::contains(c, id, &lib.user, &lib.categories)
+        })
+        .map(|(_, name)| name)
+        .collect()
 }
 
 fn categories_menu(
@@ -1951,6 +2084,7 @@ impl LibraryView {
                                 (Grouping::Status, "library.toolbar.group.status"),
                                 (Grouping::Mode, "library.toolbar.group.mode"),
                                 (Grouping::Genre, "library.toolbar.group.genre"),
+                                (Grouping::Category, "library.toolbar.group.category"),
                             ];
                             options.into_iter().fold(menu, |menu, (option, key)| {
                                 let model = model.clone();
@@ -2097,7 +2231,12 @@ impl LibraryView {
             let filter = self.filters.read(cx).filter().clone();
             let description = t_args(
                 "library.no_match.description",
-                &[("filters", &filter.describe().join(" · "))],
+                &[(
+                    "filters",
+                    &filter
+                        .describe(&models(cx).library.read(cx).user)
+                        .join(" · "),
+                )],
             );
             return EmptyState::new(IconName::SearchX, t("library.no_match.title"))
                 .description(description)
@@ -2176,6 +2315,7 @@ impl LibraryView {
             .on_action(cx.listener(|this, _: &OpenSelected, w, cx| this.open_focused(w, cx)))
             .on_action(cx.listener(|this, _: &ToggleDrawer, w, cx| this.toggle_drawer(w, cx)))
             .on_action(cx.listener(|this, _: &SelectAllGames, _, cx| this.select_all(cx)))
+            .on_action(cx.listener(|this, _: &RemovePicked, w, cx| this.remove_picked(w, cx)))
             .on_action(cx.listener(|this, _: &EndSelection, _, cx| this.end_selection(cx)))
             .on_action(
                 cx.listener(|this, _: &ActivateSelected, w, cx| this.activate_focused(w, cx)),
@@ -2273,6 +2413,26 @@ impl LibraryView {
                     |g| SharedString::from(g.to_string()),
                 ),
             ),
+            GroupKind::Category(None) => (
+                Icon::new(IconName::Tag)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                t("library.filter.uncategorized"),
+            ),
+            GroupKind::Category(Some((category, name))) => {
+                let user = &models(cx).library.read(cx).user;
+                let colour = user.category_look(&category).colour;
+                let colour = irori_ui::categories::colour(colour.as_deref(), cx)
+                    .unwrap_or(theme.muted_foreground);
+                (
+                    Icon::new(irori_ui::categories::icon(&category))
+                        .small()
+                        .text_color(colour)
+                        .into_any_element(),
+                    SharedString::from(name.to_string()),
+                )
+            }
         };
         h_flex()
             .h(rems(grid::HEADING_REM))
@@ -2350,7 +2510,15 @@ impl LibraryView {
         let focus_view = self.layout == LibraryLayout::Focus;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
-            .then(|| models(cx).library.read(cx).categories_of(&id))
+            .then(|| {
+                let badges = models(cx).library.read(cx).categories_of(&id);
+                badges
+                    .into_iter()
+                    .map(|(name, colour)| {
+                        (name, irori_ui::categories::colour(colour.as_deref(), cx))
+                    })
+                    .collect::<Vec<_>>()
+            })
             .filter(|c| !c.is_empty());
         let keyboard =
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
@@ -3300,7 +3468,11 @@ const COVER_CATEGORIES: usize = 2;
 
 /// A game's categories as small chips along its cover's foot, or its top
 /// when the cover is drawn with the title at its foot.
-fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> AnyElement {
+fn category_chips(
+    names: Vec<(String, Option<gpui_kit::Hsla>)>,
+    at_foot: bool,
+    scrim: gpui_kit::Hsla,
+) -> AnyElement {
     let more = names.len().saturating_sub(COVER_CATEGORIES);
     h_flex()
         .absolute()
@@ -3310,16 +3482,24 @@ fn category_chips(names: Vec<String>, at_foot: bool, scrim: gpui_kit::Hsla) -> A
         .gap_1()
         .min_w_0()
         .overflow_hidden()
-        .children(names.into_iter().take(COVER_CATEGORIES).map(|name| {
-            div()
-                .min_w_0()
-                .px_1p5()
-                .rounded_md()
-                .bg(scrim)
-                .text_xs()
-                .truncate()
-                .child(name)
-        }))
+        .children(
+            names
+                .into_iter()
+                .take(COVER_CATEGORIES)
+                .map(|(name, colour)| {
+                    h_flex()
+                        .min_w_0()
+                        .gap_1()
+                        .px_1p5()
+                        .rounded_md()
+                        .bg(scrim)
+                        .text_xs()
+                        .when_some(colour, |el, colour| {
+                            el.child(div().flex_none().size_1p5().rounded_full().bg(colour))
+                        })
+                        .child(div().min_w_0().truncate().child(name))
+                }),
+        )
         .when(more > 0, |el| {
             el.child(
                 div()

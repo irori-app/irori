@@ -1,12 +1,16 @@
 //! Command-line operations that run without a window: `irori <command>`.
 //! Useful for scripts, SSH sessions and troubleshooting.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
 use irori_core::util::{format_bytes, format_duration};
-use irori_core::{GameId, InstallInfoQuery, InstallPlatform, InstallRequest, RemoveArgs, Runner};
+use irori_core::{
+    GameId, GameInfo, InstallInfoQuery, InstallPlatform, InstallRequest, RemoveArgs, Runner,
+};
 use irori_services::{Backend, DownloadState};
 
 pub const COMMANDS: &[&str] = &[
@@ -23,6 +27,7 @@ pub const COMMANDS: &[&str] = &[
     "uninstall",
     "accounts",
     "sunshine-sync",
+    "steam-shortcuts",
 ];
 
 pub const HELP: &str = "Commands (run without opening a window):
@@ -44,7 +49,11 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori uninstall <runner>/<app> [--keep-files]
                                       Uninstall a game, or discard a stopped install
   irori sunshine-sync [--remove]      Bring Irori's games in Sunshine up to date
-                                      (--remove: take them out of Sunshine)";
+                                      (--remove: take them out of Sunshine)
+  irori steam-shortcuts [--remove] [<runner>/<app>...]
+                                      Bring Irori's Steam shortcuts up to date for every
+                                      installed game, or the games named (Steam must be
+                                      closed; --remove: take them out of Steam)";
 
 /// Run a headless command. Returns the process exit code.
 pub fn run(args: &[String]) -> Result<i32> {
@@ -102,6 +111,7 @@ pub fn run(args: &[String]) -> Result<i32> {
                 }
                 Ok(i32::from(!report.failed.is_empty()))
             }
+            "steam-shortcuts" => steam_shortcuts(&backend, &args[1..]).await,
             "info" => info(&backend, &args[1..]).await,
             "playtime" => playtime(&backend, &args[1..]).await,
             "install" => install(&backend, &args[1..]).await,
@@ -133,6 +143,79 @@ fn flag_value<'a>(args: &'a [String], name: &str) -> Option<&'a String> {
     args.iter()
         .position(|a| a == name)
         .and_then(|i| args.get(i + 1))
+}
+
+/// `--remove` and the games named, from `steam-shortcuts`' arguments.
+fn steam_shortcut_args(args: &[String]) -> Result<(bool, Vec<GameId>)> {
+    let mut remove = false;
+    let mut games = Vec::new();
+    for arg in args {
+        match arg.as_str() {
+            "--remove" => remove = true,
+            a if a.starts_with('-') => bail!("unknown option {a}"),
+            _ => games.push(parse_id(Some(arg))?),
+        }
+    }
+    Ok((remove, games))
+}
+
+/// The games a full sync gives a Steam shortcut: installed ones that Steam
+/// doesn't list itself, without DLCs and without hidden games while they
+/// are locked.
+fn steam_shortcut_games<'a>(
+    games: impl IntoIterator<Item = &'a Arc<GameInfo>>,
+    concealed: impl Fn(&GameId) -> bool,
+) -> Vec<Arc<GameInfo>> {
+    games
+        .into_iter()
+        .filter(|g| g.is_installed && !g.is_dlc && g.runner() != Runner::Steam)
+        .filter(|g| !concealed(&g.id()))
+        .cloned()
+        .collect()
+}
+
+/// `steam-shortcuts`: bring Irori's Steam shortcuts up to date for every
+/// installed game (removing those of games that left the library), or for
+/// the games named; with `--remove`, take them out of Steam.
+async fn steam_shortcuts(backend: &Backend, args: &[String]) -> Result<i32> {
+    use irori_extras::shortcuts;
+    let (remove, picked) = steam_shortcut_args(args)?;
+    let app = backend.settings.app();
+    let report = if remove {
+        let ids: Option<HashSet<GameId>> =
+            (!picked.is_empty()).then(|| picked.into_iter().collect());
+        shortcuts::remove_from_steam(ids.as_ref(), &app).await?
+    } else if picked.is_empty() {
+        let library = backend.library();
+        let games = steam_shortcut_games(library.all_games(), |id| backend.concealed(id));
+        let known: HashSet<GameId> = library.all_games().map(|g| g.id()).collect();
+        // A store that is signed out lists fewer games; its shortcuts stay.
+        let listing: HashSet<Runner> = backend
+            .stores()
+            .filter(|s| !s.runner().has_account() || s.user().is_some())
+            .map(|s| s.runner())
+            .collect();
+        let gone = |id: &GameId| !known.contains(id) && listing.contains(&id.runner);
+        shortcuts::sync_steam(&games, Some(&gone), &app).await?
+    } else {
+        let games = picked
+            .iter()
+            .map(|id| {
+                backend.game(id).with_context(|| {
+                    format!("{}/{} isn't in your library", id.runner.id(), id.app_name)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        shortcuts::sync_steam(&games, None, &app).await?
+    };
+    println!(
+        "Steam: {} added, {} updated, {} removed",
+        report.added, report.updated, report.removed
+    );
+    for line in &report.errors {
+        eprintln!("  {line}");
+    }
+    Ok(i32::from(!report.errors.is_empty()))
 }
 
 fn accounts(backend: &Backend) -> Result<i32> {
@@ -456,7 +539,49 @@ fn preferred_language(languages: &[String], ui: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::preferred_language;
+    use super::*;
+
+    #[test]
+    fn reads_steam_shortcut_arguments() {
+        let args = |list: &[&str]| -> Vec<String> { list.iter().map(|s| s.to_string()).collect() };
+        assert_eq!(steam_shortcut_args(&[]).unwrap(), (false, Vec::new()));
+        assert_eq!(
+            steam_shortcut_args(&args(&["gog/1", "--remove", "epic/Fortnite"])).unwrap(),
+            (
+                true,
+                vec![
+                    GameId::new(Runner::Gog, "1"),
+                    GameId::new(Runner::Legendary, "Fortnite")
+                ]
+            )
+        );
+        assert!(steam_shortcut_args(&args(&["--nope"])).is_err());
+        assert!(steam_shortcut_args(&args(&["gog"])).is_err());
+    }
+
+    #[test]
+    fn syncs_installed_games_steam_doesnt_list() {
+        let game = |runner, app: &str, installed, dlc| {
+            Arc::new(GameInfo {
+                runner: Some(runner),
+                app_name: app.into(),
+                title: app.into(),
+                is_installed: installed,
+                is_dlc: dlc,
+                ..Default::default()
+            })
+        };
+        let games = [
+            game(Runner::Gog, "installed", true, false),
+            game(Runner::Gog, "not-installed", false, false),
+            game(Runner::Gog, "dlc", true, true),
+            game(Runner::Steam, "620", true, false),
+            game(Runner::Sideload, "locked", true, false),
+        ];
+        let picked = steam_shortcut_games(&games, |id| id.app_name.as_ref() == "locked");
+        let names: Vec<&str> = picked.iter().map(|g| g.app_name.as_str()).collect();
+        assert_eq!(names, ["installed"]);
+    }
 
     #[test]
     fn picks_ui_language_then_english() {

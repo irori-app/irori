@@ -1,7 +1,8 @@
 //! Launcher shortcuts for games: freedesktop entries on the desktop and in
 //! the application menu, Steam non-Steam-game shortcuts, and the icons they
-//! use. Every shortcut starts the game with `irori --launch <runner>/<app>`;
-//! the `irori://launch/<runner>/<app>` URL scheme is registered alongside.
+//! use. Every shortcut starts the game with `irori --launch <runner>/<app>`
+//! (Steam's with `--wait`, so Steam follows the whole session); the
+//! `irori://launch/<runner>/<app>` URL scheme is registered alongside.
 //!
 //! [`ShortcutTargets`], [`add`] and [`remove`] are the contract used by
 //! `irori-services`.
@@ -14,7 +15,9 @@ pub mod desktop;
 pub mod icon;
 pub mod steam;
 
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use irori_core::{AppSettings, GameId, GameInfo};
@@ -201,23 +204,31 @@ pub async fn add_with_report(
     Ok(report)
 }
 
-/// Add games to Steam in one pass, installed or not; DLCs are skipped.
-/// Returns how many shortcuts were added. Fails when Steam is running or
-/// no Steam user could be changed.
-pub async fn add_to_steam(games: &[std::sync::Arc<GameInfo>], app: &AppSettings) -> Result<usize> {
-    let games: Vec<&GameInfo> = games.iter().map(|g| &**g).filter(|g| !is_dlc(g)).collect();
-    let mut steam_ids = Vec::with_capacity(games.len());
-    for game in &games {
-        steam_ids.push(crate::wiki::steam_app_id(game).await);
+/// The Steam app IDs (from wiki data) of `games`, which pick official
+/// Steam artwork; DLCs are left out.
+async fn with_steam_ids(games: &[Arc<GameInfo>]) -> Vec<(&GameInfo, Option<String>)> {
+    let mut out = Vec::with_capacity(games.len());
+    for game in games.iter().map(|g| &**g).filter(|g| !is_dlc(g)) {
+        out.push((game, crate::wiki::steam_app_id(game).await));
     }
-    let list: Vec<steam::SteamGame<'_>> = games
-        .iter()
-        .zip(&steam_ids)
+    out
+}
+
+fn steam_games<'a>(list: &'a [(&'a GameInfo, Option<String>)]) -> Vec<steam::SteamGame<'a>> {
+    list.iter()
         .map(|(game, id)| steam::SteamGame {
             game,
             steam_app_id: id.as_deref(),
         })
-        .collect();
+        .collect()
+}
+
+/// Add games to Steam in one pass, installed or not; DLCs are skipped.
+/// Returns how many shortcuts were added. Fails when Steam is running or
+/// no Steam user could be changed.
+pub async fn add_to_steam(games: &[Arc<GameInfo>], app: &AppSettings) -> Result<usize> {
+    let ids = with_steam_ids(games).await;
+    let list = steam_games(&ids);
     let report = steam::add_many(&list, app).await?;
     if report.steam_running {
         bail!("Steam is running. Close Steam and try again to add games to Steam.");
@@ -229,6 +240,38 @@ pub async fn add_to_steam(games: &[std::sync::Arc<GameInfo>], app: &AppSettings)
         tracing::warn!("{e}");
     }
     Ok(report.added)
+}
+
+/// Bring Irori's Steam shortcuts in step with `games` (DLCs skipped): add
+/// the missing ones, update Irori's own fields of the others and fill in
+/// their missing art. Irori's shortcuts of games `gone` picks are removed.
+/// Fails when Steam is running.
+pub async fn sync_steam(
+    games: &[Arc<GameInfo>],
+    gone: Option<&steam::Gone<'_>>,
+    app: &AppSettings,
+) -> Result<steam::SyncReport> {
+    let ids = with_steam_ids(games).await;
+    let list = steam_games(&ids);
+    let report = steam::sync(&list, gone, app).await?;
+    if report.steam_running {
+        bail!("Steam is running. Close Steam and try again to change its shortcuts.");
+    }
+    Ok(report)
+}
+
+/// Remove Irori's Steam shortcuts of `ids`, or every one of Irori's with
+/// `None`, with their art. Other programs' shortcuts stay. Fails when Steam
+/// is running and there is something to remove.
+pub async fn remove_from_steam(
+    ids: Option<&HashSet<GameId>>,
+    app: &AppSettings,
+) -> Result<steam::SyncReport> {
+    let report = steam::remove_games(ids, app).await?;
+    if report.steam_running {
+        bail!("Steam is running. Close Steam and try again to remove games from Steam.");
+    }
+    Ok(report)
 }
 
 /// Remove every shortcut Irori created for the game.

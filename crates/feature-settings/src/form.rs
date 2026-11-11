@@ -36,6 +36,7 @@ use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
+use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
 use crate::registry::{
@@ -173,6 +174,9 @@ pub struct SettingsForm {
     wine: Option<WinePicker>,
     /// The graphics cards and layers the GPU options need, once looked for.
     graphics: Option<Arc<HostGraphics>>,
+    /// The displays, for the HDR and gamescope hints (Linux, where those
+    /// settings exist).
+    displays: Option<Arc<irori_services::displays::DisplayReport>>,
     /// Release tags offered by each version picker, once loaded.
     tool_versions: HashMap<&'static str, Vec<String>>,
     tool_versions_requested: bool,
@@ -239,6 +243,7 @@ impl SettingsForm {
             slider_seen: HashMap::new(),
             wine: None,
             graphics: None,
+            displays: None,
             tool_versions: HashMap::new(),
             tool_versions_requested: false,
             errors: HashMap::new(),
@@ -260,6 +265,9 @@ impl SettingsForm {
         this.build_controls(window, cx);
         if !matches!(this.target, FormTarget::App) {
             this.load_graphics(window, cx);
+            if cfg!(target_os = "linux") {
+                this.load_displays(window, cx);
+            }
         }
         let settings_model = models(cx).settings.clone();
         this._subscriptions.push(
@@ -350,6 +358,21 @@ impl SettingsForm {
             this.update_in(cx, |this, window, cx| {
                 this.graphics = Some(Arc::new(graphics));
                 this.sync_gpu_select(window, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Read the displays for the HDR and gamescope fields' hints.
+    fn load_displays(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { Ok(b.displays(false).await) });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(displays) = task.await else { return };
+            this.update(cx, |this, cx| {
+                this.displays.get_or_insert(displays);
                 cx.notify();
             })
             .ok();
@@ -656,6 +679,7 @@ impl SettingsForm {
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
+            PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);
@@ -1644,6 +1668,41 @@ impl SettingsForm {
         cx.notify();
     }
 
+    /// A field's help, followed by what the displays say about it.
+    fn field_help(&self, spec: &FieldSpec) -> SharedString {
+        let help = spec.help_text();
+        let Some(hint) = self
+            .displays
+            .as_deref()
+            .and_then(|d| crate::displays::hint_text(spec.path, d))
+        else {
+            return help;
+        };
+        if help.is_empty() {
+            hint
+        } else {
+            format!("{help} {hint}").into()
+        }
+    }
+
+    /// Use these displays instead of the computer's.
+    #[cfg(test)]
+    pub(crate) fn set_displays_for_test(
+        &mut self,
+        displays: irori_services::displays::DisplayReport,
+        cx: &mut Context<Self>,
+    ) {
+        self.displays = Some(Arc::new(displays));
+        cx.notify();
+    }
+
+    /// The help shown under a field.
+    #[cfg(test)]
+    pub(crate) fn help_for_test(&self, path: &str) -> SharedString {
+        let spec = registry::find(path).expect("a registered field");
+        self.field_help(spec)
+    }
+
     // ---- rendering ----
 
     fn render_field(
@@ -1671,7 +1730,7 @@ impl SettingsForm {
         let label = spec.label_text();
         let mut row = RowState {
             label: label.clone(),
-            help: spec.help_text(),
+            help: self.field_help(spec),
             tag: spec.tag.map(|tag| tag.text()),
             reset,
             disabled_reason,

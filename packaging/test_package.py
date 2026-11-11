@@ -1,10 +1,12 @@
 """Packaging regressions that can run on every build host."""
+import json
 import os
 from pathlib import Path
 import re
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -12,6 +14,7 @@ from unittest.mock import patch
 import zipfile
 
 import package
+import release_manifests
 
 # AppDirs hold relative symlinks (`irori.desktop`, `.DirIcon`), which Windows
 # can't follow; AppImages are only built on Linux.
@@ -90,6 +93,20 @@ class LinuxPackagingTests(unittest.TestCase):
         with patch.object(package.subprocess, "run", side_effect=appimagetool):
             tarball = package.package("linux", self.binaries, self.root / "output", appimage=True)
         return tarball, seen
+
+    def test_tarball_holds_every_file_the_distribution_packages_install(self):
+        """The AUR PKGBUILD and the COPR spec install from the tarball by name."""
+        tarball = package.package("linux", self.binaries, self.root / "output")
+        with tarfile.open(tarball) as tar:
+            names = set(tar.getnames())
+        spec = release_manifests.spec("1.2.3", "irori-app/irori")
+        wanted = set(re.findall(r"\bIrori/([\w.-]+)", spec))
+        pkgbuild = release_manifests.pkgbuild("1.2.3", "irori-app/irori", "0" * 64)
+        wanted |= set(re.findall(r"install -Dm\d+ ([\w.-]+) ", pkgbuild))
+        self.assertGreaterEqual(wanted, {"irori", "irori-sign-in", "irori.desktop", "irori.svg",
+                                         "app.irori.Irori.metainfo.xml", "LICENSE"})
+        for name in wanted:
+            self.assertIn(f"Irori/{name}", names)
 
     def test_elf_needed_reads_the_linked_libraries(self):
         self.assertEqual(package.elf_needed(self.binaries / "irori"), ["libxkbcommon.so.0", "libc.so.6"])
@@ -219,6 +236,16 @@ class WindowsPackagingTests(unittest.TestCase):
             for name in ("irori.exe", "irori-sign-in.exe", "vcruntime140.dll", "vcruntime140_1.dll", "install.ps1"):
                 self.assertIn("Irori/" + name, zipped.namelist())
             self.assertEqual(zipped.read("Irori/vcruntime140.dll"), (self.runtime / "vcruntime140.dll").read_bytes())
+
+    def test_zip_matches_the_scoop_manifest(self):
+        archive = package.package("windows", self.binaries, self.root / "output")
+        manifest = json.loads(release_manifests.scoop("1.2.3", "irori-app/irori", "a" * 64, "b" * 64))
+        with zipfile.ZipFile(archive) as zipped:
+            names = zipped.namelist()
+        for arch in manifest["architecture"].values():
+            self.assertIn(f"{arch['extract_dir']}/{manifest['bin']}", names)
+        for target, _ in manifest["shortcuts"]:
+            self.assertIn(f"Irori/{target}", names)
 
     def test_portable_zip_keeps_data_beside_irori_and_installs_nothing(self):
         output = self.root / "output"

@@ -13,7 +13,9 @@ use irori_core::{
     BIG_PICTURE_SCALES, GameId, GameInfo, InstallInfo, InstallPlatform, InstallRequest, Runner,
     StatusKind,
 };
-use irori_services::{LibrarySnapshot, PlayStatus, UserData};
+use irori_services::{
+    CategoryIndex, CategoryRef, LibrarySnapshot, PlayStatus, PowerAction, UserData,
+};
 use irori_ui::i18n::{t, t_args};
 
 use crate::layout::HomeLayout;
@@ -21,7 +23,7 @@ use crate::text::store_name;
 use crate::theme::ShelfKind;
 
 /// A shelf of games on Home.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RowKind {
     ContinuePlaying,
     Favourites,
@@ -32,11 +34,13 @@ pub enum RowKind {
     System(&'static str),
     /// Every game; only when no other shelf has any.
     All,
+    /// A pinned category of either kind, by its id or name, with its name.
+    Category(CategoryRef, SharedString),
 }
 
 impl RowKind {
     /// Translated shelf heading.
-    pub fn title(self) -> SharedString {
+    pub fn title(&self) -> SharedString {
         match self {
             RowKind::ContinuePlaying => t("bigpicture.shelf.continue_playing"),
             RowKind::Installed => t("bigpicture.shelf.installed"),
@@ -46,12 +50,13 @@ impl RowKind {
             RowKind::All => t("bigpicture.shelf.all"),
             RowKind::System(id) => irori_engines::systems::get(id)
                 .map_or_else(|| SharedString::new_static(id), |s| s.name.clone().into()),
+            RowKind::Category(_, name) => name.clone(),
         }
     }
 
     /// Stable element id prefix of the row.
-    pub fn id(self) -> &'static str {
-        match self {
+    pub fn id(&self) -> SharedString {
+        SharedString::new_static(match self {
             RowKind::ContinuePlaying => "continue",
             RowKind::Installed => "installed",
             RowKind::Favourites => "favourites",
@@ -59,7 +64,11 @@ impl RowKind {
             RowKind::PlanToPlay => "plan-to-play",
             RowKind::All => "all",
             RowKind::System(id) => id,
-        }
+            RowKind::Category(CategoryRef::Manual(name), _) => {
+                return format!("category-{name}").into();
+            }
+            RowKind::Category(CategoryRef::Smart(id), _) => return format!("smart-{id}").into(),
+        })
     }
 }
 
@@ -79,14 +88,16 @@ fn parse_key(key: &str) -> Option<GameId> {
 const RECENTLY_ADDED: usize = 24;
 
 /// Build Home's shelves of `shelves`, in that order (the systems shelf
-/// becomes one per system with emulated games). Hidden games are left out
-/// and empty shelves dropped; "All games" stands in when nothing else has a
-/// game, so a new library still shows something to play.
+/// becomes one per system with emulated games), then a shelf per pinned
+/// category of either kind (`index` holds the smart ones' games). Hidden
+/// games are left out and empty shelves dropped; "All games" stands in when
+/// nothing else has a game, so a new library still shows something to play.
 pub fn build_rows(
     library: &LibrarySnapshot,
     user: &UserData,
     max_recent: usize,
     shelves: &[ShelfKind],
+    index: &CategoryIndex,
 ) -> Vec<Row> {
     let visible: Vec<&Arc<GameInfo>> = library
         .games
@@ -157,6 +168,17 @@ pub fn build_rows(
                 }
             }
         }
+    }
+    // Pinned categories follow the theme's shelves: pinning is the user's
+    // own choice, whatever the theme lists.
+    for (category, name) in user.categories_in_order() {
+        if !user.category_look(&category).pinned {
+            continue;
+        }
+        rows.push(Row {
+            games: irori_ui::categories::games_in(&category, library, user, index),
+            kind: RowKind::Category(category, name.into()),
+        });
     }
     rows.retain(|r| !r.games.is_empty());
     if rows.is_empty() && !visible.is_empty() {
@@ -260,17 +282,25 @@ pub enum Chip {
     Show,
     Sort,
     Status,
+    Category,
     Search,
 }
 
 impl Chip {
-    pub const ALL: [Chip; 4] = [Chip::Show, Chip::Sort, Chip::Status, Chip::Search];
+    pub const ALL: [Chip; 5] = [
+        Chip::Show,
+        Chip::Sort,
+        Chip::Status,
+        Chip::Category,
+        Chip::Search,
+    ];
 
     pub fn label(self) -> SharedString {
         t(match self {
             Chip::Show => "bigpicture.chip.show",
             Chip::Sort => "bigpicture.chip.sort",
             Chip::Status => "bigpicture.chip.status",
+            Chip::Category => "bigpicture.chip.category",
             Chip::Search => "bigpicture.chip.search",
         })
     }
@@ -280,6 +310,7 @@ impl Chip {
             Chip::Show => "bp-chip-show",
             Chip::Sort => "bp-chip-sort",
             Chip::Status => "bp-chip-status",
+            Chip::Category => "bp-chip-category",
             Chip::Search => "bp-chip-search",
         }
     }
@@ -291,7 +322,32 @@ pub struct LibraryFilter {
     pub show: Show,
     pub sort: Sort,
     pub status: StatusFilter,
+    /// Only the games of this category, of either kind. Kept by name or
+    /// id, so it survives other categories coming, going or moving.
+    pub category: Option<CategoryRef>,
     pub query: String,
+}
+
+/// The category after `current` among `user`'s (pinned first, by name),
+/// then none ("Any") again. A category no longer there starts over.
+pub fn next_category(user: &UserData, current: Option<&CategoryRef>) -> Option<CategoryRef> {
+    let all: Vec<CategoryRef> = user
+        .categories_in_order()
+        .into_iter()
+        .map(|(c, _)| c)
+        .collect();
+    match current.and_then(|c| all.iter().position(|x| x == c)) {
+        None => all.into_iter().next(),
+        Some(ix) => all.into_iter().nth(ix + 1),
+    }
+}
+
+/// `filter`'s category while `user` still has it.
+pub fn live_category(user: &UserData, filter: &LibraryFilter) -> Option<CategoryRef> {
+    filter
+        .category
+        .clone()
+        .filter(|c| user.category_name(c).is_some())
 }
 
 /// What the Show chip offers for this library: every game, favourites, each
@@ -328,11 +384,12 @@ pub fn cycle<T: PartialEq + Copy>(options: &[T], current: T) -> T {
 
 /// The Library tab's games for `filter`. Hidden games appear only under
 /// [`Show::Hidden`]. The search matches every word of the query anywhere in
-/// the title, ignoring case.
+/// the title, ignoring case. `index` holds the smart categories' games.
 pub fn library_games(
     library: &LibrarySnapshot,
     user: &UserData,
     filter: &LibraryFilter,
+    index: &CategoryIndex,
 ) -> Vec<Arc<GameInfo>> {
     let words: Vec<String> = filter
         .query
@@ -351,10 +408,16 @@ pub fn library_games(
                 Show::Store(runner) => !hidden && g.runner() == runner,
                 Show::Hidden => hidden && !library.hidden_locked,
             };
-            shown && filter.status.keeps(g) && {
-                let title = g.title.to_lowercase();
-                words.iter().all(|w| title.contains(w.as_str()))
-            }
+            shown
+                && filter.status.keeps(g)
+                && filter
+                    .category
+                    .as_ref()
+                    .is_none_or(|c| irori_ui::categories::in_entry(c, g, library, user, index))
+                && {
+                    let title = g.title.to_lowercase();
+                    words.iter().all(|w| title.contains(w.as_str()))
+                }
         })
         .cloned()
         .collect();
@@ -613,6 +676,9 @@ pub fn install_platforms(game: &GameInfo) -> Vec<InstallPlatform> {
 pub enum MenuItem {
     PauseDownloads,
     ResumeDownloads,
+    /// Switches the sound output (Left and Right too); its label names the
+    /// output in use, which the view knows.
+    SoundOutput,
     /// Cycles Big Picture's interface size; carries the current percent.
     InterfaceSize(u32),
     /// Cycles Home's layout; carries the current one.
@@ -624,6 +690,8 @@ pub enum MenuItem {
     SetUpEmulation,
     ExitBigPicture,
     QuitIrori,
+    /// Powers off, restarts, sleeps or logs out, after asking.
+    Power(PowerAction),
 }
 
 impl MenuItem {
@@ -644,12 +712,14 @@ impl MenuItem {
         t(match self {
             MenuItem::InterfaceSize(_) | MenuItem::Layout(_) => unreachable!("handled above"),
             MenuItem::Themes => "bigpicture.menu.themes",
+            MenuItem::SoundOutput => "bigpicture.overlay.output",
             MenuItem::PauseDownloads => "bigpicture.menu.pause_downloads",
             MenuItem::ResumeDownloads => "bigpicture.menu.resume_downloads",
             MenuItem::ToggleFullscreen => "bigpicture.menu.toggle_fullscreen",
             MenuItem::SetUpEmulation => "bigpicture.menu.set_up_emulation",
             MenuItem::ExitBigPicture => "bigpicture.exit",
             MenuItem::QuitIrori => "bigpicture.menu.quit",
+            MenuItem::Power(action) => power_label(action),
         })
     }
 
@@ -657,6 +727,7 @@ impl MenuItem {
         match self {
             MenuItem::PauseDownloads => IconName::CircleStop,
             MenuItem::ResumeDownloads => IconName::Play,
+            MenuItem::SoundOutput => IconName::Volume2,
             MenuItem::InterfaceSize(_) => IconName::ZoomIn,
             MenuItem::Layout(_) => IconName::LayoutDashboard,
             MenuItem::Themes => IconName::Palette,
@@ -664,6 +735,10 @@ impl MenuItem {
             MenuItem::SetUpEmulation => IconName::Joystick,
             MenuItem::ExitBigPicture => IconName::LogOut,
             MenuItem::QuitIrori => IconName::Power,
+            MenuItem::Power(PowerAction::PowerOff) => IconName::PowerOff,
+            MenuItem::Power(PowerAction::Restart) => IconName::RotateCcw,
+            MenuItem::Power(PowerAction::Sleep) => IconName::Moon,
+            MenuItem::Power(PowerAction::LogOut) => IconName::DoorOpen,
         }
     }
 
@@ -671,6 +746,7 @@ impl MenuItem {
         match self {
             MenuItem::PauseDownloads => "bp-menu-pause",
             MenuItem::ResumeDownloads => "bp-menu-resume",
+            MenuItem::SoundOutput => "bp-menu-sound-output",
             MenuItem::InterfaceSize(_) => "bp-menu-size",
             MenuItem::Layout(_) => "bp-menu-layout",
             MenuItem::Themes => "bp-menu-themes",
@@ -678,19 +754,36 @@ impl MenuItem {
             MenuItem::SetUpEmulation => "bp-menu-emulation",
             MenuItem::ExitBigPicture => "bp-menu-exit",
             MenuItem::QuitIrori => "bp-menu-quit",
+            MenuItem::Power(PowerAction::PowerOff) => "bp-menu-power-off",
+            MenuItem::Power(PowerAction::Restart) => "bp-menu-restart",
+            MenuItem::Power(PowerAction::Sleep) => "bp-menu-sleep",
+            MenuItem::Power(PowerAction::LogOut) => "bp-menu-log-out",
         }
     }
 }
 
+/// The catalog key naming a power action, on its menu entry and its
+/// confirmation's button.
+pub fn power_label(action: PowerAction) -> &'static str {
+    match action {
+        PowerAction::PowerOff => "bigpicture.menu.power_off",
+        PowerAction::Restart => "bigpicture.menu.restart",
+        PowerAction::Sleep => "bigpicture.menu.sleep",
+        PowerAction::LogOut => "bigpicture.menu.log_out",
+    }
+}
+
 /// Quick menu entries given the download queue state, the interface size
-/// in percent and Home's layout.
+/// in percent, Home's layout and the power actions the system allows (last,
+/// after leaving Big Picture and quitting Irori).
 pub fn menu_items(
     has_downloads: bool,
     paused: bool,
     scale: u32,
     layout: HomeLayout,
+    power: &[PowerAction],
 ) -> Vec<MenuItem> {
-    let mut out = Vec::with_capacity(9);
+    let mut out = Vec::with_capacity(9 + power.len());
     if has_downloads {
         out.push(if paused {
             MenuItem::ResumeDownloads
@@ -703,10 +796,12 @@ pub fn menu_items(
         MenuItem::Layout(layout),
         MenuItem::Themes,
         MenuItem::ToggleFullscreen,
+        MenuItem::SoundOutput,
         MenuItem::SetUpEmulation,
         MenuItem::ExitBigPicture,
         MenuItem::QuitIrori,
     ]);
+    out.extend(power.iter().copied().map(MenuItem::Power));
     out
 }
 
@@ -756,7 +851,109 @@ mod tests {
     }
 
     fn kinds(rows: &[Row]) -> Vec<RowKind> {
-        rows.iter().map(|r| r.kind).collect()
+        rows.iter().map(|r| r.kind.clone()).collect()
+    }
+
+    /// A library of `games` (with no copies), a user who smart-categorised
+    /// the installed ones and manually put "b" in "Later", and its index.
+    fn categorised(games: Vec<Arc<GameInfo>>) -> (LibrarySnapshot, UserData, CategoryIndex) {
+        let lib = LibrarySnapshot::new(
+            1,
+            irori_services::copies::Grouped {
+                entries: games,
+                ..Default::default()
+            },
+            HashMap::new(),
+        );
+        let mut user = UserData::default();
+        user.categories
+            .insert("Later".into(), ["gog:b".to_string()].into());
+        let mut ready = irori_services::SmartCategory::new(
+            "Ready",
+            irori_services::Match::All,
+            vec![irori_services::Rule::Installed { installed: true }],
+            vec![],
+        );
+        ready.look.pinned = true;
+        user.smart_categories.insert("s-ready".into(), ready);
+        let index = CategoryIndex::build(
+            Default::default(),
+            &lib,
+            &user,
+            &HashMap::new(),
+            &chrono::Local,
+        );
+        (lib, user, index)
+    }
+
+    #[test]
+    fn pinned_categories_of_both_kinds_get_shelves() {
+        let (lib, mut user, index) = categorised(vec![
+            game(Runner::Gog, "a", true),
+            game(Runner::Gog, "b", false),
+            game(Runner::Gog, "c", true),
+        ]);
+        user.hidden.insert("gog:c".into());
+        let rows = build_rows(&lib, &user, 8, &[], &index);
+        let smart = CategoryRef::Smart("s-ready".into());
+        assert_eq!(
+            kinds(&rows),
+            vec![RowKind::Category(smart.clone(), "Ready".into())]
+        );
+        // Hidden games stay off a category's shelf too.
+        assert_eq!(titles(&rows[0].games), vec!["A"]);
+        // Pinning the manual one adds its shelf after it.
+        user.category_looks.insert(
+            "Later".into(),
+            irori_services::CategoryLook {
+                pinned: true,
+                ..Default::default()
+            },
+        );
+        let rows = build_rows(&lib, &user, 8, &[ShelfKind::Installed], &index);
+        assert_eq!(
+            kinds(&rows),
+            vec![
+                RowKind::Installed,
+                RowKind::Category(CategoryRef::Manual("Later".into()), "Later".into()),
+                RowKind::Category(smart, "Ready".into()),
+            ]
+        );
+        assert_eq!(titles(&rows[1].games), vec!["B"]);
+    }
+
+    #[test]
+    fn the_category_filter_keeps_its_category_by_id() {
+        let (lib, mut user, index) = categorised(vec![
+            game(Runner::Gog, "a", true),
+            game(Runner::Gog, "b", false),
+        ]);
+        let smart = CategoryRef::Smart("s-ready".into());
+        // "Any", the pinned smart one, the manual one, then "Any" again.
+        assert_eq!(next_category(&user, None), Some(smart.clone()));
+        assert_eq!(
+            next_category(&user, Some(&smart)),
+            Some(CategoryRef::Manual("Later".into()))
+        );
+        assert_eq!(
+            next_category(&user, Some(&CategoryRef::Manual("Later".into()))),
+            None
+        );
+        let filter = LibraryFilter {
+            category: Some(smart.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            titles(&library_games(&lib, &user, &filter, &index)),
+            vec!["A"]
+        );
+        // Categories added before it, renamed or reordered leave it chosen.
+        user.categories.insert("Aaa".into(), Default::default());
+        user.smart_categories.get_mut("s-ready").unwrap().name = "Zzz".into();
+        assert_eq!(live_category(&user, &filter), Some(smart.clone()));
+        // Only its own deletion gives way to "Any".
+        user.smart_categories.remove("s-ready");
+        assert_eq!(live_category(&user, &filter), None);
     }
 
     fn titles(games: &[Arc<GameInfo>]) -> Vec<&str> {
@@ -774,7 +971,13 @@ mod tests {
         let mut user = UserData::default();
         user.hidden.insert("gog:c".into());
         user.recent = vec!["gog:c".into(), "gog:b".into(), "bogus".into()];
-        let rows = build_rows(&lib, &user, 8, &ShelfKind::DEFAULT);
+        let rows = build_rows(
+            &lib,
+            &user,
+            8,
+            &ShelfKind::DEFAULT,
+            &CategoryIndex::default(),
+        );
         assert_eq!(
             kinds(&rows),
             vec![RowKind::ContinuePlaying, RowKind::Installed]
@@ -813,6 +1016,7 @@ mod tests {
                 ShelfKind::RecentlyAdded,
                 ShelfKind::Installed,
             ],
+            &CategoryIndex::default(),
         );
         assert_eq!(
             kinds(&rows),
@@ -825,7 +1029,10 @@ mod tests {
         assert_eq!(titles(&rows[0].games), vec!["OLD"]);
         assert_eq!(titles(&rows[1].games), vec!["NEW", "OLD"]);
         // No shelves at all still shows every game.
-        assert_eq!(kinds(&build_rows(&lib, &user, 8, &[])), vec![RowKind::All]);
+        assert_eq!(
+            kinds(&build_rows(&lib, &user, 8, &[], &CategoryIndex::default())),
+            vec![RowKind::All]
+        );
     }
 
     #[test]
@@ -835,17 +1042,38 @@ mod tests {
             game(Runner::Gog, "a", false),
             game(Runner::Legendary, "b", false),
         ];
-        let rows = build_rows(&lib, &UserData::default(), 8, &ShelfKind::DEFAULT);
+        let rows = build_rows(
+            &lib,
+            &UserData::default(),
+            8,
+            &ShelfKind::DEFAULT,
+            &CategoryIndex::default(),
+        );
         assert_eq!(kinds(&rows), vec![RowKind::All]);
         assert_eq!(rows[0].games.len(), 2);
 
         let mut user = UserData::default();
         user.favourites.insert("legendary:b".into());
         assert_eq!(
-            kinds(&build_rows(&lib, &user, 8, &ShelfKind::DEFAULT)),
+            kinds(&build_rows(
+                &lib,
+                &user,
+                8,
+                &ShelfKind::DEFAULT,
+                &CategoryIndex::default()
+            )),
             vec![RowKind::Favourites]
         );
-        assert!(build_rows(&LibrarySnapshot::default(), &user, 8, &ShelfKind::DEFAULT).is_empty());
+        assert!(
+            build_rows(
+                &LibrarySnapshot::default(),
+                &user,
+                8,
+                &ShelfKind::DEFAULT,
+                &CategoryIndex::default()
+            )
+            .is_empty()
+        );
     }
 
     #[test]
@@ -878,47 +1106,93 @@ mod tests {
         );
         let mut filter = LibraryFilter::default();
         assert_eq!(
-            titles(&library_games(&lib, &user, &filter)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &filter,
+                &CategoryIndex::default()
+            )),
             vec!["ALPHA", "BRAVO TWO", "CHARLIE"]
         );
         filter.sort = Sort::RecentlyPlayed;
         assert_eq!(
-            titles(&library_games(&lib, &user, &filter)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &filter,
+                &CategoryIndex::default()
+            )),
             vec!["CHARLIE", "ALPHA", "BRAVO TWO"]
         );
         filter.sort = Sort::MostPlayed;
         assert_eq!(
-            titles(&library_games(&lib, &user, &filter)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &filter,
+                &CategoryIndex::default()
+            )),
             vec!["ALPHA", "CHARLIE", "BRAVO TWO"]
         );
         filter.status = StatusFilter::Installed;
         assert_eq!(
-            titles(&library_games(&lib, &user, &filter)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &filter,
+                &CategoryIndex::default()
+            )),
             vec!["CHARLIE", "BRAVO TWO"]
         );
         filter.query = "two  BRA".into();
         assert_eq!(
-            titles(&library_games(&lib, &user, &filter)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &filter,
+                &CategoryIndex::default()
+            )),
             vec!["BRAVO TWO"]
         );
         let hidden = LibraryFilter {
             show: Show::Hidden,
             ..Default::default()
         };
-        assert_eq!(titles(&library_games(&lib, &user, &hidden)), vec!["DELTA"]);
+        assert_eq!(
+            titles(&library_games(
+                &lib,
+                &user,
+                &hidden,
+                &CategoryIndex::default()
+            )),
+            vec!["DELTA"]
+        );
         let favourites = LibraryFilter {
             show: Show::Favourites,
             ..Default::default()
         };
         assert_eq!(
-            titles(&library_games(&lib, &user, &favourites)),
+            titles(&library_games(
+                &lib,
+                &user,
+                &favourites,
+                &CategoryIndex::default()
+            )),
             vec!["CHARLIE"]
         );
         let epic = LibraryFilter {
             show: Show::Store(Runner::Legendary),
             ..Default::default()
         };
-        assert_eq!(titles(&library_games(&lib, &user, &epic)), vec!["ALPHA"]);
+        assert_eq!(
+            titles(&library_games(
+                &lib,
+                &user,
+                &epic,
+                &CategoryIndex::default()
+            )),
+            vec!["ALPHA"]
+        );
 
         assert_eq!(
             show_options(&lib, &user),
@@ -1094,21 +1368,52 @@ mod tests {
     #[test]
     fn menu_offers_download_control_only_with_downloads() {
         assert_eq!(
-            menu_items(false, false, 100, HomeLayout::Shelves)[0],
+            menu_items(false, false, 100, HomeLayout::Shelves, &[])[0],
             MenuItem::InterfaceSize(100)
         );
         assert_eq!(
-            menu_items(true, false, 100, HomeLayout::Shelves)[0],
+            menu_items(true, false, 100, HomeLayout::Shelves, &[])[0],
             MenuItem::PauseDownloads
         );
         assert_eq!(
-            menu_items(true, true, 150, HomeLayout::Shelves)[0],
+            menu_items(true, true, 150, HomeLayout::Shelves, &[])[0],
             MenuItem::ResumeDownloads
         );
-        let items = menu_items(true, true, 150, HomeLayout::Wall);
+        let items = menu_items(true, true, 150, HomeLayout::Wall, &[]);
         assert_eq!(items[1], MenuItem::InterfaceSize(150));
         assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
         assert_eq!(items[3], MenuItem::Themes);
+        assert_eq!(items[5], MenuItem::SoundOutput, "after Toggle fullscreen");
+        assert_eq!(items.last(), Some(&MenuItem::QuitIrori));
+    }
+
+    #[test]
+    fn menu_offers_the_power_actions_the_system_allows_last() {
+        let items = menu_items(
+            false,
+            false,
+            100,
+            HomeLayout::Shelves,
+            &[PowerAction::PowerOff, PowerAction::Sleep],
+        );
+        let quit = items
+            .iter()
+            .position(|i| *i == MenuItem::QuitIrori)
+            .unwrap();
+        assert_eq!(
+            items[quit + 1..],
+            [
+                MenuItem::Power(PowerAction::PowerOff),
+                MenuItem::Power(PowerAction::Sleep)
+            ]
+        );
+        let none = menu_items(false, false, 100, HomeLayout::Shelves, &[]);
+        assert!(!none.iter().any(|i| matches!(i, MenuItem::Power(_))));
+        let ids: std::collections::HashSet<_> = PowerAction::ALL
+            .map(|a| MenuItem::Power(a).id())
+            .into_iter()
+            .collect();
+        assert_eq!(ids.len(), 4, "every entry has its own id");
     }
 
     #[test]

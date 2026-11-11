@@ -24,9 +24,11 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models};
 
 use crate::form::{FormTarget, SettingsForm, info_alert};
+use crate::graphics_mods::GraphicsModsChanged;
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
+use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
 use crate::steam_compat::SteamCompatPanel;
 use crate::widgets::{RowState, field_row, muted, nav_button};
@@ -80,7 +82,7 @@ impl GameSection {
             "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" | "reshade" => GameSection::Tools,
+            "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -148,6 +150,7 @@ pub struct GameSettingsView {
     log: Entity<LogViewer>,
     winetricks: Entity<WinetricksPanel>,
     reshade: Entity<ReshadePanel>,
+    renodx: Entity<RenodxPanel>,
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
@@ -197,6 +200,28 @@ impl GameSettingsView {
             let id = id.clone();
             cx.new(|_| ReshadePanel::new(id))
         };
+        let renodx = {
+            let id = id.clone();
+            cx.new(|cx| RenodxPanel::new(id, window, cx))
+        };
+        // RenoDX installs ReShade's build with add-on support, and removing
+        // ReShade removes RenoDX: each panel reads the other's change.
+        let mods_changed = [
+            cx.subscribe_in(
+                &reshade,
+                window,
+                |this, _, _: &GraphicsModsChanged, window, cx| {
+                    this.renodx.update(cx, |r, cx| r.refresh(window, cx));
+                },
+            ),
+            cx.subscribe_in(
+                &renodx,
+                window,
+                |this, _, _: &GraphicsModsChanged, window, cx| {
+                    this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                },
+            ),
+        ];
         // Steam Play exists on Linux only.
         let steam_compat = (cfg!(target_os = "linux") && id.runner == Runner::Steam)
             .then(|| crate::stores::steam(cx))
@@ -216,11 +241,12 @@ impl GameSettingsView {
             log,
             winetricks,
             reshade,
+            renodx,
             steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
             on_close: None,
-            _subscriptions: vec![sub, observe],
+            _subscriptions: [sub, observe].into_iter().chain(mods_changed).collect(),
         };
         let initial = GameSection::from_id(&section).unwrap_or_else(|| this.default_section(cx));
         this.open(initial, window, cx);
@@ -333,6 +359,7 @@ impl GameSettingsView {
         }
         if section == GameSection::Tools {
             self.reshade.update(cx, |r, cx| r.activate(window, cx));
+            self.renodx.update(cx, |r, cx| r.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -578,6 +605,11 @@ impl GameSettingsView {
                 cx,
             ))
             .child(self.reshade.clone())
+            .child(crate::widgets::group_heading(
+                t("settings.tools.group.renodx"),
+                cx,
+            ))
+            .child(self.renodx.clone())
             .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,

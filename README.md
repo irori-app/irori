@@ -132,7 +132,9 @@ Windows builds aren't signed yet, so SmartScreen may warn the first time: choose
 
 </details>
 
-Flathub, winget and the AUR are planned. To build Irori yourself, see [Building](#building).
+Flathub, winget, Fedora COPR and the AUR are planned: the release workflow is ready to
+publish to each once its account is set up ([docs/RELEASING.md](docs/RELEASING.md)). To
+build Irori yourself, see [Building](#building).
 
 ---
 
@@ -156,10 +158,19 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   and your Steam Family's games. Playtime counts, and Install, Verify files and Uninstall
   open Steam's own dialogs. On Linux, pick the Proton build (GE-Proton too) Steam runs a
   game with, next to its ProtonDB rating.
+- **Friends:** see who of your Steam and Xbox friends is online and what they play,
+  join a Steam friend's game or message them through Steam. Irori only reads them,
+  and only while the window is open. (Discord, Epic Games and GOG offer other
+  programs no way to read your friends; the window says so.)
 - **Fuzzy search, filters, sorting, categories, favourites and hidden games**, in a grid
   or a sortable list, virtualized for libraries of any size; start typing anywhere in
-  the grid or list to search. Filter by genre, and group by play status, game mode or
-  genre. "Continue playing", installed
+  the grid or list to search. Filter by genre, and group by play status, game mode,
+  genre or category. Categories are manual (you put games in them) or smart (filled
+  from rules: store, tags, game mode, play status, age rating, installed, playtime, last
+  played, HowLongToBeat length, system, another category or a search, with All/Any and
+  "Leave out" rows); both can be pinned (pinned ones get a Big Picture shelf) and
+  coloured, show their counts in the Views menu, and travel with backups and sync. A
+  saved view can become a smart category. "Continue playing", installed
   games by drive, and a random pick (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>G</kbd>).
   On a wide window the header adds one-click sort, installed, favourites and grouping
   controls, as many as fit (Settings → Appearance turns them off).
@@ -167,6 +178,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   where a click opens a resizable drawer with the game's art, Play, status, rating, play
   stats and screenshots; the sortable list; and Focus, a column of covers beside the
   selected game's whole page over its art. Arrow keys move the selection in each.
+- **Act on many games at once**: pick them (<kbd>Ctrl</kbd>-click, <kbd>Shift</kbd>-click,
+  <kbd>Ctrl</kbd> <kbd>A</kbd>) to install, uninstall, hide, categorize, add to Steam or
+  remove added games and ROMs from the library (<kbd>Delete</kbd>; ROM files are never
+  deleted, and an added game's files only when you ask).
 - **One entry per game**, however many stores you own it on: it plays the installed
   copy, its page switches between the Steam, Epic Games or GOG copies, and you can
   combine or separate copies yourself. Each keeps its own playtime and achievements.
@@ -174,6 +189,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   and art from SteamGridDB, or drop its program, shortcut or folder onto the library.
 - **Your own art for any game:** a cover, background and logo from a file, SteamGridDB
   or one of your screenshots of it, in the game's Artwork settings.
+- **Details from IGDB, if you want them:** with your own free Twitch application,
+  descriptions, genres, release dates and screenshots fill in what store pages leave
+  out (added games and ROMs above all), and IGDB's covers and artworks join the art
+  picker. Off by default; a game is looked up only when you open it.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
   favourites, categories and playtime. Bottles, Faugus Launcher and, on Windows,
   Playnite libraries come along too.
@@ -200,7 +219,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Proton prefix, with a list of backups to restore from and a word on which of Ludusavi
   and the store's cloud saves keeps each game.
 - **"Add to Steam"** for any game, installed or not; Steam starts Irori, which offers to
-  install a game that isn't installed yet.
+  install a game that isn't installed yet, and follows the whole session. "Remove from
+  Steam" takes them out again (one game or a selection), and `irori steam-shortcuts`
+  brings every installed game's shortcut and artwork up to date. Irori touches only the
+  shortcuts it made, backs Steam's file up first and edits it only while Steam is closed.
 - **Discord Rich Presence**, sleep held off while you play, and the game's log, which
   can open by itself when the game starts and keeps or hides the lines you filter for.
 
@@ -254,15 +276,27 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
 - **Graphics tab per game (Linux):** pick which graphics card a game runs on when the
   computer has more than one, turn on NVIDIA Smooth Motion, NVIDIA Reflex for Vulkan
   games, or Lossless Scaling frame generation through lsfg-vk. Every option says why
-  it's greyed out when your hardware or drivers can't use it.
+  it's greyed out when your hardware or drivers can't use it. On Windows the tab sets
+  Windows' own graphics preference (power saving or high performance) for the game's
+  program, and puts back what was there when you clear it.
+- **Your displays, known:** System info lists each display's mode, the modes it offers
+  and whether HDR is on, and the HDR and gamescope settings tell you which display has
+  HDR and what it runs at.
 - **Your folders, your shader cache:** choose where downloaded Wine and Proton builds
   go, and games get 10 GB of shader cache on NVIDIA and Mesa, so big games don't
   compile their shaders again at every start.
 - **Third-party launchers on Linux:** Battle.net, the EA app, Ubisoft Connect and
   Rockstar each get a prefix of their own (or bring the prefix you already have), and
-  their games join your library.
+  their installed games join your library. (The EA app keeps the games you own but
+  haven't installed encrypted, with no way for other programs to read them, so those
+  stay in the EA app.)
 - **Lutris install scripts**, run with your consent for every download, write and
   command, confined to the game's folder.
+- **ReShade and RenoDX HDR** per Windows game, from their official sources only:
+  ReShade with its standard shaders, and RenoDX's HDR mod for the game (picked from
+  RenoDX's own list, checked against its release's digests) with ReShade's add-on
+  build. Every file Irori writes is recorded with its hash; removing deletes only
+  what it wrote and you didn't change.
 - Winetricks browser, Protontricks for Steam games, the Steam runtime and umu.
 
 ## Emulators
@@ -288,7 +322,10 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   game's live log beside them), and the button hints match the controller in hand
   (Xbox, PlayStation including DualSense, Switch Pro, Steam Deck), with hotplug, battery
   display and scaling up to 200 % for TVs. A mouse works too. It opens by itself in the
-  Steam Deck's Game Mode and reads each press once alongside Steam Input.
+  Steam Deck's Game Mode, from anywhere when you hold Start for a second, and reads
+  each press once alongside Steam Input. Its quick menu switches the sound output and
+  powers off, restarts, sleeps or logs out, after closing running games and syncing
+  their saves.
 - **Game modes** (single player, co-op, split screen and local, online, MMO) from
   Steam, GOG and PCGamingWiki, as chips on each game's page and as a library filter,
   grouping (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>G</kbd>), saved views and search
@@ -336,8 +373,9 @@ Flathub, winget and the AUR are planned. To build Irori yourself, see [Building]
   Mica or the Linux compositor's blur. On KDE Plasma, COSMIC and Omarchy Irori follows
   your desktop's theme; elsewhere it takes the system's accent colour (GNOME and other
   Linux desktops, macOS, Windows), live as you change it. Turn it on and it follows the
-  colours pywal, wallust or matugen take from your wallpaper. It honours Increase contrast,
-  Reduce transparency and Windows high contrast.
+  colours pywal, wallust or matugen take from your wallpaper. An `appearance.json` in the
+  config folder lays your own colours over any theme, live as you save it. It honours
+  Increase contrast, Reduce transparency and Windows high contrast.
 - **Any interface size**, with <kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd>
   or in Settings, on top of the text size your system asks for.
 - **Searchable settings**, a tray menu with your recent games, and a log you can upload
@@ -389,7 +427,7 @@ packaging/install.sh
 | `crates/depot` | Shared download engine: parallel chunked downloads, resume, verify/repair, delta updates |
 | `crates/epic`, `crates/gog`, `crates/amazon` | Store protocols (Rust ports of legendary, gogdl and nile) |
 | `crates/gog-galaxy`, `crates/comet` | GOG Galaxy communication service for games (a small fork of comet, as a library) |
-| `crates/extras` | Shortcuts, wiki/ProtonDB/anticheat info, SteamGridDB, Heroic import |
+| `crates/extras` | Shortcuts, wiki/ProtonDB/anticheat info, SteamGridDB, IGDB, Heroic import |
 | `crates/services` | Backend facade: library, settings, download queue, launching |
 | `crates/ui` | Shared UI layer: models, navigation, art pipeline, theme, components |
 | `crates/feature-*` | Screens: library, game page, settings, downloads/Wine/accounts, Big Picture |

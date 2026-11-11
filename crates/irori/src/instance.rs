@@ -124,6 +124,26 @@ pub fn acquire_waiting(
     })
 }
 
+/// Hand `args` to the running instance. False when none runs: this never
+/// becomes the running instance (for requests only a running Irori serves).
+pub fn forward(args: &[String]) -> Result<bool> {
+    forward_in(&irori_core::Paths::get().config, args)
+}
+
+fn forward_in(dir: &Path, args: &[String]) -> Result<bool> {
+    // The running instance holds the lock for its whole life.
+    match File::open(dir.join("instance.lock")) {
+        Err(_) => return Ok(false),
+        Ok(lock) if lock.try_lock().is_ok() => return Ok(false),
+        Ok(_) => {}
+    }
+    // It may exit meanwhile; becoming the instance then is dropped at once.
+    Ok(matches!(
+        acquire_in(dir, args, None)?,
+        Acquired::Forwarded(_)
+    ))
+}
+
 enum Acquired {
     Primary(Instance),
     Forwarded(Forwarded),
@@ -357,6 +377,25 @@ mod tests {
         drop(stream);
         worker.join().unwrap();
     }
+    #[test]
+    fn forwarding_never_starts_an_instance() {
+        let dir = tempfile::tempdir().unwrap();
+        let args = vec!["--save-clip".to_string()];
+        // Never ran, then ran and quit: nobody to forward to.
+        assert!(!forward_in(dir.path(), &args).unwrap());
+        drop(primary(dir.path()));
+        assert!(!forward_in(dir.path(), &args).unwrap());
+        // Neither call took the lock.
+        let primary = primary(dir.path());
+        let worker = std::thread::spawn(move || {
+            let _lock = primary._lock;
+            let (stream, _) = primary.listener.accept().unwrap();
+            receive(stream, &primary.token).unwrap().0
+        });
+        assert!(forward_in(dir.path(), &args).unwrap());
+        assert_eq!(worker.join().unwrap(), args);
+    }
+
     #[test]
     fn rejects_unauthenticated_invocations() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();

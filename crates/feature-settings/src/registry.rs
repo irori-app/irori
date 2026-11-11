@@ -253,6 +253,8 @@ pub enum PanelKind {
     Replay,
     /// Sunshine: found or not, its login, syncing now, the last sync.
     Sunshine,
+    /// IGDB: the user's Twitch application, saving and forgetting it.
+    Igdb,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -533,6 +535,13 @@ impl FieldSpec {
         if mac_only && host != HostPlatform::Mac {
             return false;
         }
+        // Windows' own graphics preference stands in for the card chooser
+        // there, which only Linux can apply.
+        match self.path {
+            "iroriWindowsGpu" => return host == HostPlatform::Windows,
+            "iroriGpu" if host == HostPlatform::Windows => return false,
+            _ => {}
+        }
         // A portable Irori never adds itself to the Start menu.
         if self.path == "addStartMenuShortcuts" && irori_core::paths::is_portable() {
             return false;
@@ -684,6 +693,26 @@ static LANGUAGES: [ChoiceOption; UI_LANGUAGES.len()] = {
     out
 };
 
+/// `iroriWindowsGpu`: Windows' graphics preference for the game's program.
+const WINDOWS_GPU: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.windows_gpu.unset"),
+    ),
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.windows_gpu.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("powerSaving"),
+        Key("settings.option.windows_gpu.power_saving"),
+    ),
+    opt(
+        ChoiceValue::Str("highPerformance"),
+        Key("settings.option.windows_gpu.high_performance"),
+    ),
+];
+
 const TOP_SECTION: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("recently_played"),
@@ -757,6 +786,21 @@ const LIBRARY_LAYOUT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("focus"),
         Key("settings.option.library_layout.focus"),
+    ),
+];
+
+const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("start"),
+        Key("settings.option.big_picture_hold.start"),
+    ),
+    opt(
+        ChoiceValue::Str("select"),
+        Key("settings.option.big_picture_hold.select"),
+    ),
+    opt(
+        ChoiceValue::Str("off"),
+        Key("settings.option.big_picture_hold.off"),
     ),
 ];
 
@@ -1742,6 +1786,37 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["gamepad", "controller", "repeat", "frequency"])
     .requires(NEEDS_CONTROLLER),
     app(
+        "iroriUi.bigPictureHoldButton",
+        "settings.field.big_picture_hold_button.label",
+        General,
+        "settings.group.controller",
+        Choice(BIG_PICTURE_HOLD),
+    )
+    .help("settings.field.big_picture_hold_button.help")
+    .keywords(&[
+        "gamepad",
+        "controller",
+        "hold",
+        "start",
+        "select",
+        "console",
+        "big picture",
+    ])
+    .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriUi.bigPictureHoldMs",
+        "settings.field.big_picture_hold_ms.label",
+        General,
+        "settings.group.controller",
+        Text(TextKind::Number {
+            min: 300,
+            max: 3000,
+        }),
+    )
+    .help("settings.field.big_picture_hold_ms.help")
+    .keywords(&["gamepad", "controller", "hold", "delay", "big picture"])
+    .requires(NEEDS_CONTROLLER),
+    app(
         "iroriOverlay.enabled",
         "settings.field.overlay.label",
         General,
@@ -2033,6 +2108,32 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.steam_grid_db_api_key.help")
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
+    app(
+        "iroriIgdb",
+        "settings.field.igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.igdb.help")
+    .keywords(&[
+        "igdb",
+        "twitch",
+        "metadata",
+        "description",
+        "genres",
+        "artwork",
+        "cover",
+        "screenshots",
+    ]),
+    app(
+        "panel.igdb",
+        "settings.field.panel_igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::Igdb),
+    )
+    .keywords(&["igdb", "twitch", "client id", "client secret"]),
     app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",
@@ -2657,6 +2758,25 @@ pub static FIELDS: &[FieldSpec] = &[
         "discrete",
     ])
     .needs(&[Need::Linux, Need::SeveralGpus]),
+    // Windows' own per-program choice, in place of `iroriGpu` there.
+    game(
+        "iroriWindowsGpu",
+        "settings.field.windows_gpu.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Choice(WINDOWS_GPU),
+    )
+    .help("settings.field.windows_gpu.help")
+    .keywords(&[
+        "gpu",
+        "graphics card",
+        "graphics preference",
+        "high performance",
+        "power saving",
+        "integrated",
+        "discrete",
+        "UserGpuPreferences",
+    ]),
     game(
         "nvidiaPrime",
         "settings.field.nvidia_prime.label",
@@ -3334,7 +3454,22 @@ mod tests {
         assert!(paths("frame generation").contains(&"iroriLsfg.enabled"));
         assert!(paths("frame generation").contains(&"iroriSmoothMotion"));
         assert!(paths("lossless").contains(&"iroriLsfg.multiplier"));
-        assert!(paths("graphics card").contains(&"iroriGpu"));
+        // Each system shows one of the two card choosers.
+        assert!(find("iroriGpu").unwrap().matches("graphics card"));
+        let windows = find("iroriWindowsGpu").unwrap();
+        assert!(windows.matches("graphics card") && windows.matches("high performance"));
+        assert_eq!(
+            paths("graphics card").contains(&"iroriWindowsGpu"),
+            cfg!(windows)
+        );
+        assert_eq!(windows.section, FieldSection::Gpu);
+        assert_eq!(windows.scope, Scope::Shared);
+        assert_eq!(windows.supported_on_host(), cfg!(windows));
+        assert_eq!(
+            find("iroriGpu").unwrap().supported_on_host(),
+            !cfg!(windows)
+        );
+        assert!(!windows.applies_to_steam());
         assert!(paths("steamgriddb").contains(&"panel.artwork"));
         assert!(paths("cover").contains(&"panel.artwork"));
     }
@@ -3460,6 +3595,8 @@ mod tests {
             "disableController",
             "gamepadInitialRepeatDelay",
             "gamepadRepeatDelay",
+            "iroriUi.bigPictureHoldButton",
+            "iroriUi.bigPictureHoldMs",
         ] {
             assert!(pads.contains(&p), "{p}");
             assert_eq!(find(p).unwrap().section, FieldSection::General);

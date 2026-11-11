@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build Irori's Arch packages from the Linux tarball and install them the way
-# users will: from a pacman repository. Runs as root in an archlinux container.
+# users will: from a pacman repository; then check the AUR's PKGBUILD. Runs
+# as root in an archlinux container.
 #
 #   packaging/arch/build.sh <version> <dist dir with the tarball> <output dir> <owner/repo>
 set -euo pipefail
@@ -29,6 +30,17 @@ id builder >/dev/null 2>&1 || useradd --create-home builder
 chown -R builder "$work"
 su builder -c "cd '$work/arch' && makepkg --nodeps --noconfirm"
 cp "$work"/arch/*.pkg.tar.zst "$out/"
+
+# The AUR's irori-bin downloads the release, which a pull request doesn't
+# have: check that makepkg reads its PKGBUILD and that it names this release.
+python3 "$root/packaging/release_manifests.py" --version "$version" --dist "$dist" \
+  --repo "$repo" --output "$work" --aur
+chown -R builder "$work/aur"
+su builder -c "cd '$work/aur' && makepkg --printsrcinfo > .SRCINFO"
+cat "$work/aur/.SRCINFO"
+grep -qx "	pkgver = $version" "$work/aur/.SRCINFO"
+grep -qx "pkgname = irori-bin" "$work/aur/.SRCINFO"
+grep -qx "pkgname = irori-sign-in-bin" "$work/aur/.SRCINFO"
 
 # A local repository like packages.irori.app/arch, without signatures.
 mkdir "$work/repo"

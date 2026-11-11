@@ -26,7 +26,6 @@ use gpui_kit::{
     RenderImage, Resource, SharedString, Window, hash,
 };
 use irori_core::Paths;
-use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 
 use crate::state::backend;
@@ -133,9 +132,7 @@ fn bucket(width: u32) -> u32 {
 }
 
 fn digest(url: &str) -> String {
-    let mut h = Sha256::new();
-    h.update(url.as_bytes());
-    hex::encode(&h.finalize()[..12])
+    irori_core::paths::art_digest(url)
 }
 
 fn thumb_path(url: &str, width: u32, alpha: bool) -> PathBuf {
@@ -156,7 +153,7 @@ fn ambient_paths(url: &str) -> (PathBuf, PathBuf) {
 }
 
 fn original_path(url: &str) -> PathBuf {
-    Paths::get().images_dir().join("orig").join(digest(url))
+    Paths::get().art_original(url)
 }
 
 /// Every file the art store may keep for `url`.

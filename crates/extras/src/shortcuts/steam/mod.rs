@@ -5,20 +5,27 @@
 //! shortcuts change, so the file is only edited while Steam is not running.
 //! When Steam is running the report says so ([`SteamReport::steam_running`])
 //! and nothing is written; the caller asks the user to close Steam.
+//!
+//! Entries start the game with `irori --launch <runner>/<app> --wait`, so
+//! Steam follows the game's session, not a launcher that hands over and
+//! exits. Only Irori's own entries are changed, and in them only Irori's
+//! fields ([`sync`]); every write is backed up first and read back.
 
 pub mod art;
 pub mod shortcuts_file;
+pub mod sync;
 pub mod vdf;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 use irori_core::{AppSettings, GameId, GameInfo};
 
 use self::shortcuts_file::{GridIds, NewShortcut, ShortcutEntry, ShortcutsFile};
+use self::sync::{Upsert, write_checked};
 use super::LauncherCommand;
 use super::icon;
-use crate::util;
 
 /// One Steam account found under `<steam>/userdata`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +164,9 @@ impl EntryCommand {
             .collect();
         opts.push("--launch".into());
         opts.push(quote(&super::launch_target(id)));
+        // Steam counts the session as long as this command runs: `--wait`
+        // keeps it until the game itself ends.
+        opts.push("--wait".into());
         Self {
             exe: quote(&launcher.program),
             start_dir: quote(&launcher.working_dir.to_string_lossy()),
@@ -177,26 +187,11 @@ fn quote_if_needed(s: &str) -> String {
     }
 }
 
-/// Whether a shortcut entry launches this game through Irori (`--launch
-/// runner/app` or an `irori://launch/runner/app` URL). Titles are never
-/// compared, so renamed entries still match and other tools' entries never do.
+/// Whether a shortcut entry is Irori's and starts this game ([`sync::entry_game`]).
+/// Titles are never compared, so renamed entries still match and other
+/// tools' entries never do.
 pub fn matches_game(entry: ShortcutEntry<'_>, id: &GameId) -> bool {
-    let target = super::launch_target(id);
-    let encoded = format!(
-        "{}/{}",
-        id.runner.id(),
-        util::encode_component(&id.app_name)
-    );
-    let opts = entry.launch_options();
-    let ends_token = |rest: &str| rest.is_empty() || rest.starts_with(['"', '\'', ' ', '?', '\t']);
-    let found = |needle: &str| {
-        opts.match_indices(needle)
-            .any(|(i, _)| ends_token(&opts[i + needle.len()..]))
-    };
-    found(&format!("--launch \"{target}\""))
-        || found(&format!("--launch {target}"))
-        || found(&format!("irori://launch/{target}"))
-        || found(&format!("irori://launch/{encoded}"))
+    sync::entry_game(entry).as_ref() == Some(id)
 }
 
 /// Steam collection every Irori shortcut is filed under, so Irori's games
@@ -233,29 +228,65 @@ pub async fn add(
 }
 
 /// Add several games at once, reading and writing each user's
-/// `shortcuts.vdf` once. Games a user already has are left alone.
+/// `shortcuts.vdf` once. Games a user already has keep their entry, brought
+/// up to date ([`sync::upsert`]).
 pub async fn add_many(games: &[SteamGame<'_>], app: &AppSettings) -> Result<SteamReport> {
-    let steam = steam_path(app);
-    let users = users(&steam).await?;
-    let mut report = SteamReport::default();
-
-    if is_running(&steam).await {
-        report.steam_running = true;
+    let synced = sync(games, None, app).await?;
+    let mut report = SteamReport {
+        steam_running: synced.steam_running,
+        users_changed: synced.users_changed,
+        already_present: synced.added < games.len(),
+        added: synced.added,
+        errors: synced.errors,
+    };
+    if synced.steam_running {
+        let steam = steam_path(app);
+        let users = users(&steam).await?;
+        report.already_present = false;
         for g in games {
             if is_added_for(&users, &g.game.id()).await {
                 report.already_present = true;
                 break;
             }
         }
-        return Ok(report);
     }
+    Ok(report)
+}
 
-    let launcher = LauncherCommand::detect();
+/// What [`sync`] or [`remove_games`] did. Counts are per game: a game added
+/// for two Steam users counts once.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SyncReport {
+    /// Steam is running, so nothing was written. Close Steam and retry.
+    pub steam_running: bool,
+    pub added: usize,
+    /// Entries whose command, tag or icon Irori brought up to date.
+    pub updated: usize,
+    pub removed: usize,
+    /// Steam users whose `shortcuts.vdf` was rewritten.
+    pub users_changed: usize,
+    /// Per-user problems (corrupt files, write errors).
+    pub errors: Vec<String>,
+}
+
+/// A game's entry, ready to write.
+struct Prepared<'a> {
+    game: SteamGame<'a>,
+    id: GameId,
+    entry: vdf::Map,
+}
+
+/// The entries for `games`, with their icons from Irori's art store.
+async fn prepare<'a>(games: &[SteamGame<'a>], launcher: &LauncherCommand) -> Vec<Prepared<'a>> {
     let mut prepared = Vec::with_capacity(games.len());
+    let mut seen = HashSet::new();
     for g in games {
         let game = g.game;
         let id = game.id();
-        let cmd = EntryCommand::new(&launcher, &id);
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let cmd = EntryCommand::new(launcher, &id);
         let icon = match icon::ensure_icon(game).await {
             Ok(p) => p.map(|p| p.to_string_lossy().into_owned()),
             Err(e) => {
@@ -265,135 +296,221 @@ pub async fn add_many(games: &[SteamGame<'_>], app: &AppSettings) -> Result<Stea
         };
         let entry = NewShortcut {
             app_name: game.title.clone(),
-            exe: cmd.exe.clone(),
-            start_dir: cmd.start_dir.clone(),
+            exe: cmd.exe,
+            start_dir: cmd.start_dir,
             icon,
-            launch_options: cmd.launch_options.clone(),
+            launch_options: cmd.launch_options,
             last_play_time: i32::try_from(irori_core::util::unix_now()).unwrap_or(i32::MAX),
             tags: vec![COLLECTION.to_string()],
+            irori_id: Some(super::launch_target(&id)),
         }
         .to_entry();
-        let grid_ids = GridIds::from_exe_name(&cmd.exe, &game.title);
-        prepared.push((g, id, entry, grid_ids));
+        prepared.push(Prepared {
+            game: *g,
+            id,
+            entry,
+        });
     }
+    prepared
+}
 
-    for user in &users {
+/// The art IDs Steam uses for an entry: its stored `appid`, else the one
+/// computed from its command and name.
+fn grid_ids(entry: ShortcutEntry<'_>) -> GridIds {
+    match entry.app_id() {
+        Some(short) => GridIds::from_short(short),
+        None => GridIds::from_exe_name(entry.exe(), entry.app_name()),
+    }
+}
+
+/// Remove the art of a removed entry (by its stored and its computed IDs).
+async fn remove_art(grid: &Path, entry: &vdf::Map) {
+    let e = ShortcutEntry(entry);
+    art::remove(grid, grid_ids(e)).await;
+    art::remove(grid, GridIds::from_exe_name(e.exe(), e.app_name())).await;
+}
+
+/// Bring Irori's entries in every Steam user's `shortcuts.vdf` in step with
+/// `games`: add the missing ones, update Irori's fields of the others, and
+/// add the art Steam's `grid` folder lacks (the user's own pictures stay).
+/// Irori's entries of games `gone` picks are removed with their art. Other
+/// programs' entries are never touched. Nothing is written while Steam runs
+/// ([`SyncReport::steam_running`]).
+pub async fn sync(
+    games: &[SteamGame<'_>],
+    gone: Option<&Gone<'_>>,
+    app: &AppSettings,
+) -> Result<SyncReport> {
+    let steam = steam_path(app);
+    let users = users(&steam).await?;
+    if is_running(&steam).await {
+        return Ok(SyncReport {
+            steam_running: true,
+            ..Default::default()
+        });
+    }
+    let prepared = prepare(games, &LauncherCommand::detect()).await;
+    sync_users(&users, &prepared, gone).await
+}
+
+/// Picks the games whose entries a sync removes.
+pub type Gone<'a> = dyn Fn(&GameId) -> bool + Send + Sync + 'a;
+
+/// [`sync`] for the given users, with Steam known to be closed.
+async fn sync_users(
+    users: &[SteamUser],
+    prepared: &[Prepared<'_>],
+    gone: Option<&Gone<'_>>,
+) -> Result<SyncReport> {
+    let icons = icon::icons_dir();
+    let mut report = SyncReport::default();
+    for user in users {
         let path = user.shortcuts_file();
         let mut file = match read_file(&path).await {
             Ok(Some(f)) => f,
             Ok(None) => ShortcutsFile::empty(),
             Err(e) => {
                 report.errors.push(format!(
-                    "Can't add games to Steam user \"{}\". \"{}\" is corrupted! {e:#}",
+                    "Can't change the shortcuts of Steam user \"{}\". \"{}\" is corrupted! {e:#}",
                     user.id,
                     path.display()
                 ));
                 continue;
             }
         };
-        let entries: Vec<(&GameId, &vdf::Map)> =
-            prepared.iter().map(|(_, id, e, _)| (id, e)).collect();
-        let added = push_missing(&mut file, &entries);
-        if added.len() < prepared.len() {
-            report.already_present = true;
-        }
-        if added.is_empty() {
-            continue;
-        }
-        for &ix in &added {
-            let (g, _, _, grid_ids) = &prepared[ix];
-            for err in art::prepare(&user.grid_dir(), *grid_ids, g.game, g.steam_app_id).await {
-                tracing::warn!("Steam artwork for {}: {err}", g.game.title);
+        let (mut added, mut updated) = (0, 0);
+        for p in prepared {
+            match sync::upsert(&mut file, &p.id, &p.entry, &icons) {
+                Upsert::Added => added += 1,
+                Upsert::Updated => updated += 1,
+                Upsert::Unchanged => {}
             }
         }
-        match util::write_atomic(&path, &file.to_bytes()).await {
-            Ok(()) => {
-                report.users_changed += 1;
-                report.added = report.added.max(added.len());
+        let removed = match gone {
+            Some(gone) => sync::remove_own(&mut file, gone),
+            None => Vec::new(),
+        };
+        if added + updated + removed.len() > 0 {
+            if let Err(e) = write_checked(&path, &file).await {
+                report.errors.push(format!("{e:#}"));
+                continue;
             }
-            Err(e) => report.errors.push(format!("{e:#}")),
+            report.users_changed += 1;
         }
+        report.added = report.added.max(added);
+        report.updated = report.updated.max(updated);
+        report.removed = report.removed.max(removed.len());
+        let grid = user.grid_dir();
+        for entry in &removed {
+            remove_art(&grid, entry).await;
+        }
+        for p in prepared {
+            let Some(entry) = file.entries().find(|e| matches_game(*e, &p.id)) else {
+                continue;
+            };
+            let ids = grid_ids(entry);
+            for err in art::prepare(&grid, ids, p.game.game, p.game.steam_app_id).await {
+                tracing::warn!("Steam artwork for {}: {err}", p.game.game.title);
+            }
+        }
+    }
+    if report.users_changed == 0 && !report.errors.is_empty() {
+        bail!(
+            "Changing Steam's shortcuts failed: {}",
+            report.errors.join("; ")
+        );
     }
     Ok(report)
 }
 
-/// Append the entries whose game has no Irori shortcut in `file` yet;
-/// returns the indices of those appended.
-fn push_missing(file: &mut ShortcutsFile, entries: &[(&GameId, &vdf::Map)]) -> Vec<usize> {
-    let mut added = Vec::new();
-    for (ix, (id, entry)) in entries.iter().enumerate() {
-        if file.entries().any(|e| matches_game(e, id)) {
-            continue;
-        }
-        file.push((*entry).clone());
-        added.push(ix);
-    }
-    added
-}
-
-/// Remove the game's shortcut from every Steam user, with its artwork.
-pub async fn remove(game: &GameInfo, app: &AppSettings) -> Result<SteamReport> {
+/// Remove Irori's entries for `ids` (every one of Irori's with `None`) from
+/// every Steam user, with their art. Other programs' entries are never
+/// touched. Nothing is written while Steam runs: the report then says so
+/// when there was something to remove.
+pub async fn remove_games(ids: Option<&HashSet<GameId>>, app: &AppSettings) -> Result<SyncReport> {
     let steam = steam_path(app);
     let users = match users(&steam).await {
         Ok(u) => u,
         Err(e) => {
             tracing::debug!("Steam shortcuts not removed: {e:#}");
-            return Ok(SteamReport::default());
+            return Ok(SyncReport::default());
         }
     };
-    let id = game.id();
-    let mut report = SteamReport::default();
+    let wanted = |id: &GameId| ids.is_none_or(|ids| ids.contains(id));
     if is_running(&steam).await {
-        report.steam_running = is_added_for(&users, &id).await;
-        return Ok(report);
+        let mut present = false;
+        for user in &users {
+            if let Ok(Some(file)) = read_file(&user.shortcuts_file()).await
+                && sync::own_games(&file).iter().any(wanted)
+            {
+                present = true;
+                break;
+            }
+        }
+        return Ok(SyncReport {
+            steam_running: present,
+            ..Default::default()
+        });
     }
-    let cmd = EntryCommand::new(&LauncherCommand::detect(), &id);
-    for user in &users {
+    remove_for_users(&users, ids).await
+}
+
+/// [`remove_games`] for the given users, with Steam known to be closed.
+async fn remove_for_users(
+    users: &[SteamUser],
+    ids: Option<&HashSet<GameId>>,
+) -> Result<SyncReport> {
+    let mut report = SyncReport::default();
+    for user in users {
         let path = user.shortcuts_file();
         let mut file = match read_file(&path).await {
             Ok(Some(f)) => f,
             Ok(None) => continue,
             Err(e) => {
                 report.errors.push(format!(
-                    "Can't remove \"{}\" from Steam user \"{}\". \"{}\" is corrupted! {e:#}",
-                    game.title,
+                    "Can't remove games from Steam user \"{}\". \"{}\" is corrupted! {e:#}",
                     user.id,
                     path.display()
                 ));
                 continue;
             }
         };
-        let removed = file.remove_where(|e| matches_game(e, &id));
+        let removed = sync::remove_own(&mut file, |id| ids.is_none_or(|ids| ids.contains(id)));
         if removed.is_empty() {
             continue;
         }
-        match util::write_atomic(&path, &file.to_bytes()).await {
-            Ok(()) => report.users_changed += 1,
-            Err(e) => {
-                report.errors.push(format!("{e:#}"));
-                continue;
-            }
+        if let Err(e) = write_checked(&path, &file).await {
+            report.errors.push(format!("{e:#}"));
+            continue;
         }
+        report.users_changed += 1;
+        report.removed = report.removed.max(removed.len());
         let grid = user.grid_dir();
         for entry in &removed {
-            let e = ShortcutEntry(entry);
-            let ids = match e.app_id() {
-                Some(short) => GridIds::from_short(short),
-                None => GridIds::from_exe_name(e.exe(), e.app_name()),
-            };
-            art::remove(&grid, ids).await;
-            art::remove(&grid, GridIds::from_exe_name(e.exe(), e.app_name())).await;
+            remove_art(&grid, entry).await;
         }
-        art::remove(&grid, GridIds::from_exe_name(&cmd.exe, &game.title)).await;
     }
-    if !report.errors.is_empty() && report.users_changed == 0 {
+    if report.users_changed == 0 && !report.errors.is_empty() {
         bail!(
-            "Removing {} from Steam failed: {}",
-            game.title,
+            "Removing games from Steam failed: {}",
             report.errors.join("; ")
         );
     }
     Ok(report)
+}
+
+/// Remove the game's shortcut from every Steam user, with its artwork.
+pub async fn remove(game: &GameInfo, app: &AppSettings) -> Result<SteamReport> {
+    let ids = HashSet::from([game.id()]);
+    let r = remove_games(Some(&ids), app)
+        .await
+        .map_err(|e| e.context(format!("Removing {} from Steam failed", game.title)))?;
+    Ok(SteamReport {
+        steam_running: r.steam_running,
+        users_changed: r.users_changed,
+        errors: r.errors,
+        ..Default::default()
+    })
 }
 
 /// Whether any Steam user has an Irori shortcut for the game.
@@ -444,7 +561,7 @@ mod tests {
         let cmd = EntryCommand::new(&launcher(), &id);
         assert_eq!(cmd.exe, "\"/usr/bin/irori\"");
         assert_eq!(cmd.start_dir, "\"/usr/bin\"");
-        assert_eq!(cmd.launch_options, "--launch \"gog/1423049311\"");
+        assert_eq!(cmd.launch_options, "--launch \"gog/1423049311\" --wait");
 
         let entry = NewShortcut {
             app_name: "Cyberpunk".into(),
@@ -454,6 +571,7 @@ mod tests {
             launch_options: cmd.launch_options.clone(),
             last_play_time: 0,
             tags: Vec::new(),
+            irori_id: None,
         }
         .to_entry();
         assert!(matches_game(ShortcutEntry(&entry), &id));
@@ -487,42 +605,134 @@ mod tests {
         assert_eq!(cmd.exe, "\"flatpak\"");
         assert_eq!(
             cmd.launch_options,
-            "run app.irori.Irori --launch \"nile/amzn1.x\""
+            "run app.irori.Irori --launch \"nile/amzn1.x\" --wait"
         );
     }
 
-    #[test]
-    fn adds_only_missing_games_in_the_irori_collection() {
-        let entry = |id: &GameId, title: &str| {
-            let cmd = EntryCommand::new(&launcher(), id);
+    fn game(runner: Runner, app: &str, title: &str) -> GameInfo {
+        GameInfo {
+            runner: Some(runner),
+            app_name: app.into(),
+            title: title.into(),
+            ..Default::default()
+        }
+    }
+
+    fn prepared<'a>(games: &'a [GameInfo]) -> Vec<Prepared<'a>> {
+        games
+            .iter()
+            .map(|g| {
+                let id = g.id();
+                let cmd = EntryCommand::new(&launcher(), &id);
+                Prepared {
+                    game: SteamGame {
+                        game: g,
+                        steam_app_id: None,
+                    },
+                    entry: NewShortcut {
+                        app_name: g.title.clone(),
+                        exe: cmd.exe,
+                        start_dir: cmd.start_dir,
+                        icon: None,
+                        launch_options: cmd.launch_options,
+                        last_play_time: 0,
+                        tags: vec![COLLECTION.into()],
+                        irori_id: Some(super::super::launch_target(&id)),
+                    }
+                    .to_entry(),
+                    id,
+                }
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn syncs_and_removes_only_irori_entries() {
+        crate::util::test_paths();
+        let dir = tempfile::tempdir().unwrap();
+        let users: Vec<SteamUser> = ["1", "2"]
+            .iter()
+            .map(|id| SteamUser {
+                id: id.to_string(),
+                config_dir: dir.path().join(id).join("config"),
+            })
+            .collect();
+        // Another program's entry, and an older Irori's entry for a game
+        // that left the library.
+        let mut existing = ShortcutsFile::empty();
+        existing.push(
             NewShortcut {
-                app_name: title.into(),
-                exe: cmd.exe,
-                start_dir: cmd.start_dir,
+                app_name: "Other".into(),
+                exe: "\"/bin/x\"".into(),
+                start_dir: "\"/bin\"".into(),
                 icon: None,
-                launch_options: cmd.launch_options,
-                last_play_time: 0,
-                tags: vec![COLLECTION.into()],
+                launch_options: "--launch \"gog/9\"".into(),
+                last_play_time: 5,
+                tags: Vec::new(),
+                irori_id: None,
             }
-            .to_entry()
-        };
-        let (a, b) = (
-            GameId::new(Runner::Gog, "1"),
-            GameId::new(Runner::Legendary, "Fortnite"),
+            .to_entry(),
         );
-        let (ea, eb) = (entry(&a, "A"), entry(&b, "B"));
-        let mut file = ShortcutsFile::empty();
-        file.push(ea.clone());
-        let added = push_missing(&mut file, &[(&a, &ea), (&b, &eb), (&b, &eb)]);
-        assert_eq!(added, [1]);
-        assert_eq!(file.entries().count(), 2);
-        let tags = file
-            .entries()
-            .nth(1)
-            .and_then(|e| e.0.get_ci("tags"))
-            .and_then(vdf::Value::as_map)
-            .unwrap();
-        assert_eq!(tags.str_ci("0"), COLLECTION);
+        let foreign = existing.to_bytes();
+        existing.push(
+            NewShortcut {
+                app_name: "Gone".into(),
+                exe: "\"/usr/bin/irori\"".into(),
+                start_dir: "\"/usr/bin\"".into(),
+                icon: None,
+                launch_options: "--launch \"gog/9\"".into(),
+                last_play_time: 5,
+                tags: Vec::new(),
+                irori_id: None,
+            }
+            .to_entry(),
+        );
+        std::fs::create_dir_all(&users[0].config_dir).unwrap();
+        std::fs::write(users[0].shortcuts_file(), existing.to_bytes()).unwrap();
+
+        let games = [
+            game(Runner::Gog, "1", "Hades"),
+            game(Runner::Legendary, "Fortnite", "Fortnite"),
+        ];
+        let list = prepared(&games);
+        let keep: HashSet<GameId> = games.iter().map(GameInfo::id).collect();
+        let gone = |id: &GameId| !keep.contains(id);
+        let report = sync_users(&users, &list, Some(&gone)).await.unwrap();
+        assert_eq!(
+            (report.added, report.updated, report.removed),
+            (2, 0, 1),
+            "{report:?}"
+        );
+        assert_eq!(report.users_changed, 2);
+        let read = |u: &SteamUser| {
+            ShortcutsFile::parse(&std::fs::read(u.shortcuts_file()).unwrap()).unwrap()
+        };
+        for user in &users {
+            assert_eq!(sync::own_games(&read(user)), keep);
+        }
+        assert_eq!(
+            read(&users[0]).entries().next().unwrap().app_name(),
+            "Other"
+        );
+        // The first user's file was backed up before the change.
+        assert_eq!(
+            std::fs::read(sync::backup_path(&users[0].shortcuts_file())).unwrap(),
+            existing.to_bytes()
+        );
+
+        // Nothing new: nothing written.
+        let again = sync_users(&users, &list, Some(&gone)).await.unwrap();
+        assert_eq!(again.users_changed, 0);
+
+        // Removing one game, then all of Irori's, leaves the other entry.
+        let hades = HashSet::from([games[0].id()]);
+        let removed = remove_for_users(&users, Some(&hades)).await.unwrap();
+        assert_eq!((removed.removed, removed.users_changed), (1, 2));
+        assert!(!sync::own_games(&read(&users[1])).contains(&games[0].id()));
+        let all = remove_for_users(&users, None).await.unwrap();
+        assert_eq!(all.removed, 1);
+        assert_eq!(std::fs::read(users[0].shortcuts_file()).unwrap(), foreign);
+        assert_eq!(read(&users[1]).entries().count(), 0);
     }
 
     #[tokio::test]
@@ -547,54 +757,5 @@ mod tests {
             std::fs::write(steam.join("steam.pid"), std::process::id().to_string()).unwrap();
             assert!(is_running(&steam).await);
         }
-    }
-
-    #[tokio::test]
-    async fn add_then_remove_restores_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let user = SteamUser {
-            id: "1".into(),
-            config_dir: dir.path().join("config"),
-        };
-        std::fs::create_dir_all(&user.config_dir).unwrap();
-        let mut original = ShortcutsFile::empty();
-        original.push(
-            NewShortcut {
-                app_name: "Other".into(),
-                exe: "\"/bin/x\"".into(),
-                start_dir: "\"/bin\"".into(),
-                icon: None,
-                launch_options: String::new(),
-                last_play_time: 5,
-                tags: Vec::new(),
-            }
-            .to_entry(),
-        );
-        let before = original.to_bytes();
-        std::fs::write(user.shortcuts_file(), &before).unwrap();
-
-        let id = GameId::new(Runner::Legendary, "Fortnite");
-        let cmd = EntryCommand::new(&launcher(), &id);
-        let mut f = read_file(&user.shortcuts_file()).await.unwrap().unwrap();
-        f.push(
-            NewShortcut {
-                app_name: "Fortnite".into(),
-                exe: cmd.exe,
-                start_dir: cmd.start_dir,
-                icon: None,
-                launch_options: cmd.launch_options,
-                last_play_time: 7,
-                tags: vec![COLLECTION.into()],
-            }
-            .to_entry(),
-        );
-        util::write_atomic(&user.shortcuts_file(), &f.to_bytes())
-            .await
-            .unwrap();
-        assert!(is_added_for(std::slice::from_ref(&user), &id).await);
-
-        let mut f = read_file(&user.shortcuts_file()).await.unwrap().unwrap();
-        assert_eq!(f.remove_where(|e| matches_game(e, &id)).len(), 1);
-        assert_eq!(f.to_bytes(), before);
     }
 }

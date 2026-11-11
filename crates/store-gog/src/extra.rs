@@ -259,6 +259,7 @@ impl GogStore {
             screenshots: product.as_ref().map(screenshots).unwrap_or_default(),
             age_ratings: v2.as_ref().map(age_ratings_from_v2).unwrap_or_default(),
             game_modes: v2.as_ref().map(game_modes_from_v2).unwrap_or_default(),
+            details_from: None,
         };
         if v2.is_some() || product.is_some() {
             cache.insert(

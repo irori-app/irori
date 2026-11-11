@@ -106,6 +106,15 @@ fn main() -> Result<()> {
     if cli.wait {
         std::process::exit(waiting::run(&args));
     }
+    // A key binding in the user's compositor: only a running Irori has a
+    // replay buffer or a game to take a picture of.
+    if cli.capture() {
+        if instance::forward(&args)? {
+            return Ok(());
+        }
+        eprintln!("irori: Irori isn't running, so there is nothing to capture");
+        std::process::exit(1);
+    }
 
     let Some(listener) = instance::acquire(&args)? else {
         // Forwarded to the running instance.
@@ -336,6 +345,13 @@ fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
 }
 
 fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
+    if cli.save_clip {
+        irori_ui::backend(cx).save_clip();
+    }
+    if cli.screenshot {
+        let backend = irori_ui::backend(cx);
+        backend.take_screenshot(backend.running_games().into_iter().next());
+    }
     if let Some(id) = &cli.open {
         open_main_window(app, cx);
         nav::navigate(Route::Game(id.clone()), cx);

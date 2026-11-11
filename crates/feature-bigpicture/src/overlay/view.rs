@@ -30,6 +30,8 @@ use super::model::{
     Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, next_output, next_up, progress, unlocked_since,
 };
 use crate::gamepad::{self, ControllerKind, GamepadInput};
+use crate::layout::home::Dir;
+use crate::layout::wheel::{WheelTravel, WheelView};
 
 /// How long one unlock notice stays in the corner.
 const TOAST_TIME: Duration = Duration::from_secs(4);
@@ -49,10 +51,6 @@ enum Load<T> {
     Failed(SharedString),
 }
 
-/// Wheel travel, in pixels, that moves the focus one row (as in Big
-/// Picture).
-const WHEEL_STEP: f32 = 60.0;
-
 pub(super) struct OverlayView {
     game: GameId,
     title: SharedString,
@@ -71,8 +69,8 @@ pub(super) struct OverlayView {
     achievements: Load<Arc<Vec<Achievement>>>,
     image_cache: Entity<LruImageCache>,
     _toast_timer: Option<Task<()>>,
-    /// Wheel travel not yet turned into a row (see [`WHEEL_STEP`]).
-    wheel: f32,
+    /// Wheel travel not yet turned into a row (as in Big Picture).
+    wheel: WheelTravel,
     _tasks: Vec<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -120,7 +118,7 @@ impl OverlayView {
             achievements: Load::Loading,
             image_cache: LruImageCache::new(24, cx),
             _toast_timer: None,
-            wheel: 0.0,
+            wheel: WheelTravel::default(),
             _tasks: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -360,17 +358,20 @@ impl OverlayView {
             return;
         }
         let delta = event.delta.pixel_delta(window.line_height());
-        let sideways = self.nav.tab() == Tab::Screenshots
-            && f32::from(delta.x.abs()) > f32::from(delta.y.abs());
-        self.wheel += f32::from(if sideways { delta.x } else { delta.y });
-        while self.wheel.abs() >= WHEEL_STEP {
-            let back = self.wheel > 0.0;
-            self.wheel -= WHEEL_STEP.copysign(self.wheel);
-            let input = match (sideways, back) {
-                (true, true) => GamepadInput::Left,
-                (true, false) => GamepadInput::Right,
-                (false, true) => GamepadInput::Up,
-                (false, false) => GamepadInput::Down,
+        let view = if self.nav.tab() == Tab::Screenshots {
+            WheelView::Grid
+        } else {
+            WheelView::Rows
+        };
+        for dir in self
+            .wheel
+            .feed(view, f32::from(delta.x), f32::from(delta.y))
+        {
+            let input = match dir {
+                Dir::Up => GamepadInput::Up,
+                Dir::Down => GamepadInput::Down,
+                Dir::Left => GamepadInput::Left,
+                Dir::Right => GamepadInput::Right,
             };
             self.handle(input, window, cx);
         }
@@ -686,7 +687,10 @@ impl OverlayView {
                 if focused {
                     d.bg(theme.secondary).border_color(theme.ring)
                 } else {
+                    // The row under the pointer shows it will take a click.
+                    let hover = theme.secondary.opacity(0.6);
                     d.border_color(gpui_kit::transparent_black())
+                        .hover(move |s| s.bg(hover))
                 }
             })
             .child(Icon::new(icon))

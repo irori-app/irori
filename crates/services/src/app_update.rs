@@ -27,7 +27,8 @@ const CHECK_EVERY: u64 = 24 * 60 * 60;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallKind {
     Flatpak,
-    /// A distribution package (apt, dnf, pacman, AUR) under `/usr`.
+    /// A distribution package under `/usr`: apt, dnf (Irori's repository
+    /// or Fedora COPR), pacman (Irori's repository or the AUR).
     SystemPackage,
     Nix,
     /// Run from a Cargo `target` folder.
@@ -67,6 +68,9 @@ impl InstallKind {
             install_ini: exe
                 .parent()
                 .and_then(|dir| std::fs::read_to_string(dir.join("install.ini")).ok()),
+            scoop_files: exe.parent().is_some_and(|dir| {
+                dir.join("manifest.json").is_file() && dir.join("install.json").is_file()
+            }),
         };
         classify(&exe, &probe)
     }
@@ -99,6 +103,9 @@ struct Probe {
     homebrew_cask: bool,
     /// `install.ini` beside the executable, written by the Windows setup.
     install_ini: Option<String>,
+    /// Scoop's `manifest.json` and `install.json` beside the executable,
+    /// which every Scoop app version folder has, wherever `SCOOP` puts it.
+    scoop_files: bool,
 }
 
 fn classify(exe: &Path, probe: &Probe) -> InstallKind {
@@ -121,7 +128,7 @@ fn classify(exe: &Path, probe: &Probe) -> InstallKind {
     if probe.homebrew_cask {
         return InstallKind::Homebrew;
     }
-    if path.contains("/scoop/apps/irori/") {
+    if path.contains("/scoop/apps/irori/") || (probe.scoop_files && path.contains("/apps/irori/")) {
         return InstallKind::Scoop;
     }
     if probe
@@ -454,6 +461,61 @@ mod tests {
         );
         assert!(InstallKind::Manual.checks() && InstallKind::Winget.checks());
         assert!(!InstallKind::Flatpak.checks() && !InstallKind::Source.checks());
+    }
+
+    /// Each package channel Irori publishes to is told apart, and updates go
+    /// through its package manager: Irori never looks for releases of a
+    /// package the system updates, and names the command of one the user
+    /// updates.
+    #[test]
+    fn package_channels_defer_to_their_package_manager() {
+        let none = Probe::default();
+        let kind = |path: &str, probe: &Probe| classify(&exe(path), probe);
+        // Fedora COPR and the AUR install under /usr like any distribution
+        // package, and dnf or the AUR helper updates them.
+        let system = kind("/usr/bin/irori", &none);
+        assert_eq!(system, InstallKind::SystemPackage);
+        assert!(!system.checks());
+        assert_eq!(system.update_command(), None);
+        // Flathub: Flatpak updates it.
+        let flathub = kind(
+            "/app/bin/irori",
+            &Probe {
+                flatpak: true,
+                ..Probe::default()
+            },
+        );
+        assert_eq!(flathub, InstallKind::Flatpak);
+        assert!(!flathub.checks());
+        // Scoop, in its default root and in one `SCOOP` moved elsewhere
+        // (`current` is resolved to the version folder).
+        let scoop_files = Probe {
+            scoop_files: true,
+            ..Probe::default()
+        };
+        for scoop in [
+            kind(r"C:\Users\a\scoop\apps\irori\1.2.3\irori.exe", &none),
+            kind(r"D:\Tools\apps\irori\1.2.3\irori.exe", &scoop_files),
+        ] {
+            assert_eq!(scoop, InstallKind::Scoop);
+            assert!(scoop.checks());
+            assert_eq!(scoop.update_command(), Some("scoop update irori"));
+        }
+        // Without Scoop's files a folder named `apps` is just a folder.
+        assert_eq!(
+            kind(r"D:\Tools\apps\irori\irori.exe", &none),
+            InstallKind::Manual
+        );
+        // winget, through the setup's switch in its manifest.
+        let winget = kind(
+            r"C:\Users\a\AppData\Local\Programs\Irori\irori.exe",
+            &Probe {
+                install_ini: Some("[Install]\r\nChannel=winget\r\n".into()),
+                ..Probe::default()
+            },
+        );
+        assert_eq!(winget, InstallKind::Winget);
+        assert_eq!(winget.update_command(), Some("winget upgrade Irori.Irori"));
     }
 
     #[test]

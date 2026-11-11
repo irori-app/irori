@@ -357,6 +357,23 @@ impl Backend {
         };
         let plan = store.launch(&id.app_name, &request, ctx).await?;
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
+        // Windows' own graphics preference, for a program Irori starts.
+        if id.runner.manages_installs()
+            && plan.watch.is_none()
+            && target.platform != InstallPlatform::Browser
+            && let Some(note) = self
+                .apply_gpu_preference(
+                    id,
+                    game.install
+                        .as_ref()
+                        .map_or("", |i| i.install_path.as_str()),
+                    &settings,
+                    &plan.command,
+                )
+                .await
+        {
+            append_log(&log_file, &note);
+        }
 
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
@@ -391,6 +408,8 @@ impl Backend {
             .then(|| crate::follow::Handoff::new(pid));
         let started = Instant::now();
         let started_at = util::now_rfc3339();
+        // Open until everything after the session is done, below.
+        let open = crate::power::OpenSession::new(self);
         self.running.lock().insert(
             id.clone(),
             RunningGame {
@@ -455,6 +474,7 @@ impl Backend {
         let b = self.clone();
         let id = id.clone();
         self.spawn(async move {
+            let _open = open;
             let status = match probe {
                 Some(probe) => crate::follow::follow(&mut child, probe).await,
                 None => {

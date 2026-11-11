@@ -305,7 +305,7 @@ impl BigPictureView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let row = &self.rows[row_ix];
-        let kind = row.kind;
+        let kind = row.kind.clone();
         let is_row = focused.is_some_and(|(r, _)| r == row_ix);
         let height = SHELF_HEADING + tile * shape.ratio() * FOCUS_SCALE + TILE_GAP;
         let count = row.games.len();
@@ -363,7 +363,7 @@ impl BigPictureView {
         let Some(row) = self.rows.get(row_ix) else {
             return div().into_any_element();
         };
-        let kind = row.kind;
+        let kind = row.kind.clone();
         let col = self
             .grid
             .column(row_ix)

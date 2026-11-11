@@ -918,6 +918,26 @@ mod tests {
     }
 
     #[test]
+    fn a_windows_game_played_without_wine_keeps_its_cloud_saves() {
+        // On Windows such a game runs natively; cloud saves don't depend on
+        // Wine anywhere, only on the store and the game.
+        for runner in [Runner::Legendary, Runner::Gog, Runner::Nile] {
+            let g = GameInfo {
+                runner: Some(runner),
+                cloud_save_enabled: true,
+                is_installed: true,
+                install: Some(InstalledInfo {
+                    platform: InstallPlatform::Windows,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert_eq!(CloudSupport::of(&g, true), CloudSupport::Supported);
+            assert!(CloudSupport::of(&g, true).offers_sheet());
+        }
+    }
+
+    #[test]
     fn sheet_entry_visibility() {
         assert!(CloudSupport::Supported.offers_sheet());
         assert!(CloudSupport::NotInstalled.offers_sheet());

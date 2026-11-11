@@ -1,7 +1,7 @@
 //! The replay buffer: while a game Irori started runs, gpu-screen-recorder
 //! keeps the last moments of play in memory, and a clip of them is saved on
-//! request (a controller chord, the tray, the command palette or a global
-//! shortcut). Linux only.
+//! request (a controller chord, the tray, the command palette, a keyboard
+//! shortcut or `irori --save-clip`). Linux only.
 //!
 //! Irori never bundles the recorder. It runs the one on `PATH`, else its
 //! Flatpak, and the settings say how to install it when neither is there.
@@ -14,7 +14,10 @@
 //! its output folder, which belongs to the session, so the Flatpak's process
 //! inside its sandbox is found the same way as a native one.
 
+pub mod bindings;
 mod shortcut;
+#[cfg(target_os = "linux")]
+mod x11;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

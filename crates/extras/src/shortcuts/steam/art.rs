@@ -125,11 +125,33 @@ pub async fn remove(grid: &Path, ids: GridIds) {
     }
 }
 
+/// The image for one slot. Irori's own art comes first (what the user sees
+/// in Irori, their own pictures included, from Irori's art store); Steam's
+/// official art fills the slots Irori has none for, and the wide capsule,
+/// which Irori's art rarely fits.
 async fn art_bytes(
     kind: ArtKind,
     game: &GameInfo,
     steam_app_id: Option<&str>,
 ) -> Result<Option<(Vec<u8>, &'static str)>> {
+    let pick = |opts: &[&Option<String>]| -> Option<String> {
+        opts.iter()
+            .filter_map(|o| o.as_deref())
+            .find(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let own = match kind {
+        ArtKind::Cover => pick(&[&game.art_cover]),
+        ArtKind::Hero => pick(&[&game.art_background]),
+        ArtKind::Logo => pick(&[&game.art_logo]),
+        ArtKind::Header => None,
+    };
+    if let Some(src) = own {
+        match fetch_normalized(Some(src)).await {
+            Ok(found) => return Ok(found),
+            Err(e) => tracing::debug!("Irori's {kind:?} art unavailable: {e:#}"),
+        }
+    }
     if let Some(id) = steam_app_id.filter(|s| !s.is_empty()) {
         let url = format!("{STEAM_CDN}/{id}/{}", kind.steam_cdn_file());
         match util::load_image_source(&url).await {
@@ -137,14 +159,8 @@ async fn art_bytes(
             Err(e) => tracing::debug!("Steam CDN art unavailable: {e:#}"),
         }
     }
-    let pick = |opts: &[&Option<String>]| -> Option<String> {
-        opts.iter()
-            .filter_map(|o| o.as_deref())
-            .find(|s| !s.is_empty())
-            .map(str::to_string)
-    };
     match kind {
-        ArtKind::Cover => fetch_normalized(pick(&[&game.art_cover, &game.art_square])).await,
+        ArtKind::Cover => fetch_normalized(pick(&[&game.art_square])).await,
         ArtKind::Header => {
             fetch_normalized(pick(&[
                 &game.art_square,
@@ -154,9 +170,6 @@ async fn art_bytes(
             .await
         }
         ArtKind::Hero => {
-            if let Some(src) = pick(&[&game.art_background]) {
-                return fetch_normalized(Some(src)).await;
-            }
             let Some(src) = pick(&[&game.art_square, &game.art_cover]) else {
                 return Ok(None);
             };
@@ -166,10 +179,7 @@ async fn art_bytes(
                 .map_err(|e| anyhow!("hero generation task failed: {e}"))??;
             Ok(Some((jpg, "jpg")))
         }
-        ArtKind::Logo => match pick(&[&game.art_logo]) {
-            Some(src) => fetch_normalized(Some(src)).await,
-            None => Ok(Some((TRANSPARENT_PNG.to_vec(), "png"))),
-        },
+        ArtKind::Logo => Ok(Some((TRANSPARENT_PNG.to_vec(), "png"))),
     }
 }
 

@@ -1,7 +1,8 @@
 //! How library data from several computers becomes one, without losing any.
 //!
 //! Every value the user sets (a favourite, a rating, a play status, a
-//! category and its games, a custom title, a yearly goal) is a register:
+//! category and its games, a smart category, a category's pin and colour, a
+//! custom title, a yearly goal) is a register:
 //! the value with when and on which computer it was last set. Each sync
 //! first records what changed here since the last one, then keeps, per
 //! register, the one set last. Clearing a value is a change like any other,
@@ -18,6 +19,12 @@
 //! Values set before sync was turned on count as older than any change
 //! made with sync (time 0), except play statuses, which carry their date.
 //!
+//! A smart category is one register holding the whole category. It is read
+//! the way it was written, with whatever this version doesn't know kept in
+//! it ([`crate::smart_categories`]), and compared as read: a computer that
+//! can't read part of a category keeps it as it came and never notes it as
+//! changed (or gone), so it can't publish an older copy or a deletion.
+//!
 //! Playtime is never summed twice. Sessions are merged as a set (a session
 //! is its game and start time). Each computer also publishes, per game, the
 //! time it knows of beyond its sessions (store totals, imports): its total
@@ -31,6 +38,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::Session;
+use crate::smart_categories::{CategoryLook, SmartCategory};
 use crate::userdata::{MAX_RATING, UserData};
 
 /// Milliseconds since the Unix epoch.
@@ -100,6 +108,12 @@ pub struct Registers {
     pub backlog_goals: Lww<i32, Option<u32>>,
     /// Games whose playtime was removed (a store said it was a DLC's).
     pub playtime_removed: Lww<String, bool>,
+    /// Smart categories by id, each whole.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub smart_categories: Lww<String, Option<SmartCategory>>,
+    /// Pins and colours of manual categories, by name.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub category_looks: Lww<String, Option<CategoryLook>>,
 }
 
 impl Registers {
@@ -118,6 +132,8 @@ impl Registers {
             max(&self.overrides),
             max(&self.backlog_goals),
             max(&self.playtime_removed),
+            max(&self.smart_categories),
+            max(&self.category_looks),
         ]
         .into_iter()
         .max()
@@ -273,6 +289,15 @@ pub fn record(
     }
     changed += note(&mut regs.overrides, &view.overrides, me, |_| plain);
     changed += note(&mut regs.backlog_goals, &view.backlog_goals, me, |_| plain);
+    changed += note(
+        &mut regs.smart_categories,
+        &view.smart_categories,
+        me,
+        |_| plain,
+    );
+    changed += note(&mut regs.category_looks, &view.category_looks, me, |_| {
+        plain
+    });
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -333,6 +358,28 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(overrides, ConflictField::Custom);
     take_all!(backlog_goals, ConflictField::Goal);
     take_all!(playtime_removed, ConflictField::Playtime);
+    take_all!(category_looks, ConflictField::Category);
+    for remote in remotes {
+        take(
+            &mut regs.smart_categories,
+            &remote.registers.smart_categories,
+            |id, ours, theirs| {
+                // Named as the user knew it here.
+                let name = ours
+                    .value
+                    .as_ref()
+                    .or(theirs.value.as_ref())
+                    .map(|c| c.name.clone());
+                lost(
+                    ConflictField::Category,
+                    id.clone(),
+                    name,
+                    ours.seen(),
+                    theirs.seen(),
+                )
+            },
+        );
+    }
     for remote in remotes {
         for (name, theirs) in &remote.registers.category_games {
             let ours = regs.category_games.entry(name.clone()).or_default();
@@ -461,6 +508,8 @@ struct View {
     category_games: BTreeMap<String, BTreeMap<String, bool>>,
     overrides: BTreeMap<String, Option<GameOverrides>>,
     backlog_goals: BTreeMap<i32, Option<u32>>,
+    smart_categories: BTreeMap<String, Option<SmartCategory>>,
+    category_looks: BTreeMap<String, Option<CategoryLook>>,
 }
 
 fn on(keys: &BTreeSet<String>) -> BTreeMap<String, bool> {
@@ -507,6 +556,17 @@ impl View {
                 .filter(|(_, g)| **g > 0)
                 .map(|(y, g)| (*y, Some(*g)))
                 .collect(),
+            smart_categories: d
+                .smart_categories
+                .iter()
+                .map(|(id, c)| (id.clone(), Some(c.clone())))
+                .collect(),
+            category_looks: d
+                .category_looks
+                .iter()
+                .filter(|(name, look)| !look.is_empty() && d.categories.contains_key(*name))
+                .map(|(name, look)| (name.clone(), Some(look.clone())))
+                .collect(),
         }
     }
 
@@ -543,6 +603,8 @@ impl View {
             category_games,
             overrides: values(&regs.overrides),
             backlog_goals: values(&regs.backlog_goals),
+            smart_categories: values(&regs.smart_categories),
+            category_looks: values(&regs.category_looks),
         }
     }
 
@@ -567,6 +629,8 @@ impl View {
             + members(&self.category_games, &other.category_games)
             + differing(&self.overrides, &other.overrides)
             + differing(&self.backlog_goals, &other.backlog_goals)
+            + differing(&self.smart_categories, &other.smart_categories)
+            + differing(&self.category_looks, &other.category_looks)
     }
 
     /// Put these values into `d`, whose values were `before`. Returns how
@@ -605,6 +669,18 @@ impl View {
             .backlog_goals
             .iter()
             .filter_map(|(y, g)| Some((*y, (*g)?)))
+            .collect();
+        d.smart_categories = self
+            .smart_categories
+            .iter()
+            .filter_map(|(id, c)| Some((id.clone(), c.clone()?)))
+            .collect();
+        // A look stays only with its category.
+        d.category_looks = self
+            .category_looks
+            .iter()
+            .filter(|(name, _)| d.categories.contains_key(*name))
+            .filter_map(|(name, look)| Some((name.clone(), look.clone()?)))
             .collect();
         changed
     }

@@ -299,6 +299,31 @@ pub fn remove_shortcuts(id: &GameId, window: &mut Window, cx: &mut App) -> Task<
     )
 }
 
+/// Remove Irori's Steam shortcut of the game; other programs' shortcuts
+/// stay. Steam has to be closed.
+pub fn remove_from_steam(id: &GameId, window: &mut Window, cx: &mut App) -> Task<bool> {
+    let b = backend(cx);
+    let Some(game) = b.game(id) else {
+        return Task::ready(false);
+    };
+    let title = game.title.clone();
+    let ids = std::collections::HashSet::from([id.clone()]);
+    run_reporting(
+        window,
+        cx,
+        t_args("game.ops.steam_remove_failed", &[("title", &title)]),
+        async move { shortcuts::remove_from_steam(Some(&ids), &b.settings.app()).await },
+        move |report, window, cx| {
+            let key = if report.removed > 0 {
+                "game.ops.steam_shortcut_removed"
+            } else {
+                "game.ops.steam_shortcut_absent"
+            };
+            notify_success(window, cx, t_args(key, &[("title", &title)]))
+        },
+    )
+}
+
 /// Ask for a folder or file. Resolves to `None` when cancelled; errors are reported.
 pub(crate) fn pick_path(
     window: &mut Window,

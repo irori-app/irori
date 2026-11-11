@@ -1,7 +1,8 @@
 //! Reading the Steam library from the Steam client, without a Steam sign-in
 //! in Irori (`irori_steam::SteamStore::read_client_library`): the question
 //! that turns it on, the restart of Steam it may need, and the part of
-//! Steam's account card that shows and changes it.
+//! Steam's account card that shows and changes it, and what the card says
+//! about the games hidden in Steam.
 
 use std::sync::Arc;
 
@@ -17,7 +18,9 @@ use gpui_kit::{
     AnyElement, App, AppContext as _, Entity, Global, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, Styled as _, Window, div,
 };
-use irori_steam::{ClientLibraryError, ClientLibraryMode, ClientLibraryState, SteamStore};
+use irori_steam::{
+    ClientLibraryError, ClientLibraryMode, ClientLibraryState, SteamHiddenGames, SteamStore,
+};
 use irori_ui::i18n::{t, t_args};
 
 use crate::common::{notify_error, notify_success};
@@ -57,6 +60,33 @@ pub(crate) fn steam_library_ops(cx: &mut App) -> Entity<SteamLibraryOps> {
 /// Where reading the Steam client stands; `None` without the Steam store.
 pub fn steam_client_library_state(cx: &App) -> Option<ClientLibraryState> {
     steam_store(cx).map(|s| s.client_library_state())
+}
+
+/// What Irori knows about the games hidden in Steam; `None` without the
+/// Steam store.
+pub fn steam_hidden_games(cx: &App) -> Option<SteamHiddenGames> {
+    steam_store(cx).map(|s| s.hidden_games())
+}
+
+/// What the Steam card says about the games hidden in Steam: how many stay
+/// hidden here, or why Irori can't see them. `None` when there is nothing
+/// to say (no Steam here, or nothing hidden), and no count while hidden
+/// games are `locked` behind their PIN.
+pub(crate) fn hidden_games_text(state: &SteamHiddenGames, locked: bool) -> Option<SharedString> {
+    if !state.steam_found {
+        return None;
+    }
+    Some(match (state.known, state.signed_in, state.count) {
+        (false, true, _) => t("manage.steam_hidden.unknown_account"),
+        (false, false, _) => t("manage.steam_hidden.unknown_local"),
+        (true, _, 0) => return None,
+        (true, _, _) if locked => return None,
+        (true, _, 1) => t("manage.steam_hidden.count_one"),
+        (true, _, n) => t_args(
+            "manage.steam_hidden.count_other",
+            &[("count", &n.to_string())],
+        ),
+    })
 }
 
 /// Whether the library should suggest reading the Steam client.
@@ -186,6 +216,7 @@ fn start(mode: ClientLibraryMode, restart: bool, window: &mut Window, cx: &mut A
                     Some(ClientLibraryError::DebuggingOff { millennium: false }) if !restart => {
                         ask_to_restart(mode, window, cx)
                     }
+                    Some(kind) if offers_sign_in(kind) => offer_sign_in(kind, window, cx),
                     Some(kind) => notify_error(
                         t("manage.steam_library.read_failed"),
                         &anyhow::anyhow!(error_text(kind)),
@@ -198,6 +229,38 @@ fn start(mode: ClientLibraryMode, restart: bool, window: &mut Window, cx: &mut A
         });
     })
     .detach();
+}
+
+/// Whether the client can't be read for a reason restarting Steam doesn't
+/// fix (another program holds the port), so signing in to Steam in Irori,
+/// which needs no port, is the way to the whole library.
+pub(crate) fn offers_sign_in(error: &ClientLibraryError) -> bool {
+    matches!(error, ClientLibraryError::NotSteam { .. })
+}
+
+/// Explain why the client can't be read and offer Steam's own sign-in (a
+/// QR code the Steam Mobile App scans) instead.
+fn offer_sign_in(error: &ClientLibraryError, window: &mut Window, cx: &mut App) {
+    let reason = error_text(error);
+    window.open_alert_dialog(cx, move |alert, _, _| {
+        alert
+            .title(t("manage.steam_library.sign_in_instead.title"))
+            .description(format!(
+                "{reason} {}",
+                t("manage.steam_library.sign_in_instead.description")
+            ))
+            .show_cancel(true)
+            .cancel_text(t("manage.steam_library.dialog.cancel"))
+            .ok_text(t("manage.steam_library.sign_in_instead.ok"))
+            .on_ok(|_, window, cx| {
+                // The dialog is still open here; open the sign-in once it
+                // has closed.
+                window.defer(cx, |window, cx| {
+                    crate::login::open_login_dialog(irori_core::Runner::Steam, window, cx)
+                });
+                true
+            })
+    });
 }
 
 /// Steam runs without remote debugging: ask before restarting it.
@@ -423,5 +486,64 @@ mod tests {
             assert!(!error_text(&e).starts_with("manage."), "{e:?}");
         }
         assert!(error_text(&ClientLibraryError::NotSteam { port: 8080 }).contains("8080"));
+    }
+
+    #[test]
+    fn offers_the_qr_sign_in_when_the_port_is_taken() {
+        assert!(offers_sign_in(&ClientLibraryError::NotSteam { port: 8080 }));
+        // Restarting Steam, waiting or Millennium's settings help there.
+        for e in [
+            ClientLibraryError::NotRunning,
+            ClientLibraryError::DebuggingOff { millennium: false },
+            ClientLibraryError::DebuggingOff { millennium: true },
+            ClientLibraryError::Starting,
+            ClientLibraryError::SteamSession,
+        ] {
+            assert!(!offers_sign_in(&e), "{e:?}");
+        }
+    }
+
+    #[test]
+    fn says_what_it_knows_of_the_games_hidden_in_steam() {
+        crate::i18n::register();
+        let state = |known, signed_in, count| SteamHiddenGames {
+            known,
+            count,
+            signed_in,
+            steam_found: true,
+        };
+        assert_eq!(hidden_games_text(&state(true, false, 0), false), None);
+        assert_eq!(
+            hidden_games_text(&state(true, true, 1), false),
+            Some(t("manage.steam_hidden.count_one"))
+        );
+        assert!(
+            hidden_games_text(&state(true, false, 3), false)
+                .unwrap()
+                .contains('3')
+        );
+        assert_eq!(
+            hidden_games_text(&state(false, true, 0), false),
+            Some(t("manage.steam_hidden.unknown_account"))
+        );
+        assert_eq!(
+            hidden_games_text(&state(false, false, 0), false),
+            Some(t("manage.steam_hidden.unknown_local"))
+        );
+        let elsewhere = SteamHiddenGames {
+            steam_found: false,
+            ..state(false, false, 0)
+        };
+        assert_eq!(
+            hidden_games_text(&elsewhere, false),
+            None,
+            "no Steam, no word"
+        );
+        // Locked behind the PIN: no count, but why Irori can't see them.
+        assert_eq!(hidden_games_text(&state(true, false, 3), true), None);
+        assert_eq!(
+            hidden_games_text(&state(false, false, 0), true),
+            Some(t("manage.steam_hidden.unknown_local"))
+        );
     }
 }

@@ -20,6 +20,8 @@ pub(crate) struct InstalledApp {
     pub last_updated: Option<u64>,
     /// The `appmanifest_<id>.acf` it was read from.
     pub manifest: PathBuf,
+    /// Steam runs the app's Windows build through Proton on this system.
+    pub windows_build: bool,
 }
 
 /// Bits of a manifest's `StateFlags` (Steam's `EAppState`).
@@ -102,6 +104,20 @@ pub(crate) fn parse_manifest(text: &str, library: &Path) -> Option<InstalledApp>
         manifest: library
             .join("steamapps")
             .join(format!("appmanifest_{app_id}.acf")),
+        windows_build: runs_windows_build(state),
+    })
+}
+
+/// Whether a manifest's app runs its Windows build on another system:
+/// Steam records Proton as a platform override (`platform_override_source`
+/// `windows`) in `UserConfig` and `MountedConfig`.
+fn runs_windows_build(state: &Vdf) -> bool {
+    ["UserConfig", "MountedConfig"].iter().any(|section| {
+        state
+            .get(section)
+            .and_then(|c| c.get("platform_override_source"))
+            .and_then(Vdf::as_str)
+            .is_some_and(|p| p.trim().eq_ignore_ascii_case("windows"))
     })
 }
 
@@ -321,6 +337,16 @@ mod tests {
         assert_eq!(app.size_on_disk, 123_456);
         assert_eq!(app.build_id, "987");
         assert_eq!(app.last_updated, Some(1_700_000_000));
+        assert!(!app.windows_build);
+        let proton = manifest("620", "Portal 2", "Portal 2", 4).replace(
+            "\"language\"\t\t\"english\"",
+            "\"platform_override_dest\"\t\t\"linux\"\n\t\t\"platform_override_source\"\t\t\"windows\"",
+        );
+        assert!(
+            parse_manifest(&proton, Path::new("/lib"))
+                .unwrap()
+                .windows_build
+        );
         // Installed with an update waiting (4 | 2) still counts.
         assert!(parse_manifest(&manifest("620", "Portal 2", "P", 6), Path::new("/l")).is_some());
     }

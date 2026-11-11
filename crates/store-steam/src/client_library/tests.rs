@@ -20,7 +20,8 @@ fn reads_owned_and_borrowed_games() {
         {"id": 620, "name": "Portal 2 again", "owned": true},
         {"id": 220, "name": "Half-Life 2"}
     ])))
-    .unwrap();
+    .unwrap()
+    .games;
     let ids: Vec<&str> = games.iter().map(|g| g.app_id.as_str()).collect();
     assert_eq!(ids, ["220", "620", "70"]);
     let portal = &games[1];
@@ -33,6 +34,32 @@ fn reads_owned_and_borrowed_games() {
     assert_eq!(borrowed.playtime_minutes, 0, "the owner's time isn't ours");
     // Without the ownership getters a game in the library counts as owned.
     assert_eq!(games[0].name, "Half-Life 2");
+}
+
+#[test]
+fn reads_the_games_hidden_in_steam() {
+    let mut value = answer(serde_json::json!([
+        {"id": 620, "name": "Portal 2", "owned": true, "hidden": true},
+        {"id": 70, "name": "Half-Life", "owned": true}
+    ]));
+    let read = parse_answer(value.clone()).unwrap();
+    assert!(!read.hidden_known, "a client that didn't say");
+    value["hiddenKnown"] = true.into();
+    let read = parse_answer(value).unwrap();
+    assert!(read.hidden_known);
+    let hidden: Vec<(&str, bool)> = read
+        .games
+        .iter()
+        .map(|g| (g.app_id.as_str(), g.hidden))
+        .collect();
+    assert_eq!(hidden, [("620", true), ("70", false)]);
+    // The library cache only writes the flag when set, and reads files
+    // written before it existed.
+    let json = serde_json::to_value(&read.games[1]).unwrap();
+    assert!(json.get("hidden").is_none());
+    let old: LibraryGame =
+        serde_json::from_str(r#"{"appId": "70", "name": "Half-Life", "unknown": 1}"#).unwrap();
+    assert!(!old.hidden);
 }
 
 #[test]
@@ -69,6 +96,11 @@ fn the_expression_only_reads() {
     }
     assert!(EXPRESSION.contains("collectionStore"));
     assert!(EXPRESSION.contains("allGamesCollection"));
+    assert!(EXPRESSION.contains(r#"GetCollection("hidden")"#));
+    // No setter of collections.
+    for setter in ["SetAppsAsHidden", "AddApps", "RemoveApps", "Save"] {
+        assert!(!EXPRESSION.contains(setter), "{setter}");
+    }
 }
 
 fn state() -> ClientLibraryState {
@@ -205,20 +237,24 @@ async fn lists_what_was_read_until_an_account_signs_in() {
     s.init().await.unwrap();
     assert_eq!(s.games().len(), 1);
 
-    let read = vec![
-        LibraryGame {
-            app_id: "620".into(),
-            name: "Portal 2".into(),
-            playtime_minutes: 95,
-            ..Default::default()
-        },
-        LibraryGame {
-            app_id: "70".into(),
-            name: "Half-Life".into(),
-            playtime_minutes: 42,
-            ..Default::default()
-        },
-    ];
+    let read = ClientRead {
+        games: vec![
+            LibraryGame {
+                app_id: "620".into(),
+                name: "Portal 2".into(),
+                playtime_minutes: 95,
+                ..Default::default()
+            },
+            LibraryGame {
+                app_id: "70".into(),
+                name: "Half-Life".into(),
+                playtime_minutes: 42,
+                hidden: true,
+                ..Default::default()
+            },
+        ],
+        hidden_known: true,
+    };
     s.enable_client_library(ClientLibraryMode::Once)
         .await
         .unwrap();
@@ -230,6 +266,18 @@ async fn lists_what_was_read_until_an_account_signs_in() {
     let half_life = s.game("70").unwrap();
     assert!(!half_life.is_installed && half_life.installable);
     assert!(half_life.cover_art().unwrap().contains("/70/"));
+    // Hidden in Steam, as the client said; no files of Steam say otherwise.
+    assert!(half_life.store_hidden);
+    assert!(!s.game("620").unwrap().store_hidden);
+    assert_eq!(
+        s.hidden_games(),
+        crate::SteamHiddenGames {
+            known: true,
+            count: 1,
+            signed_in: false,
+            steam_found: true,
+        }
+    );
     assert_eq!(s.remote_playtime().await.unwrap()["70"], 42);
     let mut seen = Vec::new();
     while let Ok(e) = events.try_recv() {
@@ -281,11 +329,14 @@ async fn keeps_reading_on_refresh_only_when_asked() {
     s.enable_client_library(ClientLibraryMode::Keep)
         .await
         .unwrap();
-    s.keep_client_games(vec![LibraryGame {
-        app_id: "70".into(),
-        name: "Half-Life".into(),
-        ..Default::default()
-    }])
+    s.keep_client_games(ClientRead {
+        games: vec![LibraryGame {
+            app_id: "70".into(),
+            name: "Half-Life".into(),
+            ..Default::default()
+        }],
+        hidden_known: false,
+    })
     .await
     .unwrap();
     let state = s.client_library_state();
@@ -350,7 +401,7 @@ async fn reads_the_library_over_devtools() {
         {"id": 70, "name": "Half-Life", "owned": true, "minutes": 3}
     ])))
     .await;
-    let games = read_port(port).await.unwrap();
+    let games = read_port(port).await.unwrap().games;
     assert_eq!(games.len(), 1);
     assert_eq!(games[0].app_id, "70");
     let asked = server.await.unwrap();
@@ -374,4 +425,34 @@ async fn nothing_listening_is_not_an_error_of_its_own() {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
     assert!(devtools::list(port).await.unwrap().is_none());
+}
+
+/// Another program holding Steam's debugging port is told apart from
+/// Steam, however it answers, so the user hears why and what helps.
+#[tokio::test]
+async fn another_program_on_the_port_is_not_steam() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let answers: [&[u8]; 4] = [
+        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>Router</html>",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n[]\r\n0\r\n\r\n",
+        b"SSH-2.0-OpenSSH_9.6\r\n",
+    ];
+    for answer in answers {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 4096];
+            let _ = socket.read(&mut buf).await;
+            let _ = socket.write_all(answer).await;
+        });
+        let e = read_port(port).await.unwrap_err();
+        assert_eq!(
+            e.downcast_ref::<ClientLibraryError>(),
+            Some(&ClientLibraryError::NotSteam { port }),
+            "{}: {e:#}",
+            String::from_utf8_lossy(answer)
+        );
+    }
 }

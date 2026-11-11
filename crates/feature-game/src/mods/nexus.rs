@@ -516,9 +516,9 @@ fn squash(s: &str) -> String {
 impl NxmPicker {
     fn new(link: NxmLink, cx: &mut Context<Self>) -> Self {
         let library = irori_ui::models(cx).library.read(cx).snapshot.clone();
+        // Every copy: the one the mod is for may not be its entry's default.
         let mut games: Vec<Arc<GameInfo>> = library
-            .games
-            .iter()
+            .all_games()
             .filter(|g| irori_services::supports_mods(g))
             .cloned()
             .collect();

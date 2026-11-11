@@ -39,6 +39,8 @@ pub struct AppShell {
     narrow_expanded: bool,
     recent: Entity<sidebar::RecentGames>,
     saved_views: Entity<sidebar::SavedViewsNav>,
+    /// "Keep holding to open Big Picture" while a controller button is held.
+    hold_hint: Entity<irori_bigpicture::gamepad::HoldHintView>,
     /// The start-with-system choice last written to the system.
     autostart: (bool, bool),
     /// Games we minimized the window for, to restore when they exit.
@@ -159,6 +161,7 @@ impl AppShell {
             narrow_expanded: false,
             recent: cx.new(sidebar::RecentGames::new),
             saved_views: cx.new(sidebar::SavedViewsNav::new),
+            hold_hint: irori_bigpicture::gamepad::HoldHintView::new(window, cx),
             autostart,
             minimized_for: None,
             log_shown_for: None,
@@ -293,7 +296,7 @@ impl AppShell {
 
     /// Whether the window is too narrow for the full sidebar beside the page.
     fn is_narrow(window: &Window) -> bool {
-        window.viewport_size().width / window.rem_size() < sidebar::NARROW_WINDOW_REM
+        irori_ui::style::visible_size(window).width / window.rem_size() < sidebar::NARROW_WINDOW_REM
     }
 
     /// Whether the sidebar shows collapsed right now: the saved choice, except
@@ -775,6 +778,7 @@ impl Render for AppShell {
             .when_some(modal_dim, |this, dim| {
                 this.child(div().absolute().inset_0().bg(dim))
             })
+            .child(self.hold_hint.clone())
     }
 }
 
@@ -920,7 +924,7 @@ mod title_bar_tests {
         cx.executor().allow_parking();
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
         let slot = made.clone();
-        let backend = Backend::start(move |bus, settings| {
+        let backend = Backend::start_for_tests(move |bus, settings| {
             let store = SideloadStore::new(bus, settings);
             *slot.lock().expect("the store slot") = Some(store.clone());
             vec![store]

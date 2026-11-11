@@ -195,7 +195,7 @@ pub fn parse_search(json: &serde_json::Value) -> Vec<HowLongToBeat> {
 
 /// Letters and digits only, lower case, Roman numerals II–X as digits, so
 /// "DOOM II: Hell on Earth" and "Doom 2 - Hell on Earth" compare equal.
-fn fold(title: &str) -> String {
+pub(crate) fn fold(title: &str) -> String {
     let words: Vec<String> = title
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())

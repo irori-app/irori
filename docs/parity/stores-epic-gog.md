@@ -528,6 +528,9 @@ The literal string `"fallback"` is used as image placeholder (frontend maps it t
 `formatEpicStoreUrl(title)` (`backend/utils.ts:593-606`):
 `"https://www.epicgames.com/store/product/" + cleanTitle(title)`, where
 `cleanTitle = title.replaceAll(/('\w)|(\\(\w|\d){5})|(\\"(\\.|[^"])*")|[^((0-9)|(a-z)|(A-Z)|\s)]/g, '').replaceAll(' ', '-').replaceAll('®','').toLowerCase().split('--definitive')[0]`.
+**[QUIRK]** `('\w)` drops the letter after an apostrophe, so "Assassin's Creed® Unity" gives
+`assassin-creed-unity` where Epic's slug is `assassins-creed-unity`. Irori removes only the
+apostrophe (and the `(`, `)`, `|` the class kept).
 
 Accessors:
 

@@ -8,7 +8,9 @@ mod page;
 mod status;
 mod store_badge;
 
-pub use backdrop::{ArtBackdrop, BackdropInk, library_backdrop, library_backdrop_url};
+pub use backdrop::{
+    ArtBackdrop, BackdropInk, library_backdrop, library_backdrop_url, strongest_legible_weight,
+};
 pub use brand::BrandMark;
 pub use cover::{
     ArtImage, GameCover, art_arrival, art_image, art_img, art_is_fresh, art_loading, art_missing,

@@ -148,6 +148,7 @@ pub(crate) fn same(a: &GameInfo, b: &GameInfo) -> bool {
     a.app_name == b.app_name
         && a.title == b.title
         && a.is_installed == b.is_installed
+        && a.store_hidden == b.store_hidden
         && (&a.art_cover, &a.art_background, &a.art_logo, &a.art_square)
             == (&b.art_cover, &b.art_background, &b.art_logo, &b.art_square)
         && a.install
@@ -228,6 +229,7 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
             .collect(),
         age_ratings: age_ratings(details),
         game_modes: game_modes(details.categories.iter().map(|c| c.id)),
+        details_from: None,
     }
 }
 

@@ -30,6 +30,8 @@ pub enum GameCommand {
     /// Add a Steam shortcut, installed or not (Steam starts Irori, which
     /// offers to install a game that isn't installed yet).
     AddToSteam,
+    /// Remove Irori's Steam shortcut of the game (other programs' stay).
+    RemoveFromSteam,
     OpenFolder,
     Verify,
     /// Open the uninstall confirmation (owned by the game feature).
@@ -144,7 +146,7 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
         }
     }
     if !state.browser && !state.external && (state.installed || state.installable) {
-        files.push(AddToSteam);
+        files.extend([AddToSteam, RemoveFromSteam]);
     }
     if state.installed && state.has_install_path && !state.browser {
         files.push(OpenFolder);
@@ -192,6 +194,7 @@ impl GameCommand {
             AddShortcut => "library.command.add_shortcut",
             RemoveShortcut => "library.command.remove_shortcut",
             AddToSteam => "library.command.add_to_steam",
+            RemoveFromSteam => "library.command.remove_from_steam",
             OpenFolder => "library.command.open_folder",
             Verify => "library.command.verify",
             Uninstall if state.sideload => "library.command.remove_app",
@@ -223,6 +226,7 @@ impl GameCommand {
             AddShortcut => IconName::Link2,
             RemoveShortcut => IconName::Link2Off,
             AddToSteam => IconName::Gamepad2,
+            RemoveFromSteam => IconName::CircleMinus,
             OpenFolder => IconName::FolderOpen,
             Verify => IconName::ShieldCheck,
             Uninstall => IconName::Trash,
@@ -318,7 +322,14 @@ mod tests {
         s.has_install_path = true;
         let steam = flat(&s);
         assert_eq!(steam[0], Play);
-        for gone in [Settings, Logs, AddToSteam, Verify, Uninstall] {
+        for gone in [
+            Settings,
+            Logs,
+            AddToSteam,
+            RemoveFromSteam,
+            Verify,
+            Uninstall,
+        ] {
             assert!(!steam.contains(&gone), "{gone:?}");
         }
         assert!(steam.contains(&OpenFolder));
@@ -385,10 +396,13 @@ mod tests {
             ..Default::default()
         };
         assert!(flat(&s).contains(&AddToSteam));
+        assert!(flat(&s).contains(&RemoveFromSteam));
         s.installed = true;
         assert!(flat(&s).contains(&AddToSteam));
+        assert!(flat(&s).contains(&RemoveFromSteam));
         s.browser = true;
         assert!(!flat(&s).contains(&AddToSteam));
+        assert!(!flat(&s).contains(&RemoveFromSteam));
         let not_installable = GameState::default();
         assert!(!flat(&not_installable).contains(&AddToSteam));
     }

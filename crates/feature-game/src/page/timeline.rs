@@ -238,7 +238,8 @@ impl TimelineView {
             return;
         }
         if self.mode == TimelineMode::Journal {
-            self.journal = Rc::new(super::journal::rows(timeline, notes));
+            let today = Local::now().date_naive();
+            self.journal = Rc::new(super::journal::rows(timeline, notes, today));
         }
         let heights: Vec<f32> = match self.mode {
             TimelineMode::Days => timeline.rows.iter().map(TimelineRow::rem).collect(),
@@ -257,6 +258,12 @@ impl TimelineView {
             TimelineMode::Journal => self.journal.iter().map(JournalRow::rem).sum(),
         }
     }
+}
+
+/// Whether the panel shows its list: the journal always has today, the
+/// other views only a game with a history.
+fn list_shown(mode: TimelineMode, has_rows: bool) -> bool {
+    has_rows || mode == TimelineMode::Journal
 }
 
 /// The next day row from `from` in `step`'s direction (staying put at the
@@ -434,6 +441,7 @@ impl GamePage {
             .position(|m| *m == self.timeline.mode)
             .unwrap_or(0);
         let has_rows = !timeline.rows.is_empty();
+        let show_list = list_shown(self.timeline.mode, has_rows);
         let header = h_flex()
             .w_full()
             .gap_3()
@@ -454,7 +462,8 @@ impl GamePage {
                         .child(s),
                 )
             })
-            .when(has_rows, |row| {
+            // Every game has a journal, played or not.
+            .when(!self.timeline.data.is_loading(), |row| {
                 row.child(
                     TabBar::new("timeline-mode")
                         .segmented()
@@ -471,7 +480,7 @@ impl GamePage {
                         })),
                 )
             });
-        let body = if !has_rows {
+        let body = if !show_list {
             div()
                 .text_sm()
                 .text_color(ink.panel_muted)
@@ -901,6 +910,14 @@ impl GamePage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_journal_shows_for_a_game_never_played() {
+        assert!(list_shown(TimelineMode::Journal, false));
+        assert!(!list_shown(TimelineMode::Days, false));
+        assert!(!list_shown(TimelineMode::Sessions, false));
+        assert!(list_shown(TimelineMode::Days, true));
+    }
 
     fn at(m: u32, d: u32, h: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(2026, m, d)

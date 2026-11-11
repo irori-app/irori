@@ -424,8 +424,10 @@ impl GamePage {
         cx.notify();
     }
 
-    fn load_extra(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.id.runner == irori_core::Runner::Sideload {
+    pub(super) fn load_extra(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // An added game's page has only what the user wrote, unless IGDB
+        // may fill it in.
+        if self.id.runner == irori_core::Runner::Sideload && !backend(cx).settings.app().igdb {
             return;
         }
         self.extra = Load::Loading;
