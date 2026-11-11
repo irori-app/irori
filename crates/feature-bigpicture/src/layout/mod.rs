@@ -10,6 +10,7 @@
 //! Home's other layouts have their geometry in [`home`].
 
 pub mod home;
+pub mod wheel;
 
 use std::ops::Range;
 
@@ -209,6 +210,15 @@ pub fn list_scroll(
         .unwrap_or_else(|| top(focus))
 }
 
+/// `scroll` kept from showing room past the end of content `content` tall
+/// in a view `height` tall: [`list_scroll`] moves a row at a time, which at
+/// the end may leave part of a row's worth of empty space below the last.
+/// The focused row stays in view, as it ends where the content does at the
+/// latest.
+pub fn end_scroll(scroll: f32, content: f32, height: f32) -> f32 {
+    scroll.min((content - height).max(0.0)).max(0.0)
+}
+
 /// Share of a scrolled view one page moves, so the line at its edge stays
 /// in sight.
 const PAGE_OVERLAP: f32 = 0.9;
@@ -347,6 +357,18 @@ mod tests {
         assert_eq!(list_scroll(5, Some(4), 2.75, 2.25, 8.0), 11.0);
         // Taller than the space: the row's top leads.
         assert_eq!(list_scroll(3, None, 10.0, 0.0, 8.0), 30.0);
+    }
+
+    #[test]
+    fn lists_never_scroll_past_their_end() {
+        // 30 rows of 3.5 in 20: the last row's top would lead at 87.5,
+        // showing 2.5 of nothing below it.
+        let scroll = list_scroll(29, None, 3.5, 0.0, 20.0);
+        assert_eq!(scroll, 87.5);
+        assert_eq!(end_scroll(scroll, 105.0, 20.0), 85.0);
+        assert_eq!(end_scroll(7.0, 105.0, 20.0), 7.0);
+        // Content shorter than the view stays at the top.
+        assert_eq!(end_scroll(3.5, 10.0, 20.0), 0.0);
     }
 
     #[test]

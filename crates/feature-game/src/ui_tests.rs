@@ -171,7 +171,7 @@ fn backend() -> Backend {
     });
     let game = test_game();
     let id = game.id();
-    let b = Backend::start(move |_, _| {
+    let b = Backend::start_for_tests(move |_, _| {
         vec![
             Arc::new(FakeStore { game }) as DynStore,
             Arc::new(FakeStore { game: steam_game() }) as DynStore,

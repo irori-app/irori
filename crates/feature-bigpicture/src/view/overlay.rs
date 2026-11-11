@@ -51,7 +51,9 @@ impl BigPictureView {
                 if focused {
                     d.bg(accent).text_color(c.background)
                 } else {
+                    // The row under the pointer shows it will take a click.
                     d.text_color(if danger { c.danger } else { c.foreground })
+                        .hover(|s| s.bg(c.foreground.opacity(0.08)))
                 }
             })
             .child(Icon::new(icon))
@@ -168,10 +170,10 @@ impl BigPictureView {
                         Self::overlay_row(
                             item.id().into(),
                             item.icon(),
-                            item.label(),
+                            self.menu_label(item),
                             i == ix,
                             false,
-                            false,
+                            item == crate::model::MenuItem::SoundOutput && self.switching_output,
                             c,
                             move |this, window, cx| {
                                 this.overlay = Some(Overlay::Menu { ix: i });
@@ -243,6 +245,21 @@ impl BigPictureView {
                     cx,
                 )
             }
+            Overlay::Power { action, choice } => Self::confirm_dialog(
+                "bp-power",
+                super::system::power_title(action),
+                self.power_description(action, cx),
+                (
+                    t(crate::model::power_label(action)),
+                    crate::model::MenuItem::Power(action).icon(),
+                    self.power_pending == Some(action),
+                ),
+                choice,
+                c,
+                m,
+                move |this, window, cx| this.power(action, window, cx),
+                cx,
+            ),
             Overlay::DeleteTheme { id, choice } => {
                 let name = self
                     .look

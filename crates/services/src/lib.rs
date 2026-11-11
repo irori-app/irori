@@ -16,6 +16,7 @@ pub mod backup_schedule;
 pub mod capture;
 pub mod copies;
 mod discord;
+pub mod displays;
 mod downloads;
 mod engines;
 mod facts;
@@ -23,8 +24,10 @@ pub mod file_achievements;
 mod files;
 mod follow;
 mod games;
+pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
+mod igdb;
 mod inhibit;
 pub mod journal;
 mod library;
@@ -32,8 +35,10 @@ pub mod ludusavi;
 pub mod mods;
 mod network;
 pub mod play_status;
+pub mod power;
 mod programs;
 pub mod related;
+pub mod renodx;
 pub mod replay;
 pub mod reshade;
 pub mod screenshots;
@@ -41,6 +46,7 @@ pub mod scripts;
 pub mod search;
 pub mod sessions;
 pub mod settings;
+pub mod smart_categories;
 pub mod status;
 mod steam_tags;
 pub mod storage;
@@ -74,17 +80,23 @@ pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadS
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
+pub use igdb::IgdbStatus;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+pub use power::{Permission, PowerAction, PowerSystem};
+pub use renodx::{RenodxChoice, RenodxStatus};
 pub use replay::{Recorder, ReplayInfo, ShortcutState};
 pub use reshade::{ReshadeStatus, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
 pub use settings::SettingsService;
+pub use smart_categories::{
+    CategoryIndex, CategoryLook, CategoryRef, Condition, HltbTimes, Match, Rule, SmartCategory,
+};
 pub use status::StatusRegistry;
 pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{
@@ -127,12 +139,20 @@ pub struct Inner {
     files: Mutex<files::FilesState>,
     files_wake: Notify,
     running: Mutex<BTreeMap<irori_core::GameId, games::RunningGame>>,
+    /// Game sessions running or still ending (saves, mods), which powering
+    /// off waits for ([`power::OpenSession`]).
+    open_sessions: tokio::sync::watch::Sender<usize>,
+    /// What powers the computer off ([`power`]).
+    power_system: RwLock<Arc<dyn power::PowerSystem>>,
     updates: RwLock<Arc<std::collections::HashSet<irori_core::GameId>>>,
     /// Stores whose last update check failed; their earlier answer stands.
     update_check_failed: RwLock<Vec<Runner>>,
     /// New versions of Wine builds, translation layers and emulators.
     components: updates::ComponentUpdates,
     online: AtomicBool,
+    /// Started for tests ([`Backend::start_for_tests`]): nothing reaches the
+    /// network, the desktop or the system's settings.
+    isolated: bool,
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
     presence: discord::Presence,
@@ -156,6 +176,8 @@ pub struct Inner {
     sunshine: sunshine::SunshineService,
     /// Fixes tried and exit codes, for launch troubleshooting.
     troubleshoot: troubleshoot::TroubleshootState,
+    /// The user's IGDB application.
+    igdb: igdb::IgdbState,
 }
 
 impl Deref for Backend {
@@ -173,7 +195,19 @@ impl Backend {
     pub fn start(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
     ) -> anyhow::Result<Self> {
-        Self::start_with(make_stores, true)
+        Self::start_with(make_stores, true, false)
+    }
+
+    /// Like [`Backend::start`] for UI tests: the app's state, models and
+    /// workers, without what would reach outside the test. No connectivity
+    /// probe (the backend counts as online), no update, compatibility-data,
+    /// sync or store refresh at start, no periodic tasks, no clip shortcut,
+    /// Sunshine or graphics-preference watch. The first library build is the
+    /// only one, so a test sees no second rebuild racing its assertions.
+    pub fn start_for_tests(
+        make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
+    ) -> anyhow::Result<Self> {
+        Self::start_with(make_stores, true, true)
     }
 
     /// Like [`Backend::start`] for one-shot command-line use: no startup
@@ -181,13 +215,16 @@ impl Backend {
     pub fn start_headless(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
     ) -> anyhow::Result<Self> {
-        Self::start_with(make_stores, false)
+        Self::start_with(make_stores, false, false)
     }
 
     fn start_with(
         make_stores: impl FnOnce(EventBus, irori_core::SettingsFn) -> Vec<DynStore>,
         interactive: bool,
+        isolated: bool,
     ) -> anyhow::Result<Self> {
+        // This crate's own tests never reach the network either.
+        let isolated = isolated || cfg!(test);
         let rt: &'static Runtime = Box::leak(Box::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(3)
@@ -220,10 +257,13 @@ impl Backend {
             files: Mutex::new(files::FilesState::default()),
             files_wake: Notify::new(),
             running: Mutex::new(BTreeMap::new()),
+            open_sessions: tokio::sync::watch::Sender::new(0),
+            power_system: RwLock::new(Arc::new(power::ThisSystem)),
             updates: RwLock::new(Arc::default()),
             update_check_failed: RwLock::new(Vec::new()),
             components: updates::ComponentUpdates::load(),
             online: AtomicBool::new(true),
+            isolated,
             auto_paused: AtomicBool::new(false),
             presence: discord::Presence::default(),
             replay: replay::ReplayState::default(),
@@ -236,6 +276,7 @@ impl Backend {
             sync: sync::SyncService::load(),
             sunshine: Default::default(),
             troubleshoot: Default::default(),
+            igdb: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {
@@ -324,10 +365,12 @@ impl Backend {
             for item in b.downloads().active {
                 b.statuses.set(&item.id, irori_core::StatusKind::Queued);
             }
-            b.check_connectivity().await;
-            b.rebuild_library();
+            if !b.isolated {
+                b.check_connectivity().await;
+                b.rebuild_library();
+            }
             b.downloads_wake.notify_one();
-            if !interactive {
+            if !interactive || b.isolated {
                 return;
             }
             // The clip shortcut works from the first game on.
@@ -408,6 +451,29 @@ impl Backend {
             }
         });
 
+        // Windows' graphics preference follows a changed or cleared setting
+        // at once, not only at the game's next launch (`gpu_preference`).
+        if interactive && !self.isolated && gpu_preference::system_registry().is_some() {
+            let b = self.clone();
+            self.spawn(async move {
+                let mut rx = b.subscribe();
+                b.reconcile_gpu_preferences().await;
+                loop {
+                    match rx.recv().await {
+                        Ok(Event::SettingsChanged | Event::GameSettingsChanged(_))
+                        | Err(broadcast::error::RecvError::Lagged(_)) => {
+                            // Coalesce a burst (a preset applied to many games).
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                            while rx.try_recv().is_ok() {}
+                            b.reconcile_gpu_preferences().await;
+                        }
+                        Ok(_) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+        }
+
         // File downloads (offline installers, goodies).
         let b = self.clone();
         self.spawn(async move { b.file_worker().await });
@@ -417,7 +483,7 @@ impl Backend {
         self.spawn(async move { b.download_worker().await });
 
         // Periodic update checks and connectivity.
-        if interactive {
+        if interactive && !self.isolated {
             let b = self.clone();
             self.spawn(async move { b.periodic_tasks().await });
             self.watch_for_sunshine();
@@ -540,6 +606,9 @@ impl Backend {
     }
 
     pub async fn check_connectivity(&self) -> bool {
+        if self.isolated {
+            return self.is_online();
+        }
         let ok = irori_core::http::client()
             .head("https://www.gstatic.com/generate_204")
             .timeout(Duration::from_secs(5))

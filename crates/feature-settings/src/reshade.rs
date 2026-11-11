@@ -1,9 +1,9 @@
 //! ReShade for one game, in the game's Tools section: install (asking first
 //! when the game has anticheat), turn on or off, update and remove, with the
-//! install's steps and download progress shown in place.
+//! install's steps and download progress shown in place. Removing ReShade
+//! removes the RenoDX mod it loads too, so the RenoDX panel is told.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
@@ -11,16 +11,19 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, Context, IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString,
-    Styled as _, Window, div,
+    AnyElement, Context, EventEmitter, IntoElement, ParentElement as _, PathPromptOptions, Render,
+    SharedString, Styled as _, Window, div,
 };
 use irori_core::GameId;
 use irori_core::process::CancellationToken;
-use irori_reshade::{Manifest, ReshadeError, Step};
+use irori_reshade::{GraphicsMod, Manifest, Step};
 use irori_services::{ReshadeStatus, supports_reshade};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
 
+use crate::graphics_mods::{
+    self, GraphicsModsChanged, Report, progress_channel, removed_notification, step_text,
+};
 use crate::widgets::{RowState, field_row, group_panel, muted};
 
 enum Load {
@@ -37,12 +40,6 @@ enum Busy {
     Removing,
 }
 
-/// What a running install reports.
-enum Report {
-    Step(Step),
-    Percent(Option<f32>),
-}
-
 /// The ReShade rows of one game.
 pub(crate) struct ReshadePanel {
     id: GameId,
@@ -53,35 +50,11 @@ pub(crate) struct ReshadePanel {
     cancel: Option<CancellationToken>,
 }
 
-/// The message for a failed operation, in the interface language.
 fn error_text(e: &anyhow::Error) -> SharedString {
-    match ReshadeError::of(e) {
-        Some(ReshadeError::Banned { exe }) => {
-            t_args("settings.reshade.error.banned", &[("program", exe)])
-        }
-        Some(ReshadeError::NoApi) => t("settings.reshade.error.no_api"),
-        Some(ReshadeError::Unsupported(api)) => t_args(
-            "settings.reshade.error.unsupported",
-            &[("api", api.label())],
-        ),
-        Some(ReshadeError::UnsupportedArch) => t("settings.reshade.error.arch"),
-        Some(ReshadeError::DllTaken { name }) => {
-            t_args("settings.reshade.error.dll_taken", &[("file", name)])
-        }
-        Some(ReshadeError::OutsideGame) => t("settings.reshade.error.outside"),
-        None => format!("{e:#}").into(),
-    }
+    graphics_mods::error_text(e, GraphicsMod::Reshade)
 }
 
-fn step_text(step: Step) -> SharedString {
-    t(match step {
-        Step::Checking => "settings.reshade.step.checking",
-        Step::DownloadingReshade => "settings.reshade.step.reshade",
-        Step::DownloadingShaders => "settings.reshade.step.shaders",
-        Step::DownloadingCompiler => "settings.reshade.step.compiler",
-        Step::Writing => "settings.reshade.step.writing",
-    })
-}
+impl EventEmitter<GraphicsModsChanged> for ReshadePanel {}
 
 impl ReshadePanel {
     pub(crate) fn new(id: GameId) -> Self {
@@ -111,6 +84,14 @@ impl ReshadePanel {
     /// Read the install state the first time the panel is shown.
     pub(crate) fn activate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.load, Load::Idle) && self.applies(cx) {
+            self.reload(window, cx);
+        }
+    }
+
+    /// Read the install state again when it was read before: another
+    /// graphics mod changed it.
+    pub(crate) fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.load, Load::Idle) && self.busy.is_none() {
             self.reload(window, cx);
         }
     }
@@ -213,14 +194,7 @@ impl ReshadePanel {
         self.percent = None;
         let cancel = CancellationToken::new();
         self.cancel = Some(cancel.clone());
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Report>();
-        let step_tx = tx.clone();
-        let step: Arc<dyn Fn(Step) + Send + Sync> = Arc::new(move |s| {
-            let _ = step_tx.send(Report::Step(s));
-        });
-        let progress: irori_core::install::ProgressSink = Arc::new(move |p| {
-            let _ = tx.send(Report::Percent(p.percent));
-        });
+        let (step, progress, mut rx) = progress_channel();
         let b = backend(cx);
         let id = self.id.clone();
         let task = irori_ui::run(cx, async move {
@@ -268,6 +242,7 @@ impl ReshadePanel {
                     ),
                 }
                 this.reload(window, cx);
+                cx.emit(GraphicsModsChanged);
             })
             .ok();
         })
@@ -294,6 +269,7 @@ impl ReshadePanel {
                     );
                 }
                 this.reload(window, cx);
+                cx.emit(GraphicsModsChanged);
             })
             .ok();
         })
@@ -303,6 +279,11 @@ impl ReshadePanel {
 
     fn confirm_remove(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let title = self.title(cx);
+        let description = if self.status().is_some_and(|s| s.renodx.is_some()) {
+            t("settings.reshade.remove.description_renodx")
+        } else {
+            t("settings.reshade.remove.description")
+        };
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let this = this.clone();
@@ -311,7 +292,7 @@ impl ReshadePanel {
                     "settings.reshade.remove.title",
                     &[("title", &title)],
                 ))
-                .description(t("settings.reshade.remove.description"))
+                .description(description.clone())
                 .show_cancel(true)
                 .cancel_text(t("settings.common.cancel"))
                 .ok_text(t("settings.reshade.remove.confirm"))
@@ -338,33 +319,9 @@ impl ReshadePanel {
                 this.busy = None;
                 match result {
                     Ok(report) => {
-                        let mut note = Notification::success(t_args(
-                            "settings.reshade.removed_notice",
-                            &[("title", &title)],
-                        ));
-                        if !report.kept.is_empty() {
-                            let files = report
-                                .kept
-                                .iter()
-                                .map(|p| p.to_string_lossy().into_owned())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            let count = report.kept.len().to_string();
-                            let key = if report.kept.len() == 1 {
-                                "settings.reshade.kept_one"
-                            } else {
-                                "settings.reshade.kept_other"
-                            };
-                            note = Notification::success(t_args(
-                                key,
-                                &[("count", &count), ("files", &files)],
-                            ))
-                            .title(t_args(
-                                "settings.reshade.removed_notice",
-                                &[("title", &title)],
-                            ));
-                        }
-                        window.push_notification(note, cx);
+                        let removed =
+                            t_args("settings.reshade.removed_notice", &[("title", &title)]);
+                        window.push_notification(removed_notification(removed, &report), cx);
                     }
                     Err(e) => window.push_notification(
                         Notification::error(error_text(&e)).title(t("settings.reshade.failed")),
@@ -372,6 +329,7 @@ impl ReshadePanel {
                     ),
                 }
                 this.reload(window, cx);
+                cx.emit(GraphicsModsChanged);
             })
             .ok();
         })
@@ -432,6 +390,10 @@ impl ReshadePanel {
             ],
         )
         .to_string();
+        if manifest.addon {
+            help.push('\n');
+            help.push_str(&t("settings.reshade.addon_note"));
+        }
         if !manifest.overrides.is_empty() {
             let dlls = manifest
                 .overrides

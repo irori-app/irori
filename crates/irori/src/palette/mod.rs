@@ -35,6 +35,7 @@ enum PaletteTarget {
     SetUpEmulation,
     /// The Steam friends window.
     SteamFriends,
+    XboxFriends,
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -58,6 +59,12 @@ enum PaletteTarget {
     GroupByMode(bool),
     /// Group the library by genre (`true`) or stop, and show it.
     GroupByGenre(bool),
+    /// Group the library by category (`true`) or stop, and show it.
+    GroupByCategory(bool),
+    /// Show the library's games in one category of either kind.
+    Category(irori_services::CategoryRef),
+    /// Make a smart category.
+    NewSmartCategory,
     /// Show a saved library view.
     View(u64),
     /// Save the library's current criteria as a view.
@@ -66,14 +73,24 @@ enum PaletteTarget {
     AddFolder,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
+    /// Sync a game's cloud saves now.
+    SyncSaves(GameId),
+    /// Remove the games picked in the library from it, after asking.
+    RemovePicked,
     /// Back up a game's saves with Ludusavi now.
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
     SaveBackups(GameId),
     /// Check why a game's last run failed.
     Troubleshoot(GameId),
+    /// Show a game's ReShade and RenoDX (its settings' Tools section).
+    GraphicsMods(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
+    /// Add a game to Steam as a non-Steam shortcut.
+    AddToSteam(GameId),
+    /// Remove Irori's Steam shortcut of a game.
+    RemoveFromSteam(GameId),
     BackUp,
     Sync,
     /// Save a clip of the replay buffer.
@@ -92,6 +109,10 @@ struct LibraryCommands<'a> {
     grouped_by_mode: Option<bool>,
     /// Whether the library groups by genre, while a library view exists.
     grouped_by_genre: Option<bool>,
+    /// Whether the library groups by category, while a library view exists.
+    grouped_by_category: Option<bool>,
+    /// Every category of both kinds, to show one.
+    categories: &'a [irori_ui::categories::CategoryEntry],
     /// The saved library views, to show one.
     views: &'a [(u64, SharedString)],
     /// How the library shows games; the other layouts are offered.
@@ -127,8 +148,8 @@ impl Palette {
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
-    /// on. `stores` have a store window. `steam_friends`: a Steam account can
-    /// show its friends.
+    /// on. `stores` have a store window. `friends`: a Steam and an Xbox
+    /// account can show their friends.
     #[allow(clippy::too_many_arguments)] // One row source per argument, all needed.
     fn items(
         games: &[Arc<GameInfo>],
@@ -137,13 +158,15 @@ impl Palette {
         library: LibraryCommands<'_>,
         sync: bool,
         stores: &[Runner],
-        steam_friends: bool,
+        friends: (bool, bool),
         targets: &mut Vec<PaletteTarget>,
     ) -> Vec<CommandItem> {
         let LibraryCommands {
             grouped,
             grouped_by_mode,
             grouped_by_genre,
+            grouped_by_category,
+            categories,
             views,
             layout,
             install,
@@ -168,87 +191,8 @@ impl Palette {
             );
         }
         if let Some((game, current)) = open {
-            let keywords = [irori_ui::play_status::title()];
-            for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
-                let label = t_args(
-                    "shell.palette.play_status",
-                    &[
-                        ("title", &game.title),
-                        ("status", &irori_ui::play_status::label(status)),
-                    ],
-                );
-                push(
-                    CommandItem::new()
-                        .label(label)
-                        .keywords(keywords.clone())
-                        .icon(irori_ui::play_status::icon(status)),
-                    PaletteTarget::PlayStatus(game.id(), Some(status)),
-                    targets,
-                );
-            }
-            if current.is_some() {
-                push(
-                    CommandItem::new()
-                        .label(t_args(
-                            "shell.palette.clear_play_status",
-                            &[("title", &game.title)],
-                        ))
-                        .keywords(keywords)
-                        .icon(IconName::X),
-                    PaletteTarget::PlayStatus(game.id(), None),
-                    targets,
-                );
-            }
-            if game.is_installed && game.runner().manages_installs() {
-                push(
-                    CommandItem::new()
-                        .label(t_args(
-                            "shell.palette.troubleshoot",
-                            &[("title", &game.title)],
-                        ))
-                        .keywords([t("shell.palette.troubleshoot_keywords")])
-                        .icon(IconName::Stethoscope),
-                    PaletteTarget::Troubleshoot(game.id()),
-                    targets,
-                );
-            }
-            if irori_game::ops::offers_steam_play(&game.id()) {
-                push(
-                    CommandItem::new()
-                        .label(t_args(
-                            "shell.palette.steam_play",
-                            &[("title", &game.title)],
-                        ))
-                        .keywords([t("shell.palette.steam_play_keywords")])
-                        .icon(IconName::Wine),
-                    PaletteTarget::SteamPlay(game.id()),
-                    targets,
-                );
-            }
-            if irori_ui::save_backups::offers_backups(&game) {
-                let keywords = [SharedString::new_static("Ludusavi")];
-                push(
-                    CommandItem::new()
-                        .label(t_args(
-                            "shell.palette.back_up_saves",
-                            &[("title", &game.title)],
-                        ))
-                        .keywords(keywords.clone())
-                        .icon(IconName::DatabaseBackup),
-                    PaletteTarget::BackUpSaves(game.id()),
-                    targets,
-                );
-                push(
-                    CommandItem::new()
-                        .label(t_args(
-                            "shell.palette.save_backups",
-                            &[("title", &game.title)],
-                        ))
-                        .keywords(keywords)
-                        .icon(IconName::ArchiveRestore),
-                    PaletteTarget::SaveBackups(game.id()),
-                    targets,
-                );
+            for (item, target) in game::rows(&game, current) {
+                push(item, target, targets);
             }
         }
         for (label, icon, route) in [
@@ -349,6 +293,7 @@ impl Palette {
                 targets,
             );
         }
+        let (steam_friends, xbox_friends) = friends;
         if steam_friends {
             push(
                 CommandItem::new()
@@ -356,6 +301,16 @@ impl Palette {
                     .keywords([t("shell.palette.steam_friends_keywords")])
                     .icon(IconName::Users),
                 PaletteTarget::SteamFriends,
+                targets,
+            );
+        }
+        if xbox_friends {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.xbox_friends"))
+                    .keywords([t("shell.palette.xbox_friends_keywords")])
+                    .icon(IconName::Users),
+                PaletteTarget::XboxFriends,
                 targets,
             );
         }
@@ -493,6 +448,44 @@ impl Palette {
                     .keywords([t("shell.palette.genre_keywords")])
                     .icon(IconName::Tag),
                 PaletteTarget::GroupByGenre(!grouped),
+                targets,
+            );
+        }
+        if let Some(grouped) = grouped_by_category {
+            let label = if grouped {
+                "shell.palette.ungroup_by_category"
+            } else {
+                "shell.palette.group_by_category"
+            };
+            push(
+                CommandItem::new()
+                    .label(t(label))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Tags),
+                PaletteTarget::GroupByCategory(!grouped),
+                targets,
+            );
+        }
+        if grouped_by_category.is_some() {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.new_smart_category"))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Sparkles),
+                PaletteTarget::NewSmartCategory,
+                targets,
+            );
+        }
+        for entry in categories {
+            push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.show_category",
+                        &[("name", &entry.name)],
+                    ))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(irori_ui::categories::icon(&entry.category)),
+                PaletteTarget::Category(entry.category.clone()),
                 targets,
             );
         }
@@ -635,6 +628,8 @@ impl Palette {
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
         let grouped_by_genre = irori_library::groups_by_genre(cx);
+        let grouped_by_category = irori_library::groups_by_category(cx);
+        let categories = irori_library::category_list(cx);
         let views = irori_library::saved_view_list(cx);
         let layout = irori_library::library_layout(cx);
         let install = irori_library::install_filter(cx);
@@ -648,6 +643,8 @@ impl Palette {
             grouped,
             grouped_by_mode,
             grouped_by_genre,
+            grouped_by_category,
+            categories: &categories,
             views: &views,
             layout,
             install,
@@ -655,6 +652,11 @@ impl Palette {
             quick_controls,
             hidden_pin,
         };
+        // The shown game's cloud saves, when its store keeps them.
+        let syncable = open
+            .as_ref()
+            .map(|(game, _)| game.clone())
+            .filter(|game| irori_game::offers_sync(game, cx));
         let mut items = Self::items(
             &games,
             replay.as_deref(),
@@ -662,9 +664,36 @@ impl Palette {
             library,
             sync,
             &irori_manage::store_window_stores(cx),
-            irori_manage::steam_friends_available(cx),
+            (
+                irori_manage::steam_friends_available(cx),
+                irori_manage::xbox_friends_available(cx),
+            ),
             &mut targets,
         );
+        if let Some(game) = syncable {
+            items.push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.sync_saves",
+                        &[("title", &game.title)],
+                    ))
+                    .keywords([t("shell.palette.sync_saves_keywords")])
+                    .icon(IconName::RefreshCw),
+            );
+            targets.push(PaletteTarget::SyncSaves(game.id()));
+        }
+        if let Some(count) = irori_library::removable_picks(cx) {
+            items.push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.remove_picked",
+                        &[("count", &count.to_string())],
+                    ))
+                    .keywords([t("shell.palette.remove_picked_keywords")])
+                    .icon(IconName::ListX),
+            );
+            targets.push(PaletteTarget::RemovePicked);
+        }
         if irori_manage::steam_client_library_state(cx)
             .is_some_and(|s| s.steam_found && !s.signed_in)
         {
@@ -730,6 +759,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
+        PaletteTarget::XboxFriends => {
+            irori_manage::open_friends_dialog(irori_manage::FriendsSource::Xbox, window, cx)
+        }
         PaletteTarget::OpenStore(runner) => {
             irori_manage::open_store_window(runner, None, window, cx)
         }
@@ -744,14 +776,24 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             // After the palette's own dialog has closed.
             window.defer(cx, irori_library::open_save_view_dialog);
         }
+        PaletteTarget::SyncSaves(id) => irori_game::sync_saves_now(&id, window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
+        PaletteTarget::GraphicsMods(id) => irori_game::ops::open_settings(&id, "reshade", cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
+        PaletteTarget::AddToSteam(id) => {
+            irori_game::ops::add_shortcuts(&id, true, window, cx).detach()
+        }
+        PaletteTarget::RemoveFromSteam(id) => {
+            irori_game::ops::remove_from_steam(&id, window, cx).detach()
+        }
         PaletteTarget::GroupByStatus(on) => {
             irori_library::set_groups_by_status(on, cx);
             irori_ui::navigate(Route::Library, cx);
@@ -777,6 +819,18 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::GroupByGenre(on) => {
             irori_library::set_groups_by_genre(on, cx);
             irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupByCategory(on) => {
+            irori_library::set_groups_by_category(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::Category(category) => irori_library::show_category(category, cx),
+        PaletteTarget::NewSmartCategory => {
+            irori_ui::navigate(Route::Library, cx);
+            // After the palette's own dialog has closed.
+            window.defer(cx, |window, cx| {
+                irori_library::open_smart_category_editor(None, None, window, cx)
+            });
         }
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
@@ -829,104 +883,6 @@ fn report(
         .detach();
 }
 
+mod game;
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn targets(
-        install: Option<InstallFilter>,
-        favourites: Option<bool>,
-        quick: bool,
-    ) -> Vec<String> {
-        let mut targets = Vec::new();
-        let library = LibraryCommands {
-            grouped: install.map(|_| false),
-            grouped_by_mode: install.map(|_| true),
-            grouped_by_genre: None,
-            views: &[],
-            layout: LibraryLayout::Grid,
-            install,
-            favourites,
-            quick_controls: quick,
-            hidden_pin: None,
-        };
-        Palette::items(&[], None, None, library, false, &[], false, &mut targets);
-        targets
-            .into_iter()
-            .filter_map(|t| match t {
-                PaletteTarget::Install(f) => Some(format!("install {f:?}")),
-                PaletteTarget::FavouritesOnly(on) => Some(format!("favourites {on}")),
-                PaletteTarget::QuickControls(on) => Some(format!("quick {on}")),
-                PaletteTarget::GroupByMode(on) => Some(format!("modes {on}")),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_hidden_games_pin_is_offered_only_while_unlocked() {
-        let offered = |hidden_pin: Option<bool>| {
-            let mut targets = Vec::new();
-            let library = LibraryCommands {
-                grouped: None,
-                grouped_by_mode: None,
-                grouped_by_genre: None,
-                views: &[],
-                layout: LibraryLayout::Grid,
-                install: None,
-                favourites: None,
-                quick_controls: false,
-                hidden_pin,
-            };
-            Palette::items(&[], None, None, library, false, &[], false, &mut targets);
-            targets
-                .into_iter()
-                .filter_map(|t| match t {
-                    PaletteTarget::LockHidden => Some("lock"),
-                    PaletteTarget::HiddenPin => Some("pin"),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        assert!(
-            offered(None).is_empty(),
-            "locked: nothing about hidden games"
-        );
-        assert_eq!(offered(Some(false)), ["pin"]);
-        assert_eq!(offered(Some(true)), ["lock", "pin"]);
-    }
-
-    #[test]
-    fn library_filters_and_quick_controls_are_offered_as_toggles() {
-        assert_eq!(
-            targets(Some(InstallFilter::Any), Some(false), true),
-            [
-                "install Installed",
-                "favourites true",
-                "quick false",
-                "modes false"
-            ]
-        );
-        assert_eq!(
-            targets(Some(InstallFilter::Installed), Some(true), false),
-            [
-                "install Any",
-                "favourites false",
-                "quick true",
-                "modes false"
-            ]
-        );
-        assert_eq!(
-            targets(Some(InstallFilter::NotInstalled), Some(false), true),
-            [
-                "install Installed",
-                "install Any",
-                "favourites true",
-                "quick false",
-                "modes false"
-            ]
-        );
-        // Without a library view only the setting can change.
-        assert_eq!(targets(None, None, true), ["quick false"]);
-    }
-}
+mod tests;

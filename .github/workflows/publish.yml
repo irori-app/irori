@@ -25,7 +25,12 @@ jobs:
   assets:
     runs-on: ubuntu-24.04
     steps:
+      # The scripts come from the default branch, so publishing an older
+      # release again reaches channels added since; the tag gives its commit
+      # and Flatpak manifest.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Download the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,7 +39,10 @@ jobs:
         working-directory: dist
         run: sha256sum --check --ignore-missing SHA256SUMS
       - name: Package-manager manifests
-        run: python3 packaging/release_manifests.py --version "$TAG" --dist dist --repo "$GITHUB_REPOSITORY" --output manifests
+        run: |
+          git show "$TAG:packaging/flatpak/app.irori.Irori.yml" > "$RUNNER_TEMP/flatpak.yml"
+          python3 packaging/release_manifests.py --version "$TAG" --dist dist --repo "$GITHUB_REPOSITORY" \
+            --output manifests --commit "$(git rev-list -n 1 "$TAG")" --flatpak-manifest "$RUNNER_TEMP/flatpak.yml"
       - uses: actions/upload-artifact@v4
         with:
           name: release
@@ -250,16 +258,102 @@ jobs:
           git diff --cached --quiet || git commit -m "irori: Update to version ${TAG#v}"
           git push
 
-  # winget-pkgs only accepts updates to a package it already has: submit the
-  # first version by hand (docs/RELEASING.md).
+  # Irori's own manifests, so every version carries the /CHANNEL=winget switch
+  # (an update made from the previous manifest could lose it). wingetcreate
+  # opens the pull request on microsoft/winget-pkgs, the first version's too.
   winget:
     if: vars.PUBLISH_WINGET == 'true'
     needs: assets
+    runs-on: windows-2022
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: manifests
+          path: manifests
+      - name: Submit to winget-pkgs
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          $folder = "manifests\winget\manifests\i\Irori\Irori\$version"
+          # Microsoft's signed release, from the address its README gives for CI.
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          $signature = Get-AuthenticodeSignature .\wingetcreate.exe
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'wingetcreate is not signed by Microsoft' }
+          .\wingetcreate.exe submit --prtitle "New version: Irori.Irori version $version" --token $env:WINGET_TOKEN $folder
+          if ($LASTEXITCODE -ne 0) { throw "wingetcreate exited with $LASTEXITCODE" }
+
+  # A source package with both Linux tarballs inside; COPR builds it for each
+  # chroot of the project (Fedora x86_64 and aarch64).
+  copr:
+    if: vars.PUBLISH_COPR == 'true'
+    needs: assets
+    runs-on: ubuntu-24.04
+    container: fedora:42
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: manifests
+          path: manifests
+      - name: Build the source package and send it to COPR
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_PROJECT: ${{ vars.COPR_PROJECT }}
+        run: |
+          dnf install -y --setopt=install_weak_deps=False rpm-build copr-cli
+          mkdir -p ~/.config
+          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          chmod 600 ~/.config/copr
+          rpmbuild -bs --define "_sourcedir $PWD/dist" --define "_srcrpmdir $PWD/srpm" manifests/copr/irori.spec
+          copr-cli build "$COPR_PROJECT" srpm/*.src.rpm
+
+  # Flathub builds Irori itself from its repository flathub/app.irori.Irori:
+  # this opens a pull request there with the tag's manifest and crate list,
+  # and Flathub's bot builds, tests and (once merged) publishes it.
+  flathub:
+    if: vars.PUBLISH_FLATHUB == 'true'
+    needs: assets
     runs-on: ubuntu-24.04
     steps:
-      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+      - uses: actions/checkout@v4
         with:
-          identifier: Irori.Irori
-          installers-regex: '-windows(-arm64)?-setup\.exe$'
-          release-tag: ${{ env.TAG }}
-          token: ${{ secrets.WINGET_TOKEN }}
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate cargo-sources.json
+        run: |
+          python -m pip install --quiet 'aiohttp>=3.9.5,<4' 'tomlkit>=0.13.3,<1' 'PyYAML>=6.0.2,<7'
+          curl -fsSLo "$RUNNER_TEMP/flatpak-cargo-generator.py" \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/9d86d336a39b9af38b86f114b6ce5820fe260f91/cargo/flatpak-cargo-generator.py
+          python "$RUNNER_TEMP/flatpak-cargo-generator.py" Cargo.lock -o "$RUNNER_TEMP/cargo-sources.json"
+      - uses: actions/download-artifact@v4
+        with:
+          name: manifests
+          path: manifests
+      - name: Open a pull request on Flathub
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+        run: |
+          version="${TAG#v}"
+          branch="irori-$version"
+          gh auth setup-git
+          git clone --depth 1 https://github.com/flathub/app.irori.Irori.git "$RUNNER_TEMP/flathub"
+          cd "$RUNNER_TEMP/flathub"
+          git checkout -b "$branch"
+          cp "$GITHUB_WORKSPACE/manifests/flathub/app.irori.Irori.yml" app.irori.Irori.yml
+          cp "$RUNNER_TEMP/cargo-sources.json" cargo-sources.json
+          git add app.irori.Irori.yml cargo-sources.json
+          if git diff --cached --quiet; then echo "Flathub already has $version"; exit 0; fi
+          git -c user.name='Irori release bot' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Update to $version"
+          git push origin "$branch"
+          gh pr create --repo flathub/app.irori.Irori --base master --head "$branch" \
+            --title "Update to $version" \
+            --body "Irori $version: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"

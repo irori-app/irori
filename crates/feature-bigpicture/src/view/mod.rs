@@ -14,7 +14,8 @@
 //! `cinema`, `wall`, `carousel`, `compact`), `library`, `page` (a game's
 //! page), `log` (its log panel) and `settings` (its settings), `overlay`
 //! (quick menu and confirmations), `editor` (the theme editor), `tile`
-//! (covers) and `commands` (what the backend runs). `look` holds the theme
+//! (covers), `commands` (what the backend runs), `system` (the computer's
+//! power actions) and `sound` (the sound output). `look` holds the theme
 //! and layout in use and the colours they give.
 
 mod backdrop;
@@ -31,7 +32,9 @@ mod look;
 mod overlay;
 mod page;
 mod settings;
+mod sound;
 mod spotlight;
+mod system;
 mod tile;
 mod wall;
 
@@ -61,6 +64,7 @@ use look::{Colors, Look};
 use crate::gamepad::{self, GamepadInput};
 use crate::grid::FocusGrid;
 use crate::layout::home::{Dir, grid_move, wall_step};
+use crate::layout::wheel::{WheelTravel, WheelView};
 use crate::layout::{GridStep, HomeLayout, Metrics, grid_step};
 use crate::model::{
     Chip, GameAction, GameState, LibraryFilter, PageRow, Row, Show, StatusFilter, build_rows,
@@ -75,8 +79,6 @@ use irori_services::{LibrarySnapshot, UserData};
 const HERO_DELAY: Duration = Duration::from_millis(250);
 /// Decoded cover images kept in memory.
 const IMAGE_CACHE: usize = 128;
-/// Pixels of wheel or touchpad travel that move the focus by one item.
-const WHEEL_STEP: f32 = 60.0;
 
 /// Big Picture's top-level tabs, switched with the shoulder buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +122,11 @@ enum Overlay {
     /// "Delete the theme “…”?" over the editor, the same way.
     DeleteTheme {
         id: String,
+        choice: usize,
+    },
+    /// "Power off this computer?" and the like, the same way.
+    Power {
+        action: irori_services::PowerAction,
         choice: usize,
     },
 }
@@ -170,10 +177,18 @@ pub struct BigPictureView {
     grid: FocusGrid,
     library: LibraryTab,
     /// Wheel travel not yet turned into a focus move.
-    wheel: f32,
+    wheel: WheelTravel,
     /// The cover under the mouse (its element id), which shows its button.
     hovered_cover: Option<SharedString>,
     pending: HashSet<GameId>,
+    /// The power actions the system allows, asked when the menu opens.
+    power: Vec<irori_services::PowerAction>,
+    /// The power action under way (games stopping first).
+    power_pending: Option<irori_services::PowerAction>,
+    /// The sound outputs, read when the menu opens.
+    outputs: sound::Outputs,
+    /// A switch of the sound output is under way.
+    switching_output: bool,
     image_cache: Entity<LruImageCache>,
     /// The game whose art is behind everything, the one it replaced (fading
     /// out), and a counter that restarts the crossfade.
@@ -303,11 +318,15 @@ impl BigPictureView {
                 search,
                 searching: false,
             },
-            wheel: 0.0,
+            wheel: WheelTravel::default(),
             hovered_cover: None,
             show_options: None,
             show_option_computes: 0,
             pending: HashSet::new(),
+            power: Vec::new(),
+            power_pending: None,
+            outputs: Default::default(),
+            switching_output: false,
             image_cache: LruImageCache::new(IMAGE_CACHE, cx),
             hero: None,
             hero_prev: None,
@@ -318,6 +337,8 @@ impl BigPictureView {
             _subscriptions: subscriptions,
         };
         this.load_user_themes(window, cx);
+        this.refresh_power(cx);
+        this.refresh_outputs(cx);
         this.refresh(cx);
         this.show_requested_game(cx);
         this.hero = this.focused_game().cloned();
@@ -400,7 +421,7 @@ impl BigPictureView {
 
     fn metrics(&self, window: &Window) -> Metrics {
         let rem = window.rem_size();
-        let size = window.viewport_size();
+        let size = irori_ui::style::visible_size(window);
         Metrics::styled(
             size.width / rem,
             size.height / rem,
@@ -412,20 +433,29 @@ impl BigPictureView {
     /// keeping focus on the same game when it still exists.
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let m = models(cx);
-        let (snapshot, user) = {
+        let (snapshot, user, categories) = {
             let lib = m.library.read(cx);
-            (lib.snapshot.clone(), lib.user.clone())
+            (
+                lib.snapshot.clone(),
+                lib.user.clone(),
+                lib.categories.clone(),
+            )
         };
         let max_recent = m.settings.read(cx).app.max_recent_games;
-        let user_ptr = Arc::as_ptr(&user) as usize;
+        // The category index is new whenever the user data is, and with new
+        // HowLongToBeat times or a new day.
+        let user_ptr = Arc::as_ptr(&categories) as usize;
 
         let shelves = self.look.theme().shelves.clone();
         let key = (snapshot.revision, user_ptr, max_recent, shelves);
         if self.rows_key.as_ref() != Some(&key) {
             let previous = self.grid.focused(&self.lens()).and_then(|(r, c)| {
-                Some((self.rows.get(r)?.kind, self.rows.get(r)?.games.get(c)?.id()))
+                Some((
+                    self.rows.get(r)?.kind.clone(),
+                    self.rows.get(r)?.games.get(c)?.id(),
+                ))
             });
-            self.rows = build_rows(&snapshot, &user, max_recent as usize, &key.3);
+            self.rows = build_rows(&snapshot, &user, max_recent as usize, &key.3, &categories);
             self.rows_key = Some(key);
             let lens = self.lens();
             self.grid.clamp(&lens);
@@ -443,10 +473,12 @@ impl BigPictureView {
         if !options.contains(&lib.filter.show) {
             lib.filter.show = Default::default();
         }
+        // Only a deleted category gives way; others coming or going don't.
+        lib.filter.category = crate::model::live_category(&user, &lib.filter);
         let key = (snapshot.revision, user_ptr, lib.filter.clone());
         if lib.key.as_ref() != Some(&key) {
             let previous = lib.games.get(lib.ix).map(|g| g.id());
-            lib.games = library_games(&snapshot, &user, &lib.filter);
+            lib.games = library_games(&snapshot, &user, &lib.filter, &categories);
             lib.key = Some(key);
             lib.ix = previous
                 .and_then(|id| lib.games.iter().position(|g| g.id() == id))
@@ -517,8 +549,7 @@ impl BigPictureView {
         } else if self.look.editor.is_some() {
             self.editor_input(input, window, cx);
         } else if input == GamepadInput::Menu {
-            self.overlay = Some(Overlay::Menu { ix: 0 });
-            cx.notify();
+            self.open_menu(cx);
         } else if self.page.is_some() {
             self.page_input(input, window, cx);
         } else if matches!(input, GamepadInput::PrevPage | GamepadInput::NextPage) {
@@ -536,6 +567,15 @@ impl BigPictureView {
                 Tab::Library => self.library_input(input, window, cx),
             }
         }
+    }
+
+    /// Open the quick menu, asking again what the system allows and which
+    /// sound outputs there are.
+    fn open_menu(&mut self, cx: &mut Context<Self>) {
+        self.overlay = Some(Overlay::Menu { ix: 0 });
+        self.refresh_power(cx);
+        self.refresh_outputs(cx);
+        cx.notify();
     }
 
     fn set_tab(&mut self, tab: Tab, cx: &mut Context<Self>) {
@@ -677,6 +717,11 @@ impl BigPictureView {
                 let filter = &mut self.library.filter;
                 filter.status = cycle(&StatusFilter::ALL, filter.status)
             }
+            Chip::Category => {
+                let user = models(cx).library.read(cx).user.clone();
+                let filter = &mut self.library.filter;
+                filter.category = crate::model::next_category(&user, filter.category.as_ref());
+            }
             Chip::Search => {
                 self.library.searching = true;
                 self.library.search.update(cx, |s, cx| s.focus(window, cx));
@@ -778,6 +823,27 @@ impl BigPictureView {
         cx: &mut Context<Self>,
     ) {
         match overlay {
+            Overlay::Power { action, choice } => match input {
+                GamepadInput::Up
+                | GamepadInput::Down
+                | GamepadInput::Left
+                | GamepadInput::Right => {
+                    self.overlay = Some(Overlay::Power {
+                        action,
+                        choice: 1 - choice.min(1),
+                    });
+                }
+                GamepadInput::Confirm | GamepadInput::Alt => {
+                    if choice == 1 {
+                        // The question stays, busy, until the games stopped.
+                        self.power(action, window, cx);
+                    } else {
+                        self.overlay = None;
+                    }
+                }
+                GamepadInput::Back | GamepadInput::Menu => self.overlay = None,
+                _ => {}
+            },
             Overlay::DeleteTheme { id, choice } => match input {
                 GamepadInput::Up
                 | GamepadInput::Down
@@ -834,6 +900,12 @@ impl BigPictureView {
                         if let Some(item) = items.get(ix) {
                             self.activate_menu_item(*item, window, cx);
                         }
+                    }
+                    GamepadInput::Left | GamepadInput::Right
+                        if items.get(ix) == Some(&crate::model::MenuItem::SoundOutput) =>
+                    {
+                        let step = if input == GamepadInput::Right { 1 } else { -1 };
+                        self.switch_output(step, window, cx);
                     }
                     GamepadInput::Back | GamepadInput::Menu => self.overlay = None,
                     _ => {}
@@ -954,34 +1026,37 @@ impl BigPictureView {
         }));
     }
 
-    /// Wheel or touchpad travel: vertical moves between shelves or grid
-    /// rows, horizontal along a shelf. On a game's page and in the quick
-    /// menu it moves through their rows (vertical only: sideways there
-    /// would change a row's value).
+    /// Wheel or touchpad travel, turned into the moves the controller
+    /// makes (see [`crate::layout::wheel`]), so the view scrolls by the
+    /// spring that follows the focus and never past an end. On a game's
+    /// page and in the quick menu it moves through their rows (vertical
+    /// only: sideways there would change a row's value).
     fn on_wheel(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.look.editor.is_some() {
+        if self.look.editor.is_some() || self.settings.is_some() {
             return;
         }
-        let rows_only = self.page.is_some() || self.overlay.is_some();
-        let delta = event.delta.pixel_delta(window.line_height());
-        let (amount, along) = if !rows_only && f32::from(delta.x.abs()) > f32::from(delta.y.abs()) {
-            (f32::from(delta.x), true)
+        let view = if self.page.is_some() || self.overlay.is_some() {
+            WheelView::Rows
         } else {
-            (f32::from(delta.y), false)
+            match self.tab {
+                Tab::Home => WheelView::Home(self.look.layout()),
+                Tab::Library => WheelView::Grid,
+            }
         };
-        self.wheel += amount;
-        while self.wheel.abs() >= WHEEL_STEP {
-            let back = self.wheel > 0.0;
-            self.wheel -= WHEEL_STEP.copysign(self.wheel);
-            let input = match (along, back) {
-                (true, true) => GamepadInput::Left,
-                (true, false) => GamepadInput::Right,
-                (false, true) => GamepadInput::Up,
-                (false, false) => GamepadInput::Down,
-            };
-            if !rows_only && self.tab == Tab::Library && self.library.focus != LibraryFocus::Grid {
+        let delta = event.delta.pixel_delta(window.line_height());
+        for dir in self
+            .wheel
+            .feed(view, f32::from(delta.x), f32::from(delta.y))
+        {
+            if view == WheelView::Grid && self.library.focus != LibraryFocus::Grid {
                 break;
             }
+            let input = match dir {
+                Dir::Up => GamepadInput::Up,
+                Dir::Down => GamepadInput::Down,
+                Dir::Left => GamepadInput::Left,
+                Dir::Right => GamepadInput::Right,
+            };
             self.on_input(input, window, cx);
         }
     }

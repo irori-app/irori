@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -20,7 +20,7 @@ use gpui_kit::{
 };
 use irori_core::{GameId, GameInfo};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::models;
+use irori_ui::{backend, models};
 
 use super::{GamePage, InfoTab};
 use once_cell::sync::Lazy;
@@ -358,13 +358,59 @@ impl GamePage {
                 .into_any_element(),
         };
         let dlcs = self.render_dlcs(game, window, cx);
+        let igdb = self.render_igdb_source(game, cx);
         v_flex()
             .max_w(rems(52.))
             .gap_6()
-            .child(body)
+            .child(v_flex().gap_2().child(body).children(igdb))
             .children(dlcs)
             .children(self.render_redmod(game, cx))
             .into_any_element()
+    }
+
+    /// While IGDB is on: whether it filled in this page, with "Change
+    /// match".
+    fn render_igdb_source(&self, game: &Arc<GameInfo>, cx: &Context<Self>) -> Option<AnyElement> {
+        if !backend(cx).settings.app().igdb {
+            return None;
+        }
+        let extra = self.extra.ready()?;
+        let page = cx.entity().downgrade();
+        let (id, title) = (self.id.clone(), game.title.clone());
+        let text = if extra.details_from.is_some() {
+            t("game.igdb.details_from")
+        } else {
+            t("game.igdb.nothing_added")
+        };
+        Some(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(div().min_w_0().truncate().child(text))
+                .child(
+                    Button::new("igdb-change-match")
+                        .ghost()
+                        .xsmall()
+                        .label(t("game.igdb.change_match"))
+                        .on_click(move |_, window, cx| {
+                            let page = page.clone();
+                            let on_chosen: crate::igdb_match::OnChosen =
+                                std::rc::Rc::new(move |window, cx| {
+                                    page.update(cx, |this, cx| this.load_extra(window, cx)).ok();
+                                });
+                            crate::igdb_match::open_igdb_match_dialog(
+                                id.clone(),
+                                title.clone(),
+                                on_chosen,
+                                window,
+                                cx,
+                            );
+                        }),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_mods(

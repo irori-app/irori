@@ -12,7 +12,7 @@ use irori_services::LaunchParams;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 
-use super::BigPictureView;
+use super::{BigPictureView, Overlay};
 use crate::model::{
     GameAction, MenuItem, default_install_request, default_platform, menu_items, next_scale,
 };
@@ -208,6 +208,7 @@ impl BigPictureView {
             queue.paused,
             scale,
             self.look.layout(),
+            &self.power,
         )
     }
 
@@ -262,7 +263,9 @@ impl BigPictureView {
                 self.overlay = None;
                 crate::exit_big_picture(cx);
             }
+            MenuItem::SoundOutput => self.switch_output(1, window, cx),
             MenuItem::QuitIrori => cx.quit(),
+            MenuItem::Power(action) => self.overlay = Some(Overlay::Power { action, choice: 0 }),
         }
         cx.notify();
     }

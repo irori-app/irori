@@ -218,6 +218,8 @@ impl SideloadStore {
         for candidate in [dir, canonical.as_path()] {
             files::check_deletable(candidate, home.as_deref(), &protected)?;
         }
+        // Irori's own rule for every recursive delete, Proton's folder too.
+        irori_core::fs_guard::ensure_deletable(&canonical, &(self.settings)())?;
         if let Some(other) = apps.iter().find(|a| {
             a.app_name != app_name
                 && [a.app.install_dir(), a.app.executable.clone()]

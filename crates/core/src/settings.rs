@@ -254,6 +254,13 @@ pub struct GameSettings {
     /// precedence over `nvidiaPrime`. Linux only; Irori-only.
     #[serde(rename = "iroriGpu")]
     pub gpu: String,
+    /// Windows' own graphics preference for the game's program, written to
+    /// `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`: `auto` (let
+    /// Windows decide), `powerSaving` or `highPerformance`; empty (or a value
+    /// this Irori doesn't know) leaves Windows' setting alone. Windows only;
+    /// Irori-only.
+    #[serde(rename = "iroriWindowsGpu")]
+    pub windows_gpu: String,
     /// NVIDIA Smooth Motion frame generation
     /// (`NVPRESENT_ENABLE_SMOOTH_MOTION`). Linux only; Irori-only.
     #[serde(rename = "iroriSmoothMotion")]
@@ -300,6 +307,11 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriHltbId")]
     pub hltb_id: String,
+    /// The game's IGDB id, when the user chose its match ("Change match"),
+    /// or `none` for no match; empty finds one by title. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriIgdbId")]
+    pub igdb_id: String,
     /// The game's Steam app id for its achievements read from game files,
     /// when the user chose one; empty finds it in the game's files and
     /// variables. Per game only. Irori-only.
@@ -464,6 +476,7 @@ impl Default for GameSettings {
             fsr4_upgrade: false,
             xess_upgrade: false,
             gpu: String::new(),
+            windows_gpu: String::new(),
             smooth_motion: false,
             nvidia_reflex: false,
             lsfg: LsfgSettings::default(),
@@ -480,6 +493,7 @@ impl Default for GameSettings {
             ludusavi_interval: 0,
             ludusavi_title: String::new(),
             hltb_id: String::new(),
+            igdb_id: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
         }
@@ -730,6 +744,12 @@ pub struct AppSettings {
     /// their own executable. Irori-only.
     #[serde(rename = "iroriFileAchievements")]
     pub file_achievements: bool,
+    /// Fill what store pages leave out (descriptions, genres, release
+    /// dates, screenshots) from IGDB, and offer its art in the art picker.
+    /// Needs the user's own Twitch application, kept with `irori_secrets`;
+    /// off by default. Irori-only.
+    #[serde(rename = "iroriIgdb")]
+    pub igdb: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -782,6 +802,7 @@ impl Default for AppSettings {
             show_log_on_launch: false,
             achievement_notices: false,
             file_achievements: false,
+            igdb: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
@@ -870,6 +891,30 @@ pub enum Translucency {
     Subtle,
     /// Clearer chrome, and pages let a little of the desktop through too.
     Strong,
+}
+
+/// The controller button held to open Big Picture (`bigPictureHoldButton`).
+/// Values a newer Irori writes read as [`HoldButton::Start`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HoldButton {
+    /// Holding a button does nothing.
+    Off,
+    /// Start (Menu, Options, +).
+    #[default]
+    Start,
+    /// Select (View, Share, Create, −).
+    Select,
+}
+
+impl<'de> Deserialize<'de> for HoldButton {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "off" => HoldButton::Off,
+            "select" => HoldButton::Select,
+            _ => HoldButton::Start,
+        })
+    }
 }
 
 /// How tightly the library packs its covers and rows. Separate from the
@@ -1105,8 +1150,14 @@ pub struct UiPrefs {
     /// Big Picture's theme: `builtin:<id>`, `user:<id>` (a file in the
     /// config folder's `bigpicture/themes`), or "" for Irori's own.
     pub big_picture_theme: String,
-    /// Open Big Picture when a controller connects while Irori runs.
+    /// Open Big Picture when a controller connects while Irori runs, or
+    /// is connected when it starts.
     pub big_picture_on_controller: bool,
+    /// The controller button held to open Big Picture from anywhere in
+    /// Irori (`bigPictureHoldButton`).
+    pub big_picture_hold_button: HoldButton,
+    /// How long that button is held, in milliseconds (`bigPictureHoldMs`).
+    pub big_picture_hold_ms: u32,
     /// The accent colour the user picked, `#rrggbb` ("" = the theme's own,
     /// or the system's where Irori follows it).
     pub accent_color: String,
@@ -1226,6 +1277,12 @@ impl UiPrefs {
         self.big_picture_scale.clamp(100, 200) as f32 / 100.0
     }
 
+    /// How long [`Self::big_picture_hold_button`] is held to open Big
+    /// Picture, limited to the offered range.
+    pub fn big_picture_hold(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(u64::from(self.big_picture_hold_ms.clamp(300, 3000)))
+    }
+
     /// The accent colour the user picked, if it is a valid `#rrggbb`.
     pub fn accent_rgb(&self) -> Option<u32> {
         let hex = self.accent_color.trim().strip_prefix('#')?;
@@ -1267,6 +1324,8 @@ impl Default for UiPrefs {
             big_picture_layout: String::new(),
             big_picture_theme: String::new(),
             big_picture_on_controller: false,
+            big_picture_hold_button: HoldButton::Start,
+            big_picture_hold_ms: 1000,
             accent_color: String::new(),
             density: Density::Comfortable,
             font_family: String::new(),
@@ -1401,6 +1460,10 @@ mod tests {
         assert_eq!(gs.lsfg.flow_scale, 100, "missing keys keep their defaults");
         let json = serde_json::to_value(GameSettings::default()).unwrap();
         assert_eq!(json["iroriGpu"], "");
+        assert_eq!(json["iroriWindowsGpu"], "");
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriWindowsGpu": "highPerformance"}"#).unwrap();
+        assert_eq!(gs.windows_gpu, "highPerformance");
         assert_eq!(json["iroriLsfg"]["multiplier"], 2);
         assert_eq!(json["iroriLsfg"]["performanceMode"], false);
     }
@@ -1441,6 +1504,33 @@ mod tests {
         assert_eq!(ui.big_picture_theme, "user:x");
         assert!(ui.big_picture_on_controller);
         assert!(!UiPrefs::default().big_picture_on_controller);
+    }
+
+    #[test]
+    fn holding_a_button_opens_big_picture_after_a_second_by_default() {
+        let ui = UiPrefs::default();
+        assert_eq!(ui.big_picture_hold_button, HoldButton::Start);
+        assert_eq!(ui.big_picture_hold(), std::time::Duration::from_secs(1));
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"bigPictureHoldButton":"select","bigPictureHoldMs":20}"#)
+                .unwrap();
+        assert_eq!(ui.big_picture_hold_button, HoldButton::Select);
+        assert_eq!(ui.big_picture_hold(), std::time::Duration::from_millis(300));
+        let ui: UiPrefs = serde_json::from_str(
+            r#"{"bigPictureHoldButton":"guide-and-start","bigPictureHoldMs":90000}"#,
+        )
+        .unwrap();
+        assert_eq!(ui.big_picture_hold_button, HoldButton::Start, "unknown");
+        assert_eq!(ui.big_picture_hold(), std::time::Duration::from_secs(3));
+        let json = serde_json::to_value(UiPrefs {
+            big_picture_hold_button: HoldButton::Off,
+            ..UiPrefs::default()
+        })
+        .unwrap();
+        assert_eq!(json["bigPictureHoldButton"], "off");
+        assert_eq!(json["bigPictureHoldMs"], 1000);
+        let back: UiPrefs = serde_json::from_value(json).unwrap();
+        assert_eq!(back.big_picture_hold_button, HoldButton::Off);
     }
 
     #[test]

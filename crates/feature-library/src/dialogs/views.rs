@@ -27,10 +27,19 @@ use crate::filters_panel::active_filters;
 use crate::views::{self, ViewsModel};
 
 /// The toolbar button: the active view's name (or "Views"), opening a menu
-/// of every view plus saving and managing them.
+/// of every view plus saving and managing them, then every category of
+/// both kinds (smart ones marked, each with its count) to show or hide.
 pub fn views_button(filter: &ViewFilter, cx: &mut App) -> impl IntoElement + use<> {
     let model = views::saved_views(cx);
     let list: Vec<(u64, SharedString)> = views::list(cx);
+    let categories = {
+        let lib = irori_ui::models(cx).library.read(cx);
+        irori_ui::categories::entries(&lib.user, &lib.categories)
+    };
+    let picked: Vec<bool> = categories
+        .iter()
+        .map(|c| filter.shows_category(&c.category))
+        .collect();
     let active = model
         .read(cx)
         .views()
@@ -71,7 +80,46 @@ pub fn views_button(filter: &ViewFilter, cx: &mut App) -> impl IntoElement + use
                     .icon(gpui_kit::component::Icon::new(IconName::Settings2))
                     .on_click(|_, window, cx| open_manage_views_dialog(window, cx)),
             )
+            .separator()
+            .label(t("library.views.categories"))
+            .map(|menu| category_items(menu, &categories, &picked))
+            .item(
+                PopupMenuItem::new(t("library.categories.manage"))
+                    .icon(gpui_kit::component::Icon::new(IconName::Tags))
+                    .on_click(|_, window, cx| {
+                        crate::dialogs::categories::open_categories_dialog(None, window, cx)
+                    }),
+            )
         })
+}
+
+/// A row per category: ticked while the library shows it, a tick toggling
+/// it, smart ones marked with their icon; each named with its count.
+fn category_items(
+    mut menu: gpui_kit::component::menu::PopupMenu,
+    categories: &[irori_ui::categories::CategoryEntry],
+    picked: &[bool],
+) -> gpui_kit::component::menu::PopupMenu {
+    for (entry, on) in categories.iter().zip(picked) {
+        let category = entry.category.clone();
+        let label = t_args(
+            "library.views.category_count",
+            &[("name", &entry.name), ("count", &entry.count.to_string())],
+        );
+        let mut item = PopupMenuItem::new(label)
+            .checked(*on)
+            .on_click(move |_, _, cx| {
+                let category = category.clone();
+                crate::filters_panel::change_filters(move |f| f.toggle(&category), cx);
+            });
+        if entry.is_smart() {
+            item = item.icon(gpui_kit::component::Icon::new(irori_ui::categories::icon(
+                &entry.category,
+            )));
+        }
+        menu = menu.item(item);
+    }
+    menu
 }
 
 /// "Save view": name the library's current filters, grouping and sort.
@@ -129,7 +177,11 @@ impl Render for SaveViewDialog {
             _ => None,
         };
         let summary = active_filters(cx)
-            .map(|f| f.read(cx).filter().describe())
+            .map(|f| {
+                f.read(cx)
+                    .filter()
+                    .describe(&irori_ui::models(cx).library.read(cx).user)
+            })
             .unwrap_or_default();
         let muted = cx.theme().muted_foreground;
         v_flex()
@@ -280,6 +332,27 @@ impl ManageViewsDialog {
         );
     }
 
+    /// Open the smart category editor with the rules of view `id`, and say
+    /// which of its criteria no rule can hold.
+    fn make_smart(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(view) = self.model.read(cx).views().get(id).cloned() else {
+            return;
+        };
+        let (draft, rest) = crate::categories::smart_from_view(&view.label(), &view.filter);
+        let left = rest.describe(&irori_ui::models(cx).library.read(cx).user);
+        window.close_dialog(cx);
+        crate::dialogs::smart::open_smart_category_editor(None, Some(draft), window, cx);
+        if !left.is_empty() {
+            window.push_notification(
+                Notification::info(t_args(
+                    "library.views.smart_left_out",
+                    &[("criteria", &left.join(" · "))],
+                )),
+                cx,
+            );
+        }
+    }
+
     fn render_row(
         &self,
         ix: usize,
@@ -368,6 +441,16 @@ impl ManageViewsDialog {
                             .tooltip(t_args("library.views.move_down", &[("name", &name)]))
                             .disabled(ix + 1 == count)
                             .on_click(cx.listener(move |this, _, _, cx| this.shift(id, 1, cx))),
+                    )
+                    .child(
+                        Button::new("view-smart")
+                            .small()
+                            .ghost()
+                            .icon(IconName::Sparkles)
+                            .tooltip(t_args("library.views.make_smart", &[("name", &name)]))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.make_smart(id, window, cx)
+                            })),
                     )
                     .child(
                         Button::new("view-rename")

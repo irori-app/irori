@@ -18,7 +18,7 @@ use super::home::{InfoStyle, SCROLL_SPRING};
 use super::tile::CoverSlot;
 use super::{BigPictureView, Colors};
 use crate::layout::home::{LIST_ROW, SHELF_CHIPS};
-use crate::layout::{Metrics, list_scroll, strip_start};
+use crate::layout::{Metrics, end_scroll, list_scroll, strip_start};
 
 /// Shelf chips shown before the focused one when there are many.
 const CHIPS_BEFORE: usize = 2;
@@ -83,7 +83,12 @@ impl BigPictureView {
 
         // The list of the focused shelf.
         let mut rows: Vec<AnyElement> = Vec::new();
-        let scroll = list_scroll(col, None, LIST_ROW, 0.0, layout.list_h);
+        let len = self.rows.get(row_ix).map_or(0, |r| r.games.len());
+        let scroll = end_scroll(
+            list_scroll(col, None, LIST_ROW, 0.0, layout.list_h),
+            len as f32 * LIST_ROW,
+            layout.list_h,
+        );
         if let Some(row) = self.rows.get(row_ix) {
             let shown = (layout.list_h / LIST_ROW).ceil() as usize;
             let start = strip_start((scroll / LIST_ROW) as usize, row.games.len(), shown);

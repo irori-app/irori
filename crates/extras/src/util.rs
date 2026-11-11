@@ -109,13 +109,26 @@ pub(crate) async fn get_bytes(url: &str, timeout: Duration) -> Result<Vec<u8>> {
 }
 
 /// Load image bytes from an `http(s)` URL, a `file://` URL or a local path.
+/// Web images come from Irori's art store, the originals the library already
+/// downloaded (`Paths::art_original`), and are kept there when downloaded
+/// here.
 pub(crate) async fn load_image_source(source: &str) -> Result<Vec<u8>> {
     let source = source.trim();
     if source.starts_with("http://") || source.starts_with("https://") {
+        let stored = irori_core::Paths::get().art_original(source);
+        if let Ok(bytes) = tokio::fs::read(&stored).await
+            && !bytes.is_empty()
+        {
+            return Ok(bytes);
+        }
         let url = source.replace(' ', "%20").replacen("{ext}", "jpg", 1);
-        return get_bytes(&url, Duration::from_secs(30))
+        let bytes = get_bytes(&url, Duration::from_secs(30))
             .await
-            .with_context(|| format!("downloading {url}"));
+            .with_context(|| format!("downloading {url}"))?;
+        if let Err(e) = write_atomic(&stored, &bytes).await {
+            tracing::debug!("keeping {url} in the art store: {e:#}");
+        }
+        return Ok(bytes);
     }
     if source.starts_with("data:") {
         bail!("inline images are not supported");
@@ -198,6 +211,21 @@ pub(crate) fn env_nonempty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.is_empty())
 }
 
+/// Irori's folders for this crate's tests, under a temporary folder, so no
+/// test reads or writes the user's own. `None` when another test already
+/// fixed them elsewhere: a test that writes there must then skip.
+#[cfg(test)]
+pub(crate) fn test_paths() -> Option<&'static irori_core::Paths> {
+    static ROOT: once_cell::sync::OnceCell<PathBuf> = once_cell::sync::OnceCell::new();
+    let root = ROOT.get_or_init(|| {
+        let root = tempfile::tempdir().expect("temp dir").keep();
+        irori_core::Paths::init(irori_core::Paths::under(&root));
+        root
+    });
+    let paths = irori_core::Paths::get();
+    paths.cache.starts_with(root).then_some(paths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,5 +260,24 @@ mod tests {
         assert_eq!(v, vec![1, 2]);
         let (_, age): (Vec<u8>, _) = cache_read_entry(&p).await.unwrap();
         assert!(age < Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn web_images_come_from_the_art_store() {
+        let Some(paths) = test_paths() else {
+            return;
+        };
+        // Nothing listens on this address: the bytes can only come from the
+        // original the library already keeps.
+        let url = "http://127.0.0.1:9/cover.png";
+        let stored = paths.art_original(url);
+        std::fs::create_dir_all(stored.parent().unwrap()).unwrap();
+        std::fs::write(&stored, b"cached").unwrap();
+        assert_eq!(load_image_source(url).await.unwrap(), b"cached");
+        assert!(
+            load_image_source("http://127.0.0.1:9/other.png")
+                .await
+                .is_err()
+        );
     }
 }

@@ -476,6 +476,12 @@ Behind `iroriThirdPartyLaunchers` (off by default), like ZOOM.
   and listed under `Runner::Launchers` with `third_party_managed_app`. They launch through
   the launcher's URI or flags; the session follows the game's process, not the
   launcher's.
+- EA app: owned but uninstalled titles aren't listed. The EA app keeps the account's
+  games in its encrypted installation state (`ProgramData/EA Desktop/<hash>/IS`, keyed to
+  the machine) and behind EA's private GraphQL service, which expects the EA app's own
+  client identity with the user's token. EA publishes no API or readable file for other
+  programs, so Irori neither decrypts the file nor calls the service, and the EA card
+  explains that games appear once installed in the EA app.
 - Anti-cheat status (`crates/extras/src/anticheat.rs`) is shown before setup and on each
   game. Where the anticheat guards only an online mode (GTA Online's BattlEye), the game
   page says so and installs aren't blocked: the story works.

@@ -611,3 +611,149 @@ fn files_from_older_versions_read_with_defaults() {
     assert!(shared.sessions.is_empty());
     assert_eq!(shared.registers.newest(), 5);
 }
+
+fn smart(json: serde_json::Value) -> SmartCategory {
+    serde_json::from_value(json).unwrap()
+}
+
+/// What `d` published, as another computer reads it from the sync folder.
+fn through_file(d: &Device) -> Shared {
+    serde_json::from_str(&serde_json::to_string(&d.published).unwrap()).unwrap()
+}
+
+#[test]
+fn smart_categories_and_category_looks_travel_and_deletions_arrive() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    round(&mut a, &mut b, t(0));
+
+    let short = smart(serde_json::json!({
+        "name": "Short", "match": "all",
+        "rules": [{"rule": "hltb", "maxHours": 10}], "leaveOut": []
+    }));
+    a.data.smart_categories.insert("s-1".into(), short.clone());
+    a.data.categories.insert("RPG".into(), BTreeSet::new());
+    a.data.category_looks.insert(
+        "RPG".into(),
+        CategoryLook {
+            pinned: true,
+            colour: Some("blue".into()),
+            ..Default::default()
+        },
+    );
+    a.tick(t(10));
+    round(&mut a, &mut b, t(20));
+    assert_eq!(b.data.smart_categories["s-1"], short);
+    assert!(b.data.category_looks["RPG"].pinned);
+
+    // An edit made later wins; a deletion reaches the other computer.
+    let mut renamed = short.clone();
+    renamed.name = "Quick".into();
+    b.data
+        .smart_categories
+        .insert("s-1".into(), renamed.clone());
+    b.tick(t(30));
+    round(&mut b, &mut a, t(40));
+    assert_eq!(a.data.smart_categories["s-1"], renamed);
+    a.data.smart_categories.remove("s-1");
+    a.data.categories.remove("RPG");
+    a.data.category_looks.remove("RPG");
+    a.tick(t(50));
+    round(&mut a, &mut b, t(60));
+    assert!(b.data.smart_categories.is_empty());
+    assert!(b.data.category_looks.is_empty());
+}
+
+#[test]
+fn a_computer_that_cant_read_a_smart_category_keeps_it_unchanged() {
+    // `a` runs a newer Irori: one category has a rule and a field this
+    // version doesn't know, another a shape it can't read at all.
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    round(&mut a, &mut b, t(0));
+    let newer = serde_json::json!({
+        "name": "Full moon", "match": "any",
+        "rules": [{"rule": "moonPhase", "phase": "full"},
+                  {"rule": "installed", "installed": true, "weight": 3}],
+        "leaveOut": [], "icon": "moon"
+    });
+    let odd = serde_json::json!({"name": "Tree", "rules": {"and": []}});
+    a.data
+        .smart_categories
+        .insert("s-new".into(), smart(newer.clone()));
+    a.data
+        .smart_categories
+        .insert("s-odd".into(), smart(odd.clone()));
+    a.tick(t(10));
+    a.sync(t(11), &[&b]);
+    let a_regs = a.registers.smart_categories.clone();
+
+    // `b` reads it through the file, keeps it, and publishes it as `a` did.
+    let from_a = through_file(&a);
+    let mut from_a_device = Device::new("a");
+    from_a_device.published = from_a;
+    let merged = b.sync(t(20), &[&from_a_device]);
+    assert!(merged.conflicts.is_empty());
+    assert_eq!(
+        serde_json::to_value(&b.data.smart_categories["s-new"]).unwrap(),
+        newer
+    );
+    assert_eq!(
+        serde_json::to_value(&b.data.smart_categories["s-odd"]).unwrap(),
+        odd
+    );
+    // Nothing of it counts as changed here, now or on the next syncs.
+    let mut regs = b.registers.clone();
+    assert_eq!(
+        record(&mut regs, &b.data, &b.known, "b", Dating::At(t(25))),
+        0
+    );
+    for now in [t(30), t(40)] {
+        b.tick(now);
+        let merged = b.sync(now + 1, &[&from_a_device]);
+        assert_eq!(merged.changed, 0);
+    }
+    for (id, reg) in &b.registers.smart_categories {
+        assert_eq!(reg.by, "a", "{id} was stamped as an edit made on b");
+        assert_eq!(reg.at, a_regs[id].at);
+    }
+
+    // Back on the computer that made them, both are as they were.
+    let mut from_b_device = Device::new("b");
+    from_b_device.published = through_file(&b);
+    let merged = a.sync(t(50), &[&from_b_device]);
+    assert!(merged.conflicts.is_empty());
+    assert_eq!(
+        serde_json::to_value(&a.data.smart_categories["s-new"]).unwrap(),
+        newer
+    );
+    assert_eq!(
+        serde_json::to_value(&a.data.smart_categories["s-odd"]).unwrap(),
+        odd
+    );
+    assert_eq!(a.registers.smart_categories, a_regs);
+}
+
+#[test]
+fn a_look_goes_with_its_category() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.categories.insert("RPG".into(), BTreeSet::new());
+    a.data.category_looks.insert(
+        "RPG".into(),
+        CategoryLook {
+            pinned: true,
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    assert!(b.data.category_looks["RPG"].pinned);
+    // Deleted on `b`; the pin doesn't linger on either computer.
+    b.data.categories.remove("RPG");
+    b.tick(t(10));
+    round(&mut b, &mut a, t(20));
+    for d in [&a, &b] {
+        assert!(d.data.categories.is_empty());
+        assert!(d.data.category_looks.is_empty());
+    }
+}

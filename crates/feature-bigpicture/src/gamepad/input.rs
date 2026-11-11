@@ -407,40 +407,259 @@ fn parse_ids(list: &str) -> Vec<(u16, u16)> {
 /// another button it makes a chord (Guide + X saves a clip), and then its
 /// release does nothing. Guide stays held through a chord, so holding it and
 /// pressing a button again makes another (Guide + Up, Up: louder twice).
+///
+/// Guide's release may never arrive: Steam or the system takes the button
+/// for itself, or the controller goes away while it is held. A held Guide
+/// is therefore forgotten after [`Self::STALE`] without a chord, with its
+/// controller ([`Self::forget`]), and when controllers come or go or Irori's
+/// window gains or loses the focus ([`Self::reset`]), so a later press is
+/// never taken for a chord.
 #[derive(Debug, Default)]
 pub struct GuideTap {
-    /// Devices holding Guide: since when, and whether it made a chord.
-    pressed: Vec<(usize, Instant, bool)>,
+    pressed: Vec<HeldGuide>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HeldGuide {
+    device: usize,
+    since: Instant,
+    /// The press or the latest chord.
+    last: Instant,
+    chorded: bool,
 }
 
 impl GuideTap {
     /// Longest hold that still counts as a press.
     pub const MAX_HOLD: Duration = Duration::from_millis(600);
+    /// How long a held Guide lasts without a chord.
+    pub const STALE: Duration = Duration::from_secs(5);
 
     pub fn press(&mut self, device: usize, now: Instant) {
-        self.pressed.retain(|(d, ..)| *d != device);
-        self.pressed.push((device, now, false));
+        self.expire(now);
+        self.pressed.retain(|held| held.device != device);
+        self.pressed.push(HeldGuide {
+            device,
+            since: now,
+            last: now,
+            chorded: false,
+        });
     }
 
     /// Whether the release at `now` ends a short press on `device`.
     pub fn release(&mut self, device: usize, now: Instant) -> bool {
-        let Some(ix) = self.pressed.iter().position(|(d, ..)| *d == device) else {
+        let Some(ix) = self.pressed.iter().position(|held| held.device == device) else {
             return false;
         };
-        let (_, at, chorded) = self.pressed.swap_remove(ix);
-        !chorded && now.saturating_duration_since(at) <= Self::MAX_HOLD
+        let held = self.pressed.swap_remove(ix);
+        !held.chorded && now.saturating_duration_since(held.since) <= Self::MAX_HOLD
     }
 
-    /// Whether a button pressed on `device` makes a chord with Guide held
-    /// there. Guide's release then no longer counts as a press.
-    pub fn chord(&mut self, device: usize) -> bool {
-        match self.pressed.iter_mut().find(|(d, ..)| *d == device) {
+    /// Whether a button pressed on `device` at `now` makes a chord with
+    /// Guide held there. Guide's release then no longer counts as a press.
+    pub fn chord(&mut self, device: usize, now: Instant) -> bool {
+        self.expire(now);
+        match self.pressed.iter_mut().find(|held| held.device == device) {
             Some(held) => {
-                held.2 = true;
+                held.chorded = true;
+                held.last = now;
                 true
             }
             None => false,
         }
+    }
+
+    /// Forget Guide on a controller that went away.
+    pub fn forget(&mut self, device: usize) {
+        self.pressed.retain(|held| held.device != device);
+    }
+
+    /// Forget every held Guide (see the type's docs).
+    pub fn reset(&mut self) {
+        self.pressed.clear();
+    }
+
+    fn expire(&mut self, now: Instant) {
+        self.pressed
+            .retain(|held| now.saturating_duration_since(held.last) <= Self::STALE);
+    }
+}
+
+/// A controller as [`ConnectWatch`] tells them apart. A controller that
+/// changes mode (an 8BitDo pad switched between XInput, DInput and Switch)
+/// reports other ids and another name, so it counts as another controller.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PadIdentity {
+    pub vendor: Option<u16>,
+    pub product: Option<u16>,
+    pub name: String,
+}
+
+/// Decides when a controller connecting opens Big Picture
+/// (`iroriUi.bigPictureOnController`): whenever one is listed that wasn't,
+/// those already there when Irori starts included, whatever their family.
+/// Controllers are compared by identity, not counted, so one leaving and
+/// another arriving between two looks (a pad switching mode) still counts.
+///
+/// Some systems stop reporting controllers to a program in the background
+/// and list them again when it comes back (Windows.Gaming.Input does for a
+/// window without focus). A controller that went away while Irori's window
+/// wasn't active and returns within [`Self::RETURN_WAIT`] of it becoming
+/// active again is the same one coming back, not news.
+#[derive(Debug, Default)]
+pub struct ConnectWatch {
+    connected: Vec<PadIdentity>,
+    hidden: Vec<PadIdentity>,
+    active: bool,
+    activated: Option<Instant>,
+}
+
+impl ConnectWatch {
+    /// How long after Irori's window became active a controller hidden in
+    /// the background may come back without counting as connected.
+    pub const RETURN_WAIT: Duration = Duration::from_secs(5);
+
+    /// The controllers listed now; `active` is whether Irori's window is.
+    /// Returns whether a controller connected.
+    pub fn update(&mut self, list: &[PadIdentity], active: bool, now: Instant) -> bool {
+        if active && !self.active {
+            self.activated = Some(now);
+        }
+        self.active = active;
+        if !active {
+            self.activated = None;
+        }
+        let returning = |activated: Option<Instant>| {
+            activated.is_none_or(|at| now.saturating_duration_since(at) <= Self::RETURN_WAIT)
+        };
+        if !returning(self.activated) {
+            self.hidden.clear();
+        }
+
+        let mut before = std::mem::take(&mut self.connected);
+        let mut news = false;
+        for pad in list {
+            if let Some(ix) = before.iter().position(|p| p == pad) {
+                before.swap_remove(ix);
+            } else if let Some(ix) = self.hidden.iter().position(|p| p == pad) {
+                self.hidden.swap_remove(ix);
+            } else {
+                news = true;
+            }
+        }
+        // What is left of `before` went away.
+        if !active {
+            self.hidden.extend(before);
+        }
+        self.connected = list.to_vec();
+        news
+    }
+}
+
+/// Holding a button (Start or Select, `iroriUi.bigPictureHoldButton`) for
+/// a while opens Big Picture. Its usual input waits for the release, so a
+/// short press still does what it always did and a long one only opens
+/// Big Picture. One hold at a time: pressing the button on a second
+/// controller starts over there.
+#[derive(Debug, Default)]
+pub struct HoldTimer {
+    held: Option<Hold>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Hold {
+    device: usize,
+    since: Instant,
+    duration: Duration,
+    fired: bool,
+}
+
+/// What letting go of the held button meant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldRelease {
+    /// The button wasn't being held for Big Picture.
+    NotHeld,
+    /// Let go too early: a press, whose input is due now.
+    Tap,
+    /// Held long enough, and the release arrived before the timer was
+    /// looked at: Big Picture opens now.
+    Completed,
+    /// Big Picture already opened for this hold; the release does nothing.
+    AfterOpening,
+}
+
+impl HoldTimer {
+    /// Start holding on `device` for `duration`.
+    pub fn press(&mut self, device: usize, now: Instant, duration: Duration) {
+        self.held = Some(Hold {
+            device,
+            since: now,
+            duration,
+            fired: false,
+        });
+    }
+
+    /// The button was let go on `device` at `now`.
+    pub fn release(&mut self, device: usize, now: Instant) -> HoldRelease {
+        let Some(hold) = self.held.filter(|h| h.device == device) else {
+            return HoldRelease::NotHeld;
+        };
+        self.held = None;
+        if hold.fired {
+            HoldRelease::AfterOpening
+        } else if now.saturating_duration_since(hold.since) >= hold.duration {
+            HoldRelease::Completed
+        } else {
+            HoldRelease::Tap
+        }
+    }
+
+    /// When the hold completes, while one is under way.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.held.filter(|h| !h.fired).map(|h| h.since + h.duration)
+    }
+
+    /// Whether the hold completes at `now`. It completes once; the button
+    /// stays held until its release.
+    pub fn poll(&mut self, now: Instant) -> bool {
+        match &mut self.held {
+            Some(hold) if !hold.fired && now >= hold.since + hold.duration => {
+                hold.fired = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Since when the button is held, while the hold is under way.
+    pub fn progress(&self) -> Option<(Instant, Duration)> {
+        self.held
+            .filter(|h| !h.fired)
+            .map(|h| (h.since, h.duration))
+    }
+
+    /// Give up the hold (its controller went away, input was turned off).
+    /// Returns whether one was under way.
+    pub fn cancel(&mut self) -> bool {
+        self.held.take().is_some_and(|h| !h.fired)
+    }
+
+    /// Give up the hold when it is on `device`.
+    pub fn cancel_device(&mut self, device: usize) -> bool {
+        if self.held.is_some_and(|h| h.device == device) {
+            self.cancel()
+        } else {
+            false
+        }
+    }
+}
+
+/// The button [`HoldTimer`] watches for a setting, `None` when off.
+pub fn hold_button(setting: irori_core::settings::HoldButton) -> Option<PadButton> {
+    use irori_core::settings::HoldButton;
+    match setting {
+        HoldButton::Off => None,
+        HoldButton::Start => Some(PadButton::Start),
+        HoldButton::Select => Some(PadButton::Select),
     }
 }
 
@@ -558,10 +777,10 @@ mod tests {
     fn a_chord_with_guide_does_not_toggle_on_release() {
         let t0 = Instant::now();
         let mut tap = GuideTap::default();
-        assert!(!tap.chord(0));
+        assert!(!tap.chord(0, t0));
         tap.press(0, t0);
-        assert!(!tap.chord(1));
-        assert!(tap.chord(0));
+        assert!(!tap.chord(1, t0));
+        assert!(tap.chord(0, t0));
         assert!(!tap.release(0, t0 + ms(200)));
         tap.press(0, t0);
         assert!(tap.release(0, t0 + ms(200)));
@@ -572,10 +791,235 @@ mod tests {
         let t0 = Instant::now();
         let mut tap = GuideTap::default();
         tap.press(0, t0);
-        assert!(tap.chord(0));
-        assert!(tap.chord(0), "a second chord while Guide is still held");
+        assert!(tap.chord(0, t0));
+        assert!(
+            tap.chord(0, t0 + ms(50)),
+            "a second chord while Guide is still held"
+        );
         assert!(!tap.release(0, t0 + ms(100)));
-        assert!(!tap.chord(0), "released");
+        assert!(!tap.chord(0, t0 + ms(150)), "released");
+    }
+
+    fn pad(vendor: u16, product: u16, name: &str) -> PadIdentity {
+        PadIdentity {
+            vendor: Some(vendor),
+            product: Some(product),
+            name: name.into(),
+        }
+    }
+
+    #[test]
+    fn controllers_there_at_start_and_every_family_count_as_connected() {
+        let t0 = Instant::now();
+        let dualsense = pad(0x054c, 0x0ce6, "DualSense Wireless Controller");
+        let mut watch = ConnectWatch::default();
+        assert!(!watch.update(&[], true, t0), "none at start");
+        let mut watch = ConnectWatch::default();
+        assert!(
+            watch.update(std::slice::from_ref(&dualsense), false, t0),
+            "there at start"
+        );
+        assert!(
+            !watch.update(std::slice::from_ref(&dualsense), true, t0),
+            "no news"
+        );
+        for other in [
+            pad(0x045e, 0x0b12, "Xbox Wireless Controller"),
+            pad(0x057e, 0x2009, "Pro Controller"),
+            pad(0x28de, 0x1205, "Steam Deck"),
+            pad(0x2dc8, 0x6012, "8BitDo Ultimate 2C Wireless"),
+            PadIdentity {
+                vendor: None,
+                product: None,
+                name: "Generic USB Joystick".into(),
+            },
+        ] {
+            let both = [dualsense.clone(), other.clone()];
+            assert!(watch.update(&both, true, t0), "{other:?}");
+            assert!(!watch.update(&both, true, t0));
+            assert!(
+                !watch.update(std::slice::from_ref(&dualsense), true, t0),
+                "left"
+            );
+        }
+        // Two of one model: the second still counts.
+        let two = [dualsense.clone(), dualsense.clone()];
+        assert!(watch.update(&two, true, t0));
+        assert!(!watch.update(std::slice::from_ref(&dualsense), true, t0));
+    }
+
+    #[test]
+    fn an_8bitdo_pad_switching_mode_counts_even_between_two_looks() {
+        let t0 = Instant::now();
+        let xinput = pad(0x045e, 0x028e, "Xbox 360 Controller");
+        let dinput = pad(0x2dc8, 0x3106, "8BitDo Pro 2");
+        let switch = pad(0x057e, 0x2009, "Pro Controller");
+        let mut watch = ConnectWatch::default();
+        watch.update(std::slice::from_ref(&xinput), true, t0);
+        // Gone and back as another device before the reader looked again:
+        // as many controllers as before, but a new one.
+        assert!(watch.update(std::slice::from_ref(&dinput), true, t0));
+        assert!(!watch.update(&[], true, t0));
+        assert!(watch.update(std::slice::from_ref(&switch), true, t0));
+        assert!(!watch.update(&[], true, t0), "unplugged");
+        assert!(
+            watch.update(std::slice::from_ref(&switch), true, t0),
+            "plugged in again"
+        );
+    }
+
+    #[test]
+    fn controllers_hidden_while_irori_is_in_the_background_are_no_news() {
+        let t0 = Instant::now();
+        let xbox = pad(0x045e, 0x0b12, "Xbox Wireless Controller");
+        let mut watch = ConnectWatch::default();
+        watch.update(std::slice::from_ref(&xbox), true, t0);
+        // The window lost focus and the system stopped listing the pad;
+        // with focus back it is listed again.
+        assert!(!watch.update(&[], false, t0 + Duration::from_secs(1)));
+        assert!(!watch.update(
+            std::slice::from_ref(&xbox),
+            true,
+            t0 + Duration::from_secs(60)
+        ));
+        // After that round trip a new controller still counts.
+        let pro = pad(0x057e, 0x2009, "Pro Controller");
+        assert!(watch.update(
+            &[xbox.clone(), pro.clone()],
+            true,
+            t0 + Duration::from_secs(61)
+        ));
+        // One that comes back long after Irori is active again connected
+        // anew.
+        assert!(!watch.update(
+            std::slice::from_ref(&pro),
+            false,
+            t0 + Duration::from_secs(62)
+        ));
+        assert!(!watch.update(
+            std::slice::from_ref(&pro),
+            true,
+            t0 + Duration::from_secs(63)
+        ));
+        let later =
+            t0 + Duration::from_secs(63) + ConnectWatch::RETURN_WAIT + Duration::from_secs(1);
+        assert!(watch.update(&[pro, xbox], true, later));
+    }
+
+    #[test]
+    fn a_long_hold_opens_once_and_a_short_one_is_a_press() {
+        let t0 = Instant::now();
+        let mut hold = HoldTimer::default();
+        assert_eq!(hold.release(0, t0), HoldRelease::NotHeld);
+        assert_eq!(hold.deadline(), None);
+        hold.press(0, t0, ms(1000));
+        assert_eq!(hold.deadline(), Some(t0 + ms(1000)));
+        assert_eq!(hold.progress(), Some((t0, ms(1000))));
+        assert!(!hold.poll(t0 + ms(999)));
+        assert_eq!(
+            hold.release(1, t0 + ms(500)),
+            HoldRelease::NotHeld,
+            "other pad"
+        );
+        assert_eq!(hold.release(0, t0 + ms(500)), HoldRelease::Tap);
+        assert!(!hold.poll(t0 + ms(2000)), "let go");
+
+        hold.press(0, t0, ms(1000));
+        assert!(hold.poll(t0 + ms(1000)));
+        assert!(!hold.poll(t0 + ms(1500)), "fires once");
+        assert_eq!(hold.deadline(), None, "nothing more to wait for");
+        assert_eq!(hold.progress(), None);
+        assert_eq!(hold.release(0, t0 + ms(3000)), HoldRelease::AfterOpening);
+
+        // The release beat the timer: it completes the hold itself.
+        hold.press(2, t0, ms(800));
+        assert_eq!(hold.release(2, t0 + ms(900)), HoldRelease::Completed);
+    }
+
+    #[test]
+    fn a_hold_is_given_up_with_its_controller() {
+        let t0 = Instant::now();
+        let mut hold = HoldTimer::default();
+        hold.press(3, t0, ms(1000));
+        assert!(!hold.cancel_device(1));
+        assert!(hold.cancel_device(3));
+        assert!(!hold.poll(t0 + ms(5000)));
+        assert_eq!(hold.release(3, t0 + ms(5000)), HoldRelease::NotHeld);
+        hold.press(3, t0, ms(1000));
+        hold.press(4, t0 + ms(100), ms(1000));
+        assert_eq!(
+            hold.release(3, t0 + ms(200)),
+            HoldRelease::NotHeld,
+            "moved on"
+        );
+        assert!(hold.cancel());
+        assert!(!hold.cancel());
+        assert_eq!(
+            hold_button(irori_core::settings::HoldButton::Start),
+            Some(PadButton::Start)
+        );
+        assert_eq!(hold_button(irori_core::settings::HoldButton::Off), None);
+    }
+
+    #[test]
+    fn a_guide_whose_release_never_came_expires() {
+        // Steam (or the system) took Guide's release: Irori saw the press
+        // only. A later X must be a plain press, not Guide + X.
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        let later = t0 + GuideTap::STALE + ms(1);
+        assert!(!tap.chord(0, later), "X long after: no clip");
+        assert!(!tap.chord(0, later + ms(10)), "and none after that either");
+        assert!(
+            !tap.release(0, later + ms(20)),
+            "a late release toggles nothing"
+        );
+    }
+
+    #[test]
+    fn chords_keep_a_held_guide_alive() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        let step = GuideTap::STALE - ms(500);
+        assert!(tap.chord(0, t0 + step), "Guide + Up");
+        assert!(tap.chord(0, t0 + step * 2), "Up again, still held");
+        assert!(
+            !tap.chord(0, t0 + step * 3 + ms(600)),
+            "then nothing for long"
+        );
+    }
+
+    #[test]
+    fn a_held_guide_goes_with_its_controller() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        tap.press(0, t0);
+        tap.press(1, t0);
+        tap.forget(0);
+        assert!(!tap.chord(0, t0 + ms(10)), "disconnected while held");
+        assert!(tap.chord(1, t0 + ms(10)), "the other pad still holds it");
+        // Pressed again after reconnecting: a fresh press.
+        tap.press(0, t0 + ms(20));
+        assert!(tap.release(0, t0 + ms(100)));
+    }
+
+    #[test]
+    fn device_changes_and_focus_changes_let_go_of_guide() {
+        let t0 = Instant::now();
+        let mut tap = GuideTap::default();
+        // Guide down, another program takes the focus (and the release),
+        // focus comes back: the next X is a press.
+        tap.press(0, t0);
+        tap.press(3, t0);
+        tap.reset();
+        assert!(!tap.chord(0, t0 + ms(50)));
+        assert!(!tap.chord(3, t0 + ms(50)));
+        assert!(!tap.release(0, t0 + ms(60)), "its release does nothing");
+        // Guide works as before afterwards.
+        tap.press(0, t0 + ms(100));
+        assert!(tap.chord(0, t0 + ms(150)));
     }
 
     #[test]

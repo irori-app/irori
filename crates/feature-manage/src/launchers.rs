@@ -25,7 +25,7 @@ use gpui_kit::component::select::{Select, SelectItem, SelectState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -53,7 +53,7 @@ pub fn install_launchers_store(store: Arc<LaunchersStore>, cx: &mut App) {
     cx.set_global(LaunchersHandle(store));
 }
 
-fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
+pub(crate) fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
     cx.try_global::<LaunchersHandle>().map(|h| h.0.clone())
 }
 
@@ -509,6 +509,21 @@ impl LaunchersSection {
                             .child(div().text_xs().text_color(muted).truncate().child(played)),
                     )
                     .child(
+                        Button::new("launcher-xbox-friends")
+                            .debug_selector(|| "launcher-xbox-friends".to_string())
+                            .ghost()
+                            .small()
+                            .icon(IconName::Users)
+                            .label(t("manage.friends.button"))
+                            .on_click(|_, window, cx| {
+                                crate::friends::open_friends_dialog(
+                                    crate::friends::FriendsSource::Xbox,
+                                    window,
+                                    cx,
+                                )
+                            }),
+                    )
+                    .child(
                         Button::new("launcher-xbox-sign-out")
                             .ghost()
                             .small()
@@ -826,6 +841,27 @@ impl LaunchersSection {
                 Launcher::Ubisoft => t("manage.launchers.about.ubisoft"),
                 Launcher::Rockstar => t("manage.launchers.about.rockstar"),
             }))
+            // The EA app keeps the games an account owns only encrypted and
+            // behind EA's own service, so only installed ones can be listed.
+            .when(launcher == Launcher::EaApp, |card| {
+                card.child(
+                    h_flex()
+                        .debug_selector(|| "launcher-ea-installed-only".to_string())
+                        .w_full()
+                        .min_w_0()
+                        .gap_2()
+                        .items_start()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(Icon::new(IconName::Info).xsmall().flex_shrink_0())
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(t("manage.launchers.ea.installed_only")),
+                        ),
+                )
+            })
             .child(h_flex().justify_end().child(actions))
             .into_any_element()
     }

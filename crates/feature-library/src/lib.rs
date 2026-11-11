@@ -1,9 +1,9 @@
 //! The library screen: every game of every store in a virtualized cover grid
 //! (a click opens a drawer about the game beside it), a list, or Focus (a
 //! column of covers beside the selected game's page), with instant search, store switcher, filters, sorting, a
-//! "Continue playing" row, keyboard navigation, per-game context menus, custom
-//! categories, saved views, manually added apps and per-game title/art
-//! overrides.
+//! "Continue playing" row, keyboard navigation, per-game context menus,
+//! categories (manual and smart), saved views, manually added apps and
+//! per-game title/art overrides.
 //!
 //! # Wiring (shell)
 //!
@@ -23,6 +23,7 @@
 //! "Categories…", `None` for the category manager).
 
 mod availability;
+mod categories;
 mod commands;
 mod dialogs;
 mod filter;
@@ -52,6 +53,7 @@ pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::folder::open_add_folder_dialog;
 pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
+pub use dialogs::smart::open_smart_category_editor;
 pub use dialogs::steamgrid::open_art_picker_dialog;
 pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
@@ -61,6 +63,7 @@ pub use random::open_random_game;
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
+pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
 /// Requests for actions owned by other features. The shell routes them (for
@@ -98,6 +101,9 @@ gpui_kit::actions!(
         ActivateSelected,
         /// Pick every shown game for bulk actions.
         SelectAllGames,
+        /// Remove the picked games (or the focused one) from the library,
+        /// after asking: added games and ROMs only.
+        RemovePicked,
         /// Leave selection mode.
         EndSelection,
         /// Turn grouping the library by play status on or off.
@@ -156,6 +162,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("space", ActivateSelected, grid),
         KeyBinding::new("ctrl-enter", ActivateSelected, grid),
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
+        KeyBinding::new("delete", RemovePicked, grid),
         KeyBinding::new("escape", EndSelection, grid),
     ]);
 }
@@ -287,6 +294,41 @@ pub fn set_groups_by_genre(on: bool, cx: &mut App) {
         let group = if on { Grouping::Genre } else { Grouping::None };
         model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
     }
+}
+
+/// Whether the library groups its games by category; `None` until a
+/// library view exists.
+pub fn groups_by_category(cx: &App) -> Option<bool> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group == Grouping::Category)
+}
+
+/// Group the library by category, or stop. Does nothing until a library
+/// view exists.
+pub fn set_groups_by_category(on: bool, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        let group = if on {
+            Grouping::Category
+        } else {
+            Grouping::None
+        };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
+/// Every category of both kinds with its count, pinned first (the command
+/// palette's "Show category" rows).
+pub fn category_list(cx: &App) -> Vec<irori_ui::categories::CategoryEntry> {
+    let library = irori_ui::models(cx).library.read(cx);
+    irori_ui::categories::entries(&library.user, &library.categories)
+}
+
+/// Show the library's games in `category` alone, as a palette row or a
+/// menu does: the Filters popover's criteria give way to it, while the
+/// search, store, sort and grouping stay.
+pub fn show_category(category: irori_services::CategoryRef, cx: &mut App) {
+    filters_panel::change_filters(move |f| f.show_only(&category), cx);
+    irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 
 /// Show the library's games played in `mode` (a game page's mode chip):

@@ -29,6 +29,8 @@ use irori_xbox_api::{Client, Endpoints, Pkce, Session, Title, XboxError};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
+use crate::xbox_friends::XboxFriends;
+
 /// Irori's own Microsoft (Azure) app: personal accounts only, a public
 /// client without a secret, redirecting to the desktop page. The id is
 /// public; it only names the app on Microsoft's consent page.
@@ -274,6 +276,8 @@ pub(crate) struct XboxAccount {
     pending: Mutex<Option<Pkce>>,
     titles: RwLock<TitlesFile>,
     achievements: AchievementCache,
+    /// The friends last read, in memory only.
+    friends: tokio::sync::Mutex<XboxFriends>,
 }
 
 impl XboxAccount {
@@ -301,6 +305,7 @@ impl XboxAccount {
                 cache.join("achievements.json"),
                 ACHIEVEMENTS_MAX_AGE_SECS,
             ),
+            friends: tokio::sync::Mutex::new(XboxFriends::default()),
         }
     }
 
@@ -440,6 +445,7 @@ impl XboxAccount {
         *self.expired.write() = None;
         *self.titles.write() = TitlesFile::default();
         *self.session.lock().await = None;
+        *self.friends.lock().await = XboxFriends::default();
         let files = [
             self.account_file.clone(),
             self.titles_file.clone(),
@@ -681,6 +687,35 @@ impl XboxAccount {
     pub async fn forget_achievements(&self, app_name: &str) {
         self.achievements.forget(app_name).await
     }
+
+    /// The account's friends; `None` while signed out. A list read within
+    /// [`crate::xbox_friends::MAX_AGE`] is reused unless `force`.
+    pub async fn friends(&self, force: bool, language: &str) -> Result<Option<XboxFriends>> {
+        if self.saved.read().is_none() {
+            return Ok(None);
+        }
+        let mut cached = self.friends.lock().await;
+        if !force && cached.is_fresh() {
+            return Ok(Some(cached.clone()));
+        }
+        let client = self.client()?.clone();
+        let accept = accept_language(language);
+        let people = self
+            .with_session(|s| {
+                let (client, accept) = (client.clone(), accept.clone());
+                async move { client.friends(&s, &accept).await }
+            })
+            .await?;
+        // Signed out while Xbox answered: show nothing of that account.
+        if self.saved.read().is_none() {
+            return Ok(None);
+        }
+        *cached = XboxFriends {
+            list: crate::xbox_friends::from_people(people),
+            read_at: Some(std::time::Instant::now()),
+        };
+        Ok(Some(cached.clone()))
+    }
 }
 
 /// An Xbox achievement as Irori shows it.
@@ -806,6 +841,13 @@ pub(crate) mod tests {
                 ]})),
                 "/batch" => Resp::json(serde_json::json!({"statlistscollection": [
                     {"stats": [{"name": "MinutesPlayed", "value": "754"}]}]})),
+                "/users/xuid(25)/people" => Resp::json(serde_json::json!({"people": [
+                    {"xuid": "31", "isFavorite": false, "isFollowingCaller": true}]})),
+                "/users/batch/profile/settings" => Resp::json(serde_json::json!({"profileUsers": [
+                    {"id": "31", "settings": [{"id": "Gamertag", "value": "Wingmate"}]}]})),
+                "/users/batch" => Resp::json(serde_json::json!([
+                    {"xuid": "31", "state": "Online", "devices": [{"titles": [
+                        {"name": "Sky Racer", "state": "Active", "placement": "Full"}]}]}])),
                 p if p.ends_with("/achievements") => Resp::json(serde_json::json!({
                     "achievements": [{"id": "1", "name": "First", "progressState": "Achieved",
                         "progression": {"timeUnlocked": "2026-10-01T00:00:00Z"},
@@ -883,6 +925,36 @@ pub(crate) mod tests {
         xbox.logout().await.unwrap();
         assert!(xbox.user().is_none() && xbox.titles().is_empty());
         assert!(!dir.path().join("config/xbox-account.json").exists());
+    }
+
+    #[tokio::test]
+    async fn friends_are_read_on_request_and_dropped_at_sign_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = server(true);
+        let xbox = account(dir.path(), &s);
+        assert!(xbox.friends(false, "en").await.unwrap().is_none());
+        let _ = xbox.login_flow();
+        xbox.login("M.C1.abcdefgh").await.unwrap();
+        let people = |s: &TestServer| {
+            s.requests()
+                .iter()
+                .filter(|r| r.path.ends_with("/people"))
+                .count()
+        };
+        let friends = xbox.friends(false, "en").await.unwrap().unwrap();
+        assert_eq!(friends.list.len(), 1);
+        assert_eq!(friends.list[0].gamertag, "Wingmate");
+        assert_eq!(friends.list[0].playing.as_deref(), Some("Sky Racer"));
+        // Fresh: not asked again unless forced.
+        xbox.friends(false, "en").await.unwrap();
+        assert_eq!(people(&s), 1);
+        xbox.friends(true, "en").await.unwrap();
+        assert_eq!(people(&s), 2);
+
+        xbox.logout().await.unwrap();
+        assert!(xbox.friends(false, "en").await.unwrap().is_none());
+        assert!(!xbox.friends.lock().await.is_fresh(), "nothing kept");
+        assert_eq!(people(&s), 2);
     }
 
     #[tokio::test]

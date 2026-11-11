@@ -101,6 +101,14 @@ impl ShortcutsFile {
             .filter_map(|(_, v)| v.as_map().map(ShortcutEntry))
     }
 
+    /// Every shortcut entry, in file order, to change in place.
+    pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut Map> {
+        self.list_mut()
+            .0
+            .iter_mut()
+            .filter_map(|(_, v)| v.as_map_mut())
+    }
+
     /// Append an entry. Indices are renumbered.
     pub fn push(&mut self, entry: Map) {
         let list = self.list_mut();
@@ -181,6 +189,9 @@ pub struct NewShortcut {
     pub last_play_time: i32,
     /// Steam collections to file the shortcut under (written as `tags`).
     pub tags: Vec<String>,
+    /// The game as `<runner>/<app>`, written as [`super::sync::ID_KEY`] so
+    /// Irori knows its own entries.
+    pub irori_id: Option<String>,
 }
 
 impl NewShortcut {
@@ -197,7 +208,8 @@ impl NewShortcut {
         if let Some(icon) = &self.icon {
             m.push("icon", Value::String(icon.clone()));
         }
-        m.with("LaunchOptions", Value::String(self.launch_options.clone()))
+        m = m
+            .with("LaunchOptions", Value::String(self.launch_options.clone()))
             .with("IsHidden", Value::Int32(0))
             .with("AllowDesktopConfig", Value::Int32(1))
             .with("AllowOverlay", Value::Int32(1))
@@ -205,7 +217,11 @@ impl NewShortcut {
             .with("Devkit", Value::Int32(0))
             .with("DevkitOverrideAppID", Value::Int32(0))
             .with("LastPlayTime", Value::Int32(self.last_play_time))
-            .with("tags", Value::Map(tags_map(&self.tags)))
+            .with("tags", Value::Map(tags_map(&self.tags)));
+        if let Some(id) = &self.irori_id {
+            m.push(super::sync::ID_KEY, Value::String(id.clone()));
+        }
+        m
     }
 }
 
@@ -291,6 +307,7 @@ mod tests {
             launch_options: "--launch \"gog/123\"".into(),
             last_play_time: 1_700_000_000,
             tags: vec!["Irori".into()],
+            irori_id: None,
         }
     }
 

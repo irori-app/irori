@@ -1,4 +1,5 @@
-//! ReShade per game, below the UI and the backend.
+//! ReShade per game, below the UI and the backend, on a layer every
+//! graphics mod shares ([`layer`]).
 //!
 //! - [`pe`] reads a Windows program's architecture and imported DLLs, and
 //!   [`detect`] picks the program that draws the game (looking past a small
@@ -17,25 +18,33 @@
 //!   Irori wrote that are still unchanged, so the user's `ReShade.ini` and
 //!   presets stay. A failed or cancelled install undoes its writes.
 //! - [`install`] puts these together.
+//! - [`renodx`] adds RenoDX's HDR add-ons beside ReShade's build with
+//!   add-on support: its official catalog and builds, checked against the
+//!   digests its release lists, through the same journal.
+//! - [`fetch`] holds the download helpers the mods share.
 
 #![forbid(unsafe_code)]
 
 pub mod compat;
 pub mod detect;
 pub mod download;
+pub mod fetch;
 pub mod install;
 pub mod journal;
+pub mod layer;
 pub mod pe;
+pub mod renodx;
 
 use std::path::PathBuf;
 
-use irori_core::{GameId, Paths};
+use irori_core::GameId;
 use serde::{Deserialize, Serialize};
 
 pub use compat::{CompatEntry, CompatList};
 pub use detect::Detection;
 pub use install::{InstallRequest, Step, install};
-pub use journal::{FileRecord, Manifest, RemoveReport};
+pub use journal::{FileRecord, Manifest, ModSource, RemoveReport};
+pub use layer::GraphicsMod;
 pub use pe::{Machine, PeInfo};
 
 /// A render API, as ReShade's installer tells them apart.
@@ -96,6 +105,14 @@ pub enum ReshadeError {
     DllTaken { name: String },
     #[error("The chosen program is not inside the game folder")]
     OutsideGame,
+    #[error("The chosen file is not a ReShade add-on")]
+    NotAddon,
+    #[error("The add-on is built for another processor architecture than the game")]
+    AddonArch,
+    #[error("RenoDX has no build of this mod for the game's processor architecture")]
+    NoAddonBuild,
+    #[error("Another RenoDX mod, {name}, is already in the game folder")]
+    AddonTaken { name: String },
 }
 
 impl ReshadeError {
@@ -105,19 +122,12 @@ impl ReshadeError {
     }
 }
 
-/// Where a game's install manifest lives.
+/// Where a game's ReShade manifest lives.
 pub fn journal_path(id: &GameId) -> PathBuf {
-    Paths::get()
-        .data
-        .join("reshade")
-        .join(id.runner.id())
-        .join(format!(
-            "{}.json",
-            irori_core::paths::sanitize(&id.app_name)
-        ))
+    GraphicsMod::Reshade.journal_path(id)
 }
 
-/// Where downloads are cached.
+/// Where ReShade's downloads are cached.
 pub fn cache_dir() -> PathBuf {
-    Paths::get().cache.join("reshade")
+    GraphicsMod::Reshade.cache_dir()
 }

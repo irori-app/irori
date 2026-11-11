@@ -1,4 +1,4 @@
-//! The Library tab: filter chips (Show, Sort, Status, Search), the focused
+//! The Library tab: filter chips (Show, Sort, Status, Category, Search), the focused
 //! game's title with its place in the list, and a grid of covers whose
 //! focused row leads and glides into place. Only rows near the view are
 //! built, so a library of thousands stays cheap.
@@ -23,12 +23,20 @@ use crate::layout::{
 use crate::model::Chip;
 
 impl BigPictureView {
-    fn chip_value(&self, chip: Chip) -> SharedString {
+    fn chip_value(&self, chip: Chip, cx: &Context<Self>) -> SharedString {
         let filter = &self.library.filter;
         match chip {
             Chip::Show => filter.show.label(),
             Chip::Sort => filter.sort.label(),
             Chip::Status => filter.status.label(),
+            Chip::Category => {
+                let user = &irori_ui::models(cx).library.read(cx).user;
+                filter
+                    .category
+                    .as_ref()
+                    .and_then(|c| user.category_name(c))
+                    .map_or_else(|| t("bigpicture.category.any"), |n| n.to_owned().into())
+            }
             Chip::Search if filter.query.is_empty() => SharedString::new_static("—"),
             Chip::Search => SharedString::from(filter.query.clone()),
         }
@@ -38,7 +46,7 @@ impl BigPictureView {
         let focused = self.library.focus == LibraryFocus::Chips(ix)
             && self.overlay.is_none()
             && !self.library.searching;
-        let value = self.chip_value(chip);
+        let value = self.chip_value(chip, cx);
         h_flex()
             .id(chip.id())
             .role(Role::Button)

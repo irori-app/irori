@@ -40,6 +40,27 @@ enum Step {
     Done,
 }
 
+/// The guide's pages: the BIOS page only when a system the library has
+/// needs BIOS files, so the count never names a page the guide skips.
+fn guide_steps(needs_bios: bool) -> Vec<Step> {
+    let mut steps = vec![Step::Folders, Step::Emulators];
+    if needs_bios {
+        steps.push(Step::Bios);
+    }
+    steps.push(Step::Done);
+    steps
+}
+
+/// The page after `current` among `steps`; the last stays.
+fn step_after(steps: &[Step], current: Step) -> Step {
+    let ix = steps.iter().position(|s| *s == current).unwrap_or(0);
+    steps
+        .get(ix + 1)
+        .or(steps.last())
+        .copied()
+        .unwrap_or(Step::Done)
+}
+
 /// Open the guide.
 pub fn open_emulation_setup(window: &mut Window, cx: &mut App) {
     crate::i18n::register();
@@ -232,16 +253,17 @@ impl SetupGuide {
         self.ensure_ticker(window, cx);
     }
 
-    fn next(&mut self, cx: &mut Context<Self>) {
+    /// The pages that apply to the library as it is now.
+    fn steps(&self, cx: &App) -> Vec<Step> {
         let needs_bios = self
             .counts(cx)
             .keys()
             .any(|s| self.bios.get(s).is_some_and(|b| !b.files.is_empty()));
-        self.step = match self.step {
-            Step::Folders => Step::Emulators,
-            Step::Emulators if needs_bios => Step::Bios,
-            Step::Emulators | Step::Bios | Step::Done => Step::Done,
-        };
+        guide_steps(needs_bios)
+    }
+
+    fn next(&mut self, cx: &mut Context<Self>) {
+        self.step = step_after(&self.steps(cx), self.step);
         cx.notify();
     }
 
@@ -447,7 +469,11 @@ impl SetupGuide {
 
 impl Render for SetupGuide {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let steps = [Step::Folders, Step::Emulators, Step::Bios, Step::Done];
+        let mut steps = self.steps(cx);
+        // A BIOS page already shown stays counted.
+        if !steps.contains(&self.step) {
+            steps = guide_steps(true);
+        }
         let ix = steps.iter().position(|s| *s == self.step).unwrap_or(0);
         let body = match self.step {
             Step::Folders => self.render_folders(cx),
@@ -506,5 +532,24 @@ impl Render for SetupGuide {
                         )
                     }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_guide_counts_and_walks_only_the_pages_it_uses() {
+        let without = guide_steps(false);
+        assert_eq!(without, [Step::Folders, Step::Emulators, Step::Done]);
+        assert_eq!(step_after(&without, Step::Folders), Step::Emulators);
+        assert_eq!(step_after(&without, Step::Emulators), Step::Done);
+        assert_eq!(step_after(&without, Step::Done), Step::Done);
+
+        let with = guide_steps(true);
+        assert_eq!(with.len(), 4);
+        assert_eq!(step_after(&with, Step::Emulators), Step::Bios);
+        assert_eq!(step_after(&with, Step::Bios), Step::Done);
     }
 }

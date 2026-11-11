@@ -22,7 +22,7 @@ fn test_backend() -> Backend {
         Paths::init(Paths::under(&root));
         root
     });
-    Backend::start(|_, _| Vec::new()).expect("backend")
+    Backend::start_for_tests(|_, _| Vec::new()).expect("backend")
 }
 
 fn open<V: gpui_kit::Render>(
@@ -161,8 +161,9 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_sections(vec![FieldSection::General], cx));
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
-        // The in-game overlay's switch is among the controller rows.
-        assert_eq!(app_form.read(cx).visible_count(), 6);
+        // The in-game overlay's switch is among the controller rows, and so
+        // are the button held to open Big Picture and how long.
+        assert_eq!(app_form.read(cx).visible_count(), 8);
         assert!(general > 20);
     });
 }
@@ -395,4 +396,226 @@ fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Artwork));
+}
+
+#[gpui_kit::test]
+fn windows_graphics_preference_is_stored_per_game(cx: &mut TestAppContext) {
+    use crate::registry::FieldSection;
+
+    let id = GameId::new(Runner::Sideload, "ui-test-windows-gpu");
+    let target = FormTarget::Game(id.clone());
+    let (handle, form) = open(cx, move |window, cx| SettingsForm::new(target, window, cx));
+    let backend = cx.update(|cx| irori_ui::backend(cx));
+    cx.update_window(handle, |_, window, cx| {
+        form.update(cx, |f, cx| {
+            f.set_sections(vec![FieldSection::Gpu], cx);
+            f.write_for_test(
+                "iroriWindowsGpu",
+                Value::from("highPerformance"),
+                window,
+                cx,
+            )
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(backend.settings.game(&id).windows_gpu, "highPerformance");
+    assert!(
+        backend
+            .settings
+            .overrides(&id)
+            .is_overridden("iroriWindowsGpu")
+    );
+    // Only Windows shows it; the card chooser stays everywhere else.
+    cx.update(|cx| {
+        form.update(cx, |f, cx| f.set_query("graphics card", cx));
+        let visible = form.read(cx).visible_count();
+        assert!(visible >= 1, "{visible}");
+    });
+}
+
+fn sample_displays() -> irori_services::displays::DisplayReport {
+    use irori_services::displays::{Display, DisplayMode, DisplayReport};
+    let main = Display {
+        connector: "DP-1".into(),
+        name: Some("Test Monitor".into()),
+        primary: true,
+        enabled: true,
+        current: Some(DisplayMode {
+            width: 2560,
+            height: 1440,
+            refresh_mhz: Some(165_000),
+        }),
+        modes: vec![
+            DisplayMode {
+                width: 2560,
+                height: 1440,
+                refresh_mhz: Some(165_000),
+            },
+            DisplayMode {
+                width: 1920,
+                height: 1080,
+                refresh_mhz: Some(60_000),
+            },
+        ],
+        hdr_on: Some(false),
+        hdr_capable: Some(true),
+    };
+    let off = Display {
+        connector: "HDMI-A-1".into(),
+        enabled: false,
+        ..Default::default()
+    };
+    DisplayReport {
+        displays: vec![main, off],
+        source: "test".into(),
+        lists_modes: true,
+    }
+}
+
+#[gpui_kit::test]
+fn hdr_and_gamescope_fields_mention_the_displays(cx: &mut TestAppContext) {
+    use crate::registry::FieldSection;
+
+    let (handle, form) = open(cx, |window, cx| {
+        SettingsForm::new(FormTarget::Defaults, window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        form.update(cx, |f, cx| {
+            f.set_displays_for_test(sample_displays(), cx);
+            f.set_sections(vec![FieldSection::Wine, FieldSection::Performance], cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.update(|cx| {
+        let form = form.read(cx);
+        let hdr = form.help_for_test("enableHDR");
+        assert!(hdr.contains("Test Monitor") && hdr.contains("HDR"), "{hdr}");
+        let width = form.help_for_test("gamescope.upscaleWidth");
+        assert!(
+            width.contains("Test Monitor") && width.contains("2560") && width.contains("165"),
+            "{width}"
+        );
+        assert!(!form.help_for_test("wineVersion").contains("Test Monitor"));
+    });
+}
+
+#[gpui_kit::test]
+fn system_info_lists_the_displays(cx: &mut TestAppContext) {
+    use std::sync::Arc;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.show_sysinfo_for_test(
+                Arc::new(irori_runtime::sysinfo::SystemInfo::default()),
+                Arc::new(sample_displays()),
+                window,
+                cx,
+            )
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(view.read(cx).section(), SettingsSection::SystemInfo));
+    let rows = crate::displays::rows(&sample_displays());
+    let text: Vec<String> = rows.iter().map(|(k, v)| format!("{k}: {v}")).collect();
+    assert_eq!(rows.len(), 3, "{text:?}");
+    assert!(
+        text[0].contains("Test Monitor (DP-1)") && text[0].contains("HDR"),
+        "{text:?}"
+    );
+    assert!(text[1].contains("1920"), "{text:?}");
+    assert!(
+        text[2].starts_with("Display 2") && !text[2].contains("HDR"),
+        "{text:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn renodx_links_open_the_tools_section_with_both_graphics_mod_panels(cx: &mut TestAppContext) {
+    use crate::game_view::{GameSection, GameSettingsView};
+    assert_eq!(GameSection::from_id("renodx"), Some(GameSection::Tools));
+    assert_eq!(GameSection::from_id("hdr"), Some(GameSection::Tools));
+    // A game the backend doesn't know: the panels explain that the mods are
+    // for Windows games Irori installed, and ask nothing of the network.
+    let id = GameId::new(Runner::Sideload, "renodx-ui-test");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "renodx".into(), window, cx)
+    });
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Tools));
+    cx.update_window(handle, |_, window, cx| {
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn the_renodx_panel_draws_for_a_game_it_cannot_change(cx: &mut TestAppContext) {
+    let id = GameId::new(Runner::Sideload, "renodx-panel-test");
+    let (handle, panel) = open(cx, move |window, cx| {
+        crate::renodx::RenodxPanel::new(id, window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.activate(window, cx));
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn the_replay_panel_shows_each_way_to_get_the_shortcuts(cx: &mut TestAppContext) {
+    use irori_services::ShortcutState;
+    use irori_services::replay::bindings::{Binding, Compositor, Program};
+
+    use crate::replay::ReplayPanel;
+
+    let (handle, panel) = open(cx, |_, cx| ReplayPanel::new(None, cx));
+    let sway = Binding::new(Some(Compositor::Sway), &Program(vec!["irori".into()]));
+    let states = [
+        ShortcutState::Off,
+        ShortcutState::Portal {
+            clip: Some("Alt+F10".into()),
+            screenshot: None,
+        },
+        ShortcutState::Portal {
+            clip: Some(String::new()),
+            screenshot: Some("Alt+F12".into()),
+        },
+        ShortcutState::Grabbed {
+            clip: "Alt+F10".into(),
+            screenshot: "Alt+F12".into(),
+        },
+        ShortcutState::Commands(sway.clone()),
+        ShortcutState::Commands(Binding::new(None, &Program(vec!["irori".into()]))),
+        ShortcutState::Unavailable,
+    ];
+    for state in states {
+        cx.update_window(handle, |_, window, cx| {
+            panel.update(cx, |p, cx| p.set_shortcut(state, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+    // Copy puts the exact lines for Sway's configuration on the clipboard.
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.copy_binding(sway.lines.clone(), window, cx))
+    })
+    .unwrap();
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|c| c.text()),
+        Some(
+            "bindsym Mod1+F10 exec irori --save-clip\nbindsym Mod1+F12 exec irori --screenshot"
+                .to_string()
+        )
+    );
 }

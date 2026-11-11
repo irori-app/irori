@@ -91,19 +91,34 @@ fn weight(art: &Ambient, cx: &App) -> f32 {
 /// [`weight`] with the most it may reach scaled by `strength` (0 to 1).
 fn weight_at(art: &Ambient, strength: f32, cx: &App) -> f32 {
     let theme = cx.theme();
-    let max = MAX_WEIGHT[usize::from(!theme.mode.is_dark())] * strength.clamp(0., 1.);
-    strongest_legible_weight(
+    legible_weight_at(
         theme.background,
         &[theme.foreground, theme.muted_foreground],
         [art.darkest, art.lightest],
-        max,
+        MAX_WEIGHT[usize::from(!theme.mode.is_dark())],
+        strength,
     )
+}
+
+/// The legible weight of art up to `max`, capped at `strength` of `max`.
+/// The search runs over the full range and strength only caps its answer:
+/// searching from a scaled-down `max` steps through other weights and
+/// could land a little above the full-strength answer.
+fn legible_weight_at(bg: Hsla, inks: &[Hsla], tones: [[u8; 3]; 2], max: f32, strength: f32) -> f32 {
+    strongest_legible_weight(bg, inks, tones, max).min(max * strength.clamp(0., 1.))
+}
+
+/// The opacity the art is drawn at: the legible weight at `strength`, then
+/// `dim` of the way to none. Both only ever take weight away.
+fn shown_weight(legible_at_strength: f32, dim: f32) -> f32 {
+    legible_at_strength * (1. - dim.clamp(0., 1.))
 }
 
 /// The largest weight from `max` down to none at which every colour of
 /// `inks` reads at [`TEXT_CONTRAST`] over both `tones` laid on `bg` at that
-/// weight. Inks that don't read on `bg` alone get no art.
-fn strongest_legible_weight(bg: Hsla, inks: &[Hsla], tones: [[u8; 3]; 2], max: f32) -> f32 {
+/// weight. Inks that don't read on `bg` alone get no art. Big Picture holds
+/// its backdrop's art to it too.
+pub fn strongest_legible_weight(bg: Hsla, inks: &[Hsla], tones: [[u8; 3]; 2], max: f32) -> f32 {
     let reads = |w: f32| {
         tones.iter().all(|tone| {
             let surface = over(srgb(*tone).opacity(w), bg);
@@ -214,7 +229,7 @@ impl RenderOnce for ArtBackdrop {
         let Some(art) = art else {
             return base;
         };
-        let weight = weight_at(&art, self.strength, cx) * (1. - self.dim);
+        let weight = shown_weight(weight_at(&art, self.strength, cx), self.dim);
         if weight <= 0. {
             return base;
         }
@@ -277,6 +292,49 @@ mod tests {
         assert!(contrast(inks[1], surface) >= TEXT_CONTRAST);
         let stronger = over(srgb(tones[1]).opacity(w + WEIGHT_STEP), bg);
         assert!(contrast(inks[1], stronger) < TEXT_CONTRAST);
+    }
+
+    /// Every channel of `a` laid over `bg` at `w` lies between the two: an
+    /// opacity blend never brightens, saturates or adds contrast beyond its
+    /// inputs.
+    fn between(art: [u8; 3], bg: Hsla, w: f32) -> bool {
+        let (a, b, s) = (
+            srgb(art).to_rgb(),
+            bg.to_rgb(),
+            over(srgb(art).opacity(w), bg).to_rgb(),
+        );
+        [(a.r, b.r, s.r), (a.g, b.g, s.g), (a.b, b.b, s.b)]
+            .iter()
+            .all(|(a, b, s)| *s >= a.min(*b) - 1e-3 && *s <= a.max(*b) + 1e-3)
+    }
+
+    #[test]
+    fn strength_and_dim_only_weaken_light_art() {
+        // White art over Irori Night's page: strength and dim take weight
+        // away, and nothing shows light art brighter than the art itself.
+        let (bg, inks) = (grey(15), [grey(250), grey(161)]);
+        let tones = [[200, 200, 200], [255, 255, 255]];
+        let full = legible_weight_at(bg, &inks, tones, MAX_WEIGHT[0], 1.);
+        let mut last = full;
+        for strength in [1., 0.9, 0.75, 0.6, 0.5, 0.25, 0.1, 0.] {
+            let legible = legible_weight_at(bg, &inks, tones, MAX_WEIGHT[0], strength);
+            assert!(legible <= last + 1e-6, "strength {strength}");
+            last = legible;
+            let mut dimmed = legible;
+            for dim in [0., 0.25, 0.5, 1.] {
+                let w = shown_weight(legible, dim);
+                assert!(w <= dimmed + 1e-6 && w <= full, "dim {dim}");
+                assert!(between(tones[1], bg, w));
+                for ink in inks {
+                    let surface = over(srgb(tones[1]).opacity(w), bg);
+                    assert!(contrast(ink, surface) >= TEXT_CONTRAST, "{strength} {dim}");
+                }
+                dimmed = w;
+            }
+        }
+        assert_eq!(shown_weight(0.5, 1.), 0.);
+        assert_eq!(shown_weight(0.5, 2.), 0., "dim past 100 % clamps");
+        assert_eq!(shown_weight(0.5, -1.), 0.5, "no dim never adds");
     }
 
     #[test]

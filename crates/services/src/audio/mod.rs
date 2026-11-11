@@ -18,8 +18,9 @@
 //!   through `osascript` (`get volume settings`). macOS has no per-program
 //!   volume, so the game's can't be changed there ([`PER_GAME`]).
 //!
-//! The overlay also switches the sound output ([`Backend::audio_outputs`],
-//! [`Backend::set_audio_output`]): `pactl set-default-sink` on Linux, moving
+//! The overlay, and Big Picture outside a game
+//! ([`Backend::set_system_audio_output`]), also switch the sound output
+//! ([`Backend::audio_outputs`], [`Backend::set_audio_output`]): `pactl set-default-sink` on Linux, moving
 //! the game's streams along (PipeWire leaves a stream on the output it
 //! started on when that was chosen for it); Core Audio's default output
 //! device on macOS; and on Windows the policy configuration COM object
@@ -129,6 +130,9 @@ pub fn parse_sinks_json(text: &str, default: &str) -> Option<Vec<AudioOutput>> {
             .collect(),
     )
 }
+
+/// Whether the sound output can be switched on this system.
+pub const SWITCHES_OUTPUT: bool = cfg!(any(target_os = "linux", target_os = "macos", windows));
 
 /// Whether a game's own volume can be changed on this system (macOS has no
 /// per-program volume).
@@ -501,6 +505,16 @@ impl Backend {
     /// default, and the running game `id`'s sound with it.
     pub async fn set_audio_output(&self, id: &GameId, output: &str) -> Result<()> {
         platform::set_output(self.game_process(id), output.to_owned()).await
+    }
+
+    /// Send sound to `output` from outside a game's overlay (Big Picture's
+    /// home): the system's default, and a running game's sound with it.
+    pub async fn set_system_audio_output(&self, output: &str) -> Result<()> {
+        let game = self
+            .running_games()
+            .iter()
+            .find_map(|id| self.game_process(id));
+        platform::set_output(game, output.to_owned()).await
     }
 
     /// Move the system's volume by `step` percent, for the controller's

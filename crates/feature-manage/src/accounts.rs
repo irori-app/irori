@@ -95,6 +95,8 @@ pub(crate) struct StoreCard {
     /// Steam without a signed-in account: reading its library from the
     /// Steam client ([`crate::steam_library`]).
     pub steam_client: Option<irori_steam::ClientLibraryState>,
+    /// Steam: what the card says about the games hidden in Steam.
+    pub steam_hidden: Option<SharedString>,
 }
 
 /// Cards for the stores this build has, in display order.
@@ -133,6 +135,12 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
                 .then(|| crate::steam_library::steam_client_library_state(cx))
                 .flatten()
                 .filter(|s| !s.signed_in),
+            steam_hidden: (runner == Runner::Steam)
+                .then(|| crate::steam_library::steam_hidden_games(cx))
+                .flatten()
+                .and_then(|s| {
+                    crate::steam_library::hidden_games_text(&s, library.snapshot.hidden_locked)
+                }),
         })
         .collect()
 }
@@ -736,6 +744,13 @@ impl AccountsView {
                 .gap_3()
                 .child(detail)
                 .child(self.render_optional_account(card_data, cx))
+                .children(card_data.steam_hidden.clone().map(|text| {
+                    div()
+                        .debug_selector(|| "steam-hidden-note".into())
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(text)
+                }))
                 .children(
                     card_data
                         .steam_client

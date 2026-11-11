@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use gpui_kit::{
-    AppContext as _, Bounds, Focusable as _, TestAppContext, WindowBounds, WindowOptions, px, size,
+    AppContext as _, Bounds, Entity, Focusable as _, TestAppContext, WindowBounds, WindowOptions,
+    px, size,
 };
 use irori_core::{
     DynStore, ExtraInfo, GameId, GameInfo, InstallInfo, InstallInfoQuery, InstallPlatform,
@@ -149,7 +150,7 @@ fn start(cx: &mut TestAppContext) -> Backend {
     isolate_paths();
     cx.executor().allow_parking();
     let store: DynStore = MemoryStore::new();
-    let backend = Backend::start(move |_, _| vec![store]).expect("backend starts");
+    let backend = Backend::start_for_tests(move |_, _| vec![store]).expect("backend starts");
     cx.update(|cx| {
         gpui_kit::init(cx);
         irori_ui::init(backend.clone(), cx);
@@ -312,6 +313,69 @@ fn keyboard_navigation_filters_and_search(cx: &mut TestAppContext) {
     let _ = cx.read(|cx| view.read(cx).focus_handle(cx));
 }
 
+/// A controller's directions are these arrow keys: at the grid's edges they
+/// must be left unhandled, so the controller moves on to the controls
+/// around the grid instead of getting stuck in it.
+#[gpui_kit::test]
+fn arrows_at_the_grid_edges_are_left_to_the_window(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+    let press = |cx: &mut TestAppContext, key: &str| -> bool {
+        let handled = cx
+            .update_window(window, |_, window, cx| {
+                window.dispatch_keystroke(gpui_kit::Keystroke::parse(key).unwrap(), cx)
+            })
+            .unwrap();
+        draw(cx);
+        handled
+    };
+    let focused = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).focused_game().cloned());
+    let first = GameId::new(Runner::Gog, "1");
+    let last = GameId::new(Runner::Gog, "5");
+
+    assert!(press(cx, "down"), "the first key focuses the first game");
+    assert_eq!(focused(cx), Some(first.clone()));
+    assert!(!press(cx, "left"), "nothing left of the first game");
+    assert!(!press(cx, "up"), "nothing above the first row");
+    assert!(!press(cx, "pageup"));
+    assert_eq!(focused(cx), Some(first));
+    assert!(press(cx, "end"));
+    assert_eq!(focused(cx), Some(last.clone()));
+    assert!(!press(cx, "right"), "nothing right of the last game");
+    assert!(!press(cx, "down"), "nothing below the last row");
+    assert_eq!(focused(cx), Some(last));
+    assert!(press(cx, "left"), "inside the grid the keys still move");
+    assert_eq!(focused(cx), Some(GameId::new(Runner::Gog, "4")));
+}
+
 #[gpui_kit::test]
 fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     let _backend = start(cx);
@@ -385,6 +449,11 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
     assert_eq!(state(cx).0.len(), 5);
+    // The bar offers to take the picked games out of Steam too.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("bulk-steam-remove").is_some());
+    }
     // Redrawing with everything picked doesn't work out the bar again.
     let computes = cx.read(|cx| view.read(cx).bulk_computes());
     draw(cx);
@@ -517,6 +586,214 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     // A double click opens the game's page.
     click(cx, "2", 2);
     assert_eq!(route(cx), irori_ui::Route::Game(game("2")));
+}
+
+/// An added-games or ROM store whose removal of `fails` is refused, and
+/// which records every removal with whether its files were to go.
+struct RemovableStore {
+    runner: Runner,
+    games: Vec<Arc<GameInfo>>,
+    fails: &'static str,
+    removed: parking_lot::Mutex<Vec<(String, bool)>>,
+}
+
+impl RemovableStore {
+    fn new(runner: Runner, apps: &[&str], fails: &'static str) -> Arc<Self> {
+        let games = apps
+            .iter()
+            .map(|app| {
+                Arc::new(
+                    GameInfo {
+                        runner: Some(runner),
+                        app_name: (*app).into(),
+                        title: (*app).into(),
+                        is_installed: true,
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )
+            })
+            .collect();
+        Arc::new(Self {
+            runner,
+            games,
+            fails,
+            removed: Default::default(),
+        })
+    }
+}
+
+#[async_trait]
+impl Store for RemovableStore {
+    fn runner(&self) -> Runner {
+        self.runner
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        None
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("no accounts")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.games.clone()
+    }
+    fn game(&self, app_name: &str) -> Option<Arc<GameInfo>> {
+        self.games.iter().find(|g| g.app_name == app_name).cloned()
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not installable")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not installable")
+    }
+    async fn uninstall(&self, app_name: &str, args: RemoveArgs) -> Result<()> {
+        if app_name == self.fails {
+            bail!("{app_name} is in use");
+        }
+        self.removed
+            .lock()
+            .push((app_name.to_string(), args.delete_files));
+        Ok(())
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not installable")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not installable")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not playable")
+    }
+}
+
+#[test]
+fn removing_several_games_reports_the_ones_that_failed() {
+    use crate::view::remove::{plan_removal, remove_games};
+    isolate_paths();
+    let added = RemovableStore::new(Runner::Sideload, &["notes", "tool"], "");
+    let roms = RemovableStore::new(Runner::Emulation, &["zelda", "mario"], "mario");
+    let stores: Vec<DynStore> = vec![MemoryStore::new(), added.clone(), roms.clone()];
+    let b = Backend::start_for_tests(move |_, _| stores).expect("backend starts");
+    let picked: Vec<Arc<GameInfo>> = [
+        b.game(&GameId::new(Runner::Gog, "2")),
+        b.game(&GameId::new(Runner::Sideload, "notes")),
+        b.game(&GameId::new(Runner::Emulation, "zelda")),
+        b.game(&GameId::new(Runner::Emulation, "mario")),
+        b.game(&GameId::new(Runner::Sideload, "tool")),
+    ]
+    .into_iter()
+    .map(|g| g.expect("the game is known"))
+    .collect();
+    let plan = plan_removal(&picked, |_| false);
+    assert_eq!((plan.remove.len(), plan.stores), (4, 1));
+
+    let outcome = b
+        .runtime()
+        .block_on(remove_games(&b, plan.remove.clone(), true));
+    assert_eq!(outcome.removed, 3);
+    assert_eq!(outcome.failed.len(), 1);
+    assert_eq!(outcome.failed[0].0, "mario");
+    assert!(
+        outcome.failed[0].1.contains("in use"),
+        "{:?}",
+        outcome.failed
+    );
+    // Added games' files go only because the box was ticked; ROMs never.
+    assert_eq!(
+        *added.removed.lock(),
+        [("notes".to_string(), true), ("tool".to_string(), true)]
+    );
+    assert_eq!(*roms.removed.lock(), [("zelda".to_string(), false)]);
+
+    let kept = b
+        .runtime()
+        .block_on(remove_games(&b, vec![picked[1].clone()], false));
+    assert_eq!(kept.removed, 1);
+    assert_eq!(
+        added.removed.lock().last(),
+        Some(&("notes".to_string(), false))
+    );
+}
+
+#[gpui_kit::test]
+fn the_list_opens_at_its_top_and_its_scrollbar_knows_every_row(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(820.), px(380.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        for _ in 0..2 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let scroll = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).scroll_state());
+    draw(cx);
+    // Scrolled down the grid with nothing selected…
+    cx.update(|cx| view.update(cx, |v, cx| v.scroll_for_test(px(100.), cx)));
+    draw(cx);
+    assert!(scroll(cx).0 > px(0.), "the grid scrolled: {:?}", scroll(cx));
+    cx.update(|cx| view.update(cx, |v, cx| v.clear_focus_for_test(cx)));
+    draw(cx);
+    // …the list opens at its top, and its scrollbar spans every row.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::List, cx)));
+    draw(cx);
+    let (offset, content, items, viewport) = scroll(cx);
+    assert!(
+        items > viewport,
+        "the list scrolls: {items:?} in {viewport:?}"
+    );
+    assert_eq!(offset, px(0.), "the list opens at its top");
+    assert!(
+        (content - items).abs() < px(1.),
+        "the scrollbar knows {content:?} of {items:?}"
+    );
 }
 
 #[gpui_kit::test]
@@ -817,4 +1094,123 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     assert!(off, "the setting turns them off");
+}
+
+#[gpui_kit::test]
+fn smart_categories_filter_the_library_and_reopen_as_saved(cx: &mut TestAppContext) {
+    use irori_services::{CategoryRef, Match, Rule, SmartCategory};
+
+    let backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    let titles = |cx: &mut TestAppContext| -> Vec<String> {
+        cx.read(|cx| {
+            view.read(cx)
+                .visible_games()
+                .iter()
+                .map(|g| g.title.clone())
+                .collect()
+        })
+    };
+    let wait_for = |cx: &mut TestAppContext, done: &dyn Fn(&mut TestAppContext) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done(cx) {
+            assert!(Instant::now() < deadline, "the library never caught up");
+            std::thread::sleep(Duration::from_millis(10));
+            draw(cx);
+        }
+    };
+    draw(cx);
+
+    // "Any" with no rules and a "Leave out" row: every game but Hades.
+    let rest = SmartCategory::new(
+        "Not Hades",
+        Match::Any,
+        Vec::new(),
+        vec![Rule::Query {
+            query: "hades".into(),
+        }],
+    );
+    let id = backend.userdata.save_smart_category(None, rest.clone());
+    let smart = CategoryRef::Smart(id.clone());
+    wait_for(cx, &|cx| {
+        cx.read(|cx| models(cx).library.read(cx).categories.count(&smart) == 4)
+    });
+    cx.update(|cx| view.update(cx, |v, cx| v.update_filter(|f| f.toggle(&smart), cx)));
+    draw(cx);
+    assert_eq!(
+        titles(cx),
+        vec!["Alan Wake", "Celeste", "Inside", "Outer Wilds"]
+    );
+
+    // The editor shows it as it was saved: "any", the row left out.
+    let editor = cx
+        .update_window(window, |_, window, cx| {
+            cx.new(|cx| {
+                crate::dialogs::smart::SmartEditor::new(Some(id.clone()), rest.clone(), window, cx)
+            })
+        })
+        .unwrap();
+    cx.read(|cx| {
+        let editor = editor.read(cx);
+        assert_eq!(editor.matching(), &Match::Any);
+        assert_eq!(editor.draft(cx), rest);
+    });
+
+    // Deleted, it leaves the filter: every game again.
+    backend.userdata.delete_smart_category(&id);
+    wait_for(cx, &|cx| titles(cx).len() == 5);
+    assert!(cx.read(|cx| view.read(cx).filter(cx).smart_categories.is_empty()));
+}
+
+#[gpui_kit::test]
+fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let _backend = start(cx);
+    let open = |igdb_on: bool, cx: &mut TestAppContext| {
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        cx.read(|cx| picker.read(cx).source())
+    };
+
+    // Off: SteamGridDB only, asking for its key.
+    let picker = open(false, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+
+    // On without a SteamGridDB key: IGDB first; SteamGridDB still asks.
+    let picker = open(true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
 }
