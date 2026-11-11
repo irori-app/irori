@@ -5,7 +5,7 @@ description: 'Irori and Playnite compared: Playnite is a Windows library manager
 rival: Playnite
 summary: Playnite organizes store clients on Windows; Irori installs and plays games itself, everywhere.
 order: 2
-updated: 2026-11-08
+updated: 2026-11-12
 related: [heroic, lutris]
 rows:
   - feature: Systems
@@ -15,10 +15,10 @@ rows:
     irori: Rust and GPUI
     rival: C# and WPF
   - feature: Store libraries
-    irori: Built in for Epic Games, GOG, Amazon, ZOOM, itch.io, Steam and the Xbox app
+    irori: Built in for Epic Games, GOG, Amazon, ZOOM, itch.io, Steam, the Microsoft Store and the Xbox app
     rival: Through extensions, for many stores
   - feature: Installs and updates games itself
-    irori: Epic Games, GOG, Amazon Games, ZOOM, itch.io
+    irori: Epic Games, GOG, Amazon Games, ZOOM, itch.io, and on Linux the Microsoft Store and PC Game Pass
     rival: Through each store’s own client
   - feature: Cloud saves
     irori: Epic Games and GOG

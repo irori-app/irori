@@ -5,7 +5,7 @@ description: 'Irori and Heroic Games Launcher compared: the same stores, built-i
 rival: Heroic
 summary: The same stores and features, without Electron or helper tools, plus Steam, itch.io and emulators.
 order: 1
-updated: 2026-11-08
+updated: 2026-11-12
 related: [playnite, lutris]
 rows:
   - feature: Systems
@@ -28,6 +28,9 @@ rows:
     rival: No
   - feature: Battle.net, EA app, Ubisoft Connect, Rockstar
     irori: Set up in their own prefix; games listed and started
+    rival: No
+  - feature: Microsoft Store and PC Game Pass
+    irori: Installed and played by Irori on Linux; the Xbox app’s games on Windows
     rival: No
   - feature: Several accounts per store
     irori: Epic Games, GOG, Amazon Games, ZOOM, itch.io
@@ -79,7 +82,8 @@ Irori even reads Heroic’s settings with Heroic’s own names, which is why
   process and Heroic 2.22.4 about 478 MiB across seven.
 - **More in one library.** Your Steam games (installed ones without a login, the rest from the
   running Steam client or a login), itch.io, the games from Battle.net, the EA app, Ubisoft
-  Connect and Rockstar, the Xbox app’s games on Windows, and a ROM library with emulators Irori
+  Connect and Rockstar, your Microsoft Store and PC Game Pass games (installed and played by Irori
+  on Linux, through the Xbox app on Windows), and a ROM library with emulators Irori
   installs and updates. A game you own on several stores is one entry.
 - **Several accounts per store.** Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io each
   take more than one account, in one library.

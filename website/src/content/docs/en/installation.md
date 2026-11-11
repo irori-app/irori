@@ -123,8 +123,8 @@ Irori looks for its own new versions only where nothing else updates it:
 | Windows setup, zip or portable zip, disk image, tarball, AppImage | Checks, and links to the release page |
 
 The check asks GitHub at most once a day, only while online, and can be turned off in
-**Settings › General › Updates**. Irori never downloads or installs itself. Flathub, winget and
-the AUR are planned.
+**Settings › General › Updates**. Irori never downloads or installs itself. Flathub, winget, Fedora
+COPR and the AUR are planned: releases are ready to publish to each once its account is set up.
 
 ## Building from source
 
