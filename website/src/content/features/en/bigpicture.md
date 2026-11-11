@@ -7,7 +7,7 @@ summary: The whole launcher with a controller, opening by itself in the Steam De
 icon: tv
 screen: bigpicture
 order: 6
-updated: 2026-11-08
+updated: 2026-11-12
 related: [emulators, library, playing]
 highlights:
   - title: Eight themes, six layouts
@@ -18,8 +18,8 @@ highlights:
     body: Opens and closes Big Picture from anywhere in Irori, or the overlay while a game runs.
   - title: An in-game overlay, in beta
     body: Volume, screenshots, achievements and your journal over the game, without leaving it.
-  - title: Steam Deck Game Mode
-    body: Irori opens straight into Big Picture when Steam’s controller interface starts it.
+  - title: Hold Start, from anywhere
+    body: Hold Start for a second to open Big Picture, for pads whose Guide button Steam or the Game Bar takes.
   - title: Up to 200 % for TVs
     body: Scale the interface for the distance you sit from the screen.
 ---
@@ -30,6 +30,14 @@ Big Picture isn’t a separate app. It shows your library, the continue-playing 
 games and per-system shelves for emulated games, and every screen stays usable with a controller,
 the arrow keys, Enter and Escape. Press the Guide button, or <kbd>Ctrl</kbd> <kbd>Shift</kbd>
 <kbd>B</kbd>, to open or close it from anywhere.
+
+Where Steam, the Xbox Game Bar or the pad itself keeps the Guide button, hold Start (or Select)
+for a second instead, or let a controller you connect open Big Picture. A mouse and its wheel work too, moving along each layout’s shelves. Its quick menu switches the
+sound output, and powers off, restarts, sleeps or logs out, after it stops running games so their sessions and
+saves are kept.
+
+Outside Big Picture a controller still drives the desktop window, moving from the library grid to
+the header, the sidebar and every other part of it.
 
 A game’s settings open over its page without leaving Big Picture, and its live log pages with
 the shoulder buttons and filters down to errors and warnings or the text you type.

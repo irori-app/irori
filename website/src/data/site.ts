@@ -62,7 +62,7 @@ export const STORES = [
   { id: 'ea', name: 'EA app', feature: 'stores' },
   { id: 'ubisoft', name: 'Ubisoft Connect', feature: 'stores' },
   { id: 'rockstar', name: 'Rockstar Games Launcher', feature: 'stores' },
-  { id: 'xbox', name: 'Xbox app', feature: 'stores' },
+  { id: 'xbox', name: 'Microsoft Store', feature: 'stores' },
 ] as const
 
 /** Systems as Irori badges them in the library. */

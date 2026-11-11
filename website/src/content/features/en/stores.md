@@ -1,13 +1,13 @@
 ---
 title: Eleven stores and launchers, built in
 seoTitle: 'Epic Games, GOG, Amazon, ZOOM, itch.io and Steam in one launcher'
-description: 'Irori speaks the Epic Games, GOG and Amazon protocols itself, adds ZOOM, itch.io and Steam, and lists Battle.net, EA app, Ubisoft, Rockstar and Xbox app games.'
+description: 'Irori speaks the Epic Games, GOG and Amazon protocols itself, adds ZOOM, itch.io and Steam, plays PC Game Pass on Linux and lists Battle.net, EA and Ubisoft games.'
 tag: Stores
 summary: Store protocols written in Rust inside Irori, with several accounts per store and nothing extra to download.
 icon: store
 screen: accounts
 order: 2
-updated: 2026-11-08
+updated: 2026-11-12
 related: [library, playing, downloads]
 highlights:
   - title: No helper tools
@@ -18,8 +18,8 @@ highlights:
     body: Epic Games and GOG saves sync before and after you play, and Irori asks when both copies changed.
   - title: Steam, with or without a sign-in
     body: Installed games from Steam’s own files, the whole library from the running client or an account.
-  - title: Xbox app games on Windows
-    body: Games the Xbox app installed start in one click; an Xbox account adds playtime and achievements.
+  - title: PC Game Pass on Linux
+    body: Your Microsoft Store games and every PC Game Pass game, installed and played by Irori itself.
   - title: Signed in by itself
     body: The sign-in window finishes on its own, so you never copy a code.
 ---
@@ -40,7 +40,7 @@ external store tools to download, update or break.
 | itch.io | Log in with an API key, then install, update and play what you own; turned on in Settings |
 | Steam | Installed games with no sign-in; the whole library from the running client or an account; the Proton version per game on Linux |
 | Battle.net, EA app, Ubisoft Connect, Rockstar Games Launcher | Set up once in a Wine prefix of their own; their games join the library |
-| Xbox app and Microsoft Store | On Windows, installed games listed and started; an optional Xbox account adds playtime and achievements on every system |
+| Microsoft Store and PC Game Pass | On Linux, library, install, update and play through the Nexus Runtime; on Windows, the Xbox app’s games listed and started; an Xbox account adds playtime and achievements on every system |
 
 ## Several accounts per store
 
@@ -69,7 +69,12 @@ running Steam client: it explains first, asks before restarting Steam and, unles
 on, closes that access again after reading, because while it is open any program on the computer
 could control Steam. Or log in (a QR code for the Steam Mobile app, or your password with Steam
 Guard) to add every game you own and your Steam Family’s games, and to see your friends, message
-them and join a game when Steam reports a lobby or server to join.
+them and join a game when Steam reports a lobby or server to join. Games you hid in Steam are
+hidden in Irori too.
+
+Your Steam and Xbox friends share one Friends window: who is online and what they play, read only
+while the window is open. Discord, Epic Games and GOG let no other program read your friends, and
+the window says so.
 
 Play hands the game to Steam with your launch options and follows it until it ends, so playtime
 counts. Install, Verify files and Uninstall open Steam’s own dialogs. On Linux, a Steam game’s
@@ -89,9 +94,22 @@ archives and finds the program to start.
 Irori never handles these accounts itself. The Stores page sets each launcher up once, in a Wine
 prefix of its own with the Wine build you pick (natively on Windows), using the vendor’s official
 installer. You sign in and install games inside the launcher; Irori reads its local data, lists
-the games and starts them, and follows the game rather than the launcher for playtime.
+the games and starts them, and follows the game rather than the launcher for playtime. Only
+installed games are listed: the EA app keeps the games you own but haven’t installed encrypted,
+with no way for another program to read them, so those stay in the EA app.
 
-## Xbox app and Microsoft Store
+## Microsoft Store and PC Game Pass
+
+On Linux, turn on the Xbox store (Settings › General › Integrations) and sign in with your
+Microsoft account: the games you bought on the Microsoft Store join your library, and so does
+every PC Game Pass game while your membership lasts. Irori installs them itself from the same
+download queue as everything else, resumable and with updates that only fetch what changed,
+checks each game’s licence and decrypts it for the length of a session, leaving the files on disk
+encrypted. Games run through the open-source Nexus Runtime, a Proton build with Xbox’s game
+runtime, which the Wine manager downloads in one click. Offline play makes this computer the
+account’s offline PC, so licensed games start without a connection. Irori builds on what Xodus
+and Nexus Launcher worked out, natively; neither needs to be installed. Sign-in needs Irori’s
+sign-in window.
 
 On Windows, games the Xbox app or the Microsoft Store installed, PC Game Pass included, show up
 by themselves with their own art and size, and start in one click; the Xbox app installs, updates

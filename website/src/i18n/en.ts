@@ -115,7 +115,7 @@ export const en = {
         ea: 'Own Wine prefix',
         ubisoft: 'Own Wine prefix',
         rockstar: 'Own Wine prefix',
-        xbox: 'Windows; account optional',
+        xbox: 'Game Pass on Linux',
       },
     },
     tour: {

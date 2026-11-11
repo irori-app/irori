@@ -23,6 +23,9 @@ These run in the terminal and exit; no window opens.
 irori accounts                                   which stores are logged in
 irori import-heroic                              import Heroic accounts, installs and settings
 irori import-lutris                              import Lutris games, categories and playtime (read-only)
+irori import-bottles                             import the programs of every Bottles bottle (read-only)
+irori import-faugus                              import Faugus Launcher's games (read-only)
+irori import-playnite                            import Playnite's games, art and playtime (Windows, read-only)
 irori refresh                                    refresh every library
 irori list [--installed]
 irori list --json                                installed games as JSON, for other tools
@@ -30,10 +33,13 @@ irori info <runner>/<app> [--platform P]
 irori playtime <runner>/<app>
 irori install <runner>/<app> [--path DIR] [--platform windows|linux]
 irori uninstall <runner>/<app> [--keep-files]
+irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
+irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date, or take them out
 ```
 
 `irori install` shows its progress in the terminal. <kbd>Ctrl</kbd> <kbd>C</kbd> stops it; run
-the same command again to resume.
+the same command again to resume. `irori steam-shortcuts` needs Steam closed, touches only the
+shortcuts Irori made and backs Steam's file up first.
 
 ## Installed games as JSON
 
@@ -83,11 +89,16 @@ environment, the same id as `id`.
 | `-l`, `--launch <runner>/<app>` | Start a game. A game that isn’t installed shows its install options instead |
 | `--big-picture`, `--console` | Open in Big Picture |
 | `--minimized`, `--tray` | Start hidden in the tray |
+| `--wait` | With `--launch` or `--big-picture`, stay until the game (or Big Picture) ends; ending the command first stops the game |
+| `--save-clip` | Ask the running Irori to save a clip of the replay buffer; never starts Irori |
+| `--screenshot` | Ask the running Irori to take a screenshot of the running game; never starts Irori |
 | `-V`, `--version` | Print the version |
 | `-h`, `--help` | Print help |
 
 Only one Irori runs per config folder. Starting it again hands the arguments to the running Irori,
 so `irori --launch gog/<app>` from a shortcut starts the game in the window you already have.
+`--save-clip` and `--screenshot` are meant for a key binding in your compositor's
+configuration, and exit with status 1 when no Irori is running.
 
 ## irori:// links
 
