@@ -1668,6 +1668,28 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.itch_io.help")
     .keywords(&["itch", "itch.io", "store", "indie"]),
     app(
+        "iroriXbox",
+        "settings.field.xbox.label",
+        General,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.xbox.help")
+    .needs(&[Need::Linux])
+    .keywords(&["xbox", "microsoft", "store", "game pass", "gdk"]),
+    app(
+        "iroriXboxMarket",
+        "settings.field.xbox_market.label",
+        General,
+        "settings.group.integrations",
+        Text(TextKind::Plain),
+    )
+    .help("settings.field.xbox_market.help")
+    .placeholder(Verbatim("US"))
+    .requires(&[when("iroriXbox", true, "settings.field.xbox_market.off")])
+    .needs(&[Need::Linux])
+    .keywords(&["xbox", "market", "region", "country", "microsoft"]),
+    app(
         "action.open-windows-files",
         "settings.field.action_open_windows_files.label",
         General,

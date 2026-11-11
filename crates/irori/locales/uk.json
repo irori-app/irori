@@ -92,6 +92,8 @@
   "shell.palette.set_up_emulation_keywords": "емулятор ROM консоль ретро BIOS RetroArch",
   "shell.palette.steam_friends": "Показати друзів у Steam",
   "shell.palette.steam_friends_keywords": "друзі у мережі грає приєднатися запросити чат",
+  "shell.palette.xbox_offline_play": "Гра Xbox офлайн",
+  "shell.palette.xbox_offline_play_keywords": "microsoft store game pass офлайн пк ліцензія",
   "shell.palette.xbox_friends": "Показати друзів у Xbox",
   "shell.palette.xbox_friends_keywords": "друзі онлайн грає xbox тег гравця",
   "shell.palette.open_store": "Відкрити крамницю {store}",

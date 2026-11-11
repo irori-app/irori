@@ -167,6 +167,10 @@ fn main() -> Result<()> {
             irori_manage::install_steam_store(steam.clone(), cx);
             irori_manage::install_steam_library_store(steam.clone(), cx);
         }
+        #[cfg(target_os = "linux")]
+        if let Some(xbox) = stores::XBOX.get() {
+            irori_manage::install_xbox_store(xbox.clone(), cx);
+        }
         if let Some(sideload) = stores::SIDELOAD.get() {
             irori_library::install_sideload_store(sideload.clone(), cx);
             if let Some(launchers) = stores::LAUNCHERS.get() {

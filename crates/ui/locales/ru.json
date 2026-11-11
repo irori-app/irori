@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "Разблокировать",
   "ui.hidden_lock.unlock_description": "Введите PIN-код, чтобы показывать скрытые игры, пока Irori не закроется или вы снова их не заблокируете.",
   "ui.hidden_lock.unlock_title": "Показать скрытые игры",
-  "ui.hidden_lock.wrong_pin": "Неверный PIN-код"
+  "ui.hidden_lock.wrong_pin": "Неверный PIN-код",
+  "ui.xbox.runtime_title": "Нужна среда для игр из Microsoft Store",
+  "ui.xbox.runtime_body": "Для {title} нужна сборка Wine с xgameruntime.dll, которой нет в обычных Wine и Proton. Установите Nexus Runtime в менеджере Wine и выберите её в настройках Wine этой игры.",
+  "ui.xbox.runtime_hint": "Игра не запущена.",
+  "ui.xbox.device_limit_title": "Достигнут лимит устройств Microsoft Store",
+  "ui.xbox.device_limit_body": "Microsoft отклонила этот компьютер для {title}: к аккаунту уже привязано 10 устройств Microsoft Store. Отвяжите неиспользуемое устройство на странице устройств Microsoft и повторите попытку.",
+  "ui.xbox.device_limit_hint": "Выходить из Irori не нужно.",
+  "ui.xbox.open_wine_manager": "Открыть менеджер Wine",
+  "ui.xbox.game_settings": "Настройки Wine",
+  "ui.xbox.open_devices": "Открыть страницу устройств Microsoft"
 }

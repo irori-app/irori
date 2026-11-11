@@ -32,6 +32,9 @@ pub(super) enum WindowOutcome {
 
 /// Irori's first argument for its sign-in mode (`irori_sign_in::SIGN_IN_FLAG`).
 const SIGN_IN_FLAG: &str = "--sign-in-window";
+/// The window's first argument for the Microsoft account sign-in
+/// (`irori_sign_in::microsoft::MICROSOFT_ACCOUNT_FLAG`).
+const MICROSOFT_ACCOUNT_FLAG: &str = "--microsoft-account";
 
 /// The program that shows the sign-in window.
 #[derive(Debug, Clone)]
@@ -69,12 +72,42 @@ pub(super) async fn sign_in(
     title: String,
     cancel: CancellationToken,
 ) -> Result<WindowOutcome> {
+    let args = ["--url", &url, "--capture", &capture, "--title", &title];
+    run(helper, &args, cancel).await
+}
+
+/// Show Microsoft's sign-in page at `url` in the window's CloudExperienceHost
+/// mode until it hands over the account's `DAProperty` JSON, the window
+/// closes, or `cancel` fires. `profile` keeps the session's cookies between
+/// the sign-in and its approval page.
+pub(super) async fn sign_in_microsoft(
+    helper: Helper,
+    url: String,
+    title: String,
+    profile: PathBuf,
+    cancel: CancellationToken,
+) -> Result<WindowOutcome> {
+    let profile = profile.to_string_lossy();
+    let args = [
+        MICROSOFT_ACCOUNT_FLAG,
+        "--url",
+        &url,
+        "--title",
+        &title,
+        "--profile",
+        &profile,
+    ];
+    run(helper, &args, cancel).await
+}
+
+/// Run the window with `args` after the helper's own.
+async fn run(helper: Helper, args: &[&str], cancel: CancellationToken) -> Result<WindowOutcome> {
     let mut command = tokio::process::Command::new(&helper.program);
     // `irori-sign-in` is a console program; its output comes through pipes.
     irori_core::process::hide_console(command.as_std_mut());
     let mut child = command
         .args(helper.args)
-        .args(["--url", &url, "--capture", &capture, "--title", &title])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

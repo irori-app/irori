@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "Lås upp",
   "ui.hidden_lock.unlock_description": "Ange pinkoden för att visa dolda spel tills Irori avslutas eller du låser dem igen.",
   "ui.hidden_lock.unlock_title": "Visa dolda spel",
-  "ui.hidden_lock.wrong_pin": "Pinkoden stämmer inte"
+  "ui.hidden_lock.wrong_pin": "Pinkoden stämmer inte",
+  "ui.xbox.runtime_title": "En körmiljö för Microsoft Store-spel behövs",
+  "ui.xbox.runtime_body": "{title} behöver en Wine-version med xgameruntime.dll, som vanliga Wine och Proton saknar. Installera Nexus Runtime i Wine-hanteraren och välj den i spelets Wine-inställningar.",
+  "ui.xbox.runtime_hint": "Spelet startades inte.",
+  "ui.xbox.device_limit_title": "Gränsen för enheter i Microsoft Store är nådd",
+  "ui.xbox.device_limit_body": "Microsoft nekade den här datorn för {title}: kontot har redan 10 enheter kopplade till Microsoft Store. Koppla bort en du inte använder längre på Microsofts enhetssida och försök igen.",
+  "ui.xbox.device_limit_hint": "Du behöver inte logga ut från Irori.",
+  "ui.xbox.open_wine_manager": "Öppna Wine-hanteraren",
+  "ui.xbox.game_settings": "Wine-inställningar",
+  "ui.xbox.open_devices": "Öppna Microsofts enhetssida"
 }

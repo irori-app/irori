@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "解锁",
   "ui.hidden_lock.unlock_description": "输入 PIN 以显示隐藏的游戏，直到 Irori 退出或你再次锁定。",
   "ui.hidden_lock.unlock_title": "显示隐藏的游戏",
-  "ui.hidden_lock.wrong_pin": "PIN 不正确"
+  "ui.hidden_lock.wrong_pin": "PIN 不正确",
+  "ui.xbox.runtime_title": "需要用于 Microsoft Store 游戏的运行环境",
+  "ui.xbox.runtime_body": "{title} 需要包含 xgameruntime.dll 的 Wine 版本，普通 Wine 和 Proton 都没有。请在 Wine 管理器中安装 Nexus Runtime，然后在游戏的 Wine 设置中选择它。",
+  "ui.xbox.runtime_hint": "游戏未启动。",
+  "ui.xbox.device_limit_title": "已达到 Microsoft Store 设备上限",
+  "ui.xbox.device_limit_body": "Microsoft 拒绝了这台电脑运行 {title}：该帐户已有 10 台设备关联到 Microsoft Store。请在 Microsoft 的设备页面取消关联一台不再使用的设备，然后重试。",
+  "ui.xbox.device_limit_hint": "无需退出 Irori。",
+  "ui.xbox.open_wine_manager": "打开 Wine 管理器",
+  "ui.xbox.game_settings": "Wine 设置",
+  "ui.xbox.open_devices": "打开 Microsoft 设备页面"
 }

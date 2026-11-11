@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "Özel dal parolası",
   "game.install.path_placeholder": "Oyun için klasör",
   "game.install.pin": "Oyunu belirli bir sürümde tut",
+  "game.install.package": "Paket",
   "game.install.pin_failed": "Sürüm sabitlemesi değiştirilemedi",
   "game.install.skip_updates": "Bu oyunu güncelleme",
   "game.install.size_on_disk": "Diskteki boyut",

@@ -1222,5 +1222,10 @@
   "settings.field.ui_cover_categories.label": "Mostrar categorias nas capas",
   "settings.field.ui_cover_categories.help": "As categorias de cada jogo no fundo da capa na grelha: as duas primeiras e quantas mais.",
   "settings.field.ui_group_copies.label": "Mostrar cópias de várias lojas como um só jogo",
-  "settings.field.ui_group_copies.help": "Um jogo que tem no Steam, na Epic Games e na GOG aparece uma vez e abre a cópia instalada. A sua página alterna entre as cópias; cada uma mantém o seu tempo de jogo e as suas conquistas."
+  "settings.field.ui_group_copies.help": "Um jogo que tem no Steam, na Epic Games e na GOG aparece uma vez e abre a cópia instalada. A sua página alterna entre as cópias; cada uma mantém o seu tempo de jogo e as suas conquistas.",
+  "settings.field.xbox.label": "Loja Xbox",
+  "settings.field.xbox.help": "Inicie sessão com uma conta Microsoft para instalar e jogar os seus jogos da Microsoft Store e do PC Game Pass. Correm com o Nexus Runtime do gestor do Wine.",
+  "settings.field.xbox_market.label": "Região da Microsoft Store",
+  "settings.field.xbox_market.help": "Código de país de duas letras (US, DE, GB…) para a biblioteca, o catálogo e as licenças. Vazio segue o idioma da interface.",
+  "settings.field.xbox_market.off": "Ative primeiro a loja Xbox."
 }

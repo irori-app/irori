@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "Déverrouiller",
   "ui.hidden_lock.unlock_description": "Saisissez le code PIN pour afficher les jeux masqués jusqu’à ce qu’Irori se ferme ou que vous les verrouilliez à nouveau.",
   "ui.hidden_lock.unlock_title": "Afficher les jeux masqués",
-  "ui.hidden_lock.wrong_pin": "Ce code PIN est incorrect"
+  "ui.hidden_lock.wrong_pin": "Ce code PIN est incorrect",
+  "ui.xbox.runtime_title": "Un environnement pour les jeux du Microsoft Store est nécessaire",
+  "ui.xbox.runtime_body": "{title} a besoin d’une version de Wine contenant xgameruntime.dll, absente de Wine et Proton classiques. Installez Nexus Runtime dans le gestionnaire Wine, puis choisissez-le dans les réglages Wine du jeu.",
+  "ui.xbox.runtime_hint": "Le jeu n’a pas été lancé.",
+  "ui.xbox.device_limit_title": "Limite d’appareils du Microsoft Store atteinte",
+  "ui.xbox.device_limit_body": "Microsoft a refusé cet ordinateur pour {title} : le compte a déjà 10 appareils liés au Microsoft Store. Dissociez-en un que vous n’utilisez plus sur la page des appareils de Microsoft, puis réessayez.",
+  "ui.xbox.device_limit_hint": "Inutile de vous déconnecter d’Irori.",
+  "ui.xbox.open_wine_manager": "Ouvrir le gestionnaire Wine",
+  "ui.xbox.game_settings": "Réglages Wine",
+  "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft"
 }

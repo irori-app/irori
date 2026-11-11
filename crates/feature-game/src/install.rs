@@ -340,6 +340,19 @@ impl InstallSheet {
         }
     }
 
+    /// The store offers packages to choose between rather than builds to
+    /// pin (the Microsoft Store's PC and Xbox packages, editions).
+    fn package_choice(&self) -> bool {
+        self.id.runner == Runner::Xbox && !self.is_modify()
+    }
+
+    /// The build to install or describe: a pinned one, or the chosen package.
+    fn chosen_build(&self) -> Option<String> {
+        self.build
+            .clone()
+            .filter(|_| self.pin_build || self.package_choice())
+    }
+
     fn fetch_info(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.info_rev += 1;
         let rev = self.info_rev;
@@ -351,7 +364,7 @@ impl InstallSheet {
         let platform = self.platform;
         let query = InstallInfoQuery {
             branch: self.branch.clone(),
-            build: self.build.clone().filter(|_| self.pin_build),
+            build: self.chosen_build(),
             language: None,
         };
         let task = irori_ui::run(cx, async move {
@@ -423,7 +436,12 @@ impl InstallSheet {
             .filter(|b| b.branch == self.branch)
             .map(|b| {
                 let date = b.date.chars().take(10).collect::<String>();
-                Choice::new(b.build_id.clone(), format!("{} · {date}", b.version_name))
+                let label = if date.is_empty() {
+                    b.version_name.clone()
+                } else {
+                    format!("{} · {date}", b.version_name)
+                };
+                Choice::new(b.build_id.clone(), label)
             })
             .collect();
         if self.build.is_none()
@@ -793,7 +811,7 @@ impl InstallSheet {
             sdl: self.selected_sdl_tags(&info),
             language: self.language.clone(),
             branch: self.branch.clone(),
-            build: self.build.clone().filter(|_| self.pin_build),
+            build: self.chosen_build(),
             dependencies: info.dependencies.clone(),
             installer: None,
             account: self.account.clone(),
@@ -1192,7 +1210,21 @@ impl InstallSheet {
             .filter(|b| b.branch == self.branch)
             .count();
         let password = hooks::has_branch_password(cx) && self.id.runner == Runner::Gog;
-        if has_branches || builds > 0 || password {
+        if self.package_choice() {
+            if builds > 0 {
+                out.push(
+                    v_flex()
+                        .gap_2()
+                        .child(Self::render_section(t("game.install.package"), cx))
+                        .child(
+                            Select::new(&self.build_select)
+                                .placeholder(t("game.install.package"))
+                                .disabled(builds < 2),
+                        )
+                        .into_any_element(),
+                );
+            }
+        } else if has_branches || builds > 0 || password {
             let mut col = v_flex()
                 .gap_2()
                 .child(Self::render_section(t("game.common.version"), cx));

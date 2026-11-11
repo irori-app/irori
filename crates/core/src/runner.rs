@@ -18,6 +18,10 @@ pub enum Runner {
     Zoom,
     /// itch.io, driven through its public API with the user's API key.
     Itch,
+    /// Microsoft Store and PC Game Pass games (GDK packages), installed and
+    /// played through Wine with Irori's own Microsoft account, licence and
+    /// package code. Linux only.
+    Xbox,
     /// Games installed by the Steam client on this computer. Read-only:
     /// Steam installs, updates and starts them.
     Steam,
@@ -32,12 +36,13 @@ pub enum Runner {
 }
 
 impl Runner {
-    pub const ALL: [Runner; 9] = [
+    pub const ALL: [Runner; 10] = [
         Runner::Legendary,
         Runner::Gog,
         Runner::Nile,
         Runner::Zoom,
         Runner::Itch,
+        Runner::Xbox,
         Runner::Steam,
         Runner::Sideload,
         Runner::Emulation,
@@ -52,6 +57,7 @@ impl Runner {
             Runner::Nile => "nile",
             Runner::Zoom => "zoom",
             Runner::Itch => "itch",
+            Runner::Xbox => "xbox",
             Runner::Steam => "steam",
             Runner::Sideload => "sideload",
             Runner::Emulation => "emulation",
@@ -67,6 +73,7 @@ impl Runner {
             Runner::Nile => "Amazon Games",
             Runner::Zoom => "ZOOM Platform",
             Runner::Itch => "itch.io",
+            Runner::Xbox => "Xbox",
             Runner::Steam => "Steam",
             Runner::Sideload => "Added manually",
             Runner::Emulation => "Emulated",
@@ -82,6 +89,7 @@ impl Runner {
             Runner::Nile => "Amazon",
             Runner::Zoom => "ZOOM",
             Runner::Itch => "itch.io",
+            Runner::Xbox => "Xbox",
             Runner::Steam => "Steam",
             Runner::Sideload => "Other",
             Runner::Emulation => "Emulated",
@@ -96,6 +104,7 @@ impl Runner {
             "nile" | "amazon" => Runner::Nile,
             "zoom" => Runner::Zoom,
             "itch" | "itchio" => Runner::Itch,
+            "xbox" | "msstore" | "gamepass" => Runner::Xbox,
             "steam" => Runner::Steam,
             "sideload" => Runner::Sideload,
             "emulation" => Runner::Emulation,

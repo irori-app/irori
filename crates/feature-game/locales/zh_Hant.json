@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "私人分支密碼",
   "game.install.path_placeholder": "遊戲安裝資料夾",
   "game.install.pin": "將遊戲維持在特定版本",
+  "game.install.package": "安裝套件",
   "game.install.pin_failed": "無法變更版本固定",
   "game.install.skip_updates": "不更新此遊戲",
   "game.install.size_on_disk": "磁碟佔用空間",

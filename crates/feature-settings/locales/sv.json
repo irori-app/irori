@@ -1222,5 +1222,10 @@
   "settings.field.ui_cover_categories.label": "Visa kategorier på omslag",
   "settings.field.ui_cover_categories.help": "Varje spels kategorier längs omslagets nederkant i rutnätet: de två första och hur många fler.",
   "settings.field.ui_group_copies.label": "Visa kopior från flera butiker som ett spel",
-  "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer."
+  "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer.",
+  "settings.field.xbox.label": "Xbox-butiken",
+  "settings.field.xbox.help": "Logga in med ett Microsoft-konto för att installera och spela dina spel från Microsoft Store och PC Game Pass. De körs med Nexus Runtime från Wine-hanteraren.",
+  "settings.field.xbox_market.label": "Region för Microsoft Store",
+  "settings.field.xbox_market.help": "Landskod med två bokstäver (US, DE, GB…) för biblioteket, katalogen och licenserna. Tomt följer gränssnittets språk.",
+  "settings.field.xbox_market.off": "Slå först på Xbox-butiken."
 }

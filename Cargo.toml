@@ -50,6 +50,9 @@ irori-bigpicture = { path = "crates/feature-bigpicture" }
 irori-scripts = { path = "crates/scripts" }
 irori-mods = { path = "crates/mods" }
 irori-reshade = { path = "crates/reshade" }
+irori-msstore-api = { path = "crates/msstore" }
+irori-msixvc = { path = "crates/msixvc" }
+irori-xbox = { path = "crates/store-xbox" }
 
 gpui-kit = "0.8.0"
 anyhow = "1"

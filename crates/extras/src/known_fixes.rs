@@ -89,6 +89,7 @@ impl KnownFixesFile {
             Runner::Nile => &self.amazon,
             Runner::Zoom => &self.zoom,
             Runner::Itch
+            | Runner::Xbox
             | Runner::Steam
             | Runner::Sideload
             | Runner::Emulation

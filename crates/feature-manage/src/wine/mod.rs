@@ -53,6 +53,7 @@ fn source_description(kind: ReleaseKind) -> SharedString {
         ReleaseKind::ProtonCachyOs => t("manage.wine.source.proton_cachyos"),
         ReleaseKind::WineGe => t("manage.wine.source.wine_ge"),
         ReleaseKind::WineKron4ek => t("manage.wine.source.wine_kron4ek"),
+        ReleaseKind::NexusRuntime => t("manage.wine.source.nexus_runtime"),
         ReleaseKind::WineCrossover
         | ReleaseKind::WineStagingMac
         | ReleaseKind::GamePortingToolkit => kind.type_str().into(),

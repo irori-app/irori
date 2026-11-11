@@ -26,6 +26,22 @@ mod store_window;
 mod stores;
 mod updates;
 mod wine;
+#[cfg(target_os = "linux")]
+mod xbox;
+/// Microsoft Store games play on Linux only; elsewhere there is no offline PC
+/// to show.
+#[cfg(not(target_os = "linux"))]
+mod xbox {
+    use gpui_kit::{App, Window};
+
+    /// Always false: the Xbox store exists on Linux only.
+    pub fn xbox_offline_available(_cx: &App) -> bool {
+        false
+    }
+
+    /// Does nothing: the Xbox store exists on Linux only.
+    pub fn open_offline_play_dialog(_window: &mut Window, _cx: &mut App) {}
+}
 
 pub use accounts::AccountsView;
 pub use downloads::DownloadsView;
@@ -50,6 +66,9 @@ pub use store_window::{open_store_window, store_window_stores};
 pub use stores::StoresView;
 pub use updates::UpdatesView;
 pub use wine::WineManagerView;
+#[cfg(target_os = "linux")]
+pub use xbox::install_xbox_store;
+pub use xbox::{open_offline_play_dialog, xbox_offline_available};
 
 pub use i18n::CATALOGS;
 

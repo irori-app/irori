@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "Lösenord för privat gren",
   "game.install.path_placeholder": "Mapp för spelet",
   "game.install.pin": "Behåll spelet på en viss version",
+  "game.install.package": "Paket",
   "game.install.pin_failed": "Det gick inte att ändra versionsfästningen",
   "game.install.skip_updates": "Uppdatera inte det här spelet",
   "game.install.size_on_disk": "Storlek på disk",

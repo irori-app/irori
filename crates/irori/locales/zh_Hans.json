@@ -92,6 +92,8 @@
   "shell.palette.set_up_emulation_keywords": "模拟器 ROM 主机 复古 BIOS RetroArch",
   "shell.palette.steam_friends": "显示 Steam 好友",
   "shell.palette.steam_friends_keywords": "好友 在线 正在玩 加入 邀请 聊天",
+  "shell.palette.xbox_offline_play": "Xbox 离线游玩",
+  "shell.palette.xbox_offline_play_keywords": "microsoft store game pass 离线 电脑 许可",
   "shell.palette.xbox_friends": "显示 Xbox 好友",
   "shell.palette.xbox_friends_keywords": "好友 在线 正在玩 xbox 玩家代号",
   "shell.palette.open_store": "打开 {store} 商店",

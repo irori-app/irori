@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "プライベートブランチのパスワード",
   "game.install.path_placeholder": "ゲームのインストール先フォルダー",
   "game.install.pin": "ゲームを特定のバージョンに固定する",
+  "game.install.package": "パッケージ",
   "game.install.pin_failed": "バージョンの固定を変更できませんでした",
   "game.install.skip_updates": "このゲームを更新しない",
   "game.install.size_on_disk": "ディスク上のサイズ",

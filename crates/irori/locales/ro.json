@@ -92,6 +92,8 @@
   "shell.palette.set_up_emulation_keywords": "emulator ROM consolă retro BIOS RetroArch",
   "shell.palette.steam_friends": "Arată prietenii Steam",
   "shell.palette.steam_friends_keywords": "prieteni online joacă alătură invită chat",
+  "shell.palette.xbox_offline_play": "Joc offline Xbox",
+  "shell.palette.xbox_offline_play_keywords": "microsoft store game pass offline pc licență",
   "shell.palette.xbox_friends": "Arată prietenii de pe Xbox",
   "shell.palette.xbox_friends_keywords": "prieteni online joacă xbox gamertag",
   "shell.palette.open_store": "Deschide magazinul {store}",

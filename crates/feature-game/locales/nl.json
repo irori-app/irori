@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "Wachtwoord voor privébranch",
   "game.install.path_placeholder": "Map voor de game",
   "game.install.pin": "De game op een specifieke versie houden",
+  "game.install.package": "Pakket",
   "game.install.pin_failed": "De versievastzetting kon niet worden gewijzigd",
   "game.install.skip_updates": "Deze game niet bijwerken",
   "game.install.size_on_disk": "Grootte op schijf",

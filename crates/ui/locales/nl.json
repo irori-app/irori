@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "Ontgrendelen",
   "ui.hidden_lock.unlock_description": "Voer de pincode in om verborgen games te tonen totdat Irori sluit of je ze weer vergrendelt.",
   "ui.hidden_lock.unlock_title": "Verborgen games tonen",
-  "ui.hidden_lock.wrong_pin": "Die pincode klopt niet"
+  "ui.hidden_lock.wrong_pin": "Die pincode klopt niet",
+  "ui.xbox.runtime_title": "Er is een runtime voor Microsoft Store-games nodig",
+  "ui.xbox.runtime_body": "{title} heeft een Wine-build met xgameruntime.dll nodig, die gewone Wine en Proton niet hebben. Installeer de Nexus Runtime in het Wine-beheer en kies hem in de Wine-instellingen van de game.",
+  "ui.xbox.runtime_hint": "De game is niet gestart.",
+  "ui.xbox.device_limit_title": "Apparaatlimiet van de Microsoft Store bereikt",
+  "ui.xbox.device_limit_body": "Microsoft heeft deze computer geweigerd voor {title}: het account heeft al 10 apparaten gekoppeld aan de Microsoft Store. Ontkoppel er een die je niet meer gebruikt op de apparatenpagina van Microsoft en probeer het opnieuw.",
+  "ui.xbox.device_limit_hint": "Je hoeft je niet af te melden bij Irori.",
+  "ui.xbox.open_wine_manager": "Wine-beheer openen",
+  "ui.xbox.game_settings": "Wine-instellingen",
+  "ui.xbox.open_devices": "Apparatenpagina van Microsoft openen"
 }

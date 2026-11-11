@@ -1222,5 +1222,10 @@
   "settings.field.ui_cover_categories.label": "Kapaklarda kategorileri göster",
   "settings.field.ui_cover_categories.help": "Her oyunun kategorileri ızgaradaki kapağının altında: ilk ikisi ve kaç tane daha olduğu.",
   "settings.field.ui_group_copies.label": "Birden çok mağazadaki kopyaları tek oyun olarak göster",
-  "settings.field.ui_group_copies.help": "Steam, Epic Games ve GOG’da sahip olunan bir oyun bir kez görünür ve kurulu kopyayı başlatır. Sayfası kopyalar arasında geçiş yapar; her biri kendi oynama süresini ve başarımlarını korur."
+  "settings.field.ui_group_copies.help": "Steam, Epic Games ve GOG’da sahip olunan bir oyun bir kez görünür ve kurulu kopyayı başlatır. Sayfası kopyalar arasında geçiş yapar; her biri kendi oynama süresini ve başarımlarını korur.",
+  "settings.field.xbox.label": "Xbox mağazası",
+  "settings.field.xbox.help": "Microsoft Store ve PC Game Pass oyunlarınızı yükleyip oynamak için bir Microsoft hesabıyla oturum açın. Oyunlar Wine yöneticisindeki Nexus Runtime ile çalışır.",
+  "settings.field.xbox_market.label": "Microsoft Store bölgesi",
+  "settings.field.xbox_market.help": "Kitaplık, katalog ve lisanslar için iki harfli ülke kodu (US, DE, GB…). Boş bırakılırsa arayüz dilini izler.",
+  "settings.field.xbox_market.off": "Önce Xbox mağazasını açın."
 }

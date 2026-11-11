@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "Пароль приватної гілки",
   "game.install.path_placeholder": "Тека для гри",
   "game.install.pin": "Залишити гру на певній версії",
+  "game.install.package": "Пакет",
   "game.install.pin_failed": "Не вдалося змінити закріплення версії",
   "game.install.skip_updates": "Не оновлювати цю гру",
   "game.install.size_on_disk": "Розмір на диску",

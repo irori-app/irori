@@ -240,5 +240,14 @@
   "ui.hidden_lock.unlock": "Kilidi aç",
   "ui.hidden_lock.unlock_description": "Irori kapanana veya yeniden kilitleyene kadar gizli oyunları göstermek için PIN'i girin.",
   "ui.hidden_lock.unlock_title": "Gizli oyunları göster",
-  "ui.hidden_lock.wrong_pin": "Bu PIN doğru değil"
+  "ui.hidden_lock.wrong_pin": "Bu PIN doğru değil",
+  "ui.xbox.runtime_title": "Microsoft Store oyunları için bir çalışma ortamı gerekli",
+  "ui.xbox.runtime_body": "{title}, normal Wine ve Proton'da olmayan xgameruntime.dll içeren bir Wine sürümüne ihtiyaç duyar. Wine yöneticisinden Nexus Runtime'ı yükleyip oyunun Wine ayarlarında seçin.",
+  "ui.xbox.runtime_hint": "Oyun başlatılmadı.",
+  "ui.xbox.device_limit_title": "Microsoft Store cihaz sınırına ulaşıldı",
+  "ui.xbox.device_limit_body": "Microsoft bu bilgisayarı {title} için reddetti: hesabın Microsoft Store'a bağlı 10 cihazı zaten var. Artık kullanmadığınız birinin bağlantısını Microsoft'un cihaz sayfasından kaldırıp yeniden deneyin.",
+  "ui.xbox.device_limit_hint": "Irori'den çıkış yapmanız gerekmez.",
+  "ui.xbox.open_wine_manager": "Wine yöneticisini aç",
+  "ui.xbox.game_settings": "Wine ayarları",
+  "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç"
 }

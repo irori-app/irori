@@ -671,6 +671,15 @@ pub struct AppSettings {
     /// The itch.io store (off until turned on). Irori-only.
     #[serde(rename = "iroriItchIo", alias = "emberItchIo")]
     pub itch_io: bool,
+    /// The Xbox store: Microsoft Store and PC Game Pass games, Linux only
+    /// (off until turned on). Irori-only.
+    #[serde(rename = "iroriXbox")]
+    pub xbox: bool,
+    /// The Microsoft Store market (two-letter region) the Xbox store's
+    /// library, catalog and licences use; empty follows the interface
+    /// language's region, else `US`. Irori-only.
+    #[serde(rename = "iroriXboxMarket")]
+    pub xbox_market: String,
     /// UI language code ("en", "de", …).
     #[serde(rename = "uiLanguage")]
     pub ui_language: String,
@@ -853,6 +862,8 @@ impl Default for AppSettings {
             comet_support: true,
             zoom_platform: true,
             itch_io: false,
+            xbox: false,
+            xbox_market: String::new(),
             ui_language: "en".into(),
             ui: UiPrefs::default(),
         }
@@ -1208,6 +1219,7 @@ impl ShownStores {
             Runner::Steam => self.steam,
             Runner::Zoom
             | Runner::Itch
+            | Runner::Xbox
             | Runner::Sideload
             | Runner::Emulation
             | Runner::Launchers => true,
@@ -1224,6 +1236,7 @@ impl ShownStores {
             Runner::Steam => self.steam = shown,
             Runner::Zoom
             | Runner::Itch
+            | Runner::Xbox
             | Runner::Sideload
             | Runner::Emulation
             | Runner::Launchers => {}

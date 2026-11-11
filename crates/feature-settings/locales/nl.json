@@ -1222,5 +1222,10 @@
   "settings.field.ui_cover_categories.label": "Categorieën op covers tonen",
   "settings.field.ui_cover_categories.help": "De categorieën van elke game onderaan de cover in het raster: de eerste twee en hoeveel er nog meer zijn.",
   "settings.field.ui_group_copies.label": "Exemplaren uit meerdere winkels als één game tonen",
-  "settings.field.ui_group_copies.help": "Een game die je op Steam, Epic Games en GOG hebt, staat er één keer en start het geïnstalleerde exemplaar. Op de pagina wissel je tussen de exemplaren; elk houdt zijn eigen speeltijd en prestaties."
+  "settings.field.ui_group_copies.help": "Een game die je op Steam, Epic Games en GOG hebt, staat er één keer en start het geïnstalleerde exemplaar. Op de pagina wissel je tussen de exemplaren; elk houdt zijn eigen speeltijd en prestaties.",
+  "settings.field.xbox.label": "Xbox-winkel",
+  "settings.field.xbox.help": "Meld je aan met een Microsoft-account om je games uit de Microsoft Store en PC Game Pass te installeren en te spelen. Ze draaien met de Nexus Runtime uit het Wine-beheer.",
+  "settings.field.xbox_market.label": "Regio van de Microsoft Store",
+  "settings.field.xbox_market.help": "Landcode van twee letters (US, DE, GB…) voor bibliotheek, catalogus en licenties. Leeg volgt de taal van de interface.",
+  "settings.field.xbox_market.off": "Zet eerst de Xbox-winkel aan."
 }

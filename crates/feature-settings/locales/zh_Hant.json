@@ -1222,5 +1222,10 @@
   "settings.field.ui_cover_categories.label": "在封面上顯示分類",
   "settings.field.ui_cover_categories.help": "在網格中每個遊戲封面的底部顯示其分類：前兩個以及其餘的數量。",
   "settings.field.ui_group_copies.label": "將多個商店的副本顯示為一個遊戲",
-  "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都擁有的遊戲只顯示一次，並啟動已安裝的副本。其頁面可在各副本之間切換；每個副本保留各自的遊戲時間和成就。"
+  "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都擁有的遊戲只顯示一次，並啟動已安裝的副本。其頁面可在各副本之間切換；每個副本保留各自的遊戲時間和成就。",
+  "settings.field.xbox.label": "Xbox 商店",
+  "settings.field.xbox.help": "使用 Microsoft 帳戶登入，即可安裝並遊玩你的 Microsoft Store 與 PC Game Pass 遊戲。遊戲透過 Wine 管理員中的 Nexus Runtime 執行。",
+  "settings.field.xbox_market.label": "Microsoft Store 地區",
+  "settings.field.xbox_market.help": "用於遊戲庫、目錄與授權的兩字母國家/地區代碼（US、DE、GB…）。留空則依照介面語言。",
+  "settings.field.xbox_market.off": "請先開啟 Xbox 商店。"
 }

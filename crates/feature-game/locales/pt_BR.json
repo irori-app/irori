@@ -259,6 +259,7 @@
   "game.install.password_placeholder": "Senha do branch privado",
   "game.install.path_placeholder": "Pasta para o jogo",
   "game.install.pin": "Manter o jogo em uma versão específica",
+  "game.install.package": "Pacote",
   "game.install.pin_failed": "Não foi possível alterar a fixação de versão",
   "game.install.skip_updates": "Não atualizar este jogo",
   "game.install.size_on_disk": "Tamanho em disco",
