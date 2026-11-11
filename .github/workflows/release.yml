@@ -78,6 +78,17 @@ jobs:
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
         with:
           tool: cargo-deb,cargo-generate-rpm
+      # Irori's fat-LTO link needs more memory than the arm64 runners have;
+      # without swap the runner is killed while linking.
+      - name: Swap for the release link
+        if: matrix.arch == 'aarch64'
+        run: |
+          swap=/irori-swap
+          sudo fallocate -l 16G "$swap"
+          sudo chmod 600 "$swap"
+          sudo mkswap "$swap"
+          sudo swapon "$swap"
+          free -h
       - run: cargo build --locked --release -p irori -p irori-sign-in
       # Pinned and checked, so a release never packs a runtime nobody reviewed.
       - name: AppImage tools
@@ -324,6 +335,30 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
+      # Irori's fat-LTO link needs more memory than the arm64 runners have.
+      # The container is privileged and RUNNER_TEMP is the host's disk, so
+      # swap can be added here (not in the checkout, which the build copies).
+      # The image has no mkswap or swapon, so Python writes the swap header
+      # mkswap would and asks the kernel to use the file.
+      - name: Swap for the release link
+        if: matrix.arch == 'aarch64'
+        shell: python3 {0}
+        run: |
+          import ctypes, os, struct
+          path = os.path.join(os.environ["RUNNER_TEMP"], "irori-swap")
+          size = 16 << 30
+          page = os.sysconf("SC_PAGE_SIZE")
+          fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+          os.posix_fallocate(fd, 0, size)
+          # Version 1, the last page, no bad pages; the signature ends the first page.
+          os.pwrite(fd, struct.pack("<III", 1, size // page - 1, 0), 1024)
+          os.pwrite(fd, b"SWAPSPACE2", page - 10)
+          os.fsync(fd)
+          os.close(fd)
+          libc = ctypes.CDLL(None, use_errno=True)
+          if libc.swapon(path.encode(), 0) != 0:
+              raise OSError(ctypes.get_errno(), "swapon failed", path)
+          print(open("/proc/swaps").read())
       - uses: actions/download-artifact@v4
         with:
           name: cargo-sources
