@@ -38,6 +38,10 @@ fn server(
                 }
                 Err(error) => panic!("synthetic server: {error}"),
             };
+            // macOS and the BSDs hand out accepted sockets with the listener's
+            // non-blocking flag, so a request still in flight would read as
+            // WouldBlock; the read timeout below bounds the blocking read.
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(1)))
                 .unwrap();
