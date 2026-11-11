@@ -624,6 +624,14 @@ fn the_wheel_moves_through_every_layout_the_library_and_the_page(cx: &mut TestAp
     use crate::layout::HomeLayout;
 
     let (handle, view) = open(cx);
+    // Tests share a data folder: a Favourites shelf another test left
+    // (Alpha alone) would come first and leave the wheel nowhere to go.
+    let alpha = GameId::new(Runner::Gog, "a");
+    cx.update(|cx| irori_ui::backend(cx).userdata.set_favourite(&alpha, false));
+    wait_for(cx, |cx| {
+        let kinds: Vec<RowKind> = view.read(cx).rows.iter().map(|r| r.kind.clone()).collect();
+        kinds == [RowKind::Installed]
+    });
     for layout in HomeLayout::ALL {
         view.update(cx, |v, cx| {
             v.look.layout = layout;

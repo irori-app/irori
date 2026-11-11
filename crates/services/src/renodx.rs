@@ -339,6 +339,7 @@ mod tests {
 
     /// Write a manifest and its files the way an install would, without
     /// downloading anything.
+    #[cfg(unix)]
     fn put(journal: &Path, mut base: Manifest, files: &[(&str, &[u8])]) -> Manifest {
         use irori_reshade::journal::{self, Existing, Planned};
         base.files.clear();
