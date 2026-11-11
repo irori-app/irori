@@ -322,15 +322,27 @@ jobs:
       # Irori's fat-LTO link needs more memory than the arm64 runners have.
       # The container is privileged and RUNNER_TEMP is the host's disk, so
       # swap can be added here (not in the checkout, which the build copies).
+      # The image has no mkswap or swapon, so Python writes the swap header
+      # mkswap would and asks the kernel to use the file.
       - name: Swap for the release link
         if: matrix.arch == 'aarch64'
+        shell: python3 {0}
         run: |
-          swap="$RUNNER_TEMP/irori-swap"
-          fallocate -l 16G "$swap"
-          chmod 600 "$swap"
-          mkswap "$swap"
-          swapon "$swap"
-          free -h
+          import ctypes, os, struct
+          path = os.path.join(os.environ["RUNNER_TEMP"], "irori-swap")
+          size = 16 << 30
+          page = os.sysconf("SC_PAGE_SIZE")
+          fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+          os.posix_fallocate(fd, 0, size)
+          # Version 1, the last page, no bad pages; the signature ends the first page.
+          os.pwrite(fd, struct.pack("<III", 1, size // page - 1, 0), 1024)
+          os.pwrite(fd, b"SWAPSPACE2", page - 10)
+          os.fsync(fd)
+          os.close(fd)
+          libc = ctypes.CDLL(None, use_errno=True)
+          if libc.swapon(path.encode(), 0) != 0:
+              raise OSError(ctypes.get_errno(), "swapon failed", path)
+          print(open("/proc/swaps").read())
       - uses: actions/download-artifact@v4
         with:
           name: cargo-sources
