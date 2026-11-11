@@ -21,6 +21,11 @@ async fn response(
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(3)))
             .unwrap();
+        // A client that stops reading an oversized body leaves this write
+        // waiting on a full socket buffer; give up instead of hanging.
+        stream
+            .set_write_timeout(Some(std::time::Duration::from_secs(3)))
+            .unwrap();
         let mut request = [0; 4096];
         let _ = stream.read(&mut request);
         let headers = if chunked {
@@ -54,7 +59,11 @@ async fn response(
         .await
         .unwrap();
     let result = device_credential_response(received).await;
-    server.join().unwrap();
+    // Join off the runtime: the test runtime has one thread, and the client's
+    // connection only closes (ending the server's write) while it runs.
+    tokio::task::spawn_blocking(move || server.join().unwrap())
+        .await
+        .unwrap();
     result
 }
 
