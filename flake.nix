@@ -5,16 +5,16 @@
 
   outputs = { nixpkgs, ... }:
     let
-      version = "1.0.0";
+      version = "1.1.0";
 
       sources = {
         x86_64-linux = {
           suffix = "";
-          hash = "sha256-inEUFcnlQoCujNPYIBT+2JYJqxAtKKHb8C2S7SXgaLw=";
+          hash = "sha256-sT4V8ZUA0j0/FpG7N373Uk+6YdEQaDKCp8GhPDi/JB0=";
         };
         aarch64-linux = {
           suffix = "-arm64";
-          hash = "sha256-w7xXXIWGBLuwQneWBpVEGPH9A30cpXbcghxoOVuLEI0=";
+          hash = "sha256-W7EBCZY1F3NVK0Qq2CCDJOipjCuUlCm88siy6n42aJE=";
         };
       };
 
