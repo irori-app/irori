@@ -2694,14 +2694,19 @@ impl LibraryView {
                 )
             })
             .when(show_badges && active && !selecting && !focus_view, |el| {
+                // An entry of several stores' copies names every store.
+                let stores = irori_ui::copies::stores(&id, cx);
                 el.child(
-                    div()
+                    h_flex()
                         .absolute()
                         .top_2()
                         .left_2()
-                        .rounded_md()
-                        .bg(scrim)
-                        .child(StoreBadge::new(game.runner())),
+                        .right_2()
+                        .gap_1()
+                        .flex_wrap()
+                        .children(stores.into_iter().map(|runner| {
+                            div().rounded_md().bg(scrim).child(StoreBadge::new(runner))
+                        })),
                 )
             })
             .child(markers)
@@ -3211,6 +3216,14 @@ impl LibraryView {
         let hover_id = id.clone();
         let click_id = id.clone();
         let shown = self.frame.list_columns;
+        // An entry of several stores' copies names every store.
+        let stores = shown[0].then(|| {
+            irori_ui::copies::stores(&id, cx)
+                .iter()
+                .map(|r| r.short_name())
+                .collect::<Vec<_>>()
+                .join(" · ")
+        });
         let cell = |w: f32, right: bool, text: String| {
             div()
                 .w(rems(w))
@@ -3287,12 +3300,8 @@ impl LibraryView {
                         )
                     }),
             )
-            .when(shown[0], |el| {
-                el.child(cell(
-                    grid::LIST_COLUMNS[0],
-                    false,
-                    game.runner().short_name().to_string(),
-                ))
+            .when_some(stores, |el, stores| {
+                el.child(cell(grid::LIST_COLUMNS[0], false, stores))
             })
             .when(shown[1], |el| {
                 el.child(cell(

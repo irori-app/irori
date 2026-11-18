@@ -130,13 +130,15 @@ impl GamePage {
             .clone()
             .filter(|l| !l.is_empty() && cx.theme().mode.is_dark())
             .and_then(|url| art_img(&url, 640, true, cx));
-        let theme = cx.theme();
-        let bg = theme.background;
         let store = game
             .system
             .as_deref()
             .and_then(irori_engines::systems::get)
             .map_or(game.runner().store_name(), |s| s.name.as_str());
+        // An entry of several stores' copies names each of them, as the page does.
+        let store = self.render_store_line(store, cx);
+        let theme = cx.theme();
+        let bg = theme.background;
         let title: AnyElement = match logo {
             Some(logo) => div()
                 .h(rems(LOGO_REM))
@@ -192,7 +194,7 @@ impl GamePage {
                     .px_5()
                     .pb_1()
                     .gap_1()
-                    .child(super::caption(store, theme.muted_foreground))
+                    .child(store)
                     .child(title),
             )
             .into_any_element()
