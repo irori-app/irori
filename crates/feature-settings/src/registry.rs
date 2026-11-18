@@ -257,6 +257,8 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// A Steam game's launch options in Steam itself.
+    SteamLaunchOptions,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -625,6 +627,7 @@ impl FieldSpec {
                     | "iroriLudusaviInterval"
                     | "panel.save-backups"
                     | "panel.artwork"
+                    | "panel.steamLaunchOptions"
             )
     }
 
@@ -1628,6 +1631,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["sunshine", "moonlight", "big picture", "couch"])
     .requires(NEEDS_SUNSHINE),
     app(
+        "iroriSunshine.address",
+        "settings.field.sunshine_address.label",
+        General,
+        "settings.group.integrations",
+        Text(TextKind::Plain),
+    )
+    .help("settings.field.sunshine_address.help")
+    .placeholder(Key("settings.field.sunshine_address.placeholder"))
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "address",
+        "another computer",
+        "remote",
+        "certificate",
+        "fingerprint",
+    ])
+    .requires(NEEDS_SUNSHINE),
+    app(
         "iroriSunshine.matchClient",
         "settings.field.sunshine_match_client.label",
         General,
@@ -1652,7 +1674,14 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Panel(PanelKind::Sunshine),
     )
-    .keywords(&["sunshine", "moonlight", "stream", "password", "login"]),
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "stream",
+        "password",
+        "login",
+        "certificate",
+    ]),
     app(
         "disablePlaytimeSync",
         "settings.field.disable_playtime_sync.label",
@@ -3042,6 +3071,21 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.launcher_args.help")
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
+    game_only(
+        "panel.steamLaunchOptions",
+        "settings.field.panel_steam_launch.label",
+        Launch,
+        "settings.group.command",
+        Panel(PanelKind::SteamLaunchOptions),
+    )
+    .keywords(&[
+        "steam",
+        "launch options",
+        "%command%",
+        "arguments",
+        "variables",
+        "properties",
+    ]),
     game_only(
         "targetExe",
         "settings.field.target_exe.label",

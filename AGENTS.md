@@ -88,6 +88,7 @@ irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C st
 irori uninstall <runner>/<app> [--keep-files]
 irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
 irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date (Steam closed), or take them out
+irori displays [--json]                          the displays: modes, HDR and VRR (JSON versioned, for other tools)
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
@@ -705,6 +706,13 @@ commands without a window.
   when what Irori wants differs from `state/sunshine.json`; a failure waits 10 minutes.
   Turning the setting off takes Irori's applications out. A game with `iroriInSunshine` off
   (per game) gets none.
+  - **Another computer** (`iroriSunshine.address`, `sunshine/remote.rs`): the web UI at
+    that address (HTTPS only), its applications starting `irori` from that computer's
+    `PATH`. Its certificate is trusted on first use: the first connection records the
+    SHA-256 fingerprint in `state/sunshine.json` (by `host:port`), and a different one is
+    refused inside the TLS handshake (`PinVerifier`, rustls with ring), so nothing is sent;
+    the panel shows the new fingerprint and "Trust the new certificate"
+    (`Backend::accept_sunshine_certificate`). Loopback addresses aren't checked.
   - **Apollo** (Sunshine's fork) is told apart by its API: Basic auth is refused, so the
     client signs in at `/api/login` (one session cookie for the whole web UI: signing in
     signs a browser out, so the session is kept between syncs) and names applications by
@@ -775,14 +783,18 @@ commands without a window.
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
 - **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
-  the modes offered and HDR (on, capable), kept until a refresh. Linux reads
-  `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool
-  (`kscreen-doctor`, `hyprctl`, `wlr-randr`, `xrandr`; `irori_core::host` inside the
-  Flatpak), merged by connector name (`merge`); Windows uses `QueryDisplayConfig` and
-  advanced colour info; macOS `system_profiler`. Every parser is pure and tested in
+  the modes offered, HDR and variable refresh (on, capable, the EDID's range), kept
+  until a refresh. Linux reads `/sys/class/drm` (modes, EDID name, HDR metadata, an EDID
+  1.4 continuous refresh range wider than 10 Hz or AMD's FreeSync block for VRR) and
+  asks the compositor's tool (`kscreen-doctor`'s `vrrPolicy` and capabilities, `hyprctl`'s
+  `vrr`, `wlr-randr`'s `adaptive_sync`, `xrandr --props`' `vrr_capable`;
+  `irori_core::host` inside the Flatpak), merged by connector name (`merge`); Windows
+  uses `QueryDisplayConfig` and advanced colour info (VRR stays unknown: Windows keeps
+  it as one switch for every display); macOS `system_profiler`. Every parser is pure and tested in
   `displays/parse.rs`; unknown stays `None`, never a guess. Settings › System info lists
   them (`irori_settings` `displays.rs`), and the HDR and gamescope fields' help adds a
-  hint from them (`displays::hint`).
+  hint from them (`displays::hint`). `irori displays --json` prints the report with a
+  `version` for other tools; fields are added, never renamed.
 - **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
   only): Windows' own per-program choice in
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the
@@ -1417,7 +1429,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   config's names, then the manifest's, with `ms-resource:` references looked up in
   Windows' `MrtCache`, then the game's folder name. Art is the package's own logos at
   their largest `scale-`/`targetsize-` variant (`file://` paths); sizes are added up in
-  the background after a scan. Games start with
+  the background after a scan, over the whole `<root>\<game>` folder when the package is
+  its `Content` (the GDK keeps shaders and staging beside it; `xbox::game_folder`). Games start with
   `rundll32 shell32.dll,ShellExec_RunDLL shell:AppsFolder\<family>!<app id>`, which
   returns at once with success, and a `GameWatch` follows (and stops) the processes
   running from the package folder. The game menu's "Show in Microsoft Store"
@@ -1536,6 +1549,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
   game menu's "Steam Play…", the palette and the page's Settings button, all through
   `irori_game::ops::open_steam_play`/`settings_section`.
+- **Steam's launch options** (`compat/launch_options.rs`, `irori_settings`
+  `steam_launch.rs`, the Launch section's "Steam launch options"): the line Steam starts a
+  game with (`VAR=value wrapper %command% args`), in the account's
+  `userdata/<account>/config/localconfig.vdf` under
+  `UserLocalConfigStore/Software/Valve/Steam/apps/<appid>/LaunchOptions`, edited as text.
+  The compatibility tool's rules apply: only while Steam is closed (`SteamRunning`, asking
+  before `close_steam`, never in Game Mode), splicing only that value's bytes with the
+  strict parser of `compat/mapping.rs`, reading the edit back, `localconfig.vdf.irori-backup`
+  first. `with_variable` changes one variable in a line and keeps the rest as written.
+  Steam's client could also take the line while it runs (`SetAppLaunchOptions` over its
+  debugging port), but the client library's expression stays read-only, so Irori doesn't.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
@@ -1606,6 +1630,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   command palette's "ReShade and RenoDX for …" row of the open game. Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **Steam games.** A Steam game's Windows build takes ReShade too: natively on Windows,
+  and on Linux when Steam runs it through Proton (its appmanifest's
+  `platform_override_source`, shown as `GameInfo::is_linux_native` false). Its folder is
+  Steam's; its Tools section holds only ReShade and RenoDX. Steam starts the game, so
+  the DLL overrides go into Steam's launch options as `WINEDLLOVERRIDES`
+  (`irori_steam::with_dll_overrides`, `reshade_needs_steam_overrides`): after each
+  install, toggle or removal the panel writes the line when Steam is closed, and
+  otherwise offers to, asking before it closes Steam.
 - **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
   Irori puts into a game folder, its manifest's path and its cache folder. Detection,
   cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
@@ -1630,8 +1662,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   file). Lists are cached a day, downloads under `<cache>/reshade`. Never bundle any.
 - **Journal** (`journal.rs`): the manifest (`<data>/reshade/<runner>/<app>.json`) lists
   every file with its hash and every folder created, saved before the first write.
-  An existing DLL that isn't ours refuses the install (`DllTaken`); an existing
-  `ReShade.ini`, compiler or shader is left alone and unrecorded. Off renames the DLL
+  An existing DLL that isn't ours refuses the install (`DllTaken`); one that is a
+  ReShade installed by hand (its version information names ReShade) is
+  `ManualInstall`, and the panel offers to take it over (`Existing::Adopt`: Irori's DLL
+  replaces it and is recorded; nothing else is touched). An existing
+  `ReShade.ini`, compiler or shader is left alone and unrecorded. Before every launch
+  `Backend::restore_graphics_mods` puts back recorded files a store's update or file
+  check deleted (`journal::missing`/`restore`), from the cache or the official source,
+  only when their bytes match the record. Off renames the DLL
   to `.irori-disabled`. Removal vets the folder with `fs_guard::ensure_deletable`,
   then deletes only recorded files whose hash still matches and recorded folders left
   empty. A failed or cancelled install removes what it wrote.

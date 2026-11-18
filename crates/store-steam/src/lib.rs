@@ -54,7 +54,11 @@ use account::{AccountFiles, LibraryCache, Session};
 use client::ClientLink;
 use client_library::{ClientCache, ClientFiles, ClientSettings};
 pub use client_library::{ClientLibraryError, ClientLibraryMode, ClientLibraryState};
-pub use compat::{CompatTool, CompatToolState, SteamRunning, ToolSource};
+pub use compat::{
+    COMMAND as LAUNCH_COMMAND, CompatTool, CompatToolState, LaunchOptionsState, SteamRunning,
+    ToolSource, variable as launch_variable, with_dll_overrides,
+    with_variable as with_launch_variable, without_dll_overrides,
+};
 pub use friends::{FriendLink, FriendState, Friends, SteamFriend};
 use scan::{InstalledApp, LocalArt};
 
@@ -553,6 +557,21 @@ impl SteamStore {
     /// [`SteamRunning`] while Steam runs: Steam would overwrite the change.
     pub async fn set_compat_tool(&self, app_name: &str, tool: Option<&str>) -> Result<()> {
         compat::set_compat_tool(&self.steam_dir(), app_name, tool).await
+    }
+
+    /// The game's launch options in Steam (the account's `localconfig.vdf`)
+    /// and whether they can be changed now.
+    pub async fn launch_options(&self, app_name: &str) -> Result<LaunchOptionsState> {
+        let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
+        compat::launch_options_state(&self.steam_dir(), steamid, app_name).await
+    }
+
+    /// Set the game's launch options in Steam to `line`, or clear them for
+    /// `None`. Only that value of Steam's account settings changes. Fails
+    /// with [`SteamRunning`] while Steam runs: Steam would overwrite it.
+    pub async fn set_launch_options(&self, app_name: &str, line: Option<String>) -> Result<()> {
+        let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
+        compat::set_launch_options(&self.steam_dir(), steamid, app_name, line).await
     }
 
     /// Ask the Steam client to close, and wait until it has. Games Steam

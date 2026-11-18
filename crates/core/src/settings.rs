@@ -1173,6 +1173,9 @@ pub struct SunshinePrefs {
     pub big_picture: bool,
     /// Sunshine's web UI port; 0 reads it from Sunshine's configuration.
     pub port: u16,
+    /// Sunshine on another computer: its web UI's address (`htpc.local`,
+    /// `192.168.1.20:47990`); empty for this computer.
+    pub address: String,
     /// Games in gamescope take the Moonlight client's resolution, frame rate
     /// and HDR when a stream starts them, unless the game sets its own.
     pub match_client: bool,
@@ -1185,6 +1188,7 @@ impl Default for SunshinePrefs {
             games: SunshineGames::Installed,
             big_picture: true,
             port: 0,
+            address: String::new(),
             match_client: true,
         }
     }

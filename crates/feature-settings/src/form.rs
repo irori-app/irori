@@ -492,6 +492,12 @@ impl SettingsForm {
             {
                 return false;
             }
+            // Steam's own launch options belong to Steam games only.
+            if matches!(f.kind, FieldKind::Panel(PanelKind::SteamLaunchOptions))
+                && !matches!(&self.target, FormTarget::Game(id) if id.runner == Runner::Steam)
+            {
+                return false;
+            }
             if f.native_only && !self.native {
                 return false;
             }
@@ -692,6 +698,18 @@ impl SettingsForm {
             }
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
+            PanelKind::SteamLaunchOptions => match &self.target {
+                FormTarget::Game(id) if id.runner == Runner::Steam => {
+                    crate::stores::steam(cx).map(|steam| {
+                        let id = id.clone();
+                        cx.new(|cx| {
+                            crate::steam_launch::SteamLaunchPanel::new(id, steam, window, cx)
+                        })
+                        .into()
+                    })
+                }
+                _ => None,
+            },
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);
