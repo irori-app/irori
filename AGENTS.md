@@ -231,7 +231,7 @@ irori-core                        (depends on nothing internal)
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
-irori-ui          (services, core)
+irori-ui          (services, core, runtime, engines)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
 irori-sign-in     (standalone; Irori links it only on macOS/Windows)

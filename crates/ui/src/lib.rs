@@ -38,6 +38,7 @@ pub mod system_notify;
 mod text_scale;
 pub mod theme;
 mod wallpaper;
+pub mod wine_choice;
 mod xbox_problem;
 
 pub use models::{Models, models};
