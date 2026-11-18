@@ -90,6 +90,17 @@ merge patch) over the built-in one, or, with an id Irori does not ship, adds an 
 A broken override is logged and the built-in manifest is used. Nothing in a manifest is
 executed; it is data.
 
+The Emulators page writes such a file for the user: "Add emulator" asks for a name, the
+program, an argument line and the systems it plays, and saves a `standalone` manifest
+marked `"custom": true` as `custom-<name>.json` (`irori_engines::custom`), with the
+program recorded as the engine's custom program. The argument line is split by this
+system's quoting rules into the launch template; placeholders other than `{rom}`,
+`{rom_dir}`, `{home}`, `{engine_home}`, `{engine_dir}` and `{xdg_data}` are refused, and
+without `{rom}` the game is the last argument. The program is started directly, never
+through a shell. Its card offers Edit and Remove; removing forgets the manifest and the
+program choice (the program stays), clears it as a system's default, and games that chose
+it play with their system's default.
+
 | Key | Meaning |
 | --- | --- |
 | `id`, `name`, `license`, `homepage` | Identity. `license` is shown on the engine card. |
@@ -161,6 +172,19 @@ system's folder or the ROM folder. Box art is looked up by the folder's name whe
 names the same game (and so may carry the region), else by the title. Titles are read
 on every scan, so games already in the library are renamed under the same app name; a
 title the user set still wins.
+
+PS3 games may also be disc images (`.iso`, which RPCS3 boots directly since early
+2026). A system may name marker files a disc of it holds at its root (`discFiles`:
+`PS3_DISC.SFB` for PS3, `UMD_DATA.BIN` for PSP); an image holding one is that system's
+game wherever it sits, also in another system's folder or outside any, and the scanner
+reads its title from the same `folderTitle` files inside the image
+(`irori_engines::iso9660`: the primary volume descriptor and directories of at most
+256 KiB, every offset checked). Images in the PS3 folder and in its subfolders are games
+too; an image without a marker keeps the folder's system. A folder holding
+`PS3_DISC.SFB` is a PS3 game anywhere. RPCS3's own `dev_hdd0` folder counts as a PS3
+folder, so `dev_hdd0/game/<id>` games are found; a folder there whose `PARAM.SFO`
+category is `GD` (a disc game's patch) is not a game. Detections in the scan cache carry
+the version of these rules, so a file an older Irori didn't recognise is looked at again.
 
 ### 3.2.1.1 More N64, DS and PlayStation emulators
 
@@ -349,7 +373,8 @@ manager, in its place). Route `Route::Emulators`, link `irori://emulators`.
   (managed versions with size, Flatpak, system, app, custom) with the default marked, and
   the actions Install (with size), Update (when a newer version is listed), Set as
   default, Open, Configure (engine options), Remove version, and "Use a program on this
-  computer…". RetroArch's card lists its cores with Install/Remove.
+  computer…". RetroArch's card lists its cores with Install/Remove. Emulators the user
+  added (see [3.1](#31-manifests)) are tagged "Added by you" and offer Edit and Remove.
 - Progress shows inline on the card and in the status bar; failures show an inline alert
   with Retry.
 

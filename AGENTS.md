@@ -231,7 +231,7 @@ irori-core                        (depends on nothing internal)
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
-irori-ui          (services, core)
+irori-ui          (services, core, runtime, engines)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
 irori-sign-in     (standalone; Irori links it only on macOS/Windows)
@@ -506,7 +506,9 @@ commands without a window.
     ticks both, Group by → Category puts each game in its first category's
     section (`irori-library`'s `categories.rs`), covers show both with their
     colours, and the context menu has "Add to ▸" for manual categories and a
-    read-only "In: …" for smart ones. The category manager creates, pins,
+    read-only "In: …" for smart ones. The sidebar's Views section lists the
+    saved views, then the pinned categories of both kinds
+    (`irori_library::show_category`). The category manager creates, pins,
     colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
     (`open_smart_category_editor`), also opened from Manage views to turn a
     view into a smart category (`categories::smart_from_view`, which says
@@ -796,8 +798,14 @@ commands without a window.
      raises a notice.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
-     start it without (`docs/PLATFORMS.md`, "Sandboxed games").
-  4. Before-launch script.
+     start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
+     it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
+     `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
+     variable said about its DLL; ReShade's are added after.
+  4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
+     starts at once and runs alongside the game as a program of the session
+     (`programs::script_alongside`), stopped when the session ends or the launch
+     fails.
   5. `store.launch` builds the `LaunchPlan`.
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
@@ -1167,6 +1175,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   versions are listed. The only per-engine code is the `kind` match in
   `crates/engines/src/launch.rs` (RetroArch cores, DOSBox, ScummVM, MAME, relinkers). Users may
   override a manifest with `<config>/engines/<id>.json` (merge patch).
+- **Emulators the user adds** (`irori_engines::custom`, `Backend::save_custom_engine`,
+  `irori_manage::open_custom_engine_dialog`: the Emulators page's "Add emulator", the
+  palette): a name, a program, an argument line and the systems it plays become a
+  standalone manifest marked `custom` in `<config>/engines/custom-<name>.json` (the id is
+  made by Irori from the name, letters, digits and dashes only), with the program kept as
+  the engine's custom program. The line is split by this system's rules and run without a
+  shell; only `{rom}`, `{rom_dir}`, `{home}`, `{engine_home}`, `{engine_dir}` and
+  `{xdg_data}` are accepted, and without `{rom}` the game goes last. They show in system
+  pickers and "Play with…" like any engine; removing one deletes only its manifest, and
+  a game or system still naming it plays with the system's default. Any engine can also
+  use a program the user picks ("Use a program on this computer…", `Origin::Custom`).
 - **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
   DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
   DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
@@ -1174,7 +1193,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`), the files naming them
   (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
-  and the folders of their own layout that never name them (`layoutFolders`); BIOS
+  and the folders of their own layout that never name them (`layoutFolders`). A disc
+  image with a system's marker file at its root (`discFiles`: PS3 `PS3_DISC.SFB`, PSP
+  `UMD_DATA.BIN`) is that system's game wherever it sits, a `folderOnly` system's too,
+  and a folder holding a PS3 marker is a PS3 game anywhere; PS3 images take their title
+  from `PS3_GAME/PARAM.SFO` inside (`irori_engines::iso9660`, which reads only the
+  volume descriptor and bounded directories). RPCS3's `dev_hdd0` is a PS3 folder, and its
+  patches (`PARAM.SFO` category `GD`) aren't games. Scan cache entries carry
+  `DETECTION_RULES`, so files an older Irori didn't recognise are looked at again. BIOS
   files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
   game into a program of this computer before it plays, in Irori's data folder with the
@@ -1209,7 +1235,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   applies; Bottles and Faugus Launcher plans from `irori-extras::wine_launchers` use
   the same shapes and apply step). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is
   parsed, nothing is written there. Windows/Linux games become added apps with their
-  prefix, Wine build (matched by name, else reported), arguments and variables;
+  prefix, Wine build (matched by name, else reported), arguments, variables and Wine
+  DLL overrides (`iroriDllOverrides`; a game file's replace the runner file's per DLL);
   emulated games join the ROM library as added games with their emulator; Steam and
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
@@ -1254,7 +1281,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
     Never add a "pass through" command or leave an unknown variable as text.
   - **Consent before running.** `irori_scripts::consent` lists downloads (host and
     size), every write outside the game folder, the cache and the prefix (each approved
-    on its own), programs, registry edits, winetricks verbs and store autosetups. The
+    on its own), programs, registry edits, winetricks verbs, store autosetups and the
+    Wine DLL overrides the game keeps (`wine: overrides:`, parsed into
+    `irori_core::DllOverride`; one Wine can't read refuses the script). The
     executor refuses to run without `Approvals::accepted`.
   - **Shell commands verbatim.** Every `execute` command line is shown exactly as the
     script wrote it and as it will run, and needs its own "I understand" acknowledgement
@@ -1282,7 +1311,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
     never bundle, mirror or commit lutris.net scripts or catalogue data (test fixtures
     are hand-written).
   - **Result.** Wine and Linux scripts become added apps (`winePrefix`, `wineVersion`,
-    `enviromentOptions`); emulator runners join the ROM library with `iroriEngine`
+    `enviromentOptions`, `iroriDllOverrides`); the prefix is the game section's, else
+    the one the script created (else the first a Wine task used), else the game
+    folder; emulator runners join the ROM library with `iroriEngine`
     (mapped like the Lutris import). The Wine build is the script's own when installed
     (`match_wine_version`), else the default, and the window says which. Each game
     records its script in the Irori-only per-game setting `iroriLutrisScript`
@@ -1427,10 +1458,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   collection may leave them out). When neither can say, the Steam card says so
   (`SteamStore::hidden_games`, `irori_manage` `steam_library::hidden_games_text`); it
   shows no count while hidden games are locked behind their PIN.
-- **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
-  through `IAuthenticationService` (protobuf over the Web API). The UI emits
+- **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): mobile-app-type sessions
+  through `IAuthenticationService` (protobuf over the Web API), the only type whose
+  refresh token `GenerateAccessTokenForApp` renews without a connection to Steam's
+  servers (a Steam client session's is refused there with `AccessDenied`). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then
-  keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes `SessionExpired`.
+  keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes
+  `SessionExpired`; a Web API call refusing the access token renews it once first
+  (`account::fetch_library_renewing`), and a refresh token Steam replaces is kept.
   Never log tokens, passwords or codes; the API crate's types redact them in `Debug`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
   game's `launcherArgs`, split with `split_program_args` (`client::game_args`): Windows
@@ -1455,7 +1490,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
-  backups, art) and hide the Graphics, Tools and Log sections.
+  backups, art) and hide the Graphics, Tools and Log sections; their Launch and
+  Performance sections say why (and, on Linux, how to add MangoHud in Steam).
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
@@ -1608,7 +1644,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   (`ops::license::Grant` says which), the encrypted files decrypted into a private
   launch view (`launch_view`, 0700, removed in `after_exit`, swept at `init`), the
   account service (`service`, per session) and `proton waitforexitandrun Z:\…`.
-  `XboxUnavailable` (`DeviceLimit`) explains licensing code 501. The per-game
+  The runtime's `libnghttp2.dll` is copied into the prefix's `system32` first, with
+  `libnghttp2=n` (`irori_runtime::xbox::XboxRuntime::provision_prefix`): WinHTTP loads
+  it from `system32` only. `XboxUnavailable` (`DeviceLimit`) explains licensing code 501. The per-game
   `language` setting becomes `XODUS_PACKAGE_LOCALE`, `WINEUSERLOCALE` and the Unix
   locale (`locale::environment`); left empty, only the package resources follow the
   interface language.

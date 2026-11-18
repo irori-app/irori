@@ -1,19 +1,21 @@
 //! The sidebar: Irori's mark, the main destinations, the saved library
-//! views, recently played games, the management pages and the way into Big
-//! Picture.
+//! views and pinned categories, recently played games, the management pages
+//! and the way into Big Picture.
 
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::menu::ContextMenuExt as _;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ObjectFit,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Subscription, Window, div, px, rems,
+    AnyElement, App, Context, ElementId, Entity, Hsla, InteractiveElement as _, IntoElement,
+    ObjectFit, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, StyledImage as _, Subscription, Window, div, px, rems,
 };
 use irori_core::{GameId, GameInfo, Runner};
+use irori_services::CategoryRef;
 use irori_ui::art::LruImageCache;
 use irori_ui::components::art_img;
 use irori_ui::i18n::t;
@@ -167,6 +169,7 @@ impl Render for RecentGames {
             .iter()
             .map(|game| {
                 let id = game.id();
+                let menu_id = id.clone();
                 let active = current == Route::Game(id.clone());
                 let thumb = game
                     .cover_art()
@@ -211,6 +214,10 @@ impl Render for RecentGames {
                             .child(game.title.clone()),
                     )
                     .on_click(move |_, _, cx| nav::navigate(Route::Game(id.clone()), cx))
+                    // The game's commands, as its cover's menu in the library.
+                    .context_menu(move |menu, window, cx| {
+                        irori_game::game_menu(menu, &menu_id, window, cx)
+                    })
                     .into_any_element()
             })
             .collect();
@@ -227,8 +234,9 @@ impl Render for RecentGames {
     }
 }
 
-/// The saved library views, one click from anywhere. A view of its own so
-/// renaming or reordering views redraws only it.
+/// The saved library views and the pinned categories, one click from
+/// anywhere. A view of its own so renaming or reordering views redraws only
+/// it.
 pub(crate) struct SavedViewsNav {
     /// Following the library's criteria, once a library view exists, to
     /// mark the view it shows.
@@ -239,14 +247,24 @@ pub(crate) struct SavedViewsNav {
 impl SavedViewsNav {
     pub(crate) fn new(cx: &mut Context<Self>) -> Self {
         let views = irori_library::saved_views(cx);
+        let library = models(cx).library.clone();
         Self {
             filters: None,
             _subscriptions: vec![
                 cx.observe(&views, |_, _, cx| cx.notify()),
+                // Categories pinned, renamed or recoloured.
+                cx.observe(&library, |_, _, cx| cx.notify()),
                 cx.observe(&navigator(cx), |_, _, cx| cx.notify()),
             ],
         }
     }
+}
+
+/// What a row of the views section opens.
+#[derive(Clone)]
+enum ViewTarget {
+    Saved(u64),
+    Category(CategoryRef),
 }
 
 impl Render for SavedViewsNav {
@@ -259,18 +277,59 @@ impl Render for SavedViewsNav {
         let views = irori_library::saved_view_list(cx);
         let on_library = *navigator(cx).read(cx).current() == Route::Library;
         let active = on_library.then(|| irori_library::active_view(cx)).flatten();
+        // Pinned categories of either kind, after the views: a smart
+        // category is a view that keeps itself up to date.
+        let pinned: Vec<_> = irori_library::category_list(cx)
+            .into_iter()
+            .filter(|entry| entry.pinned)
+            .collect();
+        let mut entries: Vec<(ViewTarget, SharedString, IconName, Option<Hsla>, bool)> = views
+            .into_iter()
+            .map(|(id, name)| {
+                let selected = active == Some(id);
+                (
+                    ViewTarget::Saved(id),
+                    name,
+                    IconName::Bookmark,
+                    None,
+                    selected,
+                )
+            })
+            .collect();
+        for entry in pinned {
+            let selected = on_library
+                && active.is_none()
+                && irori_library::shows_only_category(&entry.category, cx);
+            let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
+            let icon = irori_ui::categories::icon(&entry.category);
+            entries.push((
+                ViewTarget::Category(entry.category),
+                entry.name.into(),
+                icon,
+                colour,
+                selected,
+            ));
+        }
         let theme = cx.theme();
         let palette = SidebarPalette::new(cx);
         let hover_bg = palette.highlight;
         let radius = theme.radius;
         let (active_fg, fg) = (palette.selected_text, palette.text);
         let (active_icon, icon) = (palette.selected_icon, palette.icon);
-        let rows: Vec<AnyElement> = views
+        let rows: Vec<AnyElement> = entries
             .into_iter()
-            .map(|(id, name)| {
-                let selected = active == Some(id);
+            .map(|(target, name, glyph, colour, selected)| {
+                let id = match &target {
+                    ViewTarget::Saved(id) => format!("saved-view:{id}"),
+                    ViewTarget::Category(CategoryRef::Manual(name)) => {
+                        format!("pinned-category:{name}")
+                    }
+                    ViewTarget::Category(CategoryRef::Smart(id)) => {
+                        format!("pinned-smart-category:{id}")
+                    }
+                };
                 h_flex()
-                    .id(ElementId::Name(format!("saved-view:{id}").into()))
+                    .id(ElementId::Name(id.into()))
                     .keyboard_focusable(cx)
                     .h(rems(2.25))
                     .px_3()
@@ -283,13 +342,21 @@ impl Render for SavedViewsNav {
                     .when(!selected, |d| {
                         d.hover(move |s| s.bg(hover_bg).text_color(active_fg))
                     })
-                    .child(
-                        Icon::new(IconName::Bookmark)
-                            .small()
-                            .text_color(if selected { active_icon } else { icon }),
-                    )
+                    .child(Icon::new(glyph).small().text_color(if selected {
+                        active_icon
+                    } else {
+                        icon
+                    }))
                     .child(div().flex_1().min_w_0().truncate().child(name))
-                    .on_click(move |_, _, cx| irori_library::apply_view(id, cx))
+                    .when_some(colour, |d, colour| {
+                        d.child(div().flex_none().size_2().rounded_full().bg(colour))
+                    })
+                    .on_click(move |_, _, cx| match &target {
+                        ViewTarget::Saved(id) => irori_library::apply_view(*id, cx),
+                        ViewTarget::Category(category) => {
+                            irori_library::show_category(category.clone(), cx)
+                        }
+                    })
                     .into_any_element()
             })
             .collect();

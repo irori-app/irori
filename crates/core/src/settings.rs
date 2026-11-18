@@ -149,6 +149,11 @@ pub struct GameSettings {
     pub enable_fsr: bool,
     pub enable_msync: bool,
     pub enable_fsync: bool,
+    /// NTSync, the kernel's Windows synchronization driver (`/dev/ntsync`),
+    /// in Proton and Wine builds that use it. On by default as those builds
+    /// have it; off sets `PROTON_NO_NTSYNC`. Linux only; Irori-only.
+    #[serde(rename = "iroriNtsync")]
+    pub ntsync: bool,
     pub enable_wine_wayland: bool,
     #[serde(rename = "enableHDR")]
     pub enable_hdr: bool,
@@ -157,6 +162,11 @@ pub struct GameSettings {
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
+    /// Wine DLL overrides, added to `WINEDLLOVERRIDES` for games run
+    /// through Wine or Proton (each replaces what the variable says about
+    /// its DLL). Irori-only.
+    #[serde(rename = "iroriDllOverrides")]
+    pub dll_overrides: Vec<crate::DllOverride>,
     /// List this game among Sunshine's applications while Irori keeps its
     /// games there. Irori-only; set per game.
     #[serde(rename = "iroriInSunshine")]
@@ -191,6 +201,11 @@ pub struct GameSettings {
     pub saves_path: String,
     pub gog_saves: Vec<CloudSaveLocation>,
     pub before_launch_script_path: String,
+    /// Start the game without waiting for the before-launch script, which
+    /// then runs alongside it and is stopped when the session ends (for a
+    /// script that never exits, such as a server). Irori-only.
+    #[serde(rename = "iroriBeforeLaunchScriptAlongside")]
+    pub before_launch_script_alongside: bool,
     pub after_launch_script_path: String,
     #[serde(rename = "disableUMU")]
     pub disable_umu: bool,
@@ -356,6 +371,40 @@ pub struct LsfgSettings {
     pub flow_scale: u8,
     /// lsfg-vk's lighter model.
     pub performance_mode: bool,
+    /// The Vulkan layer that generates the frames: [`LAYER_LSFG_VK`] or
+    /// [`LAYER_MAKO`] (MAKO Renderer, lsfg-vk's descendant). Settings
+    /// written before the choice existed lack the key and keep lsfg-vk.
+    pub layer: String,
+}
+
+/// [`LsfgSettings::layer`] for lsfg-vk.
+pub const LAYER_LSFG_VK: &str = "lsfg-vk";
+/// [`LsfgSettings::layer`] for MAKO Renderer.
+pub const LAYER_MAKO: &str = "mako";
+
+/// The frame generation layer [`LsfgSettings::layer`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameGenLayer {
+    LsfgVk,
+    Mako,
+}
+
+impl LsfgSettings {
+    /// The chosen layer. A value this Irori doesn't know (a newer one's)
+    /// is no layer at all, so the game starts without frame generation
+    /// rather than with a layer the user didn't pick.
+    pub fn chosen_layer(&self) -> Option<FrameGenLayer> {
+        match self.layer.trim() {
+            "" | LAYER_LSFG_VK => Some(FrameGenLayer::LsfgVk),
+            LAYER_MAKO => Some(FrameGenLayer::Mako),
+            _ => None,
+        }
+    }
+
+    /// The layer that runs for this game, when frame generation is on.
+    pub fn active_layer(&self) -> Option<FrameGenLayer> {
+        self.enabled.then(|| self.chosen_layer()).flatten()
+    }
 }
 
 impl Default for LsfgSettings {
@@ -365,6 +414,7 @@ impl Default for LsfgSettings {
             multiplier: 2,
             flow_scale: 100,
             performance_mode: false,
+            layer: LAYER_LSFG_VK.into(),
         }
     }
 }
@@ -436,11 +486,13 @@ impl Default for GameSettings {
             enable_fsr: false,
             enable_msync: false,
             enable_fsync: true,
+            ntsync: true,
             enable_wine_wayland: false,
             enable_hdr: false,
             enable_wow64: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
+            dll_overrides: Vec::new(),
             in_sunshine: true,
             discord_presence: true,
             ignore_game_updates: false,
@@ -463,6 +515,7 @@ impl Default for GameSettings {
             saves_path: String::new(),
             gog_saves: Vec::new(),
             before_launch_script_path: String::new(),
+            before_launch_script_alongside: false,
             after_launch_script_path: String::new(),
             disable_umu: false,
             verbose_logs: true,
@@ -626,6 +679,10 @@ pub struct AppSettings {
     pub custom_wine_paths: Vec<String>,
     pub dark_tray_icon: bool,
     pub default_install_path: String,
+    /// Install each store's games in a folder of the store's own inside
+    /// `defaultInstallPath` (`Games/Irori/GOG/<game>`). Irori-only.
+    #[serde(rename = "iroriInstallPerStore")]
+    pub install_per_store: bool,
     pub default_steam_path: String,
     pub default_wine_prefix_dir: String,
     pub disable_controller: bool,
@@ -829,6 +886,7 @@ impl Default for AppSettings {
             custom_wine_paths: Vec::new(),
             dark_tray_icon: false,
             default_install_path: games.to_string_lossy().into_owned(),
+            install_per_store: false,
             default_steam_path: crate::platform::steam_dir().to_string_lossy().into_owned(),
             default_wine_prefix_dir: games.join("Prefixes").to_string_lossy().into_owned(),
             disable_controller: false,
@@ -1127,6 +1185,9 @@ pub struct UiPrefs {
     /// Width in rem of the game drawer beside the grid (`libraryDrawerWidth`).
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
+    /// Hold the middle mouse button and move the mouse to scroll what is
+    /// under it (`middleClickScroll`, off unless turned on).
+    pub middle_click_scroll: bool,
     pub show_store_badges: bool,
     /// The game's categories on its cover in the grid (`coverCategories`,
     /// off unless turned on).
@@ -1142,6 +1203,9 @@ pub struct UiPrefs {
     pub window_width: f32,
     pub window_height: f32,
     pub window_maximized: bool,
+    /// Open the main window maximized, whatever state it was left in
+    /// (`startMaximized`).
+    pub start_maximized: bool,
     /// The main window's place on its display, in global logical pixels,
     /// where the system lets Irori place windows (not Wayland).
     pub window_x: Option<f32>,
@@ -1276,6 +1340,34 @@ impl AppSettings {
         };
         (!id.is_empty()).then(|| id.to_string())
     }
+
+    /// The folder new installs of a store's games are offered, as the user
+    /// wrote it (`~` unexpanded): `defaultInstallPath`, and with
+    /// `iroriInstallPerStore` the store's own folder inside it, named as the
+    /// store is (`Epic Games`, `GOG`). Stores whose games Irori doesn't
+    /// install, and added games, keep `defaultInstallPath`.
+    pub fn install_folder(&self, runner: Runner) -> String {
+        let base = self.default_install_path.as_str();
+        if !self.install_per_store || base.trim().is_empty() || !installs_per_store(runner) {
+            return base.to_string();
+        }
+        let separator = if base.contains('\\') && !base.contains('/') {
+            '\\'
+        } else {
+            '/'
+        };
+        let base = base.trim_end_matches(['/', '\\']);
+        format!("{base}{separator}{}", runner.store_name())
+    }
+}
+
+/// Whether a store's games get a folder of the store's own with
+/// `iroriInstallPerStore`: the stores Irori downloads games from.
+fn installs_per_store(runner: Runner) -> bool {
+    matches!(
+        runner,
+        Runner::Legendary | Runner::Gog | Runner::Nile | Runner::Zoom | Runner::Itch | Runner::Xbox
+    )
 }
 
 /// Shader cache room games get unless the user changes it, in GiB.
@@ -1320,6 +1412,7 @@ impl Default for UiPrefs {
             tile_size: 11.0,
             library_drawer_width: 26.0,
             reduce_motion: false,
+            middle_click_scroll: false,
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
@@ -1328,6 +1421,7 @@ impl Default for UiPrefs {
             window_width: 1440.0,
             window_height: 900.0,
             window_maximized: false,
+            start_maximized: false,
             window_x: None,
             window_y: None,
             window_display: String::new(),
@@ -1461,6 +1555,30 @@ mod tests {
     }
 
     #[test]
+    fn stores_can_install_in_folders_of_their_own() {
+        let mut app: AppSettings =
+            serde_json::from_str(r#"{"defaultInstallPath": "~/Games/Irori/"}"#).unwrap();
+        assert!(!app.install_per_store, "off unless the user turns it on");
+        assert_eq!(app.install_folder(Runner::Gog), "~/Games/Irori/");
+        app.install_per_store = true;
+        assert_eq!(app.install_folder(Runner::Gog), "~/Games/Irori/GOG");
+        assert_eq!(
+            app.install_folder(Runner::Legendary),
+            "~/Games/Irori/Epic Games"
+        );
+        assert_eq!(app.install_folder(Runner::Itch), "~/Games/Irori/itch.io");
+        // Games Irori doesn't download keep the folder itself.
+        assert_eq!(app.install_folder(Runner::Sideload), "~/Games/Irori/");
+        assert_eq!(app.install_folder(Runner::Steam), "~/Games/Irori/");
+        app.default_install_path = r"D:\Games".into();
+        assert_eq!(app.install_folder(Runner::Nile), r"D:\Games\Amazon Games");
+        app.default_install_path = String::new();
+        assert_eq!(app.install_folder(Runner::Gog), "");
+        let json = serde_json::to_value(&app).unwrap();
+        assert_eq!(json["iroriInstallPerStore"], true);
+    }
+
+    #[test]
     fn gpu_and_frame_generation_keys() {
         let gs: GameSettings = serde_json::from_str(
             r#"{"iroriGpu": "0000:03:00.0", "iroriSmoothMotion": true,
@@ -1471,6 +1589,18 @@ mod tests {
         assert!(gs.smooth_motion && !gs.nvidia_reflex);
         assert_eq!(gs.lsfg.multiplier, 3);
         assert_eq!(gs.lsfg.flow_scale, 100, "missing keys keep their defaults");
+        assert_eq!(
+            gs.lsfg.active_layer(),
+            Some(FrameGenLayer::LsfgVk),
+            "settings from before MAKO keep lsfg-vk"
+        );
+        let mako: LsfgSettings =
+            serde_json::from_str(r#"{"enabled": true, "layer": "mako"}"#).unwrap();
+        assert_eq!(mako.active_layer(), Some(FrameGenLayer::Mako));
+        let newer: LsfgSettings =
+            serde_json::from_str(r#"{"enabled": true, "layer": "something-new"}"#).unwrap();
+        assert_eq!(newer.active_layer(), None);
+        assert_eq!(LsfgSettings::default().active_layer(), None);
         let json = serde_json::to_value(GameSettings::default()).unwrap();
         assert_eq!(json["iroriGpu"], "");
         assert_eq!(json["iroriWindowsGpu"], "");

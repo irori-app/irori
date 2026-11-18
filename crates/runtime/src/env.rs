@@ -131,6 +131,28 @@ pub fn add_dll_overrides(existing: Option<&str>, add: &[(&str, &str)]) -> String
     entries.join(";")
 }
 
+/// Add the game's own DLL overrides (`iroriDllOverrides`) to the
+/// `WINEDLLOVERRIDES` in `env`, under whatever letter case the user wrote
+/// the variable in. Each replaces what the variable said about its DLL;
+/// entries that can't be read are left out.
+pub fn apply_dll_overrides(env: &mut EnvMap, overrides: &[irori_core::DllOverride]) {
+    let pairs: Vec<(String, &'static str)> = overrides
+        .iter()
+        .filter_map(irori_core::DllOverride::wine_pair)
+        .collect();
+    if pairs.is_empty() {
+        return;
+    }
+    let key = env
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case("WINEDLLOVERRIDES"))
+        .cloned()
+        .unwrap_or_else(|| "WINEDLLOVERRIDES".to_string());
+    let add: Vec<(&str, &str)> = pairs.iter().map(|(d, m)| (d.as_str(), *m)).collect();
+    let value = add_dll_overrides(env.get(&key).map(String::as_str), &add);
+    env.insert(key, value);
+}
+
 /// `HEROIC_APP_SOURCE` value of a runner.
 pub fn app_source(runner: Runner) -> &'static str {
     match runner {
@@ -410,6 +432,17 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
     }
     if !gs.enable_fsync && proton {
         set("PROTON_NO_FSYNC", "1");
+    }
+    // Proton-GE turns NTSync on with `WINENTSYNC` unless `PROTON_NO_NTSYNC`
+    // is set, and the Wine of Proton-CachyOS and Proton-Wineland reads
+    // `PROTON_NO_NTSYNC` itself, run through Proton or not. Builds patched
+    // like Wine-GE wait for `WINENTSYNC`; upstream Wine 11 uses `/dev/ntsync`
+    // whenever it exists and reads neither.
+    if gs.ntsync && !proton {
+        set("WINENTSYNC", "1");
+    }
+    if !gs.ntsync {
+        set("PROTON_NO_NTSYNC", "1");
     }
     // Gamescope gives its children an X server and no Wayland socket, so
     // Wine's Wayland driver would leave gamescope's window empty.
@@ -1002,6 +1035,10 @@ mod tests {
         assert_eq!(env["PROTON_NO_ESYNC"], "1");
         assert_eq!(env["PROTON_NO_FSYNC"], "1");
         assert!(!env.contains_key("WINEESYNC") && !env.contains_key("WINEFSYNC"));
+        assert!(
+            !env.contains_key("PROTON_NO_NTSYNC") && !env.contains_key("WINENTSYNC"),
+            "Proton turns NTSync on itself"
+        );
         assert_eq!(env["PROTON_ENABLE_WAYLAND"], "1");
         assert_eq!(env["PROTON_ENABLE_HDR"], "1");
         assert!(!env.contains_key("DISPLAY"));
@@ -1047,6 +1084,8 @@ mod tests {
         assert_eq!(env["WINE_FULLSCREEN_FSR_STRENGTH"], "4");
         assert_eq!(env["WINEESYNC"], "1");
         assert_eq!(env["WINEFSYNC"], "1");
+        assert_eq!(env["WINENTSYNC"], "1");
+        assert!(!env.contains_key("PROTON_NO_NTSYNC"));
         assert_eq!(env["DISPLAY"], "");
         assert_eq!(env["DXVK_HDR"], "1");
         assert_eq!(env["WINEARCH"], "wow64");
@@ -1086,6 +1125,21 @@ mod tests {
         let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&sys, &w, &host));
         assert!(!env.contains_key("LD_LIBRARY_PATH"));
         assert!(!env.contains_key("ORIG_LD_LIBRARY_PATH"));
+    }
+
+    #[test]
+    fn ntsync_off_reaches_proton_and_wine() {
+        let dir = tempfile::tempdir().unwrap();
+        let gs = GameSettings {
+            ntsync: false,
+            ..Default::default()
+        };
+        let none = HostEnv::default();
+        for w in [proton(), wine(dir.path())] {
+            let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &none));
+            assert_eq!(env["PROTON_NO_NTSYNC"], "1", "{}", w.name);
+            assert!(!env.contains_key("WINENTSYNC"), "{}", w.name);
+        }
     }
 
     #[test]
@@ -1161,5 +1215,38 @@ mod tests {
             add_dll_overrides(Some("DXGI.dll=b;;D3DCompiler_47=d"), &[("dxgi.dll", "n,b")]),
             "D3DCompiler_47=d;dxgi=n,b"
         );
+    }
+
+    #[test]
+    fn game_dll_overrides_join_the_users_variable() {
+        let overrides = [
+            irori_core::DllOverride::new("nvapi", "disabled").unwrap(),
+            irori_core::DllOverride::new("libglesv2", "builtin").unwrap(),
+            irori_core::DllOverride {
+                dll: "bad name".into(),
+                mode: "n".into(),
+            },
+        ];
+        // The user wrote the variable in their own case; it stays theirs.
+        let mut env = EnvMap::from([(
+            "WineDllOverrides".to_string(),
+            "nvapi=n;d3d11=n;winemenubuilder.exe=d".to_string(),
+        )]);
+        apply_dll_overrides(&mut env, &overrides);
+        assert_eq!(
+            env,
+            EnvMap::from([(
+                "WineDllOverrides".to_string(),
+                "d3d11=n;winemenubuilder.exe=d;nvapi=d;libglesv2=b".to_string()
+            )])
+        );
+
+        let mut env = EnvMap::new();
+        apply_dll_overrides(&mut env, &overrides);
+        assert_eq!(env["WINEDLLOVERRIDES"], "nvapi=d;libglesv2=b");
+
+        let mut env = EnvMap::new();
+        apply_dll_overrides(&mut env, &[]);
+        assert!(env.is_empty());
     }
 }

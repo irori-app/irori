@@ -1469,6 +1469,20 @@ impl LutrisDialog {
                 )),
             );
         }
+        if !plan.dll_overrides.is_empty() {
+            let lines: Vec<String> = plan
+                .dll_overrides
+                .iter()
+                .map(|o| format!("{}={}", o.dll, o.mode))
+                .collect();
+            body = body.child(
+                section(t("library.lutris.consent.dll_overrides"), cx).child(mono_block(
+                    "lutris-dll-overrides",
+                    lines,
+                    cx,
+                )),
+            );
+        }
         if !plan.programs.is_empty() {
             let lines: Vec<String> = plan
                 .programs

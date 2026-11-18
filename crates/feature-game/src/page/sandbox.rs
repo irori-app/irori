@@ -21,14 +21,10 @@ use irori_ui::{backend, models};
 use super::GamePage;
 use crate::ops;
 
-/// The sandbox setting of `id` as it stands now (`Default` where games of
-/// its store can't run sandboxed).
+/// The sandbox `id` starts in as its settings stand now (`Default` where
+/// the game can't run sandboxed).
 pub(super) fn configured(id: &irori_core::GameId, cx: &gpui_kit::App) -> SandboxSettings {
-    if irori_runtime::sandbox::applies_to(id.runner) {
-        backend(cx).settings.game(id).sandbox
-    } else {
-        SandboxSettings::default()
-    }
+    backend(cx).sandbox_of(id)
 }
 
 impl GamePage {

@@ -4,7 +4,9 @@
 //!
 //! Detecting a game file's system uses, in order: the folder it sits in
 //! (`…/SNES/…`), its extension when only one system claims it, and the
-//! file's header when several do (`.iso`, `.bin`).
+//! file's header when several do (`.iso`, `.bin`). Disc images of systems
+//! whose discs carry a marker file (`PS3_DISC.SFB`) are recognised by it
+//! first, wherever they sit.
 
 use std::io::Read as _;
 use std::path::Path;
@@ -13,6 +15,7 @@ use anyhow::{Context as _, Result};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
+use crate::iso9660;
 use crate::sfo;
 
 /// Bytes a header check may look at: enough for every rule in the catalog.
@@ -133,6 +136,12 @@ pub struct System {
     /// (arcade `.zip` sets, Xbox `.iso` images), never by extension alone.
     #[serde(default)]
     pub folder_only: bool,
+    /// Files at the root of an ISO 9660 image that mark a disc of this
+    /// system (`PS3_DISC.SFB`, `UMD_DATA.BIN`). Such an image is the
+    /// system's game wherever it sits, `folder_only` systems included, and
+    /// one inside a folder-games system's folder is a game of its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disc_files: Vec<String>,
 }
 
 impl System {
@@ -145,6 +154,16 @@ impl System {
         self.layout_folders
             .iter()
             .any(|f| f.eq_ignore_ascii_case(name))
+    }
+
+    /// Whether `path` may be a disc image this system recognises by its
+    /// [`System::disc_files`] (judged by the extension only).
+    pub fn takes_disc_image(&self, path: &Path) -> bool {
+        !self.disc_files.is_empty()
+            && path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| self.has_extension(e) && needs_sniff(&e.to_ascii_lowercase()))
     }
 
     pub fn needs_bios(&self) -> bool {
@@ -202,6 +221,10 @@ pub fn by_extension(ext: &str) -> Vec<&'static System> {
 /// known from a parent folder; it wins when it accepts the extension.
 pub fn detect(path: &Path, folder_hint: Option<&'static System>) -> Option<&'static System> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    // A disc's own marker file says more than the folder it was put in.
+    if let Some(system) = disc_system(path) {
+        return Some(system);
+    }
     if let Some(hint) = folder_hint
         && (hint.has_extension(&ext) || matches!(ext.as_str(), "zip" | "7z"))
     {
@@ -229,6 +252,61 @@ pub fn detect(path: &Path, folder_hint: Option<&'static System>) -> Option<&'sta
 /// Generic extensions that many systems share; their header decides.
 fn needs_sniff(ext: &str) -> bool {
     matches!(ext, "iso" | "bin" | "img" | "rvz" | "gcz")
+}
+
+/// The system whose marker file sits at the root of the disc image at
+/// `path` ([`System::disc_files`]). Opens the file only when its extension
+/// is one such a system takes.
+pub fn disc_system(path: &Path) -> Option<&'static System> {
+    let claimants: Vec<&'static System> = SYSTEMS
+        .iter()
+        .filter(|s| s.takes_disc_image(path))
+        .collect();
+    if claimants.is_empty() {
+        return None;
+    }
+    let root = iso9660::Image::open(path)?.root()?;
+    claimants.into_iter().find(|s| {
+        s.disc_files
+            .iter()
+            .any(|marker| root.iter().any(|e| e.name.eq_ignore_ascii_case(marker)))
+    })
+}
+
+/// The title the disc image at `path` gives itself through the system's
+/// [`System::folder_title`] files, read inside the image. Blocking.
+pub fn image_title(system: &System, path: &Path) -> Option<String> {
+    let mut image = iso9660::Image::open(path)?;
+    system.folder_title.iter().find_map(|rel| {
+        let entry = image.find(rel)?;
+        let bytes = image.read(&entry, TITLE_FILE_MAX)?;
+        title_of(rel, &bytes)
+    })
+}
+
+/// The title in the title file `rel` (by its name) holding `bytes`.
+fn title_of(rel: &str, bytes: &[u8]) -> Option<String> {
+    let name = Path::new(rel).file_name()?.to_str()?.to_ascii_lowercase();
+    match name.as_str() {
+        "param.json" => title_of_param_json(std::str::from_utf8(bytes).ok()?),
+        "param.sfo" => sfo::title(bytes),
+        _ => None,
+    }
+}
+
+/// Whether the game folder `folder` holds data for another game rather than
+/// a game (a PlayStation 3 patch or add-on in `dev_hdd0/game`, whose
+/// `PARAM.SFO` category is `GD`). Blocking.
+pub fn folder_is_game_data(system: &System, folder: &Path) -> bool {
+    system.folder_title.iter().any(|rel| {
+        let path = folder.join(rel);
+        rel.to_ascii_lowercase().ends_with("param.sfo")
+            && std::fs::metadata(&path).is_ok_and(|m| m.len() <= TITLE_FILE_MAX)
+            && std::fs::read(&path)
+                .ok()
+                .and_then(|b| sfo::string(&b, "CATEGORY"))
+                .is_some_and(|c| c == "GD")
+    })
 }
 
 fn read_header(path: &Path) -> Result<Vec<u8>> {
@@ -259,12 +337,7 @@ pub fn folder_title(system: &System, folder: &Path) -> Option<String> {
         if std::fs::metadata(&path).ok()?.len() > TITLE_FILE_MAX {
             return None;
         }
-        let name = Path::new(rel).file_name()?.to_str()?.to_ascii_lowercase();
-        match name.as_str() {
-            "param.json" => title_of_param_json(&std::fs::read_to_string(&path).ok()?),
-            "param.sfo" => sfo::title(&std::fs::read(&path).ok()?),
-            _ => None,
-        }
+        title_of(rel, &std::fs::read(&path).ok()?)
     })
 }
 
@@ -409,6 +482,34 @@ mod tests {
         assert!(by_extension("zip").is_empty());
         let ps3 = get("ps3").unwrap();
         assert!(ps3.folder_games && !ps3.folder_main.is_empty());
+    }
+
+    #[test]
+    fn recognises_disc_images_by_their_marker_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let ps3 = dir.path().join("BLUS30443.iso");
+        let sfo = sfo::build(&[("TITLE", "Demon's Souls™")]);
+        std::fs::write(
+            &ps3,
+            iso9660::build(&[("PS3_DISC.SFB", b".SFB"), ("PS3_GAME/PARAM.SFO", &sfo)]),
+        )
+        .unwrap();
+        // Wherever it sits, also in another system's folder.
+        assert_eq!(detect(&ps3, None).unwrap().id, "ps3");
+        assert_eq!(detect(&ps3, by_folder("PS2")).unwrap().id, "ps3");
+        let system = get("ps3").unwrap();
+        assert_eq!(image_title(system, &ps3).as_deref(), Some("Demon's Souls"));
+
+        let psp = dir.path().join("game.iso");
+        std::fs::write(&psp, iso9660::build(&[("UMD_DATA.BIN", b"x")])).unwrap();
+        assert_eq!(detect(&psp, None).unwrap().id, "psp");
+
+        // Without a marker the folder still decides; alone, nothing does.
+        let ps2 = dir.path().join("ps2.iso");
+        std::fs::write(&ps2, iso9660::build(&[("SYSTEM.CNF", b"BOOT2")])).unwrap();
+        assert!(detect(&ps2, None).is_none());
+        assert_eq!(detect(&ps2, by_folder("PS2")).unwrap().id, "ps2");
+        assert!(image_title(system, &ps2).is_none());
     }
 
     #[test]

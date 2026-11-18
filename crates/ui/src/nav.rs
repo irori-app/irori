@@ -52,10 +52,68 @@ impl Route {
     }
 }
 
-pub struct Navigator {
+/// Back/forward history around the current route, kept apart from the
+/// entity so its rules can be tested without a window.
+#[derive(Debug)]
+struct History {
     current: Route,
     back: Vec<Route>,
     forward: Vec<Route>,
+}
+
+/// How many routes "Back" remembers.
+const HISTORY_LIMIT: usize = 64;
+
+impl History {
+    fn new(current: Route) -> Self {
+        Self {
+            current,
+            back: Vec::new(),
+            forward: Vec::new(),
+        }
+    }
+
+    /// Moves to `route`; false when nothing changed.
+    fn go(&mut self, route: Route) -> bool {
+        if route == self.current {
+            return false;
+        }
+        // Going to the route just left is going back: a page's own "Back"
+        // button (a game's settings returning to the game) must not stack the
+        // two pages, or the next Back lands on the page just left again.
+        if self.back.last() == Some(&route) {
+            return self.back();
+        }
+        let prev = std::mem::replace(&mut self.current, route);
+        self.back.push(prev);
+        if self.back.len() > HISTORY_LIMIT {
+            self.back.remove(0);
+        }
+        self.forward.clear();
+        true
+    }
+
+    fn back(&mut self) -> bool {
+        let Some(prev) = self.back.pop() else {
+            return false;
+        };
+        let cur = std::mem::replace(&mut self.current, prev);
+        self.forward.push(cur);
+        true
+    }
+
+    fn forward(&mut self) -> bool {
+        let Some(next) = self.forward.pop() else {
+            return false;
+        };
+        let cur = std::mem::replace(&mut self.current, next);
+        self.back.push(cur);
+        true
+    }
+}
+
+pub struct Navigator {
+    history: History,
 }
 
 impl Global for NavigatorHandle {}
@@ -65,53 +123,45 @@ pub struct NavigatorHandle(pub Entity<Navigator>);
 
 impl Navigator {
     pub fn current(&self) -> &Route {
-        &self.current
+        &self.history.current
     }
 
     pub fn can_go_back(&self) -> bool {
-        !self.back.is_empty()
+        !self.history.back.is_empty()
     }
 
     pub fn can_go_forward(&self) -> bool {
-        !self.forward.is_empty()
+        !self.history.forward.is_empty()
     }
 
     /// The route `back` returns to.
     pub fn previous(&self) -> Option<&Route> {
-        self.back.last()
+        self.history.back.last()
     }
 
+    /// Goes to `route`. Going to the route "Back" would return to is the
+    /// same as going back, so pages that return with a button of their own
+    /// keep the history the user expects.
     pub fn go(&mut self, route: Route, cx: &mut Context<Self>) {
-        if route == self.current {
-            return;
+        if self.history.go(route) {
+            cx.notify();
         }
-        let prev = std::mem::replace(&mut self.current, route);
-        self.back.push(prev);
-        if self.back.len() > 64 {
-            self.back.remove(0);
-        }
-        self.forward.clear();
-        cx.notify();
     }
 
     /// Replace the current route without adding history.
     pub fn replace(&mut self, route: Route, cx: &mut Context<Self>) {
-        self.current = route;
+        self.history.current = route;
         cx.notify();
     }
 
     pub fn back(&mut self, cx: &mut Context<Self>) {
-        if let Some(prev) = self.back.pop() {
-            let cur = std::mem::replace(&mut self.current, prev);
-            self.forward.push(cur);
+        if self.history.back() {
             cx.notify();
         }
     }
 
     pub fn forward(&mut self, cx: &mut Context<Self>) {
-        if let Some(next) = self.forward.pop() {
-            let cur = std::mem::replace(&mut self.current, next);
-            self.back.push(cur);
+        if self.history.forward() {
             cx.notify();
         }
     }
@@ -119,9 +169,7 @@ impl Navigator {
 
 pub(crate) fn install(cx: &mut App) {
     let nav = cx.new(|_| Navigator {
-        current: Route::Library,
-        back: Vec::new(),
-        forward: Vec::new(),
+        history: History::new(Route::Library),
     });
     cx.set_global(NavigatorHandle(nav));
 }
@@ -142,4 +190,51 @@ pub fn go_back(cx: &mut App) {
 
 pub fn go_forward(cx: &mut App) {
     navigator(cx).update(cx, |n, cx| n.forward(cx));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use irori_core::Runner;
+
+    fn game() -> Route {
+        Route::Game(GameId::new(Runner::Gog, "1"))
+    }
+
+    #[test]
+    fn returning_from_game_settings_keeps_library_behind_the_game() {
+        let mut h = History::new(Route::Library);
+        h.go(game());
+        h.go(Route::GameSettings(
+            GameId::new(Runner::Gog, "1"),
+            "general".into(),
+        ));
+        // The settings page's own "Back" button navigates to the game.
+        h.go(game());
+        assert_eq!(h.current, game());
+        assert!(h.back());
+        assert_eq!(h.current, Route::Library);
+        assert!(!h.back());
+    }
+
+    #[test]
+    fn going_somewhere_new_clears_forward() {
+        let mut h = History::new(Route::Library);
+        h.go(Route::Downloads);
+        h.back();
+        assert_eq!(h.forward, vec![Route::Downloads]);
+        h.go(Route::Stats);
+        assert!(h.forward.is_empty());
+        assert_eq!(h.back, vec![Route::Library]);
+    }
+
+    #[test]
+    fn same_route_changes_nothing_and_history_is_bounded() {
+        let mut h = History::new(Route::Library);
+        assert!(!h.go(Route::Library));
+        for i in 0..100 {
+            h.go(Route::Settings(format!("s{i}").into()));
+        }
+        assert_eq!(h.back.len(), HISTORY_LIMIT);
+    }
 }

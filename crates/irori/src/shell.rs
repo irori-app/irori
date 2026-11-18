@@ -60,6 +60,8 @@ pub struct AppShell {
     start_settled: bool,
     /// Saves the window's place once it has stopped moving.
     placement_save: Option<Task<()>>,
+    /// Scrolling with the middle button held, when turned on.
+    middle_scroll: irori_ui::middle_scroll::MiddleScroll,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -171,6 +173,7 @@ impl AppShell {
             app_update: Default::default(),
             start_settled: false,
             placement_save: None,
+            middle_scroll: Default::default(),
             _subscriptions: subs,
         }
     }
@@ -324,7 +327,8 @@ impl AppShell {
     /// Save where the window is, a second after it stopped moving, so it
     /// reopens there (`crate::placement`).
     fn save_placement(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let Some(saved) = crate::placement::current(window, cx) else {
+        let previous = crate::placement::Saved::from_prefs(&models(cx).settings.read(cx).app.ui);
+        let Some(saved) = crate::placement::current(window, &previous, cx) else {
             return;
         };
         let backend = irori_ui::backend(cx);
@@ -703,6 +707,9 @@ impl Render for AppShell {
             PAGE_RISE_PX,
         );
         let modal_dim = irori_ui::theme::modal_dim(window, cx);
+        // Big Picture has its own scrolling and no pointer to speak of.
+        let middle_scroll =
+            !fullscreen_mode && models(cx).settings.read(cx).app.ui.middle_click_scroll;
 
         v_flex()
             .id("irori-shell")
@@ -779,6 +786,7 @@ impl Render for AppShell {
                 this.child(div().absolute().inset_0().bg(dim))
             })
             .child(self.hold_hint.clone())
+            .child(self.middle_scroll.element(middle_scroll))
     }
 }
 

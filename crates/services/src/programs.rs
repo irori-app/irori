@@ -150,6 +150,23 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
     out
 }
 
+/// The before-launch script, run alongside the game
+/// (`iroriBeforeLaunchScriptAlongside`): started at once, with the variables
+/// naming the game, and stopped when the session ends.
+pub(crate) fn script_alongside(script: &str, game: &GameInfo) -> Plan {
+    let spec = process::program_command(Path::new(script)).envs(identity_env(game));
+    Plan {
+        start: vec![Planned {
+            label: "the script before launch".into(),
+            spec,
+            delay: Duration::ZERO,
+            stop_with_game: true,
+            in_prefix: false,
+        }],
+        skipped: Vec::new(),
+    }
+}
+
 impl PlanInput<'_> {
     fn identity_is_steam(&self) -> bool {
         self.identity.get("IRORI_RUNNER").map(String::as_str) == Some("steam")
@@ -211,7 +228,9 @@ pub(crate) fn stops_at_end(stop_with_game: bool) -> bool {
     stop_with_game
 }
 
-/// The programs of one session.
+/// The programs of one session. Dropping it without [`Programs::end`] (a
+/// launch that failed after they started) still stops the ones that stop
+/// with the game.
 pub(crate) struct Programs {
     /// Cancelled when the session ends: programs still waiting for their
     /// delay never start, and running ones that stop with the game stop.
@@ -224,8 +243,9 @@ pub(crate) struct Programs {
 }
 
 impl Programs {
-    /// Start the planned programs (each after its delay) and log the skipped.
-    /// Call from inside the backend runtime.
+    /// Start the planned programs (each after its delay; those without one
+    /// before this returns) and log the skipped. Call from inside the backend
+    /// runtime.
     pub(crate) fn start(plan: Plan, log_file: &Path) -> Self {
         for (label, skip) in &plan.skipped {
             append_log(
@@ -237,11 +257,13 @@ impl Programs {
         let in_prefix = Arc::new(AtomicUsize::new(0));
         let mut stopping = Vec::new();
         for planned in plan.start {
+            let started = planned.delay.is_zero().then(|| launch(&planned, log_file));
             let task = tokio::spawn(run(
                 planned.clone(),
                 log_file.to_path_buf(),
                 end.clone(),
                 in_prefix.clone(),
+                started,
             ));
             if stops_at_end(planned.stop_with_game) {
                 stopping.push(task);
@@ -261,39 +283,59 @@ impl Programs {
 
     /// End the session: cancel the programs still waiting and stop the ones
     /// that stop with the game. Returns once they have exited.
-    pub(crate) async fn end(self) {
+    pub(crate) async fn end(mut self) {
         self.end.cancel();
-        for task in self.stopping {
+        for task in std::mem::take(&mut self.stopping) {
             let _ = task.await;
         }
     }
 }
 
+impl Drop for Programs {
+    fn drop(&mut self) {
+        self.end.cancel();
+    }
+}
+
+/// Start one program, writing to the game log what happened; `None` when it
+/// could not start.
+fn launch(planned: &Planned, log_file: &Path) -> Option<tokio::process::Child> {
+    let label = &planned.label;
+    append_log(log_file, &format!("Starting {label}: {}\n", planned.spec));
+    match process::spawn(&planned.spec, Some(log_file)) {
+        Ok(child) => Some(child),
+        Err(e) => {
+            tracing::warn!("starting {label}: {e:#}");
+            append_log(log_file, &format!("Could not start {label}: {e:#}\n"));
+            None
+        }
+    }
+}
+
+/// Follow one program: `started` holds the program already started (`None`
+/// inside when that failed); otherwise it starts after its delay.
 async fn run(
     planned: Planned,
     log_file: PathBuf,
     end: CancellationToken,
     in_prefix: Arc<AtomicUsize>,
+    started: Option<Option<tokio::process::Child>>,
 ) {
     let label = &planned.label;
-    if !planned.delay.is_zero() {
-        tokio::select! {
-            _ = tokio::time::sleep(planned.delay) => {}
-            _ = end.cancelled() => {
-                append_log(&log_file, &format!("Not starting {label}: the game ended first\n"));
-                return;
+    let child = match started {
+        Some(started) => started,
+        None => {
+            tokio::select! {
+                _ = tokio::time::sleep(planned.delay) => {}
+                _ = end.cancelled() => {
+                    append_log(&log_file, &format!("Not starting {label}: the game ended first\n"));
+                    return;
+                }
             }
-        }
-    }
-    append_log(&log_file, &format!("Starting {label}: {}\n", planned.spec));
-    let mut child = match process::spawn(&planned.spec, Some(&log_file)) {
-        Ok(child) => child,
-        Err(e) => {
-            tracing::warn!("starting {label}: {e:#}");
-            append_log(&log_file, &format!("Could not start {label}: {e:#}\n"));
-            return;
+            launch(&planned, &log_file)
         }
     };
+    let Some(mut child) = child else { return };
     if planned.in_prefix {
         in_prefix.fetch_add(1, Ordering::SeqCst);
     }
@@ -537,5 +579,57 @@ mod tests {
             text.contains("Not starting Late: the game ended first"),
             "{text}"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_script_alongside_starts_at_once_and_stops_with_the_session() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("game.log");
+        std::fs::write(&log, "").unwrap();
+        // A script that never exits on its own, like a server.
+        let started = dir.path().join("started");
+        let script = dir.path().join("serve.sh");
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\ntouch '{}'\nexec sleep 30\n", started.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let game = GameInfo {
+            title: "Example".into(),
+            ..Default::default()
+        };
+        let script = script.to_string_lossy();
+
+        let session = Programs::start(script_alongside(&script, &game), &log);
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("Starting the script before launch"), "{text}");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !started.exists() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(started.exists(), "the script never ran");
+        session.end().await;
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(
+            text.contains("Stopping the script before launch: the game ended"),
+            "{text}"
+        );
+
+        // A launch that fails after starting it stops it too.
+        std::fs::remove_file(&started).unwrap();
+        let session = Programs::start(script_alongside(&script, &game), &log);
+        drop(session);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let text = std::fs::read_to_string(&log).unwrap();
+            if text.matches("Stopping the script before launch").count() == 2 {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "{text}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 }

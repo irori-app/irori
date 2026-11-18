@@ -205,6 +205,8 @@ pub enum CustomKind {
     WineVersion,
     /// `KEY=VALUE` environment variable rows.
     EnvVars,
+    /// Wine DLL override rows: a DLL and its load mode.
+    DllOverrides,
     /// Wrapper command rows.
     Wrappers,
     /// GOG cloud-save locations.
@@ -316,7 +318,8 @@ pub enum Need {
     NvidiaDriver,
     /// What NVIDIA Smooth Motion needs.
     SmoothMotion,
-    /// lsfg-vk 2 and Lossless Scaling's DLL.
+    /// A frame generation layer: lsfg-vk 2 with Lossless Scaling's DLL, or
+    /// MAKO.
     Lsfg,
     /// A game run through Wine or Proton (or the defaults every game shares).
     WindowsGame,
@@ -367,7 +370,7 @@ impl Need {
                 Some(Some(SmoothMotionBlocker::OldCard)) => Some("settings.needs.rtx_40"),
                 Some(Some(SmoothMotionBlocker::OldDriver)) => Some("settings.needs.nvidia_575"),
             },
-            Need::Lsfg => match cx.graphics.map(|g| g.lsfg_blocker()) {
+            Need::Lsfg => match cx.graphics.map(|g| g.frame_generation_blocker()) {
                 None => Some(probing),
                 Some(None) => None,
                 Some(Some(LsfgBlocker::NotInstalled)) => Some("settings.needs.lsfg"),
@@ -566,6 +569,7 @@ impl FieldSpec {
                     | "showMangohud"
                     | "nvidiaPrime"
                     | "enableFsync"
+                    | "iroriNtsync"
                     | "enableFSR"
                     | "enableWineWayland"
                     | "enableHDR"
@@ -614,6 +618,7 @@ impl FieldSpec {
                     | "iroriInSunshine"
                     | "iroriDiscordPresence"
                     | "beforeLaunchScriptPath"
+                    | "iroriBeforeLaunchScriptAlongside"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
                     | "iroriLudusaviAutoBackup"
@@ -941,6 +946,14 @@ const LSFG_MULTIPLIER: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(8), Verbatim("8×")),
 ];
 
+const LSFG_LAYER: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(irori_core::LAYER_LSFG_VK),
+        Verbatim("lsfg-vk"),
+    ),
+    opt(ChoiceValue::Str(irori_core::LAYER_MAKO), Verbatim("MAKO")),
+];
+
 const LSFG_FLOW_SCALE: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(25), Verbatim("25%")),
     opt(ChoiceValue::Num(50), Verbatim("50%")),
@@ -1200,6 +1213,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.default_install_path.help")
     .keywords(&["path", "directory", "games"]),
     app(
+        "iroriInstallPerStore",
+        "settings.field.install_per_store.label",
+        General,
+        "settings.group.folders",
+        Toggle,
+    )
+    .help("settings.field.install_per_store.help")
+    .keywords(&["path", "directory", "folder", "store", "install"]),
+    app(
         "defaultWinePrefixDir",
         "settings.field.default_wine_prefix_dir.label",
         General,
@@ -1345,6 +1367,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.start_in_tray.help")
     .keywords(&["tray", "minimized", "startup"])
     .requires(NEEDS_EXIT_TO_TRAY),
+    app(
+        "iroriUi.startMaximized",
+        "settings.field.ui_start_maximized.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.ui_start_maximized.help")
+    .keywords(&["maximize", "maximized", "window", "startup", "full size"]),
     app(
         "iroriStartWithSystem",
         "settings.field.start_with_system.label",
@@ -2046,6 +2077,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["animation", "accessibility"]),
     app(
+        "iroriUi.middleClickScroll",
+        "settings.field.ui_middle_click_scroll.label",
+        Appearance,
+        "settings.group.mouse",
+        Toggle,
+    )
+    .help("settings.field.ui_middle_click_scroll.help")
+    .keywords(&[
+        "middle",
+        "mouse",
+        "scroll",
+        "autoscroll",
+        "wheel",
+        "drag",
+        "scrollanywhere",
+    ]),
+    app(
         "iroriUi.fontFamily",
         "settings.field.ui_font_family.label",
         Appearance,
@@ -2323,6 +2371,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
     game(
+        "iroriDllOverrides",
+        "settings.field.dll_overrides.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Custom(CustomKind::DllOverrides),
+    )
+    .help("settings.field.dll_overrides.help")
+    .keywords(&[
+        "dll",
+        "overrides",
+        "winedlloverrides",
+        "native",
+        "builtin",
+        "disabled",
+        "lutris",
+    ]),
+    game(
         "enableEsync",
         "settings.field.enable_esync.label",
         Wine,
@@ -2340,6 +2405,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.enable_fsync.help")
     .keywords(&["fsync", "futex", "sync", "performance"]),
+    game(
+        "iroriNtsync",
+        "settings.field.ntsync.label",
+        Wine,
+        "settings.group.wine_sync",
+        Toggle,
+    )
+    .help("settings.field.ntsync.help")
+    .keywords(&["ntsync", "kernel", "sync", "performance"]),
     game(
         "enableMsync",
         "settings.field.enable_msync.label",
@@ -2811,16 +2885,28 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.frame_generation",
         Toggle,
     )
-    .tag(Verbatim("lsfg-vk"))
+    .tag(Verbatim("lsfg-vk · MAKO"))
     .help("settings.field.lsfg_enabled.help")
     .keywords(&[
         "lossless scaling",
         "lsfg",
         "lsfg-vk",
+        "mako",
         "frame generation",
         "fps",
     ])
     .needs(&[Need::Linux, Need::Lsfg]),
+    game(
+        "iroriLsfg.layer",
+        "settings.field.lsfg_layer.label",
+        Gpu,
+        "settings.group.frame_generation",
+        Choice(LSFG_LAYER),
+    )
+    .help("settings.field.lsfg_layer.help")
+    .keywords(&["lsfg-vk", "mako", "frame generation", "layer"])
+    .needs(&[Need::Linux, Need::Lsfg])
+    .requires(NEEDS_LSFG),
     game(
         "iroriLsfg.multiplier",
         "settings.field.lsfg_multiplier.label",
@@ -3062,6 +3148,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["script", "before", "pre-launch"]),
     game(
+        "iroriBeforeLaunchScriptAlongside",
+        "settings.field.before_launch_script_alongside.label",
+        Launch,
+        "settings.group.scripts",
+        Toggle,
+    )
+    .help("settings.field.before_launch_script_alongside.help")
+    .keywords(&[
+        "script",
+        "before",
+        "pre-launch",
+        "alongside",
+        "background",
+        "wait",
+        "server",
+    ]),
+    game(
         "afterLaunchScriptPath",
         "settings.field.after_launch_script_path.label",
         Launch,
@@ -3107,7 +3210,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ignore_game_updates.help")
     .keywords(&["update", "ignore", "pin", "version"]),
-    game_only(
+    game(
         "iroriSandbox.noNetwork",
         "settings.field.sandbox_no_network.label",
         Launch,
@@ -3124,7 +3227,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "untrusted",
         "isolate",
     ]),
-    game_only(
+    game(
         "iroriSandbox.noHome",
         "settings.field.sandbox_no_home.label",
         Launch,
@@ -3432,6 +3535,7 @@ mod tests {
             "nvidiaPrime",
             "iroriSmoothMotion",
             "iroriLsfg.enabled",
+            "iroriLsfg.layer",
             "iroriLsfg.multiplier",
             "iroriLsfg.flowScale",
             "iroriLsfg.performanceMode",
@@ -3552,6 +3656,12 @@ mod tests {
             Need::Lsfg.blocker(&cx(Linux, Some(two))),
             Some("settings.needs.lsfg_update")
         );
+        // MAKO alone is enough: it needs no Lossless Scaling.
+        let mako: &'static HostGraphics = Box::leak(Box::new(HostGraphics {
+            mako: Some("/home/u/.local/bin/mako-launch".into()),
+            ..one.clone()
+        }));
+        assert_eq!(Need::Lsfg.blocker(&cx(Linux, Some(mako))), None);
 
         let chosen = NeedContext {
             chosen_gpu: true,
@@ -3645,6 +3755,7 @@ mod tests {
         for path in [
             "launcherArgs",
             "beforeLaunchScriptPath",
+            "iroriBeforeLaunchScriptAlongside",
             "panel.launchPrograms",
             "iroriReplay.enabled",
             "panel.save-backups",

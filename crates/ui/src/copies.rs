@@ -9,7 +9,7 @@ use std::sync::Arc;
 use gpui_kit::App;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use irori_core::{GameId, GameInfo};
+use irori_core::{GameId, GameInfo, Runner};
 
 use crate::i18n::{t, t_args};
 use crate::{Route, backend, models, navigate};
@@ -24,6 +24,26 @@ pub fn of(id: &GameId, cx: &App) -> Vec<Arc<GameInfo>> {
         .iter()
         .filter_map(|copy| snapshot.get(copy).cloned())
         .collect()
+}
+
+/// The stores `id`'s entry has a copy on, the default copy's first; just
+/// `id`'s own store for a game with one copy.
+pub fn stores(id: &GameId, cx: &App) -> Vec<Runner> {
+    stores_of(id, models(cx).library.read(cx).snapshot.copies_of(id))
+}
+
+/// [`stores`] from the entry's copies, each store once.
+fn stores_of(id: &GameId, copies: &[GameId]) -> Vec<Runner> {
+    let mut stores = Vec::with_capacity(copies.len().max(1));
+    for copy in copies {
+        if !stores.contains(&copy.runner) {
+            stores.push(copy.runner);
+        }
+    }
+    if stores.is_empty() {
+        stores.push(id.runner);
+    }
+    stores
 }
 
 /// "Open the Steam copy", for menus and tooltips.
@@ -97,4 +117,21 @@ pub fn menu_items(mut menu: PopupMenu, id: &GameId, cx: &App) -> PopupMenu {
             .icon(IconName::Ungroup)
             .on_click(move |_, _, cx| separate_all(group.clone(), cx)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stores_name_each_copy_once_default_first() {
+        let id = GameId::new(Runner::Gog, "a");
+        assert_eq!(stores_of(&id, &[]), vec![Runner::Gog]);
+        let copies = [
+            GameId::new(Runner::Steam, "1"),
+            GameId::new(Runner::Gog, "a"),
+            GameId::new(Runner::Steam, "2"),
+        ];
+        assert_eq!(stores_of(&id, &copies), vec![Runner::Steam, Runner::Gog]);
+    }
 }

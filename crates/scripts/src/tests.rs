@@ -80,6 +80,10 @@ script:
       type: REG_DWORD
   wine:
     version: wine-ge-8-26
+    overrides:
+      libglesv2: builtin
+      nvapi,nvapi64: disabled
+      powershell.exe:
   system:
     env:
       DXVK_HUD: fps
@@ -392,6 +396,15 @@ async fn runs_wine_setup_script() {
     assert_eq!(game.exe, Some(example.join("game.exe")));
     assert_eq!(game.prefix, Some(ctx.game_dir.clone()));
     assert_eq!(game.wine_version.as_deref(), Some("wine-ge-8-26"));
+    let overrides: Vec<_> = game
+        .dll_overrides
+        .iter()
+        .map(|o| format!("{}={}", o.dll, o.mode))
+        .collect();
+    assert_eq!(
+        overrides,
+        ["libglesv2=b", "nvapi=d", "nvapi64=d", "powershell.exe=d"]
+    );
     assert_eq!(out.record.slug, "example-game");
     assert_eq!(
         out.record.installer_slug.as_deref(),
@@ -876,4 +889,22 @@ async fn a_shell_command_refuses_a_variable_that_would_rewrite_it() {
         format!("{e:#}").contains("not safe in a shell command"),
         "{e:#}"
     );
+}
+
+#[tokio::test]
+async fn the_game_plays_in_the_prefix_the_script_created() {
+    // The game section names no prefix, so the game plays where the script
+    // made one, not in another folder (#169).
+    let script = Script::parse(&steps_script(
+        "wine",
+        "[]",
+        "  - task: {name: create_prefix, prefix: $GAMEDIR/pfx}\n  - write_file: {file: $GAMEDIR/pfx/drive_c/game.exe, content: MZ}",
+        "    exe: $GAMEDIR/pfx/drive_c/game.exe",
+    ))
+    .unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let ctx = ctx(tmp.path());
+    let out = install(&script, &ctx, &Host::default()).await.unwrap();
+    let game = out.game.unwrap();
+    assert_eq!(game.prefix, Some(ctx.game_dir.join("pfx")));
 }

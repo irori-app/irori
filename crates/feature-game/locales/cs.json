@@ -251,6 +251,7 @@
   "game.install.no_wine": "Nebyla nalezena žádná verze Wine ani Protonu. Před hraním si nějakou stáhněte.",
   "game.install.not_in_library": "{id} není v knihovně.",
   "game.install.nothing_to_install": "Tato položka neobsahuje nic k instalaci. Bonusový obsah her z GOG je k dispozici na gog.com.",
+  "game.install.nothing_to_install_other": "Tato položka neobsahuje nic k instalaci.",
   "game.install.open_failed": "Instalátor se nepodařilo otevřít",
   "game.install.open_settings": "Otevřít nastavení",
   "game.install.open_wine_manager": "Otevřít správce Wine",

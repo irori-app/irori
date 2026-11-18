@@ -179,14 +179,24 @@ pub(crate) async fn fresh(client: &Client, session: &Session) -> Result<Option<S
     if valid {
         return Ok(None);
     }
+    renew(client, session).await.map(Some)
+}
+
+/// The session with a new access token (and the refresh token Steam
+/// replaced the old one with, if it did). Only this, the token service
+/// refusing the refresh token, means the user has to sign in again.
+pub(crate) async fn renew(client: &Client, session: &Session) -> Result<Session> {
     match client
-        .refresh_access_token(&session.refresh_token, session.steamid()?)
+        .renew_tokens(&session.refresh_token, session.steamid()?)
         .await
     {
-        Ok(access_token) => Ok(Some(Session {
-            access_token,
+        Ok(renewed) => Ok(Session {
+            access_token: renewed.access_token,
+            refresh_token: renewed
+                .refresh_token
+                .unwrap_or_else(|| session.refresh_token.clone()),
             ..session.clone()
-        })),
+        }),
         Err(e) => Err(map_rejection(e)),
     }
 }
@@ -202,6 +212,34 @@ pub(crate) fn map_rejection(e: anyhow::Error) -> anyhow::Error {
     }
 }
 
+/// [`fetch_library`] with an access token that still works: when the Web
+/// API refuses the access token (it can be revoked or expire before its
+/// claims say), the token is renewed once with the refresh token and the
+/// library asked again. A Web API refusal alone never signs the user out;
+/// only the token service refusing the refresh token does. Returns the
+/// renewed session, which the caller must keep.
+pub(crate) async fn fetch_library_renewing(
+    client: &Client,
+    session: &Session,
+) -> Result<(Vec<LibraryGame>, Option<Session>)> {
+    match fetch_library(client, session).await {
+        Err(e) if is_refused(&e) => {
+            tracing::info!("Steam refused the access token; renewing it");
+            let renewed = renew(client, session).await?;
+            let games = fetch_library(client, &renewed).await?;
+            Ok((games, Some(renewed)))
+        }
+        other => other.map(|games| (games, None)),
+    }
+}
+
+fn is_refused(e: &anyhow::Error) -> bool {
+    matches!(
+        e.downcast_ref::<SteamError>(),
+        Some(SteamError::SessionRejected)
+    )
+}
+
 /// Fetch the games the account owns and those its family shares.
 pub(crate) async fn fetch_library(client: &Client, session: &Session) -> Result<Vec<LibraryGame>> {
     let steamid = session.steamid()?;
@@ -209,7 +247,6 @@ pub(crate) async fn fetch_library(client: &Client, session: &Session) -> Result<
     let owned = client
         .owned_games(token, steamid)
         .await
-        .map_err(map_rejection)
         .context("Couldn't read your Steam library")?;
     // A family is optional; failing to read it keeps the owned games.
     let shared = match client.family_group(token, steamid).await {

@@ -318,6 +318,12 @@ pub fn script_game(
             if !env.is_empty() {
                 settings.push(("enviromentOptions", env_value(&env)));
             }
+            if windows && !game.dll_overrides.is_empty() {
+                settings.push((
+                    "iroriDllOverrides",
+                    serde_json::to_value(&game.dll_overrides)?,
+                ));
+            }
             ScriptLibraryEntry::App {
                 title: game.name.clone(),
                 program,
@@ -1365,6 +1371,7 @@ mod tests {
             arch: None,
             wine_version: None,
             env: BTreeMap::new(),
+            dll_overrides: Vec::new(),
             options: Map::new(),
             runner_options: Map::new(),
         };
@@ -1400,9 +1407,14 @@ mod tests {
             g.args = Some("-windowed".into());
             g.arch = Some("win32".into());
             g.env.insert("DXVK_HUD".into(), "fps".into());
+            g.dll_overrides = vec![irori_core::DllOverride::new("nvapi", "disabled").unwrap()];
         });
         let wine = build("Wine 9.0", WineKind::Wine);
         let game = script_game(&out, dir, Some(&wine), None, Default::default()).unwrap();
+        assert_eq!(
+            setting(&game, "iroriDllOverrides"),
+            Some(&json!([{"dll": "nvapi", "mode": "d"}]))
+        );
         assert_eq!(
             game.entry,
             ScriptLibraryEntry::App {

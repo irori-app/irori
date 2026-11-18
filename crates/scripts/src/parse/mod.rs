@@ -368,6 +368,11 @@ fn parse_object(top: &Map<String, Value>) -> Result<Script, ScriptError> {
         }
     }
 
+    let dll_overrides = match runner_sections.get("wine").and_then(|w| w.get("overrides")) {
+        None | Some(Value::Null) => Vec::new(),
+        Some(v) => dll_overrides(v)?,
+    };
+
     let requires = match body.get("requires") {
         None | Some(Value::Null) => Vec::new(),
         Some(v) => groups(v, "requires")?,
@@ -395,12 +400,39 @@ fn parse_object(top: &Map<String, Value>) -> Result<Script, ScriptError> {
         system_env,
         system,
         runner_sections,
+        dll_overrides,
         requires,
         extends,
         variables,
         require_binaries,
         install_complete_text: body.get("install_complete_text").and_then(scalar),
     })
+}
+
+/// `wine: overrides:`: DLL names (one, or several separated by commas) to
+/// the mode Wine loads them in, as Wine or Lutris spell it. A name or mode
+/// Irori can't read refuses the script rather than being passed on.
+fn dll_overrides(v: &Value) -> Result<Vec<irori_core::DllOverride>, ScriptError> {
+    let location = "Section “wine” (overrides)";
+    let Value::Object(m) = v else {
+        return Err(invalid(location, "expected a mapping".into()));
+    };
+    let mut out = Vec::new();
+    for (dlls, mode) in m {
+        let mode = match mode {
+            // Lutris writes an empty value for "disabled".
+            Value::Null => String::new(),
+            v => scalar(v).ok_or_else(|| invalid(location, format!("“{dlls}” is not text")))?,
+        };
+        let list = irori_core::DllOverride::several(dlls, &mode).ok_or_else(|| {
+            invalid(
+                location,
+                format!("“{dlls}: {mode}” is not a DLL override Wine can read"),
+            )
+        })?;
+        irori_core::dll_override::merge(&mut out, list);
+    }
+    Ok(out)
 }
 
 fn missing(location: &str, key: &str) -> ScriptError {

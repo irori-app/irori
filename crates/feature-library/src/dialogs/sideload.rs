@@ -12,6 +12,10 @@
 //! installer as its program) so it has settings and a prefix; the prefix
 //! path is pinned so renaming the app later keeps the installed files. If
 //! the dialog is closed without saving, that provisional entry is removed.
+//!
+//! The form asks first for what playing needs (title, platform, program,
+//! and for Windows programs the Wine or Proton build and prefix); the rest
+//! waits under "More details", and Add stays in the dialog's footer.
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
@@ -25,8 +29,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, Textar
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex,
-    v_flex,
+    Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -37,6 +40,7 @@ use irori_core::{GameId, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
 use irori_sideload::{SideloadApp, SideloadPlatform};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::wine_choice::{WineChoice, WineSetup};
 use irori_ui::{Route, backend, navigate};
 
 use super::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent};
@@ -110,6 +114,11 @@ pub struct SideloadDialog {
     provisional: Option<String>,
     installer: InstallerState,
     error: Option<SharedString>,
+    /// The Wine or Proton build and prefix of a Windows program; `None` on
+    /// Windows, which runs it itself.
+    wine: Option<Entity<WineChoice>>,
+    /// The optional fields are shown.
+    more: bool,
     /// The SteamGridDB picker, shown instead of the form while open.
     picker: Option<Entity<ArtPicker>>,
     _picker_subscription: Option<Subscription>,
@@ -236,7 +245,53 @@ impl SideloadDialog {
             None => (Vec::new(), BTreeSet::new()),
         };
 
+        let wine =
+            (irori_core::HostPlatform::current() != irori_core::HostPlatform::Windows).then(|| {
+                let stored = editing.as_deref().and_then(|name| {
+                    let game = crate::sideload_store(cx)?.game(name)?;
+                    Some((GameId::new(Runner::Sideload, name), game))
+                });
+                cx.new(|cx| match stored {
+                    Some((id, game)) => WineChoice::for_game(&id, &game, window, cx),
+                    None => {
+                        let prefix = new_app_prefix(&existing.title, cx);
+                        WineChoice::new(&prefix, window, cx)
+                    }
+                })
+            });
+        let more = editing.is_some()
+            && (!existing.launcher_args.is_empty()
+                || existing.install_folder.is_some()
+                || existing.custom_user_agent.is_some()
+                || existing
+                    .description
+                    .as_deref()
+                    .is_some_and(|d| !d.is_empty())
+                || existing.developer.is_some()
+                || existing.release_date.is_some()
+                || existing.genres.iter().any(|g| !g.trim().is_empty())
+                || existing.cover_art.is_some()
+                || existing.background_art.is_some()
+                || !modes.is_empty());
+
         let mut subscriptions = Vec::new();
+        // A new app's prefix is named after it.
+        if editing.is_none()
+            && let Some(wine) = &wine
+        {
+            let wine = wine.clone();
+            subscriptions.push(cx.subscribe_in(
+                &title,
+                window,
+                move |_, state, event, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        let title = state.read(cx).value().trim().to_string();
+                        let prefix = new_app_prefix(&title, cx);
+                        wine.update(cx, |w, cx| w.set_default_prefix(&prefix, window, cx));
+                    }
+                },
+            ));
+        }
         for state in [&title, &executable, &url] {
             subscriptions.push(
                 cx.subscribe_in(state, window, |this, _, event, window, cx| match event {
@@ -278,10 +333,20 @@ impl SideloadDialog {
             provisional: None,
             installer: InstallerState::Idle,
             error: None,
+            wine,
+            more,
             picker: None,
             _picker_subscription: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    /// The Wine choice to apply to the app, when it is a Windows program
+    /// played through Wine.
+    fn wine_setup(&self, cx: &App) -> Option<WineSetup> {
+        (self.platform == SideloadPlatform::Windows)
+            .then(|| self.wine.as_ref().map(|w| w.read(cx).setup(cx)))
+            .flatten()
     }
 
     fn dialog_title(&self, cx: &App) -> SharedString {
@@ -353,13 +418,15 @@ impl SideloadDialog {
             let Some(installer) = picked.await else {
                 return;
             };
-            this.update_in(cx, |this, _, cx| this.start_installer(installer, cx))
-                .ok();
+            this.update_in(cx, |this, window, cx| {
+                this.start_installer(installer, window, cx)
+            })
+            .ok();
         })
         .detach();
     }
 
-    fn start_installer(&mut self, installer: PathBuf, cx: &mut Context<Self>) {
+    fn start_installer(&mut self, installer: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let Some(store) = crate::sideload_store(cx) else {
             self.error = Some(t("library.sideload.error.unavailable"));
             cx.notify();
@@ -371,6 +438,7 @@ impl SideloadDialog {
         if app.executable.is_none() {
             app.executable = Some(installer.clone());
         }
+        let setup = self.wine.as_ref().map(|w| w.read(cx).setup(cx));
         self.installer = InstallerState::Starting;
         self.error = None;
         cx.notify();
@@ -387,6 +455,10 @@ impl SideloadDialog {
             let game = store.game(&id.app_name).ok_or_else(|| {
                 anyhow::anyhow!(t("library.sideload.error.not_found").to_string())
             })?;
+            // The installer runs with the build and in the prefix chosen.
+            if let Some(setup) = &setup {
+                setup.apply(&b, &id, &game);
+            }
             let settings = b.settings.game(&id);
             let prefix = irori_runtime::prefix_path(&b.settings.app(), &settings, &game);
             if created.is_some() && settings.wine_prefix.is_empty() {
@@ -402,13 +474,17 @@ impl SideloadDialog {
             let run = b.run_in_prefix(&id, argv).await.map(|_| ());
             Ok((created, prefix, run))
         });
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 match result {
                     Ok((created, prefix, run)) => {
                         if created.is_some() {
                             this.provisional = created;
+                        }
+                        // The prefix is pinned now; saving keeps it.
+                        if let Some(wine) = &this.wine {
+                            wine.update(cx, |w, cx| w.set_prefix(&prefix, window, cx));
                         }
                         match run {
                             Ok(()) => {
@@ -478,6 +554,7 @@ impl SideloadDialog {
         let b = backend(cx);
         let settings = b.settings.app();
         let modes = super::chosen_modes(&self.known_modes, &self.modes);
+        let setup = self.wine_setup(cx);
         self.saving = true;
         self.error = None;
         cx.notify();
@@ -494,6 +571,11 @@ impl SideloadDialog {
                 }
                 SaveMode::Add => (store.add_app(app).await?, true),
             };
+            if let Some(setup) = &setup
+                && let Some(game) = store.game(&id.app_name)
+            {
+                setup.apply(&b, &id, &game);
+            }
             let mut own = b
                 .userdata
                 .snapshot()
@@ -675,35 +757,30 @@ impl SideloadDialog {
     }
 }
 
-impl Render for SideloadDialog {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(picker) = &self.picker {
-            return v_flex().id("sideload-art").child(picker.clone());
-        }
-        let rom_system = self.rom_system(cx).filter(|_| self.editing.is_none());
-        let browser = self.platform == SideloadPlatform::Browser;
-        let windows = self.platform == SideloadPlatform::Windows;
-        let adding = self.editing.is_none();
-        let installer = self.installer.clone();
-        let muted = cx.theme().muted_foreground;
-        let platform = self.platform;
-
-        v_flex()
-            .id("sideload-form")
-            .gap_4()
-            .when_some(rom_system, |this, system| {
-                this.child(
-                    Alert::info(
-                        "sideload-rom-hint",
-                        t_args(
-                            "library.sideload.rom_hint.body",
-                            &[("system", &system.name)],
-                        ),
-                    )
-                    .title(t("library.sideload.rom_hint.title")),
+impl SideloadDialog {
+    /// The hints above the form: a console game's file, or store games.
+    fn render_hints(
+        &self,
+        rom_system: Option<&irori_engines::System>,
+        cx: &mut Context<Self>,
+    ) -> Vec<gpui_kit::AnyElement> {
+        let mut out = Vec::new();
+        if let Some(system) = rom_system {
+            out.push(
+                Alert::info(
+                    "sideload-rom-hint",
+                    t_args(
+                        "library.sideload.rom_hint.body",
+                        &[("system", &system.name)],
+                    ),
                 )
-                .child(
-                    h_flex().justify_end().child(
+                .title(t("library.sideload.rom_hint.title"))
+                .into_any_element(),
+            );
+            out.push(
+                h_flex()
+                    .justify_end()
+                    .child(
                         Button::new("sideload-add-rom")
                             .primary()
                             .small()
@@ -713,56 +790,172 @@ impl Render for SideloadDialog {
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.add_as_rom(window, cx)),
                             ),
+                    )
+                    .into_any_element(),
+            );
+        } else if self.editing.is_none() {
+            out.push(
+                Alert::info("sideload-store-hint", t("library.sideload.store_hint.body"))
+                    .title(t("library.sideload.store_hint.title"))
+                    .into_any_element(),
+            );
+            out.push(
+                h_flex()
+                    .justify_end()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        Button::new("sideload-folder")
+                            .small()
+                            .ghost()
+                            .icon(IconName::FolderPlus)
+                            .label(t("library.folder.open"))
+                            .tooltip(t("library.folder.open_tooltip"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                super::folder::open_add_folder_dialog(window, cx);
+                            }),
+                    )
+                    .child(
+                        Button::new("sideload-lutris")
+                            .small()
+                            .ghost()
+                            .icon(IconName::ScrollText)
+                            .label(t("library.sideload.lutris_script"))
+                            .tooltip(t("library.sideload.lutris_script_tooltip"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                super::lutris::open_lutris_installer(None, window, cx);
+                            }),
+                    )
+                    .child(
+                        Button::new("sideload-accounts")
+                            .small()
+                            .ghost()
+                            .icon(IconName::LogIn)
+                            .label(t("library.sideload.go_to_accounts"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                navigate(Route::Accounts, cx);
+                            }),
+                    )
+                    .into_any_element(),
+            );
+        }
+        out
+    }
+
+    /// The optional fields, behind "More details".
+    fn render_details(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let browser = self.platform == SideloadPlatform::Browser;
+        v_form()
+            .when(!browser, |form| {
+                form.child(
+                    field()
+                        .label(t("library.sideload.field.arguments"))
+                        .child(Input::new(&self.arguments)),
+                )
+                .child(
+                    field()
+                        .label(t("library.sideload.field.install_folder"))
+                        .description(t("library.sideload.install_folder_hint"))
+                        .child(self.path_row(
+                            "browse-folder",
+                            |this| &this.install_folder,
+                            true,
+                            cx,
+                        )),
+                )
+            })
+            .when(browser, |form| {
+                form.child(
+                    field()
+                        .label(t("library.sideload.field.user_agent"))
+                        .description(t("library.sideload.user_agent_hint"))
+                        .child(Input::new(&self.user_agent)),
+                )
+                .child(
+                    field().label_indent(false).child(
+                        Switch::new("sideload-fullscreen")
+                            .label(t("library.sideload.fullscreen"))
+                            .checked(self.fullscreen)
+                            .on_change(cx.listener(|this, v: &bool, _, cx| {
+                                this.fullscreen = *v;
+                                cx.notify();
+                            })),
                     ),
                 )
             })
-            .when(adding && rom_system.is_none(), |this| {
-                this.child(
-                    Alert::info("sideload-store-hint", t("library.sideload.store_hint.body"))
-                        .title(t("library.sideload.store_hint.title")),
-                )
-                .child(
-                    h_flex()
-                        .justify_end()
-                        .flex_wrap()
-                        .gap_2()
-                        .child(
-                            Button::new("sideload-folder")
-                                .small()
-                                .ghost()
-                                .icon(IconName::FolderPlus)
-                                .label(t("library.folder.open"))
-                                .tooltip(t("library.folder.open_tooltip"))
-                                .on_click(|_, window, cx| {
-                                    window.close_dialog(cx);
-                                    super::folder::open_add_folder_dialog(window, cx);
-                                }),
-                        )
-                        .child(
-                            Button::new("sideload-lutris")
-                                .small()
-                                .ghost()
-                                .icon(IconName::ScrollText)
-                                .label(t("library.sideload.lutris_script"))
-                                .tooltip(t("library.sideload.lutris_script_tooltip"))
-                                .on_click(|_, window, cx| {
-                                    window.close_dialog(cx);
-                                    super::lutris::open_lutris_installer(None, window, cx);
-                                }),
-                        )
-                        .child(
-                            Button::new("sideload-accounts")
-                                .small()
-                                .ghost()
-                                .icon(IconName::LogIn)
-                                .label(t("library.sideload.go_to_accounts"))
-                                .on_click(|_, window, cx| {
-                                    window.close_dialog(cx);
-                                    navigate(Route::Accounts, cx);
-                                }),
-                        ),
-                )
-            })
+            .child(
+                field()
+                    .label(t("library.common.cover_art"))
+                    .description(t("library.sideload.art_hint"))
+                    .child(self.art_row("browse-cover", |this| &this.cover, ArtKind::Cover, cx)),
+            )
+            .child(
+                field()
+                    .label(t("library.sideload.field.background"))
+                    .child(self.art_row(
+                        "browse-background",
+                        |this| &this.background,
+                        ArtKind::Background,
+                        cx,
+                    )),
+            )
+            .child(
+                field()
+                    .label(t("library.sideload.field.description"))
+                    .description(t("library.sideload.description_hint"))
+                    .child(Textarea::new(&self.description)),
+            )
+            .child(
+                field()
+                    .label(t("library.sideload.field.developer"))
+                    .child(Input::new(&self.developer)),
+            )
+            .child(
+                field()
+                    .label(t("library.sideload.field.release_date"))
+                    .child(Input::new(&self.release_date)),
+            )
+            .child(
+                field()
+                    .label(t("library.sideload.field.genres"))
+                    .description(t("library.sideload.genres_hint"))
+                    .child(Input::new(&self.genres)),
+            )
+            .child(
+                field()
+                    .label(irori_ui::game_mode::title())
+                    .child(super::mode_boxes(
+                        &self.modes,
+                        |this: &mut Self| &mut this.modes,
+                        cx,
+                    )),
+            )
+            .into_any_element()
+    }
+}
+
+impl Render for SideloadDialog {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(picker) = &self.picker {
+            return v_flex().id("sideload-art").child(picker.clone());
+        }
+        let rom_system = self.rom_system(cx).filter(|_| self.editing.is_none());
+        let hints = self.render_hints(rom_system, cx);
+        let browser = self.platform == SideloadPlatform::Browser;
+        let windows = self.platform == SideloadPlatform::Windows;
+        let installer = self.installer.clone();
+        let platform = self.platform;
+        let wine = self.wine.clone().filter(|_| windows);
+        let more = self.more;
+        let details = more.then(|| self.render_details(cx));
+
+        v_flex()
+            .id("sideload-form")
+            .gap_4()
+            .children(hints)
             .child(
                 v_form()
                     .child(
@@ -805,6 +998,7 @@ impl Render for SideloadDialog {
                                         false,
                                         cx,
                                     )
+                                    .flex_wrap()
                                     .when(windows, |row| {
                                         row.child(
                                             Button::new("run-installer")
@@ -843,22 +1037,9 @@ impl Render for SideloadDialog {
                                 )
                             },
                         )
-                        .child(
-                            field()
-                                .label(t("library.sideload.field.arguments"))
-                                .child(Input::new(&self.arguments)),
-                        )
-                        .child(
-                            field()
-                                .label(t("library.sideload.field.install_folder"))
-                                .description(t("library.sideload.install_folder_hint"))
-                                .child(self.path_row(
-                                    "browse-folder",
-                                    |this| &this.install_folder,
-                                    true,
-                                    cx,
-                                )),
-                        )
+                    })
+                    .when_some(wine, |form, wine| {
+                        form.child(field().label_indent(false).child(wine))
                     })
                     .when(browser, |form| {
                         form.child(
@@ -866,114 +1047,104 @@ impl Render for SideloadDialog {
                                 .label(t("library.sideload.field.address"))
                                 .child(Input::new(&self.url)),
                         )
-                        .child(
-                            field()
-                                .label(t("library.sideload.field.user_agent"))
-                                .description(t("library.sideload.user_agent_hint"))
-                                .child(Input::new(&self.user_agent)),
-                        )
-                        .child(
-                            field().label_indent(false).child(
-                                Switch::new("sideload-fullscreen")
-                                    .label(t("library.sideload.fullscreen"))
-                                    .checked(self.fullscreen)
-                                    .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                        this.fullscreen = *v;
-                                        cx.notify();
-                                    })),
-                            ),
-                        )
-                    })
-                    .child(
-                        field()
-                            .label(t("library.sideload.field.description"))
-                            .description(t("library.sideload.description_hint"))
-                            .child(Textarea::new(&self.description)),
-                    )
-                    .child(
-                        field()
-                            .label(t("library.sideload.field.developer"))
-                            .child(Input::new(&self.developer)),
-                    )
-                    .child(
-                        field()
-                            .label(t("library.sideload.field.release_date"))
-                            .child(Input::new(&self.release_date)),
-                    )
-                    .child(
-                        field()
-                            .label(t("library.sideload.field.genres"))
-                            .description(t("library.sideload.genres_hint"))
-                            .child(Input::new(&self.genres)),
-                    )
-                    .child(
-                        field()
-                            .label(t("library.common.cover_art"))
-                            .child(self.art_row(
-                                "browse-cover",
-                                |this| &this.cover,
-                                ArtKind::Cover,
-                                cx,
-                            )),
-                    )
-                    .child(field().label(t("library.sideload.field.background")).child(
-                        self.art_row(
-                            "browse-background",
-                            |this| &this.background,
-                            ArtKind::Background,
-                            cx,
-                        ),
-                    ))
-                    .child(
-                        field()
-                            .label(irori_ui::game_mode::title())
-                            .child(super::mode_boxes(
-                                &self.modes,
-                                |this: &mut Self| &mut this.modes,
-                                cx,
-                            )),
-                    ),
+                    }),
             )
-            .when_some(self.error.clone(), |this, e| {
+            .child(
+                h_flex().child(
+                    Button::new("sideload-more")
+                        .ghost()
+                        .small()
+                        .icon(if more {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .label(if more {
+                            t("library.sideload.fewer_details")
+                        } else {
+                            t("library.sideload.more_details")
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.more = !this.more;
+                            cx.notify();
+                        })),
+                ),
+            )
+            .children(details)
+    }
+}
+
+/// The dialog's footer: the error, Cancel and Add (or Save), outside the
+/// scrolling form so they never move out of sight.
+pub struct SideloadFooter {
+    dialog: Entity<SideloadDialog>,
+    _observe: Subscription,
+}
+
+impl SideloadFooter {
+    fn new(dialog: Entity<SideloadDialog>, cx: &mut Context<Self>) -> Self {
+        let observe = cx.observe(&dialog, |_, _, cx| cx.notify());
+        Self {
+            dialog,
+            _observe: observe,
+        }
+    }
+}
+
+impl Render for SideloadFooter {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = self.dialog.read(cx);
+        if state.picker.is_some() {
+            return v_flex().id("sideload-footer");
+        }
+        let adding = state.editing.is_none();
+        let saving = state.saving;
+        let error = state.error.clone();
+        let dialog = self.dialog.clone();
+        v_flex()
+            .id("sideload-footer")
+            .w_full()
+            .gap_3()
+            .when_some(error, |this, e| {
                 this.child(Alert::error("sideload-error", e))
             })
             .child(
                 h_flex()
-                    .justify_between()
+                    .w_full()
+                    .justify_end()
+                    .flex_wrap()
                     .gap_2()
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .min_w_0()
-                            .child(t("library.sideload.art_hint")),
+                        Button::new("sideload-cancel")
+                            .ghost()
+                            .label(t("library.common.cancel"))
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
                     )
                     .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("sideload-cancel")
-                                    .ghost()
-                                    .label(t("library.common.cancel"))
-                                    .on_click(|_, window, cx| window.close_dialog(cx)),
-                            )
-                            .child(
-                                Button::new("sideload-save")
-                                    .primary()
-                                    .label(if adding {
-                                        t("library.sideload.add")
-                                    } else {
-                                        t("library.common.save")
-                                    })
-                                    .loading(self.saving)
-                                    .disabled(self.saving)
-                                    .on_click(
-                                        cx.listener(|this, _, window, cx| this.save(window, cx)),
-                                    ),
-                            ),
+                        Button::new("sideload-save")
+                            .primary()
+                            .label(if adding {
+                                t("library.sideload.add")
+                            } else {
+                                t("library.common.save")
+                            })
+                            .loading(saving)
+                            .disabled(saving)
+                            .on_click(move |_, window, cx| {
+                                dialog.update(cx, |d, cx| d.save(window, cx));
+                            }),
                     ),
             )
     }
+}
+
+/// Where a new app called `title` gets its prefix by default.
+fn new_app_prefix(title: &str, cx: &App) -> PathBuf {
+    let game = irori_core::GameInfo {
+        title: title.to_string(),
+        ..Default::default()
+    };
+    irori_runtime::default_prefix(&backend(cx).settings.app(), &game)
 }
 
 /// Error line for an installer that could not be started.
@@ -990,6 +1161,7 @@ fn open(editing: Option<String>, prefill: Option<SideloadApp>, window: &mut Wind
             .detach();
         SideloadDialog::with_app(editing, prefill, window, cx)
     });
+    let footer = cx.new(|cx| SideloadFooter::new(view.clone(), cx));
     let width = dialog_width(window, 40.);
     let focus = Cell::new(true);
     window.open_dialog(cx, move |dialog, window, cx| {
@@ -998,7 +1170,11 @@ fn open(editing: Option<String>, prefill: Option<SideloadApp>, window: &mut Wind
             input.focus_handle(cx).focus(window, cx);
         }
         let title = view.read(cx).dialog_title(cx);
-        dialog.title(title).w(width).child(view.clone())
+        dialog
+            .title(title)
+            .w(width)
+            .child(view.clone())
+            .footer(footer.clone())
     });
 }
 

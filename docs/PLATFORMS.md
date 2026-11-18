@@ -135,6 +135,14 @@ second after it stops moving (`iroriUi.windowWidth`, `windowHeight`, `windowMaxi
 system lets programs place windows. Wayland doesn't, so there the compositor places it.
 A window that no longer fits its display (a smaller TV, a higher scale) or whose
 display is gone opens centred and no larger than the display.
+With "Start maximized" (`iroriUi.startMaximized`, Settings › General) it always
+opens maximized. macOS reports a zoomed window as an ordinary one, so Irori asks the
+window whether it is zoomed and keeps the size it had before to come back to.
+
+"Scroll with the middle button" (`iroriUi.middleClickScroll`, Settings › Appearance,
+off by default) scrolls whatever is under the pointer while the middle button is held
+and the mouse moves, by turning the movement into scroll-wheel events
+(`irori_ui::middle_scroll`); Big Picture keeps its own scrolling.
 
 Hidden games can be put behind a PIN (Filters › Hidden, or the palette): until it is
 entered they stay out of the library, search, Big Picture, the palette, the stats page
@@ -219,7 +227,17 @@ their own games, so their games don't show it.
   Lossless Scaling in a Steam library (`lsfg-vk.dll` from its "lsfg-vk" branch, or
   `Lossless.dll`). Irori passes the game's choice as an environment profile
   (`LSFGVK_ENV=1`, `LSFGVK_MULTIPLIER`, `LSFGVK_FLOW_SCALE`, `LSFGVK_PERFORMANCE_MODE`,
-  `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file.
+  `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file. Its layer
+  (`iroriLsfg.layer`, `lsfg-vk` when missing) can instead be **MAKO** Renderer, lsfg-vk's
+  descendant with a model of its own (no Lossless Scaling needed): Irori finds its
+  `mako-launch` (or MAKO Decky's `mako-run`) on `PATH` or in `~/.local/bin`, starts the
+  game through it (after the user's wrappers, before MangoHud) and passes `MAKO_ENV=1`,
+  `MAKO_MULTIPLIER` (2 to 5), `MAKO_FLOW_SCALE` and, for performance mode,
+  `MAKO_FG_MODE=performance` and `MAKO_PERFORMANCE_MODE=1`. MAKO's `conf.toml` stays the
+  user's; Irori installs neither layer.
+- **NTSync** (`iroriNtsync`, on by default, Wine & Proton section): off sets
+  `PROTON_NO_NTSYNC=1`, which Proton-GE, Proton-CachyOS and Proton-Wineland read; on, plain
+  Wine builds get `WINENTSYNC=1`. Upstream Wine 11 uses `/dev/ntsync` whenever it exists.
 
 The Steam library scans that Steam folder and every library in its
 `steamapps/libraryfolders.vdf` for `appmanifest_*.acf` files, skipping Proton, the
@@ -978,6 +996,11 @@ has the Xbox app, which "Other launchers" lists, and macOS has no runtime for GD
   tab downloads the open-source Nexus Runtime build from
   `github.com/domsvoboda/nexus-runtime` (SHA-512 checked). It runs on the host, never under
   umu, through `proton waitforexitandrun` with `UMU_ID` set and `UMU_USE_STEAM=0`.
+  Before each start the runtime's `libnghttp2.dll` (`files/lib/wine/x86_64-windows`) is
+  copied into the prefix's `pfx/drive_c/windows/system32`, since its WinHTTP loads it from
+  there only (games such as Crimson Desert need HTTP/2), checked against the SHA-256 in
+  `XODUS_NEXUS_PATCH.json` when listed; a different file there is kept as
+  `libnghttp2.dll.irori-backup`, and the game gets `libnghttp2=n` in `WINEDLLOVERRIDES`.
 - **Launch view.** Executables stay encrypted on disk. Each session decrypts them into a
   folder only the user can open (`.irori-xbox-launch-*` beside the game, else in `/tmp`)
   with links to everything else; it is removed when the game exits, and leftovers from a
@@ -1063,9 +1086,11 @@ AppImage gives Sunshine `$APPIMAGE`, not its temporary mount.
 
 A game, an added app or a Lutris script install can run in a
 [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`) sandbox, for
-programs the user doesn't trust. The per-game settings (Launch → Sandbox) have
-two switches, `iroriSandbox.noNetwork` ("Block the network") and
-`iroriSandbox.noHome` ("Hide the home folder"); the Lutris installer window
+programs the user doesn't trust. The per-game settings and the game defaults
+(Launch → Sandbox) have two switches, `iroriSandbox.noNetwork` ("Block the
+network") and `iroriSandbox.noHome` ("Hide the home folder"). The defaults reach
+only games a sandbox can hold (not ROMs, web apps, Steam's or launchers' games),
+so those keep starting; a game's own switches stand as set. The Lutris installer window
 offers the same two, which then apply to the script's programs and to the game
 it installs. The game page shows a "Sandboxed" card under Play ("Running
 sandboxed" while it plays) that opens to list what the game can and can't

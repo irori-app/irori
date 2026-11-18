@@ -34,6 +34,9 @@ const KEPT: usize = 4;
 const SETTLE: Duration = Duration::from_millis(140);
 /// Width of the drawer's grab handle, in pixels.
 const HANDLE_PX: f32 = 6.0;
+/// How far the drawer slides in from the window's edge as it opens, in
+/// pixels.
+const DRAWER_SLIDE_PX: f32 = 48.0;
 /// How long the drawer waits after a resize before saving its width.
 const SAVE_AFTER: Duration = Duration::from_millis(400);
 
@@ -55,6 +58,8 @@ pub(super) struct Panels {
     settling: Option<Task<()>>,
     /// Whether the grid's drawer is open.
     pub drawer_open: bool,
+    /// Counts the drawer's openings, naming each slide in.
+    drawer_opened: usize,
     /// The drawer's requested width, in rem (kept within limits when drawn).
     pub drawer_rem: f32,
     saving: Option<Task<()>>,
@@ -69,6 +74,7 @@ impl Panels {
             shown_count: 0,
             settling: None,
             drawer_open: false,
+            drawer_opened: 0,
             drawer_rem,
             saving: None,
         }
@@ -206,6 +212,7 @@ impl LibraryView {
     pub(super) fn open_drawer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.panels.drawer_open {
             self.panels.drawer_open = true;
+            self.panels.drawer_opened += 1;
             cx.notify();
         }
         self.show_focused(false, window, cx);
@@ -370,7 +377,8 @@ impl LibraryView {
                 this.close_drawer(cx);
                 this.grid_focus.focus(window, cx);
             }));
-        div()
+        let opened = self.panels.drawer_opened;
+        let drawer = div()
             .id("library-drawer")
             .relative()
             .flex_shrink_0()
@@ -391,8 +399,14 @@ impl LibraryView {
                     .bg(scrim)
                     .child(close),
             )
-            .child(handle)
-            .into_any_element()
+            .child(handle);
+        // A click on a cover opens the drawer: it slides in from the edge
+        // rather than appearing at once.
+        irori_ui::motion::slide_in(
+            SharedString::from(format!("library-drawer-in:{opened}")),
+            drawer,
+            DRAWER_SLIDE_PX,
+        )
     }
 
     /// Follow a drag of the drawer's edge anywhere over the library body,

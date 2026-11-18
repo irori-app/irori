@@ -736,6 +736,18 @@ impl Render for GameSettingsView {
                 && !self.uses_wine(cx)
                 && steam_compat.is_none())
             .then(|| info_alert("native-note", t("settings.game.native_note")));
+            // Steam starts its games itself: say why most sections are gone.
+            let steam_note = (!searching
+                && self.id.runner == Runner::Steam
+                && matches!(self.section, GameSection::Launch | GameSection::Performance))
+            .then(|| {
+                let text = if cfg!(target_os = "linux") {
+                    t("settings.game.steam_note_linux")
+                } else {
+                    t("settings.game.steam_note")
+                };
+                info_alert("steam-note", text)
+            });
             let body: AnyElement = if let Some(panel) = steam_compat {
                 panel.into_any_element()
             } else if !searching && self.section == GameSection::Tools {
@@ -787,6 +799,7 @@ impl Render for GameSettingsView {
                                     v.child(muted(t("settings.common.search_results"), cx))
                                 })
                                 .children(wine_note)
+                                .children(steam_note)
                                 .child(body),
                         ),
                 )

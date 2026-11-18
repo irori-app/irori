@@ -90,6 +90,8 @@
   "shell.notice.mods_not_restored": "{title}의 모드가 아직 게임 폴더에 있습니다",
   "shell.palette.set_up_emulation": "에뮬레이션 설정",
   "shell.palette.set_up_emulation_keywords": "에뮬레이터 ROM 콘솔 레트로 BIOS RetroArch",
+  "shell.palette.add_emulator": "에뮬레이터 추가",
+  "shell.palette.add_emulator_keywords": "사용자 에뮬레이터 프로그램 빌드",
   "shell.palette.steam_friends": "Steam 친구 보기",
   "shell.palette.steam_friends_keywords": "친구 온라인 플레이 참가 초대 채팅",
   "shell.palette.xbox_offline_play": "Xbox 오프라인 플레이",

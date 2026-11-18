@@ -4,15 +4,16 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
     h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, Global, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, WeakEntity, Window, div,
+    AnyElement, App, AppContext as _, Bounds, Context, Entity, Global, InteractiveElement as _,
+    IntoElement, ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Task, WeakEntity, Window, canvas, div, px,
 };
 use irori_core::{GameMode, InstallPlatform};
 use irori_services::EffectiveStatus;
@@ -122,7 +123,22 @@ pub struct FiltersPanel {
     genres: crate::filter::PerRevision<Vec<(String, String)>>,
     /// The commonest store tags, as (key, name).
     tags: crate::filter::PerRevision<Vec<(String, String)>>,
+    /// Where the panel was last drawn, for the room under it.
+    top: Option<Pixels>,
     _observe: Vec<Subscription>,
+}
+
+/// Room the filter sections may take: from `top` (the panel's measured top,
+/// unknown before its first paint) to the foot of the `visible` window, less
+/// the panel's footer and margins, but never under half the window, where
+/// the popover is moved up to fit instead.
+fn filters_height(visible: Bounds<Pixels>, top: Option<Pixels>, rem: Pixels) -> Pixels {
+    // The footer with the reset button, the popover's padding and a margin.
+    let reserved = rem * 5.;
+    let most = (visible.size.height - reserved).max(rem * 8.);
+    let top = top.unwrap_or(visible.origin.y + rem * 10.);
+    let least = (visible.size.height * 0.5 - reserved).max(rem * 4.);
+    (visible.bottom() - top - reserved).clamp(least, most)
 }
 
 impl FiltersPanel {
@@ -132,6 +148,7 @@ impl FiltersPanel {
             systems: Default::default(),
             genres: Default::default(),
             tags: Default::default(),
+            top: None,
             _observe: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&library, |_, _, cx| cx.notify()),
@@ -601,7 +618,7 @@ impl FiltersPanel {
 }
 
 impl Render for FiltersPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let f = self.model.read(cx).filter().clone();
         let systems = self.render_systems(&f, cx);
         let genres = self.render_genres(&f, cx);
@@ -657,9 +674,38 @@ impl Render for FiltersPanel {
         let install_values = installs.clone().map(|(v, _)| v);
         let hidden_values = hidden.clone().map(|(v, _)| v);
 
-        v_flex()
-            .id("library-filters-panel")
-            .w_96()
+        // The popover opens under its button and is only moved, never
+        // shrunk, to stay in the window: the sections scroll within the room
+        // below the button (or half the window, where it is moved up).
+        let visible = irori_ui::style::visible_bounds(window);
+        let rem = window.rem_size();
+        let max_h = filters_height(visible, self.top, rem);
+        let view = cx.entity().downgrade();
+        let measure = canvas(
+            move |bounds, _, cx| {
+                view.update(cx, |this, cx| {
+                    let moved = this
+                        .top
+                        .is_none_or(|top| (top - bounds.origin.y).abs() > px(0.5));
+                    if moved {
+                        this.top = Some(bounds.origin.y);
+                        cx.notify();
+                    }
+                })
+                .ok();
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full();
+
+        let sections = v_flex()
+            .id("library-filters-sections")
+            .max_h(max_h)
+            .overflow_y_scrollbar()
+            .pr_3()
             .gap_4()
             .when_some(systems, |el, systems| el.child(systems))
             .child(
@@ -787,7 +833,15 @@ impl Render for FiltersPanel {
                             .text_color(muted)
                             .child(t("library.filters.third_party_hint")),
                     ),
-            )
+            );
+
+        v_flex()
+            .id("library-filters-panel")
+            .relative()
+            .w_96()
+            .gap_3()
+            .child(measure)
+            .child(sections)
             .child(
                 h_flex()
                     .justify_between()
@@ -820,6 +874,23 @@ impl Render for FiltersPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::{point, size};
+
+    #[test]
+    fn filters_fit_under_their_button_or_in_half_the_window() {
+        let rem = px(16.);
+        let visible = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(800.)));
+        // Room under a button near the top: the rest of the window.
+        assert_eq!(
+            filters_height(visible, Some(px(100.)), rem),
+            px(800. - 100. - 80.)
+        );
+        // Near the foot: half the window, and the popover moves up.
+        assert_eq!(filters_height(visible, Some(px(700.)), rem), px(400. - 80.));
+        // Never taller than the window, even before it was measured.
+        let short = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(200.)));
+        assert!(filters_height(short, None, rem) <= px(200.));
+    }
 
     #[test]
     fn persisted_part_ignores_query() {

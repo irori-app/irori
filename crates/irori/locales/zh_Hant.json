@@ -90,6 +90,8 @@
   "shell.notice.mods_not_restored": "{title} 的模組仍在其資料夾中",
   "shell.palette.set_up_emulation": "設定模擬遊戲",
   "shell.palette.set_up_emulation_keywords": "模擬器 ROM 主機 復古 BIOS RetroArch",
+  "shell.palette.add_emulator": "新增模擬器",
+  "shell.palette.add_emulator_keywords": "自訂 模擬器 程式 建置",
   "shell.palette.steam_friends": "顯示 Steam 好友",
   "shell.palette.steam_friends_keywords": "好友 上線 正在玩 加入 邀請 聊天",
   "shell.palette.xbox_offline_play": "Xbox 離線遊玩",

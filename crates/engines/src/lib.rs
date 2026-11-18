@@ -5,7 +5,8 @@
 //! An engine is data: a manifest (see [`manifest`]) names its sources per
 //! OS, its launch template and its options. This crate owns:
 //!
-//! - the registry of manifests, built in and overridden by the user;
+//! - the registry of manifests, built in and overridden by the user, and
+//!   the emulators the user adds ([`custom`]);
 //! - discovery of installs: Irori-managed versions, Flatpaks, programs on
 //!   `PATH`, macOS app bundles, Windows locations and a custom path;
 //! - managed installs with several versions side by side ([`install`]);
@@ -14,7 +15,8 @@
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
 //! - turning a game file into a command ([`launch`]);
-//! - reading the titles PlayStation games give themselves ([`sfo`]).
+//! - reading the titles PlayStation games give themselves ([`sfo`]), also
+//!   inside disc images ([`iso9660`]).
 //!
 //! Nothing here has a UI or blocks a Tokio worker: discovery and hashing run
 //! on the blocking pool.
@@ -22,9 +24,11 @@
 pub mod archive;
 pub mod bios;
 pub mod cheevos;
+pub mod custom;
 pub mod discovery;
 pub mod host;
 pub mod install;
+pub mod iso9660;
 pub mod launch;
 pub mod manifest;
 pub mod releases;
@@ -237,15 +241,18 @@ pub fn choices_for(system: &str) -> Vec<EngineRef> {
 }
 
 /// The emulator a game of `system` plays with when it names none:
-/// `chosen` (the user's default for the system), else the first
-/// recommended choice that `plays` accepts, else the first recommended;
-/// experimental engines only when nothing else is offered.
+/// `chosen` (the user's default for the system) while Irori knows it, else
+/// the first recommended choice that `plays` accepts, else the first
+/// recommended; experimental engines only when nothing else is offered.
 pub fn default_choice(
     system: &str,
     chosen: Option<&str>,
     plays: impl Fn(&EngineRef) -> bool,
 ) -> Option<EngineRef> {
-    if let Some(chosen) = chosen.and_then(EngineRef::parse) {
+    if let Some(chosen) = chosen
+        .and_then(EngineRef::parse)
+        .filter(|c| engine(&c.engine).is_some())
+    {
         return Some(chosen);
     }
     let choices = choices_for(system);
@@ -424,6 +431,14 @@ mod tests {
         );
         assert!(choices_for("nds").iter().any(|r| r.engine == "desmume"));
         assert!(choices_for("psx").iter().any(|r| r.engine == "epsxe"));
+    }
+
+    #[test]
+    fn a_default_that_is_gone_falls_back_to_the_recommendation() {
+        let _ = test_root("gone-default");
+        let pick = |chosen| default_choice("psx", chosen, |_| true).map(|c| c.to_string());
+        assert_eq!(pick(Some("epsxe")).as_deref(), Some("epsxe"));
+        assert_eq!(pick(Some("custom-removed")).as_deref(), Some("duckstation"));
     }
 
     #[test]

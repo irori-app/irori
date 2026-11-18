@@ -2,11 +2,44 @@
 //! writes snake_case keys; platforms come either as a `platforms` object
 //! (`{"windows": "all", "linux": "amd64"}`) or, from older servers, as
 //! `traits` (`["p_windows", "p_linux", "demo"]`). Both are read.
+//!
+//! itch.io's server is PHP, which writes an empty list as `{}` and some
+//! lists as objects keyed by position (`{"0": …, "1": …}`); every list is
+//! read with [`lenient_vec`], which takes either.
 
 use std::collections::BTreeMap;
 
+use serde::de::{DeserializeOwned, Deserializer, Error as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// A list as itch.io writes it: an array, `null`, or an object whose values
+/// are the items (`{}` for an empty list), in the order of their keys when
+/// those are positions.
+pub(crate) fn lenient_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    let items = match Value::deserialize(deserializer)? {
+        Value::Null => Vec::new(),
+        Value::Array(items) => items,
+        Value::Object(map) => {
+            let mut entries: Vec<(String, Value)> = map.into_iter().collect();
+            if entries.iter().all(|(k, _)| k.parse::<u64>().is_ok()) {
+                entries.sort_by_key(|(k, _)| k.parse::<u64>().unwrap_or(u64::MAX));
+            }
+            entries.into_iter().map(|(_, v)| v).collect()
+        }
+        Value::Bool(_) => return Err(D::Error::custom("invalid type: boolean, expected a list")),
+        Value::Number(_) => return Err(D::Error::custom("invalid type: number, expected a list")),
+        Value::String(_) => return Err(D::Error::custom("invalid type: string, expected a list")),
+    };
+    items
+        .into_iter()
+        .map(|item| serde_json::from_value(item).map_err(D::Error::custom))
+        .collect()
+}
 
 /// The account an API key belongs to.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,6 +163,7 @@ struct RawGame {
     still_cover_url: Option<String>,
     published_at: Option<String>,
     platforms: Option<Value>,
+    #[serde(deserialize_with = "lenient_vec")]
     traits: Vec<String>,
     user: Option<User>,
 }
@@ -252,6 +286,7 @@ struct RawUpload {
     preorder: bool,
     demo: bool,
     platforms: Option<Value>,
+    #[serde(deserialize_with = "lenient_vec")]
     traits: Vec<String>,
     md5_hash: Option<String>,
     updated_at: Option<String>,

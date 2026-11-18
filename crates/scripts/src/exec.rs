@@ -87,6 +87,7 @@ pub async fn run(
         deletable,
         files: BTreeMap::new(),
         wine_used: false,
+        prefix_used: None,
     };
     match runner.run().await {
         Ok(outcome) => Ok(outcome),
@@ -110,6 +111,10 @@ struct Runner<'a> {
     deletable: Sandbox,
     files: BTreeMap<String, PathBuf>,
     wine_used: bool,
+    /// The prefix the script's Wine tasks worked in: the last one it
+    /// created, else the first one a task used. The game plays there when
+    /// its section names none.
+    prefix_used: Option<PathBuf>,
 }
 
 fn lock(fs: &Mutex<Fs>) -> std::sync::MutexGuard<'_, Fs> {
@@ -201,6 +206,14 @@ impl Runner<'_> {
         let loc = loc.to_string();
         self.with_fs(move |fs| Ok(fs.sandbox.check(&p, &loc)?))
             .await
+    }
+
+    /// [`Self::prefix`] for a task that works in the prefix, remembered as
+    /// the game's when no prefix was created.
+    async fn working_prefix(&mut self, own: Option<&str>, loc: &str) -> Result<PathBuf> {
+        let prefix = self.prefix(own, loc).await?;
+        self.prefix_used.get_or_insert_with(|| prefix.clone());
+        Ok(prefix)
     }
 
     fn arch(&self, own: Option<&str>, loc: &str) -> Result<Option<String>> {
@@ -713,8 +726,10 @@ impl Runner<'_> {
         match t {
             Task::CreatePrefix(p) => {
                 self.wine_used = true;
+                let prefix = self.prefix(p.prefix.as_deref(), loc).await?;
+                self.prefix_used = Some(prefix.clone());
                 let request = PrefixRequest {
-                    prefix: self.prefix(p.prefix.as_deref(), loc).await?,
+                    prefix,
                     arch: self.arch(p.arch.as_deref(), loc)?,
                     overrides: self.env_values(&p.overrides, loc)?,
                     install_gecko: p.install_gecko,
@@ -735,7 +750,7 @@ impl Runner<'_> {
                 let request = WineExecRequest {
                     executable,
                     args: self.args(&w.args, loc)?,
-                    prefix: self.prefix(w.prefix.as_deref(), loc).await?,
+                    prefix: self.working_prefix(w.prefix.as_deref(), loc).await?,
                     arch: self.arch(w.arch.as_deref(), loc)?,
                     working_dir: self.opt_path(w.working_dir.as_deref(), loc)?,
                     blocking: w.blocking,
@@ -756,7 +771,7 @@ impl Runner<'_> {
                 check_verbs(&verbs, loc)?;
                 let request = WinetricksRequest {
                     verbs,
-                    prefix: self.prefix(w.prefix.as_deref(), loc).await?,
+                    prefix: self.working_prefix(w.prefix.as_deref(), loc).await?,
                     arch: self.arch(w.arch.as_deref(), loc)?,
                     silent: w.silent,
                     env: self.env(&BTreeMap::new(), loc)?,
@@ -771,7 +786,7 @@ impl Runner<'_> {
                     key: self.text(&r.key, loc)?,
                     value: self.text(&r.value, loc)?,
                     kind: r.kind,
-                    prefix: self.prefix(r.prefix.as_deref(), loc).await?,
+                    prefix: self.working_prefix(r.prefix.as_deref(), loc).await?,
                     arch: self.arch(r.arch.as_deref(), loc)?,
                 };
                 self.tracked(self.host.set_regedit(&request, self.cancel))
@@ -914,7 +929,12 @@ impl Runner<'_> {
                 Some(match (&self.ctx.prefix, &g.prefix) {
                     (Some(p), _) => p.clone(),
                     (None, Some(raw)) => self.path(raw, loc)?,
-                    (None, None) => self.ctx.game_dir.clone(),
+                    // Where the script put the prefix, so the game doesn't
+                    // start in another one.
+                    (None, None) => self
+                        .prefix_used
+                        .clone()
+                        .unwrap_or_else(|| self.ctx.game_dir.clone()),
                 })
             } else {
                 None
@@ -922,6 +942,11 @@ impl Runner<'_> {
             arch: g.arch.as_deref().map(|a| self.text(a, loc)).transpose()?,
             wine_version: self.script.wine_version().map(str::to_string),
             env: self.env(&BTreeMap::new(), loc)?,
+            dll_overrides: if is_wine {
+                self.script.dll_overrides.clone()
+            } else {
+                Vec::new()
+            },
             options,
             runner_options: self
                 .script
@@ -960,6 +985,7 @@ impl Runner<'_> {
                 .ctx
                 .prefix
                 .clone()
+                .or_else(|| self.prefix_used.clone())
                 .unwrap_or_else(|| self.ctx.game_dir.clone());
             let request = WineKillRequest {
                 prefix,

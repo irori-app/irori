@@ -4,6 +4,7 @@
 pub mod achievement_cache;
 pub mod age_rating;
 pub mod archive_guard;
+pub mod dll_override;
 pub mod events;
 pub mod fs_guard;
 pub mod game;
@@ -26,6 +27,7 @@ pub mod store;
 pub mod util;
 
 pub use age_rating::{AgeRating, RatingSystem};
+pub use dll_override::{DllMode, DllOverride};
 pub use events::{Event, EventBus, Notice, NoticeLevel};
 pub use game::*;
 pub use game_mode::GameMode;

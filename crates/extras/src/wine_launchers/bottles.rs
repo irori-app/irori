@@ -182,6 +182,9 @@ pub fn plan(dirs: &BottlesDirs) -> Result<(LutrisPlan, Vec<Bottle>)> {
                     wine_version: wine_version.clone(),
                     arch: Some(bottle.arch.clone()).filter(|a| !a.is_empty()),
                     env: env.clone(),
+                    // Bottles writes its DLL overrides into the bottle's
+                    // registry, which the game keeps using.
+                    dll_overrides: Vec::new(),
                 }
             };
             out.games

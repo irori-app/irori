@@ -48,8 +48,8 @@ use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
 use crate::value::{
     bool_at, effective_overrides, get_path, override_key, plan_game_write, remove_row,
-    split_assignment, text_to_value, upsert_row, validate_discord_client_id, validate_env_key,
-    validate_launcher_args, value_to_text, with_path,
+    split_assignment, text_to_value, upsert_row, validate_discord_client_id, validate_dll_override,
+    validate_env_key, validate_launcher_args, value_to_text, with_path,
 };
 use crate::widgets::{
     RowState, field_row, group_heading, group_panel, muted, panel, section_heading,
@@ -117,6 +117,7 @@ impl PairEditor {
     fn keys(kind: CustomKind) -> (&'static str, &'static str) {
         match kind {
             CustomKind::EnvVars => ("key", "value"),
+            CustomKind::DllOverrides => ("dll", "mode"),
             CustomKind::Wrappers => ("exe", "args"),
             _ => ("name", "location"),
         }
@@ -125,6 +126,9 @@ impl PairEditor {
     fn placeholders(kind: CustomKind) -> (SharedString, SharedString) {
         match kind {
             CustomKind::EnvVars => (t("settings.pairs.env_name"), t("settings.pairs.env_value")),
+            CustomKind::DllOverrides => {
+                (t("settings.pairs.dll_name"), t("settings.pairs.dll_mode"))
+            }
             CustomKind::Wrappers => (
                 t("settings.pairs.wrapper_command"),
                 t("settings.pairs.wrapper_arguments"),
@@ -757,7 +761,10 @@ impl SettingsForm {
                 });
                 self.sync_wine_select(window, cx);
             }
-            CustomKind::EnvVars | CustomKind::Wrappers | CustomKind::GogSaves => {
+            CustomKind::EnvVars
+            | CustomKind::DllOverrides
+            | CustomKind::Wrappers
+            | CustomKind::GogSaves => {
                 let (p1, p2) = PairEditor::placeholders(kind);
                 let first = cx.new(|cx| InputState::new(window, cx).placeholder(p1));
                 let second = cx.new(|cx| InputState::new(window, cx).placeholder(p2));
@@ -1301,21 +1308,26 @@ impl SettingsForm {
         );
         let existing: Vec<String> = rows.iter().map(|r| r.0.clone()).collect();
         let checked = match editor.kind {
-            CustomKind::EnvVars => validate_env_key(&first, &existing, editor.editing),
+            CustomKind::EnvVars => {
+                validate_env_key(&first, &existing, editor.editing).map(|first| (first, second))
+            }
+            CustomKind::DllOverrides => {
+                validate_dll_override(&first, &second, &existing, editor.editing)
+            }
             CustomKind::Wrappers if first.is_empty() => {
                 Err(t("settings.validate.wrapper_empty").to_string())
             }
             CustomKind::GogSaves if first.is_empty() || second.is_empty() => {
                 Err(t("settings.validate.save_location_empty").to_string())
             }
-            _ => Ok(first),
+            _ => Ok((first, second)),
         };
         match checked {
             Err(e) => {
                 editor.error = Some(e.into());
                 cx.notify();
             }
-            Ok(first) => {
+            Ok((first, second)) => {
                 let (k1, k2) = PairEditor::keys(editor.kind);
                 let row = serde_json::json!({ k1: first, k2: second });
                 let current = self
@@ -1790,7 +1802,10 @@ impl SettingsForm {
             FieldKind::Custom(kind) => {
                 if matches!(
                     kind,
-                    CustomKind::EnvVars | CustomKind::Wrappers | CustomKind::GogSaves
+                    CustomKind::EnvVars
+                        | CustomKind::DllOverrides
+                        | CustomKind::Wrappers
+                        | CustomKind::GogSaves
                 ) {
                     row.stacked = true;
                 }
@@ -1966,9 +1981,10 @@ impl SettingsForm {
                     )
                     .into_any_element()
             }
-            CustomKind::EnvVars | CustomKind::Wrappers | CustomKind::GogSaves => {
-                self.render_pairs(spec, cx).into_any_element()
-            }
+            CustomKind::EnvVars
+            | CustomKind::DllOverrides
+            | CustomKind::Wrappers
+            | CustomKind::GogSaves => self.render_pairs(spec, cx).into_any_element(),
         }
     }
 
@@ -1983,7 +1999,7 @@ impl SettingsForm {
         };
         let rows = self.rows(path);
         let sep = match editor.kind {
-            CustomKind::EnvVars => "=",
+            CustomKind::EnvVars | CustomKind::DllOverrides => "=",
             _ => " ",
         };
         let theme = cx.theme();

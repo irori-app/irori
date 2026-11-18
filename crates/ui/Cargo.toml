@@ -11,6 +11,7 @@ publish.workspace = true
 irori-core.workspace = true
 irori-services.workspace = true
 irori-engines.workspace = true
+irori-runtime.workspace = true
 dirs.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true

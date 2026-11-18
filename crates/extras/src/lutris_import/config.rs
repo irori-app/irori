@@ -1,7 +1,8 @@
 //! Lutris's YAML config cascade for one game: `system.yml`, then
 //! `runners/<runner>.yml`, then `games/<configpath>.yml`, each overriding the
 //! one before. Lutris merges `env` key by key and replaces every other
-//! mapping whole; this module does the same.
+//! mapping whole; this module does the same, except that Wine's DLL
+//! `overrides` merge key by key too (`[QUIRK]` in `docs/parity/lutris.md`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -84,6 +85,35 @@ impl Cascade {
             })
     }
 
+    /// The runner section's DLL overrides (`wine: overrides:`). Entries a
+    /// game file sets replace only the same DLLs of the runner file's (where
+    /// Lutris would drop all of the runner's); entries Wine can't read are
+    /// left out.
+    pub fn dll_overrides(&self) -> Vec<irori_core::DllOverride> {
+        let mut out = Vec::new();
+        for (dlls, mode) in self
+            .runner
+            .get("overrides")
+            .and_then(Value::as_mapping)
+            .into_iter()
+            .flatten()
+        {
+            let Some(dlls) = scalar(dlls) else { continue };
+            // Lutris writes an empty value for "disabled".
+            let mode = match mode {
+                Value::Null => String::new(),
+                v => match v.as_str() {
+                    Some(s) => s.to_string(),
+                    None => continue,
+                },
+            };
+            if let Some(list) = irori_core::DllOverride::several(&dlls, &mode) {
+                irori_core::dll_override::merge(&mut out, list);
+            }
+        }
+        out
+    }
+
     /// The effective `system.env`, without empty entries (Lutris drops them).
     pub fn env(&self) -> BTreeMap<String, String> {
         self.system
@@ -108,7 +138,7 @@ fn layer(into: &mut Mapping, from: Option<&Value>) {
         return;
     };
     for (key, value) in from {
-        if key.as_str() == Some("env")
+        if matches!(key.as_str(), Some("env" | "overrides"))
             && let (Some(Value::Mapping(dst)), Some(src)) = (into.get_mut(key), value.as_mapping())
         {
             for (k, v) in src {

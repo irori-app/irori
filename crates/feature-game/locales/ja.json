@@ -251,6 +251,7 @@
   "game.install.no_wine": "Wine または Proton のビルドが見つかりません。プレイする前にダウンロードしてください。",
   "game.install.not_in_library": "{id} はライブラリにありません。",
   "game.install.nothing_to_install": "この項目にはインストールするものがありません。GOG ゲームの特典コンテンツは gog.com で入手できます。",
+  "game.install.nothing_to_install_other": "この項目にはインストールするものがありません。",
   "game.install.open_failed": "インストーラーを開けませんでした",
   "game.install.open_settings": "設定を開く",
   "game.install.open_wine_manager": "Wine マネージャーを開く",

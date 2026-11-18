@@ -147,7 +147,7 @@ impl GamePage {
     /// The store the page's game is from or, for an entry of several stores'
     /// copies, a switch between them: each shows its own copy's page, where
     /// Play, Install and the rest act on that copy.
-    fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
         let ink = self.ink;
         let copies = irori_ui::copies::of(&self.id, cx);
         if copies.len() < 2 {

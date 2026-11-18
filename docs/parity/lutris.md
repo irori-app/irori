@@ -367,6 +367,8 @@ Lutris keeps settings in three kinds of YAML file (`lutris/config.py:164-178`):
   - **[QUIRK]** Two different merge rules for mappings that look the same in the UI.
     A user who adds one DLL override to a game silently loses every override set for
     the runner.
+    Irori keeps Wine's `overrides` as the game's `iroriDllOverrides` and, when
+    importing, lays a game file's over the runner file's DLL by DLL.
 - Writes go to the raw section of the level being edited; empty top-level sections
   are dropped and the file reloaded (`config.py:267-288`).
 - A game file written by an installer also stores the installer's name, the whole
