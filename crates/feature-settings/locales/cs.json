@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "Automatické aktualizace do",
   "settings.field.auto_update_window.help": "Automatické aktualizace se spouštějí jen v těchto hodinách. Aktualizace spuštěné ručně proběhnou vždy.",
   "settings.field.battleye_runtime.label": "Běhové prostředí BattlEye",
+  "settings.field.before_launch_script_alongside.help": "Spustit hru bez čekání na dokončení skriptu před spuštěním, pro skript, který běží dál (server, pomocný nástroj). Irori ho ukončí, když hra skončí.",
+  "settings.field.before_launch_script_alongside.label": "Spouštět skript před spuštěním souběžně se hrou",
   "settings.field.before_launch_script_path.label": "Skript před spuštěním",
   "settings.field.big_picture_in_game_mode.help": "Když Irori spustí herní režim Steam Decku nebo Steam Big Picture, otevře se v Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Ve herním režimu Steamu otevřít Big Picture",

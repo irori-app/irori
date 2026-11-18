@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "Automatische updates tot",
   "settings.field.auto_update_window.help": "Automatische updates starten alleen tussen deze tijden. Updates die je zelf start, lopen altijd.",
   "settings.field.battleye_runtime.label": "BattlEye-runtime",
+  "settings.field.before_launch_script_alongside.help": "Start het spel zonder te wachten tot het script voor het starten klaar is, voor een script dat blijft draaien (een server, een hulpprogramma). Irori stopt het wanneer het spel eindigt.",
+  "settings.field.before_launch_script_alongside.label": "Script voor het starten naast het spel uitvoeren",
   "settings.field.before_launch_script_path.label": "Script voor het starten",
   "settings.field.big_picture_in_game_mode.help": "Als de gamemodus van de Steam Deck of Steam Big Picture Irori start, opent het in Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Big Picture openen in de gamemodus van Steam",

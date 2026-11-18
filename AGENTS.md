@@ -800,7 +800,10 @@ commands without a window.
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
      `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
      variable said about its DLL; ReShade's are added after.
-  4. Before-launch script.
+  4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
+     starts at once and runs alongside the game as a program of the session
+     (`programs::script_alongside`), stopped when the session ends or the launch
+     fails.
   5. `store.launch` builds the `LaunchPlan`.
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.

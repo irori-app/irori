@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "自动更新结束时间",
   "settings.field.auto_update_window.help": "自动更新只在这段时间内开始。你手动开始的更新始终会运行。",
   "settings.field.battleye_runtime.label": "BattlEye 运行时",
+  "settings.field.before_launch_script_alongside.help": "不等启动前运行的脚本结束就启动游戏，适用于会持续运行的脚本（服务器、辅助工具）。游戏结束时 Irori 会停止该脚本。",
+  "settings.field.before_launch_script_alongside.label": "与游戏同时运行启动前的脚本",
   "settings.field.before_launch_script_path.label": "启动前运行的脚本",
   "settings.field.big_picture_in_game_mode.help": "从 Steam Deck 游戏模式或 Steam Big Picture 启动 Irori 时，直接打开 Big Picture。",
   "settings.field.big_picture_in_game_mode.label": "在 Steam 游戏模式中打开 Big Picture",

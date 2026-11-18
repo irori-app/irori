@@ -339,9 +339,19 @@ impl Backend {
         };
         write_log_header(&log_file, &game, &settings, sandbox)?;
 
+        // A script run alongside stops with the session, or as soon as this
+        // launch fails (dropped below without `end`).
+        let mut alongside = None;
         if !settings.before_launch_script_path.is_empty() {
             ctx.step.as_ref()("Running script");
-            run_script(&settings.before_launch_script_path, &game, &log_file).await?;
+            if settings.before_launch_script_alongside {
+                alongside = Some(crate::programs::Programs::start(
+                    crate::programs::script_alongside(&settings.before_launch_script_path, &game),
+                    &log_file,
+                ));
+            } else {
+                run_script(&settings.before_launch_script_path, &game, &log_file).await?;
+            }
         }
 
         // Programs alongside run with the Wine layer the store gets.
@@ -527,6 +537,9 @@ impl Backend {
             }
             if let Some(programs) = programs {
                 programs.end().await;
+            }
+            if let Some(script) = alongside {
+                script.end().await;
             }
             b.stop_replay(&id).await;
             if let Some(stop) = live_achievements {

@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "자동 업데이트 종료 시간",
   "settings.field.auto_update_window.help": "자동 업데이트는 이 시간대에만 시작됩니다. 직접 시작한 업데이트는 항상 실행됩니다.",
   "settings.field.battleye_runtime.label": "BattlEye 런타임",
+  "settings.field.before_launch_script_alongside.help": "실행 전 스크립트가 끝나기를 기다리지 않고 게임을 시작합니다. 계속 실행되는 스크립트(서버, 보조 도구)에 쓰세요. 게임이 끝나면 Irori가 스크립트를 멈춥니다.",
+  "settings.field.before_launch_script_alongside.label": "실행 전 스크립트를 게임과 함께 실행",
   "settings.field.before_launch_script_path.label": "실행 전 스크립트",
   "settings.field.big_picture_in_game_mode.help": "Steam Deck 게임 모드나 Steam Big Picture에서 Irori를 시작하면 Big Picture로 열립니다.",
   "settings.field.big_picture_in_game_mode.label": "Steam 게임 모드에서 Big Picture로 열기",

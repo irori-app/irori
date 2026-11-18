@@ -616,6 +616,7 @@ impl FieldSpec {
                     | "iroriInSunshine"
                     | "iroriDiscordPresence"
                     | "beforeLaunchScriptPath"
+                    | "iroriBeforeLaunchScriptAlongside"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
                     | "iroriLudusaviAutoBackup"
@@ -3081,6 +3082,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["script", "before", "pre-launch"]),
     game(
+        "iroriBeforeLaunchScriptAlongside",
+        "settings.field.before_launch_script_alongside.label",
+        Launch,
+        "settings.group.scripts",
+        Toggle,
+    )
+    .help("settings.field.before_launch_script_alongside.help")
+    .keywords(&[
+        "script",
+        "before",
+        "pre-launch",
+        "alongside",
+        "background",
+        "wait",
+        "server",
+    ]),
+    game(
         "afterLaunchScriptPath",
         "settings.field.after_launch_script_path.label",
         Launch,
@@ -3664,6 +3682,7 @@ mod tests {
         for path in [
             "launcherArgs",
             "beforeLaunchScriptPath",
+            "iroriBeforeLaunchScriptAlongside",
             "panel.launchPrograms",
             "iroriReplay.enabled",
             "panel.save-backups",

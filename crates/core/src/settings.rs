@@ -196,6 +196,11 @@ pub struct GameSettings {
     pub saves_path: String,
     pub gog_saves: Vec<CloudSaveLocation>,
     pub before_launch_script_path: String,
+    /// Start the game without waiting for the before-launch script, which
+    /// then runs alongside it and is stopped when the session ends (for a
+    /// script that never exits, such as a server). Irori-only.
+    #[serde(rename = "iroriBeforeLaunchScriptAlongside")]
+    pub before_launch_script_alongside: bool,
     pub after_launch_script_path: String,
     #[serde(rename = "disableUMU")]
     pub disable_umu: bool,
@@ -469,6 +474,7 @@ impl Default for GameSettings {
             saves_path: String::new(),
             gog_saves: Vec::new(),
             before_launch_script_path: String::new(),
+            before_launch_script_alongside: false,
             after_launch_script_path: String::new(),
             disable_umu: false,
             verbose_logs: true,

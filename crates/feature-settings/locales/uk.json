@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "Автоматичні оновлення до",
   "settings.field.auto_update_window.help": "Автоматичні оновлення запускаються лише в ці години. Запущені вручну виконуються завжди.",
   "settings.field.battleye_runtime.label": "Середовище виконання BattlEye",
+  "settings.field.before_launch_script_alongside.help": "Запускати гру, не чекаючи завершення скрипту перед запуском, — для скрипту, який працює далі (сервер, допоміжна програма). Irori зупинить його, коли гра завершиться.",
+  "settings.field.before_launch_script_alongside.label": "Виконувати скрипт перед запуском паралельно з грою",
   "settings.field.before_launch_script_path.label": "Скрипт перед запуском",
   "settings.field.big_picture_in_game_mode.help": "Якщо Irori запускається з ігрового режиму Steam Deck або зі Steam Big Picture, він відкривається в Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Відкривати Big Picture в ігровому режимі Steam",

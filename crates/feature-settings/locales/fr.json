@@ -248,6 +248,8 @@
   "settings.field.auto_update_until.label": "Mises à jour automatiques jusqu’à",
   "settings.field.auto_update_window.help": "Les mises à jour automatiques ne démarrent qu’entre ces heures. Celles que vous lancez vous-même s’exécutent toujours.",
   "settings.field.battleye_runtime.label": "Runtime BattlEye",
+  "settings.field.before_launch_script_alongside.help": "Lancer le jeu sans attendre la fin du script avant le lancement, pour un script qui continue de tourner (un serveur, un outil d’appoint). Irori l’arrête quand le jeu se termine.",
+  "settings.field.before_launch_script_alongside.label": "Exécuter le script avant le lancement en même temps que le jeu",
   "settings.field.before_launch_script_path.label": "Script avant le lancement",
   "settings.field.big_picture_in_game_mode.help": "Quand le mode Jeu du Steam Deck ou Steam Big Picture lance Irori, il s’ouvre dans Big Picture.",
   "settings.field.big_picture_in_game_mode.label": "Ouvrir Big Picture dans le mode Jeu de Steam",
