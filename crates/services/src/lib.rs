@@ -10,6 +10,7 @@
 pub mod accounts;
 pub mod achievements;
 pub mod app_update;
+pub mod art_cache;
 pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
@@ -104,7 +105,7 @@ pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };
-pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
+pub use sync::{RcloneInfo, SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
@@ -510,10 +511,12 @@ impl Backend {
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
+            self.cloud_copies_when_due().await;
             self.sync_sunshine_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;
+            self.trim_art_cache_when_due().await;
             let interval =
                 Duration::from_secs(self.settings.app().check_updates_interval.max(5) as u64 * 60);
             let reconnected = online && !was_online;

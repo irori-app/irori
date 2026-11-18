@@ -34,6 +34,7 @@ struct Device {
     published: Shared,
     /// How far this computer's clock is off, in milliseconds.
     skew: Millis,
+    scope: Scope,
 }
 
 impl Device {
@@ -48,6 +49,7 @@ impl Device {
             synced: None,
             published: Shared::default(),
             skew: 0,
+            scope: Scope::Everything,
         }
     }
 
@@ -66,7 +68,11 @@ impl Device {
     }
 
     fn sync(&mut self, now: Millis, others: &[&Device]) -> Merged {
-        let remotes: Vec<&Shared> = others.iter().map(|d| &d.published).collect();
+        let incoming: Vec<Shared> = others
+            .iter()
+            .map(|d| self.scope.filter(&d.published))
+            .collect();
+        let remotes: Vec<&Shared> = incoming.iter().collect();
         let merged = merge(
             Local {
                 device: self.id,
@@ -86,11 +92,11 @@ impl Device {
         self.known = self.data.playtime.keys().cloned().collect();
         self.clock = merged.clock;
         self.synced = Some(merged.clock);
-        self.published = Shared {
+        self.published = self.scope.filter(&Shared {
             registers: merged.registers.clone(),
             playtime: merged.playtime.clone(),
             sessions: merged.sessions.clone(),
-        };
+        });
         merged
     }
 
@@ -756,4 +762,49 @@ fn a_look_goes_with_its_category() {
         assert!(d.data.categories.is_empty());
         assert!(d.data.category_looks.is_empty());
     }
+}
+
+#[test]
+fn a_computer_that_only_sends_playtime_keeps_its_organisation_to_itself() {
+    let mut desk = Device::new("desk");
+    let mut deck = Device::new("deck");
+    deck.scope = Scope::PlaytimeOnly;
+    desk.data.favourites.insert("gog:1".into());
+    desk.data
+        .play_status
+        .insert("gog:1".into(), status(PlayStatus::Beaten, t(0)));
+    // The Deck's import marked everything "Plan to play", and it hides a
+    // game: none of that should reach the desk.
+    deck.data
+        .play_status
+        .insert("gog:1".into(), status(PlayStatus::PlanToPlay, t(5)));
+    deck.data.hidden.insert("gog:2".into());
+    desk.play("gog:1", t(10), 600);
+    deck.play("gog:1", t(20), 300);
+    deck.play("gog:2", t(30), 120);
+    round(&mut desk, &mut deck, t(60));
+
+    // The desk keeps its own organisation, and sees every session.
+    assert!(desk.data.hidden.is_empty());
+    assert_eq!(desk.status("gog:1"), Some(PlayStatus::Beaten));
+    assert_eq!(desk.seconds("gog:1"), 900);
+    assert_eq!(desk.seconds("gog:2"), 120);
+    // The Deck keeps its own too, and its totals count the desk's play.
+    assert!(deck.data.favourites.is_empty());
+    assert_eq!(deck.status("gog:1"), Some(PlayStatus::PlanToPlay));
+    assert!(deck.data.hidden.contains("gog:2"));
+    assert_eq!(deck.seconds("gog:1"), 900);
+    // Nothing of its organisation is in its file.
+    assert!(deck.published.registers.hidden.is_empty());
+    assert!(deck.published.registers.play_status.is_empty());
+    assert_eq!(deck.published.sessions.len(), 3);
+
+    // Later changes on either side stay where they were made.
+    deck.data.favourites.insert("gog:2".into());
+    desk.data.favourites.insert("gog:3".into());
+    desk.tick(t(70));
+    deck.tick(t(70));
+    round(&mut desk, &mut deck, t(80));
+    assert!(!desk.data.favourites.contains("gog:2"));
+    assert!(!deck.data.favourites.contains("gog:3"));
 }

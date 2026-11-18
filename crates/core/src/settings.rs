@@ -860,6 +860,19 @@ pub struct AppSettings {
     /// own backup folder. Irori-only.
     #[serde(rename = "iroriLudusaviBackupPath")]
     pub ludusavi_backup_path: String,
+    /// Full backups Ludusavi keeps of each game when Irori backs it up
+    /// (1–255); 0 keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviFullLimit")]
+    pub ludusavi_full_limit: u32,
+    /// Differential backups Ludusavi keeps per full one ("0"–"255"); empty
+    /// keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviDifferentialLimit")]
+    pub ludusavi_differential_limit: String,
+    /// Largest size of the art cache on disk in MiB (downloaded art and the
+    /// thumbnails cut from it); the least recently used art goes first.
+    /// 0 = no cap. Irori-only.
+    #[serde(rename = "iroriArtCacheLimit")]
+    pub art_cache_limit: u32,
     /// Scheduled backups. Irori-only; stays on this computer (backups and
     /// restores leave it alone).
     #[serde(rename = "iroriBackups")]
@@ -905,6 +918,9 @@ impl Default for AppSettings {
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
+            art_cache_limit: DEFAULT_ART_CACHE_LIMIT,
+            ludusavi_full_limit: 0,
+            ludusavi_differential_limit: String::new(),
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
@@ -1059,6 +1075,9 @@ impl Density {
     }
 }
 
+/// The art cache's default cap in MiB.
+pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1128,6 +1147,9 @@ pub enum SyncMode {
     Folder,
     /// A WebDAV server; the login is kept with `irori_secrets`.
     Webdav,
+    /// A remote of the user's own rclone (`rcloneRemote`); rclone keeps the
+    /// account.
+    Rclone,
 }
 
 /// Library sync between computers.
@@ -1140,6 +1162,40 @@ pub struct SyncPrefs {
     pub webdav_url: String,
     /// What other computers call this one ("" = its host name).
     pub device_name: String,
+    /// The rclone remote, with an optional folder (`gdrive:Games`).
+    pub rclone_remote: String,
+    /// The rclone program; empty finds it on `PATH`.
+    pub rclone_path: String,
+    /// Cloud copies of backups, Ludusavi's saves and screenshots at the
+    /// sync target.
+    pub copies: CopyPrefs,
+    /// Exchange only playtime and sessions: this computer's favourites,
+    /// categories and statuses stay here, and the others' don't change it.
+    pub playtime_only: bool,
+}
+
+/// When a kind of cloud copy is sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyMode {
+    #[default]
+    Off,
+    /// Only when the user asks ("Send now").
+    Manual,
+    /// On its own, every so often, never while a game runs.
+    Automatic,
+}
+
+/// What goes to the sync target besides the library.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CopyPrefs {
+    /// Irori's scheduled backups (never the store sign-ins).
+    pub backups: CopyMode,
+    /// Ludusavi's backup folder.
+    pub saves: CopyMode,
+    /// The screenshots Irori finds (not clips).
+    pub screenshots: CopyMode,
 }
 
 /// Which of Irori's games Sunshine lists.

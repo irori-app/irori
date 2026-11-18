@@ -675,6 +675,17 @@ commands without a window.
   `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
   game runs (`back_up_while_playing`): a timer task per session, one backup at a
   time, finished before the session's cloud upload.
+  Restores go into the game's current prefix (`ludusavi/restore.rs`): a preview's paths
+  are planned (the prefix holding most files and its Wine user moved into the current
+  ones, Windows paths into its `drive_c`; another prefix's files and the prefix's
+  `*.reg` files left out unless asked for) and the restore runs with `--config` on a
+  throwaway copy of Ludusavi's `config.yaml` holding the redirects and
+  `restore.toggledPaths`; Ludusavi's own configuration is never written. What a
+  restore replaces is copied first to `<data>/save-restore-undo/<game>/` (newest three
+  kept; `ludusavi/undo.rs`), and "Undo restore" puts it back. Backups are named and
+  locked through `ludusavi backups edit`, deleted by cutting them (and a full backup's
+  differential children) out of `mapping.yaml` (`ludusavi/mapping.rs`, never a locked
+  one), and kept per `iroriLudusaviFullLimit`/`iroriLudusaviDifferentialLimit`.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
@@ -684,13 +695,27 @@ commands without a window.
   before a new version first runs, and prune only their own files. Store sign-ins and the
   `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
-  WebDAV (`sync/target.rs`) and merges the others' (`sync/merge.rs`): every value the user
+  WebDAV or an rclone remote (`sync/target.rs`; `sync/rclone.rs` runs the user's own
+  rclone, found on `PATH` or on the host from the Flatpak, never bundled or downloaded:
+  the user adds remotes with `rclone config` and the account never reaches Irori)
+  and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
   every session, so nothing counts twice. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
-  `SyncService::playtime_guard`.
+  `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
+  publishes only playtime, sessions and playtime removals (`merge::Scope`): its
+  organisation stays its own.
+  Cloud copies (`sync/copies.rs`, `iroriSync.copies`: Off, Manual or Automatic per
+  kind) put Irori's scheduled backups, Ludusavi's backup folder and screenshots (not
+  clips) under `Irori sync/devices/<device id>/` at the same target, with a
+  `device.json`; only files new or changed since they were sent to that target go
+  (`state/cloud-copies.json`). Automatic copies ride the periodic tick every half hour
+  (2, 5, 15 then 30 minutes after failures) and never run while a game does. Another
+  computer's copies are brought back without replacing anything: backups into the
+  backup folder, saves into Ludusavi's (games it has no backups of), screenshots into
+  `Pictures/Irori/<computer>`.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on
@@ -963,6 +988,11 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
+  `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
+  original with its thumbnails) go least recently used first. Art the store hands out
+  is noted with `art_cache::note_used` and never removed; each trim dates its files to
+  now, so recency survives restarts without file writes on the UI thread.
 
 **Theme and translucency:**
 
