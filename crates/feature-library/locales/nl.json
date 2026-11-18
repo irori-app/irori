@@ -160,6 +160,7 @@
   "library.command.open_folder": "Installatiemap openen",
   "library.command.open_page": "Gamepagina openen",
   "library.command.play": "Spelen",
+  "library.command.play_as_pc_game": "Spelen als pc-game…",
   "library.command.remove_app": "Uit bibliotheek verwijderen…",
   "library.command.remove_favourite": "Verwijderen uit favorieten",
   "library.command.remove_from_queue": "Verwijderen uit wachtrij",

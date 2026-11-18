@@ -160,6 +160,7 @@
   "library.command.open_folder": "開啟安裝資料夾",
   "library.command.open_page": "開啟遊戲頁面",
   "library.command.play": "開始遊戲",
+  "library.command.play_as_pc_game": "作為 PC 遊戲玩…",
   "library.command.remove_app": "從遊戲庫移除…",
   "library.command.remove_favourite": "自我的最愛移除",
   "library.command.remove_from_queue": "從佇列中移除",

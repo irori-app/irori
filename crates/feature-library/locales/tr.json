@@ -160,6 +160,7 @@
   "library.command.open_folder": "Kurulum klasörünü aç",
   "library.command.open_page": "Oyun sayfasını aç",
   "library.command.play": "Oyna",
+  "library.command.play_as_pc_game": "PC oyunu olarak oyna…",
   "library.command.remove_app": "Kütüphaneden kaldır…",
   "library.command.remove_favourite": "Favorilerden kaldır",
   "library.command.remove_from_queue": "Kuyruktan çıkar",

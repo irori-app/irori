@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Steam-Bibliothek aus dem Steam-Client lesen",
   "shell.palette.steam_client_library_keywords": "Steam Bibliothek eigene Spiele nicht installiert ohne Anmeldung Client",
   "shell.palette.play_status": "{title}: Spielstatus auf {status} setzen",
+  "shell.palette.play_as_pc_game": "„{title}“ als PC-Spiel spielen…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulator programm windows linux hinzugefügtes spiel",
   "shell.palette.clear_play_status": "{title}: Spielstatus entfernen",
   "shell.palette.group_by_status": "Bibliothek nach Spielstatus gruppieren",
   "shell.palette.ungroup_by_status": "Bibliothek nicht mehr nach Spielstatus gruppieren",

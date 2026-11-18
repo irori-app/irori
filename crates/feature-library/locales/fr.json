@@ -160,6 +160,7 @@
   "library.command.open_folder": "Ouvrir le dossier d’installation",
   "library.command.open_page": "Ouvrir la page du jeu",
   "library.command.play": "Jouer",
+  "library.command.play_as_pc_game": "Jouer comme jeu PC…",
   "library.command.remove_app": "Retirer de la bibliothèque…",
   "library.command.remove_favourite": "Retirer des favoris",
   "library.command.remove_from_queue": "Retirer de la file d’attente",

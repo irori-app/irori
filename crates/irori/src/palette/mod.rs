@@ -92,6 +92,8 @@ enum PaletteTarget {
     GraphicsMods(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
+    /// Turn a ROM library entry into an added PC game.
+    PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
     AddToSteam(GameId),
     /// Remove Irori's Steam shortcut of a game.
@@ -838,6 +840,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
+        PaletteTarget::PlayAsPcGame(id) => {
+            irori_library::open_play_as_pc_game_dialog(&id, window, cx)
+        }
         PaletteTarget::AddToSteam(id) => {
             irori_game::ops::add_shortcuts(&id, true, window, cx).detach()
         }

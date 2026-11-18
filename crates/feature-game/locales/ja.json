@@ -410,6 +410,7 @@
   "game.menu.open_log": "ログを開く…",
   "game.menu.open_prefix": "Wine プレフィックスを開く",
   "game.menu.play_skip_update": "アップデートを確認せずにプレイ",
+  "game.menu.play_as_pc_game": "PC ゲームとしてプレイ…",
   "game.menu.play_verbose": "詳細ログを有効にしてプレイ",
   "game.menu.redmod": "REDmod の Mod…",
   "game.menu.mods": "Mod…",

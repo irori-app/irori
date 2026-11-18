@@ -160,6 +160,7 @@
   "library.command.open_folder": "Відкрити теку встановлення",
   "library.command.open_page": "Відкрити сторінку гри",
   "library.command.play": "Грати",
+  "library.command.play_as_pc_game": "Грати як у гру для ПК…",
   "library.command.remove_app": "Прибрати з бібліотеки…",
   "library.command.remove_favourite": "Вилучити з обраного",
   "library.command.remove_from_queue": "Прибрати з черги",

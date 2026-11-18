@@ -410,6 +410,7 @@
   "game.menu.open_log": "로그 열기…",
   "game.menu.open_prefix": "Wine 프리픽스 열기",
   "game.menu.play_skip_update": "업데이트 확인 없이 플레이",
+  "game.menu.play_as_pc_game": "PC 게임으로 플레이…",
   "game.menu.play_verbose": "상세 로그로 플레이",
   "game.menu.redmod": "REDmod 모드…",
   "game.menu.mods": "모드…",

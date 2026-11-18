@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Läs Steam-biblioteket från Steam-klienten",
   "shell.palette.steam_client_library_keywords": "Steam bibliotek egna spel ej installerade utan inloggning klient",
   "shell.palette.play_status": "{title}: sätt spelstatus till {status}",
+  "shell.palette.play_as_pc_game": "Spela ”{title}” som PC-spel…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulator program windows linux tillagt spel",
   "shell.palette.clear_play_status": "{title}: rensa spelstatus",
   "shell.palette.group_by_status": "Gruppera biblioteket efter spelstatus",
   "shell.palette.ungroup_by_status": "Sluta gruppera biblioteket efter spelstatus",

@@ -160,6 +160,7 @@
   "library.command.open_folder": "インストールフォルダーを開く",
   "library.command.open_page": "ゲームページを開く",
   "library.command.play": "プレイ",
+  "library.command.play_as_pc_game": "PC ゲームとしてプレイ…",
   "library.command.remove_app": "ライブラリから削除…",
   "library.command.remove_favourite": "お気に入りから削除",
   "library.command.remove_from_queue": "キューから削除",

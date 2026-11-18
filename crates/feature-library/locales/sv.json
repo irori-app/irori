@@ -160,6 +160,7 @@
   "library.command.open_folder": "Öppna installationsmappen",
   "library.command.open_page": "Öppna spelsidan",
   "library.command.play": "Spela",
+  "library.command.play_as_pc_game": "Spela som PC-spel…",
   "library.command.remove_app": "Ta bort från biblioteket…",
   "library.command.remove_favourite": "Ta bort från favoriter",
   "library.command.remove_from_queue": "Ta bort från kön",

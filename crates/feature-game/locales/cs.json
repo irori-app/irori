@@ -410,6 +410,7 @@
   "game.menu.open_log": "Otevřít protokol…",
   "game.menu.open_prefix": "Otevřít prefix Wine",
   "game.menu.play_skip_update": "Hrát bez kontroly aktualizací",
+  "game.menu.play_as_pc_game": "Hrát jako hru pro PC…",
   "game.menu.play_verbose": "Hrát s podrobnými protokoly",
   "game.menu.redmod": "Módy REDmod…",
   "game.menu.mods": "Módy…",

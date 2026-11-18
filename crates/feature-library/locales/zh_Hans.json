@@ -160,6 +160,7 @@
   "library.command.open_folder": "打开安装文件夹",
   "library.command.open_page": "打开游戏页面",
   "library.command.play": "开始游戏",
+  "library.command.play_as_pc_game": "作为 PC 游戏玩…",
   "library.command.remove_app": "从游戏库移除…",
   "library.command.remove_favourite": "从收藏移除",
   "library.command.remove_from_queue": "从队列中移除",

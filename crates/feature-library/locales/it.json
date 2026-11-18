@@ -160,6 +160,7 @@
   "library.command.open_folder": "Apri cartella di installazione",
   "library.command.open_page": "Apri pagina del gioco",
   "library.command.play": "Gioca",
+  "library.command.play_as_pc_game": "Gioca come gioco per PC…",
   "library.command.remove_app": "Rimuovi dalla libreria…",
   "library.command.remove_favourite": "Rimuovi dai preferiti",
   "library.command.remove_from_queue": "Rimuovi dalla coda",

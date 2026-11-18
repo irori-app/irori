@@ -1,6 +1,6 @@
 //! The command palette's rows for the game whose page is open: its play
-//! status, troubleshooting, Steam Play, ReShade and RenoDX, Steam shortcuts
-//! and save backups.
+//! status, troubleshooting, Steam Play, playing a ROM as a PC game, ReShade
+//! and RenoDX, Steam shortcuts and save backups.
 
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
@@ -70,6 +70,18 @@ pub(super) fn rows(
                 .keywords([t("shell.palette.steam_play_keywords")])
                 .icon(IconName::Wine),
             PaletteTarget::SteamPlay(game.id()),
+        );
+    }
+    if game.runner() == Runner::Emulation {
+        push(
+            CommandItem::new()
+                .label(t_args(
+                    "shell.palette.play_as_pc_game",
+                    &[("title", &game.title)],
+                ))
+                .keywords([t("shell.palette.play_as_pc_game_keywords")])
+                .icon(IconName::Monitor),
+            PaletteTarget::PlayAsPcGame(game.id()),
         );
     }
     if irori_services::supports_reshade(game) {

@@ -410,6 +410,7 @@
   "game.menu.open_log": "Ouvrir le journal…",
   "game.menu.open_prefix": "Ouvrir le préfixe Wine",
   "game.menu.play_skip_update": "Jouer sans rechercher de mises à jour",
+  "game.menu.play_as_pc_game": "Jouer comme jeu PC…",
   "game.menu.play_verbose": "Jouer avec des journaux détaillés",
   "game.menu.redmod": "Mods REDmod…",
   "game.menu.mods": "Mods…",

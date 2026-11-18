@@ -36,7 +36,7 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
 };
-use irori_core::{GameId, GameMode, Runner, Store as _};
+use irori_core::{GameId, GameInfo, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
 use irori_sideload::{SideloadApp, SideloadPlatform};
 use irori_ui::i18n::{t, t_args};
@@ -109,6 +109,10 @@ pub struct SideloadDialog {
     /// The link another launcher starts the app from (Playnite's games);
     /// the form doesn't show it, so it is kept as it was.
     launch_link: Option<String>,
+    /// The ROM library entry this new app replaces ("Play as a PC game…"):
+    /// what the user keeps about it moves to the app, and the ROM leaves
+    /// the library.
+    replaces: Option<GameId>,
     saving: bool,
     /// Saved successfully (a provisional entry is then kept).
     saved: bool,
@@ -321,6 +325,7 @@ impl SideloadDialog {
             },
             fullscreen: existing.launch_fullscreen,
             launch_link: existing.launch_link.clone(),
+            replaces: None,
             editing,
             title,
             executable,
@@ -570,6 +575,7 @@ impl SideloadDialog {
         let settings = b.settings.app();
         let modes = super::chosen_modes(&self.known_modes, &self.modes);
         let setup = self.wine_setup(cx);
+        let replaces = self.replaces.clone();
         self.saving = true;
         self.error = None;
         cx.notify();
@@ -604,6 +610,13 @@ impl SideloadDialog {
             }
             if !added {
                 return Ok(false);
+            }
+            if let Some(rom) = &replaces {
+                b.userdata.carry_over(rom, &id);
+                // A ROM leaves the library by being hidden there; its file stays.
+                if let Err(e) = b.uninstall(rom, Default::default()).await {
+                    tracing::warn!("taking {rom} out of the ROM library: {e:#}");
+                }
             }
             let targets = ShortcutTargets::from_settings(&settings);
             if (targets.desktop || targets.app_menu || targets.steam)
@@ -1188,6 +1201,10 @@ fn open(editing: Option<String>, prefill: Option<SideloadApp>, window: &mut Wind
             .detach();
         SideloadDialog::with_app(editing, prefill, window, cx)
     });
+    show(view, window, cx);
+}
+
+fn show(view: Entity<SideloadDialog>, window: &mut Window, cx: &mut App) {
     let footer = cx.new(|cx| SideloadFooter::new(view.clone(), cx));
     let width = dialog_width(window, 40.);
     let focus = Cell::new(true);
@@ -1254,6 +1271,60 @@ fn dropped_app(file: &Path, found: Option<irori_sideload::scan::FoundGame>) -> S
     }
 }
 
+/// Open the "Add game" dialog filled in from a ROM library entry, to play
+/// its file as a PC game instead (a Windows or native program the scan took
+/// for a ROM). Saving moves what the user keeps about the entry (favourite,
+/// categories, playtime, title and art, status, rating, notes) to the new
+/// app and takes the entry out of the ROM library; the file stays.
+pub fn open_play_as_pc_game_dialog(id: &GameId, window: &mut Window, cx: &mut App) {
+    let Some(game) = backend(cx).game(id) else {
+        return;
+    };
+    let prefill = rom_as_app(&game);
+    let rom = id.clone();
+    let view = cx.new(|cx| {
+        cx.on_release(|this: &mut SideloadDialog, cx| this.discard_provisional(cx))
+            .detach();
+        let mut dialog = SideloadDialog::with_app(None, Some(prefill), window, cx);
+        dialog.replaces = Some(rom);
+        dialog
+    });
+    show(view, window, cx);
+}
+
+/// The app a ROM entry becomes: its file as the program, Windows for a
+/// Windows program and this system's own otherwise, its title and art.
+fn rom_as_app(game: &GameInfo) -> SideloadApp {
+    let file = game
+        .install
+        .as_ref()
+        .map(|i| i.executable.trim())
+        .filter(|e| !e.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| game.install_path());
+    let windows = file.as_deref().is_some_and(|f| {
+        f.extension().is_some_and(|e| {
+            ["exe", "bat", "cmd", "msi", "lnk"]
+                .iter()
+                .any(|w| e.eq_ignore_ascii_case(w))
+        })
+    });
+    let platform = match irori_core::HostPlatform::current() {
+        _ if windows => SideloadPlatform::Windows,
+        irori_core::HostPlatform::Mac => SideloadPlatform::Mac,
+        irori_core::HostPlatform::Windows => SideloadPlatform::Windows,
+        irori_core::HostPlatform::Linux => SideloadPlatform::Linux,
+    };
+    SideloadApp {
+        title: game.title.clone(),
+        executable: file,
+        platform,
+        cover_art: game.art_cover.clone(),
+        background_art: game.art_background.clone(),
+        ..Default::default()
+    }
+}
+
 /// Open the edit dialog of a manually added app.
 pub(crate) fn open_edit_app_dialog(app_name: String, window: &mut Window, cx: &mut App) {
     open(Some(app_name), None, window, cx);
@@ -1299,6 +1370,40 @@ mod tests {
         assert_eq!(entry.platform, SideloadPlatform::Linux);
         assert_eq!(entry.launcher_args, "--fullscreen");
         assert_eq!(entry.cover_art.as_deref(), Some("/icons/tux.png"));
+    }
+
+    #[test]
+    fn a_rom_entry_becomes_an_added_program() {
+        let rom = |file: &str| GameInfo {
+            runner: Some(Runner::Emulation),
+            app_name: "abc".into(),
+            title: "Doom".into(),
+            art_cover: Some("https://example.com/doom.png".into()),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: "/roms/dos".into(),
+                executable: file.into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let app = rom_as_app(&rom("/roms/dos/DOOM.EXE"));
+        assert_eq!(app.title, "Doom");
+        assert_eq!(app.executable, Some(PathBuf::from("/roms/dos/DOOM.EXE")));
+        assert_eq!(app.platform, SideloadPlatform::Windows);
+        assert_eq!(
+            app.cover_art.as_deref(),
+            Some("https://example.com/doom.png")
+        );
+        let native = rom_as_app(&rom("/roms/linux/game.x86_64"));
+        assert_eq!(
+            native.platform,
+            match irori_core::HostPlatform::current() {
+                irori_core::HostPlatform::Mac => SideloadPlatform::Mac,
+                irori_core::HostPlatform::Windows => SideloadPlatform::Windows,
+                irori_core::HostPlatform::Linux => SideloadPlatform::Linux,
+            }
+        );
     }
 
     #[test]

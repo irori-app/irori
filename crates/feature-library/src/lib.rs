@@ -53,6 +53,7 @@ pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::folder::open_add_folder_dialog;
 pub use dialogs::lutris::open_lutris_installer;
 pub use dialogs::sideload::open_add_game_dialog;
+pub use dialogs::sideload::open_play_as_pc_game_dialog;
 pub use dialogs::smart::open_smart_category_editor;
 pub use dialogs::steamgrid::open_art_picker_dialog;
 pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};

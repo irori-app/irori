@@ -410,6 +410,7 @@
   "game.menu.open_log": "Open log…",
   "game.menu.open_prefix": "Open Wine prefix",
   "game.menu.play_skip_update": "Play without checking for updates",
+  "game.menu.play_as_pc_game": "Play as a PC game…",
   "game.menu.play_verbose": "Play with verbose logs",
   "game.menu.redmod": "REDmod mods…",
   "game.menu.mods": "Mods…",

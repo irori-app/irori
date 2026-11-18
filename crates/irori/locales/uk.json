@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Прочитати бібліотеку Steam із клієнта Steam",
   "shell.palette.steam_client_library_keywords": "Steam бібліотека власні ігри не встановлені без входу клієнт",
   "shell.palette.play_status": "{title}: статус проходження — {status}",
+  "shell.palette.play_as_pc_game": "Грати в «{title}» як у гру для ПК…",
+  "shell.palette.play_as_pc_game_keywords": "rom емулятор програма windows linux додана гра",
   "shell.palette.clear_play_status": "{title}: скинути статус проходження",
   "shell.palette.group_by_status": "Групувати бібліотеку за статусом проходження",
   "shell.palette.ungroup_by_status": "Не групувати бібліотеку за статусом проходження",

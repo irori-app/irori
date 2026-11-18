@@ -160,6 +160,7 @@
   "library.command.open_folder": "Otevřít instalační složku",
   "library.command.open_page": "Otevřít stránku hry",
   "library.command.play": "Hrát",
+  "library.command.play_as_pc_game": "Hrát jako hru pro PC…",
   "library.command.remove_app": "Odebrat z knihovny…",
   "library.command.remove_favourite": "Odebrat z oblíbených",
   "library.command.remove_from_queue": "Odebrat z fronty",

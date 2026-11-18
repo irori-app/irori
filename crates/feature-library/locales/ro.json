@@ -160,6 +160,7 @@
   "library.command.open_folder": "Deschide dosarul de instalare",
   "library.command.open_page": "Deschide pagina jocului",
   "library.command.play": "Joacă",
+  "library.command.play_as_pc_game": "Joacă ca joc pentru PC…",
   "library.command.remove_app": "Elimină din bibliotecă…",
   "library.command.remove_favourite": "Elimină de la favorite",
   "library.command.remove_from_queue": "Elimină din coadă",

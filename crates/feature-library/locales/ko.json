@@ -160,6 +160,7 @@
   "library.command.open_folder": "설치 폴더 열기",
   "library.command.open_page": "게임 페이지 열기",
   "library.command.play": "플레이",
+  "library.command.play_as_pc_game": "PC 게임으로 플레이…",
   "library.command.remove_app": "라이브러리에서 제거…",
   "library.command.remove_favourite": "즐겨찾기에서 제거",
   "library.command.remove_from_queue": "대기열에서 제거",

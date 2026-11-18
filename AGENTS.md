@@ -1255,6 +1255,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
+- **Play as a PC game.** A ROM entry that is really a program (the game
+  menu, the library's context menu, the palette:
+  `irori_library::open_play_as_pc_game_dialog`) opens "Add game" filled in from
+  it; saving moves what the user keeps about it to the new app
+  (`UserData::carry_over`: favourite, hidden, recents, categories, playtime, title
+  and art, date added, status, rating, journal) and hides the ROM entry. The file
+  stays, and so does the session history, under the ROM entry.
 - **Settings keys** are Irori-only: `iroriEngine`, `iroriEngineVersion`,
   `iroriEngineOptions` (merged per engine and option over the defaults),
   `iroriEngineOwnSettings`, `iroriSystemEngines`, `iroriRomFolders`, `iroriBiosFolder`.

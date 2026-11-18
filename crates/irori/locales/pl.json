@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Odczytaj bibliotekę Steam z klienta Steam",
   "shell.palette.steam_client_library_keywords": "Steam biblioteka posiadane gry niezainstalowane bez logowania klient",
   "shell.palette.play_status": "{title}: ustaw status gry na {status}",
+  "shell.palette.play_as_pc_game": "Graj w „{title}” jako grę na PC…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulator program windows linux dodana gra",
   "shell.palette.clear_play_status": "{title}: wyczyść status gry",
   "shell.palette.group_by_status": "Grupuj bibliotekę według statusu gry",
   "shell.palette.ungroup_by_status": "Przestań grupować bibliotekę według statusu gry",
