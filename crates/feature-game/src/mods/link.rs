@@ -112,10 +112,9 @@ impl LinkPicker {
                     let found = task.await;
                     let _ = this.update(cx, |this, cx| {
                         this.finding = false;
-                        match found {
-                            Ok(Some(id)) => this.pick_first(id),
-                            // Unknown: the user picks the game.
-                            Ok(None) | Err(_) => {}
+                        // Unknown: the user picks the game.
+                        if let Ok(Some(id)) = found {
+                            this.pick_first(id);
                         }
                         cx.notify();
                     });

@@ -342,6 +342,16 @@ fn remove_links(dir: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
+pub(crate) fn rar_names_for_test(seven_zip: bool, stdout: &str) -> Vec<String> {
+    let tool = if seven_zip {
+        RarTool::SevenZip(PathBuf::new())
+    } else {
+        RarTool::Unrar(PathBuf::new())
+    };
+    rar_names(&tool, stdout)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -381,14 +391,4 @@ mod tests {
         assert_eq!(cmd("ID_LIKE=debian\nID=x\n"), Some("sudo apt install 7zip"));
         assert_eq!(cmd(""), None);
     }
-}
-
-#[cfg(test)]
-pub(crate) fn rar_names_for_test(seven_zip: bool, stdout: &str) -> Vec<String> {
-    let tool = if seven_zip {
-        RarTool::SevenZip(PathBuf::new())
-    } else {
-        RarTool::Unrar(PathBuf::new())
-    };
-    rar_names(&tool, stdout)
 }
