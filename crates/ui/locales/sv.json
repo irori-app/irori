@@ -164,6 +164,8 @@
   "ui.wine.looking": "Letar efter Wine- och Proton-versioner…",
   "ui.wine.none": "Ingen Wine- eller Proton-version hittades. Ladda ned en i Wine-hanteraren innan du spelar.",
   "ui.wine.open_manager": "Öppna Wine-hanteraren",
+  "ui.wine.installed": "{version} är installerad",
+  "ui.wine.install_failed": "Det gick inte att installera {version}",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "Mappen som innehåller spelets Windows-miljö. Lämna tomt för standardmappen som visas.",
   "ui.wine.browse": "Bläddra…",

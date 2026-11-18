@@ -164,6 +164,8 @@
   "ui.wine.looking": "Пошук версій Wine і Proton…",
   "ui.wine.none": "Не знайдено жодної версії Wine чи Proton. Перед грою завантажте її в менеджері Wine.",
   "ui.wine.open_manager": "Відкрити менеджер Wine",
+  "ui.wine.installed": "Встановлено: {version}",
+  "ui.wine.install_failed": "Не вдалося встановити {version}",
   "ui.wine.prefix": "Префікс",
   "ui.wine.prefix_help": "Тека з Windows-середовищем гри. Залиште порожнім, щоб використати показану типову теку.",
   "ui.wine.browse": "Огляд…",

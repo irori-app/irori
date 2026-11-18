@@ -164,6 +164,8 @@
   "ui.wine.looking": "Looking for Wine and Proton builds…",
   "ui.wine.none": "No Wine or Proton build was found. Download one in the Wine manager before playing.",
   "ui.wine.open_manager": "Open Wine manager",
+  "ui.wine.installed": "{version} is installed",
+  "ui.wine.install_failed": "Couldn’t install {version}",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "The folder holding the game’s Windows environment. Leave it empty for the default shown.",
   "ui.wine.browse": "Browse…",

@@ -164,6 +164,8 @@
   "ui.wine.looking": "Se caută versiuni Wine și Proton…",
   "ui.wine.none": "Nu a fost găsită nicio versiune Wine sau Proton. Descarcă una din managerul Wine înainte să joci.",
   "ui.wine.open_manager": "Deschide managerul Wine",
+  "ui.wine.installed": "{version} este instalată",
+  "ui.wine.install_failed": "Nu s-a putut instala {version}",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "Folderul care conține mediul Windows al jocului. Lasă-l gol pentru cel implicit afișat.",
   "ui.wine.browse": "Răsfoiește…",

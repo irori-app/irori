@@ -478,6 +478,15 @@ commands without a window.
   `run_automatic_updates`, which keeps to `iroriAutoUpdateFrom`/`Until` and, where the
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
+  Wine manager sources (`irori_runtime::release_checks`) read their release feed
+  (`releases.atom`, not counted by GitHub) before the API and skip the API when it is
+  unchanged; GitHub's `x-ratelimit-*` budget is kept in `state/wine-release-checks.json`,
+  automatic checks leave a reserve of 10 calls, and a used-up budget is a typed
+  `RateLimited` the Wine manager shows with its reset time. Wine and Proton installs run
+  through `irori_ui::wine_installs` (one global entity), so the Wine manager and the
+  install sheet show the same download; with no Wine or Proton at all, the install sheet
+  offers "Download GE-Proton" (the newest numbered release, `manager::newest_release`),
+  which becomes the default Wine once installed.
 - **User data:** favourites, hidden games, categories, recents, playtime, play
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store
@@ -800,7 +809,12 @@ commands without a window.
   the prefix's `winetricks.log` (`pfx/` too, Steam's through protontricks' path),
   its anticheat entry and, on Linux, `vm.max_map_count`; `analysis.rs` turns that
   into findings, each with the log lines showing it and its fixes, and is pure and
-  tested. Fixes tried this session (`mark_fix_tried`) come last.
+  tested. Beside missing DLLs and anticheat it knows Direct3D 12 with VKD3D-Proton off
+  and wined3d with DXVK off under plain Wine (fix: turn the layer on), esync out of file
+  descriptors (fix: esync off, fsync on), a wineserver of another Wine version
+  (`Backend::stop_prefix_wineserver`, found by its `WINEPREFIX` in `/proc`) and Vulkan
+  failing, with the driver install command for the distribution and GPU to copy
+  (`vulkan_driver_command`). Fixes tried this session (`mark_fix_tried`) come last.
   `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
   `sudo`: a low map count is explained with the commands to run. Games through
   Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`

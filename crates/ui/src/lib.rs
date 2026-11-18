@@ -40,6 +40,7 @@ mod text_scale;
 pub mod theme;
 mod wallpaper;
 pub mod wine_choice;
+pub mod wine_installs;
 mod xbox_problem;
 
 pub use models::{Models, models};
