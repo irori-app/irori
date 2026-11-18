@@ -1,5 +1,6 @@
 //! Library sync between computers (a desktop and a Steam Deck, Linux and
-//! Windows on one PC) through a folder something else syncs, or WebDAV.
+//! Windows on one PC) through a folder something else syncs, WebDAV, or a
+//! remote of the user's own rclone (Google Drive, Dropbox, OneDrive…).
 //!
 //! Each device writes one file, `<device id>.json` in the `Irori sync`
 //! folder, with everything it knows, and reads the others'. What is merged
@@ -16,6 +17,7 @@
 //! with `irori_secrets`.
 
 pub mod merge;
+pub mod rclone;
 pub mod target;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -88,6 +90,15 @@ pub struct SyncReport {
     pub skipped: Vec<String>,
     /// Some files came from a newer Irori.
     pub newer_version: bool,
+}
+
+/// rclone as the settings page shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RcloneInfo {
+    pub program: String,
+    pub version: Option<String>,
+    /// The remotes set up in rclone, or why they couldn't be listed.
+    pub remotes: Result<Vec<String>, String>,
 }
 
 /// What the settings page shows.
@@ -269,10 +280,54 @@ impl Backend {
         }
     }
 
-    fn sync_target(&self) -> Result<Option<Target>> {
+    /// The rclone to run: the program chosen in settings, else the one
+    /// installed. `None` when there is none.
+    pub async fn rclone(&self) -> Option<rclone::Rclone> {
+        let chosen = self.settings.app().sync.rclone_path.clone();
+        rclone::Rclone::locate(&chosen).await
+    }
+
+    /// The installed rclone's program and version, and its remotes; `None`
+    /// when rclone isn't found.
+    pub async fn rclone_info(&self) -> Option<RcloneInfo> {
+        let rclone = self.rclone().await?;
+        let version = rclone
+            .version()
+            .await
+            .inspect_err(|e| tracing::info!("asking rclone its version: {e:#}"))
+            .ok();
+        let remotes = match rclone.remotes().await {
+            Ok(remotes) => Ok(remotes),
+            Err(e) => Err(format!("{e:#}")),
+        };
+        Some(RcloneInfo {
+            program: rclone.display(),
+            version,
+            remotes,
+        })
+    }
+
+    async fn sync_target(&self) -> Result<Option<Target>> {
+        let prefs = self.settings.app().sync.clone();
+        if prefs.mode == SyncMode::Rclone {
+            let remote = prefs.rclone_remote.trim().to_string();
+            if !rclone::is_remote(&remote) {
+                bail!("Choose an rclone remote");
+            }
+            let rclone = self.rclone().await.context(
+                "rclone isn’t installed. Install it, or choose its program in Settings → Backup.",
+            )?;
+            return Ok(Some(Target::Rclone { rclone, remote }));
+        }
+        let b = self.clone();
+        self.spawn_blocking(move || b.blocking_sync_target())
+            .await?
+    }
+
+    fn blocking_sync_target(&self) -> Result<Option<Target>> {
         let prefs = self.settings.app().sync.clone();
         Ok(match prefs.mode {
-            SyncMode::Off => None,
+            SyncMode::Off | SyncMode::Rclone => None,
             SyncMode::Folder => Some(Target::Folder(irori_core::paths::expand_home(
                 prefs.folder.trim(),
             ))),
@@ -382,11 +437,7 @@ impl Backend {
     }
 
     async fn sync_inner(&self) -> Result<SyncReport> {
-        let b = self.clone();
-        let target = self
-            .spawn_blocking(move || b.sync_target())
-            .await??
-            .context("Sync is off")?;
+        let target = self.sync_target().await?.context("Sync is off")?;
         let (me, own) = {
             let state = self.sync.state.lock();
             (state.device_id.clone(), format!("{}.json", state.device_id))

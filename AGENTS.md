@@ -685,7 +685,10 @@ commands without a window.
   before a new version first runs, and prune only their own files. Store sign-ins and the
   `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
-  WebDAV (`sync/target.rs`) and merges the others' (`sync/merge.rs`): every value the user
+  WebDAV or an rclone remote (`sync/target.rs`; `sync/rclone.rs` runs the user's own
+  rclone, found on `PATH` or on the host from the Flatpak, never bundled or downloaded:
+  the user adds remotes with `rclone config` and the account never reaches Irori)
+  and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
   every session, so nothing counts twice. New user data that should travel needs a

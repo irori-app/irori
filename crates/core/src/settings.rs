@@ -1147,6 +1147,9 @@ pub enum SyncMode {
     Folder,
     /// A WebDAV server; the login is kept with `irori_secrets`.
     Webdav,
+    /// A remote of the user's own rclone (`rcloneRemote`); rclone keeps the
+    /// account.
+    Rclone,
 }
 
 /// Library sync between computers.
@@ -1159,6 +1162,10 @@ pub struct SyncPrefs {
     pub webdav_url: String,
     /// What other computers call this one ("" = its host name).
     pub device_name: String,
+    /// The rclone remote, with an optional folder (`gdrive:Games`).
+    pub rclone_remote: String,
+    /// The rclone program; empty finds it on `PATH`.
+    pub rclone_path: String,
     /// Exchange only playtime and sessions: this computer's favourites,
     /// categories and statuses stay here, and the others' don't change it.
     pub playtime_only: bool,

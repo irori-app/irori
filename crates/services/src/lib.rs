@@ -105,7 +105,7 @@ pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };
-pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
+pub use sync::{RcloneInfo, SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};

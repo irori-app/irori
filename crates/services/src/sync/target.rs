@@ -1,11 +1,13 @@
 //! Where devices exchange their sync files: a folder another program keeps
-//! in sync, or a WebDAV folder. Each device writes only its own file, so
+//! in sync, a WebDAV folder, or an rclone remote ([`super::rclone`]). Each device writes only its own file, so
 //! the sync programs never have two versions of one file to choose from.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
+
+use super::rclone::{self, Rclone, Scratch};
 
 /// The folder Irori uses inside the chosen one.
 pub const DIR: &str = "Irori sync";
@@ -30,7 +32,15 @@ impl std::fmt::Debug for WebDavLogin {
 #[derive(Debug, Clone)]
 pub enum Target {
     Folder(PathBuf),
-    WebDav { url: String, login: WebDavLogin },
+    WebDav {
+        url: String,
+        login: WebDavLogin,
+    },
+    /// `remote` is an rclone remote with an optional path (`gdrive:Games`).
+    Rclone {
+        rclone: Rclone,
+        remote: String,
+    },
 }
 
 /// Whether `name` is a device file (`<id>.json`, or a copy a sync program
@@ -93,6 +103,17 @@ impl Target {
                 names.dedup();
                 Ok(names)
             }
+            Target::Rclone { rclone, remote } => {
+                let mut names: Vec<String> = rclone
+                    .list(&rclone::remote_path(remote, DIR))
+                    .await?
+                    .into_iter()
+                    .filter(|e| !e.is_dir && is_device_file(&e.name))
+                    .map(|e| e.name)
+                    .collect();
+                names.sort();
+                Ok(names)
+            }
         }
     }
 
@@ -111,6 +132,18 @@ impl Target {
                     .await
                     .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
                 Ok(checked(response).await?.bytes().await?.to_vec())
+            }
+            Target::Rclone { rclone, remote } => {
+                let scratch = Scratch::new()?;
+                rclone
+                    .download(
+                        &rclone::remote_path(remote, &format!("{DIR}/{name}")),
+                        scratch.path(),
+                    )
+                    .await?;
+                tokio::fs::read(scratch.path())
+                    .await
+                    .context("Cannot read what rclone fetched")
             }
         }
     }
@@ -147,6 +180,18 @@ impl Target {
                     .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
                 checked(response).await?;
                 Ok(())
+            }
+            Target::Rclone { rclone, remote } => {
+                let scratch = Scratch::new()?;
+                tokio::fs::write(scratch.path(), &bytes)
+                    .await
+                    .context("Cannot prepare the file for rclone")?;
+                rclone
+                    .upload(
+                        scratch.path(),
+                        &rclone::remote_path(remote, &format!("{DIR}/{name}")),
+                    )
+                    .await
             }
         }
     }

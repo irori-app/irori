@@ -1,5 +1,6 @@
 //! Settings → Backup → Sync between computers: where the library syncs
-//! (a folder something else syncs, or WebDAV), this computer's name, how
+//! (a folder something else syncs, WebDAV, or an rclone remote), this
+//! computer's name, how
 //! the last sync went, the other computers and the changes that lost to
 //! theirs.
 
@@ -23,13 +24,19 @@ use gpui_kit::{
 use irori_core::{GameId, Runner, SyncMode};
 use irori_services::backup_schedule::local_time;
 use irori_services::sync::ConflictField;
-use irori_services::{SyncConflict, SyncStatus, WebDavLogin};
+use irori_services::sync::rclone::INSTALL_URL as RCLONE_INSTALL_URL;
+use irori_services::{RcloneInfo, SyncConflict, SyncStatus, WebDavLogin};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use crate::widgets::{muted, panel};
 
-const MODES: [SyncMode; 3] = [SyncMode::Off, SyncMode::Folder, SyncMode::Webdav];
+const MODES: [SyncMode; 4] = [
+    SyncMode::Off,
+    SyncMode::Folder,
+    SyncMode::Webdav,
+    SyncMode::Rclone,
+];
 
 /// The sync section's state.
 pub struct SyncPanel {
@@ -37,6 +44,9 @@ pub struct SyncPanel {
     username: Entity<InputState>,
     password: Entity<InputState>,
     device: Entity<InputState>,
+    remote: Entity<InputState>,
+    /// rclone as found: `None` while looking, `Some(None)` when missing.
+    rclone: Option<Option<RcloneInfo>>,
     status: SyncStatus,
     /// The saved WebDAV user name, read off the UI thread.
     saved_user: Option<String>,
@@ -66,8 +76,22 @@ impl SyncPanel {
                 .placeholder(irori_services::sync::default_device_name())
                 .default_value(prefs.device_name.clone())
         });
+        let remote = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t("settings.sync.rclone_remote_placeholder"))
+                .default_value(prefs.rclone_remote.clone())
+        });
         let settings = models(cx).settings.clone();
         let subscriptions = vec![
+            cx.subscribe_in(
+                &remote,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                        this.commit_remote(window, cx);
+                    }
+                },
+            ),
             cx.observe(&settings, |this, _, cx| this.refresh(cx)),
             cx.subscribe_in(&url, window, |this, _, event: &InputEvent, _, cx| {
                 if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
@@ -94,6 +118,8 @@ impl SyncPanel {
             username,
             password,
             device,
+            remote,
+            rclone: None,
             status: SyncStatus::default(),
             saved_user: None,
             titles: HashMap::new(),
@@ -102,7 +128,69 @@ impl SyncPanel {
         };
         this.refresh(cx);
         this.load_user(cx);
+        if prefs.mode == SyncMode::Rclone {
+            this.look_for_rclone(cx);
+        }
         this
+    }
+
+    /// Find rclone and its remotes, off the UI thread.
+    fn look_for_rclone(&mut self, cx: &mut Context<Self>) {
+        self.rclone = None;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::state::run_infallible(cx, async move { b.rclone_info().await });
+        cx.spawn(async move |this, cx| {
+            let info = task.await.flatten();
+            let _ = this.update(cx, |this, cx| {
+                this.rclone = Some(info);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Keep the typed remote and sync with it.
+    fn commit_remote(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let remote = self.remote.read(cx).value().trim().to_string();
+        self.set_remote(remote, window, cx);
+    }
+
+    fn set_remote(&mut self, remote: String, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        if b.settings.app().sync.rclone_remote == remote {
+            return;
+        }
+        if self.remote.read(cx).value().trim() != remote {
+            let value = remote.clone();
+            self.remote
+                .update(cx, |s, cx| s.set_value(value, window, cx));
+        }
+        b.settings.update_app(|s| s.sync.rclone_remote = remote);
+        self.sync_now(false, window, cx);
+    }
+
+    fn choose_rclone(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(t("settings.sync.rclone_choose")),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = rx.await
+                && let Some(p) = paths.into_iter().next()
+            {
+                let _ = this.update(cx, |this, cx| {
+                    let path = p.to_string_lossy().into_owned();
+                    backend(cx)
+                        .settings
+                        .update_app(|s| s.sync.rclone_path = path);
+                    this.look_for_rclone(cx);
+                });
+            }
+        })
+        .detach();
     }
 
     /// Re-read the status and the titles of the games it names.
@@ -158,6 +246,9 @@ impl SyncPanel {
     fn set_mode(&mut self, mode: SyncMode, window: &mut Window, cx: &mut Context<Self>) {
         self.commit_texts(cx);
         backend(cx).settings.update_app(|s| s.sync.mode = mode);
+        if mode == SyncMode::Rclone {
+            self.look_for_rclone(cx);
+        }
         if mode != SyncMode::Off {
             self.sync_now(false, window, cx);
         }
@@ -347,6 +438,7 @@ impl Render for SyncPanel {
                     SyncMode::Off => t("settings.sync.mode_off"),
                     SyncMode::Folder => t("settings.sync.mode_folder"),
                     SyncMode::Webdav => SharedString::new_static("WebDAV"),
+                    SyncMode::Rclone => SharedString::new_static("rclone"),
                 };
                 Button::new(SharedString::from(format!("sync-mode-{ix}")))
                     .label(label)
@@ -365,7 +457,7 @@ impl Render for SyncPanel {
             .child(h_flex().child(modes));
 
         match mode {
-            SyncMode::Off => {}
+            SyncMode::Off | SyncMode::Rclone => {}
             SyncMode::Folder => {
                 let folder = prefs.folder.trim().to_string();
                 body = body.child(
@@ -452,6 +544,10 @@ impl Render for SyncPanel {
             }
         }
 
+        if mode == SyncMode::Rclone {
+            body = body.child(self.render_rclone(cx));
+        }
+
         if mode != SyncMode::Off {
             body = body
                 .child(
@@ -502,6 +598,108 @@ impl Render for SyncPanel {
 }
 
 impl SyncPanel {
+    /// rclone: found or how to get it, and the remote to sync with.
+    fn render_rclone(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut out = v_flex().gap_2();
+        match &self.rclone {
+            None => out = out.child(muted(t("settings.sync.rclone_looking"), cx)),
+            Some(None) => {
+                out = out
+                    .child(
+                        Alert::info("rclone-missing", t("settings.sync.rclone_missing"))
+                            .title(t("settings.sync.rclone_missing_title")),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .flex_wrap()
+                            .child(
+                                Button::new("rclone-get")
+                                    .primary()
+                                    .small()
+                                    .icon(IconName::ExternalLink)
+                                    .label(t("settings.sync.rclone_get"))
+                                    .on_click(|_, _, cx| cx.open_url(RCLONE_INSTALL_URL)),
+                            )
+                            .child(
+                                Button::new("rclone-choose")
+                                    .outline()
+                                    .small()
+                                    .icon(IconName::FolderOpen)
+                                    .label(t("settings.sync.rclone_choose"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.choose_rclone(window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("rclone-again")
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::RefreshCw)
+                                    .label(t("settings.sync.rclone_again"))
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.look_for_rclone(cx)),
+                                    ),
+                            ),
+                    );
+            }
+            Some(Some(info)) => {
+                let found = match &info.version {
+                    Some(v) => t_args("settings.sync.rclone_found", &[("version", v)]),
+                    None => t("settings.sync.rclone_found_no_version"),
+                };
+                out = out.child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(Icon::new(IconName::CircleCheck).text_color(cx.theme().success))
+                        .child(div().min_w_0().truncate().child(found))
+                        .child(muted(SharedString::from(info.program.clone()), cx))
+                        .child(
+                            Button::new("rclone-refresh")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::RefreshCw)
+                                .accessibility_label(t("settings.sync.rclone_again"))
+                                .tooltip(t("settings.sync.rclone_again"))
+                                .on_click(cx.listener(|this, _, _, cx| this.look_for_rclone(cx))),
+                        ),
+                );
+                out = out.child(
+                    v_flex()
+                        .gap_1()
+                        .child(irori_ui::style::caption(
+                            t("settings.sync.rclone_remote"),
+                            cx,
+                        ))
+                        .child(Input::new(&self.remote)),
+                );
+                match &info.remotes {
+                    Ok(remotes) if remotes.is_empty() => {
+                        out = out.child(muted(t("settings.sync.rclone_no_remotes"), cx));
+                    }
+                    Ok(remotes) => {
+                        out = out.child(h_flex().gap_1().flex_wrap().children(
+                            remotes.iter().enumerate().map(|(i, r)| {
+                                let remote = r.clone();
+                                Button::new(("rclone-remote", i))
+                                    .outline()
+                                    .xsmall()
+                                    .label(r.clone())
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.set_remote(remote.clone(), window, cx)
+                                    }))
+                            }),
+                        ));
+                    }
+                    Err(e) => out = out.child(muted(SharedString::from(e.clone()), cx)),
+                }
+                out = out.child(muted(t("settings.sync.rclone_hint"), cx));
+            }
+        }
+        out
+    }
+
     /// The last sync, the other computers and the changes that lost.
     fn render_status(&self, busy: bool, cx: &mut Context<Self>) -> impl IntoElement {
         let status = &self.status;
