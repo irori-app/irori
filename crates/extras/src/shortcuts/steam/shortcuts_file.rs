@@ -166,11 +166,14 @@ impl<'a> ShortcutEntry<'a> {
         self.0.str_ci("ShortcutPath")
     }
 
-    /// Stored app ID as unsigned (Steam writes it as a signed int32).
+    /// Stored app ID as unsigned (Steam writes it as a signed int32). An
+    /// `appid` of 0 is none: some tools write the key before Steam has
+    /// computed it, and Steam names no art after 0.
     pub fn app_id(&self) -> Option<u32> {
         self.0
             .get_ci("appid")
             .and_then(Value::as_i32)
+            .filter(|v| *v != 0)
             .map(|v| v as u32)
     }
 }

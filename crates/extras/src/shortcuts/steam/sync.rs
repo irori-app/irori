@@ -125,12 +125,12 @@ pub fn upsert(file: &mut ShortcutsFile, id: &GameId, wanted: &Map, icons: &Path)
     let mut changed = false;
     // Steam names an entry's art after its `appid`; one written before
     // Steam stored it gets the ID Steam computed from the old command, so
-    // the art stays when the command changes.
-    if entry.get_ci("appid").is_none() {
+    // the art stays when the command changes. An `appid` of 0 is no ID
+    // (`ShortcutEntry::app_id`) and is replaced the same way.
+    if ShortcutEntry(entry).app_id().is_none() {
         let e = ShortcutEntry(entry);
         let id = shortcut_id(e.exe(), e.app_name());
-        entry.push("appid", Value::Int32(id));
-        changed = true;
+        changed |= set(entry, "appid", Value::Int32(id));
     }
     for field in OWN_FIELDS {
         if let Some(value) = wanted.get_ci(field) {
@@ -364,6 +364,27 @@ mod tests {
         assert_eq!(removed.len(), 2);
         assert_eq!(file.entries().count(), 1);
         assert_eq!(file.entries().next().unwrap().0, &before_foreign);
+    }
+
+    /// An entry whose `appid` is 0 gets the ID Steam computes, so its art is
+    /// named after a real ID.
+    #[test]
+    fn an_appid_of_zero_is_computed() {
+        let icons = Path::new("/data/irori/icons");
+        let id = GameId::new(Runner::Gog, "1");
+        let mut zero = wanted(&id, "/usr/bin/irori", None);
+        *zero.get_ci_mut("appid").unwrap() = Value::Int32(0);
+        assert_eq!(ShortcutEntry(&zero).app_id(), None);
+        let mut file = ShortcutsFile::empty();
+        file.push(zero);
+        let new = wanted(&id, "/usr/bin/irori", None);
+        assert_eq!(upsert(&mut file, &id, &new, icons), Upsert::Updated);
+        let e = file.entries().next().unwrap();
+        let computed = shortcut_id("\"/usr/bin/irori\"", "Hades");
+        assert_ne!(computed, 0);
+        assert_eq!(e.app_id(), Some(computed as u32));
+        assert_eq!(e.0.get_ci("appid"), Some(&Value::Int32(computed)));
+        assert_eq!(upsert(&mut file, &id, &new, icons), Upsert::Unchanged);
     }
 
     #[test]
