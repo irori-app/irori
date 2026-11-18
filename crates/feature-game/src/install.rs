@@ -29,6 +29,7 @@ use irori_core::{
 };
 use irori_extras::anticheat::InstallGate;
 use irori_ui::i18n::{t, t_args};
+use irori_ui::wine_choice::build_label;
 use irori_ui::{Route, backend, navigate};
 
 use crate::choice::{Choice, ChoiceSelect, choice_select, set_choices};
@@ -610,24 +611,25 @@ impl InstallSheet {
         self.wines = Load::Loading;
         let app = backend(cx).settings.app();
         let task = irori_ui::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&app).await)
+            Ok(irori_runtime::wine_installations_with_sources(&app).await)
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
-                let mut list = result.unwrap_or_default();
+                let mut found = result.unwrap_or_default();
                 if let Some(current) = &this.wine
-                    && !list.iter().any(|w| w.bin == current.bin)
+                    && !found.iter().any(|(w, _)| w.bin == current.bin)
                 {
-                    list.insert(0, current.clone());
+                    found.insert(0, (current.clone(), None));
                 }
                 if this.wine.is_none() {
-                    this.wine = list.first().cloned();
+                    this.wine = found.first().map(|(w, _)| w.clone());
                 }
-                let items = list
+                let items = found
                     .iter()
-                    .map(|w| Choice::new(w.bin.clone(), w.name.clone()))
+                    .map(|(w, source)| Choice::new(w.bin.clone(), build_label(w, *source)))
                     .collect();
+                let list: Vec<WineInstallation> = found.into_iter().map(|(w, _)| w).collect();
                 let selected = this.wine.as_ref().map(|w| w.bin.clone());
                 set_choices(&this.wine_select, items, selected.as_deref(), window, cx);
                 this.wines = Load::Ready(list);

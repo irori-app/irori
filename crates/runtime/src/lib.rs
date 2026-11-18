@@ -694,6 +694,14 @@ pub async fn wine_installations(app: &AppSettings) -> Vec<WineInstallation> {
         .collect()
 }
 
+/// Every usable build, as [`wine_installations`], each with its source when
+/// another build has the same name, for pickers to tell them apart.
+pub async fn wine_installations_with_sources(
+    app: &AppSettings,
+) -> Vec<(WineInstallation, Option<discovery::WineSource>)> {
+    discovery::sources_where_shared(discovery::discover(app).await)
+}
+
 /// Run winetricks for the game's prefix: GUI when `verbs` is empty.
 pub async fn winetricks(
     app: &AppSettings,
