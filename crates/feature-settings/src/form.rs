@@ -9,7 +9,7 @@ use anyhow::Context as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
@@ -49,9 +49,10 @@ use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
 use crate::value::{
-    bool_at, effective_overrides, get_path, override_key, plan_game_write, remove_row,
-    split_assignment, text_to_value, upsert_row, validate_discord_client_id, validate_dll_override,
-    validate_env_key, validate_launcher_args, value_to_text, with_path,
+    bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
+    plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
+    validate_discord_client_id, validate_dll_override, validate_env_key, validate_launcher_args,
+    value_to_text, with_path,
 };
 use crate::widgets::{
     RowState, field_row, group_heading, group_panel, muted, panel, section_heading,
@@ -112,6 +113,9 @@ struct PairEditor {
     second: Entity<InputState>,
     editing: Option<usize>,
     error: Option<SharedString>,
+    /// The variables edited as text (environment variables only), while
+    /// that view is open.
+    text: Option<Entity<TextareaState>>,
 }
 
 impl PairEditor {
@@ -797,6 +801,7 @@ impl SettingsForm {
                         second,
                         editing: None,
                         error: None,
+                        text: None,
                     },
                 );
             }
@@ -1410,6 +1415,105 @@ impl SettingsForm {
         self.write(path, remove_row(&current, ix), window, cx);
     }
 
+    /// Show the environment variables as text to edit or paste into.
+    fn open_env_text(&mut self, path: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        let text = env_text(&self.rows(path));
+        let Some(editor) = self.pairs.get_mut(path) else {
+            return;
+        };
+        let state = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .auto_grow(4, 14)
+                .placeholder(t("settings.env_text.placeholder"))
+                .default_value(text)
+        });
+        state.read(cx).focus_handle(cx).focus(window, cx);
+        editor.editing = None;
+        editor.error = None;
+        editor.text = Some(state);
+        cx.notify();
+    }
+
+    fn close_env_text(&mut self, path: &'static str, cx: &mut Context<Self>) {
+        if let Some(editor) = self.pairs.get_mut(path) {
+            editor.text = None;
+            editor.error = None;
+            cx.notify();
+        }
+    }
+
+    /// Replace the variables with the text's, and take what a launch line
+    /// says around `%command%` into the settings it belongs to.
+    fn apply_env_text(&mut self, path: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.pairs.get_mut(path) else {
+            return;
+        };
+        let Some(state) = editor.text.clone() else {
+            return;
+        };
+        let parsed = match parse_env_text(&state.read(cx).value()) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                editor.error = Some(e.into());
+                cx.notify();
+                return;
+            }
+        };
+        editor.text = None;
+        editor.error = None;
+        let rows: Vec<Value> = parsed
+            .vars
+            .iter()
+            .map(|(k, v)| serde_json::json!({ "key": k, "value": v }))
+            .collect();
+        self.write(path, Value::Array(rows), window, cx);
+        let mut also = Vec::new();
+        if parsed.game_mode {
+            self.write("useGameMode", Value::Bool(true), window, cx);
+            also.push("useGameMode");
+        }
+        if parsed.mangohud {
+            self.write("showMangohud", Value::Bool(true), window, cx);
+            also.push("showMangohud");
+        }
+        if let Some((exe, args)) = parsed.wrapper {
+            let current = self
+                .value("wrapperOptions")
+                .cloned()
+                .unwrap_or(Value::Array(Vec::new()));
+            let row = serde_json::json!({ "exe": exe, "args": args });
+            let next = upsert_row(&current, None, row);
+            self.write("wrapperOptions", next, window, cx);
+            also.push("wrapperOptions");
+        }
+        if !parsed.args.is_empty() {
+            let current = value_to_text(self.value("launcherArgs"));
+            let added = crate::value::join_launch_args(&parsed.args);
+            let next = [current.trim(), added.as_str()]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            self.write("launcherArgs", Value::String(next), window, cx);
+            also.push("launcherArgs");
+        }
+        if !also.is_empty() {
+            let names = also
+                .iter()
+                .filter_map(|p| registry::find(p))
+                .map(|f| f.label_text().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            window.push_notification(
+                Notification::success(t_args(
+                    "settings.env_text.also_set",
+                    &[("settings", &names)],
+                )),
+                cx,
+            );
+        }
+    }
+
     // ---- actions ----
 
     fn run_action(&mut self, action: ActionKind, window: &mut Window, cx: &mut Context<Self>) {
@@ -2006,6 +2110,9 @@ impl SettingsForm {
         let Some(editor) = self.pairs.get(path) else {
             return v_flex();
         };
+        if let Some(text) = &editor.text {
+            return self.render_env_text(path, text, editor.error.clone(), cx);
+        }
         let rows = self.rows(path);
         let sep = match editor.kind {
             CustomKind::EnvVars | CustomKind::DllOverrides => "=",
@@ -2104,6 +2211,18 @@ impl SettingsForm {
                             this.cancel_edit(path, window, cx)
                         })),
                 )
+            })
+            .when(editor.kind == CustomKind::EnvVars && !editing, |r| {
+                r.child(
+                    Button::new(ElementId::Name(format!("{path}-as-text").into()))
+                        .ghost()
+                        .icon(IconName::Pencil)
+                        .label(t("settings.env_text.open"))
+                        .tooltip(t("settings.env_text.open_tooltip"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_env_text(path, window, cx)
+                        })),
+                )
             });
         let hint = (editor.kind == CustomKind::Wrappers)
             .then(|| muted(t("settings.pairs.wrapper_hint"), cx).text_xs());
@@ -2116,6 +2235,52 @@ impl SettingsForm {
             .when_some(editor.error.clone(), |v, e| {
                 v.child(div().text_xs().text_color(danger).child(e))
             })
+    }
+}
+
+impl SettingsForm {
+    /// The environment variables as text, with Apply and Cancel.
+    fn render_env_text(
+        &self,
+        path: &'static str,
+        text: &Entity<TextareaState>,
+        error: Option<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Div {
+        let danger = cx.theme().danger;
+        v_flex()
+            .gap_2()
+            .w_full()
+            .child(
+                Textarea::new(text)
+                    .aria_label(t("settings.field.environment_options.label"))
+                    .font_family(cx.theme().mono_font_family.clone()),
+            )
+            .child(muted(t("settings.env_text.hint"), cx).text_xs())
+            .when_some(error, |v, e| {
+                v.child(div().text_xs().text_color(danger).child(e))
+            })
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new(ElementId::Name(format!("{path}-text-apply").into()))
+                            .primary()
+                            .icon(IconName::Check)
+                            .label(t("settings.env_text.apply"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.apply_env_text(path, window, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(format!("{path}-text-cancel").into()))
+                            .ghost()
+                            .label(t("settings.common.cancel"))
+                            .on_click(
+                                cx.listener(move |this, _, _, cx| this.close_env_text(path, cx)),
+                            ),
+                    ),
+            )
     }
 }
 

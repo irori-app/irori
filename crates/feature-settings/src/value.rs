@@ -277,9 +277,208 @@ pub fn remove_row(rows: &Value, index: usize) -> Value {
     Value::Array(list)
 }
 
+/// What a block of environment text holds: the variables, and what a
+/// launch line such as ProtonDB's `A=1 gamemoderun %command% -dx11` says
+/// around the game.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EnvText {
+    /// `NAME=value` pairs in order; a name written twice keeps its last value.
+    pub vars: Vec<(String, String)>,
+    /// `gamemoderun` came before `%command%`.
+    pub game_mode: bool,
+    /// `mangohud` came before `%command%`.
+    pub mangohud: bool,
+    /// Any other program before `%command%`, with its arguments.
+    pub wrapper: Option<(String, String)>,
+    /// What came after `%command%`: arguments for the game.
+    pub args: Vec<String>,
+}
+
+/// The game's place in a launch line, as Steam and ProtonDB write it.
+const COMMAND: &str = "%command%";
+
+/// The variables as text, one `NAME=value` per line.
+pub fn env_text(rows: &[(String, String)]) -> String {
+    rows.iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Read environment text: one `NAME=value` per line (an `export ` before it
+/// and `#` comments are allowed), several assignments on one line, or a
+/// launch line around `%command%`. A value on its own line is kept as
+/// written, spaces and quotes included, as the list editor keeps it. The
+/// error names the line that isn't an assignment.
+pub fn parse_env_text(text: &str) -> Result<EnvText, String> {
+    let mut out = EnvText::default();
+    let set = |out: &mut EnvText, key: &str, value: &str| -> Result<(), String> {
+        let key = validate_env_key(key, &[], None)?;
+        out.vars.retain(|(k, _)| *k != key);
+        out.vars.push((key, value.to_string()));
+        Ok(())
+    };
+    for (ix, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        let line = line.strip_prefix("export ").map_or(line, str::trim_start);
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let bad = || {
+            t_args(
+                "settings.env_text.not_assignment",
+                &[("line", &(ix + 1).to_string())],
+            )
+        };
+        let tokens = irori_core::process::split_args(line);
+        if tokens.iter().any(|t| t == COMMAND) {
+            let mut before = Vec::new();
+            let mut after = false;
+            for token in tokens {
+                if after {
+                    out.args.push(token);
+                } else if token == COMMAND {
+                    after = true;
+                } else if before.is_empty()
+                    && let Some((k, v)) = assignment(&token)
+                {
+                    set(&mut out, k, v)?;
+                } else {
+                    before.push(token);
+                }
+            }
+            read_wrappers(&mut out, before);
+            continue;
+        }
+        if tokens.len() > 1 && tokens.iter().all(|t| assignment(t).is_some()) {
+            for token in &tokens {
+                let (k, v) = assignment(token).expect("checked above");
+                set(&mut out, k, v)?;
+            }
+            continue;
+        }
+        let (key, value) = line.split_once('=').ok_or_else(|| bad().to_string())?;
+        set(&mut out, key, value.trim())?;
+    }
+    Ok(out)
+}
+
+/// Arguments as one line for the launch arguments field: an argument with a
+/// blank in it is put in double quotes, which Windows' rules and this
+/// system's both read back as one argument.
+pub fn join_launch_args(args: &[String]) -> String {
+    args.iter()
+        .map(|a| {
+            if a.is_empty() || a.contains(char::is_whitespace) {
+                format!("\"{a}\"")
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// `NAME=value` when `token` is an assignment to a plain variable name.
+fn assignment(token: &str) -> Option<(&str, &str)> {
+    let (k, v) = token.split_once('=')?;
+    let valid = !k.is_empty()
+        && !k.starts_with(|c: char| c.is_ascii_digit())
+        && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    valid.then_some((k, v))
+}
+
+/// The programs written before `%command%`: GameMode and MangoHud become
+/// their switches, anything else the wrapper it is.
+fn read_wrappers(out: &mut EnvText, mut tokens: Vec<String>) {
+    loop {
+        match tokens.first().map(String::as_str) {
+            Some("gamemoderun") => {
+                out.game_mode = true;
+                tokens.remove(0);
+            }
+            Some("mangohud") => {
+                out.mangohud = true;
+                tokens.remove(0);
+                if tokens.first().is_some_and(|t| t == "--dlsym") {
+                    tokens.remove(0);
+                }
+            }
+            _ => break,
+        }
+    }
+    if tokens.is_empty() {
+        return;
+    }
+    let exe = tokens.remove(0);
+    out.wrapper = Some((exe, join_launch_args(&tokens)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn environment_text_reads_lines_and_launch_lines() {
+        let rows = vec![
+            ("DXVK_HUD".to_string(), "fps".to_string()),
+            ("WINEDLLOVERRIDES".to_string(), "dxgi=n,b".to_string()),
+        ];
+        let text = env_text(&rows);
+        assert_eq!(text, "DXVK_HUD=fps\nWINEDLLOVERRIDES=dxgi=n,b");
+        assert_eq!(parse_env_text(&text).unwrap().vars, rows);
+
+        let parsed = parse_env_text(
+            "# from the wiki\n\nexport A=1\nLABEL=two words\nQUOTED=\"x y\"\nB=2 C=3\nA=4\n",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.vars,
+            vec![
+                ("LABEL".into(), "two words".into()),
+                ("QUOTED".into(), "\"x y\"".into()),
+                ("B".into(), "2".into()),
+                ("C".into(), "3".into()),
+                ("A".into(), "4".into()),
+            ]
+        );
+        assert!(parsed.args.is_empty() && parsed.wrapper.is_none());
+
+        let line = parse_env_text(
+            "PROTON_USE_WINED3D=1 DXVK_ASYNC=\"1\" gamemoderun mangohud --dlsym %command% -dx11 \"-name x\"",
+        )
+        .unwrap();
+        assert_eq!(
+            line.vars,
+            vec![
+                ("PROTON_USE_WINED3D".into(), "1".into()),
+                ("DXVK_ASYNC".into(), "1".into()),
+            ]
+        );
+        assert!(line.game_mode && line.mangohud);
+        assert_eq!(line.wrapper, None);
+        assert_eq!(line.args, vec!["-dx11".to_string(), "-name x".to_string()]);
+
+        let scope = parse_env_text("gamescope -W 1920 -f -- %command%").unwrap();
+        assert_eq!(
+            scope.wrapper,
+            Some(("gamescope".into(), "-W 1920 -f --".into()))
+        );
+        assert!(scope.vars.is_empty() && !scope.game_mode);
+    }
+
+    #[test]
+    fn environment_text_names_the_line_it_cannot_read() {
+        crate::i18n::register();
+        let err = parse_env_text("A=1\njust words").unwrap_err();
+        assert!(err.contains('2'), "{err}");
+        assert!(parse_env_text("=value").is_err());
+        assert!(parse_env_text("TWO WORDS=x").is_err());
+        assert_eq!(
+            parse_env_text("  \n# only a comment").unwrap(),
+            EnvText::default()
+        );
+    }
 
     #[test]
     fn gamescope_switch_follows_older_settings() {
