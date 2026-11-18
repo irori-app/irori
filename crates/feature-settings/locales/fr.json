@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "L’identifiant est conservé comme ceux de vos boutiques, chiffré avec une clé du trousseau du système. Utilisez un mot de passe d’application si votre serveur en propose.",
   "settings.sync.device_name": "Nom de cet ordinateur",
   "settings.sync.device_name_hint": "Le nom de cet ordinateur sur vos autres ordinateurs.",
+  "settings.sync.playtime_only": "Cet ordinateur n’envoie que le temps de jeu",
+  "settings.sync.playtime_only_help": "Le temps de jeu et les sessions vont dans les deux sens. Les favoris, catégories, notes et statuts de jeu définis ici restent ici, et ceux de vos autres ordinateurs ne modifient pas celui-ci. Pour un ordinateur que vous ne tenez pas organisé.",
   "settings.sync.now": "Synchroniser maintenant",
   "settings.sync.syncing": "Synchronisation…",
   "settings.sync.synced": "Bibliothèque synchronisée",

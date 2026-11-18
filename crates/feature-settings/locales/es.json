@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "El inicio de sesión se guarda como los de tus tiendas, cifrado con una clave del llavero del sistema. Usa una contraseña de aplicación si tu servidor la ofrece.",
   "settings.sync.device_name": "Nombre de este ordenador",
   "settings.sync.device_name_hint": "Cómo llaman a este ordenador tus otros ordenadores.",
+  "settings.sync.playtime_only": "Este equipo solo envía el tiempo de juego",
+  "settings.sync.playtime_only_help": "El tiempo de juego y las sesiones van en ambos sentidos. Los favoritos, categorías, valoraciones y estados de juego de aquí se quedan aquí, y los de tus otros equipos no cambian este. Para un equipo que no mantienes organizado.",
   "settings.sync.now": "Sincronizar ahora",
   "settings.sync.syncing": "Sincronizando…",
   "settings.sync.synced": "Biblioteca sincronizada",

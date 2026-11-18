@@ -1140,6 +1140,9 @@ pub struct SyncPrefs {
     pub webdav_url: String,
     /// What other computers call this one ("" = its host name).
     pub device_name: String,
+    /// Exchange only playtime and sessions: this computer's favourites,
+    /// categories and statuses stay here, and the others' don't change it.
+    pub playtime_only: bool,
 }
 
 /// Which of Irori's games Sunshine lists.

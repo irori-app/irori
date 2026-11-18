@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "登录信息与商店登录信息一样，使用系统密钥环中的密钥加密保存。如果服务器提供应用专用密码，请使用它。",
   "settings.sync.device_name": "此电脑的名称",
   "settings.sync.device_name_hint": "你的其他电脑上显示的此电脑名称。",
+  "settings.sync.playtime_only": "此电脑只发送游戏时长",
+  "settings.sync.playtime_only_help": "游戏时长和游玩记录双向同步。在此设置的收藏、分类、评分和游玩状态只留在此电脑，其他电脑上的设置也不会改动它。适合不做整理的电脑。",
   "settings.sync.now": "立即同步",
   "settings.sync.syncing": "正在同步…",
   "settings.sync.synced": "游戏库已同步",

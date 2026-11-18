@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "De aanmelding wordt bewaard zoals je winkelaanmeldingen, versleuteld met een sleutel uit de sleutelbos van het systeem. Gebruik een app-wachtwoord als je server dat aanbiedt.",
   "settings.sync.device_name": "Naam van deze computer",
   "settings.sync.device_name_hint": "Hoe je andere computers deze noemen.",
+  "settings.sync.playtime_only": "Deze computer stuurt alleen speeltijd",
+  "settings.sync.playtime_only_help": "Speeltijd en sessies gaan beide kanten op. Favorieten, categorieën, beoordelingen en speelstatussen die je hier instelt blijven hier, en die van je andere computers veranderen deze niet. Voor een computer die je niet geordend houdt.",
   "settings.sync.now": "Nu synchroniseren",
   "settings.sync.syncing": "Synchroniseren…",
   "settings.sync.synced": "Bibliotheek gesynchroniseerd",

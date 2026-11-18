@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "로그인 정보는 스토어 로그인처럼 시스템 키링의 키로 암호화되어 보관됩니다. 서버에서 지원하면 앱 비밀번호를 사용하세요.",
   "settings.sync.device_name": "이 컴퓨터의 이름",
   "settings.sync.device_name_hint": "다른 컴퓨터에서 이 컴퓨터를 부르는 이름입니다.",
+  "settings.sync.playtime_only": "이 컴퓨터는 플레이 시간만 보냄",
+  "settings.sync.playtime_only_help": "플레이 시간과 세션은 양방향으로 오갑니다. 여기서 설정한 즐겨찾기, 카테고리, 평점, 플레이 상태는 여기에 남고, 다른 컴퓨터의 설정은 이 컴퓨터를 바꾸지 않습니다. 정리해 두지 않는 컴퓨터용입니다.",
   "settings.sync.now": "지금 동기화",
   "settings.sync.syncing": "동기화 중…",
   "settings.sync.synced": "라이브러리를 동기화했습니다",

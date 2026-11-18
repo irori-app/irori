@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "登入資訊與商店登入資訊一樣，使用系統金鑰圈中的金鑰加密保存。如果伺服器提供應用程式專用密碼，請使用它。",
   "settings.sync.device_name": "此電腦的名稱",
   "settings.sync.device_name_hint": "你的其他電腦上顯示的此電腦名稱。",
+  "settings.sync.playtime_only": "此電腦只傳送遊戲時數",
+  "settings.sync.playtime_only_help": "遊戲時數和遊玩記錄雙向同步。在此設定的最愛、分類、評分和遊玩狀態只留在此電腦，其他電腦上的設定也不會變更它。適合不做整理的電腦。",
   "settings.sync.now": "立即同步",
   "settings.sync.syncing": "正在同步…",
   "settings.sync.synced": "遊戲庫已同步",

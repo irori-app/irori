@@ -6,7 +6,9 @@
 //! and how is in [`merge`]. Synced: favourites, hidden games, ratings, play
 //! statuses, categories, custom titles and web art, yearly goals, playtime
 //! and sessions. Install paths, per-game and app settings, recently played
-//! and store sign-ins stay on each device.
+//! and store sign-ins stay on each device. A device set to send only
+//! playtime (`iroriSync.playtimeOnly`) exchanges playtime and sessions and
+//! keeps its organisation to itself.
 //!
 //! Changes are noted on every periodic tick while sync is on, also when the
 //! other devices are out of reach, so they keep the time they were made.
@@ -445,7 +447,13 @@ impl Backend {
             .iter()
             .map(|f| (f.device.id.clone(), f.device.name.clone()))
             .collect();
-        let shared: Vec<&Shared> = remotes.iter().map(|f| &f.shared).collect();
+        let scope = if self.settings.app().sync.playtime_only {
+            merge::Scope::PlaytimeOnly
+        } else {
+            merge::Scope::Everything
+        };
+        let incoming: Vec<Shared> = remotes.iter().map(|f| scope.filter(&f.shared)).collect();
+        let shared: Vec<&Shared> = incoming.iter().collect();
         let mut state = self.sync.state.lock();
         let mut result = None;
         self.userdata.update_if(None, |d| {
@@ -508,11 +516,11 @@ impl Backend {
                 irori_version: env!("CARGO_PKG_VERSION").into(),
                 updated: util::now_rfc3339(),
             },
-            shared: Shared {
+            shared: scope.filter(&Shared {
                 registers: merged.registers.clone(),
                 playtime: merged.playtime.clone(),
                 sessions: merged.sessions.clone(),
-            },
+            }),
         };
         let bytes = serde_json::to_vec(&file)?;
         Ok((merged, bytes))

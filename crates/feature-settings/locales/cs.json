@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "Přihlášení se uchovává jako přihlášení do obchodů, zašifrované klíčem ze systémové klíčenky. Pokud to váš server nabízí, použijte heslo aplikace.",
   "settings.sync.device_name": "Název tohoto počítače",
   "settings.sync.device_name_hint": "Jak tento počítač nazývají vaše ostatní počítače.",
+  "settings.sync.playtime_only": "Tento počítač posílá jen herní čas",
+  "settings.sync.playtime_only_help": "Herní čas a relace se přenášejí oběma směry. Oblíbené, kategorie, hodnocení a stavy hraní nastavené zde zůstanou zde a ty z ostatních počítačů tento nezmění. Pro počítač, který neudržujete uspořádaný.",
   "settings.sync.now": "Synchronizovat nyní",
   "settings.sync.syncing": "Synchronizace…",
   "settings.sync.synced": "Knihovna synchronizována",

@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "Autentificarea e păstrată ca cele din magazine, criptată cu o cheie din portchei-ul sistemului. Folosește o parolă de aplicație dacă serverul oferă una.",
   "settings.sync.device_name": "Numele acestui calculator",
   "settings.sync.device_name_hint": "Cum îl numesc celelalte calculatoare ale tale.",
+  "settings.sync.playtime_only": "Acest computer trimite doar timpul de joc",
+  "settings.sync.playtime_only_help": "Timpul de joc și sesiunile circulă în ambele sensuri. Favoritele, categoriile, notele și stările de joc setate aici rămân aici, iar cele de pe celelalte computere nu îl schimbă pe acesta. Pentru un computer pe care nu îl ții organizat.",
   "settings.sync.now": "Sincronizează acum",
   "settings.sync.syncing": "Se sincronizează…",
   "settings.sync.synced": "Bibliotecă sincronizată",

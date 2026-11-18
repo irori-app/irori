@@ -10,6 +10,7 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, WindowExt as _,
     h_flex, v_flex,
@@ -459,6 +460,23 @@ impl Render for SyncPanel {
                         .child(irori_ui::style::caption(t("settings.sync.device_name"), cx))
                         .child(Input::new(&self.device))
                         .child(muted(t("settings.sync.device_name_hint"), cx)),
+                )
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            Switch::new("sync-playtime-only")
+                                .label(t("settings.sync.playtime_only"))
+                                .checked(prefs.playtime_only)
+                                .on_change(cx.listener(|this, on: &bool, window, cx| {
+                                    let on = *on;
+                                    backend(cx)
+                                        .settings
+                                        .update_app(|s| s.sync.playtime_only = on);
+                                    this.sync_now(false, window, cx);
+                                })),
+                        )
+                        .child(muted(t("settings.sync.playtime_only_help"), cx)),
                 )
                 .child(self.render_status(busy, cx))
                 .child(

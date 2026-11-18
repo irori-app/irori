@@ -680,7 +680,9 @@ commands without a window.
   every session, so nothing counts twice. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
-  `SyncService::playtime_guard`.
+  `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
+  publishes only playtime, sessions and playtime removals (`merge::Scope`): its
+  organisation stays its own.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on

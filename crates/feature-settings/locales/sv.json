@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "Inloggningen sparas som dina butiksinloggningar, krypterad med en nyckel från systemets nyckelring. Använd ett applösenord om servern erbjuder det.",
   "settings.sync.device_name": "Den här datorns namn",
   "settings.sync.device_name_hint": "Vad dina andra datorer kallar den här.",
+  "settings.sync.playtime_only": "Den här datorn skickar bara speltid",
+  "settings.sync.playtime_only_help": "Speltid och sessioner går åt båda hållen. Favoriter, kategorier, betyg och spelstatus som sätts här stannar här, och de från dina andra datorer ändrar inte den här. För en dator du inte håller ordning på.",
   "settings.sync.now": "Synka nu",
   "settings.sync.syncing": "Synkar…",
   "settings.sync.synced": "Biblioteket synkat",

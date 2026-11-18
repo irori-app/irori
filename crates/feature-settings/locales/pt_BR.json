@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "O login é guardado como os das lojas, criptografado com uma chave do chaveiro do sistema. Use uma senha de app se o servidor oferecer.",
   "settings.sync.device_name": "Nome deste computador",
   "settings.sync.device_name_hint": "Como seus outros computadores chamam este.",
+  "settings.sync.playtime_only": "Este computador só envia o tempo de jogo",
+  "settings.sync.playtime_only_help": "O tempo de jogo e as sessões vão nos dois sentidos. Favoritos, categorias, avaliações e status de jogo definidos aqui ficam aqui, e os dos seus outros computadores não mudam este. Para um computador que você não mantém organizado.",
   "settings.sync.now": "Sincronizar agora",
   "settings.sync.syncing": "Sincronizando…",
   "settings.sync.synced": "Biblioteca sincronizada",

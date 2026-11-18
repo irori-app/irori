@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "Oturum, mağaza oturumların gibi sistem anahtarlığındaki bir anahtarla şifrelenerek saklanır. Sunucun sunuyorsa uygulama parolası kullan.",
   "settings.sync.device_name": "Bu bilgisayarın adı",
   "settings.sync.device_name_hint": "Diğer bilgisayarlarında bu bilgisayarın görünen adı.",
+  "settings.sync.playtime_only": "Bu bilgisayar yalnızca oynama süresini gönderir",
+  "settings.sync.playtime_only_help": "Oynama süresi ve oturumlar iki yönde de gider. Burada ayarlanan favoriler, kategoriler, puanlar ve oynama durumları burada kalır; diğer bilgisayarlarınızdakiler bunu değiştirmez. Düzenli tutmadığınız bir bilgisayar için.",
   "settings.sync.now": "Şimdi eşitle",
   "settings.sync.syncing": "Eşitleniyor…",
   "settings.sync.synced": "Kitaplık eşitlendi",

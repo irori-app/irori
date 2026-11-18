@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "ログイン情報はストアのものと同じく、システムのキーリングの鍵で暗号化して保存されます。サーバーが対応していればアプリパスワードを使ってください。",
   "settings.sync.device_name": "この PC の名前",
   "settings.sync.device_name_hint": "他の PC でこの PC を表示するときの名前です。",
+  "settings.sync.playtime_only": "このコンピューターはプレイ時間だけを送る",
+  "settings.sync.playtime_only_help": "プレイ時間とセッションは双方向に送られます。ここで設定したお気に入り、カテゴリー、評価、プレイ状況はここに残り、ほかのコンピューターの設定はこのコンピューターを変更しません。整理していないコンピューター向けです。",
   "settings.sync.now": "今すぐ同期",
   "settings.sync.syncing": "同期中…",
   "settings.sync.synced": "ライブラリを同期しました",

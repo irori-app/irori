@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "The login is kept like your store logins, encrypted with a key from your system keyring. Use an app password if your server offers one.",
   "settings.sync.device_name": "This computer’s name",
   "settings.sync.device_name_hint": "What your other computers call this one.",
+  "settings.sync.playtime_only": "This computer only sends playtime",
+  "settings.sync.playtime_only_help": "Playtime and sessions go both ways. Favourites, categories, ratings and play statuses set here stay here, and those set on your other computers don’t change this one. For a computer you don’t keep organised.",
   "settings.sync.now": "Sync now",
   "settings.sync.syncing": "Syncing…",
   "settings.sync.synced": "Library synced",

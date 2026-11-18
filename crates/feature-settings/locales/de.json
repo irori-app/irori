@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "Die Anmeldung wird wie deine Store-Anmeldungen aufbewahrt, verschlüsselt mit einem Schlüssel aus dem Schlüsselbund des Systems. Nutze ein App-Passwort, wenn dein Server eines anbietet.",
   "settings.sync.device_name": "Name dieses Computers",
   "settings.sync.device_name_hint": "So heißt dieser Computer auf deinen anderen Computern.",
+  "settings.sync.playtime_only": "Dieser Computer sendet nur die Spielzeit",
+  "settings.sync.playtime_only_help": "Spielzeit und Sitzungen gehen in beide Richtungen. Favoriten, Kategorien, Bewertungen und Spielstatus, die hier gesetzt werden, bleiben hier, und die deiner anderen Computer ändern diesen nicht. Für einen Computer, den du nicht ordentlich hältst.",
   "settings.sync.now": "Jetzt synchronisieren",
   "settings.sync.syncing": "Wird synchronisiert…",
   "settings.sync.synced": "Bibliothek synchronisiert",

@@ -122,6 +122,8 @@
   "settings.sync.login_hint": "A sessão é guardada como as das lojas, encriptada com uma chave do porta-chaves do sistema. Use uma palavra-passe de aplicação se o servidor a oferecer.",
   "settings.sync.device_name": "Nome deste computador",
   "settings.sync.device_name_hint": "Como os seus outros computadores chamam a este.",
+  "settings.sync.playtime_only": "Este computador só envia o tempo de jogo",
+  "settings.sync.playtime_only_help": "O tempo de jogo e as sessões vão nos dois sentidos. Os favoritos, categorias, classificações e estados de jogo definidos aqui ficam aqui, e os dos outros computadores não alteram este. Para um computador que não mantém organizado.",
   "settings.sync.now": "Sincronizar agora",
   "settings.sync.syncing": "A sincronizar…",
   "settings.sync.synced": "Biblioteca sincronizada",
