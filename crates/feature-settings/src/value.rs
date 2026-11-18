@@ -84,9 +84,10 @@ pub fn plan_game_write(
     let key = override_key(path);
     let next = with_path(effective, path, value)?;
     let next_json = serde_json::to_value(&next)?;
-    let default_json = serde_json::to_value(defaults)?;
     let new = next_json.get(key).cloned().unwrap_or(Value::Null);
-    Ok((default_json.get(key) != Some(&new)).then_some(new))
+    // Lists that merge by key keep only the game's own entries, and
+    // removals of the default entries the user took out.
+    Ok(GameSettingsOverrides::override_value(defaults, key, new))
 }
 
 /// Keys of `overrides` that actually differ from `defaults`. Stale entries
@@ -328,6 +329,38 @@ mod tests {
         assert_eq!(plan, None);
         let plan = plan_game_write(&defaults, &defaults, "showFps", Value::Bool(true)).unwrap();
         assert_eq!(plan, Some(Value::Bool(true)));
+    }
+
+    #[test]
+    fn a_game_list_stores_only_its_own_entries() {
+        let defaults = GameSettings {
+            environment_options: vec![irori_core::EnvVar {
+                key: "FOO".into(),
+                value: "1".into(),
+            }],
+            ..Default::default()
+        };
+        let rows = serde_json::json!([
+            {"key": "FOO", "value": "1"},
+            {"key": "OWN", "value": "2"},
+        ]);
+        let plan = plan_game_write(&defaults, &defaults, "enviromentOptions", rows).unwrap();
+        assert_eq!(
+            plan,
+            Some(serde_json::json!([{"key": "OWN", "value": "2"}]))
+        );
+        // Deleting the inherited row writes a removal.
+        let plan = plan_game_write(
+            &defaults,
+            &defaults,
+            "enviromentOptions",
+            serde_json::json!([]),
+        )
+        .unwrap();
+        assert_eq!(
+            plan,
+            Some(serde_json::json!([{"key": "FOO", "iroriRemoved": true}]))
+        );
     }
 
     #[test]

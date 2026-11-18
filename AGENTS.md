@@ -373,6 +373,13 @@ and `launch.rs` before changing anything below the UI.
 - Per-game overrides are sparse (`GameSettingsOverrides`, a JSON map): the effective
   settings are the defaults with the overridden keys applied. Reset a field with
   `SettingsService::set_game_value(id, key, None)`.
+- Variables, wrappers and programs started alongside (`merged_lists.rs`:
+  `enviromentOptions` by `key`, `wrapperOptions` by `exe`, `iroriLaunchPrograms` by
+  `path`) merge by key: a game's override holds only its own entries, laid over the
+  defaults' list, and `{"key": "X", "iroriRemoved": true}` takes a default entry out for
+  that game. Write a game's list through `GameSettingsOverrides::override_value` (the
+  settings form and `diff` do), which stores just those entries; older files that
+  copied the whole list read the same.
 - Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
   from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
   as overrides (variables, wrappers and programs merge by key into the current list),
