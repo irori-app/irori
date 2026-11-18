@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Доступні оновлення ігор: {count}",
   "shell.notice.download_failed": "Не вдалося завантажити {title}",
   "shell.notice.uninstalled": "{title}: видалено",
+  "shell.notice.uninstalled_with_problems": "{title}: гру видалено, але очистити все не вдалося",
   "shell.notice.move_leftover": "{title} переміщено, але стара тека залишилася в {path}",
   "shell.notice.moved": "{title} переміщено до {path}",
   "shell.notice.repaired": "{title}: перевірено й виправлено",

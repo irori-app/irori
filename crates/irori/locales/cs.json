@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Dostupné aktualizace her: {count}",
   "shell.notice.download_failed": "Stažení {title} se nezdařilo",
   "shell.notice.uninstalled": "{title} odinstalováno",
+  "shell.notice.uninstalled_with_problems": "{title} byla odinstalována, ale ne vše se podařilo uklidit",
   "shell.notice.move_leftover": "{title} přesunuto, ale stará složka zůstala v {path}",
   "shell.notice.moved": "{title} přesunuto do {path}",
   "shell.notice.repaired": "{title} ověřeno a opraveno",

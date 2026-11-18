@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Aggiornamenti disponibili per {count} giochi",
   "shell.notice.download_failed": "Download di {title} non riuscito",
   "shell.notice.uninstalled": "{title} disinstallato",
+  "shell.notice.uninstalled_with_problems": "{title} è stato disinstallato, ma non è stato possibile ripulire tutto",
   "shell.notice.move_leftover": "{title} spostato, ma la vecchia cartella è ancora in {path}",
   "shell.notice.moved": "{title} spostato in {path}",
   "shell.notice.repaired": "{title} verificato e riparato",

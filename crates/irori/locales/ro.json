@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Actualizări disponibile pentru jocuri: {count}",
   "shell.notice.download_failed": "Descărcarea {title} a eșuat",
   "shell.notice.uninstalled": "{title} a fost dezinstalat",
+  "shell.notice.uninstalled_with_problems": "{title} a fost dezinstalat, dar nu s-a putut curăța tot",
   "shell.notice.move_leftover": "{title} a fost mutat, dar folderul vechi este încă în {path}",
   "shell.notice.moved": "{title} a fost mutat în {path}",
   "shell.notice.repaired": "{title} a fost verificat și reparat",

@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Uppdateringar tillgängliga för {count} spel",
   "shell.notice.download_failed": "Nedladdningen av {title} misslyckades",
   "shell.notice.uninstalled": "{title} har avinstallerats",
+  "shell.notice.uninstalled_with_problems": "{title} avinstallerades, men allt kunde inte städas bort",
   "shell.notice.move_leftover": "{title} har flyttats, men den gamla mappen finns kvar i {path}",
   "shell.notice.moved": "{title} har flyttats till {path}",
   "shell.notice.repaired": "{title} har verifierats och reparerats",

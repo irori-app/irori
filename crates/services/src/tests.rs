@@ -1007,3 +1007,79 @@ fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     assert_eq!(rt.block_on(b.igdb_status()).client_id, None);
     b.settings.update_app(|s| s.igdb = false);
 }
+
+/// The clean-up after a store removed a game goes on past a step that fails,
+/// and the one notice names what was left.
+#[cfg(unix)]
+#[test]
+fn uninstall_cleans_up_past_a_prefix_it_cannot_delete() {
+    use std::os::unix::fs::PermissionsExt;
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    // A prefix in a folder nobody may change: deleting it fails.
+    let locked = dir.path().join("locked");
+    let prefix = locked.join("prefix");
+    std::fs::create_dir_all(&prefix).unwrap();
+    std::fs::write(prefix.join("system.reg"), "WINE REGISTRY Version 2\n").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "cleanup-on".into(),
+            title: "Cleanup On".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().display().to_string(),
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "winePrefix",
+        Some(serde_json::Value::String(prefix.display().to_string())),
+    );
+    let settings_file = Paths::get().game_settings_file(&id);
+    assert!(settings_file.is_file());
+    let mut rx = b.subscribe();
+    let args = RemoveArgs {
+        remove_prefix: true,
+        delete_files: false,
+        remove_settings: true,
+    };
+    let result = b.runtime().block_on(b.uninstall(&id, args));
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    result.unwrap();
+    assert!(prefix.is_dir(), "the prefix could not go");
+    assert!(!settings_file.exists(), "the settings went anyway");
+    let mut library_changed = false;
+    let mut notices = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            Event::LibraryChanged(Runner::Sideload) => library_changed = true,
+            Event::Notice(n) => notices.push(n),
+            _ => {}
+        }
+    }
+    assert!(library_changed);
+    let [notice] = notices.as_slice() else {
+        panic!("one notice: {notices:?}");
+    };
+    assert_eq!(
+        notice.title_key,
+        Some("shell.notice.uninstalled_with_problems")
+    );
+    assert_eq!(notice.level, irori_core::NoticeLevel::Warning);
+    let message = notice.message.as_deref().unwrap_or_default();
+    assert!(message.contains(&prefix.display().to_string()), "{message}");
+}

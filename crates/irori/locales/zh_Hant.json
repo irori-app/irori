@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "{count} 款遊戲有可用更新",
   "shell.notice.download_failed": "{title} 下載失敗",
   "shell.notice.uninstalled": "已解除安裝 {title}",
+  "shell.notice.uninstalled_with_problems": "已解除安裝 {title}，但有些內容未能清理",
   "shell.notice.move_leftover": "已移動 {title}，但舊資料夾仍在 {path}",
   "shell.notice.moved": "已將 {title} 移至 {path}",
   "shell.notice.repaired": "已驗證並修復 {title}",

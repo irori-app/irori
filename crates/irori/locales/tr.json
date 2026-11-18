@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "{count} oyun için güncelleme var",
   "shell.notice.download_failed": "{title} indirilemedi",
   "shell.notice.uninstalled": "{title} kaldırıldı",
+  "shell.notice.uninstalled_with_problems": "{title} kaldırıldı, ancak her şey temizlenemedi",
   "shell.notice.move_leftover": "{title} taşındı ancak eski klasörü hâlâ {path} konumunda",
   "shell.notice.moved": "{title}, {path} konumuna taşındı",
   "shell.notice.repaired": "{title} doğrulandı ve onarıldı",

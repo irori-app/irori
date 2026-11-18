@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Updates available for {count} games",
   "shell.notice.download_failed": "{title} failed to download",
   "shell.notice.uninstalled": "{title} uninstalled",
+  "shell.notice.uninstalled_with_problems": "{title} uninstalled, but not everything was cleaned up",
   "shell.notice.move_leftover": "{title} moved, but its old folder is still at {path}",
   "shell.notice.moved": "{title} moved to {path}",
   "shell.notice.repaired": "{title} verified and repaired",

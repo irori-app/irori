@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Updates beschikbaar voor {count} games",
   "shell.notice.download_failed": "Downloaden van {title} mislukt",
   "shell.notice.uninstalled": "{title} verwijderd",
+  "shell.notice.uninstalled_with_problems": "{title} is verwijderd, maar niet alles kon worden opgeruimd",
   "shell.notice.move_leftover": "{title} verplaatst, maar de oude map staat nog in {path}",
   "shell.notice.moved": "{title} verplaatst naar {path}",
   "shell.notice.repaired": "{title} gecontroleerd en hersteld",

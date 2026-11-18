@@ -807,23 +807,25 @@ impl Backend {
             );
         }
         store.uninstall(&id.app_name, args).await?;
+        // The game is gone from its store now. Each clean-up step runs on its
+        // own: a prefix that can't be deleted must not leave the shortcuts,
+        // settings and library data of a game that no longer exists.
+        let mut problems = Vec::new();
         if args.remove_prefix && Self::target_platform(&game).needs_wine() {
             let prefix = irori_runtime::prefix_path(&app, &settings, &game);
-            remove_prefix_dir(&prefix, &app).await?;
+            if let Err(e) = remove_prefix_dir(&prefix, &app).await {
+                problems.push(format!("{e:#}"));
+            }
         }
-        let _ = irori_extras::shortcuts::remove(&game, &app).await;
+        if let Err(e) = irori_extras::shortcuts::remove(&game, &app).await {
+            problems.push(format!("{e:#}"));
+        }
         if args.remove_settings {
             self.settings.remove_game(id);
         }
         self.userdata.forget(id);
         self.bus.emit(Event::LibraryChanged(id.runner));
-        self.bus.notice(
-            Notice::new(NoticeLevel::Success, format!("{} uninstalled", game.title)).keys(
-                "shell.notice.uninstalled",
-                None,
-                &[("title", &game.title)],
-            ),
-        );
+        self.bus.notice(uninstalled_notice(&game.title, &problems));
         Ok(())
     }
 
@@ -1249,6 +1251,31 @@ async fn run_script(script: &str, game: &GameInfo, log_file: &Path) -> Result<()
         tracing::warn!("script {script} exited with {:?}", res.code);
     }
     Ok(())
+}
+
+/// The notice after an uninstall: success, or a warning listing every
+/// clean-up step that failed after the store removed the game.
+fn uninstalled_notice(title: &str, problems: &[String]) -> Notice {
+    if problems.is_empty() {
+        return Notice::new(NoticeLevel::Success, format!("{title} uninstalled")).keys(
+            "shell.notice.uninstalled",
+            None,
+            &[("title", title)],
+        );
+    }
+    for problem in problems {
+        tracing::warn!("cleaning up after uninstalling {title}: {problem}");
+    }
+    Notice::new(
+        NoticeLevel::Warning,
+        format!("{title} uninstalled, but not everything was cleaned up"),
+    )
+    .message(problems.join("\n"))
+    .keys(
+        "shell.notice.uninstalled_with_problems",
+        None,
+        &[("title", title)],
+    )
 }
 
 /// Delete a prefix after sanity checks: never the shared prefix root, a

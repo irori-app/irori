@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Dostępne aktualizacje gier: {count}",
   "shell.notice.download_failed": "Nie udało się pobrać {title}",
   "shell.notice.uninstalled": "Odinstalowano {title}",
+  "shell.notice.uninstalled_with_problems": "Odinstalowano {title}, ale nie wszystko udało się uprzątnąć",
   "shell.notice.move_leftover": "Przeniesiono {title}, ale stary folder nadal jest w {path}",
   "shell.notice.moved": "Przeniesiono {title} do {path}",
   "shell.notice.repaired": "Zweryfikowano i naprawiono {title}",

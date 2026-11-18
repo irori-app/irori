@@ -36,6 +36,7 @@
   "shell.notice.updates_available": "Mises à jour disponibles pour {count} jeux",
   "shell.notice.download_failed": "Échec du téléchargement de {title}",
   "shell.notice.uninstalled": "{title} désinstallé",
+  "shell.notice.uninstalled_with_problems": "{title} a été désinstallé, mais tout n’a pas pu être nettoyé",
   "shell.notice.move_leftover": "{title} déplacé, mais son ancien dossier est toujours dans {path}",
   "shell.notice.moved": "{title} déplacé vers {path}",
   "shell.notice.repaired": "{title} vérifié et réparé",
