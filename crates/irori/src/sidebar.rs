@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::menu::ContextMenuExt as _;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -168,6 +169,7 @@ impl Render for RecentGames {
             .iter()
             .map(|game| {
                 let id = game.id();
+                let menu_id = id.clone();
                 let active = current == Route::Game(id.clone());
                 let thumb = game
                     .cover_art()
@@ -212,6 +214,10 @@ impl Render for RecentGames {
                             .child(game.title.clone()),
                     )
                     .on_click(move |_, _, cx| nav::navigate(Route::Game(id.clone()), cx))
+                    // The game's commands, as its cover's menu in the library.
+                    .context_menu(move |menu, window, cx| {
+                        irori_game::game_menu(menu, &menu_id, window, cx)
+                    })
                     .into_any_element()
             })
             .collect();
