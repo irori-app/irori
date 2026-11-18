@@ -220,6 +220,9 @@ their own games, so their games don't show it.
   `Lossless.dll`). Irori passes the game's choice as an environment profile
   (`LSFGVK_ENV=1`, `LSFGVK_MULTIPLIER`, `LSFGVK_FLOW_SCALE`, `LSFGVK_PERFORMANCE_MODE`,
   `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file.
+- **NTSync** (`iroriNtsync`, on by default, Wine & Proton section): off sets
+  `PROTON_NO_NTSYNC=1`, which Proton-GE, Proton-CachyOS and Proton-Wineland read; on, plain
+  Wine builds get `WINENTSYNC=1`. Upstream Wine 11 uses `/dev/ntsync` whenever it exists.
 
 The Steam library scans that Steam folder and every library in its
 `steamapps/libraryfolders.vdf` for `appmanifest_*.acf` files, skipping Proton, the

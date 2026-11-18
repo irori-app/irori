@@ -1,5 +1,5 @@
 //! The Wine manager: downloadable Wine/Proton builds from GitHub releases
-//! (GE-Proton, Proton-CachyOS, Wine-GE and Kron4ek's Wine builds), a cached
+//! (GE-Proton, Proton-CachyOS, Proton-Wineland, Wine-GE and Kron4ek's Wine builds), a cached
 //! release list with install state, and install/remove with progress,
 //! cancellation and SHA-512 verification.
 //!
@@ -29,15 +29,19 @@ pub enum ReleaseKind {
     WineCrossover,
     WineStagingMac,
     GamePortingToolkit,
+    /// Proton-Wineland (formerly Proton-CachyOS-Wineland): Proton with Wine's
+    /// Wayland driver work and NTSync on by default.
+    ProtonWineland,
     /// The open-source Proton build with `xgameruntime.dll` that Microsoft
     /// Store (GDK) games need; the Xbox store asks for it.
     NexusRuntime,
 }
 
 impl ReleaseKind {
-    pub const ALL: [ReleaseKind; 8] = [
+    pub const ALL: [ReleaseKind; 9] = [
         ReleaseKind::GeProton,
         ReleaseKind::ProtonCachyOs,
+        ReleaseKind::ProtonWineland,
         ReleaseKind::NexusRuntime,
         ReleaseKind::WineGe,
         ReleaseKind::WineKron4ek,
@@ -55,6 +59,7 @@ impl ReleaseKind {
             irori_core::HostPlatform::Linux => &[
                 Self::GeProton,
                 Self::ProtonCachyOs,
+                Self::ProtonWineland,
                 Self::NexusRuntime,
                 Self::WineGe,
                 Self::WineKron4ek,
@@ -76,6 +81,7 @@ impl ReleaseKind {
         match self {
             ReleaseKind::GeProton => "GE-Proton",
             ReleaseKind::ProtonCachyOs => "Proton-CachyOS",
+            ReleaseKind::ProtonWineland => "Proton-Wineland",
             ReleaseKind::WineGe => "Wine-GE",
             ReleaseKind::WineKron4ek => "Wine-Kron4ek",
             Self::WineCrossover => "Wine-Crossover",
@@ -98,6 +104,9 @@ impl ReleaseKind {
             ReleaseKind::ProtonCachyOs => {
                 "https://api.github.com/repos/CachyOS/proton-cachyos/releases"
             }
+            ReleaseKind::ProtonWineland => {
+                "https://api.github.com/repos/nanomatters/proton-salkim/releases"
+            }
             ReleaseKind::WineGe => {
                 "https://api.github.com/repos/GloriousEggroll/wine-ge-custom/releases"
             }
@@ -118,7 +127,10 @@ impl ReleaseKind {
     pub fn is_proton(self) -> bool {
         matches!(
             self,
-            ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs | ReleaseKind::NexusRuntime
+            ReleaseKind::GeProton
+                | ReleaseKind::ProtonCachyOs
+                | ReleaseKind::ProtonWineland
+                | ReleaseKind::NexusRuntime
         )
     }
 }
@@ -229,6 +241,13 @@ struct GhRelease {
 
 static ARM_ASSET: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"-(aarch64|arm64)\.tar\.(gz|xz)$").expect("valid regex"));
+/// Proton-Wineland's baseline x86-64 build (`proton-wineland-<version>-x86_64.tar.xz`).
+/// Its `_v3` build needs a newer CPU and its `_wow64` build drops 32-bit
+/// libraries, so neither is a safe default.
+static WINELAND_ASSET: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^proton-wineland-[0-9A-Za-z.+_-]+?-(x86_64|arm64|aarch64)\.tar\.xz$")
+        .expect("valid regex")
+});
 static NUMBERED: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d+-\d+$").expect("valid regex"));
 
 /// CPU architecture name as used by release assets.
@@ -251,6 +270,9 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
         Some(ReleaseKind::GeProton) => {
             (url.ends_with(".tar.gz") || url.ends_with(".tar.xz")) && ARM_ASSET.is_match(url) == arm
         }
+        Some(ReleaseKind::ProtonWineland) => WINELAND_ASSET
+            .captures(&file_name_of(url))
+            .is_some_and(|c| (&c[1] != "x86_64") == arm),
         Some(ReleaseKind::WineKron4ek) => !arm,
         Some(ReleaseKind::NexusRuntime) => {
             let name = file_name_of(url);
@@ -285,7 +307,10 @@ fn checksum_name(asset: &str) -> String {
 fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Option<&'a GhAsset> {
     let ty = kind.type_str();
     match kind {
-        ReleaseKind::GeProton | ReleaseKind::ProtonCachyOs | ReleaseKind::NexusRuntime => assets
+        ReleaseKind::GeProton
+        | ReleaseKind::ProtonCachyOs
+        | ReleaseKind::ProtonWineland
+        | ReleaseKind::NexusRuntime => assets
             .iter()
             .find(|a| is_compatible_download(ty, &a.browser_download_url, arch)),
         ReleaseKind::WineCrossover => assets
@@ -323,6 +348,11 @@ fn version_of(kind: ReleaseKind, tag: &str) -> String {
         ReleaseKind::WineKron4ek => format!("Wine-Kron4ek-{tag}-staging"),
         ReleaseKind::WineCrossover => format!("Wine-Crossover-{tag}"),
         ReleaseKind::WineStagingMac => format!("Wine-Staging-macOS-{tag}"),
+        // Tags are `wineland-<version>`; the folder names the build in full.
+        ReleaseKind::ProtonWineland => format!(
+            "Proton-Wineland-{}",
+            tag.strip_prefix("wineland-").unwrap_or(tag)
+        ),
         ReleaseKind::NexusRuntime => {
             format!(
                 "Nexus-Runtime-{}",
@@ -1207,6 +1237,33 @@ mod tests {
         assert_eq!(rel[1].version, "cachyos-11.0-20261015-slr");
         assert!(rel[1].download.ends_with("-slr-x86_64.tar.xz"));
         assert!(rel[1].checksum.ends_with("-slr-x86_64.sha512sum"));
+    }
+
+    #[test]
+    fn wineland_takes_the_baseline_x86_64_build() {
+        let list = parse(serde_json::json!([gh(
+            "wineland-11.0-20261117",
+            "2026-11-17",
+            &[
+                "proton-wineland-11.0-20261117-x86_64.sha512sum",
+                "proton-wineland-11.0-20261117-x86_64_v3.tar.xz",
+                "proton-wineland-11.0-20261117-x86_64_v3.sha512sum",
+                "proton-wineland-11.0-20261117-x86_64_wow64.tar.xz",
+                "proton-wineland-11.0-20261117-x86_64.tar.xz",
+            ]
+        )]));
+        let rel = releases_from_github(ReleaseKind::ProtonWineland, list.clone(), "x86_64");
+        assert_eq!(rel[0].version, "Proton-Wineland-latest");
+        assert_eq!(rel[1].version, "Proton-Wineland-11.0-20261117");
+        assert!(rel[1].download.ends_with("-20261117-x86_64.tar.xz"));
+        assert!(rel[1].checksum.ends_with("-20261117-x86_64.sha512sum"));
+        assert!(ReleaseKind::ProtonWineland.is_proton());
+        // No ARM build is published, so ARM gets nothing rather than x86-64.
+        assert!(releases_from_github(ReleaseKind::ProtonWineland, list, "aarch64").is_empty());
+        assert_eq!(
+            ReleaseKind::from_type("Proton-Wineland"),
+            Some(ReleaseKind::ProtonWineland)
+        );
     }
 
     #[test]

@@ -287,6 +287,7 @@
   "manage.wine.search": "버전 검색",
   "manage.wine.source.ge_proton": "GloriousEggroll이 게임 수정 사항을 추가한 Proton으로, Steam 밖에서 umu를 통해 실행하도록 만들어졌습니다. 대부분의 게임에 적합한 기본 선택입니다.",
   "manage.wine.source.proton_cachyos": "성능 패치와 DXVK-Sarek, D7VK 같은 추가 도구가 포함된 CachyOS의 Proton.",
+  "manage.wine.source.proton_wineland": "Proton-Wineland(이전 이름 Proton-CachyOS-Wineland): Wayland 개선과 추가 구성 요소가 포함되고 NTSync가 기본으로 켜진 Proton.",
   "manage.wine.source.wine_ge": "Proton의 게임 수정 사항이 포함된 Wine으로, Steam 런타임 없이 실행하기 위한 것입니다. 더 이상 업데이트되지 않습니다.",
   "manage.wine.source.wine_kron4ek": "Kron4ek의 일반, staging, TkG Wine 빌드.",
   "manage.wine.source.nexus_runtime": "Nexus Launcher 프로젝트에서 만든 xgameruntime.dll 포함 오픈 소스 Proton입니다. Microsoft Store 및 PC Game Pass 게임에 필요합니다.",

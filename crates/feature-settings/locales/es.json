@@ -351,6 +351,8 @@
   "settings.field.enable_fsync.label": "Fsync",
   "settings.field.enable_hdr.label": "HDR",
   "settings.field.enable_msync.label": "Msync",
+  "settings.field.ntsync.help": "Sincronización en el controlador NTSync del kernel (/dev/ntsync, Linux 6.14 o posterior); la más rápida cuando está disponible. Proton-GE, Proton-CachyOS y Proton-Wineland la usan de forma predeterminada, y al desactivarla se les indica que no lo hagan. Wine 11 o posterior sin modificar la usa siempre que exista /dev/ntsync, sin importar este ajuste.",
+  "settings.field.ntsync.label": "NTSync",
   "settings.field.enable_wine_wayland.help": "Usa el controlador Wayland nativo de Wine en lugar de XWayland. Se ignora mientras el juego se ejecuta en gamescope.",
   "settings.field.enable_wine_wayland.label": "Wine Wayland",
   "settings.field.enable_wow64.help": "Ejecuta juegos de 32 bits sin bibliotecas del sistema de 32 bits.",

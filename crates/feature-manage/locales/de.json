@@ -287,6 +287,7 @@
   "manage.wine.search": "Versionen durchsuchen",
   "manage.wine.source.ge_proton": "Proton mit zusätzlichen Spielkorrekturen von GloriousEggroll, gedacht für den Einsatz über umu außerhalb von Steam. Eine gute Wahl für die meisten Spiele.",
   "manage.wine.source.proton_cachyos": "Proton von CachyOS mit Performance-Patches und zusätzlichen Werkzeugen wie DXVK-Sarek und D7VK.",
+  "manage.wine.source.proton_wineland": "Proton-Wineland (früher Proton-CachyOS-Wineland): Proton mit Wayland-Verbesserungen, zusätzlichen Komponenten und standardmäßig aktiviertem NTSync.",
   "manage.wine.source.wine_ge": "Wine mit den Spielkorrekturen von Proton, zur Ausführung ohne die Steam-Laufzeitumgebung. Wird upstream nicht mehr aktualisiert.",
   "manage.wine.source.wine_kron4ek": "Standard-, Staging- und TkG-Wine-Builds von Kron4ek.",
   "manage.wine.source.nexus_runtime": "Quelloffenes Proton mit xgameruntime.dll vom Projekt Nexus Launcher. Spiele aus dem Microsoft Store und PC Game Pass brauchen es.",

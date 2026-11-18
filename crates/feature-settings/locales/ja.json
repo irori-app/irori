@@ -351,6 +351,8 @@
   "settings.field.enable_fsync.label": "Fsync",
   "settings.field.enable_hdr.label": "HDR",
   "settings.field.enable_msync.label": "Msync",
+  "settings.field.ntsync.help": "カーネルの NTSync ドライバー（/dev/ntsync、Linux 6.14 以降）による同期で、利用できれば最も高速です。Proton-GE、Proton-CachyOS、Proton-Wineland は既定で使用し、オフにすると使用しないよう指示します。素の Wine 11 以降は、この設定にかかわらず /dev/ntsync があれば常に使用します。",
+  "settings.field.ntsync.label": "NTSync",
   "settings.field.enable_wine_wayland.help": "XWaylandの代わりに、WineのネイティブWaylandドライバーを使用します。 ゲームを gamescope で実行している間は無視されます。",
   "settings.field.enable_wine_wayland.label": "Wine Wayland",
   "settings.field.enable_wow64.help": "32ビットのシステムライブラリなしで32ビットゲームを実行します。",

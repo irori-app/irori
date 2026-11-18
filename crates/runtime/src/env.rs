@@ -411,6 +411,17 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
     if !gs.enable_fsync && proton {
         set("PROTON_NO_FSYNC", "1");
     }
+    // Proton-GE turns NTSync on with `WINENTSYNC` unless `PROTON_NO_NTSYNC`
+    // is set, and the Wine of Proton-CachyOS and Proton-Wineland reads
+    // `PROTON_NO_NTSYNC` itself, run through Proton or not. Builds patched
+    // like Wine-GE wait for `WINENTSYNC`; upstream Wine 11 uses `/dev/ntsync`
+    // whenever it exists and reads neither.
+    if gs.ntsync && !proton {
+        set("WINENTSYNC", "1");
+    }
+    if !gs.ntsync {
+        set("PROTON_NO_NTSYNC", "1");
+    }
     // Gamescope gives its children an X server and no Wayland socket, so
     // Wine's Wayland driver would leave gamescope's window empty.
     if gs.enable_wine_wayland && !crate::wrappers::gamescope_enabled(&gs.gamescope) {
@@ -1002,6 +1013,10 @@ mod tests {
         assert_eq!(env["PROTON_NO_ESYNC"], "1");
         assert_eq!(env["PROTON_NO_FSYNC"], "1");
         assert!(!env.contains_key("WINEESYNC") && !env.contains_key("WINEFSYNC"));
+        assert!(
+            !env.contains_key("PROTON_NO_NTSYNC") && !env.contains_key("WINENTSYNC"),
+            "Proton turns NTSync on itself"
+        );
         assert_eq!(env["PROTON_ENABLE_WAYLAND"], "1");
         assert_eq!(env["PROTON_ENABLE_HDR"], "1");
         assert!(!env.contains_key("DISPLAY"));
@@ -1047,6 +1062,8 @@ mod tests {
         assert_eq!(env["WINE_FULLSCREEN_FSR_STRENGTH"], "4");
         assert_eq!(env["WINEESYNC"], "1");
         assert_eq!(env["WINEFSYNC"], "1");
+        assert_eq!(env["WINENTSYNC"], "1");
+        assert!(!env.contains_key("PROTON_NO_NTSYNC"));
         assert_eq!(env["DISPLAY"], "");
         assert_eq!(env["DXVK_HDR"], "1");
         assert_eq!(env["WINEARCH"], "wow64");
@@ -1086,6 +1103,21 @@ mod tests {
         let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&sys, &w, &host));
         assert!(!env.contains_key("LD_LIBRARY_PATH"));
         assert!(!env.contains_key("ORIG_LD_LIBRARY_PATH"));
+    }
+
+    #[test]
+    fn ntsync_off_reaches_proton_and_wine() {
+        let dir = tempfile::tempdir().unwrap();
+        let gs = GameSettings {
+            ntsync: false,
+            ..Default::default()
+        };
+        let none = HostEnv::default();
+        for w in [proton(), wine(dir.path())] {
+            let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &none));
+            assert_eq!(env["PROTON_NO_NTSYNC"], "1", "{}", w.name);
+            assert!(!env.contains_key("WINENTSYNC"), "{}", w.name);
+        }
     }
 
     #[test]

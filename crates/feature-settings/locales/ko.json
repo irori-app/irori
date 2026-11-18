@@ -351,6 +351,8 @@
   "settings.field.enable_fsync.label": "Fsync",
   "settings.field.enable_hdr.label": "HDR",
   "settings.field.enable_msync.label": "Msync",
+  "settings.field.ntsync.help": "커널의 NTSync 드라이버(/dev/ntsync, Linux 6.14 이상)를 통한 동기화로, 사용할 수 있으면 가장 빠릅니다. Proton-GE, Proton-CachyOS, Proton-Wineland는 기본으로 사용하며, 끄면 사용하지 않도록 지시합니다. 순정 Wine 11 이상은 이 설정과 관계없이 /dev/ntsync가 있으면 항상 사용합니다.",
+  "settings.field.ntsync.label": "NTSync",
   "settings.field.enable_wine_wayland.help": "XWayland 대신 Wine의 네이티브 Wayland 드라이버를 사용합니다. 게임이 gamescope에서 실행되는 동안에는 무시됩니다.",
   "settings.field.enable_wine_wayland.label": "Wine Wayland",
   "settings.field.enable_wow64.help": "32비트 시스템 라이브러리 없이 32비트 게임을 실행합니다.",

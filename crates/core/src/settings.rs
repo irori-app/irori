@@ -149,6 +149,11 @@ pub struct GameSettings {
     pub enable_fsr: bool,
     pub enable_msync: bool,
     pub enable_fsync: bool,
+    /// NTSync, the kernel's Windows synchronization driver (`/dev/ntsync`),
+    /// in Proton and Wine builds that use it. On by default as those builds
+    /// have it; off sets `PROTON_NO_NTSYNC`. Linux only; Irori-only.
+    #[serde(rename = "iroriNtsync")]
+    pub ntsync: bool,
     pub enable_wine_wayland: bool,
     #[serde(rename = "enableHDR")]
     pub enable_hdr: bool,
@@ -436,6 +441,7 @@ impl Default for GameSettings {
             enable_fsr: false,
             enable_msync: false,
             enable_fsync: true,
+            ntsync: true,
             enable_wine_wayland: false,
             enable_hdr: false,
             enable_wow64: false,

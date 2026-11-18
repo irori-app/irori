@@ -51,6 +51,7 @@ fn source_description(kind: ReleaseKind) -> SharedString {
     match kind {
         ReleaseKind::GeProton => t("manage.wine.source.ge_proton"),
         ReleaseKind::ProtonCachyOs => t("manage.wine.source.proton_cachyos"),
+        ReleaseKind::ProtonWineland => t("manage.wine.source.proton_wineland"),
         ReleaseKind::WineGe => t("manage.wine.source.wine_ge"),
         ReleaseKind::WineKron4ek => t("manage.wine.source.wine_kron4ek"),
         ReleaseKind::NexusRuntime => t("manage.wine.source.nexus_runtime"),

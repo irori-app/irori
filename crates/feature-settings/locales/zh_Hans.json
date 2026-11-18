@@ -351,6 +351,8 @@
   "settings.field.enable_fsync.label": "Fsync",
   "settings.field.enable_hdr.label": "HDR",
   "settings.field.enable_msync.label": "Msync",
+  "settings.field.ntsync.help": "使用内核 NTSync 驱动（/dev/ntsync，Linux 6.14 或更高版本）进行同步；可用时速度最快。Proton-GE、Proton-CachyOS 和 Proton-Wineland 默认使用它，关闭后会让它们不再使用。原版 Wine 11 或更高版本只要存在 /dev/ntsync 就会使用它，不受此设置影响。",
+  "settings.field.ntsync.label": "NTSync",
   "settings.field.enable_wine_wayland.help": "使用 Wine 原生的 Wayland 驱动，而不是 XWayland。 游戏在 gamescope 中运行时将被忽略。",
   "settings.field.enable_wine_wayland.label": "Wine Wayland",
   "settings.field.enable_wow64.help": "无需 32 位系统库即可运行 32 位游戏。",

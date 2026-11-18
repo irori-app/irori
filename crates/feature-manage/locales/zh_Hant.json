@@ -287,6 +287,7 @@
   "manage.wine.search": "搜尋版本",
   "manage.wine.source.ge_proton": "由 GloriousEggroll 加入額外遊戲修正的 Proton，旨在透過 umu 於 Steam 之外執行。適合大多數遊戲的預設選擇。",
   "manage.wine.source.proton_cachyos": "來自 CachyOS 的 Proton，包含效能修補以及 DXVK-Sarek 和 D7VK 等額外工具。",
+  "manage.wine.source.proton_wineland": "Proton-Wineland（原 Proton-CachyOS-Wineland）：包含 Wayland 改進和額外元件、預設啟用 NTSync 的 Proton。",
   "manage.wine.source.wine_ge": "包含 Proton 遊戲修正的 Wine，用於在沒有 Steam 執行環境的情況下執行。上游已不再更新。",
   "manage.wine.source.wine_kron4ek": "Kron4ek 提供的一般版、staging 版和 TkG 版 Wine。",
   "manage.wine.source.nexus_runtime": "Nexus Launcher 專案建置的開源 Proton，內含 xgameruntime.dll。Microsoft Store 與 PC Game Pass 遊戲需要它。",

@@ -566,6 +566,7 @@ impl FieldSpec {
                     | "showMangohud"
                     | "nvidiaPrime"
                     | "enableFsync"
+                    | "iroriNtsync"
                     | "enableFSR"
                     | "enableWineWayland"
                     | "enableHDR"
@@ -2340,6 +2341,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.enable_fsync.help")
     .keywords(&["fsync", "futex", "sync", "performance"]),
+    game(
+        "iroriNtsync",
+        "settings.field.ntsync.label",
+        Wine,
+        "settings.group.wine_sync",
+        Toggle,
+    )
+    .help("settings.field.ntsync.help")
+    .keywords(&["ntsync", "kernel", "sync", "performance"]),
     game(
         "enableMsync",
         "settings.field.enable_msync.label",

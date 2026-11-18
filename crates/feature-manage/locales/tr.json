@@ -287,6 +287,7 @@
   "manage.wine.search": "Sürümlerde ara",
   "manage.wine.source.ge_proton": "GloriousEggroll'un ek oyun düzeltmelerini içeren, Steam dışında umu üzerinden çalıştırılmak için tasarlanmış Proton. Çoğu oyun için iyi bir varsayılan.",
   "manage.wine.source.proton_cachyos": "Performans yamaları ve DXVK-Sarek ile D7VK gibi ek araçlar içeren CachyOS Proton'u.",
+  "manage.wine.source.proton_wineland": "Proton-Wineland (eski adıyla Proton-CachyOS-Wineland): Wayland iyileştirmeleri, ek bileşenler ve varsayılan olarak açık NTSync içeren Proton.",
   "manage.wine.source.wine_ge": "Steam çalışma ortamı olmadan çalıştırmak için Proton'un oyun düzeltmelerini içeren Wine. Artık güncellenmiyor.",
   "manage.wine.source.wine_kron4ek": "Kron4ek'in düz, staging ve TkG Wine sürümleri.",
   "manage.wine.source.nexus_runtime": "Nexus Launcher projesinin xgameruntime.dll içeren açık kaynaklı Proton'u. Microsoft Store ve PC Game Pass oyunları buna ihtiyaç duyar.",

@@ -287,6 +287,7 @@
   "manage.wine.search": "Caută versiuni",
   "manage.wine.source.ge_proton": "Proton cu corecturi suplimentare pentru jocuri de la GloriousEggroll, gândit să ruleze prin umu în afara Steam. O alegere bună pentru majoritatea jocurilor.",
   "manage.wine.source.proton_cachyos": "Proton de la CachyOS cu patch-uri de performanță și unelte suplimentare precum DXVK-Sarek și D7VK.",
+  "manage.wine.source.proton_wineland": "Proton-Wineland (fost Proton-CachyOS-Wineland): Proton cu îmbunătățiri pentru Wayland, componente suplimentare și NTSync activat implicit.",
   "manage.wine.source.wine_ge": "Wine cu corecturile pentru jocuri din Proton, pentru rulare fără mediul Steam. Nu mai este actualizat.",
   "manage.wine.source.wine_kron4ek": "Versiuni Wine obișnuite, staging și TkG de la Kron4ek.",
   "manage.wine.source.nexus_runtime": "Proton open source cu xgameruntime.dll, de la proiectul Nexus Launcher. Jocurile din Microsoft Store și PC Game Pass au nevoie de el.",
