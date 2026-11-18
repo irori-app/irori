@@ -1051,3 +1051,74 @@ fn removing_a_prefix_forgets_it() {
     assert!(!prefix.exists());
     assert!(!b.settings.overrides(&id).is_overridden("winePrefix"));
 }
+
+/// A ROM's title and ids find nothing in Ludusavi; its emulator manifest's
+/// name does, and is kept so the search runs once.
+#[cfg(unix)]
+#[test]
+fn emulated_games_find_their_manifest_name_once() {
+    use std::os::unix::fs::PermissionsExt as _;
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    // An added game played in an emulator, its title the ROM's, tags and all.
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "ludusavi-emulated".into(),
+            title: "Crash Bandicoot (USA)".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().display().to_string(),
+                executable: dir
+                    .path()
+                    .join("Crash Bandicoot (USA).cue")
+                    .display()
+                    .to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let calls = dir.path().join("calls");
+    let script = dir.path().join("ludusavi");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+[ "$1" = --version ] && {{ echo "ludusavi 0.31.0"; exit 0; }}
+echo "$*" >> '{calls}'
+case "$*" in
+  *--fuzzy*) echo '{{"games": {{"Crash Bandicoot (RetroArch)": {{"score": 0.95}},
+    "Crash Bandicoot (PS1)": {{"score": 0.9}}, "Crash Team Racing (PS1)": {{"score": 0.8}}}}}}' ;;
+  *) echo '{{"errors": {{"unknownGames": ["x"]}}, "games": {{}}}}'; exit 1 ;;
+esac
+"#,
+            calls = calls.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    b.settings
+        .update_app(|a| a.ludusavi_path = script.display().to_string());
+    b.settings.set_game_value(
+        &id,
+        "iroriEngine",
+        Some(serde_json::Value::String("duckstation".into())),
+    );
+    let rt = b.runtime();
+    let title = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(title.as_deref(), Some("Crash Bandicoot (PS1)"));
+    assert_eq!(b.settings.game(&id).ludusavi_title, "Crash Bandicoot (PS1)");
+    let asked = std::fs::read_to_string(&calls).unwrap().lines().count();
+    rt.block_on(b.ludusavi_title(&id)).unwrap();
+    let again = std::fs::read_to_string(&calls).unwrap().lines().count();
+    assert_eq!(asked, again, "the kept name needs no search");
+}

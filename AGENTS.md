@@ -646,7 +646,11 @@ commands without a window.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
-  id, then title, unless the user chose one (`iroriLudusaviTitle`). Windows games pass
+  id, then title, unless the user chose one (`iroriLudusaviTitle`). When those find
+  nothing, the title without its region or revision tags is tried, then, for a game
+  played in an emulator, the name an emulator manifest gives it (`… (PS2)`,
+  `… (RetroArch)`, from Ludusavi's fuzzy search over the title and the ROM's name,
+  `ludusavi/names.rs`); a name found that way is kept as `iroriLudusaviTitle`. Windows games pass
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
