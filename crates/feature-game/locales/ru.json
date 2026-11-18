@@ -141,6 +141,8 @@
   "game.header.read_more": "Читать далее",
   "game.hero.add_favourite": "Добавить в избранное",
   "game.hero.cancel_install": "Отменить",
+  "game.hero.cancel_launch": "Отменить",
+  "game.hero.cancel_launch_tooltip": "Прекратить подготовку игры. Она не запустится (Esc)",
   "game.hero.cancel_update": "Отменить обновление",
   "game.hero.cloud_saves": "Облачные сохранения",
   "game.hero.save_backups": "Копии сохранений",

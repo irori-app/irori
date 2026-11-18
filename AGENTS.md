@@ -792,7 +792,12 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
-- **Launching** (`games.rs`):
+- **Launching** (`games.rs`). Until the game starts (status `Launching`),
+  `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
+  steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
+  and the launch ends with `LaunchCancelled`, which screens don't show as an error.
+  The game page's Cancel button and Escape, Big Picture's Cancel launch row and the
+  palette cancel it.
   1. Busy and availability checks.
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with

@@ -132,6 +132,12 @@ pub fn stop(id: &GameId, window: &mut Window, cx: &mut App) -> Task<bool> {
     )
 }
 
+/// Cancel the launch of a game while it is being prepared. The launch ends
+/// without an error to show.
+pub fn cancel_launch(id: &GameId, cx: &mut App) {
+    backend(cx).cancel_launch(id);
+}
+
 /// Queue the pending update of an installed game.
 pub fn queue_update(id: &GameId, cx: &mut App) {
     let title = title_of(id, cx);

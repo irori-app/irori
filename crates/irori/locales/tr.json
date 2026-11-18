@@ -26,6 +26,8 @@
   "shell.palette.go_to": "{place} sayfasına git",
   "shell.palette.refresh": "Kütüphaneyi yenile",
   "shell.palette.play": "{title} oyna",
+  "shell.palette.cancel_launch": "{title} başlatmasını iptal et",
+  "shell.palette.cancel_launch_keywords": "iptal durdur başlat başlatma",
   "shell.launch_failed": "Oyun başlatılamadı",
   "shell.tray.show": "Irori'yi göster",
   "shell.tray.recent": "Son oynananlar",

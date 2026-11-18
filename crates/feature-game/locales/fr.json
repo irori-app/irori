@@ -141,6 +141,8 @@
   "game.header.read_more": "Lire la suite",
   "game.hero.add_favourite": "Ajouter aux favoris",
   "game.hero.cancel_install": "Annuler",
+  "game.hero.cancel_launch": "Annuler",
+  "game.hero.cancel_launch_tooltip": "Arrêter la préparation du jeu. Il ne sera pas lancé (Échap)",
   "game.hero.cancel_update": "Annuler la mise à jour",
   "game.hero.cloud_saves": "Sauvegardes cloud",
   "game.hero.save_backups": "Copies des sauvegardes",

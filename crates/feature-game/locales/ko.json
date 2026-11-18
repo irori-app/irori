@@ -141,6 +141,8 @@
   "game.header.read_more": "더 읽기",
   "game.hero.add_favourite": "즐겨찾기에 추가",
   "game.hero.cancel_install": "취소",
+  "game.hero.cancel_launch": "취소",
+  "game.hero.cancel_launch_tooltip": "게임 준비를 중단합니다. 게임이 시작되지 않습니다 (Esc)",
   "game.hero.cancel_update": "업데이트 취소",
   "game.hero.cloud_saves": "클라우드 저장",
   "game.hero.save_backups": "세이브 백업",

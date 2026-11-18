@@ -26,6 +26,8 @@
   "shell.palette.go_to": "前往{place}",
   "shell.palette.refresh": "刷新游戏库",
   "shell.palette.play": "玩 {title}",
+  "shell.palette.cancel_launch": "取消启动 {title}",
+  "shell.palette.cancel_launch_keywords": "取消 停止 中止 启动 开始",
   "shell.launch_failed": "无法启动游戏",
   "shell.tray.show": "显示 Irori",
   "shell.tray.recent": "最近玩过",

@@ -713,6 +713,16 @@ impl GamePage {
                         .loading(true)
                         .disabled(true),
                 )
+                .child(
+                    Button::new("cancel-launch")
+                        .debug_selector(|| "cancel-launch".into())
+                        .large()
+                        .ghost()
+                        .icon(IconName::X)
+                        .label(t("game.hero.cancel_launch"))
+                        .tooltip(t("game.hero.cancel_launch_tooltip"))
+                        .on_click(move |_, _, cx| ops::cancel_launch(&id, cx)),
+                )
                 .into_any_element(),
             PrimaryAction::Downloading { update } => row
                 .child(

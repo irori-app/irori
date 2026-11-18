@@ -141,6 +141,8 @@
   "game.header.read_more": "Leer más",
   "game.hero.add_favourite": "Añadir a favoritos",
   "game.hero.cancel_install": "Cancelar",
+  "game.hero.cancel_launch": "Cancelar",
+  "game.hero.cancel_launch_tooltip": "Dejar de preparar el juego. No se iniciará (Esc)",
   "game.hero.cancel_update": "Cancelar actualización",
   "game.hero.cloud_saves": "Partidas en la nube",
   "game.hero.save_backups": "Copias de partidas",

@@ -55,7 +55,8 @@ use crate::hooks::{self, CompatibilityInfo};
 use crate::load::Load;
 use crate::state::{ActionInputs, PrimaryAction};
 use crate::{
-    OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite, TroubleshootLaunch, ops,
+    CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite,
+    TroubleshootLaunch, ops,
 };
 
 pub use achievements::AchievementFilter;
@@ -701,6 +702,17 @@ impl GamePage {
             ops::open_settings(&self.id, section, cx);
         }
     }
+
+    /// Escape cancels a launch being prepared; otherwise it goes on to
+    /// whatever else takes it.
+    fn on_cancel_launch(&mut self, _: &CancelLaunch, _: &mut Window, cx: &mut Context<Self>) {
+        if self.primary_action(cx) == Some(PrimaryAction::Launching)
+            && irori_ui::backend(cx).cancel_launch(&self.id)
+        {
+            return;
+        }
+        cx.propagate();
+    }
 }
 
 impl Render for GamePage {
@@ -714,6 +726,7 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_open_log))
             .on_action(cx.listener(Self::on_open_settings))
             .on_action(cx.listener(Self::on_troubleshoot))
+            .on_action(cx.listener(Self::on_cancel_launch))
             .size_full()
             .when(self.panel.is_none(), |d| d.bg(cx.theme().background))
             .text_color(cx.theme().foreground);
