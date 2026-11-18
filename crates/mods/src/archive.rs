@@ -1,6 +1,7 @@
 //! Unpacking mod archives: zip and 7-Zip in-process, rar through a program
-//! that can read it (`unrar`, `7z` or `bsdtar`). Blocking; run on the
-//! blocking pool.
+//! that can read it (`unrar`, `7z` or `bsdtar`; on Windows also the
+//! `tar.exe` Windows ships, which is bsdtar). Blocking; run on the blocking
+//! pool.
 //!
 //! An archive is untrusted. Every entry goes through
 //! [`archive_guard`]: nothing is written outside the destination, and links
@@ -187,7 +188,21 @@ fn rar_tool() -> Option<RarTool> {
             }
         }
     }
-    which::which("bsdtar").ok().map(RarTool::Bsdtar)
+    if let Ok(p) = which::which("bsdtar") {
+        return Some(RarTool::Bsdtar(p));
+    }
+    windows_tar(std::env::var_os("SystemRoot"))
+        .filter(|p| cfg!(windows) && p.is_file())
+        .map(RarTool::Bsdtar)
+}
+
+/// The `tar.exe` Windows 10 (1803) and later ship in `System32`: libarchive's
+/// bsdtar, which reads rar 4 and 5, so stock Windows unpacks rar mods with no
+/// other program. Named by its full path: a `tar` found on `PATH` may be GNU
+/// tar (Git for Windows, MSYS2), which can't read rar at all.
+fn windows_tar(system_root: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let root = system_root.filter(|r| !r.is_empty())?;
+    Some(PathBuf::from(root).join("System32").join("tar.exe"))
 }
 
 /// Whether rar archives can be unpacked here.
@@ -276,6 +291,21 @@ fn remove_links(dir: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_tar_is_named_by_its_full_path() {
+        assert_eq!(
+            windows_tar(Some(r"C:\Windows".into())),
+            Some(PathBuf::from(r"C:\Windows").join("System32").join("tar.exe"))
+        );
+        assert_eq!(windows_tar(Some("".into())), None);
+        assert_eq!(windows_tar(None), None);
+    }
 }
 
 #[cfg(test)]
