@@ -31,8 +31,8 @@ pub use achievements::{
 pub use api::{API_BASE, ASSETS_BASE, Client, Endpoints, STORE_BASE};
 pub use assets::AppAssets;
 pub use auth::{
-    Confirmation, CredentialsSession, DeviceInfo, GuardKind, OS_TYPE, Poll, QrSession, TokenClaims,
-    Tokens,
+    Confirmation, CredentialsSession, DeviceInfo, GuardKind, OS_TYPE, Poll, QrSession, Renewed,
+    TokenClaims, Tokens,
 };
 pub use error::SteamError;
 pub use friends::PlayerSummary;

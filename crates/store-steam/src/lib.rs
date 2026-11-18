@@ -230,10 +230,9 @@ impl SteamStore {
         let client = self.client().ok()?;
         match account::fresh(client, &session).await {
             Ok(Some(renewed)) => {
-                if let Err(e) = self.files.write_session(&renewed) {
+                if let Err(e) = self.keep_session(&renewed).await {
                     tracing::warn!("saving the Steam sign-in: {e:#}");
                 }
-                *self.session.write() = Some(renewed.clone());
                 Some(renewed)
             }
             Ok(None) => Some(session),
@@ -242,6 +241,15 @@ impl SteamStore {
                 None
             }
         }
+    }
+
+    /// Use a renewed session from now on and save it (off the runtime: the
+    /// keyring can take a while).
+    async fn keep_session(&self, session: &Session) -> Result<()> {
+        *self.session.write() = Some(session.clone());
+        let files = self.files.clone();
+        let to_save = session.clone();
+        tokio::task::spawn_blocking(move || files.write_session(&to_save)).await?
     }
 
     fn client(&self) -> Result<&Client> {
@@ -389,13 +397,16 @@ impl SteamStore {
             let client = self.client()?;
             let session = match account::fresh(client, &session).await? {
                 Some(renewed) => {
-                    self.files.write_session(&renewed)?;
-                    *self.session.write() = Some(renewed.clone());
+                    self.keep_session(&renewed).await?;
                     renewed
                 }
                 None => session,
             };
-            cache.games = account::fetch_library(client, &session).await?;
+            let (games, renewed) = account::fetch_library_renewing(client, &session).await?;
+            if let Some(renewed) = &renewed {
+                self.keep_session(renewed).await?;
+            }
+            cache.games = games;
             cache.steamid = session.steamid.clone();
             *self.fetched.lock() = Some(Instant::now());
         }
@@ -658,7 +669,8 @@ impl Store for SteamStore {
         let session = account::parse_login_input(input)?;
         let client = self.client()?;
         let session = account::fresh(client, &session).await?.unwrap_or(session);
-        let games = account::fetch_library(client, &session).await?;
+        let (games, renewed) = account::fetch_library_renewing(client, &session).await?;
+        let session = renewed.unwrap_or(session);
         let files = self.files.clone();
         let mut cache = (*self.account_library.read().clone()).clone();
         cache.steamid = session.steamid.clone();
@@ -1281,6 +1293,84 @@ mod tests {
 
         s.logout().await.unwrap();
         assert!(s.friends(false).await.unwrap().is_none());
+    }
+
+    /// The Web API refusing an access token whose claims still look valid
+    /// renews it with the refresh token instead of asking to sign in again
+    /// (issue #165), and a refresh token Steam replaced is kept.
+    #[tokio::test]
+    async fn renews_a_refused_access_token_instead_of_signing_out() {
+        use irori_depot::test_server::{Resp, TestServer};
+        let steamid = 76561197960265729u64;
+        let old = token(steamid);
+        // Another token: same claims, another signature.
+        let new = old.replace(".sig", ".renewed");
+        let (old_t, new_t) = (old.clone(), new.clone());
+        let server = TestServer::start(move |req| {
+            let path = req.path.as_str();
+            if path == "/IAuthenticationService/GenerateAccessTokenForApp/v1" {
+                // GenerateAccessTokenForAppResponse { access_token, refresh_token }.
+                let mut body = vec![0x0a];
+                let mut len = new_t.len();
+                while len >= 0x80 {
+                    body.push((len as u8 & 0x7f) | 0x80);
+                    len >>= 7;
+                }
+                body.push(len as u8);
+                body.extend(new_t.as_bytes());
+                body.extend([0x12, 7]);
+                body.extend(b"rotated");
+                Resp {
+                    status: 200,
+                    headers: vec![("x-eresult".into(), "1".into())],
+                    body,
+                    ..Default::default()
+                }
+            } else if path.starts_with("/IPlayerService/GetOwnedGames/") {
+                if path.contains(&old_t) {
+                    Resp::status(401)
+                } else {
+                    Resp::json(serde_json::json!({"response": {"games": [
+                        {"appid": 620, "name": "Portal 2", "playtime_forever": 300}
+                    ]}}))
+                }
+            } else if path.starts_with("/IFamilyGroupsService/GetFamilyGroupForUser/") {
+                Resp::json(serde_json::json!({"response": {}}))
+            } else {
+                Resp::status(404)
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+        let endpoints = Endpoints {
+            api: server.base(),
+            store: server.base(),
+            assets: server.base(),
+        };
+        let s = store_at(&steam, AppSettings::default(), endpoints.clone());
+        s.init().await.unwrap();
+        let input = format!(
+            r#"{{"accountName":"player","steamid":"{steamid}","refreshToken":"r","accessToken":"{old}"}}"#
+        );
+        s.login(&input).await.unwrap();
+        assert_eq!(s.account_library.read().games.len(), 1);
+        let saved = s.files.read_session().unwrap();
+        assert_eq!(saved.access_token, new);
+        assert_eq!(saved.refresh_token, "rotated");
+
+        // After a restart, the saved (now refused) token is renewed too.
+        s.files
+            .write_session(&Session {
+                access_token: old.clone(),
+                ..saved
+            })
+            .unwrap();
+        let again = store_at(&steam, AppSettings::default(), endpoints);
+        again.init().await.unwrap();
+        again.refresh(true).await.unwrap();
+        assert!(again.has_account());
+        assert_eq!(again.files.read_session().unwrap().access_token, new);
     }
 
     #[tokio::test]

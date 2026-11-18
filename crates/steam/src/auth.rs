@@ -207,6 +207,22 @@ impl fmt::Debug for Tokens {
     }
 }
 
+/// What renewing a sign-in gave: a new access token and, when Steam
+/// replaced it, a new refresh token.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Renewed {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+}
+
+impl fmt::Debug for Renewed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Renewed")
+            .field("new_refresh_token", &self.refresh_token.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Where a sign-in stands.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Poll {
@@ -428,6 +444,16 @@ impl Client {
     /// means the refresh token no longer works and the user must sign in
     /// again.
     pub async fn refresh_access_token(&self, refresh_token: &str, steamid: u64) -> Result<String> {
+        Ok(self
+            .renew_tokens(refresh_token, steamid)
+            .await?
+            .access_token)
+    }
+
+    /// [`Self::refresh_access_token`], with the new refresh token Steam
+    /// sends when it replaces the old one. The old one stops working then,
+    /// so the caller must keep the new one.
+    pub async fn renew_tokens(&self, refresh_token: &str, steamid: u64) -> Result<Renewed> {
         let req = proto::GenerateAccessTokenForAppRequest {
             refresh_token: refresh_token.into(),
             steamid,
@@ -439,7 +465,10 @@ impl Client {
         if resp.access_token.is_empty() {
             return Err(SteamError::SessionRejected.into());
         }
-        Ok(resp.access_token)
+        Ok(Renewed {
+            access_token: resp.access_token,
+            refresh_token: non_empty(resp.refresh_token),
+        })
     }
 
     /// Ask Steam to end a saved sign-in, so a copy of its refresh token stops
@@ -852,6 +881,25 @@ oJ5AuFG/mkhc6SJBeyPKP/c87cxXhRNAlivwKivIUvqY
             .revoke_refresh_token("REFRESH", "ACCESS")
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn renewing_hands_back_a_replaced_refresh_token() {
+        let server = TestServer::start(|_| {
+            proto_resp(&proto::GenerateAccessTokenForAppResponse {
+                access_token: "fresh".into(),
+                refresh_token: "rotated".into(),
+            })
+        });
+        let renewed = client(&server).renew_tokens("rt", STEAMID).await.unwrap();
+        assert_eq!(
+            renewed,
+            Renewed {
+                access_token: "fresh".into(),
+                refresh_token: Some("rotated".into()),
+            }
+        );
+        assert!(!format!("{renewed:?}").contains("rotated"));
     }
 
     #[tokio::test]
