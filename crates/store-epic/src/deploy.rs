@@ -442,6 +442,7 @@ impl EpicStore {
             egl_guid: previous.egl_guid,
             manifest_secrets: secrets.into_iter().collect(),
             pinned_version: previous.pinned_version,
+            wine_prefix: previous.wine_prefix,
             third_party: false,
         };
         let export = !entry.is_dlc && entry.platform.starts_with("Win");

@@ -233,7 +233,7 @@ impl EpicStore {
                 g.version != item.version() || g.install_tags != item.install_tags()
             });
             if changed {
-                match self.egl_import(&pfx, item).await {
+                match self.egl_import(prefix, &pfx, item).await {
                     Ok(()) => imported.push(item.display_name().to_string()),
                     Err(e) => tracing::warn!("importing {} from EGL: {e:#}", item.app_name()),
                 }
@@ -280,7 +280,9 @@ impl EpicStore {
         ))
     }
 
-    async fn egl_import(&self, pfx: &Path, item: &EglItem) -> Result<()> {
+    /// Take EGL's install of `item`. `prefix` is the linked prefix as the
+    /// user chose it, `pfx` the folder holding its `drive_c`.
+    async fn egl_import(&self, prefix: &Path, pfx: &Path, item: &EglItem) -> Result<()> {
         let path = host_path(pfx, item.install_location())
             .with_context(|| format!("cannot resolve {}", item.install_location()))?;
         let manifest =
@@ -290,7 +292,16 @@ impl EpicStore {
         irori_epic_api::Manifest::parse(&bytes, &Default::default())
             .context("the EGL manifest is unreadable")?;
         irori_core::json_store::write_bytes(&self.layout.build_manifest(item.app_name()), &bytes)?;
-        let previous = self.installed_entry(item.app_name()).unwrap_or_default();
+        let previous = self.installed_entry(item.app_name());
+        // A game first installed in EGL's prefix keeps its saves and
+        // configuration there (Heroic #6001). One Irori already had (its own
+        // install, exported to EGL) stays in the prefix it played in.
+        let wine_prefix = match &previous {
+            Some(previous) => previous.wine_prefix.clone(),
+            None if cfg!(windows) => String::new(),
+            None => prefix.to_string_lossy().into_owned(),
+        };
+        let previous = previous.unwrap_or_default();
         let entry = InstalledGame {
             app_name: item.app_name().to_string(),
             title: item.display_name().to_string(),
@@ -308,6 +319,7 @@ impl EpicStore {
             save_timestamp: previous.save_timestamp,
             prereq: previous.prereq,
             pinned_version: previous.pinned_version,
+            wine_prefix,
             ..Default::default()
         };
         let app = item.app_name().to_string();

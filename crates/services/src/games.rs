@@ -801,7 +801,7 @@ impl Backend {
                 "This CrossOver bottle may be shared by other games. Keep the prefix when uninstalling, and manage bottles in CrossOver."
             );
             anyhow::ensure!(
-                !irori_runtime::prefix_is_shared(&app, &prefix),
+                !irori_runtime::prefix_is_shared(&app, &game, &prefix),
                 "{} is shared by other games. Keep the prefix when uninstalling.",
                 prefix.display()
             );

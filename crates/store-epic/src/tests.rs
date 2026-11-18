@@ -539,3 +539,68 @@ async fn takes_builds_the_epic_games_launcher_installed() {
     assert_eq!(std::fs::read(dir.join("Data/a.pak")).unwrap(), pak(2));
     assert_eq!(fetches(&f, "ChunksV4"), before);
 }
+
+/// Heroic #6001: a game imported from the Epic Games Launcher's prefix
+/// plays in that prefix, where its saves are; a game Irori installed itself
+/// stays in its own when EGL updates it.
+#[cfg(unix)]
+#[tokio::test]
+async fn games_imported_from_egl_get_its_prefix() {
+    use irori_epic_api::egl;
+
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    let prefix = f.root.join("egl prefix");
+    std::fs::create_dir_all(&prefix).unwrap();
+    std::fs::write(prefix.join("user.reg"), "").unwrap();
+    let game_dir = f.root.join("EGL Games/Sugar");
+    std::fs::create_dir_all(game_dir.join(".egstore")).unwrap();
+    std::fs::write(game_dir.join(".egstore/G1.manifest"), build(1).0).unwrap();
+    let location = format!("Z:{}", game_dir.to_string_lossy().replace('/', "\\"));
+    let item = egl::EglItem::from_export(&egl::ExportInfo {
+        app_name: APP,
+        title: "Sugar Game",
+        version: "v1",
+        namespace: "ns",
+        catalog_item_id: "cat",
+        folder_name: "Sugar",
+        install_location: &location,
+        install_size: 1,
+        install_tags: &[],
+        installation_guid: "G1",
+        launch_command: "",
+        executable: "Bin/Game.exe",
+        can_run_offline: true,
+        requires_ownership_token: false,
+        base_urls: &[],
+    });
+    egl::write_item(&egl::manifests_dir(&prefix), &item).unwrap();
+
+    f.store.egl_sync(Some(&prefix)).await.unwrap();
+    let install = f.store.game(APP).unwrap().install.clone().unwrap();
+    assert_eq!(install.install_path, game_dir.to_string_lossy());
+    assert_eq!(
+        install.store_prefix.as_deref(),
+        Some(prefix.to_string_lossy().as_ref())
+    );
+
+    // Irori's own install, updated in EGL, keeps the prefix it played in.
+    f.store
+        .update_installed(|map| {
+            if let Some(g) = map.get_mut(APP) {
+                g.wine_prefix.clear();
+                g.version = "v0".into();
+            }
+        })
+        .await
+        .unwrap();
+    f.store.egl_sync(Some(&prefix)).await.unwrap();
+    let install = f.store.game(APP).unwrap().install.clone().unwrap();
+    assert_eq!(install.version, "v1");
+    assert_eq!(install.store_prefix, None);
+}
