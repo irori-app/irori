@@ -607,7 +607,7 @@ impl XboxStore {
 
     fn install_dir(&self, request: &InstallRequest, title: &str) -> PathBuf {
         let base = if request.path.as_os_str().is_empty() {
-            irori_core::paths::expand_home(&(self.settings)().default_install_path)
+            irori_core::paths::expand_home(&(self.settings)().install_folder(Runner::Xbox))
         } else {
             irori_core::paths::expand_home(&request.path.to_string_lossy())
         };
@@ -1331,8 +1331,21 @@ impl XboxStore {
         (ctx.step)("Preparing the game");
         let view = launch_view::prepare(&root, &xvd, &files, key, &exe).await?;
 
+        let overrides = Self::blocking({
+            let (runtime, prefix) = (runtime.clone(), wine.prefix.clone());
+            move || runtime.provision_prefix(&prefix)
+        })
+        .await??;
+
         let mut vars: BTreeMap<String, String> = env.env.clone();
         vars.extend(runtime.launch_env(&wine.prefix));
+        if !overrides.is_empty() {
+            let value = irori_runtime::env::add_dll_overrides(
+                vars.get("WINEDLLOVERRIDES").map(String::as_str),
+                &overrides,
+            );
+            vars.insert("WINEDLLOVERRIDES".into(), value);
+        }
         for stale in [
             "XODUS_OFFLINE_IDENTITY",
             "XODUS_FORCE_OFFLINE",

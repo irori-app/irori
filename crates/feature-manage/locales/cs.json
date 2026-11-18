@@ -287,6 +287,7 @@
   "manage.wine.search": "Hledat verze",
   "manage.wine.source.ge_proton": "Proton s dalšími opravami her od GloriousEggroll, určený ke spouštění přes umu mimo Steam. Dobrá výchozí volba pro většinu her.",
   "manage.wine.source.proton_cachyos": "Proton od CachyOS s výkonnostními záplatami a dalšími nástroji, jako jsou DXVK-Sarek a D7VK.",
+  "manage.wine.source.proton_wineland": "Proton-Wineland (dříve Proton-CachyOS-Wineland): Proton s vylepšeními pro Wayland, dalšími součástmi a ve výchozím stavu zapnutým NTSync.",
   "manage.wine.source.wine_ge": "Wine s opravami her z Protonu pro běh bez prostředí Steam. Již se neaktualizuje.",
   "manage.wine.source.wine_kron4ek": "Běžná, staging a TkG sestavení Wine od Kron4ek.",
   "manage.wine.source.nexus_runtime": "Open-source Proton s xgameruntime.dll od projektu Nexus Launcher. Potřebují ho hry z Microsoft Storu a PC Game Pass.",

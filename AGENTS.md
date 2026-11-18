@@ -1633,7 +1633,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   (`ops::license::Grant` says which), the encrypted files decrypted into a private
   launch view (`launch_view`, 0700, removed in `after_exit`, swept at `init`), the
   account service (`service`, per session) and `proton waitforexitandrun Z:\…`.
-  `XboxUnavailable` (`DeviceLimit`) explains licensing code 501. The per-game
+  The runtime's `libnghttp2.dll` is copied into the prefix's `system32` first, with
+  `libnghttp2=n` (`irori_runtime::xbox::XboxRuntime::provision_prefix`): WinHTTP loads
+  it from `system32` only. `XboxUnavailable` (`DeviceLimit`) explains licensing code 501. The per-game
   `language` setting becomes `XODUS_PACKAGE_LOCALE`, `WINEUSERLOCALE` and the Unix
   locale (`locale::environment`); left empty, only the package resources follow the
   interface language.

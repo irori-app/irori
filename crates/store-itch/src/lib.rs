@@ -282,7 +282,7 @@ impl ItchStore {
 
     fn base_dir(&self, request: &InstallRequest) -> PathBuf {
         if request.path.as_os_str().is_empty() {
-            irori_core::paths::expand_home(&(self.settings)().default_install_path)
+            irori_core::paths::expand_home(&(self.settings)().install_folder(Runner::Itch))
         } else {
             irori_core::paths::expand_home(&request.path.to_string_lossy())
         }

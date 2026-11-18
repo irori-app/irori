@@ -123,7 +123,7 @@ impl ImportInstallers {
         };
         let id = GameId::new(Runner::Gog, app.as_str());
         let title = title_of(&id, cx);
-        let base = PathBuf::from(&models(cx).settings.read(cx).app.default_install_path);
+        let base = PathBuf::from(models(cx).settings.read(cx).app.install_folder(id.runner));
         let request = InstallRequest {
             path: base,
             platform: row.found.platform,

@@ -275,7 +275,7 @@ build Irori yourself, see [Building](#building).
   Proton's DLSS, FSR and XeSS upgrades without looking up variables.
 - **Graphics tab per game (Linux):** pick which graphics card a game runs on when the
   computer has more than one, turn on NVIDIA Smooth Motion, NVIDIA Reflex for Vulkan
-  games, or Lossless Scaling frame generation through lsfg-vk. Every option says why
+  games, or frame generation through lsfg-vk or MAKO. Every option says why
   it's greyed out when your hardware or drivers can't use it. On Windows the tab sets
   Windows' own graphics preference (power saving or high performance) for the game's
   program, and puts back what was there when you clear it.
