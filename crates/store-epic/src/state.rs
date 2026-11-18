@@ -153,6 +153,11 @@ pub(crate) struct InstalledGame {
     /// legendary ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub pinned_version: bool,
+    /// The Wine prefix of the Epic Games Launcher this install was imported
+    /// from, the game's prefix unless the user chose one. Irori's own key;
+    /// legendary ignores it.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub wine_prefix: String,
     #[serde(skip)]
     pub third_party: bool,
 }
@@ -186,6 +191,7 @@ impl InstalledGame {
             is_dlc: self.is_dlc,
             sdl: self.install_tags.clone(),
             pinned_version: self.pinned_version,
+            store_prefix: (!self.wine_prefix.is_empty()).then(|| self.wine_prefix.clone()),
             ..Default::default()
         }
     }

@@ -674,8 +674,18 @@ pub async fn kill_game_prefix(
     prefix::kill(&wine, &prefix).await
 }
 
-/// Default prefix path for a game when its settings name none.
+/// Default prefix path for a game when its settings name none: the prefix
+/// another launcher installed it in, else one of its own under the prefixes
+/// folder.
 pub fn default_prefix(app: &AppSettings, game: &GameInfo) -> PathBuf {
+    if let Some(prefix) = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .filter(|p| !p.trim().is_empty())
+    {
+        return irori_core::paths::expand_home(prefix.trim());
+    }
     let base = if app.default_wine_prefix_dir.is_empty() {
         PathBuf::from(&app.default_install_path).join("Prefixes")
     } else {
@@ -743,13 +753,23 @@ pub fn prefix_path(app: &AppSettings, settings: &GameSettings, game: &GameInfo) 
 }
 
 /// Whether `prefix` is shared by several games: the root that holds every
-/// game's own prefix, or the prefix set for all games in the defaults.
-/// Deleting it with one game would take the others' saves with it.
-pub fn prefix_is_shared(app: &AppSettings, prefix: &Path) -> bool {
+/// game's own prefix, the prefix set for all games in the defaults, or the
+/// prefix of another launcher (the linked Epic Games Launcher's, the one
+/// `game` was installed in). Deleting it with one game would take the others'
+/// saves, or the launcher, with it.
+pub fn prefix_is_shared(app: &AppSettings, game: &GameInfo, prefix: &Path) -> bool {
     let same = |setting: &str| {
-        !setting.trim().is_empty() && irori_core::paths::expand_home(setting) == prefix
+        !setting.trim().is_empty() && irori_core::paths::expand_home(setting.trim()) == prefix
     };
-    same(&app.default_wine_prefix_dir) || same(&app.game.wine_prefix)
+    let store_prefix = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .unwrap_or_default();
+    same(&app.default_wine_prefix_dir)
+        || same(&app.game.wine_prefix)
+        || same(&app.egs_linked_path)
+        || same(store_prefix)
 }
 
 /// Install (`enabled`) or remove a DLL tool in the game's prefix (the DXVK /
@@ -851,13 +871,13 @@ mod tests {
             default_wine_prefix_dir: "~/Games/Prefixes".into(),
             ..Default::default()
         };
-        assert!(prefix_is_shared(&app, &root));
-        assert!(!prefix_is_shared(&app, &root.join("My Game")));
+        assert!(prefix_is_shared(&app, &game(), &root));
+        assert!(!prefix_is_shared(&app, &game(), &root.join("My Game")));
         app.game.wine_prefix = "/data/shared".into();
-        assert!(prefix_is_shared(&app, Path::new("/data/shared")));
+        assert!(prefix_is_shared(&app, &game(), Path::new("/data/shared")));
         app.game.wine_prefix.clear();
         assert!(
-            !prefix_is_shared(&app, Path::new("")),
+            !prefix_is_shared(&app, &game(), Path::new("")),
             "no setting, no match"
         );
     }
@@ -875,6 +895,30 @@ mod tests {
         );
         gs.wine_prefix = "/x/y".into();
         assert_eq!(prefix_path(&app, &gs, &game()), PathBuf::from("/x/y"));
+    }
+
+    /// Heroic #6001: a game imported from the Epic Games Launcher's prefix
+    /// plays there unless the user chose a prefix, and that prefix (EGL's
+    /// own) is never deleted with the game.
+    #[test]
+    fn games_from_another_launcher_use_its_prefix() {
+        let mut app = AppSettings {
+            default_wine_prefix_dir: "/p".into(),
+            ..Default::default()
+        };
+        let mut imported = game();
+        if let Some(install) = imported.install.as_mut() {
+            install.store_prefix = Some("/egl".into());
+        }
+        let mut gs = GameSettings::default();
+        assert_eq!(default_prefix(&app, &imported), PathBuf::from("/egl"));
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/egl"));
+        assert!(prefix_is_shared(&app, &imported, Path::new("/egl")));
+        assert!(!prefix_is_shared(&app, &game(), Path::new("/egl")));
+        app.egs_linked_path = " /egl ".into();
+        assert!(prefix_is_shared(&app, &game(), Path::new("/egl")));
+        gs.wine_prefix = "/mine".into();
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/mine"));
     }
 
     #[test]

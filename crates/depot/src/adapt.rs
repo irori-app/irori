@@ -1,7 +1,8 @@
 //! How a download adapts to the connection: how many requests run at once
 //! ([`Gate`] sized by [`Tuner`]), which server each request goes to
-//! ([`Hosts`]), when a connection counts as stalled ([`Watchdog`]) and what
-//! holds the download back ([`classify`]).
+//! ([`Hosts`]), when a connection counts as stalled ([`Watchdog`]), when
+//! the whole download slumped and wants fresh connections ([`Slump`]) and
+//! what holds the download back ([`classify`]).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -30,6 +31,16 @@ const EXPLORE_EVERY: u64 = 16;
 /// First time a failing server is passed over; doubles per failure.
 const BENCH: Duration = Duration::from_secs(15);
 const MAX_BENCH: Duration = Duration::from_secs(300);
+/// A download below this share of its recent peak has slumped.
+const SLUMP_SHARE: f64 = 0.25;
+/// How long a slump lasts before the connections are replaced.
+const SLUMP_FOR: Duration = Duration::from_secs(60);
+/// Peaks below this never count: a slow connection is left alone.
+const SLUMP_MIN_PEAK: f64 = (1 << 20) as f64;
+/// The peak halves over this long, so a past burst fades.
+const PEAK_HALF_LIFE: Duration = Duration::from_secs(600);
+/// Fewest time between two replacements.
+const RECYCLE_GAP: Duration = Duration::from_secs(300);
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -108,6 +119,11 @@ impl Gate {
     /// Whether requests had to wait since the last call.
     pub fn take_contended(&self) -> bool {
         std::mem::take(&mut lock(&self.state).contended)
+    }
+
+    /// Requests running now.
+    pub fn active(&self) -> usize {
+        lock(&self.state).active
     }
 }
 
@@ -281,6 +297,82 @@ impl Hosts {
     /// Typical duration of a chunk request, once one finished.
     pub fn chunk_time(&self) -> Option<Duration> {
         lock(&self.chunk_secs).map(Duration::from_secs_f64)
+    }
+
+    /// Forget how fast each server was, so every working one is tried and
+    /// measured again. Failing servers stay benched.
+    pub fn forget_rates(&self) {
+        for s in lock(&self.scores).values_mut() {
+            s.rate = None;
+        }
+    }
+}
+
+/// Notices when the whole download slows down for good against its own
+/// recent peak while the connection was the limit (Heroic #6018: a long
+/// download fell from 27 MB/s to under 1 MB/s until it was paused and
+/// resumed on new connections). Pure: time comes in with each window.
+///
+/// Both the total rate and the rate per running request must fall below
+/// [`SLUMP_SHARE`] of their peaks for [`SLUMP_FOR`]: the end of a download,
+/// with fewer requests left, keeps its rate per request, and more requests
+/// sharing a full connection keep the total. Peaks under [`SLUMP_MIN_PEAK`]
+/// never count, and after a replacement the level reached is the new
+/// reference, so a connection that is simply slower now, or always was
+/// slow, is not disturbed again.
+#[derive(Debug, Default)]
+pub(crate) struct Slump {
+    /// Smoothed total and per-request rates.
+    smooth: Option<(f64, f64)>,
+    /// Their recent peaks, fading by [`PEAK_HALF_LIFE`].
+    peak: (f64, f64),
+    last: Option<Instant>,
+    /// When the current slump began.
+    since: Option<Instant>,
+    replaced: Option<Instant>,
+}
+
+impl Slump {
+    /// One window ending at `now`: `rate` bytes per second with `active`
+    /// requests running. `steady` is false when the connection didn't set
+    /// the pace (speed limit, disk). True when the connections should be
+    /// replaced now.
+    pub fn observe(&mut self, now: Instant, rate: f64, active: usize, steady: bool) -> bool {
+        if let Some(last) = self.last {
+            let elapsed = now.saturating_duration_since(last).as_secs_f64();
+            let fade = 0.5f64.powf(elapsed / PEAK_HALF_LIFE.as_secs_f64());
+            self.peak = (self.peak.0 * fade, self.peak.1 * fade);
+        }
+        self.last = Some(now);
+        if !steady || active == 0 {
+            self.since = None;
+            return false;
+        }
+        let per = rate / active as f64;
+        let (total, per) = match self.smooth {
+            Some((t, p)) => (t * 0.7 + rate * 0.3, p * 0.7 + per * 0.3),
+            None => (rate, per),
+        };
+        self.smooth = Some((total, per));
+        self.peak = (self.peak.0.max(total), self.peak.1.max(per));
+        let slumped = self.peak.0 >= SLUMP_MIN_PEAK
+            && total < self.peak.0 * SLUMP_SHARE
+            && per < self.peak.1 * SLUMP_SHARE;
+        if !slumped {
+            self.since = None;
+            return false;
+        }
+        let since = *self.since.get_or_insert(now);
+        let recent = self
+            .replaced
+            .is_some_and(|r| now.saturating_duration_since(r) < RECYCLE_GAP);
+        if now.saturating_duration_since(since) < SLUMP_FOR || recent {
+            return false;
+        }
+        self.replaced = Some(now);
+        self.since = None;
+        self.peak = (total, per);
+        true
     }
 }
 
@@ -485,6 +577,87 @@ mod tests {
         let mut w = Watchdog::new(s, t0);
         w.pause(Duration::from_secs(60));
         assert!(w.feed(10, t0 + Duration::from_secs(30)).is_ok());
+    }
+
+    const MB: f64 = 1e6;
+
+    /// Feed `slump` windows of 2 s for `secs` seconds from `*t`; the times a
+    /// replacement was asked for, in seconds from the start.
+    fn run(
+        slump: &mut Slump,
+        t0: Instant,
+        t: &mut u64,
+        secs: u64,
+        mut window: impl FnMut(u64) -> (f64, usize, bool),
+    ) -> Vec<u64> {
+        let mut out = Vec::new();
+        let end = *t + secs;
+        while *t < end {
+            *t += 2;
+            let (rate, active, steady) = window(*t);
+            if slump.observe(t0 + Duration::from_secs(*t), rate, active, steady) {
+                out.push(*t);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn slump_replaces_connections_once_after_a_lasting_drop() {
+        let t0 = Instant::now();
+        let (mut s, mut t) = (Slump::default(), 0);
+        assert!(run(&mut s, t0, &mut t, 600, |_| (27.0 * MB, 10, true)).is_empty());
+        // Down to 0.5 MB/s on the same ten connections: replaced once, about
+        // a minute in, and not again while the new level holds.
+        let replaced = run(&mut s, t0, &mut t, 3600, |_| (0.5 * MB, 10, true));
+        assert_eq!(replaced.len(), 1, "{replaced:?}");
+        assert!((660..=700).contains(&replaced[0]), "{replaced:?}");
+        // Back at full speed, then a new slump: replaced again, but not
+        // sooner than the gap after the last time.
+        assert!(run(&mut s, t0, &mut t, 120, |_| (27.0 * MB, 10, true)).is_empty());
+        let again = run(&mut s, t0, &mut t, 600, |_| (0.5 * MB, 10, true));
+        assert_eq!(again.len(), 1, "{again:?}");
+    }
+
+    #[test]
+    fn slump_leaves_healthy_downloads_alone() {
+        let t0 = Instant::now();
+        // A slow connection that wobbles.
+        let (mut s, mut t) = (Slump::default(), 0);
+        let wobbly = |t: u64| (if t % 20 < 10 { 0.9 * MB } else { 0.1 * MB }, 4, true);
+        assert!(run(&mut s, t0, &mut t, 7200, wobbly).is_empty());
+        // The end of a download: fewer requests, same speed each.
+        let (mut s, mut t) = (Slump::default(), 0);
+        assert!(run(&mut s, t0, &mut t, 300, |_| (20.0 * MB, 10, true)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 600, |_| (2.0 * MB, 1, true)).is_empty());
+        // More requests sharing a full connection.
+        let (mut s, mut t) = (Slump::default(), 0);
+        assert!(run(&mut s, t0, &mut t, 300, |_| (20.0 * MB, 2, true)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 600, |_| (20.0 * MB, 32, true)).is_empty());
+        // The speed limit or the disk set the pace, or nothing is running.
+        let (mut s, mut t) = (Slump::default(), 0);
+        assert!(run(&mut s, t0, &mut t, 300, |_| (20.0 * MB, 8, true)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 600, |_| (0.5 * MB, 8, false)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 600, |_| (0.0, 0, true)).is_empty());
+        // A short dip.
+        let (mut s, mut t) = (Slump::default(), 0);
+        assert!(run(&mut s, t0, &mut t, 300, |_| (20.0 * MB, 8, true)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 40, |_| (0.5 * MB, 8, true)).is_empty());
+        assert!(run(&mut s, t0, &mut t, 600, |_| (20.0 * MB, 8, true)).is_empty());
+    }
+
+    #[test]
+    fn forgetting_rates_tries_every_server_again() {
+        let urls: Vec<String> = ["https://a.cdn/x", "https://b.cdn/x"]
+            .map(String::from)
+            .into();
+        let hosts = Hosts::default();
+        hosts.record_ok(&urls[0], 4_000_000, Duration::from_secs(1));
+        hosts.record_ok(&urls[1], 1_000_000, Duration::from_secs(1));
+        assert_eq!(hosts.order(&urls)[0], 0);
+        hosts.record_failure(&urls[0]);
+        hosts.forget_rates();
+        assert_eq!(hosts.order(&urls), [1, 0], "a failing server stays benched");
     }
 
     #[test]
