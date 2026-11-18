@@ -988,6 +988,11 @@ has the Xbox app, which "Other launchers" lists, and macOS has no runtime for GD
   tab downloads the open-source Nexus Runtime build from
   `github.com/domsvoboda/nexus-runtime` (SHA-512 checked). It runs on the host, never under
   umu, through `proton waitforexitandrun` with `UMU_ID` set and `UMU_USE_STEAM=0`.
+  Before each start the runtime's `libnghttp2.dll` (`files/lib/wine/x86_64-windows`) is
+  copied into the prefix's `pfx/drive_c/windows/system32`, since its WinHTTP loads it from
+  there only (games such as Crimson Desert need HTTP/2), checked against the SHA-256 in
+  `XODUS_NEXUS_PATCH.json` when listed; a different file there is kept as
+  `libnghttp2.dll.irori-backup`, and the game gets `libnghttp2=n` in `WINEDLLOVERRIDES`.
 - **Launch view.** Executables stay encrypted on disk. Each session decrypts them into a
   folder only the user can open (`.irori-xbox-launch-*` beside the game, else in `/tmp`)
   with links to everything else; it is removed when the game exits, and leftovers from a
