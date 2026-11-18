@@ -948,6 +948,37 @@ impl Backend {
         }
     }
 
+    /// Before a launch under Wine: prefer the game folder's copy of each
+    /// proxy DLL the enabled mods put beside a program (`winhttp.dll` of
+    /// BepInEx…), merged into the user's own `WINEDLLOVERRIDES`.
+    pub(crate) async fn mods_launch_env(
+        &self,
+        id: &GameId,
+        game: &GameInfo,
+        env: &mut std::collections::BTreeMap<String, String>,
+    ) {
+        if !supports_mods(game) {
+            return;
+        }
+        let Some(game_dir) = game.install_path() else {
+            return;
+        };
+        let lib = ModLibrary::for_game(id);
+        let dlls = self
+            .spawn_blocking(move || {
+                if !lib.root().exists() {
+                    return Ok(Vec::new());
+                }
+                irori_mods::proxy::enabled_proxy_dlls(&lib, &game_dir)
+            })
+            .await;
+        match dlls {
+            Ok(Ok(dlls)) => add_proxy_overrides(&dlls, env),
+            Ok(Err(e)) => tracing::warn!("proxy DLLs of the mods of {id}: {e:#}"),
+            Err(e) => tracing::warn!("proxy DLLs of the mods of {id}: {e:#}"),
+        }
+    }
+
     /// After the game exits: take its mods back out of the game folder.
     pub(crate) async fn restore_mods(&self, id: &GameId, title: &str) {
         let lib = ModLibrary::for_game(id);
@@ -1131,6 +1162,22 @@ fn new_entry(name: String, version: Option<String>, source: ModSource) -> ModEnt
     }
 }
 
+/// `<dll>=n,b` for each of `dlls` in `WINEDLLOVERRIDES`, replacing only
+/// what the variable said about those DLLs.
+fn add_proxy_overrides(dlls: &[String], env: &mut std::collections::BTreeMap<String, String>) {
+    if dlls.is_empty() {
+        return;
+    }
+    let key = env
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case("WINEDLLOVERRIDES"))
+        .cloned()
+        .unwrap_or_else(|| "WINEDLLOVERRIDES".to_string());
+    let add: Vec<(&str, &str)> = dlls.iter().map(|d| (d.as_str(), "n,b")).collect();
+    let value = irori_runtime::env::add_dll_overrides(env.get(&key).map(String::as_str), &add);
+    env.insert(key, value);
+}
+
 /// Every enabled mod's files, lower-cased.
 fn enabled_files(lib: &ModLibrary) -> Result<HashSet<String>> {
     let list = lib.load()?;
@@ -1185,6 +1232,20 @@ fn present_files(config: &ModuleConfig, game_dir: &Path, lib: &ModLibrary) -> Ar
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_dlls_join_the_users_overrides() {
+        let mut env = std::collections::BTreeMap::new();
+        env.insert(
+            "WINEDLLOVERRIDES".to_string(),
+            "winhttp=b;d3d11=n".to_string(),
+        );
+        add_proxy_overrides(&["dinput8".into(), "winhttp".into()], &mut env);
+        assert_eq!(env["WINEDLLOVERRIDES"], "d3d11=n;dinput8=n,b;winhttp=n,b");
+        let mut empty = std::collections::BTreeMap::new();
+        add_proxy_overrides(&[], &mut empty);
+        assert!(empty.is_empty());
+    }
 
     #[test]
     fn archive_names_drop_nexus_suffixes() {

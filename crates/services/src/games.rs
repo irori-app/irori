@@ -473,6 +473,7 @@ impl Backend {
         // Wine loads its own DLL unless told to prefer the game folder's.
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;
+            self.mods_launch_env(id, &game, &mut environment.env).await;
         }
         check_launch(&cancel)?;
         // prepare_launch refuses rather than leaving the sandbox out, so a

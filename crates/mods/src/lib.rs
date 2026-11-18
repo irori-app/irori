@@ -17,6 +17,8 @@
 //! Mods come from archives ([`archive`], zip, 7z and rar), FOMOD installers
 //! ([`fomod`]), Thunderstore ([`thunderstore`]) and Nexus Mods ([`nexus`]).
 //! [`conflicts`] tells which files several mods provide and which one wins.
+//! Under Wine, [`proxy`] names the DLLs mods put beside the game's program,
+//! which Wine must load from the game folder.
 
 pub mod archive;
 pub mod conflicts;
@@ -29,6 +31,7 @@ mod model;
 mod net;
 pub mod nexus;
 pub mod overlay;
+pub mod proxy;
 pub mod thunderstore;
 
 pub use conflicts::{Conflicts, FileConflict, ModConflicts};

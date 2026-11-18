@@ -1575,6 +1575,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   outside the mods' own files and folders into the game folder, where it would
   have gone without mods. Paths compare without letter case and follow the game
   folder's spelling (`align_case`).
+- **Proxy DLLs under Wine.** A DLL the enabled mods put beside a program of the
+  game or a mod whose name is one of `irori_mods::proxy::PROXY_DLLS` (`winhttp`,
+  `version`, `dinput8`, `dxgi`…) gets `<dll>=n,b` in `WINEDLLOVERRIDES` before the
+  store builds the launch (`Backend::mods_launch_env`, beside ReShade's), so Wine
+  loads the mod loader instead of its own copy.
 - **Sources.** Archives go through `irori_mods::archive` (zip and 7z in process;
   rar through `unrar`/`7z`/`bsdtar`, on Windows also `System32\tar.exe` by its full path, after listing every name; without one the Mods tab shows the command that installs 7-Zip here, `archive::seven_zip_command`), with
   `archive_guard` on every entry and no links. FOMOD (`fomod.rs`) is parsed as
