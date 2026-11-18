@@ -210,6 +210,54 @@ pub fn can_unpack_rar() -> bool {
     rar_tool().is_some()
 }
 
+/// The command that installs 7-Zip here, for the hint shown while rar
+/// archives can't be unpacked: the system's package manager on the common
+/// Linux distributions, Homebrew on macOS, winget on Windows. `None` where
+/// Irori can't tell (other distributions, its Flatpak, whose sandbox a
+/// program installed on the host can't reach).
+pub fn seven_zip_command() -> Option<&'static str> {
+    if cfg!(windows) {
+        return Some("winget install 7zip.7zip");
+    }
+    if cfg!(target_os = "macos") {
+        return Some("brew install sevenzip");
+    }
+    if irori_core::host::is_flatpak() {
+        return None;
+    }
+    let os_release = ["/etc/os-release", "/usr/lib/os-release"]
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())?;
+    seven_zip_command_for(&os_release)
+}
+
+/// [`seven_zip_command`] for a Linux system described by `os_release`, by
+/// its `ID` and then each `ID_LIKE`.
+pub fn seven_zip_command_for(os_release: &str) -> Option<&'static str> {
+    let field = |key: &str| {
+        os_release.lines().find_map(|l| {
+            let value = l.strip_prefix(key)?.strip_prefix('=')?;
+            Some(value.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+        })
+    };
+    let likes = field("ID_LIKE").unwrap_or_default();
+    let ids = field("ID")
+        .into_iter()
+        .chain(likes.split_whitespace().map(str::to_string));
+    ids.into_iter().find_map(|id| {
+        Some(match id.as_str() {
+            "arch" => "sudo pacman -S 7zip",
+            "debian" | "ubuntu" => "sudo apt install 7zip",
+            "fedora" | "rhel" => "sudo dnf install 7zip",
+            "opensuse" | "suse" | "opensuse-tumbleweed" | "opensuse-leap" => {
+                "sudo zypper install 7zip"
+            }
+            "gentoo" => "sudo emerge app-arch/7zip",
+            _ => return None,
+        })
+    })
+}
+
 async fn unrar(archive: &Path, dest: &Path, cancel: &CancellationToken) -> Result<()> {
     use irori_core::process::{CommandSpec, RunOptions, run};
     let Some(tool) = rar_tool() else {
@@ -305,6 +353,26 @@ mod tests {
         );
         assert_eq!(windows_tar(Some("".into())), None);
         assert_eq!(windows_tar(None), None);
+    }
+
+    #[test]
+    fn seven_zip_command_follows_the_distribution() {
+        let cmd = seven_zip_command_for;
+        assert_eq!(cmd("ID=arch\n"), Some("sudo pacman -S 7zip"));
+        assert_eq!(
+            cmd("NAME=\"Linux Mint\"\nID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"),
+            Some("sudo apt install 7zip")
+        );
+        assert_eq!(cmd("ID=cachyos\nID_LIKE=arch\n"), Some("sudo pacman -S 7zip"));
+        assert_eq!(cmd("ID=\"fedora\"\n"), Some("sudo dnf install 7zip"));
+        assert_eq!(
+            cmd("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"),
+            Some("sudo zypper install 7zip")
+        );
+        assert_eq!(cmd("ID=nixos\n"), None);
+        // `ID_LIKE` is not taken for `ID`.
+        assert_eq!(cmd("ID_LIKE=debian\nID=x\n"), Some("sudo apt install 7zip"));
+        assert_eq!(cmd(""), None);
     }
 }
 

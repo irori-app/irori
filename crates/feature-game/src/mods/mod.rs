@@ -642,6 +642,9 @@ impl ModsPanel {
                         })),
                 )
             })
+            .when(view.rar_missing, |col| {
+                col.child(render_rar_hint(view.seven_zip_command, cx))
+            })
             .when(view.written_files > 0, |col| {
                 col.child(
                     h_flex()
@@ -787,6 +790,74 @@ impl Render for ModsPanel {
             .children(status)
             .child(body)
     }
+}
+
+/// Rar mods need a program Irori doesn't ship: say which, and how to get it
+/// here when the system is known.
+fn render_rar_hint(command: Option<&'static str>, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    v_flex()
+        .gap_2()
+        .p_3()
+        .rounded(theme.radius_lg)
+        .border_1()
+        .border_color(theme.border)
+        .child(
+            h_flex()
+                .gap_2()
+                .items_start()
+                .child(
+                    Icon::new(IconName::Info)
+                        .small()
+                        .text_color(theme.muted_foreground),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(if command.is_some() {
+                            t("game.mods.rar_missing")
+                        } else {
+                            t("game.mods.rar_missing_generic")
+                        }),
+                ),
+        )
+        .when_some(command, |col, command| {
+            col.child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .px_2()
+                            .py_1()
+                            .rounded(theme.radius)
+                            .bg(theme.muted)
+                            .font_family(theme.mono_font_family.clone())
+                            .text_xs()
+                            .child(command),
+                    )
+                    .child(
+                        Button::new("mods-copy-7zip")
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Copy)
+                            .label(t("game.mods.copy_command"))
+                            .on_click(move |_, window, cx| {
+                                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                    command.to_string(),
+                                ));
+                                notify_success(window, cx, t("game.mods.command_copied"));
+                            }),
+                    ),
+            )
+        })
+        .into_any_element()
 }
 
 /// `one` or `other` for `count`, with `{count}` and `args` filled in.

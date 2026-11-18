@@ -1573,7 +1573,7 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   have gone without mods. Paths compare without letter case and follow the game
   folder's spelling (`align_case`).
 - **Sources.** Archives go through `irori_mods::archive` (zip and 7z in process;
-  rar through `unrar`/`7z`/`bsdtar`, on Windows also `System32\tar.exe` by its full path, after listing every name), with
+  rar through `unrar`/`7z`/`bsdtar`, on Windows also `System32\tar.exe` by its full path, after listing every name; without one the Mods tab shows the command that installs 7-Zip here, `archive::seven_zip_command`), with
   `archive_guard` on every entry and no links. FOMOD (`fomod.rs`) is parsed as
   data only (no DTDs, no scripted installers); the UI asks the steps
   (`FomodPrompt`, `Backend::finish_fomod`). Thunderstore's ecosystem schema (cached

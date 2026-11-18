@@ -43,6 +43,10 @@ pub struct ModsView {
     pub folder: PathBuf,
     /// Icons of mods that came with one, by mod id.
     pub icons: HashMap<String, PathBuf>,
+    /// No program here unpacks rar archives.
+    pub rar_missing: bool,
+    /// The command that installs 7-Zip on this system, when known.
+    pub seven_zip_command: Option<&'static str>,
 }
 
 /// An archive install that needs the user's choices first.
@@ -246,6 +250,8 @@ impl Backend {
                 folder: lib.root().to_path_buf(),
                 icons,
                 list,
+                rar_missing: !irori_mods::archive::can_unpack_rar(),
+                seven_zip_command: irori_mods::archive::seven_zip_command(),
             })
         })
         .await?
