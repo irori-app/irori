@@ -343,6 +343,12 @@ pub struct GameSettings {
     /// variables. Per game only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
+    /// The umu database id (`GAMEID`) the game runs with under umu, when the
+    /// user chose one (`umu-1091500`, or a bare Steam app id); empty finds
+    /// it from the store, the Steam app id or the title. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriUmuId")]
+    pub umu_id: String,
     /// Keep the last moments of play ready to save as a clip. Linux only;
     /// Irori-only.
     #[serde(rename = "iroriReplay")]
@@ -561,6 +567,7 @@ impl Default for GameSettings {
             hltb_id: String::new(),
             igdb_id: String::new(),
             steam_app_id: String::new(),
+            umu_id: String::new(),
             replay: ReplaySettings::default(),
         }
     }

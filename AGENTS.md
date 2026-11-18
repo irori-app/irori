@@ -832,7 +832,12 @@ commands without a window.
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
      `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
-     variable said about its DLL; ReShade's are added after.
+     variable said about its DLL; ReShade's are added after. Under umu the
+     game's `GAMEID` comes from `irori_runtime::umu::resolve`: the user's
+     `iroriUmuId`, the umu database's entry for the store id, `umu-<Steam app
+     id>` from `iroriSteamAppId`, else a title the database (its CSV, cached a
+     week in `<cache>/umu-database.csv`) lists under one id. The game's Wine
+     section shows the id, its source and a database search.
   4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
      starts at once and runs alongside the game as a program of the session
      (`programs::script_alongside`), stopped when the session ends or the launch

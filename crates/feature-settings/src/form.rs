@@ -49,6 +49,7 @@ use crate::registry::{
 use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
+use crate::umu::UmuPanel;
 use crate::value::{
     bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
     plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
@@ -771,6 +772,13 @@ impl SettingsForm {
             }
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
+            PanelKind::Umu => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UmuPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);

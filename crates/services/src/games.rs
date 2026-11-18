@@ -380,6 +380,26 @@ impl Backend {
         choices
     }
 
+    /// The umu database id `id` runs with when umu starts it, and where it
+    /// came from; `None` when it has none (umu then runs it as `umu-0`).
+    pub async fn umu_id(&self, id: &GameId) -> Option<irori_runtime::umu::UmuMatch> {
+        let game = self.game(id)?;
+        let settings = self.settings.game(id);
+        irori_runtime::umu::resolve(id, &game.title, &settings).await
+    }
+
+    /// Titles of the umu database matching `query`, one per id.
+    pub async fn umu_suggestions(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Vec<irori_runtime::umu::UmuEntry> {
+        match irori_runtime::umu::database().await {
+            Some(entries) => irori_runtime::umu::suggestions(&entries, query, limit),
+            None => Vec::new(),
+        }
+    }
+
     /// Launch a game and track it until it exits.
     pub async fn launch(
         &self,

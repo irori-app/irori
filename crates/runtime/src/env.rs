@@ -11,8 +11,8 @@
 //!    Motion and lsfg-vk, except what the user's variables set
 //! 4. known-fixes variables
 //! 5. [`wine_env`]: Wine/Proton variables (Windows games only)
-//! 6. `GAMEID=<umu id>` when umu runs the game and the game is in the umu
-//!    database
+//! 6. `GAMEID=<umu id>` when umu runs the game and it has one
+//!    ([`crate::umu::resolve`])
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};

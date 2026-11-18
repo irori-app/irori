@@ -257,6 +257,8 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// One game's umu id: the one used, its source, a database search.
+    Umu,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -579,6 +581,8 @@ impl FieldSpec {
                     | "eacRuntime"
                     | "battlEyeRuntime"
                     | "disableUMU"
+                    | "iroriUmuId"
+                    | "panel.umu"
                     | "steamRuntime"
                     | "preferSystemLibs"
                     | "autoInstallDxvk"
@@ -2373,6 +2377,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
+    game_only(
+        "iroriUmuId",
+        "settings.field.umu_id.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Text(TextKind::Plain),
+    )
+    .tag(Verbatim("umu"))
+    .help("settings.field.umu_id.help")
+    .placeholder(Verbatim("umu-1091500"))
+    .keywords(&["umu", "gameid", "protonfixes", "proton", "fixes"]),
+    game_only(
+        "panel.umu",
+        "settings.field.panel_umu.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Panel(PanelKind::Umu),
+    )
+    .keywords(&["umu", "gameid", "protonfixes", "database"]),
     game(
         "iroriProtonPreferSdl",
         "settings.field.proton_prefer_sdl.label",

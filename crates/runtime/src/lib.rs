@@ -20,6 +20,7 @@ pub mod runtimes;
 pub mod sandbox;
 pub mod sysinfo;
 pub mod tools;
+pub mod umu;
 pub mod vdf;
 pub mod windows_file;
 pub mod windows_uri;
@@ -441,12 +442,9 @@ pub async fn prepare_launch(
     env::layer(&mut vars, env::game_debug_env(&effective, &host));
     env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
     if wc.uses_umu
-        && let Some(id) = hooks::hooks()
-            .umu_id(target.id)
-            .await
-            .filter(|i| !i.is_empty())
+        && let Some(found) = umu::resolve(target.id, &target.game.title, &effective).await
     {
-        vars.insert("GAMEID".into(), id);
+        vars.insert("GAMEID".into(), found.id);
     }
     parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
 

@@ -71,8 +71,10 @@ fn umu_cache_file() -> std::path::PathBuf {
     Paths::get().cache.join("umu-ids.json")
 }
 
-/// Query the umu database for a game, caching answers (including "not
-/// found") on disk. Network failures are not cached.
+/// Query the umu database for a store game by its store and id, caching
+/// answers (including "not found") on disk. Network failures are not
+/// cached. Added games have no store id; [`crate::umu::resolve`] matches
+/// them by Steam app id or title.
 pub async fn lookup_umu_id(id: &GameId) -> Option<String> {
     if id.runner == Runner::Sideload {
         return None;
