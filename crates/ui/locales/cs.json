@@ -164,6 +164,8 @@
   "ui.wine.looking": "Hledají se verze Wine a Protonu…",
   "ui.wine.none": "Nebyla nalezena žádná verze Wine ani Protonu. Před hraním si nějakou stáhněte ve správci Wine.",
   "ui.wine.open_manager": "Otevřít správce Wine",
+  "ui.wine.installed": "{version} je nainstalováno",
+  "ui.wine.install_failed": "{version} se nepodařilo nainstalovat",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "Složka s prostředím Windows pro tuto hru. Ponechte prázdné pro zobrazenou výchozí.",
   "ui.wine.browse": "Procházet…",

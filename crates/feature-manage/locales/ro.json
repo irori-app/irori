@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "mai sunt {time}",
   "manage.wine.progress.starting": "Se pornește…",
-  "manage.wine.installed": "{version} este instalată",
-  "manage.wine.install_failed": "Nu s-a putut instala {version}",
   "manage.onboarding.step": "Pasul {current} din {total}",
   "manage.onboarding.skip": "Omite configurarea",
   "manage.onboarding.back": "Înapoi",

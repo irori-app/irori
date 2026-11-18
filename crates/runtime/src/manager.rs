@@ -732,6 +732,40 @@ pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
         .collect())
 }
 
+/// The newest regularly numbered build of `kind` in `releases` that runs on
+/// this computer: never the `-latest` entry, which is replaced in place when
+/// the source publishes again.
+pub fn newest_numbered(releases: &[Release], kind: ReleaseKind, arch: &str) -> Option<Release> {
+    releases
+        .iter()
+        .filter(|r| r.kind == kind.type_str())
+        .filter(|r| !r.version.ends_with("-latest") && NUMBERED.is_match(&r.version))
+        .filter(|r| !r.download.is_empty() && is_compatible_download(&r.kind, &r.download, arch))
+        .fold(None::<&Release>, |best, r| match best {
+            Some(b) if b.date >= r.date => Some(b),
+            _ => Some(r),
+        })
+        .cloned()
+}
+
+/// The newest numbered build of `kind`, checked now (the user asked for
+/// it); the cached list stands in when the check fails.
+pub async fn newest_release(kind: ReleaseKind) -> Result<Release> {
+    let list = match update_releases(true, &[kind]).await {
+        Ok(list) => list,
+        Err(e) => {
+            let cached = cached_releases();
+            if !cached.iter().any(|r| r.kind == kind.type_str()) {
+                return Err(e);
+            }
+            tracing::warn!("{e:#}; using cached releases");
+            cached
+        }
+    };
+    newest_numbered(&list, kind, host_arch())
+        .with_context(|| format!("No {} build was found to download", kind.type_str()))
+}
+
 /// A build from Irori's Wine manager with something newer to install.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WineUpdate {
@@ -1509,6 +1543,38 @@ mod tests {
         assert_eq!(rel[1].version, "Wine-Kron4ek-10.17-staging");
         assert!(rel[1].download.ends_with("wine-10.17-staging-amd64.tar.xz"));
         assert!(releases_from_github(ReleaseKind::WineKron4ek, list, "aarch64").is_empty());
+    }
+
+    #[test]
+    fn the_newest_numbered_build_is_picked() {
+        let release = |version: &str, date: &str, url: &str| Release {
+            kind: "GE-Proton".into(),
+            version: version.into(),
+            date: date.into(),
+            download: url.into(),
+            ..Default::default()
+        };
+        let list = [
+            release("GE-Proton-latest", "2026-11-10", "x/GE-Proton10-25.tar.gz"),
+            release("GE-Proton10-24", "2026-10-01", "x/GE-Proton10-24.tar.gz"),
+            release("GE-Proton10-25", "2026-11-10", "x/GE-Proton10-25.tar.gz"),
+            release(
+                "GE-Proton10-26-rc",
+                "2026-11-12",
+                "x/GE-Proton10-26-rc.tar.gz",
+            ),
+            release(
+                "GE-Proton10-27",
+                "2026-11-15",
+                "x/GE-Proton10-27-arm64.tar.xz",
+            ),
+        ];
+        let pick = newest_numbered(&list, ReleaseKind::GeProton, "x86_64").unwrap();
+        assert_eq!(pick.version, "GE-Proton10-25");
+        assert_eq!(
+            newest_numbered(&list, ReleaseKind::ProtonCachyOs, "x86_64"),
+            None
+        );
     }
 
     #[test]

@@ -164,6 +164,8 @@
   "ui.wine.looking": "Wine 및 Proton 빌드 찾는 중…",
   "ui.wine.none": "Wine 또는 Proton 빌드를 찾을 수 없습니다. 플레이하기 전에 Wine 관리자에서 하나를 다운로드하세요.",
   "ui.wine.open_manager": "Wine 관리자 열기",
+  "ui.wine.installed": "{version} 설치 완료",
+  "ui.wine.install_failed": "{version}을(를) 설치할 수 없습니다",
   "ui.wine.prefix": "프리픽스",
   "ui.wine.prefix_help": "게임의 Windows 환경이 들어 있는 폴더입니다. 비워 두면 표시된 기본 위치를 사용합니다.",
   "ui.wine.browse": "찾아보기…",

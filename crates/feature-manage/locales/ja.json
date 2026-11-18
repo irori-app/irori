@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "残り {time}",
   "manage.wine.progress.starting": "開始中…",
-  "manage.wine.installed": "{version} をインストールしました",
-  "manage.wine.install_failed": "{version} をインストールできませんでした",
   "manage.onboarding.step": "ステップ {current}/{total}",
   "manage.onboarding.skip": "セットアップをスキップ",
   "manage.onboarding.back": "戻る",

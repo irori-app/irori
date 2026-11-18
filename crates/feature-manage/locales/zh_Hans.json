@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "剩余 {time}",
   "manage.wine.progress.starting": "正在开始…",
-  "manage.wine.installed": "{version} 已安装",
-  "manage.wine.install_failed": "无法安装 {version}",
   "manage.onboarding.step": "第 {current} 步，共 {total} 步",
   "manage.onboarding.skip": "跳过设置",
   "manage.onboarding.back": "返回",

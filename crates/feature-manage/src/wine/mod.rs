@@ -3,7 +3,6 @@
 //! system with the user's custom Wine paths.
 
 mod installed;
-mod ops;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -40,7 +39,9 @@ use irori_ui::{backend, models};
 use crate::common::{backend_op, notify_error};
 use crate::format;
 use installed::{WineOrigin, group, kind_label};
-use ops::{OpLive, WineOps, cancel_install, release_key, start_install, wine_ops};
+use irori_ui::wine_installs::{
+    OpLive, WineOps, cancel_install, release_key, start_install, wine_ops,
+};
 
 /// Repaint interval while installs report progress.
 const PROGRESS_TICK: Duration = Duration::from_millis(300);
@@ -456,7 +457,9 @@ impl WineManagerView {
                                 .small()
                                 .icon(IconName::RefreshCw)
                                 .label(t("manage.wine.update"))
-                                .on_click(move |_, _, cx| start_install(upd.clone(), cx)),
+                                .on_click(move |_, _, cx| {
+                                    start_install(upd.clone(), false, cx);
+                                }),
                         )
                     })
                     .child(
@@ -476,7 +479,9 @@ impl WineManagerView {
                     .small()
                     .icon(IconName::Download)
                     .label(t("manage.wine.install"))
-                    .on_click(move |_, _, cx| start_install(r.clone(), cx))
+                    .on_click(move |_, _, cx| {
+                        start_install(r.clone(), false, cx);
+                    })
                     .into_any_element()
             }
         };
@@ -718,10 +723,7 @@ impl WineManagerView {
 /// Inline progress of a running install.
 fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
     let progress = live.progress.unwrap_or_default();
-    let extracting = live
-        .step
-        .as_deref()
-        .is_some_and(|s| s.starts_with("Extracting"));
+    let extracting = live.extracting();
     let detail = if extracting {
         t("manage.wine.progress.extracting").to_string()
     } else {

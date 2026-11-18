@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "%{percent}",
   "manage.wine.progress.time_left": "{time} kaldı",
   "manage.wine.progress.starting": "Başlatılıyor…",
-  "manage.wine.installed": "{version} yüklendi",
-  "manage.wine.install_failed": "{version} yüklenemedi",
   "manage.onboarding.step": "Adım {current}/{total}",
   "manage.onboarding.skip": "Kurulumu atla",
   "manage.onboarding.back": "Geri",

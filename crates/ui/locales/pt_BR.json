@@ -164,6 +164,8 @@
   "ui.wine.looking": "Procurando versões do Wine e do Proton…",
   "ui.wine.none": "Nenhuma versão do Wine ou do Proton foi encontrada. Baixe uma no gerenciador do Wine antes de jogar.",
   "ui.wine.open_manager": "Abrir gerenciador do Wine",
+  "ui.wine.installed": "{version} está instalada",
+  "ui.wine.install_failed": "Não foi possível instalar {version}",
   "ui.wine.prefix": "Prefixo",
   "ui.wine.prefix_help": "A pasta que contém o ambiente Windows do jogo. Deixe em branco para usar a padrão mostrada.",
   "ui.wine.browse": "Procurar…",

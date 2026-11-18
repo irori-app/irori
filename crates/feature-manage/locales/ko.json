@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "{time} 남음",
   "manage.wine.progress.starting": "시작하는 중…",
-  "manage.wine.installed": "{version} 설치 완료",
-  "manage.wine.install_failed": "{version}을(를) 설치할 수 없습니다",
   "manage.onboarding.step": "{total}단계 중 {current}단계",
   "manage.onboarding.skip": "설정 건너뛰기",
   "manage.onboarding.back": "뒤로",

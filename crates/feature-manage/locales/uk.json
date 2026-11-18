@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "залишилось {time}",
   "manage.wine.progress.starting": "Запуск…",
-  "manage.wine.installed": "Встановлено: {version}",
-  "manage.wine.install_failed": "Не вдалося встановити {version}",
   "manage.onboarding.step": "Крок {current} з {total}",
   "manage.onboarding.skip": "Пропустити налаштування",
   "manage.onboarding.back": "Назад",

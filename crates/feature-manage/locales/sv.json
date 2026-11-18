@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent} %",
   "manage.wine.progress.time_left": "{time} kvar",
   "manage.wine.progress.starting": "Startar…",
-  "manage.wine.installed": "{version} är installerad",
-  "manage.wine.install_failed": "Det gick inte att installera {version}",
   "manage.onboarding.step": "Steg {current} av {total}",
   "manage.onboarding.skip": "Hoppa över konfigurationen",
   "manage.onboarding.back": "Tillbaka",

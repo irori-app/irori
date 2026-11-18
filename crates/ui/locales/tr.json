@@ -164,6 +164,8 @@
   "ui.wine.looking": "Wine ve Proton sürümleri aranıyor…",
   "ui.wine.none": "Hiç Wine veya Proton sürümü bulunamadı. Oynamadan önce Wine yöneticisinden bir tane indirin.",
   "ui.wine.open_manager": "Wine yöneticisini aç",
+  "ui.wine.installed": "{version} yüklendi",
+  "ui.wine.install_failed": "{version} yüklenemedi",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "Oyunun Windows ortamını barındıran klasör. Gösterilen varsayılanı kullanmak için boş bırakın.",
   "ui.wine.browse": "Gözat…",

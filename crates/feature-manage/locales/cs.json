@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent} %",
   "manage.wine.progress.time_left": "zbývá {time}",
   "manage.wine.progress.starting": "Spouštění…",
-  "manage.wine.installed": "{version} je nainstalováno",
-  "manage.wine.install_failed": "{version} se nepodařilo nainstalovat",
   "manage.onboarding.step": "Krok {current} z {total}",
   "manage.onboarding.skip": "Přeskočit nastavení",
   "manage.onboarding.back": "Zpět",

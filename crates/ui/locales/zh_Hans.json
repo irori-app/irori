@@ -164,6 +164,8 @@
   "ui.wine.looking": "正在查找 Wine 和 Proton 版本…",
   "ui.wine.none": "未找到任何 Wine 或 Proton 版本。请在游玩前于 Wine 管理器中下载一个。",
   "ui.wine.open_manager": "打开 Wine 管理器",
+  "ui.wine.installed": "{version} 已安装",
+  "ui.wine.install_failed": "无法安装 {version}",
   "ui.wine.prefix": "前缀",
   "ui.wine.prefix_help": "存放游戏 Windows 环境的文件夹。留空则使用显示的默认位置。",
   "ui.wine.browse": "浏览…",

@@ -164,6 +164,8 @@
   "ui.wine.looking": "Zoeken naar Wine- en Proton-versies…",
   "ui.wine.none": "Geen Wine- of Proton-versie gevonden. Download er een in Wine-beheer voordat je gaat spelen.",
   "ui.wine.open_manager": "Wine-beheer openen",
+  "ui.wine.installed": "{version} is geïnstalleerd",
+  "ui.wine.install_failed": "Kan {version} niet installeren",
   "ui.wine.prefix": "Prefix",
   "ui.wine.prefix_help": "De map met de Windows-omgeving van de game. Laat leeg voor de getoonde standaardmap.",
   "ui.wine.browse": "Bladeren…",

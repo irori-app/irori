@@ -482,7 +482,11 @@ commands without a window.
   (`releases.atom`, not counted by GitHub) before the API and skip the API when it is
   unchanged; GitHub's `x-ratelimit-*` budget is kept in `state/wine-release-checks.json`,
   automatic checks leave a reserve of 10 calls, and a used-up budget is a typed
-  `RateLimited` the Wine manager shows with its reset time.
+  `RateLimited` the Wine manager shows with its reset time. Wine and Proton installs run
+  through `irori_ui::wine_installs` (one global entity), so the Wine manager and the
+  install sheet show the same download; with no Wine or Proton at all, the install sheet
+  offers "Download GE-Proton" (the newest numbered release, `manager::newest_release`),
+  which becomes the default Wine once installed.
 - **User data:** favourites, hidden games, categories, recents, playtime, play
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store

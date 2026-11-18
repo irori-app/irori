@@ -332,8 +332,6 @@
   "manage.wine.progress.percent": "{percent}%",
   "manage.wine.progress.time_left": "{time} rimanenti",
   "manage.wine.progress.starting": "Avvio…",
-  "manage.wine.installed": "{version} è installata",
-  "manage.wine.install_failed": "Impossibile installare {version}",
   "manage.onboarding.step": "Passo {current} di {total}",
   "manage.onboarding.skip": "Salta configurazione",
   "manage.onboarding.back": "Indietro",
