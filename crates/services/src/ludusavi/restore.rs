@@ -266,7 +266,7 @@ pub fn plan(
             });
         }
     }
-    redirects.sort_by(|a, b| b.source.len().cmp(&a.source.len()));
+    redirects.sort_by_key(|r| std::cmp::Reverse(r.source.len()));
 
     let planned = files
         .into_iter()

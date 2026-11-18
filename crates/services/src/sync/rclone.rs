@@ -361,7 +361,9 @@ mod tests {
         let found = locate_from("", &|_| Some("/usr/bin/rclone".into()), &[]).unwrap();
         assert_eq!(found.program, PathBuf::from("/usr/bin/rclone"));
         assert_eq!(
-            locate_from("", &none, &[chosen.clone()]).unwrap().program,
+            locate_from("", &none, std::slice::from_ref(&chosen))
+                .unwrap()
+                .program,
             chosen
         );
     }
