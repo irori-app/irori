@@ -46,6 +46,7 @@ pub mod scripts;
 pub mod search;
 pub mod sessions;
 pub mod settings;
+mod settings_migration;
 pub mod smart_categories;
 pub mod status;
 mod steam_tags;

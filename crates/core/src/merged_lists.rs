@@ -120,6 +120,20 @@ pub fn own_entries(base: Option<&Value>, wanted: &Value, field: &str) -> Option<
     Some(Value::Array(whole))
 }
 
+/// A list written before lists merged, when it replaced `base` whole, as
+/// the override that still reads exactly as it did: `None` when merging
+/// already gives the same list (it copied every default entry it meant to
+/// keep), else its own entries and removals of the default entries it left
+/// out.
+pub fn from_whole_list(base: Option<&Value>, old: &Value, field: &str) -> Option<Value> {
+    if !old.is_array() || merge(base, old, field) == *old {
+        return None;
+    }
+    // `own_entries` is `None` only when `old` equals `base`, which merges
+    // to itself and returned above.
+    own_entries(base, old, field)
+}
+
 fn removal(key: Option<&Value>, field: &str) -> Value {
     let mut entry = Map::new();
     entry.insert(field.to_string(), key.cloned().unwrap_or(Value::Null));

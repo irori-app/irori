@@ -35,6 +35,56 @@ pub const TITLE_KEY: &str = "iroriLudusaviTitle";
 /// done once per game.
 static MATCHES: Lazy<Mutex<HashMap<String, Option<String>>>> = Lazy::new(Default::default);
 
+/// Names the wider search found ([`Backend::ludusavi_fallback`]), kept in
+/// `<cache>/ludusavi-names.json` by game key apart from the user's choice.
+/// Each remembers the title it was found for, so a renamed game searches
+/// again.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct FoundName {
+    for_title: String,
+    name: String,
+}
+
+/// Serialises reads and writes of the found names file.
+static FOUND_FILE: Mutex<()> = parking_lot::const_mutex(());
+
+fn found_names_file() -> PathBuf {
+    irori_core::Paths::get().cache.join("ludusavi-names.json")
+}
+
+/// The name found earlier for `key` while its title was `title`.
+fn found_name(key: &str, title: &str) -> Option<String> {
+    let _guard = FOUND_FILE.lock();
+    let names: HashMap<String, FoundName> =
+        irori_core::json_store::read_or_default(&found_names_file());
+    names
+        .get(key)
+        .filter(|f| f.for_title == title)
+        .map(|f| f.name.clone())
+}
+
+/// Forget this session's matches, as a restart does.
+#[cfg(test)]
+pub(crate) fn forget_matches_for_test() {
+    MATCHES.lock().clear();
+}
+
+fn remember_found_name(key: &str, title: &str, name: &str) {
+    let _guard = FOUND_FILE.lock();
+    let file = found_names_file();
+    let mut names: HashMap<String, FoundName> = irori_core::json_store::read_or_default(&file);
+    names.insert(
+        key.to_string(),
+        FoundName {
+            for_title: title.to_string(),
+            name: name.to_string(),
+        },
+    );
+    if let Err(e) = irori_core::json_store::write(&file, &names) {
+        tracing::warn!("keeping Ludusavi's name of {key}: {e:#}");
+    }
+}
+
 /// The installed Ludusavi, for the settings page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LudusaviInfo {
@@ -255,12 +305,18 @@ impl Backend {
             .next()
             .map(|m| m.title);
         if found.is_none() {
-            found = self.ludusavi_fallback(&ludusavi, &game).await?;
-            // Kept as the game's title, so the wider search runs once.
-            if let Some(title) = &found {
-                self.settings
-                    .set_game_value(id, TITLE_KEY, Some(Value::String(title.clone())));
-            }
+            found = match found_name(&id.key(), &game.title) {
+                Some(name) => Some(name),
+                None => {
+                    let name = self.ludusavi_fallback(&ludusavi, &game).await?;
+                    // Kept apart from the user's choice, so the wider
+                    // search runs once.
+                    if let Some(name) = &name {
+                        remember_found_name(&id.key(), &game.title, name);
+                    }
+                    name
+                }
+            };
         }
         MATCHES.lock().insert(id.key(), found.clone());
         Ok(found)

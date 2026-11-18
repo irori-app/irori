@@ -378,8 +378,11 @@ and `launch.rs` before changing anything below the UI.
   `path`) merge by key: a game's override holds only its own entries, laid over the
   defaults' list, and `{"key": "X", "iroriRemoved": true}` takes a default entry out for
   that game. Write a game's list through `GameSettingsOverrides::override_value` (the
-  settings form and `diff` do), which stores just those entries; older files that
-  copied the whole list read the same.
+  settings form and `diff` do), which stores just those entries. Game settings and
+  backups written before the merge, whose lists replaced the defaults' whole, are
+  rewritten once with removals of the default entries they left out
+  (`irori-services`' `settings_migration.rs`, recorded in `state/migrations.json`), so
+  every game keeps the list it had.
 - Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
   from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
   as overrides (variables, wrappers and programs merge by key into the current list),
@@ -650,7 +653,9 @@ commands without a window.
   nothing, the title without its region or revision tags is tried, then, for a game
   played in an emulator, the name an emulator manifest gives it (`… (PS2)`,
   `… (RetroArch)`, from Ludusavi's fuzzy search over the title and the ROM's name,
-  `ludusavi/names.rs`); a name found that way is kept as `iroriLudusaviTitle`. Windows games pass
+  `ludusavi/names.rs`); a name found that way is kept in `<cache>/ludusavi-names.json`
+  by game key and the title it was found for (a renamed game searches again), never as
+  the user's choice. Windows games pass
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
