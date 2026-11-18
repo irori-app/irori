@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Donker systeemvakpictogram",
   "settings.field.default_install_path.help": "Hier worden nieuwe games geïnstalleerd, tenzij je een andere map kiest.",
   "settings.field.default_install_path.label": "Standaard installatiemap",
+  "settings.field.install_per_store.help": "Nieuwe installaties komen in een map per winkel binnen de standaardinstallatiemap, zoals GOG/Cyberpunk 2077. Games die al geïnstalleerd zijn, blijven waar ze zijn.",
+  "settings.field.install_per_store.label": "Een map per winkel",
   "settings.field.default_size": "Standaardgrootte",
   "settings.field.default_steam_path.help": "Hier leest Irori je geïnstalleerde Steam-games en de Proton-versies van Steam, en voegt het games aan Steam toe.",
   "settings.field.default_steam_path.label": "Steam-map",

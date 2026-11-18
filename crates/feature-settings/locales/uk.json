@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Темна піктограма в лотку",
   "settings.field.default_install_path.help": "Сюди встановлюються нові ігри, якщо не вибрано іншої теки.",
   "settings.field.default_install_path.label": "Типова тека встановлення",
+  "settings.field.install_per_store.help": "Нові встановлення потрапляють в окрему теку кожної крамниці всередині типової теки встановлення, наприклад GOG/Cyberpunk 2077. Уже встановлені ігри залишаються на місці.",
+  "settings.field.install_per_store.label": "Окрема тека для кожної крамниці",
   "settings.field.default_size": "Типовий розмір",
   "settings.field.default_steam_path.help": "Звідси Irori читає встановлені ігри Steam і збірки Proton зі Steam та додає ігри до Steam.",
   "settings.field.default_steam_path.label": "Тека Steam",

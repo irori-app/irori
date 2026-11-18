@@ -666,7 +666,7 @@ impl Store for AmazonStore {
     ) -> Result<Outcome> {
         let game = self.require_game(app_name)?;
         let base = if request.path.as_os_str().is_empty() {
-            PathBuf::from(&(self.settings)().default_install_path)
+            PathBuf::from((self.settings)().install_folder(Runner::Nile))
         } else {
             request.path.clone()
         };

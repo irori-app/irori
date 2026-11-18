@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "어두운 트레이 아이콘",
   "settings.field.default_install_path.help": "다른 폴더를 선택하지 않으면 새 게임이 이곳에 설치됩니다.",
   "settings.field.default_install_path.label": "기본 설치 폴더",
+  "settings.field.install_per_store.help": "새로 설치하는 게임은 기본 설치 폴더 안의 스토어별 폴더(예: GOG/Cyberpunk 2077)에 들어갑니다. 이미 설치된 게임은 그대로 둡니다.",
+  "settings.field.install_per_store.label": "스토어별 폴더",
   "settings.field.default_size": "기본 크기",
   "settings.field.default_steam_path.help": "Irori가 설치된 Steam 게임과 Steam의 Proton 빌드를 읽고 Steam에 게임을 추가하는 위치입니다.",
   "settings.field.default_steam_path.label": "Steam 폴더",

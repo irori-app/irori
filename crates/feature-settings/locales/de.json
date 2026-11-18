@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Dunkles Taskleistensymbol",
   "settings.field.default_install_path.help": "Hier werden neue Spiele installiert, sofern kein anderer Ordner gewählt wird.",
   "settings.field.default_install_path.label": "Standard-Installationsordner",
+  "settings.field.install_per_store.help": "Neue Installationen landen in einem Ordner pro Store innerhalb des Standard-Installationsordners, etwa GOG/Cyberpunk 2077. Bereits installierte Spiele bleiben, wo sie sind.",
+  "settings.field.install_per_store.label": "Ein Ordner pro Store",
   "settings.field.default_size": "Standardgröße",
   "settings.field.default_steam_path.help": "Hier liest Irori deine installierten Steam-Spiele und die Proton-Versionen von Steam und fügt Spiele zu Steam hinzu.",
   "settings.field.default_steam_path.label": "Steam-Ordner",

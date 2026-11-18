@@ -148,7 +148,9 @@ impl ItchStore {
     }
 
     pub(crate) async fn has_partial_download(&self, app: &str) -> bool {
-        let base = irori_core::paths::expand_home(&(self.settings)().default_install_path);
+        let base = irori_core::paths::expand_home(
+            &(self.settings)().install_folder(irori_core::Runner::Itch),
+        );
         tokio::fs::try_exists(self.staging_dir(app, &base))
             .await
             .unwrap_or(false)

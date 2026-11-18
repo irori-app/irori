@@ -597,7 +597,7 @@ impl Store for ZoomStore {
             .game(app_name)
             .with_context(|| format!("{app_name} is not in your ZOOM Platform library"))?;
         let base = if request.path.as_os_str().is_empty() {
-            irori_core::paths::expand_home(&(self.settings)().default_install_path)
+            irori_core::paths::expand_home(&(self.settings)().install_folder(Runner::Zoom))
         } else {
             irori_core::paths::expand_home(&request.path.to_string_lossy())
         };

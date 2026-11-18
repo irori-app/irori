@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Тёмный значок в трее",
   "settings.field.default_install_path.help": "Сюда устанавливаются новые игры, если не выбрана другая папка.",
   "settings.field.default_install_path.label": "Папка установки по умолчанию",
+  "settings.field.install_per_store.help": "Новые установки попадают в отдельную папку каждого магазина внутри папки установки по умолчанию, например GOG/Cyberpunk 2077. Уже установленные игры остаются на месте.",
+  "settings.field.install_per_store.label": "Отдельная папка для каждого магазина",
   "settings.field.default_size": "Размер по умолчанию",
   "settings.field.default_steam_path.help": "Отсюда Irori читает установленные игры Steam и сборки Proton из Steam и добавляет игры в Steam.",
   "settings.field.default_steam_path.label": "Папка Steam",

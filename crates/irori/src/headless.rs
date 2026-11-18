@@ -430,7 +430,7 @@ async fn install(backend: &Backend, args: &[String]) -> Result<i32> {
         });
     let path = flag_value(args, "--path")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(&backend.settings.app().default_install_path));
+        .unwrap_or_else(|| PathBuf::from(backend.settings.app().install_folder(id.runner)));
     let info = store
         .install_info(&id.app_name, platform, &InstallInfoQuery::default())
         .await?;

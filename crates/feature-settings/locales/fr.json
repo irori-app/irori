@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Icône sombre dans la zone de notification",
   "settings.field.default_install_path.help": "Emplacement d’installation des nouveaux jeux, sauf si vous choisissez un autre dossier.",
   "settings.field.default_install_path.label": "Dossier d’installation par défaut",
+  "settings.field.install_per_store.help": "Les nouvelles installations vont dans un dossier par boutique à l’intérieur du dossier d’installation par défaut, comme GOG/Cyberpunk 2077. Les jeux déjà installés restent où ils sont.",
+  "settings.field.install_per_store.label": "Un dossier par boutique",
   "settings.field.default_size": "Taille par défaut",
   "settings.field.default_steam_path.help": "Irori y lit vos jeux Steam installés et les versions de Proton de Steam, et y ajoute des jeux à Steam.",
   "settings.field.default_steam_path.label": "Dossier de Steam",

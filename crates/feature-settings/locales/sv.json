@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Mörk ikon i systemfältet",
   "settings.field.default_install_path.help": "Här installeras nya spel om du inte väljer en annan mapp.",
   "settings.field.default_install_path.label": "Standardmapp för installation",
+  "settings.field.install_per_store.help": "Nya installationer hamnar i en mapp per butik i standardmappen för installationer, till exempel GOG/Cyberpunk 2077. Spel som redan är installerade ligger kvar där de är.",
+  "settings.field.install_per_store.label": "En mapp per butik",
   "settings.field.default_size": "Standardstorlek",
   "settings.field.default_steam_path.help": "Här läser Irori dina installerade Steam-spel och Steams Proton-versioner, och lägger till spel i Steam.",
   "settings.field.default_steam_path.label": "Steam-mapp",

@@ -69,7 +69,7 @@ impl BigPictureView {
             }
             GameAction::Install => {
                 let app = models(cx).settings.read(cx).app.clone();
-                let dir = irori_core::paths::expand_home(&app.default_install_path);
+                let dir = irori_core::paths::expand_home(&app.install_folder(id.runner));
                 let platform = platform.unwrap_or_else(|| default_platform(&game));
                 let id = id.clone();
                 let game = game.clone();

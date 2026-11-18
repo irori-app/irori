@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "深色系統列圖示",
   "settings.field.default_install_path.help": "新遊戲預設安裝在此處，除非你選擇其他資料夾。",
   "settings.field.default_install_path.label": "預設安裝資料夾",
+  "settings.field.install_per_store.help": "新安裝的遊戲會放在預設安裝資料夾中依商店區分的資料夾裡，例如 GOG/Cyberpunk 2077。已安裝的遊戲保持原位。",
+  "settings.field.install_per_store.label": "每個商店一個資料夾",
   "settings.field.default_size": "預設大小",
   "settings.field.default_steam_path.help": "Irori 從這裡讀取已安裝的 Steam 遊戲和 Steam 的 Proton 版本，並將遊戲加入 Steam。",
   "settings.field.default_steam_path.label": "Steam 資料夾",

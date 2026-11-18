@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "深色托盘图标",
   "settings.field.default_install_path.help": "新游戏默认安装到此处，除非你选择其他文件夹。",
   "settings.field.default_install_path.label": "默认安装文件夹",
+  "settings.field.install_per_store.help": "新安装的游戏会放在默认安装文件夹中按商店划分的文件夹里，例如 GOG/Cyberpunk 2077。已安装的游戏保持原位。",
+  "settings.field.install_per_store.label": "每个商店一个文件夹",
   "settings.field.default_size": "默认大小",
   "settings.field.default_steam_path.help": "Irori 从这里读取已安装的 Steam 游戏和 Steam 的 Proton 版本，并将游戏添加到 Steam。",
   "settings.field.default_steam_path.label": "Steam 文件夹",

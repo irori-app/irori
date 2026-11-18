@@ -667,6 +667,10 @@ pub struct AppSettings {
     pub custom_wine_paths: Vec<String>,
     pub dark_tray_icon: bool,
     pub default_install_path: String,
+    /// Install each store's games in a folder of the store's own inside
+    /// `defaultInstallPath` (`Games/Irori/GOG/<game>`). Irori-only.
+    #[serde(rename = "iroriInstallPerStore")]
+    pub install_per_store: bool,
     pub default_steam_path: String,
     pub default_wine_prefix_dir: String,
     pub disable_controller: bool,
@@ -870,6 +874,7 @@ impl Default for AppSettings {
             custom_wine_paths: Vec::new(),
             dark_tray_icon: false,
             default_install_path: games.to_string_lossy().into_owned(),
+            install_per_store: false,
             default_steam_path: crate::platform::steam_dir().to_string_lossy().into_owned(),
             default_wine_prefix_dir: games.join("Prefixes").to_string_lossy().into_owned(),
             disable_controller: false,
@@ -1317,6 +1322,34 @@ impl AppSettings {
         };
         (!id.is_empty()).then(|| id.to_string())
     }
+
+    /// The folder new installs of a store's games are offered, as the user
+    /// wrote it (`~` unexpanded): `defaultInstallPath`, and with
+    /// `iroriInstallPerStore` the store's own folder inside it, named as the
+    /// store is (`Epic Games`, `GOG`). Stores whose games Irori doesn't
+    /// install, and added games, keep `defaultInstallPath`.
+    pub fn install_folder(&self, runner: Runner) -> String {
+        let base = self.default_install_path.as_str();
+        if !self.install_per_store || base.trim().is_empty() || !installs_per_store(runner) {
+            return base.to_string();
+        }
+        let separator = if base.contains('\\') && !base.contains('/') {
+            '\\'
+        } else {
+            '/'
+        };
+        let base = base.trim_end_matches(['/', '\\']);
+        format!("{base}{separator}{}", runner.store_name())
+    }
+}
+
+/// Whether a store's games get a folder of the store's own with
+/// `iroriInstallPerStore`: the stores Irori downloads games from.
+fn installs_per_store(runner: Runner) -> bool {
+    matches!(
+        runner,
+        Runner::Legendary | Runner::Gog | Runner::Nile | Runner::Zoom | Runner::Itch | Runner::Xbox
+    )
 }
 
 /// Shader cache room games get unless the user changes it, in GiB.
@@ -1499,6 +1532,30 @@ mod tests {
             serde_json::from_str(r#"{"emberItchIo": true, "emberEngine": "mgba"}"#).unwrap();
         assert!(app.itch_io);
         assert_eq!(serde_json::to_value(&app).unwrap()["iroriEngine"], "mgba");
+    }
+
+    #[test]
+    fn stores_can_install_in_folders_of_their_own() {
+        let mut app: AppSettings =
+            serde_json::from_str(r#"{"defaultInstallPath": "~/Games/Irori/"}"#).unwrap();
+        assert!(!app.install_per_store, "off unless the user turns it on");
+        assert_eq!(app.install_folder(Runner::Gog), "~/Games/Irori/");
+        app.install_per_store = true;
+        assert_eq!(app.install_folder(Runner::Gog), "~/Games/Irori/GOG");
+        assert_eq!(
+            app.install_folder(Runner::Legendary),
+            "~/Games/Irori/Epic Games"
+        );
+        assert_eq!(app.install_folder(Runner::Itch), "~/Games/Irori/itch.io");
+        // Games Irori doesn't download keep the folder itself.
+        assert_eq!(app.install_folder(Runner::Sideload), "~/Games/Irori/");
+        assert_eq!(app.install_folder(Runner::Steam), "~/Games/Irori/");
+        app.default_install_path = r"D:\Games".into();
+        assert_eq!(app.install_folder(Runner::Nile), r"D:\Games\Amazon Games");
+        app.default_install_path = String::new();
+        assert_eq!(app.install_folder(Runner::Gog), "");
+        let json = serde_json::to_value(&app).unwrap();
+        assert_eq!(json["iroriInstallPerStore"], true);
     }
 
     #[test]

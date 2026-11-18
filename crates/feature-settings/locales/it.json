@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Icona scura nell'area di notifica",
   "settings.field.default_install_path.help": "Dove vengono installati i nuovi giochi, a meno che tu non scelga un'altra cartella.",
   "settings.field.default_install_path.label": "Cartella di installazione predefinita",
+  "settings.field.install_per_store.help": "Le nuove installazioni vanno in una cartella per negozio dentro la cartella di installazione predefinita, ad esempio GOG/Cyberpunk 2077. I giochi già installati restano dove sono.",
+  "settings.field.install_per_store.label": "Una cartella per negozio",
   "settings.field.default_size": "Dimensione predefinita",
   "settings.field.default_steam_path.help": "Da qui Irori legge i giochi Steam installati e le versioni di Proton di Steam, e aggiunge giochi a Steam.",
   "settings.field.default_steam_path.label": "Cartella di Steam",

@@ -660,7 +660,7 @@ impl Backend {
         if let Some(launcher) = &info.third_party_managed_app {
             bail!("{} is installed through {launcher}", game.title);
         }
-        let dir = irori_core::paths::expand_home(&self.settings.app().default_install_path);
+        let dir = irori_core::paths::expand_home(&self.settings.app().install_folder(id.runner));
         let request = irori_core::InstallRequest::with_defaults(&info, &dir, platform);
         self.enqueue_install(id.clone(), game.title.clone(), request, info.download_size);
         Ok(())

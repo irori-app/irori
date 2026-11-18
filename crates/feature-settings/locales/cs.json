@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Tmavá ikona v systémové oblasti",
   "settings.field.default_install_path.help": "Sem se instalují nové hry, pokud nevyberete jinou složku.",
   "settings.field.default_install_path.label": "Výchozí složka pro instalace",
+  "settings.field.install_per_store.help": "Nové instalace půjdou do složky pro každý obchod uvnitř výchozí instalační složky, například GOG/Cyberpunk 2077. Již nainstalované hry zůstanou, kde jsou.",
+  "settings.field.install_per_store.label": "Složka pro každý obchod",
   "settings.field.default_size": "Výchozí velikost",
   "settings.field.default_steam_path.help": "Odtud Irori načítá nainstalované hry ze Steamu a sestavení Proton ze Steamu a sem přidává hry do Steamu.",
   "settings.field.default_steam_path.label": "Složka Steamu",

@@ -1210,6 +1210,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.default_install_path.help")
     .keywords(&["path", "directory", "games"]),
     app(
+        "iroriInstallPerStore",
+        "settings.field.install_per_store.label",
+        General,
+        "settings.group.folders",
+        Toggle,
+    )
+    .help("settings.field.install_per_store.help")
+    .keywords(&["path", "directory", "folder", "store", "install"]),
+    app(
         "defaultWinePrefixDir",
         "settings.field.default_wine_prefix_dir.label",
         General,

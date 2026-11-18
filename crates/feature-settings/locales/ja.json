@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "ダークトレイアイコン",
   "settings.field.default_install_path.help": "別のフォルダーを選ばない限り、新しいゲームはここにインストールされます。",
   "settings.field.default_install_path.label": "既定のインストールフォルダー",
+  "settings.field.install_per_store.help": "新しいインストールは、既定のインストールフォルダー内のストアごとのフォルダー（例: GOG/Cyberpunk 2077）に入ります。インストール済みのゲームはそのままです。",
+  "settings.field.install_per_store.label": "ストアごとのフォルダー",
   "settings.field.default_size": "既定のサイズ",
   "settings.field.default_steam_path.help": "Irori はここからインストール済みの Steam ゲームと Steam の Proton を読み込み、Steam にゲームを追加します。",
   "settings.field.default_steam_path.label": "Steamフォルダー",

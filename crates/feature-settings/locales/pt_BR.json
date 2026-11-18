@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Ícone escuro na bandeja",
   "settings.field.default_install_path.help": "Onde novos jogos são instalados, a menos que você escolha outra pasta.",
   "settings.field.default_install_path.label": "Pasta de instalação padrão",
+  "settings.field.install_per_store.help": "Novas instalações vão para uma pasta por loja dentro da pasta de instalação padrão, como GOG/Cyberpunk 2077. Jogos já instalados continuam onde estão.",
+  "settings.field.install_per_store.label": "Uma pasta para cada loja",
   "settings.field.default_size": "Tamanho padrão",
   "settings.field.default_steam_path.help": "É daqui que o Irori lê seus jogos instalados do Steam e as versões do Proton do Steam, e adiciona jogos ao Steam.",
   "settings.field.default_steam_path.label": "Pasta do Steam",

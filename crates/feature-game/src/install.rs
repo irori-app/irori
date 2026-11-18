@@ -198,7 +198,7 @@ impl InstallSheet {
         let owners = if owners.len() > 1 { owners } else { Vec::new() };
         let account = owners.first().map(|(id, _)| id.clone());
 
-        let default_path = app.default_install_path.clone();
+        let default_path = app.install_folder(id.runner);
         let path = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t("game.install.path_placeholder"))

@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Koyu tepsi simgesi",
   "settings.field.default_install_path.help": "Başka bir klasör seçmediğiniz sürece yeni oyunlar buraya kurulur.",
   "settings.field.default_install_path.label": "Varsayılan kurulum klasörü",
+  "settings.field.install_per_store.help": "Yeni kurulumlar, varsayılan kurulum klasörünün içinde her mağaza için ayrı bir klasöre gider; örneğin GOG/Cyberpunk 2077. Zaten kurulu oyunlar oldukları yerde kalır.",
+  "settings.field.install_per_store.label": "Her mağaza için bir klasör",
   "settings.field.default_size": "Varsayılan boyut",
   "settings.field.default_steam_path.help": "Irori, yüklü Steam oyunlarınızı ve Steam’in Proton sürümlerini buradan okur; oyunları Steam’e de buradan ekler.",
   "settings.field.default_steam_path.label": "Steam klasörü",

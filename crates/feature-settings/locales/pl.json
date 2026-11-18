@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Ciemna ikona w zasobniku",
   "settings.field.default_install_path.help": "Tu instalowane są nowe gry, chyba że wybierzesz inny folder.",
   "settings.field.default_install_path.label": "Domyślny folder instalacji",
+  "settings.field.install_per_store.help": "Nowe instalacje trafiają do osobnego folderu dla każdego sklepu w domyślnym folderze instalacji, np. GOG/Cyberpunk 2077. Już zainstalowane gry zostają tam, gdzie są.",
+  "settings.field.install_per_store.label": "Osobny folder dla każdego sklepu",
   "settings.field.default_size": "Domyślny rozmiar",
   "settings.field.default_steam_path.help": "Stąd Irori odczytuje zainstalowane gry ze Steama i wersje Protona ze Steama oraz dodaje gry do Steama.",
   "settings.field.default_steam_path.label": "Folder Steama",

@@ -265,6 +265,8 @@
   "settings.field.dark_tray_icon.label": "Dark tray icon",
   "settings.field.default_install_path.help": "Where new games are installed unless you pick another folder.",
   "settings.field.default_install_path.label": "Default install folder",
+  "settings.field.install_per_store.help": "New installs go in a folder per store inside the default install folder, such as GOG/Cyberpunk 2077. Games already installed stay where they are.",
+  "settings.field.install_per_store.label": "A folder for each store",
   "settings.field.default_size": "Default size",
   "settings.field.default_steam_path.help": "Where Irori reads your installed Steam games and Steam’s Proton builds, and adds games to Steam.",
   "settings.field.default_steam_path.label": "Steam folder",
