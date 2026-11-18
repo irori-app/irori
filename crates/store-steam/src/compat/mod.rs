@@ -1,14 +1,17 @@
-//! Choosing the Steam Play compatibility tool (the Proton build) Steam runs
-//! a game with: the tools installed ([`tools`]), the game's choice in
-//! Steam's `config/config.vdf` ([`mapping`]), and the rules for changing it.
+//! Steam's own per-game settings Irori changes: the Steam Play compatibility
+//! tool (the Proton build) Steam runs a game with, from the tools installed
+//! ([`tools`]) into Steam's `config/config.vdf` ([`mapping`]), and the
+//! game's launch options in the account's `localconfig.vdf`
+//! ([`launch_options`]), with the rules for changing them.
 //!
-//! Steam reads `config.vdf` when it starts and writes it back when it
+//! Steam reads both files when it starts and writes them back when it
 //! exits, so a change made while it runs would be lost and could clobber
-//! Steam's own. The file is therefore written only while Steam is closed;
-//! closing it is the user's call ([`close_steam`]). Before each write the
-//! previous file is kept as `config.vdf.irori-backup`, and the new one
-//! replaces it atomically.
+//! Steam's own. The files are therefore written only while Steam is closed;
+//! closing it is the user's call ([`close_steam`]), never in Steam's Game
+//! Mode. Before each write the previous file is kept as
+//! `<file>.irori-backup`, and the new one replaces it atomically.
 
+mod launch_options;
 mod mapping;
 mod tools;
 
@@ -19,7 +22,19 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, bail};
 use irori_core::host;
 
+pub use launch_options::{COMMAND, variable, with_variable, without_dll_overrides};
 pub use tools::{CompatTool, ToolSource};
+
+/// What a game's launch options in Steam show.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchOptionsState {
+    /// The line Steam starts the game with; `None` when there is none.
+    pub line: Option<String>,
+    /// Steam runs now, so the line can't be written.
+    pub steam_running: bool,
+    /// Irori may close Steam (not in Steam's Game Mode).
+    pub can_close_steam: bool,
+}
 
 /// What the compatibility tool choice of one game shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +57,7 @@ pub struct SteamRunning;
 
 impl fmt::Display for SteamRunning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Steam is running. Close Steam to change the compatibility tool.")
+        f.write_str("Steam is running. Close Steam to change its settings for the game.")
     }
 }
 
@@ -95,27 +110,110 @@ pub(crate) async fn set_compat_tool(
 /// Write the mapping into `steam_dir`'s settings file, keeping the previous
 /// file as the backup. `false` when the file already said so. Blocking.
 fn write_mapping(steam_dir: &Path, app_id: &str, tool: Option<&str>) -> Result<bool> {
-    let config = config_file(steam_dir);
-    let text = match std::fs::read_to_string(&config) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            bail!("Steam has no settings file yet. Start Steam once, close it and try again.")
-        }
-        Err(e) => return Err(e).with_context(|| format!("Couldn't read {}", config.display())),
-    };
-    let edited = mapping::set_compat_tool(&text, app_id, tool)?;
-    if edited == text {
+    let changed = edit_file(&config_file(steam_dir), &backup_file(steam_dir), |text| {
+        mapping::set_compat_tool(text, app_id, tool)
+    })?;
+    if !changed {
         return Ok(false);
     }
-    irori_core::json_store::write_bytes(&backup_file(steam_dir), text.as_bytes())
-        .with_context(|| format!("Couldn't keep a copy of {}", config.display()))?;
-    irori_core::json_store::write_bytes(&config, edited.as_bytes())
-        .with_context(|| format!("Couldn't save {}", config.display()))?;
     tracing::info!(
         "Steam app {app_id} now uses {}",
         tool.unwrap_or("Steam's default compatibility tool")
     );
     Ok(true)
+}
+
+/// Rewrite one of Steam's settings files with `edit`, keeping the previous
+/// file as `backup`. `false` when the edit changed nothing. Blocking.
+fn edit_file(
+    file: &Path,
+    backup: &Path,
+    edit: impl FnOnce(&str) -> Result<String>,
+) -> Result<bool> {
+    let text = match std::fs::read_to_string(file) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            bail!("Steam has no settings file yet. Start Steam once, close it and try again.")
+        }
+        Err(e) => return Err(e).with_context(|| format!("Couldn't read {}", file.display())),
+    };
+    let edited = edit(&text)?;
+    if edited == text {
+        return Ok(false);
+    }
+    irori_core::json_store::write_bytes(backup, text.as_bytes())
+        .with_context(|| format!("Couldn't keep a copy of {}", file.display()))?;
+    irori_core::json_store::write_bytes(file, edited.as_bytes())
+        .with_context(|| format!("Couldn't save {}", file.display()))?;
+    Ok(true)
+}
+
+/// The account's `localconfig.vdf`: the signed-in account's (`steamid`),
+/// else the user Steam remembers as the latest here.
+fn localconfig_file(steam_dir: &Path, steamid: Option<&str>) -> Result<PathBuf> {
+    crate::hidden::user_dir(steam_dir, steamid)
+        .map(|dir| dir.join("config").join("localconfig.vdf"))
+        .context("Steam has no account on this computer yet. Sign in to Steam once and try again.")
+}
+
+/// The launch options of `app_id` and whether they can be written now.
+pub(crate) async fn launch_options_state(
+    steam_dir: &Path,
+    steamid: Option<String>,
+    app_id: &str,
+) -> Result<LaunchOptionsState> {
+    let dir = steam_dir.to_path_buf();
+    let id = app_id.to_string();
+    let line = tokio::task::spawn_blocking(move || -> Result<Option<String>> {
+        let file = localconfig_file(&dir, steamid.as_deref())?;
+        Ok(std::fs::read_to_string(file)
+            .ok()
+            .and_then(|text| launch_options::launch_options(&text, &id)))
+    })
+    .await??;
+    Ok(LaunchOptionsState {
+        line,
+        steam_running: steam_running().await?,
+        can_close_steam: !irori_core::platform::in_steam_gamepad_ui(),
+    })
+}
+
+/// Set the launch options of `app_id` to `line`, or clear them for `None`.
+/// Fails with [`SteamRunning`] while Steam runs.
+pub(crate) async fn set_launch_options(
+    steam_dir: &Path,
+    steamid: Option<String>,
+    app_id: &str,
+    line: Option<String>,
+) -> Result<()> {
+    if steam_running().await? {
+        return Err(SteamRunning.into());
+    }
+    let dir = steam_dir.to_path_buf();
+    let id = app_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        write_launch_options(
+            &localconfig_file(&dir, steamid.as_deref())?,
+            &id,
+            line.as_deref(),
+        )
+    })
+    .await??;
+    Ok(())
+}
+
+/// Write the launch options into `file`, keeping the previous file as
+/// `localconfig.vdf.irori-backup`. Blocking.
+fn write_launch_options(file: &Path, app_id: &str, line: Option<&str>) -> Result<bool> {
+    let backup = file.with_file_name("localconfig.vdf.irori-backup");
+    let changed = edit_file(file, &backup, |text| {
+        launch_options::set_launch_options(text, app_id, line)
+    })?;
+    if changed {
+        // The line may hold anything the user typed; only say it changed.
+        tracing::info!("Steam app {app_id}: launch options changed");
+    }
+    Ok(changed)
 }
 
 /// How long Steam gets to close.
@@ -236,6 +334,46 @@ mod tests {
             .unwrap()
             .count();
         assert_eq!(files, 2, "only the file and its backup");
+    }
+
+    #[test]
+    fn launch_options_are_written_with_a_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("localconfig.vdf");
+        assert!(write_launch_options(&file, "620", Some("-novid")).is_err());
+        let original = "\"UserLocalConfigStore\"\n{\n\t\"friends\"\n\t{\n\t}\n}\n";
+        std::fs::write(&file, original).unwrap();
+        assert!(write_launch_options(&file, "620", Some("-novid")).unwrap());
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(
+            launch_options::launch_options(&written, "620").as_deref(),
+            Some("-novid")
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("localconfig.vdf.irori-backup")).unwrap(),
+            original
+        );
+        assert!(!write_launch_options(&file, "620", Some("-novid")).unwrap());
+        assert!(write_launch_options(&file, "620", None).unwrap());
+    }
+
+    #[test]
+    fn finds_the_accounts_settings_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(localconfig_file(dir.path(), None).is_err());
+        let user = dir.path().join("userdata/1234/config");
+        std::fs::create_dir_all(&user).unwrap();
+        std::fs::write(user.join("localconfig.vdf"), "").unwrap();
+        assert_eq!(
+            localconfig_file(dir.path(), None).unwrap(),
+            user.join("localconfig.vdf")
+        );
+        // The signed-in account's own folder only.
+        assert!(localconfig_file(dir.path(), Some("76561197960265729")).is_err());
+        assert_eq!(
+            localconfig_file(dir.path(), Some("76561197960266962")).unwrap(),
+            user.join("localconfig.vdf")
+        );
     }
 
     #[test]

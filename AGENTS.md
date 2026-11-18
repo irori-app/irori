@@ -1535,6 +1535,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
   game menu's "Steam Play…", the palette and the page's Settings button, all through
   `irori_game::ops::open_steam_play`/`settings_section`.
+- **Steam's launch options** (`compat/launch_options.rs`, `irori_settings`
+  `steam_launch.rs`, the Launch section's "Steam launch options"): the line Steam starts a
+  game with (`VAR=value wrapper %command% args`), in the account's
+  `userdata/<account>/config/localconfig.vdf` under
+  `UserLocalConfigStore/Software/Valve/Steam/apps/<appid>/LaunchOptions`, edited as text.
+  The compatibility tool's rules apply: only while Steam is closed (`SteamRunning`, asking
+  before `close_steam`, never in Game Mode), splicing only that value's bytes with the
+  strict parser of `compat/mapping.rs`, reading the edit back, `localconfig.vdf.irori-backup`
+  first. `with_variable` changes one variable in a line and keeps the rest as written.
+  Steam's client could also take the line while it runs (`SetAppLaunchOptions` over its
+  debugging port), but the client library's expression stays read-only, so Irori doesn't.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save

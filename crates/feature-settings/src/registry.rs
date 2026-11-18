@@ -257,6 +257,8 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// A Steam game's launch options in Steam itself.
+    SteamLaunchOptions,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -625,6 +627,7 @@ impl FieldSpec {
                     | "iroriLudusaviInterval"
                     | "panel.save-backups"
                     | "panel.artwork"
+                    | "panel.steamLaunchOptions"
             )
     }
 
@@ -3068,6 +3071,21 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.launcher_args.help")
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
+    game_only(
+        "panel.steamLaunchOptions",
+        "settings.field.panel_steam_launch.label",
+        Launch,
+        "settings.group.command",
+        Panel(PanelKind::SteamLaunchOptions),
+    )
+    .keywords(&[
+        "steam",
+        "launch options",
+        "%command%",
+        "arguments",
+        "variables",
+        "properties",
+    ]),
     game_only(
         "targetExe",
         "settings.field.target_exe.label",

@@ -41,6 +41,7 @@ mod replay;
 mod reshade;
 mod saves;
 mod steam_compat;
+mod steam_launch;
 mod storage;
 mod stores;
 mod sunshine;
