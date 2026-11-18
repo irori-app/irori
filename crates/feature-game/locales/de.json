@@ -656,6 +656,7 @@
   "game.saves.offline": "Für die Synchronisierung von Spielständen wird eine Internetverbindung benötigt.",
   "game.saves.remove_location": "Speicherort entfernen",
   "game.saves.replace_cloud": "Cloud-Spielstände ersetzen",
+  "game.saves.replace_cloud_deletes_description": "Im Spielstandordner dieses Spiels gibt es keine Spielstände, daher werden die Cloud-Spielstände von „{title}“ gelöscht. Das lässt sich nicht rückgängig machen.",
   "game.saves.replace_cloud_description": "Die Cloud-Kopie der Spielstände dieses Spiels wird mit Ihren lokalen Spielständen überschrieben.",
   "game.saves.replace_cloud_title": "Cloud-Spielstände ersetzen?",
   "game.saves.replace_local": "Lokale Spielstände ersetzen",

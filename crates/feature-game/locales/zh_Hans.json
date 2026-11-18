@@ -656,6 +656,7 @@
   "game.saves.offline": "同步存档需要联网。",
   "game.saves.remove_location": "移除位置",
   "game.saves.replace_cloud": "替换云端存档",
+  "game.saves.replace_cloud_deletes_description": "此游戏的存档文件夹中没有存档，因此“{title}”的云端存档将被删除。此操作无法撤销。",
   "game.saves.replace_cloud_description": "此游戏的云端存档将被你的本地存档覆盖。",
   "game.saves.replace_cloud_title": "替换云端存档？",
   "game.saves.replace_local": "替换本地存档",

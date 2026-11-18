@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Molnkopian skriver över sparfilerna på den här datorn.",
   "settings.saves.force_download.title": "Ersätt de lokala sparfilerna för ”{title}”?",
   "settings.saves.force_upload.confirm": "Tvinga uppladdning",
+  "settings.saves.force_upload.deletes_description": "Det finns inga sparfiler i spelets sparmapp, så sparfilerna i molnet för ”{title}” raderas. Det går inte att ångra.",
   "settings.saves.force_upload.description": "Sparfilerna på den här datorn skriver över molnkopian.",
   "settings.saves.force_upload.title": "Ersätt sparfilerna i molnet för ”{title}”?",
   "settings.saves.in_sync": "Sparfilerna är synkroniserade.",

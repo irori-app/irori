@@ -656,6 +656,7 @@
   "game.saves.offline": "Sincronizar saves precisa de conexão com a internet.",
   "game.saves.remove_location": "Remover local",
   "game.saves.replace_cloud": "Substituir saves da nuvem",
+  "game.saves.replace_cloud_deletes_description": "Não há saves na pasta de saves deste jogo, então os saves na nuvem de “{title}” serão excluídos. Esta ação não pode ser desfeita.",
   "game.saves.replace_cloud_description": "A cópia na nuvem dos saves deste jogo será substituída pelos seus saves locais.",
   "game.saves.replace_cloud_title": "Substituir os saves da nuvem?",
   "game.saves.replace_local": "Substituir saves locais",

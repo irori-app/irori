@@ -656,6 +656,7 @@
   "game.saves.offline": "La synchronisation des sauvegardes nécessite une connexion Internet.",
   "game.saves.remove_location": "Retirer l’emplacement",
   "game.saves.replace_cloud": "Remplacer les sauvegardes cloud",
+  "game.saves.replace_cloud_deletes_description": "Le dossier de sauvegarde de ce jeu ne contient aucune sauvegarde : les sauvegardes cloud de « {title} » seront donc supprimées. Cette action est irréversible.",
   "game.saves.replace_cloud_description": "La copie cloud des sauvegardes de ce jeu est écrasée par vos sauvegardes locales.",
   "game.saves.replace_cloud_title": "Remplacer les sauvegardes cloud ?",
   "game.saves.replace_local": "Remplacer les sauvegardes locales",

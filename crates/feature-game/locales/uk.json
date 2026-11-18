@@ -656,6 +656,7 @@
   "game.saves.offline": "Для синхронізації збережень потрібне підключення до інтернету.",
   "game.saves.remove_location": "Видалити розташування",
   "game.saves.replace_cloud": "Замінити хмарні збереження",
+  "game.saves.replace_cloud_deletes_description": "У теці збережень цієї гри немає збережень, тому хмарні збереження «{title}» буде видалено. Цю дію не можна скасувати.",
   "game.saves.replace_cloud_description": "Хмарну копію збережень цієї гри буде перезаписано вашими локальними збереженнями.",
   "game.saves.replace_cloud_title": "Замінити хмарні збереження?",
   "game.saves.replace_local": "Замінити локальні збереження",

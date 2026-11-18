@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "The cloud copy overwrites the saves on this computer.",
   "settings.saves.force_download.title": "Replace the local saves of “{title}”?",
   "settings.saves.force_upload.confirm": "Force upload",
+  "settings.saves.force_upload.deletes_description": "There are no saves in this game's save folder, so the cloud saves of “{title}” will be deleted. This can't be undone.",
   "settings.saves.force_upload.description": "The saves on this computer overwrite the cloud copy.",
   "settings.saves.force_upload.title": "Replace the cloud saves of “{title}”?",
   "settings.saves.in_sync": "Saves are in sync.",

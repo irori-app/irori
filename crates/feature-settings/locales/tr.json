@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Buluttaki kopya bu bilgisayardaki kayıtların üzerine yazar.",
   "settings.saves.force_download.title": "“{title}” için yerel kayıtlar değiştirilsin mi?",
   "settings.saves.force_upload.confirm": "Yüklemeye zorla",
+  "settings.saves.force_upload.deletes_description": "Bu oyunun kayıt klasöründe hiç kayıt yok, bu yüzden “{title}” için buluttaki kayıtlar silinecek. Bu işlem geri alınamaz.",
   "settings.saves.force_upload.description": "Bu bilgisayardaki kayıtlar buluttaki kopyanın üzerine yazar.",
   "settings.saves.force_upload.title": "“{title}” için buluttaki kayıtlar değiştirilsin mi?",
   "settings.saves.in_sync": "Kayıtlar eşitlenmiş durumda.",

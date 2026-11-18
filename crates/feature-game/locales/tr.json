@@ -656,6 +656,7 @@
   "game.saves.offline": "Kayıtları eşitlemek için internet bağlantısı gerekir.",
   "game.saves.remove_location": "Konumu kaldır",
   "game.saves.replace_cloud": "Buluttaki kayıtları değiştir",
+  "game.saves.replace_cloud_deletes_description": "Bu oyunun kayıt klasöründe hiç kayıt yok, bu yüzden “{title}” için buluttaki kayıtlar silinecek. Bu işlem geri alınamaz.",
   "game.saves.replace_cloud_description": "Bu oyunun buluttaki kayıt kopyasının üzerine yerel kayıtlarınız yazılır.",
   "game.saves.replace_cloud_title": "Buluttaki kayıtlar değiştirilsin mi?",
   "game.saves.replace_local": "Yerel kayıtları değiştir",

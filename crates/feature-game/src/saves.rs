@@ -532,8 +532,32 @@ impl CloudSavesPanel {
     /// Sync now in the chosen direction. Forced directions overwrite one side
     /// and ask first.
     pub fn request_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let direction = self.direction;
-        let warning = match direction {
+        if self.direction != SyncDirection::ForceUpload {
+            return self.confirm_sync(false, window, cx);
+        }
+        // A forced upload from a folder without saves deletes the cloud
+        // saves, and the question must say so: look at the folder first, off
+        // the UI thread. When that can't be told, the usual question stays.
+        self.persist_path(cx);
+        let b = backend(cx);
+        let id = self.id.clone();
+        let task = irori_ui::run(
+            cx,
+            async move { b.forced_upload_deletes_cloud_saves(&id).await },
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let deletes = task.await.unwrap_or(false);
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.confirm_sync(deletes, window, cx)
+            });
+        })
+        .detach();
+    }
+
+    /// Ask before a forced sync (`deletes`: a forced upload takes the cloud
+    /// saves away), or sync right away.
+    fn confirm_sync(&mut self, deletes: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let warning = match self.direction {
             SyncDirection::ForceDownload => Some((
                 t("game.saves.replace_local_title"),
                 t("game.saves.replace_local_description"),
@@ -541,7 +565,14 @@ impl CloudSavesPanel {
             )),
             SyncDirection::ForceUpload => Some((
                 t("game.saves.replace_cloud_title"),
-                t("game.saves.replace_cloud_description"),
+                if deletes {
+                    t_args(
+                        "game.saves.replace_cloud_deletes_description",
+                        &[("title", &self.game.title)],
+                    )
+                } else {
+                    t("game.saves.replace_cloud_description")
+                },
                 t("game.saves.replace_cloud"),
             )),
             _ => None,

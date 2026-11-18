@@ -656,6 +656,7 @@
   "game.saves.offline": "Для синхронизации сохранений нужно подключение к интернету.",
   "game.saves.remove_location": "Удалить расположение",
   "game.saves.replace_cloud": "Заменить облачные сохранения",
+  "game.saves.replace_cloud_deletes_description": "В папке сохранений этой игры нет сохранений, поэтому облачные сохранения «{title}» будут удалены. Это действие нельзя отменить.",
   "game.saves.replace_cloud_description": "Облачная копия сохранений этой игры будет перезаписана вашими локальными сохранениями.",
   "game.saves.replace_cloud_title": "Заменить облачные сохранения?",
   "game.saves.replace_local": "Заменить локальные сохранения",

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "A cópia na nuvem substitui os saves deste computador.",
   "settings.saves.force_download.title": "Substituir os saves locais de “{title}”?",
   "settings.saves.force_upload.confirm": "Forçar upload",
+  "settings.saves.force_upload.deletes_description": "Não há saves na pasta de saves deste jogo, então os saves na nuvem de “{title}” serão excluídos. Esta ação não pode ser desfeita.",
   "settings.saves.force_upload.description": "Os saves deste computador substituem a cópia na nuvem.",
   "settings.saves.force_upload.title": "Substituir os saves na nuvem de “{title}”?",
   "settings.saves.in_sync": "Os saves estão sincronizados.",

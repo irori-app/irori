@@ -940,6 +940,25 @@ impl Backend {
         store.sync_saves(&id.app_name, direction, &saves, ctx).await
     }
 
+    /// Whether a forced upload of `id`'s saves would delete cloud saves: a
+    /// save folder holds no files, and Epic and GOG then take the cloud
+    /// copy away instead of replacing it. For the confirmation, which must
+    /// say so. Resolves the default save folder like a sync.
+    pub async fn forced_upload_deletes_cloud_saves(&self, id: &GameId) -> Result<bool> {
+        self.save_locations(id).await?;
+        let settings = self.settings.game(id);
+        let dirs: Vec<PathBuf> = if settings.gog_saves.is_empty() {
+            vec![irori_core::paths::expand_home(settings.saves_path.trim())]
+        } else {
+            settings
+                .gog_saves
+                .iter()
+                .map(|l| irori_core::paths::expand_home(l.location.trim()))
+                .collect()
+        };
+        Ok(tokio::task::spawn_blocking(move || dirs.iter().any(|d| !holds_files(d))).await?)
+    }
+
     /// Sync like [`Self::sync_saves`], given up after [`SAVE_SYNC_TIMEOUT`].
     async fn sync_saves_limited(
         &self,
@@ -1383,9 +1402,32 @@ fn copy_tree(src: &Path, dst: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<()
     Ok(())
 }
 
+/// Whether `dir` (a save folder) holds a file anywhere below it. A missing
+/// folder holds none. Blocking.
+fn holds_files(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| match e.file_type() {
+        Ok(t) if t.is_dir() => holds_files(&e.path()),
+        Ok(_) => true,
+        Err(_) => false,
+    })
+}
+
 #[cfg(test)]
 mod platform_tests {
     use super::*;
+
+    #[test]
+    fn knows_save_folders_without_files() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!holds_files(&dir.path().join("missing")));
+        std::fs::create_dir_all(dir.path().join("slot/empty")).unwrap();
+        assert!(!holds_files(dir.path()), "folders alone are no saves");
+        std::fs::write(dir.path().join("slot/1.sav"), "x").unwrap();
+        assert!(holds_files(dir.path()));
+    }
 
     #[test]
     fn moves_by_renaming_on_the_same_filesystem() {

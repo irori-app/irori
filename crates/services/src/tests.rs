@@ -567,6 +567,30 @@ fn a_failed_save_download_stops_the_launch_until_the_user_plays_anyway() {
     assert!(ended.is_some(), "the game ran");
 }
 
+/// Heroic #5968: the force-upload question says when the save folder holds
+/// no files, since the cloud saves are then deleted.
+#[cfg(unix)]
+#[test]
+fn knows_when_a_forced_upload_deletes_cloud_saves() {
+    let (b, id) = play_with("saves-empty-folder", "exit 0", true);
+    let dir = tempfile::tempdir().unwrap();
+    let saves = dir.path().join("saves");
+    std::fs::create_dir_all(&saves).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "savesPath",
+        Some(serde_json::Value::String(saves.display().to_string())),
+    );
+    let deletes = || {
+        b.runtime()
+            .block_on(b.forced_upload_deletes_cloud_saves(&id))
+            .unwrap()
+    };
+    assert!(deletes());
+    std::fs::write(saves.join("slot1.sav"), "x").unwrap();
+    assert!(!deletes());
+}
+
 /// Wait up to `limit` for `id`'s session to end; how long that took.
 #[cfg(unix)]
 fn session_end(

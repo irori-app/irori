@@ -656,6 +656,7 @@
   "game.saves.offline": "Voor het synchroniseren van opgeslagen spellen is een internetverbinding nodig.",
   "game.saves.remove_location": "Locatie verwijderen",
   "game.saves.replace_cloud": "Cloudopslag vervangen",
+  "game.saves.replace_cloud_deletes_description": "Er staan geen saves in de savemap van deze game, dus de cloudsaves van ‘{title}’ worden verwijderd. Dit kan niet ongedaan worden gemaakt.",
   "game.saves.replace_cloud_description": "De cloudkopie van de opgeslagen spellen van deze game wordt overschreven met je lokale opgeslagen spellen.",
   "game.saves.replace_cloud_title": "Cloudopslag vervangen?",
   "game.saves.replace_local": "Lokale opgeslagen spellen vervangen",

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "La copia nel cloud sovrascrive i salvataggi su questo computer.",
   "settings.saves.force_download.title": "Sostituire i salvataggi locali di «{title}»?",
   "settings.saves.force_upload.confirm": "Forza upload",
+  "settings.saves.force_upload.deletes_description": "Nella cartella dei salvataggi di questo gioco non ci sono salvataggi, quindi i salvataggi nel cloud di «{title}» verranno eliminati. L'operazione non può essere annullata.",
   "settings.saves.force_upload.description": "I salvataggi su questo computer sovrascrivono la copia nel cloud.",
   "settings.saves.force_upload.title": "Sostituire i salvataggi nel cloud di «{title}»?",
   "settings.saves.in_sync": "I salvataggi sono sincronizzati.",

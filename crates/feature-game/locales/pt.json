@@ -656,6 +656,7 @@
   "game.saves.offline": "Sincronizar gravações precisa de ligação à Internet.",
   "game.saves.remove_location": "Remover localização",
   "game.saves.replace_cloud": "Substituir gravações na nuvem",
+  "game.saves.replace_cloud_deletes_description": "Não há dados guardados na pasta de gravações deste jogo, por isso os dados guardados na nuvem de «{title}» serão eliminados. Esta ação não pode ser anulada.",
   "game.saves.replace_cloud_description": "A cópia na nuvem das gravações deste jogo é substituída pelas suas gravações locais.",
   "game.saves.replace_cloud_title": "Substituir as gravações na nuvem?",
   "game.saves.replace_local": "Substituir gravações locais",

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "La copie du cloud écrase les sauvegardes de cet ordinateur.",
   "settings.saves.force_download.title": "Remplacer les sauvegardes locales de « {title} » ?",
   "settings.saves.force_upload.confirm": "Forcer l’envoi",
+  "settings.saves.force_upload.deletes_description": "Le dossier de sauvegarde de ce jeu ne contient aucune sauvegarde : les sauvegardes cloud de « {title} » seront donc supprimées. Cette action est irréversible.",
   "settings.saves.force_upload.description": "Les sauvegardes de cet ordinateur écrasent la copie du cloud.",
   "settings.saves.force_upload.title": "Remplacer les sauvegardes cloud de « {title} » ?",
   "settings.saves.in_sync": "Les sauvegardes sont synchronisées.",

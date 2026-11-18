@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "雲端副本將覆寫此電腦上的存檔。",
   "settings.saves.force_download.title": "取代「{title}」的本機存檔？",
   "settings.saves.force_upload.confirm": "強制上傳",
+  "settings.saves.force_upload.deletes_description": "此遊戲的存檔資料夾中沒有存檔，因此「{title}」的雲端存檔將被刪除。此操作無法復原。",
   "settings.saves.force_upload.description": "此電腦上的存檔將覆寫雲端副本。",
   "settings.saves.force_upload.title": "取代「{title}」的雲端存檔？",
   "settings.saves.in_sync": "存檔已同步。",

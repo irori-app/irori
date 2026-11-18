@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Kopia z chmury nadpisze zapisy na tym komputerze.",
   "settings.saves.force_download.title": "Zastąpić lokalne zapisy gry „{title}”?",
   "settings.saves.force_upload.confirm": "Wymuś wysyłanie",
+  "settings.saves.force_upload.deletes_description": "W folderze zapisów tej gry nie ma żadnych zapisów, więc zapisy gry „{title}” w chmurze zostaną usunięte. Tej operacji nie można cofnąć.",
   "settings.saves.force_upload.description": "Zapisy z tego komputera nadpiszą kopię w chmurze.",
   "settings.saves.force_upload.title": "Zastąpić zapisy gry „{title}” w chmurze?",
   "settings.saves.in_sync": "Zapisy są zsynchronizowane.",

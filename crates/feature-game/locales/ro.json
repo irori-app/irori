@@ -656,6 +656,7 @@
   "game.saves.offline": "Sincronizarea salvărilor necesită conexiune la internet.",
   "game.saves.remove_location": "Elimină locația",
   "game.saves.replace_cloud": "Înlocuiește salvările din cloud",
+  "game.saves.replace_cloud_deletes_description": "Nu există salvări în dosarul de salvări al acestui joc, așa că salvările din cloud pentru „{title}” vor fi șterse. Acțiunea nu poate fi anulată.",
   "game.saves.replace_cloud_description": "Copia din cloud a salvărilor acestui joc este suprascrisă cu salvările tale locale.",
   "game.saves.replace_cloud_title": "Înlocuiești salvările din cloud?",
   "game.saves.replace_local": "Înlocuiește salvările locale",
