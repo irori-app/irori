@@ -331,6 +331,18 @@ pub fn show_category(category: irori_services::CategoryRef, cx: &mut App) {
     irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 
+/// Whether the library shows `category` alone, as [`show_category`] leaves
+/// it (the sidebar marks the pinned category shown).
+pub fn shows_only_category(category: &irori_services::CategoryRef, cx: &App) -> bool {
+    let Some(filters) = filters_panel::active_filters(cx) else {
+        return false;
+    };
+    let filter = filters.read(cx).filter();
+    let mut only = filter.clone();
+    only.show_only(category);
+    only == *filter
+}
+
 /// Show the library's games played in `mode` (a game page's mode chip):
 /// the Filters popover's criteria give way to that mode alone, while the
 /// search, store, sort and grouping stay. Without a library view yet, the

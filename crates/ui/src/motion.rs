@@ -53,6 +53,23 @@ where
         .into_any_element()
 }
 
+/// Fades `element` in while it slides `distance` pixels in from its right
+/// (from its left when negative), such as a panel opening at a window's
+/// edge. For elements in normal flow (it offsets them with relative
+/// positioning).
+pub fn slide_in<E>(id: impl Into<ElementId>, element: E, distance: f32) -> AnyElement
+where
+    E: IntoElement + Styled + 'static,
+{
+    element
+        .with_animation(
+            id,
+            Animation::new(STANDARD).with_easing(enter_curve()),
+            move |el, t| el.opacity(t).relative().left(px(distance * (1.0 - t))),
+        )
+        .into_any_element()
+}
+
 /// Slides a bar pinned to the top of its parent (`absolute().top_0()`) down
 /// into view by `distance` pixels while it fades in.
 pub fn drop_in<E>(id: impl Into<ElementId>, element: E, distance: f32) -> AnyElement

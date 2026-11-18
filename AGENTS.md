@@ -506,7 +506,9 @@ commands without a window.
     ticks both, Group by → Category puts each game in its first category's
     section (`irori-library`'s `categories.rs`), covers show both with their
     colours, and the context menu has "Add to ▸" for manual categories and a
-    read-only "In: …" for smart ones. The category manager creates, pins,
+    read-only "In: …" for smart ones. The sidebar's Views section lists the
+    saved views, then the pinned categories of both kinds
+    (`irori_library::show_category`). The category manager creates, pins,
     colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
     (`open_smart_category_editor`), also opened from Manage views to turn a
     view into a smart category (`categories::smart_from_view`, which says
