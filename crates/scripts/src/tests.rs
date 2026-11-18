@@ -877,3 +877,21 @@ async fn a_shell_command_refuses_a_variable_that_would_rewrite_it() {
         "{e:#}"
     );
 }
+
+#[tokio::test]
+async fn the_game_plays_in_the_prefix_the_script_created() {
+    // The game section names no prefix, so the game plays where the script
+    // made one, not in another folder (#169).
+    let script = Script::parse(&steps_script(
+        "wine",
+        "[]",
+        "  - task: {name: create_prefix, prefix: $GAMEDIR/pfx}\n  - write_file: {file: $GAMEDIR/pfx/drive_c/game.exe, content: MZ}",
+        "    exe: $GAMEDIR/pfx/drive_c/game.exe",
+    ))
+    .unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let ctx = ctx(tmp.path());
+    let out = install(&script, &ctx, &Host::default()).await.unwrap();
+    let game = out.game.unwrap();
+    assert_eq!(game.prefix, Some(ctx.game_dir.join("pfx")));
+}
