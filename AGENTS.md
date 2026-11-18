@@ -446,8 +446,9 @@ commands without a window.
   pick, then the last played), `other_copies` the rest; `get` finds every copy,
   `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
   counts, storage, backups and stats). Every per-game operation keeps the copy's own
-  `GameId`; a store filter shows that store's copy. Screens offer the copies through
-  `irori_ui::copies`.
+  `GameId`; a store filter shows that store's copy. Grouped covers, the list's Store
+  column and the drawer name the copy stores through `irori_ui::copies`. The game
+  page switches between copies.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank

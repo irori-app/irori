@@ -137,6 +137,21 @@ impl GamePage {
             .as_deref()
             .and_then(irori_engines::systems::get)
             .map_or(game.runner().store_name(), |s| s.name.as_str());
+        let copies = models(cx).library.read(cx).snapshot.copies_of(&self.id);
+        let store = if copies.is_empty() {
+            store.to_owned()
+        } else {
+            irori_ui::copies::store_runners(&self.id, copies)
+                .map(|runner| {
+                    if runner == self.id.runner {
+                        store
+                    } else {
+                        runner.store_name()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" · ")
+        };
         let title: AnyElement = match logo {
             Some(logo) => div()
                 .h(rems(LOGO_REM))
@@ -192,7 +207,7 @@ impl GamePage {
                     .px_5()
                     .pb_1()
                     .gap_1()
-                    .child(super::caption(store, theme.muted_foreground))
+                    .child(super::caption(store, theme.muted_foreground).min_w_0())
                     .child(title),
             )
             .into_any_element()

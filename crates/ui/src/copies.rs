@@ -4,12 +4,13 @@
 //! [`GameId`], so whatever a screen does with one is done with that copy.
 //! The changes write the library file, so they run off the UI thread.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use gpui_kit::App;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use irori_core::{GameId, GameInfo};
+use irori_core::{GameId, GameInfo, Runner};
 
 use crate::i18n::{t, t_args};
 use crate::{Route, backend, models, navigate};
@@ -24,6 +25,17 @@ pub fn of(id: &GameId, cx: &App) -> Vec<Arc<GameInfo>> {
         .iter()
         .filter_map(|copy| snapshot.get(copy).cloned())
         .collect()
+}
+
+/// Stores represented by an entry, starting with the copy being shown.
+pub fn store_runners<'a>(
+    id: &GameId,
+    copies: &'a [GameId],
+) -> impl Iterator<Item = Runner> + use<'a> {
+    let mut seen = HashSet::new();
+    std::iter::once(id.runner)
+        .chain(copies.iter().map(|copy| copy.runner))
+        .filter(move |runner| seen.insert(*runner))
 }
 
 /// "Open the Steam copy", for menus and tooltips.
@@ -97,4 +109,30 @@ pub fn menu_items(mut menu: PopupMenu, id: &GameId, cx: &App) -> PopupMenu {
             .icon(IconName::Ungroup)
             .on_click(move |_, _, cx| separate_all(group.clone(), cx)),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn store_labels_include_all_copies_without_repeating_stores() {
+        let epic = GameId::new(Runner::Legendary, "epic");
+        let steam = GameId::new(Runner::Steam, "steam");
+        let gog = GameId::new(Runner::Gog, "gog");
+        let copies = [
+            epic.clone(),
+            steam.clone(),
+            GameId::new(Runner::Legendary, "another-epic-copy"),
+            gog,
+        ];
+        let names = |id: &GameId, copies: &[GameId]| {
+            store_runners(id, copies)
+                .map(Runner::short_name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&epic, &copies), ["Epic", "Steam", "GOG"]);
+        assert_eq!(names(&steam, &copies), ["Steam", "Epic", "GOG"]);
+        assert_eq!(names(&epic, &[]), ["Epic"]);
+    }
 }

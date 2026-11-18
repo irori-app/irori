@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use gpui_kit::{
-    AppContext as _, Bounds, Entity, Focusable as _, TestAppContext, WindowBounds, WindowOptions,
-    px, size,
+    AppContext as _, Bounds, Entity, Focusable as _, TestAppContext, VisualTestContext,
+    WindowBounds, WindowOptions, px, size,
 };
 use irori_core::{
     DynStore, ExtraInfo, GameId, GameInfo, InstallInfo, InstallInfoQuery, InstallPlatform,
@@ -24,6 +24,7 @@ use crate::filter::InstallFilter;
 use crate::view::LibraryView;
 
 struct MemoryStore {
+    runner: Runner,
     games: Vec<Arc<GameInfo>>,
 }
 
@@ -54,6 +55,7 @@ impl MemoryStore {
             )
         };
         Arc::new(Self {
+            runner: Runner::Gog,
             games: vec![
                 game("1", "Alan Wake", false),
                 game("2", "Celeste", true),
@@ -68,7 +70,7 @@ impl MemoryStore {
 #[async_trait]
 impl Store for MemoryStore {
     fn runner(&self) -> Runner {
-        Runner::Gog
+        self.runner
     }
     async fn init(&self) -> Result<()> {
         Ok(())
@@ -147,10 +149,13 @@ fn isolate_paths() {
 /// Start a backend over the in-memory store, install the UI layer and wait
 /// until the library model holds the store's games.
 fn start(cx: &mut TestAppContext) -> Backend {
+    start_with(cx, vec![MemoryStore::new()])
+}
+
+fn start_with(cx: &mut TestAppContext, stores: Vec<DynStore>) -> Backend {
     isolate_paths();
     cx.executor().allow_parking();
-    let store: DynStore = MemoryStore::new();
-    let backend = Backend::start_for_tests(move |_, _| vec![store]).expect("backend starts");
+    let backend = Backend::start_for_tests(move |_, _| stores).expect("backend starts");
     cx.update(|cx| {
         gpui_kit::init(cx);
         irori_ui::init(backend.clone(), cx);
@@ -169,6 +174,49 @@ fn start(cx: &mut TestAppContext) -> Backend {
         std::thread::sleep(Duration::from_millis(10));
     }
     backend
+}
+
+#[gpui_kit::test]
+fn grouped_cover_names_both_stores_without_hover(cx: &mut TestAppContext) {
+    let epic = Runner::Legendary;
+    let store = Arc::new(MemoryStore {
+        runner: epic,
+        games: vec![Arc::new(
+            GameInfo {
+                runner: Some(epic),
+                app_name: "alan-wake".into(),
+                title: "Alan Wake".into(),
+                ..Default::default()
+            }
+            .finalize(),
+        )],
+    });
+    let _backend = start_with(cx, vec![MemoryStore::new(), store]);
+    let (window, _) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(px(1280.), px(800.)),
+                ))),
+                ..Default::default()
+            },
+            cx,
+            |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+        )
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(window, cx);
+    vcx.run_until_parked();
+    assert!(
+        vcx.debug_bounds("tile-store:legendary:alan-wake:legendary")
+            .is_some()
+    );
+    assert!(
+        vcx.debug_bounds("tile-store:legendary:alan-wake:gog")
+            .is_some()
+    );
+    assert!(vcx.debug_bounds("tile-store:gog:4:gog").is_none());
 }
 
 #[gpui_kit::test]

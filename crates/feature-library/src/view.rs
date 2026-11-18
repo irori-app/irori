@@ -21,6 +21,7 @@ use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState, SliderValue};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     ActiveTheme as _, Icon, Selectable as _, Sizable as _, StyledExt as _, ThemeStyled as _,
     VirtualListScrollHandle, WindowExt as _, h_flex, v_flex, v_virtual_list,
@@ -2535,14 +2536,20 @@ impl LibraryView {
         let muted = theme.muted_foreground;
         let radius = theme.radius_lg;
 
-        // An entry of several stores' copies says so.
-        let copies = models(cx).library.read(cx).snapshot.copies_of(&id).len();
-        let markers = h_flex()
-            .absolute()
-            .top_2()
-            .right_2()
+        let selecting = self.selection.is_active();
+        let copies = models(cx).library.read(cx).snapshot.copies_of(&id);
+        let show_stores =
+            show_badges && !selecting && (copies.len() > 1 || (active && !focus_view));
+        let stores: Vec<_> = show_stores
+            .then(|| irori_ui::copies::store_runners(&id, copies))
+            .into_iter()
+            .flatten()
+            .collect();
+        let markers = v_flex()
+            .flex_shrink_0()
+            .items_end()
             .gap_1()
-            .when(copies > 1, |el| {
+            .when(copies.len() > 1 && copies.len() > stores.len(), |el| {
                 el.child(
                     h_flex()
                         .gap_0p5()
@@ -2635,7 +2642,6 @@ impl LibraryView {
             _ => None,
         });
 
-        let selecting = self.selection.is_active();
         let picked = self.selection.contains(&id);
         // Focus covers are small, and the page beside them has the actions.
         let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
@@ -2693,18 +2699,25 @@ impl LibraryView {
                         .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
-            .when(show_badges && active && !selecting && !focus_view, |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .top_2()
-                        .left_2()
-                        .rounded_md()
-                        .bg(scrim)
-                        .child(StoreBadge::new(game.runner())),
-                )
-            })
-            .child(markers)
+            .child(
+                h_flex()
+                    .absolute()
+                    .top_2()
+                    .left_2()
+                    .right_2()
+                    .items_start()
+                    .gap_1()
+                    .child(h_flex().flex_1().min_w_0().flex_wrap().gap_1().children(
+                        stores.into_iter().map(|runner| {
+                            div()
+                                .rounded_md()
+                                .bg(scrim)
+                                .debug_selector(|| format!("tile-store:{key}:{}", runner.id()))
+                                .child(StoreBadge::new(runner))
+                        }),
+                    ))
+                    .child(markers),
+            )
             .when(actions.is_none() && status_overlay.is_none(), |el| {
                 el.children(categories.map(|names| {
                     // A cover Irori draws itself has the title at its foot.
@@ -3288,11 +3301,29 @@ impl LibraryView {
                     }),
             )
             .when(shown[0], |el| {
-                el.child(cell(
-                    grid::LIST_COLUMNS[0],
-                    false,
-                    game.runner().short_name().to_string(),
-                ))
+                let copies = models(cx).library.read(cx).snapshot.copies_of(&id);
+                if copies.is_empty() {
+                    return el.child(cell(
+                        grid::LIST_COLUMNS[0],
+                        false,
+                        game.runner().short_name().to_string(),
+                    ));
+                }
+                let stores: Vec<_> = irori_ui::copies::store_runners(&id, copies).collect();
+                let labels = stores.iter().map(|r| r.short_name()).collect::<Vec<_>>();
+                let tooltip = SharedString::from(
+                    stores
+                        .iter()
+                        .map(|r| r.store_name())
+                        .collect::<Vec<_>>()
+                        .join(" · "),
+                );
+                el.child(
+                    cell(grid::LIST_COLUMNS[0], false, labels.join(" · "))
+                        .id(ElementId::Name(format!("row-stores:{key}").into()))
+                        .aria_label(tooltip.clone())
+                        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)),
+                )
             })
             .when(shown[1], |el| {
                 el.child(cell(
