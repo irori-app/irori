@@ -9,6 +9,7 @@
   "bigpicture.action.play": "Играть",
   "bigpicture.action.play_with_log": "Играть с журналом",
   "bigpicture.action.stop": "Остановить",
+  "bigpicture.action.cancel_launch": "Отменить запуск",
   "bigpicture.action.install": "Установить",
   "bigpicture.action.cancel_download": "Отменить загрузку",
   "bigpicture.action.update": "Обновить",

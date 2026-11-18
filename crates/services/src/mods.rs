@@ -927,8 +927,15 @@ impl Backend {
         Ok(())
     }
 
-    /// At start: take out deployments a crash left in game folders.
+    /// At start: take out deployments a crash left in game folders, but not
+    /// those of games still running from before (they come out when those
+    /// end).
     pub(crate) async fn recover_mods(&self) {
+        let playing: Vec<PathBuf> = self
+            .running_games()
+            .iter()
+            .map(|id| ModLibrary::for_game(id).root().to_path_buf())
+            .collect();
         let base = ModLibrary::base_dir();
         let manifests: Vec<PathBuf> = self
             .spawn_blocking(move || {
@@ -949,7 +956,7 @@ impl Backend {
             })
             .await
             .unwrap_or_default();
-        for root in manifests {
+        for root in manifests.into_iter().filter(|r| !playing.contains(r)) {
             let lib = ModLibrary::new(root);
             if let Err(e) = self.take_out(&lib).await {
                 tracing::error!("taking leftover mods out ({}): {e:#}", lib.root().display());

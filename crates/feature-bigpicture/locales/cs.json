@@ -9,6 +9,7 @@
   "bigpicture.action.play": "Hrát",
   "bigpicture.action.play_with_log": "Hrát s protokoly",
   "bigpicture.action.stop": "Zastavit",
+  "bigpicture.action.cancel_launch": "Zrušit spuštění",
   "bigpicture.action.install": "Instalovat",
   "bigpicture.action.cancel_download": "Zrušit stahování",
   "bigpicture.action.update": "Aktualizovat",

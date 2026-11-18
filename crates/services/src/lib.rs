@@ -41,6 +41,7 @@ pub mod related;
 pub mod renodx;
 pub mod replay;
 pub mod reshade;
+mod running;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
@@ -80,7 +81,7 @@ pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
-pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
+pub use games::{LaunchCancelled, LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
@@ -334,9 +335,14 @@ impl Backend {
 
     fn spawn_background_tasks(&self, interactive: bool) {
         // Only the app: a command-line run may sit beside a running game.
+        // Games still running from before are followed again first, so
+        // their mods stay in while they play.
         if interactive {
             let b = self.clone();
-            self.spawn(async move { b.recover_mods().await });
+            self.spawn(async move {
+                b.adopt_sessions().await;
+                b.recover_mods().await;
+            });
         }
 
         // A new version of Irori backs up what the old one wrote first.

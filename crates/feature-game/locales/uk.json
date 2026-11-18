@@ -141,6 +141,8 @@
   "game.header.read_more": "Читати далі",
   "game.hero.add_favourite": "Додати до улюблених",
   "game.hero.cancel_install": "Скасувати",
+  "game.hero.cancel_launch": "Скасувати",
+  "game.hero.cancel_launch_tooltip": "Припинити підготовку гри. Вона не запуститься (Esc)",
   "game.hero.cancel_update": "Скасувати оновлення",
   "game.hero.cloud_saves": "Хмарні збереження",
   "game.hero.save_backups": "Копії збережень",

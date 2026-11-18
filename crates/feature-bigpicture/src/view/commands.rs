@@ -67,6 +67,11 @@ impl BigPictureView {
                     error("bigpicture.error.stop"),
                 )
             }
+            // The launch itself ends quietly; nothing to track here.
+            GameAction::CancelLaunch => {
+                b.cancel_launch(&id);
+                return;
+            }
             GameAction::Install => {
                 let app = models(cx).settings.read(cx).app.clone();
                 let dir = irori_core::paths::expand_home(&app.install_folder(id.runner));

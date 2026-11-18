@@ -141,6 +141,8 @@
   "game.header.read_more": "Read more",
   "game.hero.add_favourite": "Add to favourites",
   "game.hero.cancel_install": "Cancel",
+  "game.hero.cancel_launch": "Cancel",
+  "game.hero.cancel_launch_tooltip": "Stop getting the game ready. It won’t start (Esc)",
   "game.hero.cancel_update": "Cancel update",
   "game.hero.cloud_saves": "Cloud saves",
   "game.hero.save_backups": "Save backups",

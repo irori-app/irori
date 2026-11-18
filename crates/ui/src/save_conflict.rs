@@ -16,8 +16,9 @@ use crate::state::{backend, run};
 /// When `error` is a save conflict, ask which saves of `id` to keep, then
 /// sync that way and start the game with `params`. A missing emulator, core,
 /// BIOS or launcher gets its fix offered instead, and a sandbox that can't
-/// start its explanation. Returns whether it took care of the
-/// error; otherwise the caller reports it as usual.
+/// start its explanation. A launch the user cancelled needs nothing.
+/// Returns whether it took care of the error; otherwise the caller reports
+/// it as usual.
 pub fn resolve_launch_error(
     id: &GameId,
     params: LaunchParams,
@@ -25,6 +26,9 @@ pub fn resolve_launch_error(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
+    if irori_services::LaunchCancelled::of(error) {
+        return true;
+    }
     if crate::engine_problem::resolve(id, &params, error, window, cx)
         || crate::launcher_problem::resolve(id, &params, error, window, cx)
         || crate::sandbox_problem::resolve(id, error, window, cx)

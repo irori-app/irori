@@ -9,6 +9,7 @@
   "bigpicture.action.play": "Spielen",
   "bigpicture.action.play_with_log": "Mit Protokollen spielen",
   "bigpicture.action.stop": "Stoppen",
+  "bigpicture.action.cancel_launch": "Start abbrechen",
   "bigpicture.action.install": "Installieren",
   "bigpicture.action.cancel_download": "Download abbrechen",
   "bigpicture.action.update": "Aktualisieren",

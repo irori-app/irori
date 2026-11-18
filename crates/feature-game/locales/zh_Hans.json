@@ -141,6 +141,8 @@
   "game.header.read_more": "阅读更多",
   "game.hero.add_favourite": "添加到收藏",
   "game.hero.cancel_install": "取消",
+  "game.hero.cancel_launch": "取消",
+  "game.hero.cancel_launch_tooltip": "停止准备游戏。游戏不会启动（Esc）",
   "game.hero.cancel_update": "取消更新",
   "game.hero.cloud_saves": "云存档",
   "game.hero.save_backups": "存档备份",

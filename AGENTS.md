@@ -94,6 +94,9 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
+  without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
+  fails then brings the window up to say why.
 - `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
@@ -336,7 +339,7 @@ and `launch.rs` before changing anything below the UI.
 - Store config goes under `store_config_dir(runner)`, as do credentials (written only
   through `irori_secrets`, see below), store caches under
   `store_cache_dir(runner)`, and Irori state (`library.json`, `downloads.json`,
-  `sessions.jsonl`) under `state_dir()`.
+  `sessions.jsonl`, `running.json`) under `state_dir()`.
 - Per-game settings are `config/games/<runner>/<app>.json`. Logs go under
   `logs_dir()`; the app log is `data/logs/irori.log`, and a panic writes
   `crash-<time>.txt` beside it (`crates/irori/src/crash.rs`).
@@ -805,7 +808,16 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
-- **Launching** (`games.rs`):
+- **Launching** (`games.rs`). Until the game starts (status `Launching`),
+  `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
+  steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
+  and the launch ends with `LaunchCancelled`, which screens don't show as an error.
+  The game page's Cancel button and Escape, Big Picture's Cancel launch row and the
+  palette cancel it. Sessions Irori follows itself (not `LaunchPlan::watch` ones) are
+  kept in `state/running.json` (`running.rs`: pid, process start time, start, folder,
+  mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
+  still running (a pid whose process started at another time was reused) to their end,
+  so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
   1. Busy and availability checks.
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with

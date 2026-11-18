@@ -141,6 +141,8 @@
   "game.header.read_more": "Číst dál",
   "game.hero.add_favourite": "Přidat do oblíbených",
   "game.hero.cancel_install": "Zrušit",
+  "game.hero.cancel_launch": "Zrušit",
+  "game.hero.cancel_launch_tooltip": "Přestat hru připravovat. Hra se nespustí (Esc)",
   "game.hero.cancel_update": "Zrušit aktualizaci",
   "game.hero.cloud_saves": "Uložené hry v cloudu",
   "game.hero.save_backups": "Zálohy uložených pozic",

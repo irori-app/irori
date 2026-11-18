@@ -141,6 +141,8 @@
   "game.header.read_more": "Citește mai mult",
   "game.hero.add_favourite": "Adaugă la favorite",
   "game.hero.cancel_install": "Anulează",
+  "game.hero.cancel_launch": "Anulează",
+  "game.hero.cancel_launch_tooltip": "Oprește pregătirea jocului. Nu va porni (Esc)",
   "game.hero.cancel_update": "Anulează actualizarea",
   "game.hero.cloud_saves": "Salvări în cloud",
   "game.hero.save_backups": "Copiile salvărilor",

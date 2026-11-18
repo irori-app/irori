@@ -55,7 +55,9 @@ impl Cli {
             match arg.as_str() {
                 "--launch" | "-l" => cli.launch = it.next().as_deref().and_then(parse_game_ref),
                 "--big-picture" | "--console" => cli.big_picture = true,
-                "--minimized" | "--tray" => cli.minimized = true,
+                // `--no-gui` is Heroic's spelling, which shortcuts made
+                // for Heroic carry.
+                "--minimized" | "--tray" | "--no-gui" => cli.minimized = true,
                 "--wait" => cli.wait = true,
                 "--save-clip" => cli.save_clip = true,
                 "--screenshot" => cli.screenshot = true,
@@ -171,6 +173,18 @@ impl Cli {
             || self.capture()
     }
 
+    /// Whether this invocation only plays a game and asks for no window
+    /// (`--launch` with `--minimized`, `--tray` or `--no-gui`): the game
+    /// starts and Irori stays out of sight, Big Picture included. A link's
+    /// launch asks the user first, which takes the window.
+    pub fn launch_without_window(&self) -> bool {
+        let rest = Cli {
+            launch: None,
+            ..self.clone()
+        };
+        self.minimized && self.launch.is_some() && !self.launch_from_link && !rest.has_request()
+    }
+
     /// Whether this invocation asks the running Irori for a clip or a
     /// screenshot, which only a running Irori can take.
     pub fn capture(&self) -> bool {
@@ -266,7 +280,8 @@ Options:
       --big-picture             Start in Big Picture mode
       --wait                    With --launch or --big-picture: stay until the game
                                 (or Big Picture) ends, and end it when stopped (Sunshine)
-      --minimized               Start in the tray
+      --minimized               Start in the tray; with --launch, play without
+                                opening the window
       --save-clip               Ask the running Irori to save a clip of the replay buffer
       --screenshot              Ask the running Irori to take a screenshot of the game
                                 (bind both to keys in your compositor; see Settings)
@@ -303,6 +318,29 @@ mod tests {
         let none = parse(&["--minimized"]);
         assert!(!none.capture() && !none.has_request());
         assert!(HELP.contains("--save-clip") && HELP.contains("--screenshot"));
+    }
+
+    #[test]
+    fn a_launch_with_minimized_or_no_gui_opens_no_window() {
+        for flag in ["--minimized", "--tray", "--no-gui"] {
+            assert!(
+                parse(&["--launch", "gog/1", flag]).launch_without_window(),
+                "{flag}"
+            );
+            assert!(parse(&[flag, "--launch", "gog/1", "--wait"]).launch_without_window());
+        }
+        // Without the flag, or with anything else asked, the window shows.
+        assert!(!parse(&["--launch", "gog/1"]).launch_without_window());
+        assert!(!parse(&["--minimized"]).launch_without_window());
+        assert!(
+            !parse(&["--launch", "gog/1", "--no-gui", "--big-picture"]).launch_without_window()
+        );
+        assert!(
+            !parse(&["--no-gui", "irori://library", "--launch", "gog/1"]).launch_without_window()
+        );
+        // A link's launch asks first.
+        assert!(!parse(&["--no-gui", "irori://launch/gog/1"]).launch_without_window());
+        assert!(!HELP.contains("--no-gui"), "a hidden alias");
     }
 
     #[test]

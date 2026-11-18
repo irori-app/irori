@@ -27,6 +27,13 @@ struct Download<'a> {
     ctx: &'a OpContext,
 }
 
+/// Whether `path` is a macOS application bundle (`Game.app`).
+fn is_app_bundle(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("app"))
+        && path.is_dir()
+}
+
 /// Epic's platform name for an install platform.
 pub(crate) fn platform_arg(platform: InstallPlatform) -> Result<&'static str> {
     match platform {
@@ -484,24 +491,43 @@ impl EpicStore {
         }
         let build = self.fetch_build(app, platform).await?;
         let manifest = &build.manifest;
-        let dir = path.to_path_buf();
         let names: Vec<String> = manifest.files.iter().map(|f| f.filename.clone()).collect();
         let exe = manifest.meta.launch_exe.trim_start_matches('/').to_string();
-        let (found, exe_found) = Self::blocking(move || {
-            let exists = |rel: &str| {
-                irori_depot::path::normalize(rel)
-                    .map(|r| {
-                        irori_epic_api::saves::case_insensitive(&irori_depot::path::join(&dir, &r))
+        let selected = path.to_path_buf();
+        let (path, found, exe_found) = Self::blocking(move || {
+            let count = |dir: &Path| {
+                let exists = |rel: &str| {
+                    irori_depot::path::normalize(rel)
+                        .map(|r| {
+                            irori_epic_api::saves::case_insensitive(&irori_depot::path::join(
+                                dir, &r,
+                            ))
                             .is_file()
-                    })
-                    .unwrap_or(false)
+                        })
+                        .unwrap_or(false)
+                };
+                (
+                    names.iter().filter(|n| exists(n)).count(),
+                    exe.is_empty() || exists(&exe),
+                )
             };
-            (
-                names.iter().filter(|n| exists(n)).count(),
-                exe.is_empty() || exists(&exe),
-            )
+            // A Mac game's files sit beside its bundle (`Game.app/Contents/…`
+            // in the manifest), and macOS shows the bundle as the thing to
+            // pick: picking it means the folder that holds it.
+            let (found, exe_found) = count(&selected);
+            if found == 0
+                && is_app_bundle(&selected)
+                && let Some(parent) = selected.parent()
+            {
+                let (in_parent, exe_in_parent) = count(parent);
+                if in_parent > 0 {
+                    return (parent.to_path_buf(), in_parent, exe_in_parent);
+                }
+            }
+            (selected, found, exe_found)
         })
         .await?;
+        let path = path.as_path();
         if found == 0 {
             bail!(
                 "No files of {} were found in {}. Choose the folder that contains the game.",

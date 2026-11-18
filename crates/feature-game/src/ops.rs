@@ -3,7 +3,7 @@
 //! reports failure to the user through a notification; none only logs.
 
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::notification::Notification;
@@ -132,6 +132,12 @@ pub fn stop(id: &GameId, window: &mut Window, cx: &mut App) -> Task<bool> {
     )
 }
 
+/// Cancel the launch of a game while it is being prepared. The launch ends
+/// without an error to show.
+pub fn cancel_launch(id: &GameId, cx: &mut App) {
+    backend(cx).cancel_launch(id);
+}
+
 /// Queue the pending update of an installed game.
 pub fn queue_update(id: &GameId, cx: &mut App) {
     let title = title_of(id, cx);
@@ -218,9 +224,36 @@ pub fn settings_section(id: &GameId) -> Option<&'static str> {
     }
 }
 
-/// Open a folder or file with the desktop's default application.
+/// Whether opening `path` must show it in Finder instead: macOS opens an
+/// application bundle (an added Mac game's `Game.app`) by starting it.
+/// Read from the name alone: revealing a file named so does no harm, and the
+/// UI thread asks the disk nothing.
+fn reveals_instead(path: &Path) -> bool {
+    cfg!(target_os = "macos")
+        && path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("app"))
+}
+
+/// Open a folder or file with the desktop's default application. An
+/// application bundle on macOS is shown in Finder rather than started.
 pub(crate) fn open_path(path: PathBuf, window: &mut Window, cx: &mut App) {
-    if let Err(e) = open::that_detached(&path) {
+    let opened = if reveals_instead(&path) {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|mut child| {
+                // `open` returns at once; reap it so no zombie stays behind.
+                std::thread::spawn(move || child.wait());
+            })
+    } else {
+        open::that_detached(&path)
+    };
+    if let Err(e) = opened {
         let e = anyhow::Error::from(e).context(t_args(
             "game.ops.opening_path",
             &[("path", &path.display().to_string())],
@@ -490,4 +523,18 @@ pub fn change_install_location(id: &GameId, window: &mut Window, cx: &mut App) {
             });
         })
         .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_bundles_are_revealed_not_started_on_macos() {
+        let mac = cfg!(target_os = "macos");
+        assert_eq!(reveals_instead(Path::new("/Games/Hades.app")), mac);
+        assert_eq!(reveals_instead(Path::new("/Games/Old.APP")), mac);
+        assert!(!reveals_instead(Path::new("/Games/Hades")));
+        assert!(!reveals_instead(Path::new("/Games/app")));
+    }
 }
