@@ -90,6 +90,8 @@
   "shell.notice.mods_not_restored": "Os mods de {title} ainda estão na sua pasta",
   "shell.palette.set_up_emulation": "Configurar a emulação",
   "shell.palette.set_up_emulation_keywords": "emulador ROM consola retro BIOS RetroArch",
+  "shell.palette.add_emulator": "Adicionar um emulador",
+  "shell.palette.add_emulator_keywords": "emulador próprio programa compilação",
   "shell.palette.steam_friends": "Mostrar amigos do Steam",
   "shell.palette.steam_friends_keywords": "amigos online a jogar juntar convidar chat",
   "shell.palette.xbox_offline_play": "Jogo offline Xbox",

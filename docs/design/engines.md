@@ -90,6 +90,17 @@ merge patch) over the built-in one, or, with an id Irori does not ship, adds an 
 A broken override is logged and the built-in manifest is used. Nothing in a manifest is
 executed; it is data.
 
+The Emulators page writes such a file for the user: "Add emulator" asks for a name, the
+program, an argument line and the systems it plays, and saves a `standalone` manifest
+marked `"custom": true` as `custom-<name>.json` (`irori_engines::custom`), with the
+program recorded as the engine's custom program. The argument line is split by this
+system's quoting rules into the launch template; placeholders other than `{rom}`,
+`{rom_dir}`, `{home}`, `{engine_home}`, `{engine_dir}` and `{xdg_data}` are refused, and
+without `{rom}` the game is the last argument. The program is started directly, never
+through a shell. Its card offers Edit and Remove; removing forgets the manifest and the
+program choice (the program stays), clears it as a system's default, and games that chose
+it play with their system's default.
+
 | Key | Meaning |
 | --- | --- |
 | `id`, `name`, `license`, `homepage` | Identity. `license` is shown on the engine card. |
@@ -362,7 +373,8 @@ manager, in its place). Route `Route::Emulators`, link `irori://emulators`.
   (managed versions with size, Flatpak, system, app, custom) with the default marked, and
   the actions Install (with size), Update (when a newer version is listed), Set as
   default, Open, Configure (engine options), Remove version, and "Use a program on this
-  computer…". RetroArch's card lists its cores with Install/Remove.
+  computer…". RetroArch's card lists its cores with Install/Remove. Emulators the user
+  added (see [3.1](#31-manifests)) are tagged "Added by you" and offer Edit and Remove.
 - Progress shows inline on the card and in the status bar; failures show an inline alert
   with Retry.
 

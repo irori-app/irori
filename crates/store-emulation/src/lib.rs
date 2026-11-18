@@ -364,9 +364,12 @@ impl EmulationStore {
     }
 
     /// The emulator `settings` chose for a game of `system`, else the
-    /// system's default. Blocking.
+    /// system's default (also when the chosen one is gone: an emulator the
+    /// user added and removed). Blocking.
     fn choice_for(&self, system: &str, chosen: &str) -> Option<EngineRef> {
-        if let Some(c) = EngineRef::parse(chosen) {
+        if let Some(c) =
+            EngineRef::parse(chosen).filter(|c| irori_engines::engine(&c.engine).is_some())
+        {
             return Some(c);
         }
         let app = (self.settings)();

@@ -90,6 +90,8 @@
   "shell.notice.mods_not_restored": "{title} の Mod がまだゲームフォルダーに残っています",
   "shell.palette.set_up_emulation": "エミュレーションを設定",
   "shell.palette.set_up_emulation_keywords": "エミュレーター ROM ゲーム機 コンソール レトロ BIOS RetroArch",
+  "shell.palette.add_emulator": "エミュレーターを追加",
+  "shell.palette.add_emulator_keywords": "カスタム エミュレーター プログラム ビルド",
   "shell.palette.steam_friends": "Steam のフレンドを表示",
   "shell.palette.steam_friends_keywords": "フレンド オンライン プレイ中 参加 招待 チャット",
   "shell.palette.xbox_offline_play": "Xbox オフラインプレイ",

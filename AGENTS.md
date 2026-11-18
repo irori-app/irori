@@ -1167,6 +1167,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   versions are listed. The only per-engine code is the `kind` match in
   `crates/engines/src/launch.rs` (RetroArch cores, DOSBox, ScummVM, MAME, relinkers). Users may
   override a manifest with `<config>/engines/<id>.json` (merge patch).
+- **Emulators the user adds** (`irori_engines::custom`, `Backend::save_custom_engine`,
+  `irori_manage::open_custom_engine_dialog`: the Emulators page's "Add emulator", the
+  palette): a name, a program, an argument line and the systems it plays become a
+  standalone manifest marked `custom` in `<config>/engines/custom-<name>.json` (the id is
+  made by Irori from the name, letters, digits and dashes only), with the program kept as
+  the engine's custom program. The line is split by this system's rules and run without a
+  shell; only `{rom}`, `{rom_dir}`, `{home}`, `{engine_home}`, `{engine_dir}` and
+  `{xdg_data}` are accepted, and without `{rom}` the game goes last. They show in system
+  pickers and "Play with…" like any engine; removing one deletes only its manifest, and
+  a game or system still naming it plays with the system's default. Any engine can also
+  use a program the user picks ("Use a program on this computer…", `Origin::Custom`).
 - **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
   DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
   DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the

@@ -46,8 +46,8 @@ mod xbox {
 pub use accounts::AccountsView;
 pub use downloads::DownloadsView;
 pub use emulators::{
-    EmulatorsView, InstallTarget, choice_name, open_emulation_setup, open_engine_settings,
-    start_install,
+    EmulatorsView, InstallTarget, choice_name, open_custom_engine_dialog, open_emulation_setup,
+    open_engine_settings, start_install,
 };
 pub use friends::{
     FriendsSource, friends_available, install_steam_store, open_friends_dialog,
