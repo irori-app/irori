@@ -1569,7 +1569,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Never delete game files.** Links: the full manifest is written before any
   file is touched; a game file a mod replaces is renamed to
   `<name>.irori-original` beside itself; `deploy::undeploy` is safe to rerun at
-  any step and calls `fs_guard::ensure_deletable` on the game folder first. A
+  any step and calls `fs_guard::ensure_deletable` on the game folder first. It
+  checks every file before changing any: one still in use (Windows sharing
+  violations, waited for up to 5 s in all) stops it with the folder as it was and
+  the reason in the manifest (`blocked`). Copies (across drives, or when links
+  fail) go to `<name>.irori-partial` and are renamed into place. A
   file Irori put there that the game changed or replaced goes to `.written/`.
   Overlay (Linux, `fuse-overlayfs`): the game folder is a lower layer and is
   never written; after unmounting, `overlay::settle` moves what the game wrote

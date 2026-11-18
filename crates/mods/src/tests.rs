@@ -247,6 +247,78 @@ fn deploy_and_undeploy_restore_the_game_exactly() {
 }
 
 #[test]
+fn files_in_use_leave_the_deployment_untouched() {
+    let f = fixture();
+    let before = snapshot(&f.game);
+    let layers = f.lib.layers(&f.list).unwrap();
+    let manifest = f.lib.manifest_file();
+    deploy_links(&f.game, &layers, &manifest).unwrap();
+    let deployed = snapshot(&f.game);
+    let app = AppSettings::default();
+    let err = deploy::undeploy_checking(&manifest, &f.lib.written_dir(), &app, |p| {
+        p.ends_with("a.dll")
+    })
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("a.dll"), "{err:#}");
+    // Nothing moved; the reason is kept for the next attempt.
+    assert_eq!(snapshot(&f.game), deployed);
+    let record = deploy::read(&manifest).unwrap().unwrap();
+    assert!(record.blocked.unwrap().contains("still in use"));
+    // Once the file is free, the folder comes back exactly.
+    undeploy(&manifest, &f.lib.written_dir(), &app).unwrap();
+    assert_eq!(snapshot(&f.game), before);
+}
+
+#[test]
+fn copies_land_whole_or_not_at_all() {
+    let tmp = tempfile::tempdir().unwrap();
+    let from = tmp.path().join("from.bin");
+    std::fs::write(&from, b"payload").unwrap();
+    let to = tmp.path().join("out/to.bin");
+    std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+    crate::fsutil::copy_whole(&from, &to).unwrap();
+    assert_eq!(std::fs::read(&to).unwrap(), b"payload");
+    assert!(!tmp.path().join("out/to.bin.irori-partial").exists());
+    // A source that can't be read leaves neither the target nor a partial.
+    let missing = tmp.path().join("missing.bin");
+    let other = tmp.path().join("out/other.bin");
+    assert!(crate::fsutil::copy_whole(&missing, &other).is_err());
+    assert!(!other.exists());
+    assert!(!tmp.path().join("out/other.bin.irori-partial").exists());
+}
+
+#[test]
+fn locked_files_are_waited_for_within_a_budget() {
+    use crate::fsutil::{is_locked, retry_locked};
+    use std::time::Duration;
+    let locked = || std::io::Error::from_raw_os_error(if cfg!(windows) { 32 } else { 16 });
+    assert!(is_locked(&locked()));
+    assert!(!is_locked(&std::io::Error::from(
+        std::io::ErrorKind::NotFound
+    )));
+    let mut tries = 0;
+    let result = retry_locked(Duration::from_secs(2), || {
+        tries += 1;
+        if tries < 3 { Err(locked()) } else { Ok(tries) }
+    });
+    assert_eq!(result.unwrap(), 3);
+    let mut tries = 0;
+    let result: std::io::Result<()> = retry_locked(Duration::from_secs(2), || {
+        tries += 1;
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    });
+    assert!(result.is_err());
+    assert_eq!(tries, 1);
+    let mut tries = 0;
+    let result: std::io::Result<()> = retry_locked(Duration::ZERO, || {
+        tries += 1;
+        Err(locked())
+    });
+    assert!(result.is_err());
+    assert_eq!(tries, 1);
+}
+
+#[test]
 fn undeploy_recovers_from_an_interrupted_deployment() {
     let f = fixture();
     let before = snapshot(&f.game);

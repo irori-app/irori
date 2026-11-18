@@ -991,6 +991,7 @@ impl Backend {
                 files: Vec::new(),
                 dirs: Vec::new(),
                 created_at: irori_core::util::now_rfc3339(),
+                blocked: None,
             };
             irori_core::json_store::write(&lib.manifest_file(), &manifest)?;
             match overlay::mount(&tool, &game_dir, lower, &lib.written_dir(), &lib.work_dir()).await
