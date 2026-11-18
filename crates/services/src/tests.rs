@@ -1116,9 +1116,29 @@ esac
     let rt = b.runtime();
     let title = rt.block_on(b.ludusavi_title(&id)).unwrap();
     assert_eq!(title.as_deref(), Some("Crash Bandicoot (PS1)"));
-    assert_eq!(b.settings.game(&id).ludusavi_title, "Crash Bandicoot (PS1)");
-    let asked = std::fs::read_to_string(&calls).unwrap().lines().count();
-    rt.block_on(b.ludusavi_title(&id)).unwrap();
-    let again = std::fs::read_to_string(&calls).unwrap().lines().count();
-    assert_eq!(asked, again, "the kept name needs no search");
+    // Found, not chosen: the user's own choice stays empty.
+    assert!(
+        !b.settings
+            .overrides(&id)
+            .is_overridden("iroriLudusaviTitle")
+    );
+
+    // A new session (no matches in memory) runs only the plain lookup.
+    let fuzzy = || {
+        std::fs::read_to_string(&calls)
+            .unwrap()
+            .lines()
+            .filter(|l| l.contains("--fuzzy"))
+            .count()
+    };
+    let asked = fuzzy();
+    crate::ludusavi::forget_matches_for_test();
+    let again = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(again.as_deref(), Some("Crash Bandicoot (PS1)"));
+    assert_eq!(fuzzy(), asked, "the kept name needs no search");
+
+    // The user's choice wins over the found name.
+    b.set_ludusavi_title(&id, Some("Crash Bandicoot (RetroArch)"));
+    let chosen = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(chosen.as_deref(), Some("Crash Bandicoot (RetroArch)"));
 }

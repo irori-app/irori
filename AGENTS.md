@@ -653,7 +653,9 @@ commands without a window.
   nothing, the title without its region or revision tags is tried, then, for a game
   played in an emulator, the name an emulator manifest gives it (`… (PS2)`,
   `… (RetroArch)`, from Ludusavi's fuzzy search over the title and the ROM's name,
-  `ludusavi/names.rs`); a name found that way is kept as `iroriLudusaviTitle`. Windows games pass
+  `ludusavi/names.rs`); a name found that way is kept in `<cache>/ludusavi-names.json`
+  by game key and the title it was found for (a renamed game searches again), never as
+  the user's choice. Windows games pass
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
