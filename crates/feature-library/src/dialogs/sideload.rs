@@ -88,6 +88,9 @@ pub struct SideloadDialog {
     title: Entity<InputState>,
     executable: Entity<InputState>,
     arguments: Entity<InputState>,
+    /// A command line that starts a Linux or macOS game instead of its
+    /// program.
+    command: Entity<InputState>,
     install_folder: Entity<InputState>,
     url: Entity<InputState>,
     user_agent: Entity<InputState>,
@@ -189,6 +192,10 @@ impl SideloadDialog {
             t("library.sideload.placeholder.arguments"),
             existing.launcher_args.clone(),
         );
+        let command = input(
+            t("library.sideload.placeholder.command"),
+            existing.command.clone().unwrap_or_default(),
+        );
         let install_folder = input(
             t("library.sideload.placeholder.install_folder"),
             path_text(&existing.install_folder),
@@ -261,6 +268,7 @@ impl SideloadDialog {
             });
         let more = editing.is_some()
             && (!existing.launcher_args.is_empty()
+                || existing.command.is_some()
                 || existing.install_folder.is_some()
                 || existing.custom_user_agent.is_some()
                 || existing
@@ -317,6 +325,7 @@ impl SideloadDialog {
             title,
             executable,
             arguments,
+            command,
             install_folder,
             url,
             user_agent,
@@ -531,6 +540,12 @@ impl SideloadDialog {
                 .map(str::to_string)
                 .collect(),
             launch_link: self.launch_link.clone(),
+            command: matches!(
+                self.platform,
+                SideloadPlatform::Linux | SideloadPlatform::Mac
+            )
+            .then(|| optional_text(&self.command, cx))
+            .flatten(),
         }
     }
 
@@ -848,6 +863,10 @@ impl SideloadDialog {
     /// The optional fields, behind "More details".
     fn render_details(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let browser = self.platform == SideloadPlatform::Browser;
+        let native = matches!(
+            self.platform,
+            SideloadPlatform::Linux | SideloadPlatform::Mac
+        );
         v_form()
             .when(!browser, |form| {
                 form.child(
@@ -855,6 +874,14 @@ impl SideloadDialog {
                         .label(t("library.sideload.field.arguments"))
                         .child(Input::new(&self.arguments)),
                 )
+                .when(native, |form| {
+                    form.child(
+                        field()
+                            .label(t("library.sideload.field.command"))
+                            .description(t("library.sideload.command_hint"))
+                            .child(Input::new(&self.command)),
+                    )
+                })
                 .child(
                     field()
                         .label(t("library.sideload.field.install_folder"))
