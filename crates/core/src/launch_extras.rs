@@ -85,6 +85,7 @@ pub const PRESET_KEYS: &[&str] = &[
     "iroriLaunchPrograms",
     "gamescope",
     "showMangohud",
+    "iroriMangohudFpsLimit",
     "useGameMode",
     "nvidiaPrime",
     "enableEsync",

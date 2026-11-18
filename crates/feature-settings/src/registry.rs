@@ -567,6 +567,7 @@ impl FieldSpec {
                 self.path,
                 "useGameMode"
                     | "showMangohud"
+                    | "iroriMangohudFpsLimit"
                     | "nvidiaPrime"
                     | "enableFsync"
                     | "iroriNtsync"
@@ -1082,6 +1083,7 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     true,
     "settings.requires.fps_limit",
 )];
+const NEEDS_MANGOHUD: &[Condition] = &[when("showMangohud", true, "settings.requires.mangohud")];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
     true,
@@ -2587,6 +2589,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_mangohud.help")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
+    game(
+        "iroriMangohudFpsLimit",
+        "settings.field.mangohud_fps_limit.label",
+        Performance,
+        "settings.group.system",
+        Text(TextKind::Digits { max_len: 4 }),
+    )
+    .help("settings.field.mangohud_fps_limit.help")
+    .placeholder(Verbatim("60"))
+    .keywords(&["mangohud", "fps", "limit", "cap", "frame rate", "fps_limit"])
+    .requires(NEEDS_MANGOHUD),
     game(
         "showFps",
         "settings.field.show_fps.label",

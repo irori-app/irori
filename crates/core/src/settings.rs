@@ -186,6 +186,11 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
+    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
+    /// games of every kind while MangoHud is on; empty for none. Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriMangohudFpsLimit")]
+    pub mangohud_fps_limit: String,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -506,6 +511,7 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
+            mangohud_fps_limit: String::new(),
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
