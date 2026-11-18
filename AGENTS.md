@@ -1561,7 +1561,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   folders, applied on top), and `deployment.json` while mods are applied. Mod ids
   are `[a-z0-9-]` only, so they never name anything outside that folder.
 - **Only while playing.** `Backend::launch_with` calls `apply_mods` right before
-  the game starts and `restore_mods` after it exits (after the saves sync).
+  the store builds the launch (so a program a mod brings exists when the store
+  checks it) and `restore_mods` after it exits (after the saves sync).
   Leftovers from a crash are taken out at start (`recover_mods`, the app only:
   a command-line run may sit beside a running game). Mods can't change while
   the game runs.
@@ -1575,6 +1576,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   outside the mods' own files and folders into the game folder, where it would
   have gone without mods. Paths compare without letter case and follow the game
   folder's spelling (`align_case`).
+- **Bethesda games** (`irori_mods::bethesda`, told by their program: Oblivion,
+  Fallout 3/New Vegas/4/4 VR, Skyrim/SE/VR, Starfield): once mods are in,
+  `Plugins.txt` (local application data; under Wine the prefix's user, Steam's
+  `compatdata/<appid>/pfx`) lists the enabled mods' plugins after the user's own
+  entries, and `[Archive]` keys loose files need are set in the game's ini
+  (`bInvalidateOlderFiles`, `sResourceDataDirsFinal`). `bethesda.json` records it
+  first; `take_out` restores it before the files: the user's `Plugins.txt` comes
+  back from `.irori-original`, and only ini keys still holding Irori's value are
+  reset. The older games order plugins by file time, which Irori leaves alone.
+  The Mods tab offers "Start through SKSE/F4SE/…" (`Backend::set_script_extender`,
+  the per-game `targetExe`), except for Steam games, which Steam starts itself.
 - **Proxy DLLs under Wine.** A DLL the enabled mods put beside a program of the
   game or a mod whose name is one of `irori_mods::proxy::PROXY_DLLS` (`winhttp`,
   `version`, `dinput8`, `dxgi`…) gets `<dll>=n,b` in `WINEDLLOVERRIDES` before the

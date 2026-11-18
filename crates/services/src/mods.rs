@@ -47,6 +47,40 @@ pub struct ModsView {
     pub rar_missing: bool,
     /// The command that installs 7-Zip on this system, when known.
     pub seven_zip_command: Option<&'static str>,
+    /// For a Bethesda game: its script extender and whether it is used.
+    pub script_extender: Option<ScriptExtender>,
+}
+
+/// A Bethesda game's script extender (SKSE, F4SE…).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptExtender {
+    pub name: &'static str,
+    /// Its loader's file name, as the game folder or the mod spells it.
+    pub loader: String,
+    /// The loader is in the game folder or an enabled mod.
+    pub available: bool,
+    /// The game starts through the loader (its `targetExe`).
+    pub in_use: bool,
+    /// Steam starts the game's own program, whatever `targetExe` says.
+    pub steam: bool,
+}
+
+/// The loader `name` as the game folder or an enabled mod spells it, when
+/// either has it at the game folder's root.
+fn find_loader(game_dir: &Path, enabled: &[(String, Vec<String>)], name: &str) -> Option<String> {
+    let in_game = std::fs::read_dir(game_dir).ok().and_then(|entries| {
+        entries
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|n| n.eq_ignore_ascii_case(name))
+    });
+    in_game.or_else(|| {
+        enabled
+            .iter()
+            .flat_map(|(_, files)| files)
+            .find(|f| f.eq_ignore_ascii_case(name))
+            .cloned()
+    })
 }
 
 /// An archive install that needs the user's choices first.
@@ -217,6 +251,8 @@ impl Backend {
         let (_, game_dir) = self.mod_game(id)?;
         let lib = ModLibrary::for_game(id);
         let running = self.is_running(id);
+        let target_exe = self.settings.game(id).target_exe;
+        let steam = id.runner == Runner::Steam;
         self.spawn_blocking(move || {
             let list = lib.load()?;
             let enabled: Vec<(String, Vec<String>)> = list
@@ -252,6 +288,18 @@ impl Backend {
                 list,
                 rar_missing: !irori_mods::archive::can_unpack_rar(),
                 seven_zip_command: irori_mods::archive::seven_zip_command(),
+                script_extender: irori_mods::bethesda::detect(&game_dir).map(|game| {
+                    let name = game.extender_loader();
+                    let found = find_loader(&game_dir, &enabled, name);
+                    let target = target_exe.trim().rsplit(['/', '\\']).next().unwrap_or("");
+                    ScriptExtender {
+                        name: game.extender_name(),
+                        available: found.is_some(),
+                        loader: found.unwrap_or_else(|| name.to_string()),
+                        in_use: target.eq_ignore_ascii_case(name),
+                        steam,
+                    }
+                }),
             })
         })
         .await?
@@ -291,6 +339,47 @@ impl Backend {
             list.mods.iter().map(|m| &m.id).ne(before.iter())
         })
         .await
+    }
+
+    /// Start a Bethesda game through its script extender's loader (its
+    /// `targetExe`), or again through its own program. Turning it off leaves
+    /// a program the user chose themselves alone.
+    pub async fn set_script_extender(&self, id: &GameId, on: bool) -> Result<()> {
+        let (_, game_dir) = self.mod_game_idle(id)?;
+        let lib = ModLibrary::for_game(id);
+        let dir = game_dir.clone();
+        let loader = self
+            .spawn_blocking(move || -> Result<Option<String>> {
+                let Some(game) = irori_mods::bethesda::detect(&dir) else {
+                    return Ok(None);
+                };
+                let list = lib.load()?;
+                let enabled: Vec<(String, Vec<String>)> = list
+                    .mods
+                    .iter()
+                    .filter(|m| m.enabled)
+                    .map(|m| Ok((m.id.clone(), lib.index(&m.id)?)))
+                    .collect::<Result<_>>()?;
+                let name = game.extender_loader();
+                Ok(Some(
+                    find_loader(&dir, &enabled, name).unwrap_or_else(|| name.to_string()),
+                ))
+            })
+            .await??
+            .context("Irori doesn't know a script extender for this game")?;
+        if on {
+            let path = game_dir.join(&loader).to_string_lossy().into_owned();
+            self.settings
+                .set_game_value(id, "targetExe", Some(serde_json::Value::String(path)));
+        } else {
+            let current = self.settings.game(id).target_exe;
+            let file = current.trim().rsplit(['/', '\\']).next().unwrap_or("");
+            if file.eq_ignore_ascii_case(&loader) {
+                self.settings.set_game_value(id, "targetExe", None);
+            }
+        }
+        self.mods_changed(id);
+        Ok(())
     }
 
     pub async fn set_mod_method(&self, id: &GameId, method: DeployMethod) -> Result<()> {
@@ -911,6 +1000,7 @@ impl Backend {
                         log,
                         &format!("Mods: {count} applied with fuse-overlayfs\n"),
                     );
+                    self.write_plugin_list(id, &lib, &game_dir, log).await;
                     self.mods_changed(id);
                     return Ok(true);
                 }
@@ -935,6 +1025,7 @@ impl Backend {
                     log,
                     &format!("Mods: {count} applied, {} files linked\n", d.files.len()),
                 );
+                self.write_plugin_list(id, &lib, &game_dir, log).await;
                 self.mods_changed(id);
                 Ok(true)
             }
@@ -999,8 +1090,102 @@ impl Backend {
         self.mods_changed(id);
     }
 
-    /// Undo whatever deployment `lib` records.
+    /// For a Bethesda game, once its mods are in: write `Plugins.txt` with
+    /// their plugins and set the ini keys loose files need
+    /// ([`irori_mods::bethesda`]). A game that can't get them still plays,
+    /// and its log says why.
+    async fn write_plugin_list(&self, id: &GameId, lib: &ModLibrary, game_dir: &Path, log: &Path) {
+        let places = self.bethesda_places(id, game_dir);
+        let edition = match id.runner {
+            Runner::Gog => Some("GOG"),
+            Runner::Legendary => Some("EPIC"),
+            Runner::Xbox => Some("MS"),
+            _ => None,
+        };
+        let (lib, game_dir) = (lib.clone(), game_dir.to_path_buf());
+        let result = self
+            .spawn_blocking(move || -> Result<Option<String>> {
+                let Some(bethesda) = irori_mods::bethesda::detect(&game_dir) else {
+                    return Ok(None);
+                };
+                let places = places.context("the game's Wine prefix was not found")?;
+                let data = layout::data_dir(&game_dir).unwrap_or_else(|| "Data".into());
+                let list = lib.load()?;
+                let mods: Vec<Vec<String>> = list
+                    .mods
+                    .iter()
+                    .filter(|m| m.enabled)
+                    .map(|m| lib.index(&m.id))
+                    .collect::<Result<_>>()?;
+                let plugins = irori_mods::bethesda::mod_plugins(&mods, &data);
+                let applied = irori_mods::bethesda::apply(
+                    bethesda,
+                    &game_dir.join(&data),
+                    &places,
+                    edition,
+                    &plugins,
+                    &plugin_record(&lib),
+                )?;
+                Ok(Some(format!(
+                    "Mods: {} plugins listed in {}, {} ini settings set\n",
+                    applied.plugins,
+                    applied
+                        .plugins_txt
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                    applied.ini_keys
+                )))
+            })
+            .await;
+        match result {
+            Ok(Ok(Some(line))) => crate::games::append_log(log, &line),
+            Ok(Ok(None)) => {}
+            Ok(Err(e)) => {
+                tracing::warn!("plugin list of {id}: {e:#}");
+                crate::games::append_log(log, &format!("Mods: plugins not listed: {e:#}\n"));
+            }
+            Err(e) => tracing::warn!("plugin list of {id}: {e:#}"),
+        }
+    }
+
+    /// Where the game keeps `Plugins.txt` and its ini: the user's own
+    /// folders on Windows, else its Wine prefix (a Steam game's Proton
+    /// prefix sits in `compatdata` beside its library's `common`).
+    fn bethesda_places(
+        &self,
+        id: &GameId,
+        game_dir: &Path,
+    ) -> Option<irori_mods::bethesda::Places> {
+        if cfg!(windows) {
+            return Some(irori_mods::bethesda::Places {
+                local_app_data: dirs::data_local_dir()?,
+                documents: dirs::document_dir()?,
+            });
+        }
+        let prefix = if id.runner == Runner::Steam {
+            game_dir
+                .parent()?
+                .parent()?
+                .join("compatdata")
+                .join(id.app_name.as_ref())
+        } else {
+            let prefix = self.settings.game(id).wine_prefix;
+            if prefix.trim().is_empty() {
+                return None;
+            }
+            irori_core::paths::expand_home(prefix.trim())
+        };
+        let root = crate::ludusavi::wine_prefix_root(&prefix)?;
+        irori_mods::bethesda::Places::in_prefix(&root)
+    }
+
+    /// Undo whatever deployment `lib` records, its plugin list first.
     async fn take_out(&self, lib: &ModLibrary) -> Result<()> {
+        let record = plugin_record(lib);
+        if record.exists() {
+            self.spawn_blocking(move || irori_mods::bethesda::restore(&record))
+                .await??;
+        }
         let manifest = lib.manifest_file();
         let Some(deployment) = deploy::read(&manifest)? else {
             return Ok(());
@@ -1162,6 +1347,11 @@ fn new_entry(name: String, version: Option<String>, source: ModSource) -> ModEnt
     }
 }
 
+/// What [`irori_mods::bethesda::apply`] wrote for this game.
+fn plugin_record(lib: &ModLibrary) -> PathBuf {
+    lib.root().join("bethesda.json")
+}
+
 /// `<dll>=n,b` for each of `dlls` in `WINEDLLOVERRIDES`, replacing only
 /// what the variable said about those DLLs.
 fn add_proxy_overrides(dlls: &[String], env: &mut std::collections::BTreeMap<String, String>) {
@@ -1245,6 +1435,22 @@ mod tests {
         let mut empty = std::collections::BTreeMap::new();
         add_proxy_overrides(&[], &mut empty);
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn script_extender_loaders_are_found_in_the_game_or_a_mod() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mods = vec![("skse".to_string(), vec!["SKSE64_Loader.exe".to_string()])];
+        assert_eq!(
+            find_loader(tmp.path(), &mods, "skse64_loader.exe").as_deref(),
+            Some("SKSE64_Loader.exe")
+        );
+        std::fs::write(tmp.path().join("skse64_loader.EXE"), b"MZ").unwrap();
+        assert_eq!(
+            find_loader(tmp.path(), &mods, "skse64_loader.exe").as_deref(),
+            Some("skse64_loader.EXE")
+        );
+        assert_eq!(find_loader(tmp.path(), &[], "f4se_loader.exe"), None);
     }
 
     #[test]

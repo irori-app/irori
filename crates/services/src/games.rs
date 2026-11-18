@@ -531,6 +531,10 @@ impl Backend {
         // What the store set up for this session (GOG's Galaxy service, an
         // Xbox launch view) ends with `after_exit`, also when the launch is
         // cancelled once the store began.
+        // Mods go in before the store builds the launch: a program a mod
+        // brings (a script extender's loader as the game's program) must be
+        // there when the store checks it.
+        let mods = self.apply_mods(id, &game, &log_file).await?;
         let plan = match crate::downloads::stop_within(
             store.launch(&id.app_name, &request, ctx),
             &cancel,
@@ -539,10 +543,15 @@ impl Backend {
         .await
         {
             Some(Ok(plan)) if !cancel.is_cancelled() => plan,
-            Some(Err(e)) if !cancel.is_cancelled() => return Err(e),
+            Some(Err(e)) if !cancel.is_cancelled() => {
+                if mods {
+                    self.restore_mods(id, &game.title).await;
+                }
+                return Err(e);
+            }
             _ => {
                 return Err(self
-                    .abandon_launch(id, &store, &game.title, &log_file, false)
+                    .abandon_launch(id, &store, &game.title, &log_file, mods)
                     .await);
             }
         };
@@ -568,7 +577,6 @@ impl Backend {
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
         let header = std::fs::metadata(&log_file).map(|m| m.len()).unwrap_or(0);
-        let mods = self.apply_mods(id, &game, &log_file).await?;
         // The last moment a cancel counts: from here on the game runs, and
         // stopping it is Stop.
         if cancel.is_cancelled() {

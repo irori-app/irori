@@ -31,7 +31,7 @@ use gpui_kit::{
 use irori_core::{Event, GameId, GameInfo};
 use irori_mods::DeployMethod;
 use irori_mods::thunderstore::Community;
-use irori_services::{InstallOutcome, ModProgress, ModsView};
+use irori_services::{InstallOutcome, ModProgress, ModsView, ScriptExtender};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
 
@@ -600,8 +600,12 @@ impl ModsPanel {
     }
 
     fn render_options(&self, view: &ModsView, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
         let running = self.running(cx);
+        let extender = view
+            .script_extender
+            .clone()
+            .map(|e| self.render_extender(e, running, cx));
+        let theme = cx.theme();
         let links = view.list.method == DeployMethod::Links;
         let method_text = if view.overlay_available && !links {
             t("game.mods.method_overlay")
@@ -643,6 +647,7 @@ impl ModsPanel {
                         })),
                 )
             })
+            .children(extender)
             .when(view.rar_missing, |col| {
                 col.child(render_rar_hint(view.seven_zip_command, cx))
             })
@@ -673,6 +678,81 @@ impl ModsPanel {
                                     this.confirm_clear_written(window, cx)
                                 })),
                         ),
+                )
+            })
+            .into_any_element()
+    }
+
+    fn set_extender(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.change(window, cx, t("game.mods.change_failed"), move |b, id| {
+            Box::pin(async move { b.set_script_extender(&id, on).await })
+        });
+    }
+
+    /// A Bethesda game: what Irori does with its plugin list, and starting
+    /// it through its script extender.
+    fn render_extender(
+        &self,
+        extender: ScriptExtender,
+        running: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let name = extender.name;
+        let status = if extender.steam {
+            (extender.available || extender.in_use)
+                .then(|| t_args("game.mods.extender_steam", &[("name", name)]))
+        } else if extender.in_use {
+            Some(t_args(
+                "game.mods.extender_in_use",
+                &[("name", name), ("loader", &extender.loader)],
+            ))
+        } else if extender.available {
+            Some(t_args("game.mods.extender_available", &[("name", name)]))
+        } else {
+            None
+        };
+        let button = (!extender.steam && (extender.available || extender.in_use)).then(|| {
+            let on = !extender.in_use;
+            Button::new("mods-extender")
+                .xsmall()
+                .outline()
+                .label(if on {
+                    t_args("game.mods.extender_use", &[("name", name)])
+                } else {
+                    t("game.mods.extender_stop")
+                })
+                .disabled(running)
+                .on_click(cx.listener(move |this, _, window, cx| this.set_extender(on, window, cx)))
+        });
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_start()
+                    .child(
+                        Icon::new(IconName::Puzzle)
+                            .small()
+                            .text_color(theme.muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(t("game.mods.plugins_note")),
+                    ),
+            )
+            .when_some(status, |col, status| {
+                col.child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .items_center()
+                        .child(div().flex_1().min_w_0().text_xs().child(status))
+                        .children(button),
                 )
             })
             .into_any_element()
