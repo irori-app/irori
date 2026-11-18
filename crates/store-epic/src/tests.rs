@@ -496,3 +496,46 @@ async fn converts_files_left_by_legendary() {
     assert!(s.is_available("EaGame").await);
     assert_eq!(s.updatable_games().await.unwrap_or_default().len(), 0);
 }
+
+/// Heronite #347: a game the Epic Games Launcher updated stops showing an
+/// update on the next refresh, without EGL sync, while EGL's record of an
+/// older build never lowers the version Irori knows.
+#[tokio::test]
+async fn takes_builds_the_epic_games_launcher_installed() {
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    f.store
+        .install(APP, &InstallRequest::default(), OpContext::detached())
+        .await
+        .unwrap();
+    let dir = f.root.join(INSTALL_BASE).join("SugarDir");
+    let egstore = dir.join(".egstore");
+    std::fs::create_dir_all(&egstore).unwrap();
+
+    f.version.store(2, Ordering::SeqCst);
+    // A record of the installed build changes nothing.
+    std::fs::write(egstore.join("OLD.manifest"), build(1).0).unwrap();
+    assert_eq!(f.store.updatable_games().await.unwrap(), [APP]);
+
+    // EGL updated the game: its manifest of the current build is taken.
+    std::fs::write(egstore.join("NEW.manifest"), build(2).0).unwrap();
+    std::fs::write(dir.join("Data/a.pak"), pak(2)).unwrap();
+    assert!(f.store.updatable_games().await.unwrap().is_empty());
+    let g = f.store.installed_entry(APP).unwrap();
+    assert_eq!(g.version, "v2");
+    assert_eq!(
+        std::fs::read(f.store.layout.build_manifest(APP)).unwrap(),
+        build(2).0
+    );
+    // Its manifest is Irori's base from now on: a repair finds nothing to do.
+    let before = fetches(&f, "ChunksV4");
+    let outcome = f.store.repair(APP, OpContext::detached()).await.unwrap();
+    assert_eq!(outcome, Outcome::Done);
+    assert_eq!(std::fs::read(dir.join("Data/a.pak")).unwrap(), pak(2));
+    assert_eq!(fetches(&f, "ChunksV4"), before);
+}
