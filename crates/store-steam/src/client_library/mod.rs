@@ -529,7 +529,7 @@ impl SteamStore {
     /// Start the Steam client (its window opens on the library).
     async fn start_steam(&self) -> Result<()> {
         self.opener
-            .open(&crate::client::open_url("steam://open/games"))
+            .open_link(&self.steam_dir(), "steam://open/games")
             .await
             .context("Steam didn't start")
     }

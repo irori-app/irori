@@ -595,7 +595,7 @@ impl SteamStore {
     /// Open `link` in the Steam client.
     pub async fn open_friend_link(&self, link: FriendLink) -> Result<()> {
         self.opener
-            .open(&client::open_url(&link.url()))
+            .open_link(&self.steam_dir(), &link.url())
             .await
             .context("Steam didn't open")
     }
@@ -879,9 +879,10 @@ impl Store for SteamStore {
         // Steam is handed the game here, detached, rather than started as the
         // session's program: a Steam this starts must not end with the
         // session or depend on Irori.
-        let command = client::launch_command(&self.steam_dir(), &game.app_name, &args).await;
-        self.opener
-            .open(&command)
+        let commands = client::launch_commands(&self.steam_dir(), &game.app_name, &args).await;
+        let command = self
+            .opener
+            .hand_over(commands)
             .await
             .context("Steam didn't open")?;
         client::log_handover(&request.log_file, &command).await;
@@ -905,7 +906,7 @@ impl Store for SteamStore {
             ClientAction::Show => ClientLink::Details,
         };
         self.opener
-            .open(&client::open_url(&link.url(app_name)))
+            .open_link(&self.steam_dir(), &link.url(app_name))
             .await
             .context("Steam didn't open")
     }

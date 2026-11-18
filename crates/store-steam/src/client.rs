@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use futures::future::BoxFuture;
 use irori_core::host;
 use irori_core::process::CommandSpec;
 use parking_lot::Mutex;
@@ -53,6 +54,22 @@ impl Opener {
                 Ok(())
             }
         }
+    }
+
+    /// Try `commands` in order until one reaches Steam; the one that did.
+    pub(crate) async fn hand_over(&self, commands: Vec<CommandSpec>) -> Result<CommandSpec> {
+        hand_over(
+            |command| Box::pin(async move { self.open(&command).await }),
+            commands,
+        )
+        .await
+    }
+
+    /// Hand `url` to Steam: through the system's opener, else Steam's own
+    /// program for `steam_dir`.
+    pub(crate) async fn open_link(&self, steam_dir: &Path, url: &str) -> Result<()> {
+        let commands = link_commands(url, steam_program(steam_dir).await);
+        self.hand_over(commands).await.map(drop)
     }
 
     /// What a test store was asked to open, in order.
@@ -138,24 +155,68 @@ pub(crate) fn game_args(
     args
 }
 
-/// The command starting `app_id` with `args`. Without arguments Steam's
-/// `rungameid` link is enough. With them, `-applaunch` passes them silently;
-/// the `steam://run` link is the fallback, for which Steam asks the user to
-/// confirm the arguments.
-pub(crate) async fn launch_command(steam_dir: &Path, app_id: &str, args: &[String]) -> CommandSpec {
-    if args.is_empty() {
-        return open_url(&format!("steam://rungameid/{app_id}"));
-    }
-    launch_command_with(steam_program(steam_dir).await, app_id, args)
+/// The commands that can start `app_id` with `args`, in the order to try
+/// them. Without arguments Steam's `rungameid` link is enough, with Steam's
+/// own program as the fallback ([`link_commands`]). With them, `-applaunch`
+/// passes them silently; the `steam://run` link is the fallback, for which
+/// Steam asks the user to confirm the arguments.
+pub(crate) async fn launch_commands(
+    steam_dir: &Path,
+    app_id: &str,
+    args: &[String],
+) -> Vec<CommandSpec> {
+    launch_commands_with(steam_program(steam_dir).await, app_id, args)
 }
 
-/// [`launch_command`] with arguments, given Steam's program when found.
-/// Each argument stays one argument: the program gets them as a list, and
-/// the link quotes those with blanks or quotes.
-fn launch_command_with(steam: Option<CommandSpec>, app_id: &str, args: &[String]) -> CommandSpec {
-    if let Some(steam) = steam {
-        return steam.arg("-applaunch").arg(app_id).args(args.iter());
+/// [`launch_commands`], given Steam's program when found.
+fn launch_commands_with(
+    steam: Option<CommandSpec>,
+    app_id: &str,
+    args: &[String],
+) -> Vec<CommandSpec> {
+    if args.is_empty() {
+        return link_commands(&format!("steam://rungameid/{app_id}"), steam);
     }
+    let link = open_url(&run_link(app_id, args));
+    match steam {
+        Some(steam) => vec![steam.arg("-applaunch").arg(app_id).args(args.iter()), link],
+        None => vec![link],
+    }
+}
+
+/// The commands that can hand `url` to Steam, in the order to try them: the
+/// system's opener, then Steam's own program with the link, which is what
+/// Steam's desktop entry runs. The second is for systems whose opener
+/// can't open `steam://` links (a default handler that is missing or names
+/// a program that is gone).
+pub(crate) fn link_commands(url: &str, steam: Option<CommandSpec>) -> Vec<CommandSpec> {
+    let mut commands = vec![open_url(url)];
+    commands.extend(steam.map(|steam| steam.arg(url)));
+    commands
+}
+
+/// Run `commands` with `open` in order until one hands its request over;
+/// the one that did. When none does, the last one's error.
+pub(crate) async fn hand_over<'a>(
+    open: impl Fn(CommandSpec) -> BoxFuture<'a, Result<()>>,
+    commands: Vec<CommandSpec>,
+) -> Result<CommandSpec> {
+    let mut failed = None;
+    for command in commands {
+        match open(command.clone()).await {
+            Ok(()) => return Ok(command),
+            Err(e) => {
+                tracing::warn!("{command} didn't reach Steam: {e:#}");
+                failed = Some(e);
+            }
+        }
+    }
+    Err(failed.unwrap_or_else(|| anyhow::anyhow!("nothing can open Steam")))
+}
+
+/// Steam's `run` link for `app_id` with `args`. Each argument stays one
+/// argument: the link quotes those with blanks or quotes.
+fn run_link(app_id: &str, args: &[String]) -> String {
     let joined = args
         .iter()
         .map(|a| {
@@ -170,7 +231,7 @@ fn launch_command_with(steam: Option<CommandSpec>, app_id: &str, args: &[String]
     let encoded: String = url::form_urlencoded::byte_serialize(joined.as_bytes())
         .collect::<String>()
         .replace('+', "%20");
-    open_url(&format!("steam://run/{app_id}//{encoded}/"))
+    format!("steam://run/{app_id}//{encoded}/")
 }
 
 /// A request to the Steam client about one game.
@@ -207,12 +268,12 @@ mod tests {
     #[tokio::test]
     async fn launches_through_links_or_the_program() {
         let dir = tempfile::tempdir().unwrap();
-        let plain = launch_command(dir.path(), "620", &[]).await;
-        assert_eq!(argv(&plain).last().unwrap(), "steam://rungameid/620");
+        let plain = launch_commands(dir.path(), "620", &[]).await;
+        assert_eq!(argv(&plain[0]).last().unwrap(), "steam://rungameid/620");
 
         let args = vec!["-novid".to_string(), "+map test".to_string()];
-        let with_args = launch_command(dir.path(), "620", &args).await;
-        let v = argv(&with_args);
+        let with_args = launch_commands(dir.path(), "620", &args).await;
+        let v = argv(&with_args[0]);
         if steam_program(dir.path()).await.is_some() {
             assert_eq!(
                 &v[v.len() - 4..],
@@ -224,6 +285,65 @@ mod tests {
                 "steam://run/620//-novid%20%22%2Bmap%20test%22/"
             );
         }
+    }
+
+    /// An opener that can't open `steam://` links (Zorin OS with a broken
+    /// default handler: `xdg-open` exits 4) leaves the link to Steam's own
+    /// program, as Steam's desktop entry would run it.
+    #[tokio::test]
+    async fn a_link_the_opener_refuses_goes_to_steams_program() {
+        let steam = CommandSpec::new("/usr/bin/steam");
+        let opener = open_url("steam://x").program;
+        let tried = std::sync::Arc::new(Mutex::new(Vec::new()));
+        // A fake opener refusing every command of `refused`, noting each.
+        let refusing = |refused: std::path::PathBuf| {
+            let tried = tried.clone();
+            move |command: CommandSpec| -> BoxFuture<'static, Result<()>> {
+                tried.lock().push(command.clone());
+                let refuses = command.program == refused;
+                Box::pin(async move {
+                    if refuses {
+                        anyhow::bail!("it couldn't open it (exit status: 4)")
+                    }
+                    Ok(())
+                })
+            }
+        };
+
+        let commands = launch_commands_with(Some(steam.clone()), "620", &[]);
+        let used = hand_over(refusing(opener.clone()), commands).await.unwrap();
+        assert_eq!(used.program, steam.program);
+        assert_eq!(argv(&used), ["steam://rungameid/620"]);
+        assert_eq!(tried.lock().len(), 2);
+
+        // A working opener is the only one asked.
+        tried.lock().clear();
+        let commands = launch_commands_with(Some(steam.clone()), "620", &[]);
+        let used = hand_over(refusing("nothing".into()), commands)
+            .await
+            .unwrap();
+        assert_eq!(used.program, opener);
+        assert_eq!(tried.lock().len(), 1);
+
+        // Without Steam's program the opener's refusal is the error.
+        let commands = launch_commands_with(None, "620", &[]);
+        let e = hand_over(refusing(opener.clone()), commands)
+            .await
+            .unwrap_err();
+        assert!(format!("{e:#}").contains("exit status: 4"), "{e:#}");
+
+        // `-applaunch` that fails falls back to the `run` link.
+        let args = ["-novid".to_string()];
+        let commands = launch_commands_with(Some(steam.clone()), "620", &args);
+        let used = hand_over(refusing(steam.program.clone()), commands)
+            .await
+            .unwrap();
+        assert_eq!(argv(&used).last().unwrap(), "steam://run/620//-novid/");
+
+        // Every link has the same fallback.
+        let link = link_commands("steam://validate/70", Some(steam.clone()));
+        assert_eq!(link.len(), 2);
+        assert_eq!(argv(&link[1]), ["steam://validate/70"]);
     }
 
     /// Launch options with a Windows path and a quoted value, as a user
@@ -248,12 +368,14 @@ mod tests {
         assert_eq!(args, expected());
         // The command line steam.exe gets on Windows, and the one Steam's
         // program gets elsewhere, carry the same arguments.
-        let windows = launch_command_with(
+        let windows = launch_commands_with(
             Some(CommandSpec::new(r"C:\Program Files (x86)\Steam\steam.exe")),
             "620",
             &args,
-        );
-        let linux = launch_command_with(Some(CommandSpec::new("/usr/bin/steam")), "620", &args);
+        )
+        .remove(0);
+        let linux =
+            launch_commands_with(Some(CommandSpec::new("/usr/bin/steam")), "620", &args).remove(0);
         assert_eq!(
             windows.program,
             std::path::PathBuf::from(r"C:\Program Files (x86)\Steam\steam.exe")
@@ -281,7 +403,7 @@ mod tests {
 
     #[test]
     fn the_link_keeps_each_argument_whole() {
-        let link = launch_command_with(None, "620", &expected());
+        let link = launch_commands_with(None, "620", &expected()).remove(0);
         let link = argv(&link).last().unwrap().clone();
         let encoded = link
             .strip_prefix("steam://run/620//")
