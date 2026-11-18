@@ -985,6 +985,33 @@ const LUDUSAVI_INTERVAL: &[ChoiceOption] = &[
     ),
 ];
 
+const LUDUSAVI_FULL_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.ludusavi_limit.ludusavi"),
+    ),
+    opt(ChoiceValue::Num(1), Verbatim("1")),
+    opt(ChoiceValue::Num(2), Verbatim("2")),
+    opt(ChoiceValue::Num(3), Verbatim("3")),
+    opt(ChoiceValue::Num(5), Verbatim("5")),
+    opt(ChoiceValue::Num(10), Verbatim("10")),
+];
+
+const LUDUSAVI_DIFFERENTIAL_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.ludusavi_limit.ludusavi"),
+    ),
+    opt(
+        ChoiceValue::Str("0"),
+        Key("settings.option.ludusavi_limit.none"),
+    ),
+    opt(ChoiceValue::Str("1"), Verbatim("1")),
+    opt(ChoiceValue::Str("3"), Verbatim("3")),
+    opt(ChoiceValue::Str("5"), Verbatim("5")),
+    opt(ChoiceValue::Str("10"), Verbatim("10")),
+];
+
 const ART_CACHE_LIMIT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Num(0),
@@ -3420,6 +3447,31 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ludusavi_backup_path.help")
     .placeholder(Key("settings.field.ludusavi_backup_path.placeholder"))
     .keywords(&["ludusavi", "backup", "folder", "path"]),
+    app(
+        "iroriLudusaviFullLimit",
+        "settings.field.ludusavi_full_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_FULL_LIMIT),
+    )
+    .help("settings.field.ludusavi_full_limit.help")
+    .keywords(&["ludusavi", "backup", "retention", "keep", "full", "limit"]),
+    app(
+        "iroriLudusaviDifferentialLimit",
+        "settings.field.ludusavi_differential_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_DIFFERENTIAL_LIMIT),
+    )
+    .help("settings.field.ludusavi_differential_limit.help")
+    .keywords(&[
+        "ludusavi",
+        "backup",
+        "retention",
+        "keep",
+        "differential",
+        "limit",
+    ]),
 ];
 
 /// The field with this path.

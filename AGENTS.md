@@ -665,6 +665,17 @@ commands without a window.
   `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
   game runs (`back_up_while_playing`): a timer task per session, one backup at a
   time, finished before the session's cloud upload.
+  Restores go into the game's current prefix (`ludusavi/restore.rs`): a preview's paths
+  are planned (the prefix holding most files and its Wine user moved into the current
+  ones, Windows paths into its `drive_c`; another prefix's files and the prefix's
+  `*.reg` files left out unless asked for) and the restore runs with `--config` on a
+  throwaway copy of Ludusavi's `config.yaml` holding the redirects and
+  `restore.toggledPaths`; Ludusavi's own configuration is never written. What a
+  restore replaces is copied first to `<data>/save-restore-undo/<game>/` (newest three
+  kept; `ludusavi/undo.rs`), and "Undo restore" puts it back. Backups are named and
+  locked through `ludusavi backups edit`, deleted by cutting them (and a full backup's
+  differential children) out of `mapping.yaml` (`ludusavi/mapping.rs`, never a locked
+  one), and kept per `iroriLudusaviFullLimit`/`iroriLudusaviDifferentialLimit`.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.

@@ -860,6 +860,14 @@ pub struct AppSettings {
     /// own backup folder. Irori-only.
     #[serde(rename = "iroriLudusaviBackupPath")]
     pub ludusavi_backup_path: String,
+    /// Full backups Ludusavi keeps of each game when Irori backs it up
+    /// (1–255); 0 keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviFullLimit")]
+    pub ludusavi_full_limit: u32,
+    /// Differential backups Ludusavi keeps per full one ("0"–"255"); empty
+    /// keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviDifferentialLimit")]
+    pub ludusavi_differential_limit: String,
     /// Largest size of the art cache on disk in MiB (downloaded art and the
     /// thumbnails cut from it); the least recently used art goes first.
     /// 0 = no cap. Irori-only.
@@ -911,6 +919,8 @@ impl Default for AppSettings {
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
             art_cache_limit: DEFAULT_ART_CACHE_LIMIT,
+            ludusavi_full_limit: 0,
+            ludusavi_differential_limit: String::new(),
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
