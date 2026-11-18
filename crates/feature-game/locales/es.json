@@ -251,6 +251,7 @@
   "game.install.no_wine": "No se encontró ninguna versión de Wine ni de Proton. Descarga una antes de jugar.",
   "game.install.not_in_library": "{id} no está en la biblioteca.",
   "game.install.nothing_to_install": "Este elemento no tiene nada que instalar. El contenido adicional de los juegos de GOG está disponible en gog.com.",
+  "game.install.nothing_to_install_other": "Este elemento no tiene nada que instalar.",
   "game.install.open_failed": "No se pudo abrir el instalador",
   "game.install.open_settings": "Abrir ajustes",
   "game.install.open_wine_manager": "Abrir el gestor de Wine",

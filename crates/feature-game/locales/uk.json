@@ -251,6 +251,7 @@
   "game.install.no_wine": "Не знайдено жодної версії Wine чи Proton. Завантажте її перед грою.",
   "game.install.not_in_library": "{id} немає в бібліотеці.",
   "game.install.nothing_to_install": "Для цього елемента нічого встановлювати. Бонусні матеріали ігор GOG доступні на gog.com.",
+  "game.install.nothing_to_install_other": "Для цього елемента нічого встановлювати.",
   "game.install.open_failed": "Не вдалося відкрити інсталятор",
   "game.install.open_settings": "Відкрити налаштування",
   "game.install.open_wine_manager": "Відкрити менеджер Wine",

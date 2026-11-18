@@ -251,6 +251,7 @@
   "game.install.no_wine": "Geen Wine- of Proton-versie gevonden. Download er een voordat je gaat spelen.",
   "game.install.not_in_library": "{id} staat niet in de bibliotheek.",
   "game.install.nothing_to_install": "Er valt voor dit item niets te installeren. Bonusmateriaal van GOG-games is beschikbaar op gog.com.",
+  "game.install.nothing_to_install_other": "Dit item heeft niets om te installeren.",
   "game.install.open_failed": "Het installatieprogramma kon niet worden geopend",
   "game.install.open_settings": "Instellingen openen",
   "game.install.open_wine_manager": "Wine-beheer openen",

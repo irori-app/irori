@@ -251,6 +251,7 @@
   "game.install.no_wine": "Hiç Wine veya Proton sürümü bulunamadı. Oynamadan önce bir tane indirin.",
   "game.install.not_in_library": "{id} kitaplıkta yok.",
   "game.install.nothing_to_install": "Bu öğede yüklenecek bir şey yok. GOG oyunlarının bonus içerikleri gog.com’da bulunur.",
+  "game.install.nothing_to_install_other": "Bu öğede yüklenecek bir şey yok.",
   "game.install.open_failed": "Yükleyici açılamadı",
   "game.install.open_settings": "Ayarları aç",
   "game.install.open_wine_manager": "Wine yöneticisini aç",

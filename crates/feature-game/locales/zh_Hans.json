@@ -251,6 +251,7 @@
   "game.install.no_wine": "未找到任何 Wine 或 Proton 版本。请在游玩前下载一个。",
   "game.install.not_in_library": "{id} 不在游戏库中。",
   "game.install.nothing_to_install": "此项目没有可安装的内容。GOG 游戏的额外内容可在 gog.com 获取。",
+  "game.install.nothing_to_install_other": "此项目没有可安装的内容。",
   "game.install.open_failed": "无法打开安装程序",
   "game.install.open_settings": "打开设置",
   "game.install.open_wine_manager": "打开 Wine 管理器",

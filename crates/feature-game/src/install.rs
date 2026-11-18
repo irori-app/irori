@@ -136,6 +136,30 @@ fn open_sheet(id: GameId, mode: InstallMode, window: &mut Window, cx: &mut App) 
     });
 }
 
+/// Whether the store's answer leaves nothing to download (a GOG goodie
+/// pack, say). A game another launcher installs (EA app, Ubisoft Connect)
+/// has no sizes either, yet Irori installs it by starting that launcher, so
+/// it never counts (#167).
+pub(crate) fn nothing_to_install(info: &InstallInfo, game: &GameInfo) -> bool {
+    let launcher = info
+        .third_party_managed_app
+        .as_ref()
+        .or(game.third_party_managed_app.as_ref());
+    launcher.is_none()
+        && info.download_size == 0
+        && info.disk_size == 0
+        && info.language_sizes.is_empty()
+}
+
+/// The explanation for [`nothing_to_install`]: only GOG's mentions GOG's
+/// bonus content.
+pub(crate) fn nothing_to_install_text(runner: Runner) -> &'static str {
+    match runner {
+        Runner::Gog => "game.install.nothing_to_install",
+        _ => "game.install.nothing_to_install_other",
+    }
+}
+
 /// Platforms the user can install on this host, native Linux first.
 pub fn installable_platforms(game: &GameInfo) -> Vec<InstallPlatform> {
     let mut out = Vec::new();
@@ -698,9 +722,9 @@ impl InstallSheet {
     }
 
     fn not_installable(&self) -> bool {
-        self.info.ready().is_some_and(|i| {
-            i.download_size == 0 && i.disk_size == 0 && i.language_sizes.is_empty()
-        })
+        self.info
+            .ready()
+            .is_some_and(|i| nothing_to_install(i, &self.game))
     }
 
     /// Why the primary button is disabled, if it is (a `game.install.blocker`
@@ -961,8 +985,11 @@ impl InstallSheet {
         }
         if self.not_installable() {
             out.push(
-                Alert::warning("not-installable", t("game.install.nothing_to_install"))
-                    .into_any_element(),
+                Alert::warning(
+                    "not-installable",
+                    t(nothing_to_install_text(self.game.runner())),
+                )
+                .into_any_element(),
             );
         }
         if let Some(app) = self.third_party() {
@@ -1565,6 +1592,49 @@ impl Render for InstallFooter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Epic games the EA app or Ubisoft Connect installs have no sizes; the
+    /// sheet must offer Install, not "nothing to install" (#167).
+    #[test]
+    fn launcher_games_have_something_to_install() {
+        let ea = GameInfo {
+            runner: Some(Runner::Legendary),
+            third_party_managed_app: Some("The EA App".into()),
+            is_ea_managed: true,
+            ..Default::default()
+        };
+        let info = InstallInfo {
+            third_party_managed_app: Some("The EA App".into()),
+            ..Default::default()
+        };
+        assert!(!nothing_to_install(&info, &ea));
+        assert!(!nothing_to_install(&InstallInfo::default(), &ea));
+
+        let goodies = GameInfo {
+            runner: Some(Runner::Gog),
+            ..Default::default()
+        };
+        assert!(nothing_to_install(&InstallInfo::default(), &goodies));
+        let sized = InstallInfo {
+            download_size: 1,
+            ..Default::default()
+        };
+        assert!(!nothing_to_install(&sized, &goodies));
+    }
+
+    #[test]
+    fn only_gog_mentions_gog_bonus_content() {
+        assert_eq!(
+            nothing_to_install_text(Runner::Gog),
+            "game.install.nothing_to_install"
+        );
+        for runner in [Runner::Legendary, Runner::Nile, Runner::Zoom, Runner::Itch] {
+            assert_eq!(
+                nothing_to_install_text(runner),
+                "game.install.nothing_to_install_other"
+            );
+        }
+    }
 
     #[test]
     fn native_linux_is_the_default_platform() {

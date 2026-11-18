@@ -251,6 +251,7 @@
   "game.install.no_wine": "Nu a fost găsită nicio versiune Wine sau Proton. Descarcă una înainte să joci.",
   "game.install.not_in_library": "{id} nu este în bibliotecă.",
   "game.install.nothing_to_install": "Acest element nu are nimic de instalat. Conținutul bonus al jocurilor GOG este disponibil pe gog.com.",
+  "game.install.nothing_to_install_other": "Acest element nu are nimic de instalat.",
   "game.install.open_failed": "Programul de instalare nu a putut fi deschis",
   "game.install.open_settings": "Deschide setările",
   "game.install.open_wine_manager": "Deschide managerul Wine",

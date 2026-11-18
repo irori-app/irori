@@ -209,7 +209,14 @@ pub(crate) fn build_entry(app_name: &str, meta: &GameMetadata) -> Option<Catalog
     let third_party = attr(attrs, "ThirdPartyManagedApp")
         .or_else(|| attr(attrs, "ThirdPartyManagedProvider"))
         .map(str::to_string);
-    let tp_lower = third_party.as_deref().map(str::to_lowercase);
+    // Compared without case, spaces or punctuation: Epic spells the same
+    // launcher several ways ("The EA App", "EA app", "Ubisoft Connect").
+    let tp_lower = third_party.as_deref().map(|t| {
+        t.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect::<String>()
+            .to_ascii_lowercase()
+    });
 
     let image = |kinds: &[&str]| {
         m.key_images
@@ -298,8 +305,10 @@ pub(crate) fn build_entry(app_name: &str, meta: &GameMetadata) -> Option<Catalog
         folder_name: Some(attr(attrs, "FolderName").unwrap_or(app_name).to_string()),
         is_ea_managed: tp_lower
             .as_deref()
-            .is_some_and(|t| t == "origin" || t == "the ea app"),
-        is_ubisoft_managed: tp_lower.as_deref() == Some("ubisoftconnect"),
+            .is_some_and(|t| ["origin", "theeaapp", "eaapp", "eadesktop"].contains(&t)),
+        is_ubisoft_managed: tp_lower
+            .as_deref()
+            .is_some_and(|t| ["ubisoftconnect", "uplay"].contains(&t)),
         third_party_managed_app: third_party,
         platforms,
         dlcs,
@@ -582,6 +591,12 @@ mod tests {
         let ubi = r#"{"app_name":"u","metadata":{"releaseInfo":[{"appId":"u"}],
             "customAttributes":{"ThirdPartyManagedProvider":{"type":"STRING","value":"UbisoftConnect"}}}}"#;
         assert!(entry(ubi).unwrap().game.is_ubisoft_managed);
+        let spaced = r#"{"app_name":"s","metadata":{"releaseInfo":[{"appId":"s"}],
+            "customAttributes":{"ThirdPartyManagedApp":{"type":"STRING","value":"Ubisoft Connect"}}}}"#;
+        assert!(entry(spaced).unwrap().game.is_ubisoft_managed);
+        let ea_app = r#"{"app_name":"e","metadata":{"releaseInfo":[{"appId":"e"}],
+            "customAttributes":{"ThirdPartyManagedApp":{"type":"STRING","value":"EA app"}}}}"#;
+        assert!(entry(ea_app).unwrap().game.is_ea_managed);
     }
 
     #[test]
