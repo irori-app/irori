@@ -297,6 +297,7 @@
   "manage.wine.source.proton_sarek": "Proton-Sarek：為僅支援 Vulkan 1.1 或 1.2 的顯示卡打造的 Proton。已不再更新；其 DXVK 現已包含在 Proton-CachyOS 中。",
   "manage.wine.fetch_failed": "無法取得版本清單：{error}。GitHub 可能正在限制請求，請稍後再試。",
   "manage.wine.refresh_failed": "無法重新整理 {source}",
+  "manage.wine.rate_limited": "GitHub 在無帳號時每小時只允許少量版本檢查，且已用完。{minutes} 分鐘後恢復檢查。",
   "manage.wine.remove_confirm.title": "要移除 {version} 嗎？",
   "manage.wine.remove_confirm.default_description": "這是所有遊戲的預設 Wine。沒有個別 Wine 設定的遊戲需要其他版本才能啟動。",
   "manage.wine.remove_confirm.description": "設定為使用此版本的遊戲將需要其他 Wine 或 Proton 版本。你可以隨時重新下載。",

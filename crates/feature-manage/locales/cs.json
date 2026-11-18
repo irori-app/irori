@@ -297,6 +297,7 @@
   "manage.wine.source.proton_sarek": "Proton-Sarek: Proton pro grafické karty s Vulkanem 1.1 nebo 1.2. Už se neaktualizuje; jeho DXVK nyní obsahuje Proton-CachyOS.",
   "manage.wine.fetch_failed": "Vydání se nepodařilo načíst: {error}. GitHub možná omezuje požadavky; zkuste to později.",
   "manage.wine.refresh_failed": "{source} se nepodařilo obnovit",
+  "manage.wine.rate_limited": "GitHub bez účtu povoluje jen několik kontrol vydání za hodinu a ty jsou vyčerpané. Kontroly budou pokračovat za {minutes} min.",
   "manage.wine.remove_confirm.title": "Odebrat {version}?",
   "manage.wine.remove_confirm.default_description": "Toto je výchozí Wine pro všechny hry. Hry bez vlastního nastavení Wine budou před spuštěním potřebovat jiné sestavení.",
   "manage.wine.remove_confirm.description": "Hry nastavené na toto sestavení budou potřebovat jiné sestavení Wine nebo Proton. Kdykoli si jej můžete znovu stáhnout.",

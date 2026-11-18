@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::discovery;
 use crate::download;
 use crate::locations;
+use crate::release_checks::{self, CheckKind};
 
 /// A release source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -505,6 +506,70 @@ pub async fn fetch_releases(kind: ReleaseKind, count: u32) -> Result<Vec<Release
     fetch_releases_at(kind, &kind.list_url(count), host_arch()).await
 }
 
+/// A source's release list, unless its feed says nothing changed since the
+/// list in the cache was fetched (`Ok(None)`). GitHub's API is asked only
+/// within the budget [`release_checks`] allows `check`.
+async fn check_source(
+    kind: ReleaseKind,
+    has_cached: bool,
+    check: CheckKind,
+) -> Result<Option<Vec<Release>>> {
+    anyhow::ensure!(
+        ReleaseKind::available().contains(&kind),
+        "This runtime source is not available on this operating system"
+    );
+    let ty = kind.type_str();
+    let mut state = release_checks::read_state();
+    let fingerprint = match release_checks::feed_url(kind.url()) {
+        Some(feed) => match download::get_text(&feed).await {
+            Ok(xml) => release_checks::feed_fingerprint(&xml),
+            Err(e) => {
+                tracing::debug!("{ty} release feed: {e:#}");
+                None
+            }
+        },
+        None => None,
+    };
+    if has_cached && fingerprint.is_some() && state.feeds.get(ty) == fingerprint.as_ref() {
+        tracing::debug!("{ty}: release feed unchanged, no API call");
+        return Ok(None);
+    }
+    let github = release_checks::is_github(kind.url());
+    let now = irori_core::util::unix_now();
+    if github {
+        release_checks::may_call_api(state.github, now, check)?;
+    }
+    let url = kind.list_url(50);
+    let response = download::api_get(&url)
+        .await
+        .with_context(|| format!("could not fetch {ty} releases"))?;
+    let status = response.status();
+    if github && let Some(budget) = release_checks::budget_from_headers(response.headers()) {
+        state.github = Some(budget);
+    }
+    if !status.is_success() {
+        let refused = github
+            .then(|| release_checks::refusal(status.as_u16(), response.headers(), now))
+            .flatten();
+        release_checks::write_state(&state);
+        if let Some(limited) = refused {
+            return Err(anyhow::Error::new(limited))
+                .with_context(|| format!("could not fetch {ty} releases"));
+        }
+        bail!("could not fetch {ty} releases: the server answered {status}");
+    }
+    let gh: Vec<GhRelease> = response
+        .json()
+        .await
+        .with_context(|| format!("could not fetch {ty} releases"))?;
+    match fingerprint {
+        Some(f) => state.feeds.insert(ty.to_string(), f),
+        None => state.feeds.remove(ty),
+    };
+    release_checks::write_state(&state);
+    Ok(Some(releases_from_github(kind, gh, host_arch())))
+}
+
 async fn fetch_releases_at(kind: ReleaseKind, url: &str, arch: &str) -> Result<Vec<Release>> {
     let gh: Vec<GhRelease> = download::get_json(url)
         .await
@@ -566,28 +631,47 @@ fn write_store(store: &ReleaseStore) -> Result<()> {
 static STORE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Refresh the release list (Heroic's `updateWineVersionInfos`). With
-/// `fetch`, the given sources are re-fetched from GitHub (failures of single
-/// sources are logged); without, the cache is only pruned of entries that
-/// can no longer be used. Returns the whole list.
+/// `fetch`, the given sources are checked as the user asked for it (failures
+/// of single sources are logged, and returned when every source failed);
+/// without, the cache is only pruned of entries that can no longer be used.
+/// Returns the whole list.
 pub async fn update_releases(fetch: bool, kinds: &[ReleaseKind]) -> Result<Vec<Release>> {
+    if !fetch {
+        return prune_releases().await;
+    }
+    refresh_releases(kinds, CheckKind::Manual).await
+}
+
+async fn prune_releases() -> Result<Vec<Release>> {
     let _guard = STORE_LOCK.lock().await;
     let mut store = read_store();
-    if !fetch {
-        let before = store.releases.len();
-        store.releases.retain(keep_cached);
-        if store.releases.len() != before {
-            write_store(&store)?;
-        }
-        return Ok(store.releases);
+    let before = store.releases.len();
+    store.releases.retain(keep_cached);
+    if store.releases.len() != before {
+        write_store(&store)?;
     }
+    Ok(store.releases)
+}
+
+/// Check `kinds` for new releases: the feed first, then the API within the
+/// budget `check` allows. A manual check fails when every source failed; an
+/// automatic one falls back to the cache when it has anything.
+async fn refresh_releases(kinds: &[ReleaseKind], check: CheckKind) -> Result<Vec<Release>> {
+    let _guard = STORE_LOCK.lock().await;
+    let mut store = read_store();
     let mut fresh = Vec::new();
     let mut fetched = Vec::new();
+    let mut checked = 0;
     let mut last_err = None;
     for &kind in kinds {
-        match fetch_releases(kind, 50).await {
+        let has_cached = store.releases.iter().any(|r| r.kind == kind.type_str());
+        match check_source(kind, has_cached, check).await {
             Ok(list) => {
-                fresh.extend(list);
-                fetched.push(kind);
+                if let Some(list) = list {
+                    fresh.extend(list);
+                    fetched.push(kind);
+                }
+                checked += 1;
                 store
                     .fetched_at
                     .insert(kind.type_str().into(), irori_core::util::unix_now());
@@ -598,21 +682,24 @@ pub async fn update_releases(fetch: bool, kinds: &[ReleaseKind]) -> Result<Vec<R
             }
         }
     }
-    if fetched.is_empty() {
-        if let Some(e) = last_err
-            && store.releases.is_empty()
-        {
-            return Err(e);
-        }
-        return Ok(store.releases);
+    if checked == 0
+        && let Some(e) = last_err
+        && (check == CheckKind::Manual || store.releases.is_empty())
+    {
+        return Err(e);
     }
-    store.releases = merge(std::mem::take(&mut store.releases), fresh, &fetched);
-    write_store(&store)?;
+    if !fetched.is_empty() {
+        store.releases = merge(std::mem::take(&mut store.releases), fresh, &fetched);
+    }
+    if checked > 0 {
+        write_store(&store)?;
+    }
     Ok(store.releases)
 }
 
-/// Releases of one source, fetched from GitHub when the cache has none or is
-/// older than a day. Install state reflects what is on disk now.
+/// Releases of one source, checked again (an automatic check, which keeps
+/// GitHub's reserve) when the cache has none or is older than a day. Install
+/// state reflects what is on disk now.
 pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
     let store = read_store();
     let fresh_enough = store
@@ -623,7 +710,7 @@ pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
     let list = if has_any && fresh_enough {
         store.releases
     } else {
-        match update_releases(true, &[kind]).await {
+        match refresh_releases(&[kind], CheckKind::Automatic).await {
             Ok(list) => list,
             Err(e) if has_any => {
                 tracing::warn!("{e:#}; using cached releases");

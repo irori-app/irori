@@ -69,6 +69,17 @@ pub async fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
         .with_context(|| format!("unexpected response from {}", host_of(url)))
 }
 
+/// GET an API address with a short timeout, leaving the status and headers
+/// to the caller (rate limits are read from them).
+pub async fn api_get(url: &str) -> Result<reqwest::Response> {
+    API_CLIENT
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .with_context(|| format!("could not reach {}", host_of(url)))
+}
+
 /// GET a small text document with a short timeout.
 pub async fn get_text(url: &str) -> Result<String> {
     API_CLIENT

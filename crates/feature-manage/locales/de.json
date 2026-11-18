@@ -297,6 +297,7 @@
   "manage.wine.source.proton_sarek": "Proton-Sarek: Proton für Grafikkarten mit Vulkan 1.1 oder 1.2. Wird nicht mehr aktualisiert; sein DXVK steckt jetzt in Proton-CachyOS.",
   "manage.wine.fetch_failed": "Releases konnten nicht abgerufen werden: {error}. GitHub begrenzt möglicherweise die Anfragen; versuche es später erneut.",
   "manage.wine.refresh_failed": "{source} konnte nicht aktualisiert werden",
+  "manage.wine.rate_limited": "GitHub erlaubt ohne Konto nur wenige Release-Abfragen pro Stunde, und sie sind aufgebraucht. Abfragen gehen in {minutes} Min. weiter.",
   "manage.wine.remove_confirm.title": "{version} entfernen?",
   "manage.wine.remove_confirm.default_description": "Dies ist das Standard-Wine für alle Spiele. Spiele ohne eigene Wine-Einstellung benötigen einen anderen Build, bevor sie starten können.",
   "manage.wine.remove_confirm.description": "Spiele, die diesen Build verwenden, benötigen einen anderen Wine- oder Proton-Build. Du kannst ihn jederzeit erneut herunterladen.",

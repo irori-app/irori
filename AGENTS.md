@@ -478,6 +478,11 @@ commands without a window.
   `run_automatic_updates`, which keeps to `iroriAutoUpdateFrom`/`Until` and, where the
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
+  Wine manager sources (`irori_runtime::release_checks`) read their release feed
+  (`releases.atom`, not counted by GitHub) before the API and skip the API when it is
+  unchanged; GitHub's `x-ratelimit-*` budget is kept in `state/wine-release-checks.json`,
+  automatic checks leave a reserve of 10 calls, and a used-up budget is a typed
+  `RateLimited` the Wine manager shows with its reset time.
 - **User data:** favourites, hidden games, categories, recents, playtime, play
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store

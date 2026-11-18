@@ -297,6 +297,7 @@
   "manage.wine.source.proton_sarek": "Proton-Sarek：Vulkan 1.1 または 1.2 のグラフィックカード向けの Proton。更新は終了し、その DXVK は現在 Proton-CachyOS に含まれています。",
   "manage.wine.fetch_failed": "リリースを取得できませんでした: {error}。GitHub がリクエストを制限している可能性があります。しばらくしてからもう一度お試しください。",
   "manage.wine.refresh_failed": "{source} を更新できませんでした",
+  "manage.wine.rate_limited": "GitHub はアカウントなしではリリースの確認を 1 時間に数回しか許可しておらず、その回数を使い切りました。{minutes} 分後に再開します。",
   "manage.wine.remove_confirm.title": "{version} を削除しますか？",
   "manage.wine.remove_confirm.default_description": "これはすべてのゲームの既定の Wine です。個別の Wine 設定がないゲームは、起動する前に別のビルドが必要になります。",
   "manage.wine.remove_confirm.description": "このビルドを使うように設定されたゲームには、別の Wine または Proton のビルドが必要になります。いつでも再ダウンロードできます。",

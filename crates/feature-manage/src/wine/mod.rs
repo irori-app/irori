@@ -14,6 +14,7 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
@@ -31,6 +32,7 @@ use gpui_kit::{
 };
 use irori_core::{Event, Paths, WineInstallation};
 use irori_runtime::manager::{self, Release, ReleaseKind};
+use irori_runtime::release_checks;
 use irori_ui::components::{EmptyState, PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -45,6 +47,14 @@ const PROGRESS_TICK: Duration = Duration::from_millis(300);
 
 fn source_label(kind: ReleaseKind) -> &'static str {
     kind.type_str()
+}
+
+/// Why a check didn't reach GitHub, and in how long it can.
+fn rate_limited_text(limited: release_checks::RateLimited, now: u64) -> SharedString {
+    t_args(
+        "manage.wine.rate_limited",
+        &[("minutes", &limited.minutes_left(now).to_string())],
+    )
 }
 
 fn source_description(kind: ReleaseKind) -> SharedString {
@@ -84,6 +94,8 @@ pub struct WineManagerView {
     tab_ix: usize,
     lists: HashMap<ReleaseKind, ListState>,
     refreshing: bool,
+    /// GitHub's API budget is used up until this unix time.
+    limited_until: Option<u64>,
     search: Entity<InputState>,
     system: Option<SystemState>,
     ops: Entity<WineOps>,
@@ -127,6 +139,7 @@ impl WineManagerView {
             tab_ix: 0,
             lists: HashMap::new(),
             refreshing: false,
+            limited_until: None,
             search,
             system: None,
             ops,
@@ -182,25 +195,51 @@ impl WineManagerView {
         }
         cx.notify();
         let task = irori_ui::run(cx, async move {
-            if fetch {
-                manager::update_releases(true, &[kind]).await?;
+            let list = async {
+                if fetch {
+                    manager::update_releases(true, &[kind]).await?;
+                }
+                manager::available_releases(kind).await
             }
-            manager::available_releases(kind).await
+            .await;
+            let now = irori_core::util::unix_now();
+            Ok((list, release_checks::exhausted_until(now)))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
+            let Ok((result, limited_until)) = task.await else {
+                return;
+            };
             let _ = this.update_in(cx, |this, window, cx| {
                 if fetch {
                     this.refreshing = false;
                 }
+                this.limited_until = limited_until;
                 match result {
                     Ok(list) => {
                         this.lists.insert(kind, ListState::Loaded(list));
                     }
                     Err(e) => {
-                        let message =
-                            t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))]);
+                        let now = irori_core::util::unix_now();
+                        let limited = release_checks::rate_limited(&e);
+                        let message = match limited {
+                            Some(l) => rate_limited_text(l, now),
+                            None => {
+                                t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))])
+                            }
+                        };
+                        if let Some(l) = limited {
+                            this.limited_until = Some(l.reset);
+                        }
                         match this.lists.get(&kind) {
+                            Some(ListState::Loaded(_)) if limited.is_some() => {
+                                window.push_notification(
+                                    Notification::warning(message).title(t_args(
+                                        "manage.wine.refresh_failed",
+                                        &[("source", source_label(kind))],
+                                    )),
+                                    cx,
+                                );
+                            }
                             Some(ListState::Loaded(_)) => notify_error(
                                 t_args(
                                     "manage.wine.refresh_failed",
@@ -557,6 +596,20 @@ impl WineManagerView {
                             .flex_shrink_0()
                             .child(Input::new(&self.search).small()),
                     ),
+            )
+            .when_some(
+                self.limited_until.filter(|reset| {
+                    *reset > irori_core::util::unix_now() && release_checks::is_github(kind.url())
+                }),
+                |col, reset| {
+                    let limited = release_checks::RateLimited { reset };
+                    col.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(rate_limited_text(limited, irori_core::util::unix_now())),
+                    )
+                },
             )
             .child(body)
             .into_any_element()

@@ -16,6 +16,7 @@ pub mod mac_driver;
 pub mod manager;
 pub mod prefix;
 pub mod protontricks;
+pub mod release_checks;
 pub mod runtimes;
 pub mod sandbox;
 pub mod sysinfo;

@@ -297,6 +297,7 @@
   "manage.wine.source.proton_sarek": "Proton-Sarek: Vulkan 1.1 veya 1.2 destekli ekran kartları için Proton. Artık güncellenmiyor; DXVK’sı artık Proton-CachyOS’ta.",
   "manage.wine.fetch_failed": "Sürümler alınamadı: {error}. GitHub istekleri sınırlıyor olabilir; daha sonra yeniden dene.",
   "manage.wine.refresh_failed": "{source} yenilenemedi",
+  "manage.wine.rate_limited": "GitHub hesap olmadan saatte yalnızca birkaç sürüm denetimine izin veriyor ve bunlar tükendi. Denetimler {minutes} dk sonra sürecek.",
   "manage.wine.remove_confirm.title": "{version} kaldırılsın mı?",
   "manage.wine.remove_confirm.default_description": "Bu, tüm oyunlar için varsayılan Wine. Kendi Wine ayarı olmayan oyunların başlayabilmesi için başka bir sürüm gerekecek.",
   "manage.wine.remove_confirm.description": "Bu sürümü kullanan oyunlar başka bir Wine veya Proton sürümüne ihtiyaç duyacak. Dilediğin zaman yeniden indirebilirsin.",
