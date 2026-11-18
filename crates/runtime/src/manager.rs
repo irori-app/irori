@@ -1,7 +1,7 @@
 //! The Wine manager: downloadable Wine/Proton builds from GitHub releases
 //! (GE-Proton, Proton-CachyOS, Proton-Wineland, Wine-GE and Kron4ek's Wine builds), a cached
 //! release list with install state, and install/remove with progress,
-//! cancellation and SHA-512 verification.
+//! cancellation and SHA-512 or SHA-256 verification.
 //!
 //! The cache file uses Heroic's `wine-downloader-info.json` shape
 //! (`{"wine-releases": [...]}`) so entries are interchangeable.
@@ -152,7 +152,8 @@ pub struct Release {
     pub downsize: u64,
     /// Size on disk after install, in bytes (0 when unknown).
     pub disksize: u64,
-    /// URL of the `.sha512sum` file, empty when the source publishes none.
+    /// URL of the `.sha512sum` (or `.sha256sum`) file, empty when the source
+    /// publishes none.
     pub checksum: String,
     pub release_notes_link: String,
     #[serde(rename = "installDir", skip_serializing_if = "Option::is_none")]
@@ -295,13 +296,15 @@ fn is_tarball(name: &str) -> bool {
         || name.ends_with(".tar.bz2")
 }
 
-fn checksum_name(asset: &str) -> String {
+/// The checksum files a source may publish beside `asset`, strongest first:
+/// most publish SHA-512, Proton-EM SHA-256.
+fn checksum_names(asset: &str) -> [String; 2] {
     let stem = asset
         .strip_suffix(".tar.gz")
         .or_else(|| asset.strip_suffix(".tar.xz"))
         .or_else(|| asset.strip_suffix(".tar.zst"))
         .unwrap_or(asset);
-    format!("{stem}.sha512sum")
+    [format!("{stem}.sha512sum"), format!("{stem}.sha256sum")]
 }
 
 fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Option<&'a GhAsset> {
@@ -373,11 +376,9 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
         .filter(|r| !r.draft)
         .filter_map(|r| {
             let asset = select_asset(kind, &r.assets, arch)?;
-            let wanted = checksum_name(&asset.name);
-            let checksum = r
-                .assets
+            let checksum = checksum_names(&asset.name)
                 .iter()
-                .find(|a| a.name == wanted)
+                .find_map(|wanted| r.assets.iter().find(|a| &a.name == wanted))
                 .map(|a| a.browser_download_url.clone())
                 .unwrap_or_default();
             Some(Release {
@@ -717,6 +718,7 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
     }
 
     let file_name = file_name_of(&release.download);
+    let digest_kind = download::DigestKind::of_checksum_file(&release.checksum).unwrap_or_default();
     let expected = if release.checksum.is_empty() {
         tracing::warn!("{} has no published checksum", release.version);
         None
@@ -725,7 +727,7 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
             .await
             .context("could not fetch the checksum")?;
         Some(
-            download::parse_sha512sum(&text, &file_name)
+            download::parse_checksum(&text, &file_name, digest_kind)
                 .context("the published checksum file is not valid")?,
         )
     };
@@ -733,10 +735,16 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
     (ctx.step)(&format!("Downloading {}", release.version));
     let archive = base.join(&file_name);
     let _ = tokio::fs::remove_file(&archive).await;
-    let downloaded =
-        download::download(&release.download, &archive, &ctx.progress, &ctx.cancel).await?;
+    let downloaded = download::download_hashed(
+        &release.download,
+        &archive,
+        &ctx.progress,
+        &ctx.cancel,
+        digest_kind,
+    )
+    .await?;
     if let Some(expected) = &expected
-        && !download::checksum_matches(expected, &downloaded.sha512)
+        && !download::checksum_matches(expected, &downloaded.digest)
     {
         let _ = tokio::fs::remove_file(&archive).await;
         bail!("Checksum verification failed for {}", release.version);
@@ -1529,8 +1537,36 @@ mod tests {
         assert_eq!(r.release_kind(), Some(ReleaseKind::GeProton));
         assert!(!r.installed(), "missing directory is not installed");
         assert_eq!(file_name_of(&r.download), "a.tar.gz");
-        assert_eq!(checksum_name("a-x86_64.tar.xz"), "a-x86_64.sha512sum");
+        assert_eq!(checksum_names("a-x86_64.tar.xz")[0], "a-x86_64.sha512sum");
+        assert_eq!(checksum_names("a-x86_64.tar.xz")[1], "a-x86_64.sha256sum");
         let back = serde_json::to_value(&store).unwrap();
         assert_eq!(back["wine-releases"][0]["installDir"], "/nonexistent");
+    }
+
+    #[test]
+    fn a_sha256_checksum_is_used_when_no_sha512_is_published() {
+        let only_256 = parse(serde_json::json!([gh(
+            "GE-Proton10-30",
+            "2026-11-01",
+            &["GE-Proton10-30.tar.gz", "GE-Proton10-30.sha256sum"],
+        )]));
+        let rel = releases_from_github(ReleaseKind::GeProton, only_256, "x86_64");
+        assert!(rel[1].checksum.ends_with("/GE-Proton10-30.sha256sum"));
+        assert_eq!(
+            download::DigestKind::of_checksum_file(&rel[1].checksum),
+            Some(download::DigestKind::Sha256)
+        );
+        // SHA-512 wins when both are there.
+        let both = parse(serde_json::json!([gh(
+            "GE-Proton10-30",
+            "2026-11-01",
+            &[
+                "GE-Proton10-30.tar.gz",
+                "GE-Proton10-30.sha256sum",
+                "GE-Proton10-30.sha512sum",
+            ],
+        )]));
+        let rel = releases_from_github(ReleaseKind::GeProton, both, "x86_64");
+        assert!(rel[1].checksum.ends_with("/GE-Proton10-30.sha512sum"));
     }
 }
