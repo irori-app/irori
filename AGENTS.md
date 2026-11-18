@@ -1174,7 +1174,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`), the files naming them
   (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
-  and the folders of their own layout that never name them (`layoutFolders`); BIOS
+  and the folders of their own layout that never name them (`layoutFolders`). A disc
+  image with a system's marker file at its root (`discFiles`: PS3 `PS3_DISC.SFB`, PSP
+  `UMD_DATA.BIN`) is that system's game wherever it sits, a `folderOnly` system's too,
+  and a folder holding a PS3 marker is a PS3 game anywhere; PS3 images take their title
+  from `PS3_GAME/PARAM.SFO` inside (`irori_engines::iso9660`, which reads only the
+  volume descriptor and bounded directories). RPCS3's `dev_hdd0` is a PS3 folder, and its
+  patches (`PARAM.SFO` category `GD`) aren't games. Scan cache entries carry
+  `DETECTION_RULES`, so files an older Irori didn't recognise are looked at again. BIOS
   files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
   game into a program of this computer before it plays, in Irori's data folder with the

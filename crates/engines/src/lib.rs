@@ -14,7 +14,8 @@
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
 //! - turning a game file into a command ([`launch`]);
-//! - reading the titles PlayStation games give themselves ([`sfo`]).
+//! - reading the titles PlayStation games give themselves ([`sfo`]), also
+//!   inside disc images ([`iso9660`]).
 //!
 //! Nothing here has a UI or blocks a Tokio worker: discovery and hashing run
 //! on the blocking pool.
@@ -25,6 +26,7 @@ pub mod cheevos;
 pub mod discovery;
 pub mod host;
 pub mod install;
+pub mod iso9660;
 pub mod launch;
 pub mod manifest;
 pub mod releases;

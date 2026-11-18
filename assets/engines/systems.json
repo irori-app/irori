@@ -587,6 +587,9 @@
         "psp",
         "playstation portable"
       ],
+      "discFiles": [
+        "UMD_DATA.BIN"
+      ],
       "engines": [
         "ppsspp",
         "retroarch:ppsspp"
@@ -773,7 +776,8 @@
       ],
       "folders": [
         "ps3",
-        "playstation 3"
+        "playstation 3",
+        "dev hdd0"
       ],
       "folderOnly": true,
       "folderGames": true,
@@ -788,6 +792,9 @@
       "layoutFolders": [
         "PS3_GAME",
         "USRDIR"
+      ],
+      "discFiles": [
+        "PS3_DISC.SFB"
       ],
       "engines": [
         "rpcs3"

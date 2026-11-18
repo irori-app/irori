@@ -162,6 +162,19 @@ names the same game (and so may carry the region), else by the title. Titles are
 on every scan, so games already in the library are renamed under the same app name; a
 title the user set still wins.
 
+PS3 games may also be disc images (`.iso`, which RPCS3 boots directly since early
+2026). A system may name marker files a disc of it holds at its root (`discFiles`:
+`PS3_DISC.SFB` for PS3, `UMD_DATA.BIN` for PSP); an image holding one is that system's
+game wherever it sits, also in another system's folder or outside any, and the scanner
+reads its title from the same `folderTitle` files inside the image
+(`irori_engines::iso9660`: the primary volume descriptor and directories of at most
+256 KiB, every offset checked). Images in the PS3 folder and in its subfolders are games
+too; an image without a marker keeps the folder's system. A folder holding
+`PS3_DISC.SFB` is a PS3 game anywhere. RPCS3's own `dev_hdd0` folder counts as a PS3
+folder, so `dev_hdd0/game/<id>` games are found; a folder there whose `PARAM.SFO`
+category is `GD` (a disc game's patch) is not a game. Detections in the scan cache carry
+the version of these rules, so a file an older Irori didn't recognise is looked at again.
+
 ### 3.2.1.1 More N64, DS and PlayStation emulators
 
 For people who already use a standalone emulator. Only Gopher64 is downloaded; the rest
