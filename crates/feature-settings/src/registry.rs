@@ -985,6 +985,33 @@ const LUDUSAVI_INTERVAL: &[ChoiceOption] = &[
     ),
 ];
 
+const ART_CACHE_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.art_cache_limit.0"),
+    ),
+    opt(
+        ChoiceValue::Num(512),
+        Key("settings.option.art_cache_limit.512"),
+    ),
+    opt(
+        ChoiceValue::Num(1024),
+        Key("settings.option.art_cache_limit.1024"),
+    ),
+    opt(
+        ChoiceValue::Num(2048),
+        Key("settings.option.art_cache_limit.2048"),
+    ),
+    opt(
+        ChoiceValue::Num(5120),
+        Key("settings.option.art_cache_limit.5120"),
+    ),
+    opt(
+        ChoiceValue::Num(10240),
+        Key("settings.option.art_cache_limit.10240"),
+    ),
+];
+
 const REPLAY_SECONDS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Num(15),
@@ -2156,6 +2183,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.steam_grid_db_api_key.help")
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
+    app(
+        "iroriArtCacheLimit",
+        "settings.field.art_cache_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Choice(ART_CACHE_LIMIT),
+    )
+    .help("settings.field.art_cache_limit.help")
+    .keywords(&[
+        "art",
+        "image",
+        "cache",
+        "disk",
+        "space",
+        "size",
+        "limit",
+        "thumbnail",
+    ]),
     app(
         "iroriIgdb",
         "settings.field.igdb.label",

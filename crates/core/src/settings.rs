@@ -860,6 +860,11 @@ pub struct AppSettings {
     /// own backup folder. Irori-only.
     #[serde(rename = "iroriLudusaviBackupPath")]
     pub ludusavi_backup_path: String,
+    /// Largest size of the art cache on disk in MiB (downloaded art and the
+    /// thumbnails cut from it); the least recently used art goes first.
+    /// 0 = no cap. Irori-only.
+    #[serde(rename = "iroriArtCacheLimit")]
+    pub art_cache_limit: u32,
     /// Scheduled backups. Irori-only; stays on this computer (backups and
     /// restores leave it alone).
     #[serde(rename = "iroriBackups")]
@@ -905,6 +910,7 @@ impl Default for AppSettings {
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
+            art_cache_limit: DEFAULT_ART_CACHE_LIMIT,
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
@@ -1058,6 +1064,9 @@ impl Density {
         }
     }
 }
+
+/// The art cache's default cap in MiB.
+pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
 
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

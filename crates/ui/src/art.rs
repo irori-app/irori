@@ -9,6 +9,10 @@
 //! 3. views render the thumbnail path through an [`LruImageCache`], which
 //!    bounds how many decoded images stay in GPU/CPU memory.
 //!
+//! The disk cache has a size cap (`iroriArtCacheLimit`), kept by
+//! `irori_services::art_cache`; art asked for here is noted as in use, so the
+//! cap never removes what is shown.
+//!
 //! Backdrop art also gets an [`Ambient`]: a small pre-blurred copy (a GPU blur
 //! of a full-size image every frame would cost far more), the colour the art
 //! is mostly made of, which tints the page around it, and the darkest and
@@ -197,6 +201,8 @@ impl ArtStore {
         if self.pending.contains(&key) {
             return self.stand_in_or_loading(&key);
         }
+        // Shown from now on: the disk cache's trim keeps it.
+        irori_services::art_cache::note_used(&digest(url));
         let thumb = thumb_path(url, key.width, keep_alpha);
         if thumb.is_file() {
             let p: Arc<Path> = thumb.into();
@@ -300,6 +306,7 @@ impl ArtStore {
         if self.ambient_pending.contains(&key) {
             return None;
         }
+        irori_services::art_cache::note_used(&digest(url));
         let (image, rgb) = ambient_paths(url);
         if let Some(found) = read_ambient(&image, &rgb) {
             self.ambient.insert(key, Some(found.clone()));

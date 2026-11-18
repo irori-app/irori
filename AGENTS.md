@@ -939,6 +939,11 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
+  `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
+  original with its thumbnails) go least recently used first. Art the store hands out
+  is noted with `art_cache::note_used` and never removed; each trim dates its files to
+  now, so recency survives restarts without file writes on the UI thread.
 
 **Theme and translucency:**
 

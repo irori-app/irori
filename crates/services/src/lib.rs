@@ -10,6 +10,7 @@
 pub mod accounts;
 pub mod achievements;
 pub mod app_update;
+pub mod art_cache;
 pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
@@ -514,6 +515,7 @@ impl Backend {
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;
+            self.trim_art_cache_when_due().await;
             let interval =
                 Duration::from_secs(self.settings.app().check_updates_interval.max(5) as u64 * 60);
             let reconnected = online && !was_online;
