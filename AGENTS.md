@@ -1424,7 +1424,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 
 - **Without an account** the library is what Steam installed (`scan.rs`: library
   folders, manifests, `localconfig.vdf` playtime, `appcache/librarycache` art), watched
-  with `notify` on each `steamapps` folder. With one (`account.rs`), it adds the account's
+  with `notify` on each `steamapps` folder. On Linux the library folders of every Steam
+  install under the home folder that lists them (native, Flatpak, Snap) are read, not only
+  the chosen one's (`scan::steam_installs`). With one (`account.rs`), it adds the account's
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
@@ -1472,8 +1474,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   quoting for a Windows build, which every game is on Windows and a game whose manifest
   records Proton (`platform_override_source` `windows`) is elsewhere, so the same options
   reach the game alike on every system; the `steam://run` fallback quotes arguments with
-  blanks. A `SteamGameWatch` follows the reaper (Linux), the game folder's
-  processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+  blanks. Every link and launch is handed over with `process::open_detached` (no
+  pipes of Irori's, a process group of its own, only the opener's exit status waited
+  for; `client::Opener`), so a Steam it starts never depends on Irori, and a link the
+  system's opener refuses goes to Steam's own program (`client::link_commands`). The
+  launch plan's command then only exits. A `SteamGameWatch` follows the reaper (Linux),
+  the game folder's processes and the manifest's launch flags, re-checking known PIDs
+  before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
   Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as
