@@ -94,6 +94,9 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
+  without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
+  fails then brings the window up to say why.
 - `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
