@@ -339,7 +339,7 @@ and `launch.rs` before changing anything below the UI.
 - Store config goes under `store_config_dir(runner)`, as do credentials (written only
   through `irori_secrets`, see below), store caches under
   `store_cache_dir(runner)`, and Irori state (`library.json`, `downloads.json`,
-  `sessions.jsonl`) under `state_dir()`.
+  `sessions.jsonl`, `running.json`) under `state_dir()`.
 - Per-game settings are `config/games/<runner>/<app>.json`. Logs go under
   `logs_dir()`; the app log is `data/logs/irori.log`, and a panic writes
   `crash-<time>.txt` beside it (`crates/irori/src/crash.rs`).
@@ -797,7 +797,11 @@ commands without a window.
   steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
   and the launch ends with `LaunchCancelled`, which screens don't show as an error.
   The game page's Cancel button and Escape, Big Picture's Cancel launch row and the
-  palette cancel it.
+  palette cancel it. Sessions Irori follows itself (not `LaunchPlan::watch` ones) are
+  kept in `state/running.json` (`running.rs`: pid, process start time, start, folder,
+  mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
+  still running (a pid whose process started at another time was reused) to their end,
+  so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
   1. Busy and availability checks.
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with

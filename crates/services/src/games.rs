@@ -57,6 +57,23 @@ pub struct RunningGame {
     pub(crate) handoff: Option<Arc<crate::follow::Handoff>>,
 }
 
+/// What [`Backend::finish_session`] needs of a session that ended.
+pub(crate) struct SessionEnd {
+    pub id: GameId,
+    /// `None` when the game left the library while it ran.
+    pub game: Option<Arc<GameInfo>>,
+    pub settings: irori_core::GameSettings,
+    pub started: Instant,
+    /// When it started, as the session history records it.
+    pub started_at: String,
+    /// How the started program exited; `None` for a session followed again
+    /// after a restart, whose exit nobody saw.
+    pub exit: Option<Option<std::process::ExitStatus>>,
+    /// Mods were applied for it and are taken out after.
+    pub mods: bool,
+    pub log_file: PathBuf,
+}
+
 /// Whether a session counts as a failed start: the game exited with an error
 /// within seconds of starting and nobody asked it to stop. A clean exit is
 /// never one, since launchers (EA app, Ubisoft Connect) hand off and exit 0.
@@ -600,7 +617,30 @@ impl Backend {
                 handoff: handoff.clone(),
             },
         );
+        // The game runs: no launch is left to cancel.
         drop(guard);
+        // Kept on disk, so an Irori that closes or crashes before the game
+        // ends follows it again when it starts. A game another program owns
+        // is that program's to follow, and a browser is no game's.
+        if plan.watch.is_none() && target.platform != InstallPlatform::Browser {
+            let process_start = self
+                .spawn_blocking(move || crate::running::process_start(pid))
+                .await
+                .ok()
+                .flatten();
+            let folder = (id.runner == irori_core::Runner::Launchers)
+                .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
+                .flatten()
+                .filter(|p| !p.is_empty());
+            crate::running::remember(crate::running::Record {
+                game: id.key(),
+                pid,
+                started_at: started_at.clone(),
+                process_start,
+                folder,
+                mods,
+            });
+        }
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
         self.start_replay(id, &game.title, &settings.replay);
@@ -719,60 +759,96 @@ impl Backend {
                 stop.cancel();
                 let _ = task.await;
             }
-            let seconds = started.elapsed().as_secs();
-            let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
-            let crashed = failed_start(status, seconds, stopped);
-            let exit_code = status.and_then(|s| s.code());
-            b.troubleshoot
-                .record_exit(&id, exit_code.filter(|_| crashed));
-            b.statuses.clear(&id);
-            {
-                // Sync sees both or neither.
-                let _playtime = b.sync.playtime_guard();
-                b.userdata.record_session(&id, seconds);
-                let session = crate::sessions::Session {
-                    game: id.key(),
-                    started: started_at,
-                    seconds,
-                    crashed,
-                    exit_code: exit_code.filter(|_| crashed),
-                };
-                if let Err(e) = crate::sessions::append(&session) {
-                    tracing::warn!("recording the session of {id}: {e:#}");
-                }
-            }
-            if let Some(store) = b.store(id.runner)
-                && let Err(e) = store.after_exit(&id.app_name, seconds).await
-            {
-                tracing::warn!("after-exit hook of {id}: {e:#}");
-            }
-            if !settings.after_launch_script_path.is_empty() {
-                let _ = run_script(&settings.after_launch_script_path, &game, &log_file, None).await;
-            }
-            if settings.auto_sync_saves && b.is_online() {
-                b.upload_after_session(&id, &game).await;
-            }
-            // After the cloud upload, so Ludusavi copies the saves the
-            // cloud now holds too.
-            if settings.ludusavi_auto_backup {
-                b.back_up_after_session(&id, &game.title).await;
-            }
-            // After the saves synced, which may live among the mods' files.
-            if mods {
-                b.restore_mods(&id, &game.title).await;
-            }
-            if b.is_online() {
-                let (b, id, title) = (b.clone(), id.clone(), game.title.clone());
-                tokio::spawn(async move { b.after_session_achievements(&id, &title).await });
-            }
-            b.bus.emit(Event::GameExited {
+            b.finish_session(SessionEnd {
                 id,
-                seconds,
-                crashed,
-                exit_code,
-            });
+                game: Some(game),
+                settings,
+                started,
+                started_at,
+                exit: Some(status),
+                mods,
+                log_file,
+            })
+            .await;
         });
         Ok(())
+    }
+
+    /// Everything after a session ended: record it and its playtime, the
+    /// store's after-exit hook, the after-launch script, the saves' upload
+    /// and backup, taking the mods out, then [`Event::GameExited`].
+    pub(crate) async fn finish_session(&self, end: SessionEnd) {
+        let SessionEnd {
+            id,
+            game,
+            settings,
+            started,
+            started_at,
+            exit,
+            mods,
+            log_file,
+        } = end;
+        crate::running::forget(&id);
+        let seconds = started.elapsed().as_secs();
+        let stopped = self.running.lock().remove(&id).is_some_and(|r| r.stopping);
+        // A session followed again after a restart has no exit status to
+        // judge, and has run for longer than a failed start anyway.
+        let status = exit.flatten();
+        let crashed = exit.is_some() && failed_start(status, seconds, stopped);
+        let exit_code = status.and_then(|s| s.code());
+        self.troubleshoot
+            .record_exit(&id, exit_code.filter(|_| crashed));
+        self.statuses.clear(&id);
+        {
+            // Sync sees both or neither.
+            let _playtime = self.sync.playtime_guard();
+            self.userdata.record_session(&id, seconds);
+            let session = crate::sessions::Session {
+                game: id.key(),
+                started: started_at,
+                seconds,
+                crashed,
+                exit_code: exit_code.filter(|_| crashed),
+            };
+            if let Err(e) = crate::sessions::append(&session) {
+                tracing::warn!("recording the session of {id}: {e:#}");
+            }
+        }
+        if let Some(store) = self.store(id.runner)
+            && let Err(e) = store.after_exit(&id.app_name, seconds).await
+        {
+            tracing::warn!("after-exit hook of {id}: {e:#}");
+        }
+        let title = game
+            .as_ref()
+            .map_or_else(|| id.app_name.to_string(), |g| g.title.clone());
+        if let Some(game) = &game {
+            if !settings.after_launch_script_path.is_empty() {
+                let _ = run_script(&settings.after_launch_script_path, game, &log_file, None).await;
+            }
+            if settings.auto_sync_saves && self.is_online() {
+                self.upload_after_session(&id, game).await;
+            }
+        }
+        // After the cloud upload, so Ludusavi copies the saves the
+        // cloud now holds too.
+        if settings.ludusavi_auto_backup {
+            self.back_up_after_session(&id, &title).await;
+        }
+        // After the saves synced, which may live among the mods' files.
+        if mods {
+            self.restore_mods(&id, &title).await;
+        }
+        if self.is_online() {
+            let (b, id, title) = (self.clone(), id.clone(), title.clone());
+            tokio::spawn(async move { b.after_session_achievements(&id, &title).await });
+        }
+        self.bus.emit(Event::GameExited {
+            id,
+            seconds,
+            crashed,
+            exit_code,
+        });
     }
 
     /// Start the game's programs alongside, if it has any. Steam games reach

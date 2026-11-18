@@ -734,6 +734,100 @@ fn a_launch_cancelled_while_its_script_runs_starts_nothing() {
     assert!(!started.exists(), "the game never started");
 }
 
+/// Whether `id` has a session recorded as running on disk.
+#[cfg(unix)]
+fn recorded_running(id: &irori_core::GameId) -> Option<crate::running::Record> {
+    crate::running::read()
+        .into_iter()
+        .find(|r| r.game == id.key())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_running_session_is_kept_on_disk_until_it_ends() {
+    let (b, id) = play("kept-on-disk", "sleep 2");
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    let record = recorded_running(&id).expect("recorded while it runs");
+    assert_eq!(Some(record.pid), b.running_pid(&id));
+    assert!(record.process_start.is_some());
+    assert!(session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15)).is_some());
+    assert!(recorded_running(&id).is_none(), "forgotten when it ended");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_game_still_running_after_a_restart_is_followed_to_its_end() {
+    use std::os::unix::process::CommandExt as _;
+    let (b, id) = play("followed-again", "exit 0");
+    // The game an Irori that closed left running, in its own process group
+    // as Irori starts games.
+    let mut game = std::process::Command::new("sh")
+        .args(["-c", "sleep 4"])
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let pid = game.id();
+    // Nobody else reaps it: a zombie would look alive.
+    let reaper = std::thread::spawn(move || game.wait());
+    let record = crate::running::Record {
+        game: id.key(),
+        pid,
+        started_at: (chrono::Utc::now() - chrono::Duration::seconds(90)).to_rfc3339(),
+        process_start: crate::running::process_start(pid),
+        folder: None,
+        mods: false,
+    };
+    crate::running::remember(record.clone());
+    // A game that ended while Irori was closed is only forgotten.
+    let ended = std::process::Command::new("true").spawn().unwrap().wait();
+    assert!(ended.is_ok());
+    let gone = irori_core::GameId::new(Runner::Sideload, "ended-meanwhile");
+    let stale = crate::running::Record {
+        game: gone.key(),
+        pid: 999_999,
+        ..record.clone()
+    };
+    crate::running::remember(stale.clone());
+
+    let mut rx = b.subscribe();
+    b.runtime().block_on(b.adopt_records(vec![record, stale]));
+    assert!(b.is_running(&id));
+    assert_eq!(
+        b.statuses.get(&id).map(|s| s.kind),
+        Some(irori_core::StatusKind::Playing)
+    );
+    assert!(b.playing_for(&id).unwrap() >= std::time::Duration::from_secs(89));
+    assert!(!b.is_running(&gone));
+    assert!(recorded_running(&gone).is_none());
+
+    let seconds = b.runtime().block_on(async {
+        tokio::time::timeout(std::time::Duration::from_secs(20), async {
+            loop {
+                if let Ok(Event::GameExited { id: e, seconds, .. }) = rx.recv().await
+                    && e == id
+                {
+                    return seconds;
+                }
+            }
+        })
+        .await
+        .expect("the session ended with the game")
+    });
+    let _ = reaper.join();
+    assert!(seconds >= 90, "counted from its start: {seconds}");
+    assert!(!b.is_running(&id));
+    assert!(recorded_running(&id).is_none());
+    let session = b
+        .sessions()
+        .into_iter()
+        .rfind(|s| s.game == id.key())
+        .expect("the session was recorded");
+    assert!(!session.crashed);
+}
+
 #[test]
 fn launch_presets_save_apply_and_go() {
     isolate_paths();

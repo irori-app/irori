@@ -76,9 +76,16 @@ pub(crate) struct Handoff {
 impl Handoff {
     /// Follow what the program `pid`, started just now, leaves behind.
     pub(crate) fn new(pid: u32) -> Arc<Self> {
-        let since = std::time::SystemTime::now()
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs().saturating_sub(1));
+            .map_or(0, |d| d.as_secs());
+        Self::resume(pid, now)
+    }
+
+    /// Follow what the program `pid`, started at Unix time `started`, left
+    /// running: also a session from before Irori restarted.
+    pub(crate) fn resume(pid: u32, started: u64) -> Arc<Self> {
+        let since = started.saturating_sub(1);
         Arc::new(Self {
             #[cfg(unix)]
             pid,
