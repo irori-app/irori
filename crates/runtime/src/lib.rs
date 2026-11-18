@@ -21,6 +21,7 @@ pub mod runtimes;
 pub mod sandbox;
 pub mod sysinfo;
 pub mod tools;
+pub mod umu;
 pub mod vdf;
 pub mod windows_file;
 pub mod windows_uri;
@@ -442,12 +443,9 @@ pub async fn prepare_launch(
     env::layer(&mut vars, env::game_debug_env(&effective, &host));
     env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
     if wc.uses_umu
-        && let Some(id) = hooks::hooks()
-            .umu_id(target.id)
-            .await
-            .filter(|i| !i.is_empty())
+        && let Some(found) = umu::resolve(target.id, &target.game.title, &effective).await
     {
-        vars.insert("GAMEID".into(), id);
+        vars.insert("GAMEID".into(), found.id);
     }
     parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
 
@@ -693,6 +691,33 @@ pub fn default_prefix(app: &AppSettings, game: &GameInfo) -> PathBuf {
         PathBuf::from(&app.default_wine_prefix_dir)
     };
     base.join(irori_core::paths::sanitize(&game.title))
+}
+
+/// The folder holding every game's own prefix (`<folder>/<title>`): the
+/// prefixes folder of the settings, else `Prefixes` in the install folder.
+pub fn prefixes_root(app: &AppSettings) -> PathBuf {
+    let dir = app.default_wine_prefix_dir.trim();
+    if dir.is_empty() {
+        irori_core::paths::expand_home(&app.default_install_path).join("Prefixes")
+    } else {
+        irori_core::paths::expand_home(dir)
+    }
+}
+
+/// The prefixes directly inside `root` (folders holding an initialised
+/// prefix, flat or Proton's `pfx/`), sorted by name. Reads the folder; call
+/// off the UI thread.
+pub fn prefixes_in(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && is_prefix(p))
+        .collect();
+    found.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    found
 }
 
 /// Every Wine/Proton build usable on this system (system Wine, downloaded
@@ -945,6 +970,36 @@ mod tests {
         assert!(prefix_is_shared(&app, &game(), Path::new("/egl")));
         gs.wine_prefix = "/mine".into();
         assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/mine"));
+    }
+
+    #[test]
+    fn lists_the_prefixes_in_the_prefixes_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("zeta")).unwrap();
+        std::fs::write(root.join("zeta/system.reg"), "").unwrap();
+        std::fs::create_dir_all(root.join("Alpha/pfx")).unwrap();
+        std::fs::write(root.join("Alpha/pfx/system.reg"), "").unwrap();
+        // Not prefixes: an empty folder and a file.
+        std::fs::create_dir_all(root.join("empty")).unwrap();
+        std::fs::write(root.join("notes.txt"), "").unwrap();
+        assert_eq!(
+            prefixes_in(root),
+            vec![root.join("Alpha"), root.join("zeta")]
+        );
+        assert!(prefixes_in(&root.join("missing")).is_empty());
+
+        let app = AppSettings {
+            default_wine_prefix_dir: " /p ".into(),
+            ..Default::default()
+        };
+        assert_eq!(prefixes_root(&app), PathBuf::from("/p"));
+        let app = AppSettings {
+            default_install_path: "/games".into(),
+            default_wine_prefix_dir: String::new(),
+            ..Default::default()
+        };
+        assert_eq!(prefixes_root(&app), PathBuf::from("/games/Prefixes"));
     }
 
     #[test]

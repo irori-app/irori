@@ -47,6 +47,7 @@ mod stores;
 mod sunshine;
 mod sync;
 mod treemap;
+mod umu;
 pub mod value;
 mod view;
 mod widgets;

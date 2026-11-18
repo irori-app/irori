@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Načíst knihovnu Steamu z klienta Steam",
   "shell.palette.steam_client_library_keywords": "Steam knihovna vlastněné hry nenainstalované bez přihlášení klient",
   "shell.palette.play_status": "{title}: nastavit stav hraní na {status}",
+  "shell.palette.play_as_pc_game": "Hrát „{title}“ jako hru pro PC…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulátor program windows linux přidaná hra",
   "shell.palette.clear_play_status": "{title}: zrušit stav hraní",
   "shell.palette.group_by_status": "Seskupit knihovnu podle stavu hraní",
   "shell.palette.ungroup_by_status": "Zrušit seskupení knihovny podle stavu hraní",

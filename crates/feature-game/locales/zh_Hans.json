@@ -433,6 +433,7 @@
   "game.menu.open_log": "打开日志…",
   "game.menu.open_prefix": "打开 Wine 前缀",
   "game.menu.play_skip_update": "不检查更新直接游玩",
+  "game.menu.play_as_pc_game": "作为 PC 游戏玩…",
   "game.menu.play_verbose": "以详细日志模式游玩",
   "game.menu.redmod": "REDmod 模组…",
   "game.menu.mods": "模组…",

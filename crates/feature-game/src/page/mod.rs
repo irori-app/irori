@@ -75,6 +75,10 @@ pub enum GamePageEvent {
     /// "Edit title and art…" was chosen: open the metadata editor for the
     /// game (`irori_library::open_edit_game_dialog`).
     RequestEdit(GameId),
+    /// "Play as a PC game…" was chosen for a ROM library entry: open the
+    /// "Add game" dialog filled in from it
+    /// (`irori_library::open_play_as_pc_game_dialog`).
+    RequestPlayAsPcGame(GameId),
     /// "Categories…" was chosen: open category assignment for the page's
     /// game ([`GamePage::game_id`]) through `irori_library`'s categories dialog.
     RequestCategories,

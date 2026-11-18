@@ -433,6 +433,7 @@
   "game.menu.open_log": "開啟記錄…",
   "game.menu.open_prefix": "開啟 Wine 前綴",
   "game.menu.play_skip_update": "不檢查更新直接遊玩",
+  "game.menu.play_as_pc_game": "作為 PC 遊戲玩…",
   "game.menu.play_verbose": "以詳細記錄模式遊玩",
   "game.menu.redmod": "REDmod 模組…",
   "game.menu.mods": "模組…",

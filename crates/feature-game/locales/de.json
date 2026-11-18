@@ -433,6 +433,7 @@
   "game.menu.open_log": "Protokoll öffnen …",
   "game.menu.open_prefix": "Wine-Präfix öffnen",
   "game.menu.play_skip_update": "Ohne Update-Prüfung spielen",
+  "game.menu.play_as_pc_game": "Als PC-Spiel spielen…",
   "game.menu.play_verbose": "Mit ausführlichen Protokollen spielen",
   "game.menu.redmod": "REDmod-Mods …",
   "game.menu.mods": "Mods…",

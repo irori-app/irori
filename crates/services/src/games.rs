@@ -19,6 +19,14 @@ use serde_json::Value;
 use crate::Backend;
 use crate::inhibit::Inhibitor;
 
+/// A Wine prefix a game could play in ([`Backend::prefix_choices`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixChoice {
+    pub path: PathBuf,
+    /// Titles of the installed games playing in it, sorted.
+    pub games: Vec<String>,
+}
+
 /// One-off launch choices.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchParams {
@@ -331,6 +339,67 @@ impl Backend {
         )
     }
 
+    /// The Wine prefixes `id` could use instead of its own: those in the
+    /// prefixes folder, and those other installed games play in, each with
+    /// the titles of the games using it. Only prefixes that exist are
+    /// listed. Reads folders; call off the UI thread.
+    pub fn prefix_choices(&self, id: &GameId) -> Vec<PrefixChoice> {
+        let app = self.settings.app();
+        let mut choices: Vec<PrefixChoice> =
+            irori_runtime::prefixes_in(&irori_runtime::prefixes_root(&app))
+                .into_iter()
+                .map(|path| PrefixChoice {
+                    path,
+                    games: Vec::new(),
+                })
+                .collect();
+        let library = self.library();
+        for game in library.all_games() {
+            if game.is_dlc
+                || !game.is_installed
+                || game.id() == *id
+                || !Self::target_platform(game).needs_wine()
+            {
+                continue;
+            }
+            let prefix = irori_runtime::prefix_path(&app, &self.settings.game(&game.id()), game);
+            match choices.iter_mut().find(|c| c.path == prefix) {
+                Some(choice) => choice.games.push(game.title.clone()),
+                None if irori_runtime::is_prefix(&prefix) => choices.push(PrefixChoice {
+                    path: prefix,
+                    games: vec![game.title.clone()],
+                }),
+                None => {}
+            }
+        }
+        for choice in &mut choices {
+            choice.games.sort_by_key(|t| t.to_lowercase());
+            choice.games.dedup();
+        }
+        choices.sort_by_key(|c| c.path.to_string_lossy().to_lowercase());
+        choices
+    }
+
+    /// The umu database id `id` runs with when umu starts it, and where it
+    /// came from; `None` when it has none (umu then runs it as `umu-0`).
+    pub async fn umu_id(&self, id: &GameId) -> Option<irori_runtime::umu::UmuMatch> {
+        let game = self.game(id)?;
+        let settings = self.settings.game(id);
+        irori_runtime::umu::resolve(id, &game.title, &settings).await
+    }
+
+    /// Titles of the umu database matching `query`, one per id.
+    pub async fn umu_suggestions(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Vec<irori_runtime::umu::UmuEntry> {
+        match irori_runtime::umu::database().await {
+            Some(entries) => irori_runtime::umu::suggestions(&entries, query, limit),
+            None => Vec::new(),
+        }
+    }
+
     /// Launch a game and track it until it exits.
     pub async fn launch(
         &self,
@@ -380,13 +449,11 @@ impl Backend {
             })
             .await?
         {
-            bail!(
-                "The game files of {} were not found{}",
-                game.title,
-                game.install_path()
-                    .map(|p| format!(" at {}", p.display()))
-                    .unwrap_or_default()
-            );
+            return Err(irori_core::GameFilesMissing {
+                title: game.title.clone(),
+                path: game.install_path(),
+            }
+            .into());
         }
 
         let app = self.settings.app();
@@ -1397,6 +1464,33 @@ impl Backend {
         Self::ensure_managed(id)?;
         let store = self.store(id.runner).context("store not available")?;
         store.set_install_path(&id.app_name, path).await?;
+        self.bus.emit(Event::LibraryChanged(id.runner));
+        Ok(())
+    }
+
+    /// Whether a game whose files are missing can be forgotten as installed
+    /// ([`Backend::forget_install`]): store games Irori installs. An added
+    /// game or a ROM has no install apart from its files; it is located again
+    /// or removed from the library instead.
+    pub fn can_forget_install(id: &GameId) -> bool {
+        id.runner.manages_installs() && !matches!(id.runner, Runner::Sideload | Runner::Emulation)
+    }
+
+    /// Forget that a game is installed without touching any file, for an
+    /// install whose files are gone. Its settings, prefix and library data
+    /// stay, so installing it again picks them up.
+    pub async fn forget_install(&self, id: &GameId) -> Result<()> {
+        anyhow::ensure!(
+            Self::can_forget_install(id),
+            "Irori can only forget the installs of store games"
+        );
+        let game = self.installed_game(id)?;
+        if self.is_running(id) {
+            bail!("{} is running", game.title);
+        }
+        let store = self.store(id.runner).context("store not available")?;
+        let _guard = self.statuses.guard(id, StatusKind::Uninstalling);
+        store.forget_install(&id.app_name).await?;
         self.bus.emit(Event::LibraryChanged(id.runner));
         Ok(())
     }

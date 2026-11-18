@@ -31,6 +31,9 @@ pub fn game_event(
     match event {
         GamePageEvent::TitleChanged(_) => {}
         GamePageEvent::RequestEdit(id) => irori_library::open_edit_game_dialog(id, window, cx),
+        GamePageEvent::RequestPlayAsPcGame(id) => {
+            irori_library::open_play_as_pc_game_dialog(id, window, cx)
+        }
         GamePageEvent::RequestCategories => {
             let id = page.read(cx).game_id().clone();
             irori_library::open_categories_dialog(Some(&id), window, cx);

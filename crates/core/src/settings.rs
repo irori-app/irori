@@ -160,6 +160,11 @@ pub struct GameSettings {
     pub enable_hdr: bool,
     #[serde(rename = "enableWoW64")]
     pub enable_wow64: bool,
+    /// Proton reads controllers through SDL instead of hidraw and evdev
+    /// (`PROTON_PREFER_SDL`), for controllers it otherwise misreads or
+    /// misses. Linux only; Irori-only.
+    #[serde(rename = "iroriProtonPreferSdl")]
+    pub proton_prefer_sdl: bool,
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
@@ -186,6 +191,11 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
+    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
+    /// games of every kind while MangoHud is on; empty for none. Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriMangohudFpsLimit")]
+    pub mangohud_fps_limit: String,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -333,6 +343,12 @@ pub struct GameSettings {
     /// variables. Per game only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
+    /// The umu database id (`GAMEID`) the game runs with under umu, when the
+    /// user chose one (`umu-1091500`, or a bare Steam app id); empty finds
+    /// it from the store, the Steam app id or the title. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriUmuId")]
+    pub umu_id: String,
     /// Keep the last moments of play ready to save as a clip. Linux only;
     /// Irori-only.
     #[serde(rename = "iroriReplay")]
@@ -491,6 +507,7 @@ impl Default for GameSettings {
             enable_wine_wayland: false,
             enable_hdr: false,
             enable_wow64: false,
+            proton_prefer_sdl: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
             dll_overrides: Vec::new(),
@@ -506,6 +523,7 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
+            mangohud_fps_limit: String::new(),
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
@@ -549,6 +567,7 @@ impl Default for GameSettings {
             hltb_id: String::new(),
             igdb_id: String::new(),
             steam_app_id: String::new(),
+            umu_id: String::new(),
             replay: ReplaySettings::default(),
         }
     }

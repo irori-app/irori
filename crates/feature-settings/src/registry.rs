@@ -259,6 +259,8 @@ pub enum PanelKind {
     Igdb,
     /// A Steam game's launch options in Steam itself.
     SteamLaunchOptions,
+    /// One game's umu id: the one used, its source, a database search.
+    Umu,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -569,6 +571,7 @@ impl FieldSpec {
                 self.path,
                 "useGameMode"
                     | "showMangohud"
+                    | "iroriMangohudFpsLimit"
                     | "nvidiaPrime"
                     | "enableFsync"
                     | "iroriNtsync"
@@ -576,9 +579,12 @@ impl FieldSpec {
                     | "enableWineWayland"
                     | "enableHDR"
                     | "enableWoW64"
+                    | "iroriProtonPreferSdl"
                     | "eacRuntime"
                     | "battlEyeRuntime"
                     | "disableUMU"
+                    | "iroriUmuId"
+                    | "panel.umu"
                     | "steamRuntime"
                     | "preferSystemLibs"
                     | "autoInstallDxvk"
@@ -1139,6 +1145,7 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     true,
     "settings.requires.fps_limit",
 )];
+const NEEDS_MANGOHUD: &[Condition] = &[when("showMangohud", true, "settings.requires.mangohud")];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
     true,
@@ -2471,6 +2478,42 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
+    game_only(
+        "iroriUmuId",
+        "settings.field.umu_id.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Text(TextKind::Plain),
+    )
+    .tag(Verbatim("umu"))
+    .help("settings.field.umu_id.help")
+    .placeholder(Verbatim("umu-1091500"))
+    .keywords(&["umu", "gameid", "protonfixes", "proton", "fixes"]),
+    game_only(
+        "panel.umu",
+        "settings.field.panel_umu.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Panel(PanelKind::Umu),
+    )
+    .keywords(&["umu", "gameid", "protonfixes", "database"]),
+    game(
+        "iroriProtonPreferSdl",
+        "settings.field.proton_prefer_sdl.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_prefer_sdl.help")
+    .keywords(&[
+        "sdl",
+        "controller",
+        "gamepad",
+        "joystick",
+        "hidraw",
+        "proton_prefer_sdl",
+    ]),
     game(
         "iroriDllOverrides",
         "settings.field.dll_overrides.label",
@@ -2688,6 +2731,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_mangohud.help")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
+    game(
+        "iroriMangohudFpsLimit",
+        "settings.field.mangohud_fps_limit.label",
+        Performance,
+        "settings.group.system",
+        Text(TextKind::Digits { max_len: 4 }),
+    )
+    .help("settings.field.mangohud_fps_limit.help")
+    .placeholder(Verbatim("60"))
+    .keywords(&["mangohud", "fps", "limit", "cap", "frame rate", "fps_limit"])
+    .requires(NEEDS_MANGOHUD),
     game(
         "showFps",
         "settings.field.show_fps.label",

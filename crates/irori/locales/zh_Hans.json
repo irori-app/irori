@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "从 Steam 客户端读取 Steam 库",
   "shell.palette.steam_client_library_keywords": "Steam 库 已拥有游戏 未安装 无需登录 客户端",
   "shell.palette.play_status": "{title}：将游玩状态设为“{status}”",
+  "shell.palette.play_as_pc_game": "将“{title}”作为 PC 游戏玩…",
+  "shell.palette.play_as_pc_game_keywords": "ROM 模拟器 程序 Windows Linux 添加的游戏",
   "shell.palette.clear_play_status": "{title}：清除游玩状态",
   "shell.palette.group_by_status": "按游玩状态为游戏库分组",
   "shell.palette.ungroup_by_status": "取消按游玩状态为游戏库分组",

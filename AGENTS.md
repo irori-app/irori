@@ -869,7 +869,10 @@ commands without a window.
   mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
   still running (a pid whose process started at another time was reused) to their end,
   so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
-  1. Busy and availability checks.
+  1. Busy and availability checks. Files that aren't where the install says
+     fail with the typed `GameFilesMissing`; `irori_ui::missing_files` offers
+     to locate them and play, or, for store games, to forget the install
+     (`Backend::forget_install`, which deletes nothing).
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with
      `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
@@ -880,7 +883,12 @@ commands without a window.
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
      `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
-     variable said about its DLL; ReShade's are added after.
+     variable said about its DLL; ReShade's are added after. Under umu the
+     game's `GAMEID` comes from `irori_runtime::umu::resolve`: the user's
+     `iroriUmuId`, the umu database's entry for the store id, `umu-<Steam app
+     id>` from `iroriSteamAppId`, else a title the database (its CSV, cached a
+     week in `<cache>/umu-database.csv`) lists under one id. The game's Wine
+     section shows the id, its source and a database search.
   4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
      starts at once and runs alongside the game as a program of the session
      (`programs::script_alongside`), stopped when the session ends or the launch
@@ -1303,6 +1311,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
+- **Play as a PC game.** A ROM entry that is really a program (the game
+  menu, the library's context menu, the palette:
+  `irori_library::open_play_as_pc_game_dialog`) opens "Add game" filled in from
+  it; saving moves what the user keeps about it to the new app
+  (`UserData::carry_over`: favourite, hidden, recents, categories, playtime, title
+  and art, date added, status, rating, journal) and hides the ROM entry. The file
+  stays, and so does the session history, under the ROM entry.
 - **Settings keys** are Irori-only: `iroriEngine`, `iroriEngineVersion`,
   `iroriEngineOptions` (merged per engine and option over the defaults),
   `iroriEngineOwnSettings`, `iroriSystemEngines`, `iroriRomFolders`, `iroriBiosFolder`.

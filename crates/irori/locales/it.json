@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Leggi la libreria Steam dal client Steam",
   "shell.palette.steam_client_library_keywords": "Steam libreria giochi posseduti non installati senza accesso client",
   "shell.palette.play_status": "{title}: imposta lo stato di gioco su {status}",
+  "shell.palette.play_as_pc_game": "Gioca “{title}” come gioco per PC…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulatore programma windows linux gioco aggiunto",
   "shell.palette.clear_play_status": "{title}: rimuovi lo stato di gioco",
   "shell.palette.group_by_status": "Raggruppa la libreria per stato di gioco",
   "shell.palette.ungroup_by_status": "Non raggruppare più la libreria per stato di gioco",
