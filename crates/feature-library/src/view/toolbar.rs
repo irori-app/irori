@@ -386,7 +386,14 @@ impl LibraryView {
             .top(y)
             .px(rems(grid::EDGE_REM))
             .py_2()
-            .when(stuck, |el| el.bg(surface).border_b_1().border_color(border))
+            // Covers scroll under it: a click between its controls is not a
+            // click on them, while the wheel still scrolls the list.
+            .block_mouse_except_scroll()
+            // The border is always there, so holding the toolbar doesn't
+            // change its height (and the list's room for it).
+            .border_b_1()
+            .border_color(gpui_kit::transparent_black())
+            .when(stuck, |el| el.bg(surface).border_color(border))
             .child(follow)
             .child(toolbar)
             .into_any_element()
