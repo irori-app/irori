@@ -229,6 +229,15 @@ impl SteamStore {
             .unwrap_or_else(|| irori_runtime::locations::steam_path(&(self.settings)()))
     }
 
+    /// Every Steam install whose libraries are read ([`scan::steam_installs`]):
+    /// only the given folder for a test store.
+    fn steam_installs(&self) -> Vec<PathBuf> {
+        match &self.steam_dir {
+            Some(dir) => vec![dir.clone()],
+            None => scan::steam_installs(&self.steam_dir(), &irori_runtime::locations::home()),
+        }
+    }
+
     /// The signed-in account with an access token that still works, renewed
     /// when it is about to expire; `None` without an account or when Steam
     /// can't renew it now.
@@ -269,6 +278,7 @@ impl SteamStore {
     /// the account's. Reports whether the library changed.
     async fn scan(&self) -> Result<bool> {
         let dir = self.steam_dir();
+        let installs = self.steam_installs();
         let account = self.account_library.read().clone();
         let client = self.client_games();
         let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
@@ -276,7 +286,7 @@ impl SteamStore {
             let found = dir.join("steamapps").is_dir();
             let hidden =
                 hidden::user_dir(&dir, steamid.as_deref()).and_then(|u| hidden::hidden_apps(&u));
-            let apps = scan::installed_apps(&dir);
+            let apps = scan::installed_apps(&installs);
             let ids = apps
                 .iter()
                 .map(|a| a.app_id.as_str())
@@ -454,8 +464,7 @@ impl SteamStore {
     /// show without a refresh. Re-armed when the libraries change.
     fn watch_libraries(&self) {
         use notify::{RecursiveMode, Watcher as _};
-        let dir = self.steam_dir();
-        let folders: Vec<PathBuf> = scan::libraries(&dir)
+        let folders: Vec<PathBuf> = scan::libraries(&self.steam_installs())
             .into_iter()
             .map(|l| l.join("steamapps"))
             .collect();

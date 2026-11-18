@@ -1424,7 +1424,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 
 - **Without an account** the library is what Steam installed (`scan.rs`: library
   folders, manifests, `localconfig.vdf` playtime, `appcache/librarycache` art), watched
-  with `notify` on each `steamapps` folder. With one (`account.rs`), it adds the account's
+  with `notify` on each `steamapps` folder. On Linux the library folders of every Steam
+  install under the home folder that lists them (native, Flatpak, Snap) are read, not only
+  the chosen one's (`scan::steam_installs`). With one (`account.rs`), it adds the account's
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
