@@ -154,6 +154,72 @@ fn required_files(wc: &WineContext) -> &'static [&'static str] {
     }
 }
 
+/// Where a prefix keeps its Windows files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefixLayout {
+    /// Nothing there yet: any build may create it.
+    Empty,
+    /// `drive_c` and the registry at the top: made by Wine, CrossOver, Game
+    /// Porting Toolkit or umu. umu adds a `pfx` link to the prefix itself, so
+    /// Proton run directly can use it too.
+    Flat { pfx_link: bool },
+    /// `drive_c` and the registry in a `pfx` folder: made by Proton run
+    /// directly.
+    Proton,
+}
+
+fn holds_windows(dir: &Path) -> bool {
+    dir.join("drive_c").is_dir() || dir.join("system.reg").is_file()
+}
+
+/// How the prefix at `prefix` is laid out, read from its files.
+pub fn prefix_layout(prefix: &Path) -> PrefixLayout {
+    let pfx = prefix.join("pfx");
+    let linked = std::fs::symlink_metadata(&pfx).is_ok_and(|m| m.file_type().is_symlink());
+    let to_self = linked
+        && matches!(
+            (pfx.canonicalize(), prefix.canonicalize()),
+            (Ok(a), Ok(b)) if a == b
+        );
+    if !linked && pfx.is_dir() && holds_windows(&pfx) {
+        PrefixLayout::Proton
+    } else if holds_windows(prefix) {
+        PrefixLayout::Flat { pfx_link: to_self }
+    } else {
+        PrefixLayout::Empty
+    }
+}
+
+/// Refuse to start `wc`'s build in a prefix laid out for another kind of
+/// runner. Proton run directly keeps its files in `pfx/`, so started in a
+/// prefix Wine made it would create a second, empty prefix inside it (and
+/// the game's files would seem gone); Wine started in Proton's prefix would
+/// create one beside `pfx/`. Neither writes anything once refused.
+pub fn check_layout(wc: &WineContext) -> Result<()> {
+    if wc.wine.kind == WineKind::Crossover {
+        return Ok(());
+    }
+    let layout = prefix_layout(&wc.prefix);
+    let direct_proton = wc.is_proton() && !wc.uses_umu;
+    match layout {
+        PrefixLayout::Flat { pfx_link: false } if direct_proton => bail!(
+            "The prefix at {} was made by Wine or umu and keeps its files at its top, but {} \
+             runs Proton directly, which keeps them in a pfx folder. Turn umu on for this \
+             game, choose a Wine build, or choose another prefix.",
+            wc.prefix.display(),
+            wc.wine.name
+        ),
+        PrefixLayout::Proton if !direct_proton => bail!(
+            "The prefix at {} was made by Proton run directly and keeps its files in its pfx \
+             folder, but {} uses them at the prefix's top. Choose a Proton build with umu \
+             turned off, or choose another prefix.",
+            wc.prefix.display(),
+            wc.wine.name
+        ),
+        _ => Ok(()),
+    }
+}
+
 const BOOTSTRAP_MARKER: &str = ".irori-prefix-incomplete";
 
 /// Whether the prefix looks complete for this build.
@@ -185,6 +251,7 @@ pub async fn run_wine(
             wc.wine.bin
         );
     }
+    check_layout(wc)?;
     if !cmd.skip_prefix_check && wc.wine.kind != WineKind::Crossover && !prefix_complete(wc) {
         tracing::warn!(
             "prefix {} is incomplete; initialising it",
@@ -333,6 +400,7 @@ pub async fn verify_prefix(
     if !discovery::is_valid(&wc.wine) || wc.wine.kind == WineKind::Crossover {
         return Ok(false);
     }
+    check_layout(wc)?;
     if !wc.prefix.exists() && !wc.uses_umu {
         tokio::fs::create_dir_all(&wc.prefix)
             .await
@@ -715,6 +783,104 @@ mod tests {
         let e = verify(wc.clone()).await.unwrap_err();
         assert!(format!("{e:#}").contains("exited with code 1"), "{e:#}");
         assert!(!prefix_complete(&wc), "failed setup must remain retryable");
+    }
+
+    fn flat_prefix(dir: &Path) {
+        std::fs::create_dir_all(dir.join("drive_c")).unwrap();
+        std::fs::create_dir_all(dir.join("dosdevices")).unwrap();
+        std::fs::write(dir.join("system.reg"), "").unwrap();
+    }
+
+    #[tokio::test]
+    async fn direct_proton_never_nests_a_prefix_in_a_flat_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("proton");
+        std::fs::write(&bin, "").unwrap();
+        let prefix = dir.path().join("prefix");
+        flat_prefix(&prefix);
+        let wc = WineContext::new(
+            WineInstallation {
+                bin: bin.to_string_lossy().into_owned(),
+                name: "GE-Proton".into(),
+                kind: WineKind::Proton,
+                ..Default::default()
+            },
+            prefix.clone(),
+            false,
+            PathBuf::new(),
+        );
+        assert_eq!(
+            prefix_layout(&prefix),
+            PrefixLayout::Flat { pfx_link: false }
+        );
+        let e = verify_prefix(
+            &AppSettings::default(),
+            &GameSettings::default(),
+            &wc,
+            &OpContext::detached(),
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{e:#}").contains("umu"), "{e:#}");
+        assert!(!prefix.join("pfx").exists());
+        assert!(!prefix.join(BOOTSTRAP_MARKER).exists());
+        // With umu the same prefix is the right one.
+        assert!(
+            check_layout(&WineContext {
+                uses_umu: true,
+                ..wc
+            })
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn layouts_match_their_runners() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut wine = ctx_for(WineKind::Wine, false);
+        wine.prefix = dir.path().join("p");
+        let direct = WineContext {
+            wine: WineInstallation {
+                kind: WineKind::Proton,
+                ..wine.wine.clone()
+            },
+            ..wine.clone()
+        };
+        assert_eq!(prefix_layout(&wine.prefix), PrefixLayout::Empty);
+        assert!(check_layout(&wine).is_ok() && check_layout(&direct).is_ok());
+
+        flat_prefix(&wine.prefix.join("pfx"));
+        assert_eq!(prefix_layout(&wine.prefix), PrefixLayout::Proton);
+        assert!(check_layout(&direct).is_ok());
+        assert!(check_layout(&wine).is_err());
+        let umu = WineContext {
+            uses_umu: true,
+            ..direct.clone()
+        };
+        assert!(check_layout(&umu).is_err());
+        let crossover = WineContext {
+            wine: WineInstallation {
+                kind: WineKind::Crossover,
+                ..wine.wine.clone()
+            },
+            ..wine.clone()
+        };
+        assert!(check_layout(&crossover).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_umu_prefix_serves_proton_run_directly() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut direct = ctx_for(WineKind::Proton, false);
+        direct.prefix = dir.path().to_path_buf();
+        flat_prefix(dir.path());
+        std::os::unix::fs::symlink(dir.path(), dir.path().join("pfx")).unwrap();
+        assert_eq!(
+            prefix_layout(dir.path()),
+            PrefixLayout::Flat { pfx_link: true }
+        );
+        assert!(check_layout(&direct).is_ok());
     }
 
     #[test]
