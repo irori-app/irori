@@ -19,6 +19,14 @@ use serde_json::Value;
 use crate::Backend;
 use crate::inhibit::Inhibitor;
 
+/// A Wine prefix a game could play in ([`Backend::prefix_choices`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixChoice {
+    pub path: PathBuf,
+    /// Titles of the installed games playing in it, sorted.
+    pub games: Vec<String>,
+}
+
 /// One-off launch choices.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchParams {
@@ -329,6 +337,47 @@ impl Backend {
             self.settings.overrides(id).is_overridden("iroriSandbox"),
             self.settings.game(id).sandbox,
         )
+    }
+
+    /// The Wine prefixes `id` could use instead of its own: those in the
+    /// prefixes folder, and those other installed games play in, each with
+    /// the titles of the games using it. Only prefixes that exist are
+    /// listed. Reads folders; call off the UI thread.
+    pub fn prefix_choices(&self, id: &GameId) -> Vec<PrefixChoice> {
+        let app = self.settings.app();
+        let mut choices: Vec<PrefixChoice> =
+            irori_runtime::prefixes_in(&irori_runtime::prefixes_root(&app))
+                .into_iter()
+                .map(|path| PrefixChoice {
+                    path,
+                    games: Vec::new(),
+                })
+                .collect();
+        let library = self.library();
+        for game in library.all_games() {
+            if game.is_dlc
+                || !game.is_installed
+                || game.id() == *id
+                || !Self::target_platform(game).needs_wine()
+            {
+                continue;
+            }
+            let prefix = irori_runtime::prefix_path(&app, &self.settings.game(&game.id()), game);
+            match choices.iter_mut().find(|c| c.path == prefix) {
+                Some(choice) => choice.games.push(game.title.clone()),
+                None if irori_runtime::is_prefix(&prefix) => choices.push(PrefixChoice {
+                    path: prefix,
+                    games: vec![game.title.clone()],
+                }),
+                None => {}
+            }
+        }
+        for choice in &mut choices {
+            choice.games.sort_by_key(|t| t.to_lowercase());
+            choice.games.dedup();
+        }
+        choices.sort_by_key(|c| c.path.to_string_lossy().to_lowercase());
+        choices
     }
 
     /// Launch a game and track it until it exits.

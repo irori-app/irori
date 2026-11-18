@@ -10,6 +10,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
@@ -189,6 +190,9 @@ pub struct SettingsForm {
     /// The displays, for the HDR and gamescope hints (Linux, where those
     /// settings exist).
     displays: Option<Arc<irori_services::displays::DisplayReport>>,
+    /// Game target: the prefixes it could use instead of its own, once
+    /// looked for.
+    prefix_choices: Option<Arc<Vec<irori_services::PrefixChoice>>>,
     /// Release tags offered by each version picker, once loaded.
     tool_versions: HashMap<&'static str, Vec<String>>,
     tool_versions_requested: bool,
@@ -256,6 +260,7 @@ impl SettingsForm {
             wine: None,
             graphics: None,
             displays: None,
+            prefix_choices: None,
             tool_versions: HashMap::new(),
             tool_versions_requested: false,
             errors: HashMap::new(),
@@ -280,6 +285,9 @@ impl SettingsForm {
             if cfg!(target_os = "linux") {
                 this.load_displays(window, cx);
             }
+        }
+        if this.fields.iter().any(|f| f.path == "winePrefix") {
+            this.load_prefix_choices(window, cx);
         }
         let settings_model = models(cx).settings.clone();
         this._subscriptions.push(
@@ -379,6 +387,73 @@ impl SettingsForm {
             .ok();
         })
         .detach();
+    }
+
+    /// Look for the prefixes a game could share (its prefix menu).
+    fn load_prefix_choices(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let FormTarget::Game(id) = &self.target else {
+            return;
+        };
+        let (b, id) = (backend(cx), id.clone());
+        let job = b.spawn_blocking({
+            let b = b.clone();
+            move || b.prefix_choices(&id)
+        });
+        let task = irori_ui::run(cx, async move { Ok(job.await?) });
+        cx.spawn_in(window, async move |this, cx| {
+            let choices = task.await.unwrap_or_default();
+            this.update(cx, |this, cx| {
+                this.prefix_choices = Some(Arc::new(choices));
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The menu beside a game's prefix field: the prefixes in the prefixes
+    /// folder and those other games play in, to share one.
+    fn prefix_menu(&self, disabled: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let FormTarget::Game(_) = &self.target else {
+            return None;
+        };
+        let choices = self.prefix_choices.clone();
+        let view = cx.entity().downgrade();
+        Some(
+            Button::new("prefixes-winePrefix")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronDown)
+                .tooltip(t("settings.prefix_menu.tooltip"))
+                .disabled(disabled)
+                .dropdown_menu(move |menu, window, _| {
+                    let menu = menu.scrollable(true).max_h(window.rem_size() * 24.);
+                    let Some(list) = &choices else {
+                        return menu.label(t("settings.prefix_menu.looking"));
+                    };
+                    if list.is_empty() {
+                        return menu.label(t("settings.prefix_menu.none"));
+                    }
+                    list.iter().fold(menu, |menu, choice| {
+                        let path = choice.path.to_string_lossy().into_owned();
+                        let label: SharedString = match choice.games.as_slice() {
+                            [] => path.clone().into(),
+                            games => t_args(
+                                "settings.prefix_menu.used_by",
+                                &[("path", &path), ("games", &games.join(", "))],
+                            ),
+                        };
+                        let view = view.clone();
+                        menu.item(PopupMenuItem::new(label).on_click(move |_, window, cx| {
+                            let path = path.clone();
+                            let _ = view.update(cx, |this, cx| {
+                                this.write("winePrefix", Value::String(path), window, cx)
+                            });
+                        }))
+                    })
+                })
+                .into_any_element(),
+        )
     }
 
     /// Read the displays for the HDR and gamescope fields' hints.
@@ -1890,6 +1965,15 @@ impl SettingsForm {
                             this.pick_path(path, kind == TextKind::Directory, window, cx)
                         }))
                 });
+                let prefixes = (path == "winePrefix")
+                    .then(|| self.prefix_menu(disabled, cx))
+                    .flatten();
+                let picker = match (picker, prefixes) {
+                    (Some(picker), Some(menu)) => {
+                        Some(h_flex().child(menu).child(picker).into_any_element())
+                    }
+                    (picker, _) => picker.map(IntoElement::into_any_element),
+                };
                 let wide = matches!(
                     kind,
                     TextKind::Plain | TextKind::Directory | TextKind::File | TextKind::Secret
