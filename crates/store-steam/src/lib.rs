@@ -136,6 +136,8 @@ pub struct SteamStore {
     client_marker: RwLock<bool>,
     /// One read of the Steam client at a time.
     client_reading: tokio::sync::Mutex<()>,
+    /// Hands links and launches to Steam.
+    opener: client::Opener,
 }
 
 impl SteamStore {
@@ -152,11 +154,13 @@ impl SteamStore {
             AccountFiles::new(&config, &cache),
             ClientFiles::new(&config, &cache),
             Endpoints::default(),
+            client::Opener::System,
         )
     }
 
     /// A store reading the Steam installation at `steam_dir`, keeping its
     /// own files under `data` and talking to Steam at `endpoints` (tests).
+    /// Links and launches are recorded, never handed to a Steam.
     pub fn with_layout(
         bus: EventBus,
         settings: SettingsFn,
@@ -171,6 +175,7 @@ impl SteamStore {
             AccountFiles::new(&data.join("config"), &data.join("cache")),
             ClientFiles::new(&data.join("config"), &data.join("cache")),
             endpoints,
+            client::Opener::Recorded(Mutex::new(Vec::new())),
         )
     }
 
@@ -181,6 +186,7 @@ impl SteamStore {
         files: AccountFiles,
         client_files: ClientFiles,
         endpoints: Endpoints,
+        opener: client::Opener,
     ) -> Arc<Self> {
         let client = Client::with_endpoints(endpoints)
             .inspect_err(|e| tracing::warn!("Steam's web client: {e:#}"))
@@ -211,6 +217,7 @@ impl SteamStore {
             client_cache: RwLock::new(Arc::default()),
             client_marker: RwLock::new(false),
             client_reading: tokio::sync::Mutex::new(()),
+            opener,
         })
     }
 
@@ -587,12 +594,10 @@ impl SteamStore {
 
     /// Open `link` in the Steam client.
     pub async fn open_friend_link(&self, link: FriendLink) -> Result<()> {
-        irori_core::process::run(&client::open_url(&link.url()), Default::default())
+        self.opener
+            .open(&client::open_url(&link.url()))
             .await
-            .context("Steam didn't open")?
-            .check()
-            .context("Steam didn't open")?;
-        Ok(())
+            .context("Steam didn't open")
     }
 }
 
@@ -871,8 +876,17 @@ impl Store for SteamStore {
             cfg!(windows) || windows_build,
         );
         let install_path = game.install.as_ref().map(|i| i.install_path.clone());
+        // Steam is handed the game here, detached, rather than started as the
+        // session's program: a Steam this starts must not end with the
+        // session or depend on Irori.
+        let command = client::launch_command(&self.steam_dir(), &game.app_name, &args).await;
+        self.opener
+            .open(&command)
+            .await
+            .context("Steam didn't open")?;
+        client::log_handover(&request.log_file, &command).await;
         Ok(LaunchPlan {
-            command: client::launch_command(&self.steam_dir(), &game.app_name, &args).await,
+            command: client::handed_over(),
             track_wineserver: false,
             watch: Some(Arc::new(watch::SteamGameWatch::new(
                 game.app_name.to_string(),
@@ -890,13 +904,10 @@ impl Store for SteamStore {
             ClientAction::Verify => ClientLink::Verify,
             ClientAction::Show => ClientLink::Details,
         };
-        let command = client::open_url(&link.url(app_name));
-        irori_core::process::run(&command, Default::default())
+        self.opener
+            .open(&client::open_url(&link.url(app_name)))
             .await
-            .context("Steam didn't open")?
-            .check()
-            .context("Steam didn't open")?;
-        Ok(())
+            .context("Steam didn't open")
     }
 
     /// The larger of what Steam recorded on this computer and what the
@@ -1087,11 +1098,14 @@ mod tests {
         assert!(s.login("a pasted code").await.is_err());
     }
 
-    /// The arguments after `-applaunch <id>` of a launch plan, or those of
-    /// Steam's `run` link when Steam's program isn't found.
-    fn launched_args(plan: &LaunchPlan) -> Vec<String> {
-        let argv: Vec<String> = plan
-            .command
+    /// The arguments after `-applaunch <id>` of what Steam was last handed,
+    /// or those of Steam's `run` link when Steam's program isn't found.
+    fn launched_args(s: &SteamStore) -> Vec<String> {
+        let argv: Vec<String> = s
+            .opener
+            .opened()
+            .last()
+            .expect("Steam was handed the game")
             .args
             .iter()
             .map(|a| a.to_string_lossy().into_owned())
@@ -1137,12 +1151,11 @@ mod tests {
             skip_version_check: false,
             log_file: dir.path().join("log"),
         };
-        let plan = s
-            .launch("620", &request, OpContext::detached())
+        s.launch("620", &request, OpContext::detached())
             .await
             .unwrap();
         assert_eq!(
-            launched_args(&plan),
+            launched_args(&s),
             [
                 "-savedir",
                 r"C:\Users\me\saves",
@@ -1429,12 +1442,19 @@ mod tests {
             .launch("620", &request, OpContext::detached())
             .await
             .unwrap();
-        let args: Vec<String> = plan
-            .command
-            .args
-            .iter()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
+        let opened = |s: &SteamStore| -> Vec<String> {
+            s.opener
+                .opened()
+                .last()
+                .unwrap()
+                .args
+                .iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let args = opened(&s);
+        // Steam was handed the game; the plan's own command only exits.
+        assert_eq!(plan.command.to_string(), client::handed_over().to_string());
         // Arguments go through `-applaunch`, or Steam's `run` link when its
         // program isn't found.
         assert!(
@@ -1451,10 +1471,8 @@ mod tests {
             .launch("620", &plain, OpContext::detached())
             .await
             .unwrap();
-        assert_eq!(
-            plan.command.args.last().unwrap().to_string_lossy(),
-            "steam://rungameid/620"
-        );
+        assert_eq!(opened(&s).last().unwrap(), "steam://rungameid/620");
+        assert_eq!(plan.command.to_string(), client::handed_over().to_string());
         assert!(
             s.launch("1", &request, OpContext::detached())
                 .await
@@ -1481,6 +1499,25 @@ mod tests {
         ));
         assert!(s.updatable_games().await.unwrap().is_empty());
         assert!(s.game("400").unwrap().is_installed);
+    }
+
+    /// Client links go through the opener, which starts them detached from
+    /// Irori, never through a run that waits on Steam's output.
+    #[tokio::test]
+    async fn client_links_go_through_the_opener() {
+        let dir = tempfile::tempdir().unwrap();
+        write_manifest(dir.path(), "400", "Portal");
+        let s = store(dir.path(), AppSettings::default());
+        s.init().await.unwrap();
+        s.client_action("400", ClientAction::Verify).await.unwrap();
+        s.open_friend_link(FriendLink::FriendsList).await.unwrap();
+        let links: Vec<String> = s
+            .opener
+            .opened()
+            .iter()
+            .map(|c| c.args.last().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(links, ["steam://validate/400", "steam://open/friends"]);
     }
 
     #[tokio::test]

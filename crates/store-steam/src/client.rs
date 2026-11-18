@@ -1,12 +1,16 @@
 //! Talking to the Steam client: `steam://` links for what Steam does itself
 //! (install, uninstall, verify, show a game), and its program for launches
 //! with arguments. When Irori runs as a Flatpak both run on the host, where
-//! Steam is (`irori_core::host`).
+//! Steam is (`irori_core::host`). Both are started detached from Irori
+//! ([`Opener`]): an opener that starts Steam would otherwise leave Steam with
+//! Irori's pipes and in a game's process group.
 
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
 use irori_core::host;
 use irori_core::process::CommandSpec;
+use parking_lot::Mutex;
 
 /// Flatpak Steam's application ID.
 const FLATPAK_ID: &str = "com.valvesoftware.Steam";
@@ -27,6 +31,68 @@ fn local_open_url(url: &str) -> CommandSpec {
             .arg(url)
     } else {
         CommandSpec::new("xdg-open").arg(url)
+    }
+}
+
+/// How links and launches reach Steam.
+pub(crate) enum Opener {
+    /// Started detached from Irori ([`irori_core::process::open_detached`]),
+    /// so a Steam it starts never depends on Irori and outlives it.
+    System,
+    /// Recorded and never run, for test stores: no test starts Steam.
+    Recorded(Mutex<Vec<CommandSpec>>),
+}
+
+impl Opener {
+    /// Run `command`; an error when the opener says it couldn't.
+    pub(crate) async fn open(&self, command: &CommandSpec) -> Result<()> {
+        match self {
+            Opener::System => irori_core::process::open_detached(command).await,
+            Opener::Recorded(opened) => {
+                opened.lock().push(command.clone());
+                Ok(())
+            }
+        }
+    }
+
+    /// What a test store was asked to open, in order.
+    #[cfg(test)]
+    pub(crate) fn opened(&self) -> Vec<CommandSpec> {
+        match self {
+            Opener::System => Vec::new(),
+            Opener::Recorded(opened) => opened.lock().clone(),
+        }
+    }
+}
+
+/// The launch plan's command once Steam has the game: Steam was already
+/// handed it through the [`Opener`], so this only exits at once and the
+/// session follows the game's own processes.
+pub(crate) fn handed_over() -> CommandSpec {
+    if cfg!(windows) {
+        CommandSpec::new("cmd.exe")
+            .args(["/d", "/c", "exit 0"])
+            .console(irori_core::process::ConsoleWindow::Hidden)
+    } else {
+        CommandSpec::new("true")
+    }
+}
+
+/// Note in the game's log what Steam was handed, since the launch plan's
+/// own command says nothing.
+pub(crate) async fn log_handover(log_file: &Path, command: &CommandSpec) {
+    use tokio::io::AsyncWriteExt as _;
+    let line = format!("Handed to Steam: {command}\n");
+    let written = async {
+        tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(log_file)
+            .await?
+            .write_all(line.as_bytes())
+            .await
+    };
+    if let Err(e) = written.await {
+        tracing::debug!("writing to {}: {e}", log_file.display());
     }
 }
 
