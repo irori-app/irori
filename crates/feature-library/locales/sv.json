@@ -658,6 +658,7 @@
   "library.lutris.consent.sandbox_home": "Dölj hemmappen",
   "library.lutris.consent.game": "Vad Spela startar",
   "library.lutris.consent.env": "Miljövariabler",
+  "library.lutris.consent.dll_overrides": "DLL-åsidosättningar för Wine, sparade i spelets inställningar",
   "library.lutris.consent.shell_resolved": "Så som det kommer att köras:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Skriptet vill ha {requested}. Irori använder {build}, den närmaste version du har.",

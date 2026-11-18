@@ -658,6 +658,7 @@
   "library.lutris.consent.sandbox_home": "Ev klasörünü gizle",
   "library.lutris.consent.game": "Oyna neyi başlatır",
   "library.lutris.consent.env": "Ortam değişkenleri",
+  "library.lutris.consent.dll_overrides": "Wine DLL geçersiz kılmaları, oyunun ayarlarında saklanır",
   "library.lutris.consent.shell_resolved": "Çalıştırılacak hâli:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Betik {requested} istiyor. Irori, sahip olduğunuz en yakın sürüm olan {build} kullanır.",

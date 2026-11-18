@@ -798,8 +798,14 @@ commands without a window.
      raises a notice.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
-     start it without (`docs/PLATFORMS.md`, "Sandboxed games").
-  4. Before-launch script.
+     start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
+     it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
+     `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
+     variable said about its DLL; ReShade's are added after.
+  4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
+     starts at once and runs alongside the game as a program of the session
+     (`programs::script_alongside`), stopped when the session ends or the launch
+     fails.
   5. `store.launch` builds the `LaunchPlan`.
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
@@ -1229,7 +1235,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   applies; Bottles and Faugus Launcher plans from `irori-extras::wine_launchers` use
   the same shapes and apply step). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is
   parsed, nothing is written there. Windows/Linux games become added apps with their
-  prefix, Wine build (matched by name, else reported), arguments and variables;
+  prefix, Wine build (matched by name, else reported), arguments, variables and Wine
+  DLL overrides (`iroriDllOverrides`; a game file's replace the runner file's per DLL);
   emulated games join the ROM library as added games with their emulator; Steam and
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
@@ -1274,7 +1281,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
     Never add a "pass through" command or leave an unknown variable as text.
   - **Consent before running.** `irori_scripts::consent` lists downloads (host and
     size), every write outside the game folder, the cache and the prefix (each approved
-    on its own), programs, registry edits, winetricks verbs and store autosetups. The
+    on its own), programs, registry edits, winetricks verbs, store autosetups and the
+    Wine DLL overrides the game keeps (`wine: overrides:`, parsed into
+    `irori_core::DllOverride`; one Wine can't read refuses the script). The
     executor refuses to run without `Approvals::accepted`.
   - **Shell commands verbatim.** Every `execute` command line is shown exactly as the
     script wrote it and as it will run, and needs its own "I understand" acknowledgement
@@ -1302,7 +1311,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
     never bundle, mirror or commit lutris.net scripts or catalogue data (test fixtures
     are hand-written).
   - **Result.** Wine and Linux scripts become added apps (`winePrefix`, `wineVersion`,
-    `enviromentOptions`); emulator runners join the ROM library with `iroriEngine`
+    `enviromentOptions`, `iroriDllOverrides`); the prefix is the game section's, else
+    the one the script created (else the first a Wine task used), else the game
+    folder; emulator runners join the ROM library with `iroriEngine`
     (mapped like the Lutris import). The Wine build is the script's own when installed
     (`match_wine_version`), else the default, and the window says which. Each game
     records its script in the Irori-only per-game setting `iroriLutrisScript`

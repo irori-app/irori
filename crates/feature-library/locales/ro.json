@@ -658,6 +658,7 @@
   "library.lutris.consent.sandbox_home": "Ascunde dosarul personal",
   "library.lutris.consent.game": "Ce pornește Joacă",
   "library.lutris.consent.env": "Variabile de mediu",
+  "library.lutris.consent.dll_overrides": "Suprascrieri DLL pentru Wine, păstrate în setările jocului",
   "library.lutris.consent.shell_resolved": "Așa cum va rula:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Scriptul cere {requested}. Irori folosește {build}, cea mai apropiată versiune pe care o ai.",

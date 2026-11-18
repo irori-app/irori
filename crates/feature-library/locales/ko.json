@@ -658,6 +658,7 @@
   "library.lutris.consent.sandbox_home": "홈 폴더 숨기기",
   "library.lutris.consent.game": "플레이 시 실행되는 항목",
   "library.lutris.consent.env": "환경 변수",
+  "library.lutris.consent.dll_overrides": "Wine DLL 재정의(게임 설정에 저장됨)",
   "library.lutris.consent.shell_resolved": "실제로 실행될 내용:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "스크립트가 {requested}을(를) 요청합니다. Irori는 가지고 있는 것 중 가장 가까운 {build}을(를) 사용합니다.",

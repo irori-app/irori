@@ -161,6 +161,8 @@ pub struct Consent {
     pub autosetups: Vec<AutosetupUse>,
     pub game: Option<GamePlan>,
     pub env: Vec<EnvUse>,
+    /// The Wine DLL overrides the game keeps in its settings.
+    pub dll_overrides: Vec<irori_core::DllOverride>,
 }
 
 impl Consent {
@@ -512,6 +514,9 @@ pub fn consent(script: &Script, ctx: &Context) -> Consent {
     }
 
     c.env.extend(env_uses(None, &script.system_env, &p));
+    if script.extends.is_none() && script.info.runner == "wine" {
+        c.dll_overrides = script.dll_overrides.clone();
+    }
     if script.extends.is_none() {
         let g = &script.game;
         c.game = [&g.exe, &g.main_file, &g.iso, &g.rom, &g.path]

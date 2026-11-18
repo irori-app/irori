@@ -205,6 +205,8 @@ pub enum CustomKind {
     WineVersion,
     /// `KEY=VALUE` environment variable rows.
     EnvVars,
+    /// Wine DLL override rows: a DLL and its load mode.
+    DllOverrides,
     /// Wrapper command rows.
     Wrappers,
     /// GOG cloud-save locations.
@@ -616,6 +618,7 @@ impl FieldSpec {
                     | "iroriInSunshine"
                     | "iroriDiscordPresence"
                     | "beforeLaunchScriptPath"
+                    | "iroriBeforeLaunchScriptAlongside"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
                     | "iroriLudusaviAutoBackup"
@@ -2368,6 +2371,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
     game(
+        "iroriDllOverrides",
+        "settings.field.dll_overrides.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Custom(CustomKind::DllOverrides),
+    )
+    .help("settings.field.dll_overrides.help")
+    .keywords(&[
+        "dll",
+        "overrides",
+        "winedlloverrides",
+        "native",
+        "builtin",
+        "disabled",
+        "lutris",
+    ]),
+    game(
         "enableEsync",
         "settings.field.enable_esync.label",
         Wine,
@@ -3128,6 +3148,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["script", "before", "pre-launch"]),
     game(
+        "iroriBeforeLaunchScriptAlongside",
+        "settings.field.before_launch_script_alongside.label",
+        Launch,
+        "settings.group.scripts",
+        Toggle,
+    )
+    .help("settings.field.before_launch_script_alongside.help")
+    .keywords(&[
+        "script",
+        "before",
+        "pre-launch",
+        "alongside",
+        "background",
+        "wait",
+        "server",
+    ]),
+    game(
         "afterLaunchScriptPath",
         "settings.field.after_launch_script_path.label",
         Launch,
@@ -3718,6 +3755,7 @@ mod tests {
         for path in [
             "launcherArgs",
             "beforeLaunchScriptPath",
+            "iroriBeforeLaunchScriptAlongside",
             "panel.launchPrograms",
             "iroriReplay.enabled",
             "panel.save-backups",

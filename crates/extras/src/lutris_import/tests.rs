@@ -181,11 +181,11 @@ fn fixture(home: &Path) -> LutrisDirs {
     );
     write(
         &config.join("runners/wine.yml"),
-        "wine:\n  version: wine-ge-8-26-x86_64\n  dxvk: true\nsystem:\n  env:\n    SHARED: runner\n    WINE_ONLY: '1'\n",
+        "wine:\n  version: wine-ge-8-26-x86_64\n  dxvk: true\n  overrides:\n    d3d9: native\n    xinput1_3: builtin\nsystem:\n  env:\n    SHARED: runner\n    WINE_ONLY: '1'\n",
     );
     write(
         &config.join("games/the-witcher.yml"),
-        "game:\n  exe: bin/witcher.exe\n  args: -nointro\n  prefix: ~/Games/prefixes/witcher\n  arch: win64\nsystem:\n  env:\n    GAME_ONLY: true\n    DXVK_HUD: ''\n  prelaunch_command: /opt/trainer --fast\n  postexit_command: /opt/backup.sh\n",
+        "game:\n  exe: bin/witcher.exe\n  args: -nointro\n  prefix: ~/Games/prefixes/witcher\n  arch: win64\nwine:\n  overrides:\n    D3D9: n,b\n    nvapi,nvapi64:\n    bogus: sometimes\nsystem:\n  env:\n    GAME_ONLY: true\n    DXVK_HUD: ''\n  prelaunch_command: /opt/trainer --fast\n  postexit_command: /opt/backup.sh\n",
     );
     write(
         &config.join("games/supertux.yml"),
@@ -274,6 +274,7 @@ fn plans_every_kind_of_game() {
         wine_version,
         arch,
         env,
+        dll_overrides,
     } = &witcher.kind
     else {
         panic!("{:?}", witcher.kind)
@@ -295,6 +296,16 @@ fn plans_every_kind_of_game() {
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect();
     assert_eq!(env, &expected);
+    // The game's overrides replace the runner's for the same DLL only (where
+    // Lutris drops the runner's), and an unreadable one is left out.
+    let overrides: Vec<String> = dll_overrides
+        .iter()
+        .map(|o| format!("{}={}", o.dll, o.mode))
+        .collect();
+    assert_eq!(
+        overrides,
+        ["D3D9=n,b", "xinput1_3=b", "nvapi=d", "nvapi64=d"]
+    );
 
     let supertux = by_slug(&plan, "supertux");
     assert!(supertux.hidden);

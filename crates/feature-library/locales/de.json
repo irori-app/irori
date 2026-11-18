@@ -658,6 +658,7 @@
   "library.lutris.consent.sandbox_home": "Home-Ordner verbergen",
   "library.lutris.consent.game": "Was „Spielen“ startet",
   "library.lutris.consent.env": "Umgebungsvariablen",
+  "library.lutris.consent.dll_overrides": "Wine-DLL-Overrides, gespeichert in den Einstellungen des Spiels",
   "library.lutris.consent.shell_resolved": "So wird es ausgeführt:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Das Skript verlangt {requested}. Irori verwendet {build}, die ähnlichste vorhandene Version.",

@@ -37,6 +37,32 @@ fn parses_gog_autosetup_script() {
 }
 
 #[test]
+fn wine_dll_overrides_are_typed() {
+    let script = |overrides: &str| {
+        format!(
+            "name: T\ngame_slug: t\nversion: v\nslug: t-v\nrunner: wine\nscript:\n  game:\n    exe: $GAMEDIR/a.exe\n  wine:\n    overrides:\n{overrides}\n"
+        )
+    };
+    let s = Script::parse(&script("      d3d11: native,builtin\n      DXGI: n")).unwrap();
+    let mut pairs: Vec<_> = s
+        .dll_overrides
+        .iter()
+        .map(|o| (o.dll.as_str(), o.mode.as_str()))
+        .collect();
+    pairs.sort();
+    assert_eq!(pairs, [("DXGI", "n"), ("d3d11", "n,b")]);
+    // A mode or name Wine can't read refuses the script, naming the section.
+    for bad in [
+        "      d3d11: sometimes",
+        "      \"a;b\": n",
+        "      d3d11: [n]",
+    ] {
+        let e = err(&script(bad));
+        assert!(e.to_string().contains("overrides"), "{bad}: {e}");
+    }
+}
+
+#[test]
 fn parses_wine_setup_script() {
     let checksum = format!("md5:{}", "0".repeat(32));
     let s = Script::parse(&wine_fixture(EXAMPLE, &checksum)).unwrap();
@@ -349,6 +375,8 @@ fn consent_lists_everything_that_needs_approval() {
     assert_eq!(c.winetricks[0].verbs, ["d3dx9", "vcrun2019"]);
     assert_eq!(c.programs[0].kind, ProgramKind::Wine);
     assert!(c.programs[0].program.ends_with("example_setup.exe"));
+    let dlls: Vec<_> = c.dll_overrides.iter().map(|o| o.dll.as_str()).collect();
+    assert_eq!(dlls, ["libglesv2", "nvapi", "nvapi64", "powershell.exe"]);
 
     let gog = Script::parse(&gog_fixture()).unwrap();
     let c = consent(&gog, &ctx);
