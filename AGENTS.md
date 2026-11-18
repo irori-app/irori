@@ -1403,7 +1403,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   config's names, then the manifest's, with `ms-resource:` references looked up in
   Windows' `MrtCache`, then the game's folder name. Art is the package's own logos at
   their largest `scale-`/`targetsize-` variant (`file://` paths); sizes are added up in
-  the background after a scan. Games start with
+  the background after a scan, over the whole `<root>\<game>` folder when the package is
+  its `Content` (the GDK keeps shaders and staging beside it; `xbox::game_folder`). Games start with
   `rundll32 shell32.dll,ShellExec_RunDLL shell:AppsFolder\<family>!<app id>`, which
   returns at once with success, and a `GameWatch` follows (and stops) the processes
   running from the package folder. The game menu's "Show in Microsoft Store"

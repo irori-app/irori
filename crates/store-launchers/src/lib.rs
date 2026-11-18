@@ -623,7 +623,7 @@ impl LaunchersStore {
                 folders
                     .into_iter()
                     .map(|(dir, version)| {
-                        let size = xbox::folder_size(&dir);
+                        let size = xbox::game_size(&dir);
                         ((dir, version), size)
                     })
                     .collect::<Vec<_>>()
@@ -1073,11 +1073,7 @@ fn xbox_game_info(g: &XboxGame, size: Option<u64>) -> GameInfo {
         third_party_managed_app: Some(xbox::DISPLAY_NAME.to_string()),
         platforms: vec![InstallPlatform::Windows],
         version: g.version.clone(),
-        folder_name: g
-            .install_dir
-            .parent()
-            .filter(|_| g.install_dir.ends_with(xbox::CONTENT))
-            .unwrap_or(&g.install_dir)
+        folder_name: xbox::game_folder(&g.install_dir)
             .file_name()
             .map(|n| n.to_string_lossy().into_owned()),
         ..Default::default()
