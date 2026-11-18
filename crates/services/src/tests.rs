@@ -1404,3 +1404,53 @@ fn uninstall_cleans_up_past_a_prefix_it_cannot_delete() {
     let message = notice.message.as_deref().unwrap_or_default();
     assert!(message.contains(&prefix.display().to_string()), "{message}");
 }
+
+/// A game whose folder is gone stops with a typed error the UI turns into
+/// "locate the files or forget the install", never a plain message.
+#[cfg(unix)]
+#[test]
+fn missing_game_files_stop_the_launch_with_a_typed_error() {
+    isolate_paths();
+    let gone = tempfile::tempdir().unwrap().path().join("Moved Away");
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "files-gone".into(),
+            title: "Files Gone".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: gone.display().to_string(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("sh").args(["-c", "exit 0"]),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let e = b
+        .runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap_err();
+    let missing = irori_core::GameFilesMissing::of(&e).expect("a typed error");
+    assert_eq!(missing.title, "Files Gone");
+    assert_eq!(missing.path.as_deref(), Some(gone.as_path()));
+    assert!(!b.is_running(&id));
+    // An added game is located again, never "forgotten".
+    assert!(!Backend::can_forget_install(&id));
+    assert!(b.runtime().block_on(b.forget_install(&id)).is_err());
+    assert!(Backend::can_forget_install(&irori_core::GameId::new(
+        Runner::Gog,
+        "1"
+    )));
+    assert!(!Backend::can_forget_install(&irori_core::GameId::new(
+        Runner::Steam,
+        "1"
+    )));
+}

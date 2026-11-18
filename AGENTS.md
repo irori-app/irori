@@ -818,7 +818,10 @@ commands without a window.
   mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
   still running (a pid whose process started at another time was reused) to their end,
   so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
-  1. Busy and availability checks.
+  1. Busy and availability checks. Files that aren't where the install says
+     fail with the typed `GameFilesMissing`; `irori_ui::missing_files` offers
+     to locate them and play, or, for store games, to forget the install
+     (`Backend::forget_install`, which deletes nothing).
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with
      `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try

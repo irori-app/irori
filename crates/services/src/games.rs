@@ -429,13 +429,11 @@ impl Backend {
             })
             .await?
         {
-            bail!(
-                "The game files of {} were not found{}",
-                game.title,
-                game.install_path()
-                    .map(|p| format!(" at {}", p.display()))
-                    .unwrap_or_default()
-            );
+            return Err(irori_core::GameFilesMissing {
+                title: game.title.clone(),
+                path: game.install_path(),
+            }
+            .into());
         }
 
         let app = self.settings.app();
@@ -1444,6 +1442,33 @@ impl Backend {
         Self::ensure_managed(id)?;
         let store = self.store(id.runner).context("store not available")?;
         store.set_install_path(&id.app_name, path).await?;
+        self.bus.emit(Event::LibraryChanged(id.runner));
+        Ok(())
+    }
+
+    /// Whether a game whose files are missing can be forgotten as installed
+    /// ([`Backend::forget_install`]): store games Irori installs. An added
+    /// game or a ROM has no install apart from its files; it is located again
+    /// or removed from the library instead.
+    pub fn can_forget_install(id: &GameId) -> bool {
+        id.runner.manages_installs() && !matches!(id.runner, Runner::Sideload | Runner::Emulation)
+    }
+
+    /// Forget that a game is installed without touching any file, for an
+    /// install whose files are gone. Its settings, prefix and library data
+    /// stay, so installing it again picks them up.
+    pub async fn forget_install(&self, id: &GameId) -> Result<()> {
+        anyhow::ensure!(
+            Self::can_forget_install(id),
+            "Irori can only forget the installs of store games"
+        );
+        let game = self.installed_game(id)?;
+        if self.is_running(id) {
+            bail!("{} is running", game.title);
+        }
+        let store = self.store(id.runner).context("store not available")?;
+        let _guard = self.statuses.guard(id, StatusKind::Uninstalling);
+        store.forget_install(&id.app_name).await?;
         self.bus.emit(Event::LibraryChanged(id.runner));
         Ok(())
     }
