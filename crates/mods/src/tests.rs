@@ -877,6 +877,38 @@ fn thunderstore_answers_are_parsed() {
     assert_eq!(page.results[0].display_name(), "More Company");
     let foreign = json!({ "namespace": "a", "name": "b", "latest": { "download_url": "https://evil.example/x.zip" } });
     assert!(thunderstore::parse_package(&foreign).is_none());
+    let listed = json!({
+        "namespace": "a", "name": "b",
+        "latest": { "download_url": "https://thunderstore.io/package/download/a/b/1.0.0/" },
+        "community_listings": [{ "community": "riskofrain2" }, { "community": "valheim" }]
+    });
+    assert_eq!(
+        thunderstore::parse_package(&listed).unwrap().communities,
+        ["riskofrain2", "valheim"]
+    );
+}
+
+#[test]
+fn mod_manager_links_are_parsed() {
+    use thunderstore::ModManagerLink;
+    let link =
+        ModManagerLink::parse("ror2mm://v1/install/thunderstore.io/bbepis/BepInExPack/5.4.2100/")
+            .unwrap();
+    assert_eq!(link.full_name(), "bbepis-BepInExPack");
+    assert_eq!(link.version, "5.4.2100");
+    assert!(
+        ModManagerLink::parse("ror2mm://v1/install/valheim.thunderstore.io/a/b_c/1.0.0").is_some()
+    );
+    for bad in [
+        "ror2mm://v1/install/evil.example/a/b/1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/../1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/b%2F..%2Fc/1.0.0/",
+        "ror2mm://v2/install/thunderstore.io/a/b/1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/b/",
+        "nxm://a/mods/1/files/2",
+    ] {
+        assert_eq!(ModManagerLink::parse(bad), None, "{bad}");
+    }
 }
 
 #[tokio::test]

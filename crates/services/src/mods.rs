@@ -18,7 +18,7 @@ use irori_core::process::CancellationToken;
 use irori_core::{Event, GameId, GameInfo, Notice, NoticeLevel, Paths, Runner};
 use irori_mods::fomod::{self, Choices, FileState, ModuleConfig};
 use irori_mods::nexus::{self, ApiKey, NexusUser, NxmLink};
-use irori_mods::thunderstore::{self, Community, Ecosystem, GameKeys, SearchPage};
+use irori_mods::thunderstore::{self, Community, Ecosystem, GameKeys, ModManagerLink, SearchPage};
 use irori_mods::{
     Applied, Conflicts, DeployMethod, DownloadProgress, ModEntry, ModLibrary, ModList, ModSource,
     Staging, conflicts, deploy, layout, overlay,
@@ -682,6 +682,70 @@ impl Backend {
             self.mods_changed(id);
         }
         Ok(done)
+    }
+
+    /// Which of `games` a Thunderstore link's package is for: the first
+    /// whose community (the user's choice, else the recognised one) lists
+    /// the package.
+    pub async fn thunderstore_link_game(
+        &self,
+        link: &ModManagerLink,
+        games: Vec<GameId>,
+    ) -> Result<Option<GameId>> {
+        let package =
+            thunderstore::package(thunderstore::BASE, &link.namespace, &link.name).await?;
+        for id in games {
+            let Ok(Some(community)) = self.mod_community(&id).await else {
+                continue;
+            };
+            if package
+                .communities
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case(&community.id))
+            {
+                return Ok(Some(id));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Install the package of a Thunderstore link (`ror2mm://`) into `id`,
+    /// with what it needs, from the game's community, else the first
+    /// community listing the package.
+    pub async fn install_thunderstore_link(
+        &self,
+        id: &GameId,
+        link: &ModManagerLink,
+        progress: ModProgress,
+    ) -> Result<InstallOutcome> {
+        let community = match self.mod_community(id).await? {
+            Some(c) => c,
+            None => {
+                let eco = self.thunderstore_ecosystem().await?;
+                let package =
+                    thunderstore::package(thunderstore::BASE, &link.namespace, &link.name).await?;
+                package
+                    .communities
+                    .iter()
+                    .find_map(|c| eco.community(c))
+                    .cloned()
+                    .with_context(|| {
+                        format!(
+                            "{} is in no Thunderstore community Irori knows",
+                            link.full_name()
+                        )
+                    })?
+            }
+        };
+        let names = self
+            .install_thunderstore(id, &community, &link.namespace, &link.name, progress)
+            .await?;
+        Ok(InstallOutcome::Installed {
+            name: names
+                .last()
+                .cloned()
+                .unwrap_or_else(|| link.name.replace('_', " ")),
+        })
     }
 
     /// The saved Nexus Mods account, when a key is saved.

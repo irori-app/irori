@@ -4,6 +4,7 @@
 
 mod details;
 mod fomod;
+mod link;
 mod list;
 mod nexus;
 mod thunderstore;
@@ -37,7 +38,7 @@ use irori_ui::i18n::{t, t_args};
 use crate::load::Load;
 use crate::ops::{notify_error, notify_success, open_path, pick_path, run_reporting};
 
-pub use nexus::open_nxm_dialog;
+pub use link::{open_nxm_dialog, open_thunderstore_link_dialog};
 
 /// Whether the game gets a Mods tab.
 pub(crate) fn applies(game: &GameInfo) -> bool {

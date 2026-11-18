@@ -349,7 +349,11 @@ mod tests {
     fn windows_tar_is_named_by_its_full_path() {
         assert_eq!(
             windows_tar(Some(r"C:\Windows".into())),
-            Some(PathBuf::from(r"C:\Windows").join("System32").join("tar.exe"))
+            Some(
+                PathBuf::from(r"C:\Windows")
+                    .join("System32")
+                    .join("tar.exe")
+            )
         );
         assert_eq!(windows_tar(Some("".into())), None);
         assert_eq!(windows_tar(None), None);
@@ -363,7 +367,10 @@ mod tests {
             cmd("NAME=\"Linux Mint\"\nID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"),
             Some("sudo apt install 7zip")
         );
-        assert_eq!(cmd("ID=cachyos\nID_LIKE=arch\n"), Some("sudo pacman -S 7zip"));
+        assert_eq!(
+            cmd("ID=cachyos\nID_LIKE=arch\n"),
+            Some("sudo pacman -S 7zip")
+        );
         assert_eq!(cmd("ID=\"fedora\"\n"), Some("sudo dnf install 7zip"));
         assert_eq!(
             cmd("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"),

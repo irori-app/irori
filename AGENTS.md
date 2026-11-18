@@ -111,7 +111,10 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
   Heroic's `heroic://launch/...`, and Nexus Mods' `nxm://<game>/mods/<mod>/files/<file>`
-  (installs the file after asking which game it is for). Any web page or program can open a link, so
+  (installs the file after asking which game it is for), and Thunderstore's
+  `ror2mm://v1/install/thunderstore.io/<owner>/<package>/<version>/` (installs the package
+  and what it needs, latest version, into the game picked; Irori doesn't register the scheme,
+  r2modman does, so the user points it at Irori). Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
 - A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
   Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
@@ -1580,7 +1583,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   a day) names each community's Steam/Epic ids, programs, loader and install
   rules; only BepInEx and MelonLoader communities install. Nexus Mods uses the
   user's personal API key (through `irori_secrets`, never logged); free accounts
-  install through `nxm://` links, which carry a one-time key.
+  install through `nxm://` links, which carry a one-time key. Thunderstore's
+  `ror2mm://` links (`thunderstore::ModManagerLink`) name only a package; the
+  link dialog (`irori_game::open_thunderstore_link_dialog`) preselects the game
+  whose community lists it (`community_listings`).
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 

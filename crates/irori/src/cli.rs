@@ -22,6 +22,9 @@ pub struct Cli {
     pub lutris: Option<String>,
     /// A Nexus Mods "Mod manager download" link (`nxm://…`) to install.
     pub nxm: Option<String>,
+    /// A Thunderstore "Install with Mod Manager" link (`ror2mm://…`) to
+    /// install.
+    pub thunderstore: Option<String>,
     /// A Windows file opened with Irori (`.exe`, `.msi`, `.bat`, `.cmd`,
     /// `.reg`, as an absolute path or a `file://` URL) to open in a game's
     /// Wine prefix. Not on Windows, which opens them itself.
@@ -64,6 +67,7 @@ impl Cli {
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
+                s if s.starts_with("ror2mm://") => cli.thunderstore = Some(s.to_string()),
                 s if s.starts_with("file://") => {
                     cli.windows_file = url::Url::parse(s)
                         .ok()
@@ -167,6 +171,7 @@ impl Cli {
             || self.route.is_some()
             || self.lutris.is_some()
             || self.nxm.is_some()
+            || self.thunderstore.is_some()
             || self.windows_file.is_some()
             || self.windows_uri.is_some()
             || self.big_picture
@@ -291,7 +296,8 @@ Options:
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
       irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
-      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)
+      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads),
+      ror2mm://v1/install/thunderstore.io/<owner>/<package>/<version>/ (Thunderstore installs)
 
 Files: a Windows program, installer, batch or registry file (.exe, .msi, .bat, .cmd, .reg)
        opens in the Wine prefix of a game you choose (Linux and macOS)
@@ -402,6 +408,15 @@ mod tests {
         );
         assert!(cli.has_request());
         assert_eq!(cli.launch, None);
+    }
+
+    #[test]
+    fn thunderstore_links_are_kept_for_the_mod_installer() {
+        let link = "ror2mm://v1/install/thunderstore.io/bbepis/BepInExPack/5.4.2100/";
+        let cli = parse(&[link]);
+        assert_eq!(cli.thunderstore.as_deref(), Some(link));
+        assert_eq!(cli.windows_uri, None);
+        assert!(cli.has_request());
     }
 
     #[cfg(not(windows))]
