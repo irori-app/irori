@@ -441,8 +441,11 @@ async fn imports_existing_installs() {
     assert!(format!("{err:#}").contains("No files"), "{err:#}");
     std::fs::create_dir_all(dir.join("Bin")).unwrap();
     std::fs::write(dir.join("Bin/Game.exe"), exe()).unwrap();
+    // The game's bundle, as macOS offers it, stands for its folder.
+    let bundle = dir.join("Game.app");
+    std::fs::create_dir_all(bundle.join("Contents")).unwrap();
     f.store
-        .import(APP, &dir, InstallPlatform::Windows)
+        .import(APP, &bundle, InstallPlatform::Windows)
         .await
         .unwrap();
     let g = f.store.installed_entry(APP).unwrap();
