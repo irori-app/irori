@@ -361,6 +361,40 @@ pub struct LsfgSettings {
     pub flow_scale: u8,
     /// lsfg-vk's lighter model.
     pub performance_mode: bool,
+    /// The Vulkan layer that generates the frames: [`LAYER_LSFG_VK`] or
+    /// [`LAYER_MAKO`] (MAKO Renderer, lsfg-vk's descendant). Settings
+    /// written before the choice existed lack the key and keep lsfg-vk.
+    pub layer: String,
+}
+
+/// [`LsfgSettings::layer`] for lsfg-vk.
+pub const LAYER_LSFG_VK: &str = "lsfg-vk";
+/// [`LsfgSettings::layer`] for MAKO Renderer.
+pub const LAYER_MAKO: &str = "mako";
+
+/// The frame generation layer [`LsfgSettings::layer`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameGenLayer {
+    LsfgVk,
+    Mako,
+}
+
+impl LsfgSettings {
+    /// The chosen layer. A value this Irori doesn't know (a newer one's)
+    /// is no layer at all, so the game starts without frame generation
+    /// rather than with a layer the user didn't pick.
+    pub fn chosen_layer(&self) -> Option<FrameGenLayer> {
+        match self.layer.trim() {
+            "" | LAYER_LSFG_VK => Some(FrameGenLayer::LsfgVk),
+            LAYER_MAKO => Some(FrameGenLayer::Mako),
+            _ => None,
+        }
+    }
+
+    /// The layer that runs for this game, when frame generation is on.
+    pub fn active_layer(&self) -> Option<FrameGenLayer> {
+        self.enabled.then(|| self.chosen_layer()).flatten()
+    }
 }
 
 impl Default for LsfgSettings {
@@ -370,6 +404,7 @@ impl Default for LsfgSettings {
             multiplier: 2,
             flow_scale: 100,
             performance_mode: false,
+            layer: LAYER_LSFG_VK.into(),
         }
     }
 }
@@ -1477,6 +1512,18 @@ mod tests {
         assert!(gs.smooth_motion && !gs.nvidia_reflex);
         assert_eq!(gs.lsfg.multiplier, 3);
         assert_eq!(gs.lsfg.flow_scale, 100, "missing keys keep their defaults");
+        assert_eq!(
+            gs.lsfg.active_layer(),
+            Some(FrameGenLayer::LsfgVk),
+            "settings from before MAKO keep lsfg-vk"
+        );
+        let mako: LsfgSettings =
+            serde_json::from_str(r#"{"enabled": true, "layer": "mako"}"#).unwrap();
+        assert_eq!(mako.active_layer(), Some(FrameGenLayer::Mako));
+        let newer: LsfgSettings =
+            serde_json::from_str(r#"{"enabled": true, "layer": "something-new"}"#).unwrap();
+        assert_eq!(newer.active_layer(), None);
+        assert_eq!(LsfgSettings::default().active_layer(), None);
         let json = serde_json::to_value(GameSettings::default()).unwrap();
         assert_eq!(json["iroriGpu"], "");
         assert_eq!(json["iroriWindowsGpu"], "");

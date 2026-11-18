@@ -219,7 +219,14 @@ their own games, so their games don't show it.
   Lossless Scaling in a Steam library (`lsfg-vk.dll` from its "lsfg-vk" branch, or
   `Lossless.dll`). Irori passes the game's choice as an environment profile
   (`LSFGVK_ENV=1`, `LSFGVK_MULTIPLIER`, `LSFGVK_FLOW_SCALE`, `LSFGVK_PERFORMANCE_MODE`,
-  `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file.
+  `LSFGVK_DLL_PATH`) and never writes lsfg-vk's configuration file. Its layer
+  (`iroriLsfg.layer`, `lsfg-vk` when missing) can instead be **MAKO** Renderer, lsfg-vk's
+  descendant with a model of its own (no Lossless Scaling needed): Irori finds its
+  `mako-launch` (or MAKO Decky's `mako-run`) on `PATH` or in `~/.local/bin`, starts the
+  game through it (after the user's wrappers, before MangoHud) and passes `MAKO_ENV=1`,
+  `MAKO_MULTIPLIER` (2 to 5), `MAKO_FLOW_SCALE` and, for performance mode,
+  `MAKO_FG_MODE=performance` and `MAKO_PERFORMANCE_MODE=1`. MAKO's `conf.toml` stays the
+  user's; Irori installs neither layer.
 - **NTSync** (`iroriNtsync`, on by default, Wine & Proton section): off sets
   `PROTON_NO_NTSYNC=1`, which Proton-GE, Proton-CachyOS and Proton-Wineland read; on, plain
   Wine builds get `WINENTSYNC=1`. Upstream Wine 11 uses `/dev/ntsync` whenever it exists.

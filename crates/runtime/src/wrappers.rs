@@ -79,6 +79,8 @@ pub struct WrapperParts {
     pub mangohud: Vec<String>,
     /// `gamemoderun` when GameMode is enabled.
     pub gamemode: Option<String>,
+    /// `[mako-launch]` when MAKO generates the game's frames.
+    pub frame_generation: Vec<String>,
     /// `[umu-run]` for native games on the Steam runtime.
     pub steam_runtime: Vec<String>,
     /// `[bwrap, options…, --]` when the game runs sandboxed
@@ -87,8 +89,9 @@ pub struct WrapperParts {
 }
 
 /// The wrapper chain, outermost first, in Heroic's order: gamescope, user
-/// wrappers, MangoHud (only without gamescope, which uses `--mangoapp`
-/// instead), gamemoderun, then umu-run. Empty arguments are dropped.
+/// wrappers, MAKO's launcher (Irori's own), MangoHud (only without
+/// gamescope, which uses `--mangoapp` instead), gamemoderun, then umu-run.
+/// Empty arguments are dropped.
 ///
 /// A sandboxed game has gamescope and gamemoderun outside the sandbox, as
 /// they need the compositor and D-Bus (gamemoderun then registers the
@@ -111,6 +114,9 @@ pub fn setup_wrappers(gs: &GameSettings, parts: &WrapperParts) -> Vec<Vec<String
         let mut cmd = vec![exe.to_string()];
         cmd.extend(split_args(&w.args));
         chain.push(cmd);
+    }
+    if !parts.frame_generation.is_empty() {
+        chain.push(parts.frame_generation.clone());
     }
     if parts.gamescope.is_empty() && !parts.mangohud.is_empty() {
         chain.push(parts.mangohud.clone());
@@ -291,6 +297,7 @@ mod tests {
             gamemode: Some("/usr/bin/gamemoderun".into()),
             steam_runtime: vec!["/usr/bin/umu-run".into()],
             sandbox: Vec::new(),
+            frame_generation: Vec::new(),
         };
         assert_eq!(
             setup_wrappers(&gs, &parts),
@@ -311,6 +318,15 @@ mod tests {
                 vec!["/usr/bin/umu-run"],
             ]
         );
+        // MAKO's launcher sits inside the user's wrappers, around MangoHud.
+        parts.frame_generation = vec!["/home/u/.local/bin/mako-launch".into()];
+        assert_eq!(
+            setup_wrappers(&gs, &parts)[1..3],
+            [
+                vec!["/home/u/.local/bin/mako-launch"],
+                vec!["/usr/bin/mangohud", "--dlsym"],
+            ]
+        );
         assert!(setup_wrappers(&GameSettings::default(), &WrapperParts::default()).is_empty());
     }
 
@@ -329,6 +345,7 @@ mod tests {
             gamemode: Some("/usr/bin/gamemoderun".into()),
             steam_runtime: vec!["/usr/bin/umu-run".into()],
             sandbox: vec!["/usr/bin/bwrap".into(), "--unshare-net".into(), "--".into()],
+            ..Default::default()
         };
         assert_eq!(
             setup_wrappers(&gs, &parts),

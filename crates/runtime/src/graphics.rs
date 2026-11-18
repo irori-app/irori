@@ -1,7 +1,8 @@
 //! The host's graphics, as far as per-game GPU options need it: the graphics
 //! cards (`/sys/class/drm`, named from `pci.ids`), NVIDIA's driver and its
-//! Smooth Motion layer, and lsfg-vk with Lossless Scaling's DLL. Also the
-//! variables those options set ([`graphics_env`]).
+//! Smooth Motion layer, lsfg-vk with Lossless Scaling's DLL, and MAKO
+//! Renderer's launcher. Also the variables those options set
+//! ([`graphics_env`]).
 //!
 //! Everything here is Linux only; elsewhere [`HostGraphics::probe`] finds
 //! nothing. Probing reads a few small sysfs and manifest files plus `pci.ids`,
@@ -10,7 +11,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use irori_core::{AppSettings, GameSettings};
+use irori_core::{AppSettings, FrameGenLayer, GameSettings};
 
 use crate::env::{EnvMap, HostEnv};
 
@@ -31,6 +32,12 @@ const LSFG_V1_MANIFEST: &str = "VkLayer_LS_frame_generation.json";
 /// `lsfg-vk.dll`; the regular build's `Lossless.dll` also works.
 const LOSSLESS_FOLDER: &str = "Lossless Scaling";
 const LOSSLESS_DLLS: [&str; 2] = ["lsfg-vk.dll", "Lossless.dll"];
+/// MAKO Renderer's launchers: the standalone install's, then MAKO Decky's.
+/// MAKO only runs in a game started through one: it enables its layer from a
+/// folder of its own and keeps lsfg-vk's layers out of the game.
+const MAKO_LAUNCHERS: [&str; 2] = ["mako-launch", "mako-run"];
+/// MAKO's frame multipliers, total frames per rendered one.
+const MAKO_MULTIPLIERS: (u8, u8) = (2, 5);
 
 /// One graphics card.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -130,6 +137,8 @@ pub struct HostGraphics {
     /// NVIDIA's Smooth Motion layer is installed.
     pub smooth_motion_layer: bool,
     pub lsfg: Option<LsfgVk>,
+    /// MAKO Renderer's launcher (`mako-launch` or `mako-run`).
+    pub mako: Option<PathBuf>,
 }
 
 impl HostGraphics {
@@ -167,6 +176,7 @@ impl HostGraphics {
             let dirs = implicit_layer_dirs(host, &crate::locations::home());
             let libraries = crate::vdf::steam_libraries(&crate::locations::steam_path(app));
             found.lsfg = find_lsfg(&dirs, &libraries, host);
+            found.mako = find_mako(host, &crate::locations::home());
         }
         found
     }
@@ -218,6 +228,16 @@ impl HostGraphics {
             Some(l) if l.dll.is_none() => Some(LsfgBlocker::NoLosslessScaling),
             Some(_) => None,
         }
+    }
+
+    /// Why no frame generation layer can run here; `None` when lsfg-vk or
+    /// MAKO can. MAKO needs no Lossless Scaling: its own model is the
+    /// default.
+    pub fn frame_generation_blocker(&self) -> Option<LsfgBlocker> {
+        if self.mako.is_some() {
+            return None;
+        }
+        self.lsfg_blocker()
     }
 }
 
@@ -426,6 +446,35 @@ pub fn find_lsfg(dirs: &[PathBuf], libraries: &[PathBuf], host: &HostEnv) -> Opt
     })
 }
 
+/// MAKO Renderer's launcher: on `PATH` (the Arch package's), else in
+/// `~/.local/bin`, where its installer and MAKO Decky put it and which
+/// `PATH` often lacks in a desktop session.
+pub fn find_mako(host: &HostEnv, home: &Path) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = host
+        .get("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    dirs.push(home.join(".local/bin"));
+    MAKO_LAUNCHERS
+        .iter()
+        .find_map(|name| dirs.iter().map(|d| d.join(name)).find(|p| is_executable(p)))
+}
+
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
+}
+
 /// Variables of the GPU and frame generation options, for a Linux launch:
 /// the chosen graphics card, Smooth Motion and lsfg-vk. Variables the user
 /// set for the game are left out, so theirs win; the host environment's do
@@ -443,7 +492,24 @@ pub fn graphics_env(settings: &GameSettings, graphics: &HostGraphics) -> EnvMap 
         env.insert("NVPRESENT_ENABLE_SMOOTH_MOTION".into(), "1".into());
     }
     let lsfg = &settings.lsfg;
-    if lsfg.enabled {
+    let flow_scale = (f64::from(lsfg.flow_scale.clamp(25, 100)) / 100.0).to_string();
+    if lsfg.active_layer() == Some(FrameGenLayer::Mako) {
+        // MAKO's environment-only profile, as with lsfg-vk: its own
+        // profiles in `conf.toml` stay the user's. Its default model is its
+        // own (MAKO FG); "performance" lightens that one and Lossless
+        // Scaling's alike.
+        let (low, high) = MAKO_MULTIPLIERS;
+        env.insert("MAKO_ENV".into(), "1".into());
+        env.insert(
+            "MAKO_MULTIPLIER".into(),
+            lsfg.multiplier.clamp(low, high).to_string(),
+        );
+        env.insert("MAKO_FLOW_SCALE".into(), flow_scale.clone());
+        if lsfg.performance_mode {
+            env.insert("MAKO_FG_MODE".into(), "performance".into());
+            env.insert("MAKO_PERFORMANCE_MODE".into(), "1".into());
+        }
+    } else if lsfg.active_layer() == Some(FrameGenLayer::LsfgVk) {
         // An environment profile: lsfg-vk ignores its configuration file's
         // profiles for this game.
         env.insert("LSFGVK_ENV".into(), "1".into());
@@ -451,10 +517,7 @@ pub fn graphics_env(settings: &GameSettings, graphics: &HostGraphics) -> EnvMap 
             "LSFGVK_MULTIPLIER".into(),
             lsfg.multiplier.clamp(2, 20).to_string(),
         );
-        env.insert(
-            "LSFGVK_FLOW_SCALE".into(),
-            (f64::from(lsfg.flow_scale.clamp(25, 100)) / 100.0).to_string(),
-        );
+        env.insert("LSFGVK_FLOW_SCALE".into(), flow_scale);
         if lsfg.performance_mode {
             env.insert("LSFGVK_PERFORMANCE_MODE".into(), "1".into());
         }
@@ -722,6 +785,60 @@ C 00  Unclassified device
         assert!(!env.contains_key("LSFGVK_DLL_PATH"));
 
         assert!(graphics_env(&GameSettings::default(), &graphics).is_empty());
+
+        // MAKO takes the same choices through its own variables, within its
+        // 2× to 5× range, and lsfg-vk's are left out.
+        gs.lsfg.layer = irori_core::LAYER_MAKO.into();
+        gs.lsfg.multiplier = 8;
+        gs.lsfg.flow_scale = 70;
+        gs.lsfg.performance_mode = true;
+        let env = graphics_env(&gs, &graphics);
+        assert_eq!(env["MAKO_ENV"], "1");
+        assert_eq!(env["MAKO_MULTIPLIER"], "5");
+        assert_eq!(env["MAKO_FLOW_SCALE"], "0.7");
+        assert_eq!(env["MAKO_FG_MODE"], "performance");
+        assert!(env.keys().all(|k| !k.starts_with("LSFGVK_")));
+
+        // A layer this Irori doesn't know runs nothing.
+        gs.lsfg.layer = "newer".into();
+        assert!(
+            graphics_env(&gs, &graphics)
+                .keys()
+                .all(|k| !k.starts_with("LSFGVK_") && !k.starts_with("MAKO_"))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mako_is_found_on_path_or_in_local_bin() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let bin = dir.path().join("bin");
+        let local = home.join(".local/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&local).unwrap();
+        let path = HostEnv::from_pairs([("PATH", bin.to_string_lossy().into_owned())]);
+        assert_eq!(find_mako(&path, &home), None);
+
+        let write = |p: &Path, mode: u32| {
+            std::fs::write(p, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        // MAKO Decky's launcher, and a file that can't run.
+        write(&local.join("mako-run"), 0o755);
+        write(&bin.join("mako-launch"), 0o644);
+        assert_eq!(find_mako(&path, &home), Some(local.join("mako-run")));
+        // The standalone launcher wins.
+        write(&bin.join("mako-launch"), 0o755);
+        assert_eq!(find_mako(&path, &home), Some(bin.join("mako-launch")));
+
+        let found = HostGraphics {
+            mako: Some(bin.join("mako-launch")),
+            ..Default::default()
+        };
+        assert_eq!(found.lsfg_blocker(), Some(LsfgBlocker::NotInstalled));
+        assert_eq!(found.frame_generation_blocker(), None);
     }
 
     #[test]
