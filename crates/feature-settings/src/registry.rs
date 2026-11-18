@@ -3107,7 +3107,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ignore_game_updates.help")
     .keywords(&["update", "ignore", "pin", "version"]),
-    game_only(
+    game(
         "iroriSandbox.noNetwork",
         "settings.field.sandbox_no_network.label",
         Launch,
@@ -3124,7 +3124,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "untrusted",
         "isolate",
     ]),
-    game_only(
+    game(
         "iroriSandbox.noHome",
         "settings.field.sandbox_no_home.label",
         Launch,

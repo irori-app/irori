@@ -1063,9 +1063,11 @@ AppImage gives Sunshine `$APPIMAGE`, not its temporary mount.
 
 A game, an added app or a Lutris script install can run in a
 [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`) sandbox, for
-programs the user doesn't trust. The per-game settings (Launch → Sandbox) have
-two switches, `iroriSandbox.noNetwork` ("Block the network") and
-`iroriSandbox.noHome` ("Hide the home folder"); the Lutris installer window
+programs the user doesn't trust. The per-game settings and the game defaults
+(Launch → Sandbox) have two switches, `iroriSandbox.noNetwork` ("Block the
+network") and `iroriSandbox.noHome` ("Hide the home folder"). The defaults reach
+only games a sandbox can hold (not ROMs, web apps, Steam's or launchers' games),
+so those keep starting; a game's own switches stand as set. The Lutris installer window
 offers the same two, which then apply to the script's programs and to the game
 it installs. The game page shows a "Sandboxed" card under Play ("Running
 sandboxed" while it plays) that opens to list what the game can and can't
