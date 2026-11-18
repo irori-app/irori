@@ -351,6 +351,7 @@ impl InstallSheet {
         this.fetch_wines(window, cx);
         this.fetch_compat(window, cx);
         this.refresh_disk(window, cx);
+        this.check_prefix(window, cx);
         this
     }
 
@@ -571,6 +572,33 @@ impl InstallSheet {
                     }
                 });
             }
+        })
+        .detach();
+    }
+
+    /// Replace a saved prefix that no longer exists with the one the
+    /// defaults give, unless the user already typed another.
+    fn check_prefix(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let app = b.settings.app();
+        let settings = b.settings.game(&self.id);
+        if settings.wine_prefix.is_empty() {
+            return;
+        }
+        let shown = self.prefix.read(cx).value().to_string();
+        let game = self.game.clone();
+        let task = irori_ui::run(cx, async move {
+            Ok(irori_runtime::install_prefix(&app, &settings, &game))
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(suggested) = task.await else { return };
+            let _ = this.update_in(cx, |this, window, cx| {
+                let suggested = suggested.to_string_lossy().into_owned();
+                if this.prefix.read(cx).value() == shown && suggested != shown {
+                    this.prefix
+                        .update(cx, |s, cx| s.set_value(suggested, window, cx));
+                }
+            });
         })
         .detach();
     }
@@ -891,8 +919,24 @@ impl InstallSheet {
             b.settings.set_game_value(&self.id, "wineVersion", Some(v));
         }
         let prefix = self.prefix.read(cx).value().trim().to_string();
-        let current = irori_runtime::prefix_path(&b.settings.app(), &effective, &self.game);
-        if !prefix.is_empty() && irori_core::paths::expand_home(&prefix) != current {
+        let app = b.settings.app();
+        let current = irori_runtime::prefix_path(&app, &effective, &self.game);
+        let inherited = irori_runtime::prefix_path(
+            &app,
+            &irori_core::GameSettings {
+                wine_prefix: app.game.wine_prefix.clone(),
+                ..effective.clone()
+            },
+            &self.game,
+        );
+        if prefix.is_empty() {
+            return;
+        }
+        let chosen = irori_core::paths::expand_home(&prefix);
+        if chosen == inherited && chosen != current {
+            // The saved prefix was gone and the defaults' one was taken.
+            b.settings.set_game_value(&self.id, "winePrefix", None);
+        } else if chosen != current {
             b.settings.set_game_value(
                 &self.id,
                 "winePrefix",

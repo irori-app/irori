@@ -810,6 +810,7 @@ impl Backend {
         if args.remove_prefix && Self::target_platform(&game).needs_wine() {
             let prefix = irori_runtime::prefix_path(&app, &settings, &game);
             remove_prefix_dir(&prefix, &app).await?;
+            self.settings.forget_prefix(id);
         }
         let _ = irori_extras::shortcuts::remove(&game, &app).await;
         if args.remove_settings {

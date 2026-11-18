@@ -1007,3 +1007,47 @@ fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     assert_eq!(rt.block_on(b.igdb_status()).client_id, None);
     b.settings.update_app(|s| s.igdb = false);
 }
+
+#[cfg(unix)]
+#[test]
+fn removing_a_prefix_forgets_it() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let prefix = dir.path().join("prefix");
+    std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+    std::fs::write(prefix.join("system.reg"), "").unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "prefix-gone".into(),
+            title: "Prefix Gone".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().join("game").display().to_string(),
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "winePrefix",
+        Some(serde_json::Value::String(prefix.display().to_string())),
+    );
+    let args = RemoveArgs {
+        remove_prefix: true,
+        ..Default::default()
+    };
+    b.runtime().block_on(b.uninstall(&id, args)).unwrap();
+    assert!(!prefix.exists());
+    assert!(!b.settings.overrides(&id).is_overridden("winePrefix"));
+}

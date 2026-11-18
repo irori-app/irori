@@ -742,6 +742,23 @@ pub fn prefix_path(app: &AppSettings, settings: &GameSettings, game: &GameInfo) 
     }
 }
 
+/// The prefix to suggest when installing: the game's saved prefix while it
+/// still exists, else the one the defaults give it. A prefix deleted since
+/// (by hand, or a cleanup) would otherwise be offered again.
+pub fn install_prefix(app: &AppSettings, settings: &GameSettings, game: &GameInfo) -> PathBuf {
+    let saved = prefix_path(app, settings, game);
+    if settings.wine_prefix.is_empty() || saved.exists() {
+        return saved;
+    }
+    let defaults = GameSettings {
+        wine_version: settings.wine_version.clone(),
+        wine_crossover_bottle: settings.wine_crossover_bottle.clone(),
+        wine_prefix: app.game.wine_prefix.clone(),
+        ..GameSettings::default()
+    };
+    prefix_path(app, &defaults, game)
+}
+
 /// Whether `prefix` is shared by several games: the root that holds every
 /// game's own prefix, or the prefix set for all games in the defaults.
 /// Deleting it with one game would take the others' saves with it.
@@ -875,6 +892,30 @@ mod tests {
         );
         gs.wine_prefix = "/x/y".into();
         assert_eq!(prefix_path(&app, &gs, &game()), PathBuf::from("/x/y"));
+    }
+
+    #[test]
+    fn a_deleted_prefix_is_not_suggested_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = AppSettings {
+            default_wine_prefix_dir: dir.path().display().to_string(),
+            ..Default::default()
+        };
+        let mut gs = GameSettings {
+            wine_prefix: dir.path().join("old").display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
+        std::fs::create_dir(dir.path().join("old")).unwrap();
+        assert_eq!(install_prefix(&app, &gs, &game()), dir.path().join("old"));
+        gs.wine_prefix.clear();
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
     }
 
     #[test]

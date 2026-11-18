@@ -83,6 +83,14 @@ impl SettingsService {
         self.store_overrides(id, o);
     }
 
+    /// Drop the game's own prefix after that prefix was deleted, so a
+    /// reinstall offers the defaults' prefix instead of a missing folder.
+    pub fn forget_prefix(&self, id: &GameId) {
+        if self.overrides(id).is_overridden("winePrefix") {
+            self.set_game_value(id, "winePrefix", None);
+        }
+    }
+
     /// Store effective settings for a game, keeping only what differs from defaults.
     pub fn set_game(&self, id: &GameId, effective: &GameSettings) {
         let o = GameSettingsOverrides::diff(&self.app().game, effective);
