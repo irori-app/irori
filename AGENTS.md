@@ -805,7 +805,12 @@ commands without a window.
   the prefix's `winetricks.log` (`pfx/` too, Steam's through protontricks' path),
   its anticheat entry and, on Linux, `vm.max_map_count`; `analysis.rs` turns that
   into findings, each with the log lines showing it and its fixes, and is pure and
-  tested. Fixes tried this session (`mark_fix_tried`) come last.
+  tested. Beside missing DLLs and anticheat it knows Direct3D 12 with VKD3D-Proton off
+  and wined3d with DXVK off under plain Wine (fix: turn the layer on), esync out of file
+  descriptors (fix: esync off, fsync on), a wineserver of another Wine version
+  (`Backend::stop_prefix_wineserver`, found by its `WINEPREFIX` in `/proc`) and Vulkan
+  failing, with the driver install command for the distribution and GPU to copy
+  (`vulkan_driver_command`). Fixes tried this session (`mark_fix_tried`) come last.
   `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
   `sudo`: a low map count is explained with the commands to run. Games through
   Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`

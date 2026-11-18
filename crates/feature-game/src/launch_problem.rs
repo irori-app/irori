@@ -40,6 +40,10 @@ fn hint_text(hint: LaunchHint) -> SharedString {
     t(match hint {
         LaunchHint::MissingExecutable => "game.launch_problem.hint.missing_executable",
         LaunchHint::WrongWineBuild => "game.launch_problem.hint.wrong_wine",
+        LaunchHint::WineserverMismatch => "game.launch_problem.hint.wineserver_mismatch",
+        LaunchHint::Direct3D12 => "game.launch_problem.hint.direct3d12",
+        LaunchHint::Wined3d => "game.launch_problem.hint.wined3d",
+        LaunchHint::EsyncLimit => "game.launch_problem.hint.esync_limit",
         LaunchHint::AntiCheat => "game.launch_problem.hint.anticheat",
         LaunchHint::MissingLibrary => "game.launch_problem.hint.missing_library",
         LaunchHint::MissingNativeLibrary => "game.launch_problem.hint.missing_native_library",
@@ -76,6 +80,16 @@ fn finding_text(f: &Finding) -> SharedString {
                 _ => "game.launch_problem.hint.anticheat_runtime",
             };
             t_args(key, &[("anticheat", &names.join(", "))])
+        }
+        (LaunchHint::Direct3D12, Some(Detail::ProgramGraphics { dll })) => t_args(
+            "game.launch_problem.hint.direct3d12_program",
+            &[("dll", dll)],
+        ),
+        (LaunchHint::Wined3d, Some(Detail::ProgramGraphics { dll })) => {
+            t_args("game.launch_problem.hint.wined3d_program", &[("dll", dll)])
+        }
+        (LaunchHint::EsyncLimit, Some(Detail::EsyncWithFsync)) => {
+            t("game.launch_problem.hint.esync_fsync")
         }
         (LaunchHint::MapCount, Some(Detail::MapCount { current })) => t_args(
             "game.launch_problem.hint.map_count",
@@ -328,6 +342,46 @@ impl LaunchProblem {
                 cx.write_to_clipboard(ClipboardItem::new_string(map_count_commands().join("\n")));
                 ops::notify_success(window, cx, t("game.launch_problem.map_count_copied"));
             }
+            Fix::VulkanDriver(command) => {
+                cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
+                ops::notify_success(window, cx, t("game.launch_problem.vulkan_copied"));
+            }
+            Fix::EnableDxvk | Fix::EnableVkd3d | Fix::UseFsync => {
+                let values: &[(&str, bool)] = match &fix {
+                    Fix::EnableDxvk => &[("autoInstallDxvk", true)],
+                    Fix::EnableVkd3d => &[("autoInstallVkd3d", true)],
+                    _ => &[("enableEsync", false), ("enableFsync", true)],
+                };
+                for (key, value) in values {
+                    b.settings
+                        .set_game_value(&id, key, Some(serde_json::Value::Bool(*value)));
+                }
+                self.try_again(window, cx);
+            }
+            Fix::StopWineserver => {
+                self.fixing = Some(fix.clone());
+                cx.notify();
+                let task = irori_ui::run(cx, async move { b.stop_prefix_wineserver(&id).await });
+                cx.spawn_in(window, async move |this, cx| {
+                    let result = task.await;
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.fixing = None;
+                        match result {
+                            Ok(()) => this.try_again(window, cx),
+                            Err(e) => {
+                                ops::notify_error(
+                                    window,
+                                    cx,
+                                    t("game.launch_problem.fix.failed"),
+                                    &e,
+                                );
+                                cx.notify();
+                            }
+                        }
+                    });
+                })
+                .detach();
+            }
             Fix::Winetricks(verbs) => {
                 let verbs: Vec<String> = verbs.iter().map(|v| v.to_string()).collect();
                 self.fixing = Some(fix.clone());
@@ -369,6 +423,11 @@ impl LaunchProblem {
             Fix::SteamRuntime => t("game.launch_problem.fix.steam_runtime"),
             Fix::ProgramSettings => t("game.launch_problem.fix.programs"),
             Fix::MapCount => t("game.launch_problem.fix.map_count"),
+            Fix::EnableDxvk => t("game.launch_problem.fix.dxvk"),
+            Fix::EnableVkd3d => t("game.launch_problem.fix.vkd3d"),
+            Fix::UseFsync => t("game.launch_problem.fix.fsync"),
+            Fix::StopWineserver => t("game.launch_problem.fix.wineserver"),
+            Fix::VulkanDriver(_) => t("game.launch_problem.fix.vulkan_driver"),
         }
     }
 
@@ -472,6 +531,18 @@ impl LaunchProblem {
                             .child(t("game.launch_problem.map_count_how")),
                     )
                     .children(map_count_commands().map(|c| mono(c.into())));
+            }
+            Some(Detail::VulkanDriver {
+                command: Some(command),
+            }) => {
+                col = col
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(t("game.launch_problem.vulkan_how")),
+                    )
+                    .child(mono(command.clone().into()));
             }
             _ => {}
         }
@@ -757,6 +828,21 @@ mod tests {
             }),
         );
         assert!(finding_text(&denied).contains("BattlEye"));
+        let d3d12 = finding(
+            LaunchHint::Direct3D12,
+            Some(Detail::ProgramGraphics {
+                dll: "d3d12.dll".into(),
+            }),
+        );
+        assert!(finding_text(&d3d12).contains("d3d12.dll"));
+        for hint in [
+            LaunchHint::WineserverMismatch,
+            LaunchHint::Direct3D12,
+            LaunchHint::Wined3d,
+            LaunchHint::EsyncLimit,
+        ] {
+            assert!(!hint_text(hint).is_empty());
+        }
         // Without details, the cause's own text.
         let plain = finding(LaunchHint::MissingLibrary, None);
         assert_eq!(finding_text(&plain), hint_text(LaunchHint::MissingLibrary));
@@ -769,6 +855,11 @@ mod tests {
             Fix::SteamRuntime,
             Fix::ProgramSettings,
             Fix::MapCount,
+            Fix::EnableDxvk,
+            Fix::EnableVkd3d,
+            Fix::UseFsync,
+            Fix::StopWineserver,
+            Fix::VulkanDriver("sudo pacman -S vulkan-radeon".into()),
         ] {
             assert!(!LaunchProblem::fix_label(&fix).is_empty());
         }
