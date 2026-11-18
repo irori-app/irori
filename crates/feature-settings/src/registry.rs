@@ -1628,6 +1628,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["sunshine", "moonlight", "big picture", "couch"])
     .requires(NEEDS_SUNSHINE),
     app(
+        "iroriSunshine.address",
+        "settings.field.sunshine_address.label",
+        General,
+        "settings.group.integrations",
+        Text(TextKind::Plain),
+    )
+    .help("settings.field.sunshine_address.help")
+    .placeholder(Key("settings.field.sunshine_address.placeholder"))
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "address",
+        "another computer",
+        "remote",
+        "certificate",
+        "fingerprint",
+    ])
+    .requires(NEEDS_SUNSHINE),
+    app(
         "iroriSunshine.matchClient",
         "settings.field.sunshine_match_client.label",
         General,
@@ -1652,7 +1671,14 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Panel(PanelKind::Sunshine),
     )
-    .keywords(&["sunshine", "moonlight", "stream", "password", "login"]),
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "stream",
+        "password",
+        "login",
+        "certificate",
+    ]),
     app(
         "disablePlaytimeSync",
         "settings.field.disable_playtime_sync.label",

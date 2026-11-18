@@ -697,6 +697,13 @@ commands without a window.
   when what Irori wants differs from `state/sunshine.json`; a failure waits 10 minutes.
   Turning the setting off takes Irori's applications out. A game with `iroriInSunshine` off
   (per game) gets none.
+  - **Another computer** (`iroriSunshine.address`, `sunshine/remote.rs`): the web UI at
+    that address (HTTPS only), its applications starting `irori` from that computer's
+    `PATH`. Its certificate is trusted on first use: the first connection records the
+    SHA-256 fingerprint in `state/sunshine.json` (by `host:port`), and a different one is
+    refused inside the TLS handshake (`PinVerifier`, rustls with ring), so nothing is sent;
+    the panel shows the new fingerprint and "Trust the new certificate"
+    (`Backend::accept_sunshine_certificate`). Loopback addresses aren't checked.
   - **Apollo** (Sunshine's fork) is told apart by its API: Basic auth is refused, so the
     client signs in at `/api/login` (one session cookie for the whole web UI: signing in
     signs a browser out, so the session is kept between syncs) and names applications by
