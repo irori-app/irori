@@ -24,6 +24,7 @@ pub mod journal;
 mod kde;
 mod launcher_problem;
 pub mod lutris_summary;
+pub mod middle_scroll;
 pub mod models;
 pub mod motion;
 pub mod nav;
@@ -38,6 +39,7 @@ pub mod system_notify;
 mod text_scale;
 pub mod theme;
 mod wallpaper;
+pub mod wine_choice;
 mod xbox_problem;
 
 pub use models::{Models, models};

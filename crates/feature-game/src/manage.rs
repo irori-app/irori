@@ -17,6 +17,7 @@ use gpui_kit::{
 };
 use irori_core::{GameId, GameInfo, InstallPlatform, RemoveArgs, Runner};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::wine_choice::WineChoice;
 use irori_ui::{Route, backend, models, navigate};
 
 use crate::i18n::{platform_label, status_label};
@@ -29,6 +30,9 @@ pub struct ImportForm {
     path: Entity<InputState>,
     platforms: Vec<InstallPlatform>,
     platform: InstallPlatform,
+    /// The Wine or Proton build and prefix, for a Windows install played
+    /// through Wine.
+    wine: Option<Entity<WineChoice>>,
     submitting: bool,
 }
 
@@ -49,11 +53,17 @@ impl ImportForm {
         let platforms = installable_platforms(&game);
         let path =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("game.import.path_placeholder")));
+        let wine = platforms.iter().any(|p| p.needs_wine()).then(|| {
+            let id = game.id();
+            let game = game.clone();
+            cx.new(|cx| WineChoice::for_game(&id, &game, window, cx))
+        });
         Self {
             platform: platforms.first().copied().unwrap_or_default(),
             platforms,
             game,
             path,
+            wine,
             submitting: false,
         }
     }
@@ -82,6 +92,12 @@ impl ImportForm {
         let id = self.game.id();
         let platform = self.platform;
         let title = self.game.title.clone();
+        let game = self.game.clone();
+        let setup = self
+            .wine
+            .as_ref()
+            .filter(|_| platform.needs_wine())
+            .map(|w| w.read(cx).setup(cx));
         self.submitting = true;
         cx.notify();
         let task = run_reporting(
@@ -95,7 +111,11 @@ impl ImportForm {
                         &[("path", &path.display().to_string())]
                     ));
                 }
-                b.import(&id, &path, platform).await
+                b.import(&id, &path, platform).await?;
+                if let Some(setup) = setup {
+                    setup.apply(&b, &id, &game);
+                }
+                Ok(())
             },
             move |_, window, cx| {
                 window.close_dialog(cx);
@@ -150,6 +170,10 @@ impl Render for ImportForm {
                         })),
                 )
             })
+            .when_some(
+                self.wine.clone().filter(|_| self.platform.needs_wine()),
+                |col, wine| col.child(wine),
+            )
             .child(
                 DialogFooter::new()
                     .child(

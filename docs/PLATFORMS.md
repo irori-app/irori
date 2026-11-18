@@ -135,6 +135,14 @@ second after it stops moving (`iroriUi.windowWidth`, `windowHeight`, `windowMaxi
 system lets programs place windows. Wayland doesn't, so there the compositor places it.
 A window that no longer fits its display (a smaller TV, a higher scale) or whose
 display is gone opens centred and no larger than the display.
+With "Start maximized" (`iroriUi.startMaximized`, Settings › General) it always
+opens maximized. macOS reports a zoomed window as an ordinary one, so Irori asks the
+window whether it is zoomed and keeps the size it had before to come back to.
+
+"Scroll with the middle button" (`iroriUi.middleClickScroll`, Settings › Appearance,
+off by default) scrolls whatever is under the pointer while the middle button is held
+and the mouse moves, by turning the movement into scroll-wheel events
+(`irori_ui::middle_scroll`); Big Picture keeps its own scrolling.
 
 Hidden games can be put behind a PIN (Filters › Hidden, or the palette): until it is
 entered they stay out of the library, search, Big Picture, the palette, the stats page
@@ -1063,9 +1071,11 @@ AppImage gives Sunshine `$APPIMAGE`, not its temporary mount.
 
 A game, an added app or a Lutris script install can run in a
 [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`) sandbox, for
-programs the user doesn't trust. The per-game settings (Launch → Sandbox) have
-two switches, `iroriSandbox.noNetwork` ("Block the network") and
-`iroriSandbox.noHome` ("Hide the home folder"); the Lutris installer window
+programs the user doesn't trust. The per-game settings and the game defaults
+(Launch → Sandbox) have two switches, `iroriSandbox.noNetwork` ("Block the
+network") and `iroriSandbox.noHome` ("Hide the home folder"). The defaults reach
+only games a sandbox can hold (not ROMs, web apps, Steam's or launchers' games),
+so those keep starting; a game's own switches stand as set. The Lutris installer window
 offers the same two, which then apply to the script's programs and to the game
 it installs. The game page shows a "Sandboxed" card under Play ("Running
 sandboxed" while it plays) that opens to list what the game can and can't

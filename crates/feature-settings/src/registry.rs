@@ -1346,6 +1346,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["tray", "minimized", "startup"])
     .requires(NEEDS_EXIT_TO_TRAY),
     app(
+        "iroriUi.startMaximized",
+        "settings.field.ui_start_maximized.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.ui_start_maximized.help")
+    .keywords(&["maximize", "maximized", "window", "startup", "full size"]),
+    app(
         "iroriStartWithSystem",
         "settings.field.start_with_system.label",
         General,
@@ -2045,6 +2054,23 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["animation", "accessibility"]),
+    app(
+        "iroriUi.middleClickScroll",
+        "settings.field.ui_middle_click_scroll.label",
+        Appearance,
+        "settings.group.mouse",
+        Toggle,
+    )
+    .help("settings.field.ui_middle_click_scroll.help")
+    .keywords(&[
+        "middle",
+        "mouse",
+        "scroll",
+        "autoscroll",
+        "wheel",
+        "drag",
+        "scrollanywhere",
+    ]),
     app(
         "iroriUi.fontFamily",
         "settings.field.ui_font_family.label",
@@ -3107,7 +3133,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ignore_game_updates.help")
     .keywords(&["update", "ignore", "pin", "version"]),
-    game_only(
+    game(
         "iroriSandbox.noNetwork",
         "settings.field.sandbox_no_network.label",
         Launch,
@@ -3124,7 +3150,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "untrusted",
         "isolate",
     ]),
-    game_only(
+    game(
         "iroriSandbox.noHome",
         "settings.field.sandbox_no_home.label",
         Launch,

@@ -231,7 +231,7 @@ irori-core                        (depends on nothing internal)
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
-irori-ui          (services, core)
+irori-ui          (services, core, runtime, engines)
 feature crates    (ui, services, core; concrete store crates only where a screen needs a store's own API)
 irori (binary)    (everything; the only crate that names every store)
 irori-sign-in     (standalone; Irori links it only on macOS/Windows)
@@ -1477,7 +1477,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
-  backups, art) and hide the Graphics, Tools and Log sections.
+  backups, art) and hide the Graphics, Tools and Log sections; their Launch and
+  Performance sections say why (and, on Linux, how to add MangoHud in Steam).
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.

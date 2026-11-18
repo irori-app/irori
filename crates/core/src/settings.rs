@@ -1127,6 +1127,9 @@ pub struct UiPrefs {
     /// Width in rem of the game drawer beside the grid (`libraryDrawerWidth`).
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
+    /// Hold the middle mouse button and move the mouse to scroll what is
+    /// under it (`middleClickScroll`, off unless turned on).
+    pub middle_click_scroll: bool,
     pub show_store_badges: bool,
     /// The game's categories on its cover in the grid (`coverCategories`,
     /// off unless turned on).
@@ -1142,6 +1145,9 @@ pub struct UiPrefs {
     pub window_width: f32,
     pub window_height: f32,
     pub window_maximized: bool,
+    /// Open the main window maximized, whatever state it was left in
+    /// (`startMaximized`).
+    pub start_maximized: bool,
     /// The main window's place on its display, in global logical pixels,
     /// where the system lets Irori place windows (not Wayland).
     pub window_x: Option<f32>,
@@ -1320,6 +1326,7 @@ impl Default for UiPrefs {
             tile_size: 11.0,
             library_drawer_width: 26.0,
             reduce_motion: false,
+            middle_click_scroll: false,
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
@@ -1328,6 +1335,7 @@ impl Default for UiPrefs {
             window_width: 1440.0,
             window_height: 900.0,
             window_maximized: false,
+            start_maximized: false,
             window_x: None,
             window_y: None,
             window_display: String::new(),

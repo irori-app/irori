@@ -5936,6 +5936,7 @@ dependencies = [
  "image",
  "irori-core",
  "irori-engines",
+ "irori-runtime",
  "irori-services",
  "libc",
  "notify",

@@ -71,6 +71,25 @@ pub(crate) fn failed_start(
     status.is_none_or(|s| !s.success() && seconds < FAILED_START_SECONDS)
 }
 
+/// The sandbox a launch runs in. A game's own choice stands; the game
+/// defaults' applies only where a sandbox can hold the game (Linux, a store
+/// or added game Irori starts itself, not a ROM or a web app), so turning it
+/// on for every game never stops the others from starting.
+pub(crate) fn launch_sandbox(
+    runner: irori_core::Runner,
+    platform: InstallPlatform,
+    own_choice: bool,
+    sandbox: irori_core::SandboxSettings,
+) -> irori_core::SandboxSettings {
+    if own_choice
+        || (irori_runtime::sandbox::applies_to(runner) && platform != InstallPlatform::Browser)
+    {
+        sandbox
+    } else {
+        irori_core::SandboxSettings::default()
+    }
+}
+
 /// End what a launcher left running. On Unix it is in the launcher's process
 /// group, which stopping already signals; Windows has to find each process.
 async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool) {
@@ -206,6 +225,19 @@ impl Backend {
             .unwrap_or(InstallPlatform::Windows)
     }
 
+    /// The sandbox `id` starts in, as its settings stand now.
+    pub fn sandbox_of(&self, id: &GameId) -> irori_core::SandboxSettings {
+        let platform = self
+            .game(id)
+            .map_or(InstallPlatform::Windows, |g| Self::target_platform(&g));
+        launch_sandbox(
+            id.runner,
+            platform,
+            self.settings.overrides(id).is_overridden("iroriSandbox"),
+            self.settings.game(id).sandbox,
+        )
+    }
+
     /// Launch a game and track it until it exits.
     pub async fn launch(
         &self,
@@ -266,6 +298,12 @@ impl Backend {
             );
         }
         let mut settings = self.settings.game(id);
+        settings.sandbox = launch_sandbox(
+            id.runner,
+            Self::target_platform(&game),
+            self.settings.overrides(id).is_overridden("iroriSandbox"),
+            settings.sandbox,
+        );
         if verbose {
             settings.verbose_logs = true;
         }
@@ -1395,8 +1433,37 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::failed_start;
+    use super::{failed_start, launch_sandbox};
+    use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
+
+    #[test]
+    fn the_default_sandbox_holds_only_games_it_can() {
+        let on = SandboxSettings {
+            no_network: true,
+            no_home: false,
+        };
+        let off = SandboxSettings::default();
+        let linux = cfg!(target_os = "linux");
+        let windows_game = launch_sandbox(Runner::Gog, InstallPlatform::Windows, false, on);
+        assert_eq!(windows_game, if linux { on } else { off });
+        // ROMs, launchers' games, Steam's and web apps keep starting.
+        for runner in [Runner::Emulation, Runner::Launchers, Runner::Steam] {
+            assert_eq!(
+                launch_sandbox(runner, InstallPlatform::Windows, false, on),
+                off
+            );
+        }
+        assert_eq!(
+            launch_sandbox(Runner::Sideload, InstallPlatform::Browser, false, on),
+            off
+        );
+        // A game's own choice is kept as it is.
+        assert_eq!(
+            launch_sandbox(Runner::Emulation, InstallPlatform::Windows, true, on),
+            on
+        );
+    }
 
     fn exit(code: i32) -> ExitStatus {
         #[cfg(unix)]

@@ -20,7 +20,7 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement, Render, SharedString, Styled, Subscription, Window, div, relative, rems,
+    ParentElement, Pixels, Render, SharedString, Styled, Subscription, Window, div, relative,
 };
 use irori_core::util::format_bytes;
 use irori_core::{
@@ -128,9 +128,11 @@ fn open_sheet(id: GameId, mode: InstallMode, window: &mut Window, cx: &mut App) 
     };
     let sheet = cx.new(|cx| InstallSheet::new(game, mode, window, cx));
     let footer = cx.new(|cx| InstallFooter::new(sheet.clone(), cx));
-    window.open_sheet(cx, move |s, _, _| {
-        s.title(title.clone())
-            .size(rems(34.))
+    window.open_sheet(cx, move |s, window, _| {
+        // A long title is cut, never pushed past the close button; a large
+        // interface scale keeps the sheet inside the window.
+        s.title(div().min_w_0().flex_1().truncate().child(title.clone()))
+            .size(sheet_width(window))
             .child(sheet.clone())
             .footer(footer.clone())
     });
@@ -158,6 +160,12 @@ pub(crate) fn nothing_to_install_text(runner: Runner) -> &'static str {
         Runner::Gog => "game.install.nothing_to_install",
         _ => "game.install.nothing_to_install_other",
     }
+}
+
+/// The sheet's width: 34 rem, at most nine tenths of the window.
+fn sheet_width(window: &Window) -> Pixels {
+    let visible = irori_ui::style::visible_size(window).width;
+    (window.rem_size() * 34.).min(visible * 0.9)
 }
 
 /// Platforms the user can install on this host, native Linux first.
@@ -1193,10 +1201,18 @@ impl InstallSheet {
         let size = self.size();
         let row = |label: SharedString, value: String| {
             h_flex()
+                .w_full()
                 .justify_between()
+                .gap_3()
                 .text_sm()
-                .child(div().text_color(cx.theme().muted_foreground).child(label))
-                .child(div().child(value))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(label),
+                )
+                .child(div().flex_shrink_0().child(value))
         };
         let value = |bytes: u64| {
             if self.info.is_loading() {
@@ -1355,6 +1371,9 @@ impl InstallSheet {
         let all_selected = all.is_subset(&self.selected_dlcs);
         let mut col = v_flex().gap_2().child(
             h_flex()
+                .w_full()
+                .flex_wrap()
+                .gap_2()
                 .justify_between()
                 .child(Self::render_section(t("game.install.dlc"), cx))
                 .child(
