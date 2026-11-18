@@ -1587,6 +1587,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   reset. The older games order plugins by file time, which Irori leaves alone.
   The Mods tab offers "Start through SKSE/F4SE/…" (`Backend::set_script_extender`,
   the per-game `targetExe`), except for Steam games, which Steam starts itself.
+- **Layouts** (`irori_mods::layout`): an archive's files go where the game reads
+  them: as they mirror the game folder; into `Data` for Bethesda plugins and data
+  folders; for Unreal Engine games (an `Engine` folder beside a project holding
+  `Content/Paks`), packages (`.pak`, `.ucas`, `.utoc`) into
+  `<Project>/Content/Paks/~mods`, `~mods`/`LogicMods` into `Content/Paks`, `Paks`
+  into `Content`, `Content`/`Binaries` into the project; else into the one game
+  folder that holds every folder the mod starts with.
 - **Proxy DLLs under Wine.** A DLL the enabled mods put beside a program of the
   game or a mod whose name is one of `irori_mods::proxy::PROXY_DLLS` (`winhttp`,
   `version`, `dinput8`, `dxgi`…) gets `<dll>=n,b` in `WINEDLLOVERRIDES` before the
