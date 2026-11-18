@@ -575,6 +575,7 @@ impl FieldSpec {
                     | "enableWineWayland"
                     | "enableHDR"
                     | "enableWoW64"
+                    | "iroriProtonPreferSdl"
                     | "eacRuntime"
                     | "battlEyeRuntime"
                     | "disableUMU"
@@ -2372,6 +2373,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
+    game(
+        "iroriProtonPreferSdl",
+        "settings.field.proton_prefer_sdl.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_prefer_sdl.help")
+    .keywords(&[
+        "sdl",
+        "controller",
+        "gamepad",
+        "joystick",
+        "hidraw",
+        "proton_prefer_sdl",
+    ]),
     game(
         "iroriDllOverrides",
         "settings.field.dll_overrides.label",

@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Usar as bibliotecas do sistema em vez das incluídas na versão do Wine.",
   "settings.field.prefer_system_libs.label": "Preferir as bibliotecas do sistema",
   "settings.field.proton_feature.help": "Requer uma compilação do Proton compatível, como o Proton-CachyOS.",
+  "settings.field.proton_prefer_sdl.label": "Ler comandos através do SDL",
+  "settings.field.proton_prefer_sdl.help": "O Proton lê os comandos através do SDL em vez de hidraw e evdev. Experimente quando o jogo não deteta um comando ou troca os botões.",
   "settings.field.saves_path.label": "Pasta dos dados guardados",
   "settings.field.saves_path.placeholder": "Detetada na primeira sincronização",
   "settings.field.secret_saved_placeholder": "Guardada — escreva uma nova chave para a substituir",

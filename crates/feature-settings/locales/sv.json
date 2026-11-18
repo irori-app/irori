@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Använd systemets bibliotek i stället för de som följer med Wine-versionen.",
   "settings.field.prefer_system_libs.label": "Föredra systembibliotek",
   "settings.field.proton_feature.help": "Kräver ett Proton-bygge som stöder det, till exempel Proton-CachyOS.",
+  "settings.field.proton_prefer_sdl.label": "Läs handkontroller via SDL",
+  "settings.field.proton_prefer_sdl.help": "Proton läser handkontroller via SDL i stället för hidraw och evdev. Prova när spelet inte ser en handkontroll eller blandar ihop knapparna.",
   "settings.field.saves_path.label": "Mapp för sparfiler",
   "settings.field.saves_path.placeholder": "Hittas vid första synkroniseringen",
   "settings.field.secret_saved_placeholder": "Sparad – skriv en ny nyckel för att ersätta den",

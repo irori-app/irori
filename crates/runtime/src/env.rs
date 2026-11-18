@@ -497,6 +497,9 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
             }
         }
     }
+    if proton && gs.proton_prefer_sdl {
+        set("PROTON_PREFER_SDL", "1");
+    }
     if gs.enable_wow64 {
         if proton {
             set("PROTON_USE_WOW64", "1");
@@ -902,6 +905,27 @@ mod tests {
             let env = generic_env_for(Linux, &gs, None, None, &none);
             assert!(!env.contains_key("MANGOHUD_CONFIG"), "{limit} {on}");
         }
+    }
+
+    #[test]
+    fn proton_reads_controllers_through_sdl_when_asked() {
+        let host = HostEnv::default();
+        let mut gs = GameSettings::default();
+        let w = proton();
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
+        gs.proton_prefer_sdl = true;
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &host));
+        assert_eq!(env["PROTON_PREFER_SDL"], "1");
+        // Plain Wine and macOS don't read it.
+        let wine = WineInstallation {
+            kind: WineKind::Wine,
+            ..proton()
+        };
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &wine, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
+        let env = wine_env_for(irori_core::HostPlatform::Mac, &input(&gs, &w, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
     }
 
     #[test]

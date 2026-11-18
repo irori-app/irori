@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "使用系统的库，而不是 Wine 版本自带的库。",
   "settings.field.prefer_system_libs.label": "优先使用系统库",
   "settings.field.proton_feature.help": "需要支持此功能的 Proton 版本，例如 Proton-CachyOS。",
+  "settings.field.proton_prefer_sdl.label": "通过 SDL 读取控制器",
+  "settings.field.proton_prefer_sdl.help": "Proton 通过 SDL 而不是 hidraw 和 evdev 读取控制器。游戏识别不到控制器或按键错乱时可以试试。",
   "settings.field.saves_path.label": "存档文件夹",
   "settings.field.saves_path.placeholder": "首次同步时检测",
   "settings.field.secret_saved_placeholder": "已保存，输入新密钥即可替换",

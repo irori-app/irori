@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "使用系統的函式庫，而非 Wine 版本內附的函式庫。",
   "settings.field.prefer_system_libs.label": "優先使用系統函式庫",
   "settings.field.proton_feature.help": "需要支援此功能的 Proton 版本，例如 Proton-CachyOS。",
+  "settings.field.proton_prefer_sdl.label": "透過 SDL 讀取控制器",
+  "settings.field.proton_prefer_sdl.help": "Proton 透過 SDL 而非 hidraw 與 evdev 讀取控制器。遊戲偵測不到控制器或按鍵錯亂時可以試試。",
   "settings.field.saves_path.label": "存檔資料夾",
   "settings.field.saves_path.placeholder": "首次同步時偵測",
   "settings.field.secret_saved_placeholder": "已儲存，輸入新金鑰即可取代",

@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Wineビルドに同梱されたライブラリではなく、システムのライブラリを使用します。",
   "settings.field.prefer_system_libs.label": "システムライブラリを優先",
   "settings.field.proton_feature.help": "Proton-CachyOS など、対応する Proton ビルドが必要です。",
+  "settings.field.proton_prefer_sdl.label": "コントローラーを SDL で読み取る",
+  "settings.field.proton_prefer_sdl.help": "Proton がコントローラーを hidraw や evdev ではなく SDL で読み取ります。ゲームがコントローラーを認識しないときや、ボタンが入れ替わるときに試してください。",
   "settings.field.saves_path.label": "セーブフォルダー",
   "settings.field.saves_path.placeholder": "初回の同期時に検出",
   "settings.field.secret_saved_placeholder": "保存済み — 置き換えるには新しいキーを入力",

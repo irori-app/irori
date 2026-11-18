@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Utilise les bibliothèques du système au lieu de celles fournies avec la version de Wine.",
   "settings.field.prefer_system_libs.label": "Préférer les bibliothèques système",
   "settings.field.proton_feature.help": "Nécessite une version de Proton compatible, comme Proton-CachyOS.",
+  "settings.field.proton_prefer_sdl.label": "Lire les manettes avec SDL",
+  "settings.field.proton_prefer_sdl.help": "Proton lit les manettes avec SDL au lieu de hidraw et evdev. Essayez-le quand le jeu ne voit pas une manette ou que ses boutons sont inversés.",
   "settings.field.saves_path.label": "Dossier des sauvegardes",
   "settings.field.saves_path.placeholder": "Détecté à la première synchronisation",
   "settings.field.secret_saved_placeholder": "Enregistrée — saisissez une nouvelle clé pour la remplacer",

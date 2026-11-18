@@ -160,6 +160,11 @@ pub struct GameSettings {
     pub enable_hdr: bool,
     #[serde(rename = "enableWoW64")]
     pub enable_wow64: bool,
+    /// Proton reads controllers through SDL instead of hidraw and evdev
+    /// (`PROTON_PREFER_SDL`), for controllers it otherwise misreads or
+    /// misses. Linux only; Irori-only.
+    #[serde(rename = "iroriProtonPreferSdl")]
+    pub proton_prefer_sdl: bool,
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
@@ -496,6 +501,7 @@ impl Default for GameSettings {
             enable_wine_wayland: false,
             enable_hdr: false,
             enable_wow64: false,
+            proton_prefer_sdl: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
             dll_overrides: Vec::new(),

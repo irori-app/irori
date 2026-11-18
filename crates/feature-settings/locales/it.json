@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Usa le librerie di sistema invece di quelle incluse nella build di Wine.",
   "settings.field.prefer_system_libs.label": "Preferisci le librerie di sistema",
   "settings.field.proton_feature.help": "Richiede una build di Proton compatibile, come Proton-CachyOS.",
+  "settings.field.proton_prefer_sdl.label": "Leggi i controller con SDL",
+  "settings.field.proton_prefer_sdl.help": "Proton legge i controller con SDL invece che con hidraw ed evdev. Provalo quando il gioco non vede un controller o ne confonde i tasti.",
   "settings.field.saves_path.label": "Cartella dei salvataggi",
   "settings.field.saves_path.placeholder": "Rilevata alla prima sincronizzazione",
   "settings.field.secret_saved_placeholder": "Salvata: digita una nuova chiave per sostituirla",

@@ -550,6 +550,8 @@
   "settings.field.prefer_system_libs.help": "Wine sürümüyle gelen kitaplıklar yerine sistemin kitaplıklarını kullan.",
   "settings.field.prefer_system_libs.label": "Sistem kitaplıklarını tercih et",
   "settings.field.proton_feature.help": "Bunu destekleyen bir Proton derlemesi gerekir, örneğin Proton-CachyOS.",
+  "settings.field.proton_prefer_sdl.label": "Oyun kumandalarını SDL ile oku",
+  "settings.field.proton_prefer_sdl.help": "Proton oyun kumandalarını hidraw ve evdev yerine SDL ile okur. Oyun bir kumandayı görmüyorsa ya da düğmelerini karıştırıyorsa deneyin.",
   "settings.field.saves_path.label": "Kayıt klasörü",
   "settings.field.saves_path.placeholder": "İlk eşitlemede algılanır",
   "settings.field.secret_saved_placeholder": "Kaydedildi — değiştirmek için yeni bir anahtar yazın",
