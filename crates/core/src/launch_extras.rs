@@ -10,6 +10,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::merged_lists;
 use crate::platform::HostPlatform;
 use crate::settings::{GameSettings, GameSettingsOverrides};
 
@@ -96,14 +97,6 @@ pub const PRESET_KEYS: &[&str] = &[
     "autoInstallDxvkNvapi",
 ];
 
-/// List keys whose entries merge by a key field (variables by name,
-/// wrappers by command, programs by path) when a preset is applied.
-const MERGED_LISTS: &[(&str, &str)] = &[
-    ("enviromentOptions", "key"),
-    ("wrapperOptions", "exe"),
-    ("iroriLaunchPrograms", "path"),
-];
-
 /// A named set of launch settings. Irori-only.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -151,8 +144,9 @@ impl LaunchPreset {
             .into_iter()
             .filter_map(|key| {
                 let value = self.values.get(key)?;
-                let merged = match MERGED_LISTS.iter().find(|(k, _)| *k == key) {
-                    Some((_, field)) => merge_list(current.get(key), value, field),
+                // Lists merge by key (`merged_lists`), as a game's own do.
+                let merged = match merged_lists::key_field(key) {
+                    Some(field) => merged_lists::merge(current.get(key), value, field),
                     None => value.clone(),
                 };
                 Some((key.to_string(), merged))
@@ -171,7 +165,16 @@ impl LaunchPreset {
         let effective = overrides.apply(defaults);
         let mut out = overrides.clone();
         for (key, value) in self.values_over(&effective) {
-            out.set(&key, value);
+            // A list keeps only the game's own entries, so defaults added
+            // later still reach the game.
+            if merged_lists::key_field(&key).is_some() {
+                match GameSettingsOverrides::override_value(defaults, &key, value) {
+                    Some(own) => out.set(&key, own),
+                    None => out.reset(&key),
+                }
+            } else {
+                out.set(&key, value);
+            }
         }
         out
     }
@@ -181,26 +184,6 @@ impl LaunchPreset {
         let overrides = GameSettingsOverrides(self.values_over(defaults));
         overrides.apply(defaults)
     }
-}
-
-/// `current` with every entry of `preset` written in: an entry whose `field`
-/// matches one already there replaces it, the others are added at the end.
-fn merge_list(current: Option<&Value>, preset: &Value, field: &str) -> Value {
-    let mut list = current
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    for entry in preset.as_array().into_iter().flatten() {
-        let key = entry.get(field);
-        match list
-            .iter_mut()
-            .find(|e| key.is_some() && e.get(field) == key)
-        {
-            Some(existing) => *existing = entry.clone(),
-            None => list.push(entry.clone()),
-        }
-    }
-    Value::Array(list)
 }
 
 /// Irori's own presets that make sense on `host`, in menu order. Their names

@@ -25,6 +25,7 @@ use irori_services::troubleshoot::{
     Detail, Diagnosis, Finding, Fix, LaunchHint, MAP_COUNT_WANTED, map_count_commands,
 };
 use irori_ui::i18n::{t, t_args};
+use irori_ui::wine_choice::build_label;
 use irori_ui::{backend, models};
 
 use crate::choice::{Choice, ChoiceSelect, choice_select, set_choices};
@@ -237,19 +238,22 @@ impl LaunchProblem {
         let app = b.settings.app();
         let current = b.settings.game(&self.id).wine_version;
         let task = irori_ui::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&app).await)
+            Ok(irori_runtime::wine_installations_with_sources(&app).await)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let list = task.await.unwrap_or_default();
+            let found = task.await.unwrap_or_default();
             let _ = this.update_in(cx, |this, window, cx| {
                 // The current build just failed; offer the others.
-                let list: Vec<WineInstallation> =
-                    list.into_iter().filter(|w| w.bin != current.bin).collect();
-                this.wine = list.first().cloned();
-                let items = list
-                    .iter()
-                    .map(|w| Choice::new(w.bin.clone(), w.name.clone()))
+                let found: Vec<_> = found
+                    .into_iter()
+                    .filter(|(w, _)| w.bin != current.bin)
                     .collect();
+                this.wine = found.first().map(|(w, _)| w.clone());
+                let items = found
+                    .iter()
+                    .map(|(w, source)| Choice::new(w.bin.clone(), build_label(w, *source)))
+                    .collect();
+                let list: Vec<WineInstallation> = found.into_iter().map(|(w, _)| w).collect();
                 let selected = this.wine.as_ref().map(|w| w.bin.clone());
                 set_choices(&this.wine_select, items, selected.as_deref(), window, cx);
                 this.wines = Load::Ready(list);

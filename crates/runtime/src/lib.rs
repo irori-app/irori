@@ -704,6 +704,14 @@ pub async fn wine_installations(app: &AppSettings) -> Vec<WineInstallation> {
         .collect()
 }
 
+/// Every usable build, as [`wine_installations`], each with its source when
+/// another build has the same name, for pickers to tell them apart.
+pub async fn wine_installations_with_sources(
+    app: &AppSettings,
+) -> Vec<(WineInstallation, Option<discovery::WineSource>)> {
+    discovery::sources_where_shared(discovery::discover(app).await)
+}
+
 /// Run winetricks for the game's prefix: GUI when `verbs` is empty.
 pub async fn winetricks(
     app: &AppSettings,
@@ -750,6 +758,23 @@ pub fn prefix_path(app: &AppSettings, settings: &GameSettings, game: &GameInfo) 
     } else {
         irori_core::paths::expand_home(&settings.wine_prefix)
     }
+}
+
+/// The prefix to suggest when installing: the game's saved prefix while it
+/// still exists, else the one the defaults give it. A prefix deleted since
+/// (by hand, or a cleanup) would otherwise be offered again.
+pub fn install_prefix(app: &AppSettings, settings: &GameSettings, game: &GameInfo) -> PathBuf {
+    let saved = prefix_path(app, settings, game);
+    if settings.wine_prefix.is_empty() || saved.exists() {
+        return saved;
+    }
+    let defaults = GameSettings {
+        wine_version: settings.wine_version.clone(),
+        wine_crossover_bottle: settings.wine_crossover_bottle.clone(),
+        wine_prefix: app.game.wine_prefix.clone(),
+        ..GameSettings::default()
+    };
+    prefix_path(app, &defaults, game)
 }
 
 /// Whether `prefix` is shared by several games: the root that holds every
@@ -919,6 +944,30 @@ mod tests {
         assert!(prefix_is_shared(&app, &game(), Path::new("/egl")));
         gs.wine_prefix = "/mine".into();
         assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/mine"));
+    }
+
+    #[test]
+    fn a_deleted_prefix_is_not_suggested_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = AppSettings {
+            default_wine_prefix_dir: dir.path().display().to_string(),
+            ..Default::default()
+        };
+        let mut gs = GameSettings {
+            wine_prefix: dir.path().join("old").display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
+        std::fs::create_dir(dir.path().join("old")).unwrap();
+        assert_eq!(install_prefix(&app, &gs, &game()), dir.path().join("old"));
+        gs.wine_prefix.clear();
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
     }
 
     #[test]

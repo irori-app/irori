@@ -17,6 +17,7 @@ use gpui_kit::{
     InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, Render,
     SharedString, Styled as _, Subscription, Window, div, rems,
 };
+use irori_core::settings::GameSettingsOverrides;
 use irori_core::{HostPlatform, LaunchProgram, Runner};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -118,8 +119,11 @@ impl LaunchProgramsPanel {
         let b = backend(cx);
         match &self.target {
             FormTarget::Game(id) => {
-                b.settings
-                    .set_game_value(id, KEY, serde_json::to_value(&programs).ok());
+                // Only the game's own programs are stored, over the defaults'.
+                let own = serde_json::to_value(&programs).ok().and_then(|list| {
+                    GameSettingsOverrides::override_value(&b.settings.app().game, KEY, list)
+                });
+                b.settings.set_game_value(id, KEY, own);
             }
             _ => b.settings.update_app(|a| a.game.launch_programs = programs),
         }
