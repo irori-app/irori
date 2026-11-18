@@ -6,7 +6,8 @@
 //! `.m3u` playlist lists belong to that sheet; discs of one game become one
 //! entry (with a playlist written for engines that switch discs). DOS,
 //! ScummVM and PlayStation 3, 4 and 5 games are folders, the PlayStation
-//! ones named by their own title files. Detection results are cached by path, size and
+//! ones named by their own title files; PlayStation 3 games may also be disc
+//! images, named by the title file inside. Detection results are cached by path, size and
 //! modification time, so a rescan of a 10,000-file library only lists
 //! folders. Nothing here touches the network.
 
@@ -48,12 +49,21 @@ pub struct RomEntry {
     pub root: PathBuf,
 }
 
+/// The version of the detection rules. A file detected under older rules is
+/// looked at again, so a newer Irori recognises what an older one didn't
+/// (1: disc images by their marker files).
+pub const DETECTION_RULES: u32 = 1;
+
 /// What a file was detected as last time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Seen {
     pub size: u64,
     pub mtime: u64,
     pub system: Option<String>,
+    /// The [`DETECTION_RULES`] it was detected under (0 before they had a
+    /// version).
+    #[serde(default)]
+    pub rules: u32,
 }
 
 pub type ScanCache = HashMap<PathBuf, Seen>;
@@ -150,6 +160,16 @@ fn scan_dir(
         for game in &dirs {
             folder_games(system, game, dir, root, 0, &mut out.entries);
         }
+        // Disc images of a system whose games are otherwise folders
+        // (PlayStation 3 `.iso` files) are games of their own; nothing
+        // else here is.
+        if !system.disc_files.is_empty() {
+            files.retain(|(path, _, _)| system.takes_disc_image(path));
+            if !files.is_empty() {
+                scan_files(files, root, hint, previous, playlists, out);
+            }
+            return;
+        }
         if system.id == "dos" {
             for (path, size, _) in &files {
                 if is_dos_program(path) {
@@ -172,6 +192,49 @@ fn scan_dir(
         return;
     }
 
+    // A folder holding a disc's marker file (`PS3_DISC.SFB`) is a game of
+    // that disc's system wherever it sits; its insides are not searched.
+    let mut rest = Vec::with_capacity(dirs.len());
+    for sub in dirs {
+        match marked_disc_folder(&sub) {
+            Some(system) => {
+                if let Some(entry) = folder_game(system, &sub, dir, root) {
+                    out.entries.push(entry);
+                }
+            }
+            None => rest.push(sub),
+        }
+    }
+    scan_files(files, root, hint, previous, playlists, out);
+
+    if depth < MAX_DEPTH {
+        for sub in rest.into_iter().rev() {
+            let named = sub
+                .file_name()
+                .and_then(|n| systems::by_folder(&n.to_string_lossy()));
+            stack.push((sub, named.or(hint), depth + 1));
+        }
+    }
+}
+
+/// The folder-games system whose disc marker file sits in `folder`.
+fn marked_disc_folder(folder: &Path) -> Option<&'static System> {
+    systems::all().iter().find(|s| {
+        s.folder_games
+            && !s.folder_main.is_empty()
+            && s.disc_files.iter().any(|m| folder.join(m).is_file())
+    })
+}
+
+/// The games among the files of one folder.
+fn scan_files(
+    files: Vec<(PathBuf, u64, u64)>,
+    root: &Path,
+    hint: Option<&'static System>,
+    previous: &ScanCache,
+    playlists: &Path,
+    out: &mut Scanned,
+) {
     // Files a cue sheet or playlist lists are not games of their own.
     let mut owned: HashSet<PathBuf> = HashSet::new();
     for (path, _, _) in &files {
@@ -188,7 +251,9 @@ fn scan_dir(
             continue;
         }
         let system = match previous.get(&path) {
-            Some(seen) if seen.size == size && seen.mtime == mtime => {
+            Some(seen)
+                if seen.size == size && seen.mtime == mtime && seen.rules == DETECTION_RULES =>
+            {
                 seen.system.as_deref().and_then(systems::get)
             }
             _ => systems::detect(&path, hint),
@@ -199,6 +264,7 @@ fn scan_dir(
                 size,
                 mtime,
                 system: system.map(|s| s.id.clone()),
+                rules: DETECTION_RULES,
             },
         );
         let Some(system) = system else {
@@ -208,14 +274,15 @@ fn scan_dir(
             continue;
         };
         // A track `.bin` beside nothing that lists it, or a DOS program
-        // outside a DOS folder, is not a game.
-        if system.folder_games {
+        // outside a DOS folder, is not a game; a disc image of a system
+        // whose games are otherwise folders is.
+        if system.folder_games && !system.takes_disc_image(&path) {
             continue;
         }
-        let stem = stem_of(&path);
+        let (name, stem) = image_name(system, &path);
         candidates.push(Candidate {
             system,
-            name: names::parse(&stem),
+            name,
             stem,
             path,
             size,
@@ -260,15 +327,24 @@ fn scan_dir(
             root: root.to_path_buf(),
         });
     }
+}
 
-    if depth < MAX_DEPTH {
-        for sub in dirs.into_iter().rev() {
-            let named = sub
-                .file_name()
-                .and_then(|n| systems::by_folder(&n.to_string_lossy()));
-            stack.push((sub, named.or(hint), depth + 1));
+/// The name of the game file at `path`, and the stem thumbnails go by: the
+/// file's name, or for a disc image the title file inside names the game
+/// ([`systems::image_title`]), as it does for folder games.
+fn image_name(system: &System, path: &Path) -> (RomName, String) {
+    let mut stem = stem_of(path);
+    let mut name = names::parse(&stem);
+    if system.takes_disc_image(path)
+        && !system.folder_title.is_empty()
+        && let Some(title) = systems::image_title(system, path)
+    {
+        if !name.title.eq_ignore_ascii_case(&title) {
+            stem.clone_from(&title);
         }
+        name.title = title;
     }
+    (name, stem)
 }
 
 fn stem_of(path: &Path) -> String {
@@ -322,7 +398,11 @@ fn folder_games(
     out: &mut Vec<RomEntry>,
 ) {
     if let Some(entry) = folder_game(system, folder, top, root) {
-        out.push(entry);
+        // A patch or add-on beside the games (RPCS3's `dev_hdd0/game`) is
+        // not a game.
+        if !systems::folder_is_game_data(system, folder) {
+            out.push(entry);
+        }
         return;
     }
     if system.folder_main.is_empty() || depth >= NESTED_DEPTH {
@@ -331,13 +411,37 @@ fn folder_games(
     let Ok(read) = std::fs::read_dir(folder) else {
         return;
     };
-    let mut subs: Vec<PathBuf> = read
-        .flatten()
-        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .map(|e| e.path())
-        .collect();
+    let mut subs = Vec::new();
+    let mut images = Vec::new();
+    for e in read.flatten() {
+        if e.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let Ok(kind) = e.file_type() else { continue };
+        if kind.is_dir() {
+            subs.push(e.path());
+        } else if kind.is_file() && system.takes_disc_image(&e.path()) {
+            images.push((e.path(), e.metadata().map_or(0, |m| m.len())));
+        }
+    }
     subs.sort();
+    images.sort();
+    // Disc images in a folder of the system's folder (`PS3/Discs/…`).
+    for (path, size) in images {
+        let system = systems::disc_system(&path).unwrap_or(system);
+        let (name, stem) = image_name(system, &path);
+        out.push(RomEntry {
+            app_name: app_name_of(&system.id, &path),
+            system: system.id.clone(),
+            title: name.title,
+            tags: name.tags,
+            path,
+            discs: Vec::new(),
+            size,
+            stem,
+            root: root.to_path_buf(),
+        });
+    }
     for sub in subs {
         folder_games(system, &sub, top, root, depth + 1, out);
     }
@@ -654,6 +758,113 @@ mod tests {
         let again = scan(&[roms], &found.cache, &playlists, &|_| {});
         let fixed = again.entries.iter().find(|e| e.app_name == before).unwrap();
         assert_eq!(fixed.title, "Fixed Title");
+    }
+
+    #[test]
+    fn finds_playstation_3_disc_images_and_dumps() {
+        use irori_engines::{iso9660, sfo};
+        let dir = tempfile::tempdir().unwrap();
+        let roms = dir.path().join("roms");
+        let sfo_of = |title: &str| sfo::build(&[("TITLE", title), ("CATEGORY", "DG")]);
+        let ps3_iso = |title: &str| {
+            iso9660::build(&[
+                ("PS3_DISC.SFB", b".SFB"),
+                ("PS3_GAME/PARAM.SFO", &sfo_of(title)),
+                ("PS3_GAME/USRDIR/EBOOT.BIN", b"SCE"),
+            ])
+        };
+        // Images in the system's folder, one folder deeper, and among other
+        // systems' games, all named by the title file inside.
+        touch(&roms.join("PS3/BLUS30443.iso"), &ps3_iso("Demon's Souls"));
+        touch(&roms.join("PS3/Discs/Flower (USA).iso"), &ps3_iso("Flower"));
+        touch(&roms.join("Mixed/BCES00001.iso"), &ps3_iso("Mixed Disc"));
+        // A PSP disc among them is a PSP game; a PS2 disc has no marker.
+        touch(
+            &roms.join("Mixed/Patapon.iso"),
+            &iso9660::build(&[("UMD_DATA.BIN", b"x"), ("PSP_GAME/PARAM.SFO", b"x")]),
+        );
+        touch(
+            &roms.join("Mixed/ps2.iso"),
+            &iso9660::build(&[("SYSTEM.CNF", b"BOOT2 = cdrom0:SLUS_200.62;1")]),
+        );
+        // An extracted disc outside a PS3 folder, known by its marker file.
+        touch(&roms.join("Games/BLES00001/PS3_DISC.SFB"), b".SFB");
+        touch(
+            &roms.join("Games/BLES00001/PS3_GAME/USRDIR/EBOOT.BIN"),
+            b"x",
+        );
+        touch(
+            &roms.join("Games/BLES00001/PS3_GAME/PARAM.SFO"),
+            &sfo_of("Extracted Disc"),
+        );
+        // RPCS3's own folder: an installed game and a patch for a disc game.
+        touch(&roms.join("dev_hdd0/game/NPUB30001/USRDIR/EBOOT.BIN"), b"x");
+        touch(
+            &roms.join("dev_hdd0/game/NPUB30001/PARAM.SFO"),
+            &sfo::build(&[("TITLE", "Installed Game"), ("CATEGORY", "HG")]),
+        );
+        touch(&roms.join("dev_hdd0/game/BLUS30443/USRDIR/EBOOT.BIN"), b"x");
+        touch(
+            &roms.join("dev_hdd0/game/BLUS30443/PARAM.SFO"),
+            &sfo::build(&[("TITLE", "Demon's Souls"), ("CATEGORY", "GD")]),
+        );
+
+        let playlists = dir.path().join("playlists");
+        // A cache an older Irori wrote, which took the image for nothing.
+        let mut old = ScanCache::new();
+        let mixed = roms.join("Mixed/BCES00001.iso");
+        let meta = std::fs::metadata(&mixed).unwrap();
+        old.insert(
+            mixed.clone(),
+            Seen {
+                size: meta.len(),
+                mtime: meta
+                    .modified()
+                    .unwrap()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                system: None,
+                rules: 0,
+            },
+        );
+        let found = scan(std::slice::from_ref(&roms), &old, &playlists, &|_| {});
+        let got: Vec<(&str, &str, PathBuf)> = found
+            .entries
+            .iter()
+            .map(|e| {
+                let path = e.path.strip_prefix(&roms).unwrap().to_path_buf();
+                (e.system.as_str(), e.title.as_str(), path)
+            })
+            .collect();
+        let want: Vec<(&str, &str, PathBuf)> = [
+            ("ps3", "Demon's Souls", "PS3/BLUS30443.iso"),
+            (
+                "ps3",
+                "Extracted Disc",
+                "Games/BLES00001/PS3_GAME/USRDIR/EBOOT.BIN",
+            ),
+            ("ps3", "Flower", "PS3/Discs/Flower (USA).iso"),
+            (
+                "ps3",
+                "Installed Game",
+                "dev_hdd0/game/NPUB30001/USRDIR/EBOOT.BIN",
+            ),
+            ("ps3", "Mixed Disc", "Mixed/BCES00001.iso"),
+            ("psp", "Patapon", "Mixed/Patapon.iso"),
+        ]
+        .iter()
+        .map(|(s, t, p)| (*s, *t, p.split('/').collect::<PathBuf>()))
+        .collect();
+        assert_eq!(got, want);
+        assert_eq!(found.entries[2].stem, "Flower (USA)");
+        assert_eq!(found.entries[2].tags, ["USA"]);
+        assert_eq!(found.unrecognized, 1);
+        assert_eq!(
+            found.cache[&mixed].system.as_deref(),
+            Some("ps3"),
+            "an old detection is redone"
+        );
     }
 
     #[test]

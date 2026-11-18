@@ -170,6 +170,14 @@ impl EmulationStore {
                 .await
                 .context("looking for the program stopped")?
                 .with_context(|| format!("{} holds no DOS program", path.display()))?
+        } else if meta.is_dir() && !system.folder_main.is_empty() {
+            // The program engines open (`PS3_GAME/USRDIR/EBOOT.BIN`).
+            system
+                .folder_main
+                .iter()
+                .map(|rel| path.join(rel))
+                .find(|p| p.is_file())
+                .with_context(|| format!("{} holds no {} game", path.display(), system.name))?
         } else {
             path.to_path_buf()
         };
@@ -178,10 +186,29 @@ impl EmulationStore {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
         let name = names::parse(&stem);
+        // The title the game gives itself, as the scanner reads it.
+        let own_title = {
+            let (p, is_dir) = (path.to_path_buf(), meta.is_dir());
+            tokio::task::spawn_blocking(move || {
+                if is_dir {
+                    systems::folder_title(system, &p)
+                } else if system.takes_disc_image(&p) {
+                    systems::image_title(system, &p)
+                } else {
+                    None
+                }
+            })
+            .await
+            .ok()
+            .flatten()
+        };
         let entry = RomEntry {
             app_name: scan::app_name_of(&system.id, path),
             system: system.id.clone(),
-            title: title.filter(|t| !t.trim().is_empty()).unwrap_or(name.title),
+            title: title
+                .filter(|t| !t.trim().is_empty())
+                .or(own_title)
+                .unwrap_or(name.title),
             tags: name.tags,
             path: main,
             discs: Vec::new(),
@@ -337,9 +364,12 @@ impl EmulationStore {
     }
 
     /// The emulator `settings` chose for a game of `system`, else the
-    /// system's default. Blocking.
+    /// system's default (also when the chosen one is gone: an emulator the
+    /// user added and removed). Blocking.
     fn choice_for(&self, system: &str, chosen: &str) -> Option<EngineRef> {
-        if let Some(c) = EngineRef::parse(chosen) {
+        if let Some(c) =
+            EngineRef::parse(chosen).filter(|c| irori_engines::engine(&c.engine).is_some())
+        {
             return Some(c);
         }
         let app = (self.settings)();

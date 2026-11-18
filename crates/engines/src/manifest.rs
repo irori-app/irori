@@ -264,6 +264,10 @@ pub struct EngineManifest {
     /// Libretro cores (RetroArch only).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cores: Vec<Core>,
+    /// The user added this emulator on the Emulators page ([`crate::custom`]):
+    /// Irori wrote its file and may change or remove it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub custom: bool,
 }
 
 impl EngineManifest {

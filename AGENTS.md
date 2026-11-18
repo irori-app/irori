@@ -1167,6 +1167,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   versions are listed. The only per-engine code is the `kind` match in
   `crates/engines/src/launch.rs` (RetroArch cores, DOSBox, ScummVM, MAME, relinkers). Users may
   override a manifest with `<config>/engines/<id>.json` (merge patch).
+- **Emulators the user adds** (`irori_engines::custom`, `Backend::save_custom_engine`,
+  `irori_manage::open_custom_engine_dialog`: the Emulators page's "Add emulator", the
+  palette): a name, a program, an argument line and the systems it plays become a
+  standalone manifest marked `custom` in `<config>/engines/custom-<name>.json` (the id is
+  made by Irori from the name, letters, digits and dashes only), with the program kept as
+  the engine's custom program. The line is split by this system's rules and run without a
+  shell; only `{rom}`, `{rom_dir}`, `{home}`, `{engine_home}`, `{engine_dir}` and
+  `{xdg_data}` are accepted, and without `{rom}` the game goes last. They show in system
+  pickers and "Play with…" like any engine; removing one deletes only its manifest, and
+  a game or system still naming it plays with the system's default. Any engine can also
+  use a program the user picks ("Use a program on this computer…", `Origin::Custom`).
 - **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
   DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
   DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
@@ -1174,7 +1185,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`), the files naming them
   (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
-  and the folders of their own layout that never name them (`layoutFolders`); BIOS
+  and the folders of their own layout that never name them (`layoutFolders`). A disc
+  image with a system's marker file at its root (`discFiles`: PS3 `PS3_DISC.SFB`, PSP
+  `UMD_DATA.BIN`) is that system's game wherever it sits, a `folderOnly` system's too,
+  and a folder holding a PS3 marker is a PS3 game anywhere; PS3 images take their title
+  from `PS3_GAME/PARAM.SFO` inside (`irori_engines::iso9660`, which reads only the
+  volume descriptor and bounded directories). RPCS3's `dev_hdd0` is a PS3 folder, and its
+  patches (`PARAM.SFO` category `GD`) aren't games. Scan cache entries carry
+  `DETECTION_RULES`, so files an older Irori didn't recognise are looked at again. BIOS
   files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
   game into a program of this computer before it plays, in Irori's data folder with the

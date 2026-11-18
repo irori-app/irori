@@ -9,6 +9,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use irori_core::{Event, OpContext};
 use irori_engines::bios::{self, BiosIndex, SystemBios};
+use irori_engines::custom::CustomEngine;
 use irori_engines::releases::{self, Release};
 use irori_engines::state::{CoreInstall, ManagedInstall};
 use irori_engines::{EngineManifest, EngineRef, Installation, discovery, install, retroarch};
@@ -152,6 +153,40 @@ impl Backend {
         self.spawn_blocking(move || install::set_custom(&e, path.as_deref()))
             .await
             .context("saving the program")??;
+        self.bus.emit(Event::EnginesChanged);
+        Ok(())
+    }
+
+    /// Save an emulator of the user's own (a new one when `id` is `None`)
+    /// and use its program by default. Returns its id.
+    pub async fn save_custom_engine(
+        &self,
+        id: Option<String>,
+        def: CustomEngine,
+    ) -> Result<String> {
+        let id = self
+            .spawn_blocking(move || {
+                let id = irori_engines::custom::save(id.as_deref(), &def)?;
+                install::set_preferred(&id, "custom")?;
+                anyhow::Ok(id)
+            })
+            .await
+            .context("saving the emulator stopped")??;
+        self.bus.emit(Event::EnginesChanged);
+        Ok(id)
+    }
+
+    /// Forget the emulator `id` the user added, and stop using it as a
+    /// system's default. Games that chose it fall back to the default.
+    pub async fn remove_custom_engine(&self, id: &str) -> Result<()> {
+        let engine = id.to_string();
+        self.spawn_blocking(move || irori_engines::custom::remove(&engine))
+            .await
+            .context("removing the emulator stopped")??;
+        self.settings.update_app(|app| {
+            app.system_engines
+                .retain(|_, choice| EngineRef::parse(choice).is_none_or(|c| c.engine != id));
+        });
         self.bus.emit(Event::EnginesChanged);
         Ok(())
     }

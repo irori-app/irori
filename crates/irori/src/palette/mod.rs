@@ -33,6 +33,8 @@ enum PaletteTarget {
     Refresh,
     Random,
     SetUpEmulation,
+    /// Add an emulator of the user's own.
+    AddEmulator,
     /// The Steam friends window.
     SteamFriends,
     XboxOfflinePlay,
@@ -321,6 +323,14 @@ impl Palette {
                 .keywords([t("shell.palette.set_up_emulation_keywords")])
                 .icon(IconName::Joystick),
             PaletteTarget::SetUpEmulation,
+            targets,
+        );
+        push(
+            CommandItem::new()
+                .label(t("shell.palette.add_emulator"))
+                .keywords([t("shell.palette.add_emulator_keywords")])
+                .icon(IconName::Plus),
+            PaletteTarget::AddEmulator,
             targets,
         );
         push(
@@ -768,6 +778,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Refresh => irori_ui::models::refresh_library(false, cx),
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
+        PaletteTarget::AddEmulator => irori_manage::open_custom_engine_dialog(None, window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
         PaletteTarget::XboxFriends => {

@@ -5,6 +5,7 @@
 //! ([`retro`]).
 
 mod configure;
+mod custom;
 mod ops;
 mod retro;
 mod setup;
@@ -46,6 +47,7 @@ use irori_ui::{backend, models};
 use crate::common::{card, notify_error};
 use crate::format;
 pub use configure::open_engine_settings;
+pub use custom::{confirm_remove_custom_engine, open_custom_engine_dialog};
 use ops::{EngineOps, OpLive, cancel_install, core_key, core_name, engine_key, engine_ops};
 pub use ops::{InstallTarget, start_install};
 pub use setup::open_emulation_setup;
@@ -791,6 +793,13 @@ impl EmulatorsView {
                                                 .xsmall()
                                                 .child(t("manage.emulators.tag.experimental")),
                                         )
+                                    })
+                                    .when(m.custom, |d| {
+                                        d.child(
+                                            Tag::secondary()
+                                                .xsmall()
+                                                .child(t("manage.emulators.tag.custom")),
+                                        )
                                     }),
                             )
                             .child(div().text_sm().text_color(muted).child(t_args(
@@ -810,12 +819,11 @@ impl EmulatorsView {
                 )
             })
             .when(!status.is_installed() && !m.downloadable_on(host), |d| {
-                d.child(
-                    div()
-                        .text_sm()
-                        .text_color(muted)
-                        .child(not_downloadable_text(m, host)),
-                )
+                d.child(div().text_sm().text_color(muted).child(if m.custom {
+                    t_args("manage.emulators.custom.missing", &[("engine", &m.name)])
+                } else {
+                    not_downloadable_text(m, host)
+                }))
             })
             .when(!installs.is_empty(), |d| {
                 d.child(v_flex().gap_1().children(installs))
@@ -830,12 +838,23 @@ impl EmulatorsView {
                     .items_center()
                     .child(
                         div().flex_1().min_w_0().text_xs().text_color(muted).child(
+                            // Emulators the user added have neither.
                             [
-                                t_args("manage.emulators.exit_hotkey", &[("keys", &m.exit_hotkey)])
-                                    .to_string(),
-                                t_args("manage.emulators.license", &[("license", &m.license)])
-                                    .to_string(),
+                                (!m.exit_hotkey.is_empty()).then(|| {
+                                    t_args(
+                                        "manage.emulators.exit_hotkey",
+                                        &[("keys", &m.exit_hotkey)],
+                                    )
+                                    .to_string()
+                                }),
+                                (!m.license.is_empty()).then(|| {
+                                    t_args("manage.emulators.license", &[("license", &m.license)])
+                                        .to_string()
+                                }),
                             ]
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>()
                             .join(" · "),
                         ),
                     )
@@ -846,15 +865,46 @@ impl EmulatorsView {
                                 .child(t("manage.emulators.homepage")),
                         )
                     })
-                    .child({
+                    .when(!m.custom, |d| {
                         let id = m.id.clone();
-                        Button::new("use-program")
-                            .ghost()
-                            .small()
-                            .label(t("manage.emulators.use_program"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.pick_program(id.clone(), window, cx)
-                            }))
+                        d.child(
+                            Button::new("use-program")
+                                .ghost()
+                                .small()
+                                .label(t("manage.emulators.use_program"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.pick_program(id.clone(), window, cx)
+                                })),
+                        )
+                    })
+                    .when(m.custom, |d| {
+                        let existing = custom_definition(status);
+                        let (id, name) = (m.id.clone(), m.name.clone());
+                        d.child(
+                            Button::new("edit-custom")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Pencil)
+                                .label(t("manage.emulators.custom.edit"))
+                                .on_click(move |_, window, cx| {
+                                    open_custom_engine_dialog(Some(existing.clone()), window, cx)
+                                }),
+                        )
+                        .child(
+                            Button::new("remove-custom")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Trash)
+                                .label(t("manage.emulators.custom.remove"))
+                                .on_click(move |_, window, cx| {
+                                    confirm_remove_custom_engine(
+                                        id.clone(),
+                                        name.clone(),
+                                        window,
+                                        cx,
+                                    )
+                                }),
+                        )
                     })
                     .when(!m.options.is_empty(), |d| {
                         let id = m.id.clone();
@@ -996,7 +1046,9 @@ impl EmulatorsView {
                                 })),
                         )
                     })
-                    .when(i.origin == Origin::Custom, |d| {
+                    // An emulator the user added is its program; it is
+                    // changed or removed as a whole.
+                    .when(i.origin == Origin::Custom && !m.custom, |d| {
                         let engine = engine.clone();
                         d.child(
                             Button::new("stop-using")
@@ -1453,6 +1505,14 @@ impl Render for EmulatorsView {
                                 h_flex()
                                     .gap_2()
                                     .child(
+                                        Button::new("add-emulator")
+                                            .icon(IconName::Plus)
+                                            .label(t("manage.emulators.custom.add"))
+                                            .on_click(|_, window, cx| {
+                                                open_custom_engine_dialog(None, window, cx)
+                                            }),
+                                    )
+                                    .child(
                                         Button::new("setup-emulation")
                                             .icon(IconName::WandSparkles)
                                             .label(t("manage.setup.open"))
@@ -1519,6 +1579,27 @@ impl Render for EmulatorsView {
                     })),
             )
     }
+}
+
+/// What the user entered for the emulator they added in `status`, for the
+/// edit dialog.
+fn custom_definition(status: &EngineStatus) -> (String, irori_engines::custom::CustomEngine) {
+    let m = &status.manifest;
+    let program = status
+        .installations
+        .iter()
+        .find(|i| i.origin == Origin::Custom)
+        .map(|i| i.program.clone())
+        .unwrap_or_default();
+    (
+        m.id.clone(),
+        irori_engines::custom::CustomEngine {
+            name: m.name.clone(),
+            program,
+            args: irori_engines::custom::args_line(&m.launch.args),
+            systems: m.systems.clone(),
+        },
+    )
 }
 
 /// Why an engine has no Install button on this computer.
