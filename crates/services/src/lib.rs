@@ -87,7 +87,7 @@ pub use igdb::IgdbStatus;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
-pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
+pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};

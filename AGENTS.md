@@ -112,7 +112,10 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
   Heroic's `heroic://launch/...`, and Nexus Mods' `nxm://<game>/mods/<mod>/files/<file>`
-  (installs the file after asking which game it is for). Any web page or program can open a link, so
+  (installs the file after asking which game it is for), and Thunderstore's
+  `ror2mm://v1/install/thunderstore.io/<owner>/<package>/<version>/` (installs the package
+  and what it needs, latest version, into the game picked; Irori doesn't register the scheme,
+  r2modman does, so the user points it at Irori). Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
 - A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
   Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
@@ -1641,29 +1644,66 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   folders, applied on top), and `deployment.json` while mods are applied. Mod ids
   are `[a-z0-9-]` only, so they never name anything outside that folder.
 - **Only while playing.** `Backend::launch_with` calls `apply_mods` right before
-  the game starts and `restore_mods` after it exits (after the saves sync).
+  the store builds the launch (so a program a mod brings exists when the store
+  checks it) and `restore_mods` after it exits (after the saves sync).
   Leftovers from a crash are taken out at start (`recover_mods`, the app only:
   a command-line run may sit beside a running game). Mods can't change while
   the game runs.
 - **Never delete game files.** Links: the full manifest is written before any
   file is touched; a game file a mod replaces is renamed to
   `<name>.irori-original` beside itself; `deploy::undeploy` is safe to rerun at
-  any step and calls `fs_guard::ensure_deletable` on the game folder first. A
+  any step and calls `fs_guard::ensure_deletable` on the game folder first. It
+  checks every file before changing any: one still in use (Windows sharing
+  violations, waited for up to 5 s in all) stops it with the folder as it was and
+  the reason in the manifest (`blocked`). Copies (across drives, or when links
+  fail) go to `<name>.irori-partial` and are renamed into place. A
   file Irori put there that the game changed or replaced goes to `.written/`.
   Overlay (Linux, `fuse-overlayfs`): the game folder is a lower layer and is
   never written; after unmounting, `overlay::settle` moves what the game wrote
   outside the mods' own files and folders into the game folder, where it would
   have gone without mods. Paths compare without letter case and follow the game
   folder's spelling (`align_case`).
+- **Bethesda games** (`irori_mods::bethesda`, told by their program: Oblivion,
+  Fallout 3/New Vegas/4/4 VR, Skyrim/SE/VR, Starfield): once mods are in,
+  `Plugins.txt` (local application data; under Wine the prefix's user, Steam's
+  `compatdata/<appid>/pfx`) lists the enabled mods' plugins after the user's own
+  entries, and `[Archive]` keys loose files need are set in the game's ini
+  (`bInvalidateOlderFiles`, `sResourceDataDirsFinal`). `bethesda.json` records it
+  first; `take_out` restores it before the files: the user's `Plugins.txt` comes
+  back from `.irori-original`, and only ini keys still holding Irori's value are
+  reset. The older games order plugins by file time, which Irori leaves alone.
+  The Mods tab offers "Start through SKSE/F4SE/…" (`Backend::set_script_extender`,
+  the per-game `targetExe`), except for Steam games, which Steam starts itself.
+- **Layouts** (`irori_mods::layout`): an archive's files go where the game reads
+  them: as they mirror the game folder; into `Data` for Bethesda plugins and data
+  folders; for Unreal Engine games (an `Engine` folder beside a project holding
+  `Content/Paks`), packages (`.pak`, `.ucas`, `.utoc`) into
+  `<Project>/Content/Paks/~mods`, `~mods`/`LogicMods` into `Content/Paks`, `Paks`
+  into `Content`, `Content`/`Binaries` into the project; else into the one game
+  folder that holds every folder the mod starts with.
+- **Proxy DLLs under Wine.** A DLL the enabled mods put beside a program of the
+  game or a mod whose name is one of `irori_mods::proxy::PROXY_DLLS` (`winhttp`,
+  `version`, `dinput8`, `dxgi`…) gets `<dll>=n,b` in `WINEDLLOVERRIDES` before the
+  store builds the launch (`Backend::mods_launch_env`, beside ReShade's), so Wine
+  loads the mod loader instead of its own copy.
 - **Sources.** Archives go through `irori_mods::archive` (zip and 7z in process;
-  rar through `unrar`/`7z`/`bsdtar` after listing every name), with
+  rar through `unrar`/`7z`/`bsdtar`, on Windows also `System32\tar.exe` by its full path, after listing every name; without one the Mods tab shows the command that installs 7-Zip here, `archive::seven_zip_command`), with
   `archive_guard` on every entry and no links. FOMOD (`fomod.rs`) is parsed as
   data only (no DTDs, no scripted installers); the UI asks the steps
   (`FomodPrompt`, `Backend::finish_fomod`). Thunderstore's ecosystem schema (cached
   a day) names each community's Steam/Epic ids, programs, loader and install
   rules; only BepInEx and MelonLoader communities install. Nexus Mods uses the
   user's personal API key (through `irori_secrets`, never logged); free accounts
-  install through `nxm://` links, which carry a one-time key.
+  install through `nxm://` links, which carry a one-time key. The Nexus dialog
+  searches the game's mods by name through Nexus' documented GraphQL API v2
+  (`nexus::Client::search`, `/v2/graphql`, the text only as a variable, adult mods
+  left out) for the game's Nexus name (`Backend::mod_nexus_domain`: the user's,
+  else its Nexus mods', else its folded title; kept in `mods.json` once a search
+  finds something); a result lists its files, which Premium installs and free
+  accounts open on the site for the `nxm://` button. Thunderstore's
+  `ror2mm://` links (`thunderstore::ModManagerLink`) name only a package; the
+  link dialog (`irori_game::open_thunderstore_link_dialog`) preselects the game
+  whose community lists it (`community_listings`).
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 
