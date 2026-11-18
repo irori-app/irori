@@ -656,6 +656,7 @@
   "game.saves.offline": "セーブデータの同期にはインターネット接続が必要です。",
   "game.saves.remove_location": "場所を削除",
   "game.saves.replace_cloud": "クラウドのセーブを置き換え",
+  "game.saves.replace_cloud_deletes_description": "このゲームのセーブフォルダーにセーブデータがないため、「{title}」のクラウドのセーブデータは削除されます。この操作は元に戻せません。",
   "game.saves.replace_cloud_description": "このゲームのクラウド上のセーブデータが、ローカルのセーブデータで上書きされます。",
   "game.saves.replace_cloud_title": "クラウドのセーブを置き換えますか？",
   "game.saves.replace_local": "ローカルのセーブを置き換え",

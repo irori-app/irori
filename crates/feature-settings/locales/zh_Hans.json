@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "云端副本将覆盖此电脑上的存档。",
   "settings.saves.force_download.title": "替换“{title}”的本地存档？",
   "settings.saves.force_upload.confirm": "强制上传",
+  "settings.saves.force_upload.deletes_description": "此游戏的存档文件夹中没有存档，因此“{title}”的云端存档将被删除。此操作无法撤销。",
   "settings.saves.force_upload.description": "此电脑上的存档将覆盖云端副本。",
   "settings.saves.force_upload.title": "替换“{title}”的云端存档？",
   "settings.saves.in_sync": "存档已同步。",

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Die Cloud-Kopie überschreibt die Spielstände auf diesem Computer.",
   "settings.saves.force_download.title": "Lokale Spielstände von „{title}“ ersetzen?",
   "settings.saves.force_upload.confirm": "Upload erzwingen",
+  "settings.saves.force_upload.deletes_description": "Im Spielstandordner dieses Spiels gibt es keine Spielstände, daher werden die Cloud-Spielstände von „{title}“ gelöscht. Das lässt sich nicht rückgängig machen.",
   "settings.saves.force_upload.description": "Die Spielstände auf diesem Computer überschreiben die Cloud-Kopie.",
   "settings.saves.force_upload.title": "Cloud-Spielstände von „{title}“ ersetzen?",
   "settings.saves.in_sync": "Spielstände sind synchron.",

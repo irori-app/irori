@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Kopie z cloudu přepíše uložené pozice v tomto počítači.",
   "settings.saves.force_download.title": "Nahradit místní uložené pozice hry „{title}“?",
   "settings.saves.force_upload.confirm": "Vynutit nahrání",
+  "settings.saves.force_upload.deletes_description": "Ve složce s uloženými pozicemi této hry nejsou žádné uložené pozice, proto budou uložené pozice hry „{title}“ v cloudu smazány. Tuto akci nelze vrátit zpět.",
   "settings.saves.force_upload.description": "Uložené pozice z tohoto počítače přepíší kopii v cloudu.",
   "settings.saves.force_upload.title": "Nahradit uložené pozice hry „{title}“ v cloudu?",
   "settings.saves.in_sync": "Uložené pozice jsou synchronizované.",

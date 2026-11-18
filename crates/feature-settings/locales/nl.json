@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "De kopie in de cloud overschrijft de savegames op deze computer.",
   "settings.saves.force_download.title": "Lokale savegames van ‘{title}’ vervangen?",
   "settings.saves.force_upload.confirm": "Upload forceren",
+  "settings.saves.force_upload.deletes_description": "Er staan geen saves in de savemap van deze game, dus de cloudsaves van ‘{title}’ worden verwijderd. Dit kan niet ongedaan worden gemaakt.",
   "settings.saves.force_upload.description": "De savegames op deze computer overschrijven de kopie in de cloud.",
   "settings.saves.force_upload.title": "Cloudsaves van ‘{title}’ vervangen?",
   "settings.saves.in_sync": "Savegames zijn gesynchroniseerd.",

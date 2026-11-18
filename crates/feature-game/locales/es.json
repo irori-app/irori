@@ -656,6 +656,7 @@
   "game.saves.offline": "Sincronizar partidas necesita conexión a internet.",
   "game.saves.remove_location": "Quitar ubicación",
   "game.saves.replace_cloud": "Reemplazar partidas en la nube",
+  "game.saves.replace_cloud_deletes_description": "No hay partidas guardadas en la carpeta de guardado de este juego, así que se eliminarán las partidas guardadas en la nube de «{title}». Esta acción no se puede deshacer.",
   "game.saves.replace_cloud_description": "La copia en la nube de las partidas de este juego se sobrescribe con tus partidas locales.",
   "game.saves.replace_cloud_title": "¿Reemplazar las partidas en la nube?",
   "game.saves.replace_local": "Reemplazar partidas locales",

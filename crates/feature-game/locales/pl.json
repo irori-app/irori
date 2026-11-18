@@ -656,6 +656,7 @@
   "game.saves.offline": "Synchronizacja zapisów wymaga połączenia z internetem.",
   "game.saves.remove_location": "Usuń lokalizację",
   "game.saves.replace_cloud": "Zastąp zapisy w chmurze",
+  "game.saves.replace_cloud_deletes_description": "W folderze zapisów tej gry nie ma żadnych zapisów, więc zapisy gry „{title}” w chmurze zostaną usunięte. Tej operacji nie można cofnąć.",
   "game.saves.replace_cloud_description": "Kopia zapisów tej gry w chmurze zostanie nadpisana zapisami lokalnymi.",
   "game.saves.replace_cloud_title": "Zastąpić zapisy w chmurze?",
   "game.saves.replace_local": "Zastąp zapisy lokalne",
