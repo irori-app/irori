@@ -53,12 +53,30 @@ fn version_key(v: &str) -> Vec<u32> {
 }
 
 /// Whether Irori can put ReShade into the game: an installed Windows build
-/// whose files Irori manages.
+/// whose files Irori manages, or a Steam game's Windows build (natively on
+/// Windows; through Proton on Linux, which Steam's entry says by not being
+/// Linux-native). Steam starts its games itself, so under Proton the DLL
+/// overrides go into Steam's launch options rather than Irori's launch.
 pub fn supports_reshade(game: &GameInfo) -> bool {
-    game.runner().manages_installs()
-        && game.is_installed
-        && game.installed_platform() == Some(InstallPlatform::Windows)
-        && game.install_path().is_some()
+    let windows_build = match game.runner() {
+        Runner::Steam => match irori_core::HostPlatform::current() {
+            irori_core::HostPlatform::Windows => true,
+            irori_core::HostPlatform::Linux => !game.is_linux_native,
+            irori_core::HostPlatform::Mac => false,
+        },
+        runner => {
+            runner.manages_installs() && game.installed_platform() == Some(InstallPlatform::Windows)
+        }
+    };
+    windows_build && game.is_installed && game.install_path().is_some()
+}
+
+/// Whether Steam starts the game through Proton, so ReShade's DLL overrides
+/// belong in Steam's launch options.
+pub fn reshade_needs_steam_overrides(game: &GameInfo) -> bool {
+    game.runner() == Runner::Steam
+        && irori_core::HostPlatform::current() == irori_core::HostPlatform::Linux
+        && supports_reshade(game)
 }
 
 /// Games with a graphics mod operation running.
@@ -91,7 +109,7 @@ pub(crate) async fn anticheat_of(game: &GameInfo) -> Vec<String> {
     let query = AntiCheatQuery {
         title: &game.title,
         epic_namespace: game.namespace.as_deref().filter(|n| !n.is_empty()),
-        steam_app_id: None,
+        steam_app_id: (game.runner() == Runner::Steam).then_some(game.app_name.as_str()),
     };
     anticheat::lookup(&query)
         .await
@@ -108,7 +126,9 @@ impl Backend {
     pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
         let game = self.installed_game(id)?;
         if !supports_reshade(&game) {
-            bail!("ReShade can only be installed into Windows games Irori installed");
+            bail!(
+                "ReShade can only be installed into the Windows builds of games Irori installs                  or Steam runs"
+            );
         }
         Ok(game)
     }
@@ -204,6 +224,7 @@ impl Backend {
             game_root: root,
             configured_exe: self.configured_exe(id, game),
             chosen_exe: chosen,
+            // Steam's Windows builds run through Proton everywhere but Windows.
             wine: irori_core::HostPlatform::current().needs_wine(InstallPlatform::Windows),
             journal,
             addon,
@@ -382,6 +403,37 @@ mod tests {
         let mut empty = BTreeMap::new();
         add_overrides(&manifest(), true, &mut empty);
         assert_eq!(empty["WINEDLLOVERRIDES"], "dxgi=n,b;d3dcompiler_47=n,b");
+    }
+
+    #[test]
+    fn steam_games_take_reshade_when_they_are_windows_builds() {
+        let game = |linux_native: bool| GameInfo {
+            runner: Some(Runner::Steam),
+            app_name: "620".into(),
+            is_installed: true,
+            is_linux_native: linux_native,
+            install: Some(irori_core::InstalledInfo {
+                install_path: "/games/Portal 2".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let expected = |linux_native: bool| match irori_core::HostPlatform::current() {
+            irori_core::HostPlatform::Windows => true,
+            irori_core::HostPlatform::Linux => !linux_native,
+            irori_core::HostPlatform::Mac => false,
+        };
+        for native in [true, false] {
+            assert_eq!(supports_reshade(&game(native)), expected(native));
+        }
+        let mut gone = game(false);
+        gone.is_installed = false;
+        assert!(!supports_reshade(&gone));
+        assert_eq!(
+            reshade_needs_steam_overrides(&game(false)),
+            cfg!(target_os = "linux")
+        );
+        assert!(!reshade_needs_steam_overrides(&game(true)));
     }
 
     #[test]

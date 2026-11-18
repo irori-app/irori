@@ -2,8 +2,14 @@
 //! when the game has anticheat), turn on or off, update and remove, with the
 //! install's steps and download progress shown in place. Removing ReShade
 //! removes the RenoDX mod it loads too, so the RenoDX panel is told.
+//!
+//! Steam starts its games itself, so a Steam game under Proton loads
+//! ReShade only when Steam's launch options set `WINEDLLOVERRIDES`. After
+//! each change the panel brings that line in step when Steam is closed, and
+//! otherwise offers to, asking before it closes Steam.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
@@ -17,7 +23,8 @@ use gpui_kit::{
 use irori_core::GameId;
 use irori_core::process::CancellationToken;
 use irori_reshade::{GraphicsMod, Manifest, Step};
-use irori_services::{ReshadeStatus, supports_reshade};
+use irori_services::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
+use irori_steam::{LaunchOptionsState, SteamRunning, SteamStore};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
 
@@ -48,6 +55,42 @@ pub(crate) struct ReshadePanel {
     step: Option<Step>,
     percent: Option<f32>,
     cancel: Option<CancellationToken>,
+    /// A Steam game under Proton: Steam's launch options, once read.
+    steam: Option<SteamLine>,
+}
+
+/// Steam's launch options of a game whose ReShade needs them.
+struct SteamLine {
+    store: Arc<SteamStore>,
+    state: Option<LaunchOptionsState>,
+    /// The DLLs a ReShade that was removed had Steam load, to take out.
+    removed: Vec<String>,
+    /// Bring the line in step on the next read when Steam is closed.
+    follow: bool,
+    saving: bool,
+}
+
+/// The launch line ReShade's install wants: its DLLs loaded from the game
+/// folder while it is on and complete, nothing about them otherwise (or
+/// about those of a ReShade just removed). `None` when the line is right.
+fn wanted_line(
+    current: Option<&str>,
+    manifest: Option<&Manifest>,
+    removed: &[String],
+) -> Option<Option<String>> {
+    let line = current.unwrap_or_default();
+    let on = manifest.is_some_and(|m| m.enabled && m.complete);
+    let ours: Vec<&str> = manifest
+        .map(|m| m.overrides.iter().map(String::as_str).collect())
+        .unwrap_or_default();
+    let unset: Vec<&str> = ours
+        .iter()
+        .copied()
+        .chain(removed.iter().map(String::as_str))
+        .collect();
+    let set: &[&str] = if on { &ours } else { &[] };
+    let next = irori_steam::with_dll_overrides(line, set, &unset);
+    (next != line.trim()).then(|| (!next.is_empty()).then_some(next))
 }
 
 fn error_text(e: &anyhow::Error) -> SharedString {
@@ -57,7 +100,18 @@ fn error_text(e: &anyhow::Error) -> SharedString {
 impl EventEmitter<GraphicsModsChanged> for ReshadePanel {}
 
 impl ReshadePanel {
-    pub(crate) fn new(id: GameId) -> Self {
+    pub(crate) fn new(id: GameId, cx: &mut Context<Self>) -> Self {
+        let steam = backend(cx)
+            .game(&id)
+            .filter(|g| reshade_needs_steam_overrides(g))
+            .and_then(|_| crate::stores::steam(cx))
+            .map(|store| SteamLine {
+                store,
+                state: None,
+                removed: Vec::new(),
+                follow: false,
+                saving: false,
+            });
         Self {
             id,
             load: Load::Idle,
@@ -65,6 +119,139 @@ impl ReshadePanel {
             step: None,
             percent: None,
             cancel: None,
+            steam,
+        }
+    }
+
+    /// Read Steam's launch options, then write the line ReShade wants when
+    /// a change asked to and Steam is closed.
+    fn read_steam_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(steam) = &self.steam else { return };
+        let store = steam.store.clone();
+        let app = self.id.app_name.to_string();
+        let task = irori_ui::run(cx, async move { store.launch_options(&app).await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            this.update_in(cx, |this, window, cx| {
+                let Some(steam) = &mut this.steam else { return };
+                match result {
+                    Ok(state) => steam.state = Some(state),
+                    Err(e) => tracing::info!("Steam's launch options: {e:#}"),
+                }
+                let follow = std::mem::take(&mut steam.follow);
+                let closed = steam.state.as_ref().is_some_and(|s| !s.steam_running);
+                if follow && closed && this.steam_change().is_some() {
+                    this.write_steam_line(false, window, cx);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The line to write into Steam, when it differs from Steam's.
+    fn steam_change(&self) -> Option<Option<String>> {
+        let steam = self.steam.as_ref()?;
+        let state = steam.state.as_ref()?;
+        let manifest = self.status().and_then(|s| s.manifest.as_ref());
+        wanted_line(state.line.as_deref(), manifest, &steam.removed)
+    }
+
+    /// Update Steam's launch options, asking to close Steam when it runs.
+    fn update_steam_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.steam.as_ref().and_then(|s| s.state.as_ref()) else {
+            return;
+        };
+        if !state.steam_running {
+            self.write_steam_line(false, window, cx);
+            return;
+        }
+        if !state.can_close_steam {
+            window.push_notification(
+                Notification::error(t("settings.steam_launch.session"))
+                    .title(t("settings.steam_launch.save_failed")),
+                cx,
+            );
+            return;
+        }
+        let title = self.title(cx);
+        let this = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let this = this.clone();
+            alert
+                .title(t_args(
+                    "settings.steam_launch.close.title",
+                    &[("title", &title)],
+                ))
+                .description(t("settings.steam_launch.close.description"))
+                .show_cancel(true)
+                .cancel_text(t("settings.common.cancel"))
+                .ok_text(t("settings.steam_launch.close.confirm"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    this.update(cx, |this, cx| this.write_steam_line(true, window, cx))
+                        .ok();
+                    true
+                })
+        });
+    }
+
+    fn write_steam_line(&mut self, close_steam: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(line) = self.steam_change() else {
+            return;
+        };
+        let Some(steam) = &mut self.steam else { return };
+        if steam.saving {
+            return;
+        }
+        steam.saving = true;
+        let store = steam.store.clone();
+        let app = self.id.app_name.to_string();
+        let task = irori_ui::run(cx, async move {
+            if close_steam {
+                store.close_steam().await?;
+            }
+            store.set_launch_options(&app, line).await
+        });
+        let title = self.title(cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            this.update_in(cx, |this, window, cx| {
+                if let Some(steam) = &mut this.steam {
+                    steam.saving = false;
+                    if result.is_ok() {
+                        steam.removed.clear();
+                    }
+                }
+                match result {
+                    Ok(()) => window.push_notification(
+                        Notification::success(t_args(
+                            "settings.reshade.steam.updated",
+                            &[("title", &title)],
+                        )),
+                        cx,
+                    ),
+                    // Steam started meanwhile: the row offers it again.
+                    Err(e) if e.downcast_ref::<SteamRunning>().is_some() => {}
+                    Err(e) => window.push_notification(
+                        Notification::error(format!("{e:#}"))
+                            .title(t("settings.steam_launch.save_failed")),
+                        cx,
+                    ),
+                }
+                this.read_steam_line(window, cx);
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// After a change to ReShade, follow it in Steam's launch options.
+    fn follow_in_steam(&mut self) {
+        if let Some(steam) = &mut self.steam {
+            steam.follow = true;
         }
     }
 
@@ -103,11 +290,12 @@ impl ReshadePanel {
         let task = irori_ui::run(cx, async move { b.reshade_status(&id).await });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 this.load = match result {
                     Ok(status) => Load::Ready(Box::new(status)),
                     Err(e) => Load::Failed(error_text(&e)),
                 };
+                this.read_steam_line(window, cx);
                 cx.notify();
             })
             .ok();
@@ -225,6 +413,7 @@ impl ReshadePanel {
                 this.busy = None;
                 this.cancel = None;
                 this.step = None;
+                this.follow_in_steam();
                 match result {
                     Ok(_) => window.push_notification(
                         Notification::success(t_args(
@@ -262,6 +451,7 @@ impl ReshadePanel {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
                 this.busy = None;
+                this.follow_in_steam();
                 if let Err(e) = result {
                     window.push_notification(
                         Notification::error(error_text(&e)).title(t("settings.reshade.failed")),
@@ -309,6 +499,16 @@ impl ReshadePanel {
             return;
         }
         self.busy = Some(Busy::Removing);
+        // The record goes with ReShade; its DLLs leave Steam's line after.
+        let overrides = self
+            .status()
+            .and_then(|s| s.manifest.as_ref())
+            .map(|m| m.overrides.clone());
+        if let Some(steam) = &mut self.steam
+            && let Some(overrides) = overrides
+        {
+            steam.removed = overrides;
+        }
         let b = backend(cx);
         let id = self.id.clone();
         let title = self.title(cx);
@@ -317,6 +517,7 @@ impl ReshadePanel {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
                 this.busy = None;
+                this.follow_in_steam();
                 match result {
                     Ok(report) => {
                         let removed =
@@ -456,6 +657,33 @@ impl ReshadePanel {
         field_row(row, control, cx).into_any_element()
     }
 
+    /// Whether Steam's launch options load ReShade, with a way to fix them.
+    fn render_steam_line(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let steam = self.steam.as_ref()?;
+        let change = self.steam_change()?;
+        let state = steam.state.as_ref()?;
+        let help = match &change {
+            Some(line) => t_args("settings.reshade.steam.needs", &[("line", line)]),
+            None => t("settings.reshade.steam.clear"),
+        };
+        let row = RowState {
+            label: t("settings.field.panel_steam_launch.label"),
+            help,
+            disabled_reason: (state.steam_running && !state.can_close_steam)
+                .then(|| t("settings.steam_launch.session")),
+            ..Default::default()
+        };
+        let button = Button::new("reshade-steam-line")
+            .outline()
+            .small()
+            .label(t("settings.reshade.steam.update"))
+            .loading(steam.saving)
+            .disabled(steam.saving || self.busy.is_some())
+            .on_click(cx.listener(|this, _, window, cx| this.update_steam_line(window, cx)))
+            .into_any_element();
+        Some(field_row(row, button, cx).into_any_element())
+    }
+
     fn render_not_installed(&self, cx: &mut Context<Self>) -> AnyElement {
         let busy = self.busy.is_some();
         let row = RowState {
@@ -485,6 +713,43 @@ impl ReshadePanel {
             )
             .into_any_element();
         field_row(row, control, cx).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(enabled: bool) -> Manifest {
+        serde_json::from_value(serde_json::json!({
+            "version": "6.8.0", "exe": "/g/Game.exe", "machine": "x64", "api": "dxgi",
+            "dll": "dxgi.dll", "dir": "/g", "enabled": enabled, "complete": true,
+            "overrides": ["dxgi", "d3dcompiler_47"], "files": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn steams_line_follows_reshade() {
+        let on = manifest(true);
+        let line = wanted_line(Some("-novid"), Some(&on), &[])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            line,
+            "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command% -novid"
+        );
+        assert_eq!(wanted_line(Some(&line), Some(&on), &[]), None);
+        // Turned off: the overrides leave, the rest of the line stays.
+        assert_eq!(
+            wanted_line(Some(&line), Some(&manifest(false)), &[]),
+            Some(Some("-novid".to_string()))
+        );
+        // Removed: the remembered DLLs leave; an empty line clears it.
+        let removed = vec!["dxgi".to_string(), "d3dcompiler_47".to_string()];
+        let only = "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command%";
+        assert_eq!(wanted_line(Some(only), None, &removed), Some(None));
+        assert_eq!(wanted_line(None, None, &[]), None);
     }
 }
 
@@ -525,9 +790,14 @@ impl Render for ReshadePanel {
                 },
             }
         };
+        let steam_line = if self.busy.is_none() {
+            self.render_steam_line(cx)
+        } else {
+            None
+        };
         v_flex()
             .pt_2()
-            .child(group_panel(cx).child(body))
+            .child(group_panel(cx).child(body).children(steam_line))
             .into_any_element()
     }
 }

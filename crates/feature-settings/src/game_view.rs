@@ -154,6 +154,9 @@ pub struct GameSettingsView {
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
+    /// A Steam game whose Windows build ReShade can go into: its Tools
+    /// section holds ReShade and RenoDX.
+    steam_reshade: bool,
     running: HashSet<Tool>,
     language: LanguageStamp,
     /// Set when another screen shows the view in place: Back calls it, and
@@ -198,7 +201,7 @@ impl GameSettingsView {
         };
         let reshade = {
             let id = id.clone();
-            cx.new(|_| ReshadePanel::new(id))
+            cx.new(|cx| ReshadePanel::new(id, cx))
         };
         let renodx = {
             let id = id.clone();
@@ -222,6 +225,10 @@ impl GameSettingsView {
                 },
             ),
         ];
+        let id_is_steam_reshade = id.runner == Runner::Steam
+            && backend(cx)
+                .game(&id)
+                .is_some_and(|g| irori_services::supports_reshade(&g));
         // Steam Play exists on Linux only.
         let steam_compat = (cfg!(target_os = "linux") && id.runner == Runner::Steam)
             .then(|| crate::stores::steam(cx))
@@ -243,6 +250,7 @@ impl GameSettingsView {
             reshade,
             renodx,
             steam_compat,
+            steam_reshade: id_is_steam_reshade,
             running: HashSet::new(),
             language: LanguageStamp::new(),
             on_close: None,
@@ -295,8 +303,9 @@ impl GameSettingsView {
 
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
-    /// log; Wine & Proton becomes its Steam Play choice (Linux), and
-    /// Performance keeps only the replay buffer (Linux).
+    /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
+    /// keeps only the replay buffer (Linux), and Tools only ReShade and
+    /// RenoDX, for a Windows build.
     fn sections(&self) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
@@ -308,7 +317,8 @@ impl GameSettingsView {
                 GameSection::Wine => self.steam_compat.is_some(),
                 GameSection::Performance => linux,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
-                GameSection::Gpu | GameSection::Tools | GameSection::Log => false,
+                GameSection::Tools => self.steam_reshade,
+                GameSection::Gpu | GameSection::Log => false,
             })
             .collect()
     }
@@ -512,6 +522,22 @@ impl GameSettingsView {
     }
 
     fn render_tools(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.id.runner == Runner::Steam {
+            // Steam runs the game, so only what goes into its folder applies.
+            return v_flex()
+                .w_full()
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.reshade"),
+                    cx,
+                ))
+                .child(self.reshade.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.renodx"),
+                    cx,
+                ))
+                .child(self.renodx.clone())
+                .into_any_element();
+        }
         let enabled = self.uses_wine(cx);
         let reason = (!enabled).then(|| t("settings.tools.windows_only"));
         let tools = [

@@ -22,7 +22,9 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, bail};
 use irori_core::host;
 
-pub use launch_options::{COMMAND, variable, with_variable, without_dll_overrides};
+pub use launch_options::{
+    COMMAND, variable, with_dll_overrides, with_variable, without_dll_overrides,
+};
 pub use tools::{CompatTool, ToolSource};
 
 /// What a game's launch options in Steam show.

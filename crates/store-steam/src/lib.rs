@@ -56,8 +56,8 @@ use client_library::{ClientCache, ClientFiles, ClientSettings};
 pub use client_library::{ClientLibraryError, ClientLibraryMode, ClientLibraryState};
 pub use compat::{
     COMMAND as LAUNCH_COMMAND, CompatTool, CompatToolState, LaunchOptionsState, SteamRunning,
-    ToolSource, variable as launch_variable, with_variable as with_launch_variable,
-    without_dll_overrides,
+    ToolSource, variable as launch_variable, with_dll_overrides,
+    with_variable as with_launch_variable, without_dll_overrides,
 };
 pub use friends::{FriendLink, FriendState, Friends, SteamFriend};
 use scan::{InstalledApp, LocalArt};

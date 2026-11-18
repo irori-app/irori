@@ -326,6 +326,29 @@ pub fn with_variable(line: &str, name: &str, value: Option<&str>) -> String {
     }
 }
 
+/// Wine's variable for DLLs to load from the game folder.
+const DLL_OVERRIDES: &str = "WINEDLLOVERRIDES";
+
+/// `line` with `WINEDLLOVERRIDES` loading each of `native` from the game
+/// folder (`<dll>=n,b`) and saying nothing more about `unset`, the user's
+/// other overrides kept. The variable goes when nothing is left in it.
+pub fn with_dll_overrides(line: &str, native: &[&str], unset: &[&str]) -> String {
+    let current = variable(line, DLL_OVERRIDES).unwrap_or_default();
+    let mut value = without_dll_overrides(&current, unset);
+    if !native.is_empty() {
+        let add: Vec<(&str, &str)> = native.iter().map(|d| (*d, "n,b")).collect();
+        value = irori_runtime::env::add_dll_overrides(Some(&value), &add);
+    }
+    if value == current && variable(line, DLL_OVERRIDES).is_some() == !value.is_empty() {
+        return line.trim().to_string();
+    }
+    with_variable(
+        line,
+        DLL_OVERRIDES,
+        (!value.is_empty()).then_some(value.as_str()),
+    )
+}
+
 /// A `WINEDLLOVERRIDES` value without the entries naming `dlls`.
 pub fn without_dll_overrides(value: &str, dlls: &[&str]) -> String {
     let norm = |name: &str| {
@@ -503,6 +526,29 @@ mod tests {
             "A=2 gamescope -- env A=1 %command%"
         );
         assert_eq!(variable("-novid", key), None);
+    }
+
+    #[test]
+    fn sets_and_unsets_dll_overrides_in_a_line() {
+        let all = ["dxgi", "d3dcompiler_47"];
+        assert_eq!(
+            with_dll_overrides("-novid", &all, &all),
+            "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command% -novid"
+        );
+        let line = "WINEDLLOVERRIDES=winmm=n,b %command%";
+        let on = with_dll_overrides(line, &["dxgi"], &all);
+        assert_eq!(on, "WINEDLLOVERRIDES='winmm=n,b;dxgi=n,b' %command%");
+        // Already so: the line stays as written.
+        assert_eq!(with_dll_overrides(&on, &["dxgi"], &all), on);
+        assert_eq!(
+            with_dll_overrides(&on, &[], &all),
+            "WINEDLLOVERRIDES=winmm=n,b %command%"
+        );
+        assert_eq!(
+            with_dll_overrides("WINEDLLOVERRIDES=dxgi=n,b %command% -x", &[], &all),
+            "-x"
+        );
+        assert_eq!(with_dll_overrides("", &[], &all), "");
     }
 
     #[test]

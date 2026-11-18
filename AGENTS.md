@@ -1616,6 +1616,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   command palette's "ReShade and RenoDX for …" row of the open game. Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **Steam games.** A Steam game's Windows build takes ReShade too: natively on Windows,
+  and on Linux when Steam runs it through Proton (its appmanifest's
+  `platform_override_source`, shown as `GameInfo::is_linux_native` false). Its folder is
+  Steam's; its Tools section holds only ReShade and RenoDX. Steam starts the game, so
+  the DLL overrides go into Steam's launch options as `WINEDLLOVERRIDES`
+  (`irori_steam::with_dll_overrides`, `reshade_needs_steam_overrides`): after each
+  install, toggle or removal the panel writes the line when Steam is closed, and
+  otherwise offers to, asking before it closes Steam.
 - **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
   Irori puts into a game folder, its manifest's path and its cache folder. Detection,
   cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
