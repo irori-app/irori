@@ -470,6 +470,8 @@ impl Backend {
         } else {
             Default::default()
         };
+        // A store's update may have deleted ReShade from the game folder.
+        self.restore_graphics_mods(id).await;
         // Wine loads its own DLL unless told to prefer the game folder's.
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;

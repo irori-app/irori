@@ -198,6 +198,7 @@ impl Backend {
                     &game,
                     None,
                     true,
+                    false,
                     step.clone(),
                     progress.clone(),
                     cancel.clone(),

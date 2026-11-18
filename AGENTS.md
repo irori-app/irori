@@ -1648,8 +1648,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   file). Lists are cached a day, downloads under `<cache>/reshade`. Never bundle any.
 - **Journal** (`journal.rs`): the manifest (`<data>/reshade/<runner>/<app>.json`) lists
   every file with its hash and every folder created, saved before the first write.
-  An existing DLL that isn't ours refuses the install (`DllTaken`); an existing
-  `ReShade.ini`, compiler or shader is left alone and unrecorded. Off renames the DLL
+  An existing DLL that isn't ours refuses the install (`DllTaken`); one that is a
+  ReShade installed by hand (its version information names ReShade) is
+  `ManualInstall`, and the panel offers to take it over (`Existing::Adopt`: Irori's DLL
+  replaces it and is recorded; nothing else is touched). An existing
+  `ReShade.ini`, compiler or shader is left alone and unrecorded. Before every launch
+  `Backend::restore_graphics_mods` puts back recorded files a store's update or file
+  check deleted (`journal::missing`/`restore`), from the cache or the official source,
+  only when their bytes match the record. Off renames the DLL
   to `.irori-disabled`. Removal vets the folder with `fs_guard::ensure_deletable`,
   then deletes only recorded files whose hash still matches and recorded folders left
   empty. A failed or cancelled install removes what it wrote.

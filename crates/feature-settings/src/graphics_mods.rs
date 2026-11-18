@@ -37,6 +37,9 @@ pub(crate) fn error_text(e: &anyhow::Error, kind: GraphicsMod) -> SharedString {
             },
             &[("file", name)],
         ),
+        Some(ReshadeError::ManualInstall { name }) => {
+            t_args("settings.reshade.error.manual", &[("file", name)])
+        }
         Some(ReshadeError::OutsideGame) => t("settings.reshade.error.outside"),
         Some(ReshadeError::NotAddon) => t("settings.renodx.error.not_addon"),
         Some(ReshadeError::AddonArch) => t("settings.renodx.error.arch"),

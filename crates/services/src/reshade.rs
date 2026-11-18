@@ -183,17 +183,20 @@ impl Backend {
     /// (keeping the files the user changed). `chosen_exe` overrides the
     /// program found in the game folder. A ReShade with add-on support
     /// stays one.
+    /// With `adopt`, a ReShade installed by hand
+    /// (`ReshadeError::ManualInstall`) is taken over.
     pub async fn install_reshade(
         &self,
         id: &GameId,
         chosen_exe: Option<PathBuf>,
+        adopt: bool,
         step: Arc<dyn Fn(Step) + Send + Sync>,
         progress: ProgressSink,
         cancel: CancellationToken,
     ) -> Result<Manifest> {
         let game = self.reshade_game(id)?;
         let _busy = self.graphics_mod_ready(id, GraphicsMod::Reshade)?;
-        self.install_reshade_build(id, &game, chosen_exe, false, step, progress, cancel)
+        self.install_reshade_build(id, &game, chosen_exe, false, adopt, step, progress, cancel)
             .await
     }
 
@@ -206,6 +209,7 @@ impl Backend {
         game: &GameInfo,
         chosen_exe: Option<PathBuf>,
         addon: bool,
+        adopt: bool,
         step: Arc<dyn Fn(Step) + Send + Sync>,
         progress: ProgressSink,
         cancel: CancellationToken,
@@ -228,6 +232,7 @@ impl Backend {
             wine: irori_core::HostPlatform::current().needs_wine(InstallPlatform::Windows),
             journal,
             addon,
+            adopt,
         };
         let manifest = irori_reshade::install(request, step, progress, cancel).await?;
         tracing::info!(
@@ -312,6 +317,78 @@ impl Backend {
             report.kept.len()
         );
         Ok(report)
+    }
+
+    /// Put back the files of the game's graphics mods that its folder lost
+    /// since they were installed: a store's update or file check deletes
+    /// what it doesn't know, which would quietly leave the game without
+    /// ReShade. Only ReShade's own downloads (its DLL, the compiler, the
+    /// shaders) come back, from the cache or their official source, and
+    /// only when they match what was installed. Never fails the launch.
+    pub(crate) async fn restore_graphics_mods(&self, id: &GameId) {
+        let manifest = match load(GraphicsMod::Reshade, id).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::warn!("ReShade record of {id}: {e:#}");
+                return;
+            }
+        };
+        let missing = {
+            let m = manifest.clone();
+            tokio::task::spawn_blocking(move || journal::missing(&m))
+                .await
+                .unwrap_or_default()
+        };
+        if missing.is_empty() {
+            return;
+        }
+        let mut bytes: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+        let progress = irori_core::install::ignore_progress();
+        let cancel = CancellationToken::new();
+        for file in &missing {
+            let name = file.path.to_string_lossy();
+            let got = if file.path == Path::new(&manifest.dll) {
+                irori_reshade::download::reshade_dll(
+                    &manifest.version,
+                    manifest.machine,
+                    manifest.addon,
+                    &progress,
+                    &cancel,
+                )
+                .await
+                .map(Some)
+            } else if name.eq_ignore_ascii_case("d3dcompiler_47.dll") {
+                irori_reshade::download::d3dcompiler(manifest.machine, &progress, &cancel)
+                    .await
+                    .map(Some)
+            } else {
+                Ok(None)
+            };
+            match got {
+                Ok(Some(b)) => bytes.push((file.path.clone(), b)),
+                Ok(None) => {}
+                Err(e) => tracing::info!("putting ReShade back into {id}: {e:#}"),
+            }
+        }
+        if missing
+            .iter()
+            .any(|f| f.path.starts_with("reshade-shaders"))
+        {
+            match irori_reshade::download::shaders(&progress, &cancel).await {
+                Ok(files) => bytes.extend(files),
+                Err(e) => tracing::info!("putting ReShade's shaders back into {id}: {e:#}"),
+            }
+        }
+        let restored = tokio::task::spawn_blocking(move || journal::restore(&manifest, &bytes))
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|r| r);
+        match restored {
+            Ok(0) => {}
+            Ok(n) => tracing::info!("put {n} of ReShade's files back into {id}"),
+            Err(e) => tracing::warn!("putting ReShade back into {id}: {e:#}"),
+        }
     }
 
     /// Add the overrides an installed, enabled ReShade needs to a Wine

@@ -1,7 +1,8 @@
 //! ReShade for one game, in the game's Tools section: install (asking first
-//! when the game has anticheat), turn on or off, update and remove, with the
-//! install's steps and download progress shown in place. Removing ReShade
-//! removes the RenoDX mod it loads too, so the RenoDX panel is told.
+//! when the game has anticheat, and before taking over a ReShade installed
+//! by hand), turn on or off, update and remove, with the install's steps and
+//! download progress shown in place. Removing ReShade removes the RenoDX mod
+//! it loads too, so the RenoDX panel is told.
 //!
 //! Steam starts its games itself, so a Steam game under Proton loads
 //! ReShade only when Steam's launch options set `WINEDLLOVERRIDES`. After
@@ -22,7 +23,7 @@ use gpui_kit::{
 };
 use irori_core::GameId;
 use irori_core::process::CancellationToken;
-use irori_reshade::{GraphicsMod, Manifest, Step};
+use irori_reshade::{GraphicsMod, Manifest, ReshadeError, Step};
 use irori_services::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
 use irori_steam::{LaunchOptionsState, SteamRunning, SteamStore};
 use irori_ui::backend;
@@ -324,7 +325,7 @@ impl ReshadePanel {
             .unwrap_or_default();
         let installed = self.status().is_some_and(|s| s.manifest.is_some());
         if anticheat.is_empty() || installed {
-            self.install(chosen, window, cx);
+            self.install(chosen, false, window, cx);
             return;
         }
         let title = self.title(cx);
@@ -346,8 +347,34 @@ impl ReshadePanel {
                 .ok_text(t("settings.reshade.anticheat.confirm"))
                 .ok_variant(ButtonVariant::Danger)
                 .on_ok(move |_, window, cx| {
-                    this.update(cx, |this, cx| this.install(chosen.clone(), window, cx))
-                        .ok();
+                    this.update(cx, |this, cx| {
+                        this.install(chosen.clone(), false, window, cx)
+                    })
+                    .ok();
+                    true
+                })
+        });
+    }
+
+    /// The game folder has a ReShade installed without Irori: offer to take
+    /// it over rather than refuse.
+    fn ask_adopt(&mut self, chosen: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+        let title = self.title(cx);
+        let this = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let this = this.clone();
+            let chosen = chosen.clone();
+            alert
+                .title(t_args("settings.reshade.adopt.title", &[("title", &title)]))
+                .description(t("settings.reshade.adopt.description"))
+                .show_cancel(true)
+                .cancel_text(t("settings.common.cancel"))
+                .ok_text(t("settings.reshade.adopt.confirm"))
+                .on_ok(move |_, window, cx| {
+                    this.update(cx, |this, cx| {
+                        this.install(chosen.clone(), true, window, cx)
+                    })
+                    .ok();
                     true
                 })
         });
@@ -373,10 +400,17 @@ impl ReshadePanel {
         .detach();
     }
 
-    fn install(&mut self, chosen: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+    fn install(
+        &mut self,
+        chosen: Option<PathBuf>,
+        adopt: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.busy.is_some() {
             return;
         }
+        let asked = chosen.clone();
         self.busy = Some(Busy::Installing);
         self.step = None;
         self.percent = None;
@@ -386,7 +420,8 @@ impl ReshadePanel {
         let b = backend(cx);
         let id = self.id.clone();
         let task = irori_ui::run(cx, async move {
-            b.install_reshade(&id, chosen, step, progress, cancel).await
+            b.install_reshade(&id, chosen, adopt, step, progress, cancel)
+                .await
         });
         cx.spawn_in(window, async move |this, cx| {
             while let Some(report) = rx.recv().await {
@@ -424,6 +459,15 @@ impl ReshadePanel {
                     ),
                     Err(e) if irori_runtime::is_cancelled(&e) => window
                         .push_notification(Notification::info(t("settings.reshade.cancelled")), cx),
+                    Err(e)
+                        if !adopt
+                            && matches!(
+                                ReshadeError::of(&e),
+                                Some(ReshadeError::ManualInstall { .. })
+                            ) =>
+                    {
+                        this.ask_adopt(asked.clone(), window, cx)
+                    }
                     Err(e) => window.push_notification(
                         Notification::error(error_text(&e))
                             .title(t("settings.reshade.install_failed")),
@@ -639,7 +683,9 @@ impl ReshadePanel {
                         .label(t_args("settings.reshade.update", &[("version", &latest)]))
                         .disabled(busy)
                         .on_click(
-                            cx.listener(|this, _, window, cx| this.install(None, window, cx)),
+                            cx.listener(|this, _, window, cx| {
+                                this.install(None, false, window, cx)
+                            }),
                         ),
                 )
             })

@@ -103,6 +103,10 @@ pub enum ReshadeError {
     UnsupportedArch,
     #[error("{name} already exists in the game folder and isn't ReShade's")]
     DllTaken { name: String },
+    /// The file is a ReShade put there by hand or by another tool; the
+    /// install can take it over (`InstallRequest::adopt`).
+    #[error("ReShade is already in the game folder as {name}, installed without Irori")]
+    ManualInstall { name: String },
     #[error("The chosen program is not inside the game folder")]
     OutsideGame,
     #[error("The chosen file is not a ReShade add-on")]
