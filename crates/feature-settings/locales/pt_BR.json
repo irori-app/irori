@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Iniciar no Big Picture",
   "settings.field.start_in_tray.help": "Iniciar sem abrir a janela.",
   "settings.field.start_in_tray.label": "Iniciar na bandeja",
+  "settings.field.ui_start_maximized.label": "Iniciar maximizada",
+  "settings.field.ui_start_maximized.help": "Abre a janela do Irori maximizada, não importa como ela foi deixada.",
   "settings.field.steam_grid_db_api_key.help": "Permite escolher capas personalizadas do SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Chave de API do SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Cole sua chave de API",

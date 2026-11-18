@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Starten in Big Picture",
   "settings.field.start_in_tray.help": "Starten zonder het venster te openen.",
   "settings.field.start_in_tray.label": "Starten in systeemvak",
+  "settings.field.ui_start_maximized.label": "Gemaximaliseerd starten",
+  "settings.field.ui_start_maximized.help": "Opent het venster van Irori gemaximaliseerd, ongeacht hoe het werd achtergelaten.",
   "settings.field.steam_grid_db_api_key.help": "Hiermee kun je eigen covers kiezen van SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "SteamGridDB-API-sleutel",
   "settings.field.steam_grid_db_api_key.placeholder": "Plak je API-sleutel",

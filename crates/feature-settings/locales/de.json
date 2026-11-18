@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "In Big Picture starten",
   "settings.field.start_in_tray.help": "Starten, ohne das Fenster zu öffnen.",
   "settings.field.start_in_tray.label": "In der Taskleiste starten",
+  "settings.field.ui_start_maximized.label": "Maximiert starten",
+  "settings.field.ui_start_maximized.help": "Öffnet das Fenster von Irori maximiert, egal wie es zuletzt war.",
   "settings.field.steam_grid_db_api_key.help": "Ermöglicht die Auswahl eigener Cover von SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "SteamGridDB-API-Schlüssel",
   "settings.field.steam_grid_db_api_key.placeholder": "API-Schlüssel einfügen",

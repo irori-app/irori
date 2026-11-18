@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Avvia in Big Picture",
   "settings.field.start_in_tray.help": "Si avvia senza aprire la finestra.",
   "settings.field.start_in_tray.label": "Avvia nell'area di notifica",
+  "settings.field.ui_start_maximized.label": "Avvia ingrandita",
+  "settings.field.ui_start_maximized.help": "Apre la finestra di Irori ingrandita, comunque fosse stata lasciata.",
   "settings.field.steam_grid_db_api_key.help": "Permette di scegliere copertine personalizzate da SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Chiave API di SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Incolla la tua chiave API",

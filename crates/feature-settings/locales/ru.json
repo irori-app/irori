@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Запускать в режиме Big Picture",
   "settings.field.start_in_tray.help": "Запускаться без открытия окна.",
   "settings.field.start_in_tray.label": "Запускать в трее",
+  "settings.field.ui_start_maximized.label": "Открывать развёрнутым",
+  "settings.field.ui_start_maximized.help": "Окно Irori открывается развёрнутым, каким бы его ни оставили.",
   "settings.field.steam_grid_db_api_key.help": "Позволяет выбирать свои обложки из SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Ключ API SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Вставьте ключ API",

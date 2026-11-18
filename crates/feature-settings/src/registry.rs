@@ -1346,6 +1346,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["tray", "minimized", "startup"])
     .requires(NEEDS_EXIT_TO_TRAY),
     app(
+        "iroriUi.startMaximized",
+        "settings.field.ui_start_maximized.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.ui_start_maximized.help")
+    .keywords(&["maximize", "maximized", "window", "startup", "full size"]),
+    app(
         "iroriStartWithSystem",
         "settings.field.start_with_system.label",
         General,

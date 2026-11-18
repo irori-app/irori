@@ -135,6 +135,9 @@ second after it stops moving (`iroriUi.windowWidth`, `windowHeight`, `windowMaxi
 system lets programs place windows. Wayland doesn't, so there the compositor places it.
 A window that no longer fits its display (a smaller TV, a higher scale) or whose
 display is gone opens centred and no larger than the display.
+With "Start maximized" (`iroriUi.startMaximized`, Settings › General) it always
+opens maximized. macOS reports a zoomed window as an ordinary one, so Irori asks the
+window whether it is zoomed and keeps the size it had before to come back to.
 
 Hidden games can be put behind a PIN (Filters › Hidden, or the palette): until it is
 entered they stay out of the library, search, Big Picture, the palette, the stats page

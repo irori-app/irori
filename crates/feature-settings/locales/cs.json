@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Spouštět v režimu Big Picture",
   "settings.field.start_in_tray.help": "Spouštět bez otevření okna.",
   "settings.field.start_in_tray.label": "Spouštět v systémové oblasti",
+  "settings.field.ui_start_maximized.label": "Spouštět maximalizované",
+  "settings.field.ui_start_maximized.help": "Okno Irori se otevře maximalizované bez ohledu na to, jak bylo zavřeno.",
   "settings.field.steam_grid_db_api_key.help": "Umožní vybírat vlastní obaly ze SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Klíč API SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Vložte svůj klíč API",

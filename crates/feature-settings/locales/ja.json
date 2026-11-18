@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Big Pictureで起動",
   "settings.field.start_in_tray.help": "ウィンドウを開かずに起動します。",
   "settings.field.start_in_tray.label": "トレイで起動",
+  "settings.field.ui_start_maximized.label": "最大化して起動",
+  "settings.field.ui_start_maximized.help": "前回の状態にかかわらず、Irori のウィンドウを最大化して開きます。",
   "settings.field.steam_grid_db_api_key.help": "SteamGridDBからカスタムカバーを選べるようになります。",
   "settings.field.steam_grid_db_api_key.label": "SteamGridDB APIキー",
   "settings.field.steam_grid_db_api_key.placeholder": "APIキーを貼り付け",

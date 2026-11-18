@@ -324,7 +324,8 @@ impl AppShell {
     /// Save where the window is, a second after it stopped moving, so it
     /// reopens there (`crate::placement`).
     fn save_placement(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let Some(saved) = crate::placement::current(window, cx) else {
+        let previous = crate::placement::Saved::from_prefs(&models(cx).settings.read(cx).app.ui);
+        let Some(saved) = crate::placement::current(window, &previous, cx) else {
             return;
         };
         let backend = irori_ui::backend(cx);

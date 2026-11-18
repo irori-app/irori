@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "啟動時進入大螢幕模式",
   "settings.field.start_in_tray.help": "啟動時不開啟視窗。",
   "settings.field.start_in_tray.label": "啟動時縮小到系統列",
+  "settings.field.ui_start_maximized.label": "啟動時最大化",
+  "settings.field.ui_start_maximized.help": "無論上次如何關閉，都以最大化方式開啟 Irori 視窗。",
   "settings.field.steam_grid_db_api_key.help": "讓你可以從 SteamGridDB 選擇自訂封面。",
   "settings.field.steam_grid_db_api_key.label": "SteamGridDB API 金鑰",
   "settings.field.steam_grid_db_api_key.placeholder": "貼上你的 API 金鑰",

@@ -7,6 +7,12 @@
 //! (a smaller TV, a higher scale), opens centred and no larger than the
 //! display's visible area. Wayland doesn't let programs place their windows,
 //! so there only the size, display and maximized state come back.
+//!
+//! With "Start maximized" (`iroriUi.startMaximized`) the window always opens
+//! maximized, on the display it was last on. macOS reports a zoomed window
+//! as an ordinary one of the screen's size, so the maximized state is read
+//! from the window itself and the size it had before is kept to come back
+//! to.
 
 use gpui_kit::{App, Bounds, DisplayId, Pixels, Size, Window, WindowBounds, point, px, size};
 use irori_core::settings::UiPrefs;
@@ -143,12 +149,9 @@ pub fn open_bounds(prefs: &UiPrefs, cx: &App) -> (WindowBounds, Option<DisplayId
         })
         .collect();
     let primary = displays.iter().position(|d| Some(d.id()) == primary_id);
-    let placement = place(
-        &Saved::from_prefs(prefs),
-        &screens,
-        primary,
-        positions_honoured(cx),
-    );
+    let mut saved = Saved::from_prefs(prefs);
+    saved.maximized |= prefs.start_maximized;
+    let placement = place(&saved, &screens, primary, positions_honoured(cx));
     let display = placement
         .screen
         .and_then(|i| displays.get(i))
@@ -166,17 +169,19 @@ pub fn open_bounds(prefs: &UiPrefs, cx: &App) -> (WindowBounds, Option<DisplayId
     (bounds, display)
 }
 
-/// What to save for the window as it is now; `None` in fullscreen (Big
-/// Picture), which isn't a place to come back to.
-pub fn current(window: &Window, cx: &App) -> Option<Saved> {
-    let (bounds, maximized) = match window.window_bounds() {
-        WindowBounds::Windowed(b) => (b, false),
-        WindowBounds::Maximized(b) => (b, true),
+/// What to save for the window as it is now, given what was saved before;
+/// `None` in fullscreen (Big Picture), which isn't a place to come back to.
+pub fn current(window: &Window, previous: &Saved, cx: &App) -> Option<Saved> {
+    // Linux and Windows report a maximized window with the bounds it goes
+    // back to; macOS reports it as windowed, at the size of the screen.
+    let (bounds, maximized, restore_known) = match window.window_bounds() {
+        WindowBounds::Windowed(b) => (b, window.is_maximized(), false),
+        WindowBounds::Maximized(b) => (b, true, true),
         WindowBounds::Fullscreen(_) => return None,
     };
     let r = rect(bounds);
     let Size { width, height } = bounds.size;
-    Some(Saved {
+    let now = Saved {
         size: (f32::from(width), f32::from(height)),
         origin: positions_honoured(cx).then_some((r.x, r.y)),
         display: window
@@ -185,7 +190,23 @@ pub fn current(window: &Window, cx: &App) -> Option<Saved> {
             .map(|u| u.to_string())
             .unwrap_or_default(),
         maximized,
-    })
+    };
+    Some(remember(previous, now, restore_known))
+}
+
+/// `now`, keeping the size and place of `previous` while the window is
+/// maximized and the system doesn't say what it goes back to, so leaving
+/// the maximized state later restores the window's own size.
+pub fn remember(previous: &Saved, now: Saved, restore_known: bool) -> Saved {
+    if now.maximized && !restore_known {
+        Saved {
+            size: previous.size,
+            origin: previous.origin,
+            ..now
+        }
+    } else {
+        now
+    }
 }
 
 /// Write `saved` into the settings' window fields.
@@ -216,6 +237,34 @@ mod tests {
             display: display.into(),
             maximized: false,
         }
+    }
+
+    #[test]
+    fn a_zoomed_window_keeps_the_size_it_goes_back_to() {
+        let before = saved("a", Some((100.0, 80.0)));
+        let zoomed = Saved {
+            size: (1920.0, 1055.0),
+            origin: Some((0.0, 25.0)),
+            display: "a".into(),
+            maximized: true,
+        };
+        let kept = remember(&before, zoomed.clone(), false);
+        assert!(kept.maximized);
+        assert_eq!(kept.size, before.size);
+        assert_eq!(kept.origin, before.origin);
+        // Where the system gives the restore bounds, they are saved as given.
+        assert_eq!(remember(&before, zoomed.clone(), true), zoomed);
+        // A window that isn't maximized is saved as it is.
+        let moved = saved("a", Some((300.0, 200.0)));
+        assert_eq!(remember(&before, moved.clone(), false), moved);
+    }
+
+    #[test]
+    fn the_saved_maximized_state_comes_back() {
+        let screens = [screen("a", 0.0, 1920.0, 1080.0)];
+        let mut s = saved("a", Some((100.0, 80.0)));
+        s.maximized = true;
+        assert!(place(&s, &screens, Some(0), true).maximized);
     }
 
     #[test]

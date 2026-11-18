@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Démarrer en mode Big Picture",
   "settings.field.start_in_tray.help": "Démarre sans ouvrir la fenêtre.",
   "settings.field.start_in_tray.label": "Démarrer dans la zone de notification",
+  "settings.field.ui_start_maximized.label": "Démarrer en fenêtre agrandie",
+  "settings.field.ui_start_maximized.help": "Ouvre la fenêtre d’Irori agrandie, quel que soit son état à la fermeture.",
   "settings.field.steam_grid_db_api_key.help": "Permet de choisir des jaquettes personnalisées depuis SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Clé d’API SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Collez votre clé d’API",

@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Big Picture modunda başlat",
   "settings.field.start_in_tray.help": "Pencereyi açmadan başlat.",
   "settings.field.start_in_tray.label": "Sistem tepsisinde başlat",
+  "settings.field.ui_start_maximized.label": "Tam boyutta başlat",
+  "settings.field.ui_start_maximized.help": "Irori penceresini, nasıl bırakıldığından bağımsız olarak ekranı kaplayacak şekilde açar.",
   "settings.field.steam_grid_db_api_key.help": "SteamGridDB'den özel kapaklar seçmenizi sağlar.",
   "settings.field.steam_grid_db_api_key.label": "SteamGridDB API anahtarı",
   "settings.field.steam_grid_db_api_key.placeholder": "API anahtarınızı yapıştırın",

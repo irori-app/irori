@@ -1142,6 +1142,9 @@ pub struct UiPrefs {
     pub window_width: f32,
     pub window_height: f32,
     pub window_maximized: bool,
+    /// Open the main window maximized, whatever state it was left in
+    /// (`startMaximized`).
+    pub start_maximized: bool,
     /// The main window's place on its display, in global logical pixels,
     /// where the system lets Irori place windows (not Wayland).
     pub window_x: Option<f32>,
@@ -1328,6 +1331,7 @@ impl Default for UiPrefs {
             window_width: 1440.0,
             window_height: 900.0,
             window_maximized: false,
+            start_maximized: false,
             window_x: None,
             window_y: None,
             window_display: String::new(),

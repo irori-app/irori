@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Pornește în Big Picture",
   "settings.field.start_in_tray.help": "Pornește fără a deschide fereastra.",
   "settings.field.start_in_tray.label": "Pornește în zona de notificare",
+  "settings.field.ui_start_maximized.label": "Pornește maximizat",
+  "settings.field.ui_start_maximized.help": "Deschide fereastra Irori maximizată, indiferent cum a fost lăsată.",
   "settings.field.steam_grid_db_api_key.help": "Îți permite să alegi coperți personalizate de pe SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "Cheie API SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Lipește cheia API",

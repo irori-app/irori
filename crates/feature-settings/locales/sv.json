@@ -557,6 +557,8 @@
   "settings.field.start_in_console_mode.label": "Starta i Big Picture",
   "settings.field.start_in_tray.help": "Starta utan att öppna fönstret.",
   "settings.field.start_in_tray.label": "Starta i systemfältet",
+  "settings.field.ui_start_maximized.label": "Starta maximerad",
+  "settings.field.ui_start_maximized.help": "Öppnar Iroris fönster maximerat, oavsett hur det lämnades.",
   "settings.field.steam_grid_db_api_key.help": "Låter dig välja egna omslag från SteamGridDB.",
   "settings.field.steam_grid_db_api_key.label": "API-nyckel för SteamGridDB",
   "settings.field.steam_grid_db_api_key.placeholder": "Klistra in din API-nyckel",
