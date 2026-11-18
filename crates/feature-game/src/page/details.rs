@@ -58,17 +58,22 @@ fn text(value: impl Into<SharedString>) -> AnyElement {
 const MAX_CHIPS: usize = 3;
 
 /// `values` as chips, the ones past [`MAX_CHIPS`] counted in a last "+N".
+/// A chip never grows past the row: a long name (a developer's, at a large
+/// text size) wraps inside it.
 fn chips(values: Vec<String>) -> AnyElement {
     let (shown, more) = chip_split(values.len(), MAX_CHIPS);
     h_flex()
+        .w_full()
+        .min_w_0()
         .gap_1()
         .flex_wrap()
-        .children(
-            values
-                .into_iter()
-                .take(shown)
-                .map(|v| Tag::secondary().xsmall().child(v)),
-        )
+        .children(values.into_iter().take(shown).map(|v| {
+            Tag::secondary()
+                .xsmall()
+                .max_w_full()
+                .min_w_0()
+                .child(div().min_w_0().child(v))
+        }))
         .when_some(more, |r, n| {
             r.child(
                 Tag::secondary()
