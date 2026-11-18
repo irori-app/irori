@@ -15,6 +15,8 @@ use super::*;
 
 const CODE: &str = "0123456789abcdef0123456789abcdef";
 const APP: &str = "Sugar";
+/// The cloud save the stand-in lists.
+const CLOUD_SAVE: &str = "2024.01.31-12.00.05.manifest";
 
 fn exe() -> Vec<u8> {
     vec![1u8; 100_000]
@@ -184,6 +186,15 @@ async fn fixture() -> Fixture {
                 },
                 None => Resp::status(404),
             };
+        }
+        // One cloud save; DELETE takes it (the listing doesn't change).
+        if p == format!("/api/v1/access/egstore/savesync/acc/{APP}/manifests/") {
+            return Resp::json(json!({"files": {
+                format!("x/acc/{APP}/manifests/{CLOUD_SAVE}"):
+                    {"readLink": format!("{base}/cloud/{CLOUD_SAVE}")}}}));
+        }
+        if req.method == "DELETE" && p.starts_with("/api/v1/data/egstore/") {
+            return Resp::status(204);
         }
         Resp::status(404)
     });
@@ -603,4 +614,55 @@ async fn games_imported_from_egl_get_its_prefix() {
     let install = f.store.game(APP).unwrap().install.clone().unwrap();
     assert_eq!(install.version, "v1");
     assert_eq!(install.store_prefix, None);
+}
+
+/// Heroic #5968: a confirmed forced upload from an empty save folder
+/// deletes the cloud saves, so they don't come back; nothing else does.
+#[tokio::test]
+async fn forced_upload_of_no_saves_deletes_cloud_saves() {
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    f.store
+        .install(APP, &InstallRequest::default(), OpContext::detached())
+        .await
+        .unwrap();
+    let saves = f.root.join("saves");
+    let path = saves.to_string_lossy().into_owned();
+    let deletes = || {
+        f.server
+            .requests()
+            .iter()
+            .filter(|r| r.method == "DELETE")
+            .map(|r| r.path.clone())
+            .collect::<Vec<_>>()
+    };
+
+    f.store
+        .sync_saves(APP, SyncDirection::Upload, &path, OpContext::detached())
+        .await
+        .unwrap();
+    assert!(deletes().is_empty(), "an upload never deletes");
+
+    let log = f
+        .store
+        .sync_saves(
+            APP,
+            SyncDirection::ForceUpload,
+            &path,
+            OpContext::detached(),
+        )
+        .await
+        .unwrap();
+    assert!(log.contains("deleted 1 cloud saves"), "{log}");
+    assert_eq!(
+        deletes(),
+        [format!(
+            "/api/v1/data/egstore/x/acc/{APP}/manifests/{CLOUD_SAVE}"
+        )]
+    );
 }
