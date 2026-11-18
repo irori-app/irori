@@ -1,8 +1,15 @@
-//! Sign-in through Steam's `IAuthenticationService`, as the Steam client
-//! does: a QR code approved in the Steam mobile app, or account name and
-//! password (RSA-encrypted) followed by Steam Guard. Both end by polling the
-//! session until Steam hands out a refresh token, which later buys access
-//! tokens.
+//! Sign-in through Steam's `IAuthenticationService`: a QR code approved in
+//! the Steam mobile app, or account name and password (RSA-encrypted)
+//! followed by Steam Guard. Both end by polling the session until Steam
+//! hands out a refresh token, which later buys access tokens.
+//!
+//! Sessions are of the mobile app's platform type
+//! ([`proto::PLATFORM_MOBILE_APP`]): it is the only type whose refresh token
+//! `GenerateAccessTokenForApp` renews over the Web API. A Steam client
+//! session's refresh token is refused there (`AccessDenied`) unless sent
+//! over a signed-in connection to Steam's servers, which Irori doesn't
+//! keep, so such a sign-in stopped working once its first access token
+//! (about a day) ran out.
 //!
 //! Tokens, passwords, guard data and Steam Guard codes never reach a log or
 //! a `Debug` string.
@@ -20,28 +27,16 @@ use crate::api::{Client, Verb};
 use crate::error::SteamError;
 use crate::proto;
 
-/// The `website_id` the Steam client signs in with.
-const WEBSITE_ID: &str = "Client";
+/// The `website_id` of mobile app sign-ins.
+const WEBSITE_ID: &str = "Mobile";
 
 /// Poll interval when Steam doesn't name a usable one.
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(5);
 
-/// `EOSType` reported for this computer in the account's device list.
-///
-/// * Windows: `k_EOSTypeWindows10` (16). Telling Windows 11 (20) apart
-///   needs an OS version query; Steam only uses this for display.
-/// * macOS: `k_EOSTypeMacOSUnknown` (-102).
-/// * Linux: `k_EOSTypeLinuxUnknown` (-203).
-/// * Anything else: `k_EOSTypeUnknown` (-1).
-pub const OS_TYPE: i32 = if cfg!(target_os = "windows") {
-    16
-} else if cfg!(target_os = "macos") {
-    -102
-} else if cfg!(target_os = "linux") {
-    -203
-} else {
-    -1
-};
+/// `EOSType` sent with a sign-in: `k_EOSTypeAndroidUnknown` (-500), the
+/// type that goes with the mobile app platform. The account's device list
+/// shows the device by its friendly name.
+pub const OS_TYPE: i32 = -500;
 
 /// The computer signing in, as the account's device list will show it.
 #[derive(Clone, PartialEq, Eq)]
@@ -65,9 +60,9 @@ impl DeviceInfo {
     fn details(&self) -> proto::DeviceDetails {
         proto::DeviceDetails {
             device_friendly_name: self.friendly_name.clone(),
-            platform_type: proto::PLATFORM_STEAM_CLIENT,
+            platform_type: proto::PLATFORM_MOBILE_APP,
             os_type: OS_TYPE,
-            gaming_device_type: proto::GAMING_DEVICE_STANDARD_PC,
+            gaming_device_type: proto::GAMING_DEVICE_PHONE,
             client_count: 0,
             machine_id: self.machine_id.clone(),
         }
@@ -315,7 +310,7 @@ impl Client {
     pub async fn begin_qr(&self, device: &DeviceInfo) -> Result<QrSession> {
         let req = proto::BeginAuthSessionViaQrRequest {
             device_friendly_name: device.friendly_name.clone(),
-            platform_type: proto::PLATFORM_STEAM_CLIENT,
+            platform_type: proto::PLATFORM_MOBILE_APP,
             device_details: Some(device.details()),
             website_id: WEBSITE_ID.into(),
         };
@@ -357,7 +352,7 @@ impl Client {
             encrypted_password,
             encryption_timestamp: key.timestamp,
             remember_login: true,
-            platform_type: proto::PLATFORM_STEAM_CLIENT,
+            platform_type: proto::PLATFORM_MOBILE_APP,
             persistence: proto::PERSISTENCE_PERSISTENT,
             website_id: WEBSITE_ID.into(),
             device_details: Some(device.details()),
@@ -714,6 +709,19 @@ oJ5AuFG/mkhc6SJBeyPKP/c87cxXhRNAlivwKivIUvqY
             req.header("content-type"),
             Some("application/x-www-form-urlencoded")
         );
+        // A mobile app session: the only kind the Web API renews (#165).
+        let (_, value) = url::form_urlencoded::parse(&req.body)
+            .find(|(k, _)| k == "input_protobuf_encoded")
+            .unwrap();
+        let sent = <proto::BeginAuthSessionViaQrRequest as prost::Message>::decode(
+            &STANDARD.decode(value.as_bytes()).unwrap()[..],
+        )
+        .unwrap();
+        assert_eq!(sent.platform_type, proto::PLATFORM_MOBILE_APP);
+        assert_eq!(sent.website_id, "Mobile");
+        let details = sent.device_details.unwrap();
+        assert_eq!(details.platform_type, proto::PLATFORM_MOBILE_APP);
+        assert_eq!(details.gaming_device_type, proto::GAMING_DEVICE_PHONE);
     }
 
     #[tokio::test]

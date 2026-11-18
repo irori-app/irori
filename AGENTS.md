@@ -1427,10 +1427,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   collection may leave them out). When neither can say, the Steam card says so
   (`SteamStore::hidden_games`, `irori_manage` `steam_library::hidden_games_text`); it
   shows no count while hidden games are locked behind their PIN.
-- **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): SteamClient-type sessions
-  through `IAuthenticationService` (protobuf over the Web API). The UI emits
+- **Login** (`signin.rs` for the UI, `irori-steam-api::auth`): mobile-app-type sessions
+  through `IAuthenticationService` (protobuf over the Web API), the only type whose
+  refresh token `GenerateAccessTokenForApp` renews without a connection to Steam's
+  servers (a Steam client session's is refused there with `AccessDenied`). The UI emits
   `login_input(tokens)`; `Store::login` proves the tokens by reading the library, then
-  keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes `SessionExpired`.
+  keeps them in `session.json` (through `irori_secrets`). A refused refresh becomes
+  `SessionExpired`; a Web API call refusing the access token renews it once first
+  (`account::fetch_library_renewing`), and a refresh token Steam replaces is kept.
   Never log tokens, passwords or codes; the API crate's types redact them in `Debug`.
 - **Launch** (`client.rs`, `watch.rs`): `steam://rungameid`, or `-applaunch` with the
   game's `launcherArgs`, split with `split_program_args` (`client::game_args`): Windows

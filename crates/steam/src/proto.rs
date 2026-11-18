@@ -12,14 +12,16 @@
 
 use std::fmt;
 
-/// `EAuthTokenPlatformType::k_EAuthTokenPlatformType_SteamClient`.
-pub(crate) const PLATFORM_STEAM_CLIENT: i32 = 1;
+/// `EAuthTokenPlatformType::k_EAuthTokenPlatformType_MobileApp`: the only
+/// type whose refresh token the Web API renews (see [`crate::auth`]).
+pub(crate) const PLATFORM_MOBILE_APP: i32 = 3;
 
 /// `ESessionPersistence::k_ESessionPersistence_Persistent`.
 pub(crate) const PERSISTENCE_PERSISTENT: i32 = 1;
 
-/// `EGamingDeviceType::k_EGamingDeviceType_StandardPC`.
-pub(crate) const GAMING_DEVICE_STANDARD_PC: u32 = 1;
+/// `EGamingDeviceType::k_EGamingDeviceType_Phone`, which goes with
+/// [`PLATFORM_MOBILE_APP`].
+pub(crate) const GAMING_DEVICE_PHONE: u32 = 528;
 
 #[derive(Clone, PartialEq, prost::Message)]
 pub(crate) struct DeviceDetails {
