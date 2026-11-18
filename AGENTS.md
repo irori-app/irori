@@ -378,8 +378,11 @@ and `launch.rs` before changing anything below the UI.
   `path`) merge by key: a game's override holds only its own entries, laid over the
   defaults' list, and `{"key": "X", "iroriRemoved": true}` takes a default entry out for
   that game. Write a game's list through `GameSettingsOverrides::override_value` (the
-  settings form and `diff` do), which stores just those entries; older files that
-  copied the whole list read the same.
+  settings form and `diff` do), which stores just those entries. Game settings and
+  backups written before the merge, whose lists replaced the defaults' whole, are
+  rewritten once with removals of the default entries they left out
+  (`irori-services`' `settings_migration.rs`, recorded in `state/migrations.json`), so
+  every game keeps the list it had.
 - Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
   from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
   as overrides (variables, wrappers and programs merge by key into the current list),

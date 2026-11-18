@@ -20,6 +20,13 @@ impl SettingsService {
     pub fn load(bus: EventBus) -> Self {
         let path = Paths::get().settings_file();
         let app: AppSettings = json_store::read_or_default(&path);
+        // Before any game's settings are read: lists written before they
+        // merged with the defaults keep what they left out.
+        crate::settings_migration::migrate_game_lists(
+            &Paths::get().config.join("games"),
+            &Paths::get().state_dir().join("migrations.json"),
+            &app.game,
+        );
         Self {
             app: RwLock::new(Arc::new(app)),
             overrides: RwLock::new(HashMap::new()),
