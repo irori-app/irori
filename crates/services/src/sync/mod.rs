@@ -16,6 +16,7 @@
 //! The state between syncs is `state/sync.json`; the WebDAV login is kept
 //! with `irori_secrets`.
 
+pub mod copies;
 pub mod merge;
 pub mod rclone;
 pub mod target;
@@ -172,7 +173,7 @@ pub fn default_device_name() -> String {
         .unwrap_or_else(|| "Irori".into())
 }
 
-fn os() -> &'static str {
+pub(crate) fn os() -> &'static str {
     std::env::consts::OS
 }
 

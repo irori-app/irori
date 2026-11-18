@@ -21,11 +21,13 @@ use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, PathPromptOptions, Render,
     SharedString, Styled as _, Subscription, Window, div,
 };
+use irori_core::CopyMode;
 use irori_core::{GameId, Runner, SyncMode};
 use irori_services::backup_schedule::local_time;
 use irori_services::sync::ConflictField;
+use irori_services::sync::copies::{CopyKind, CopyStatus};
 use irori_services::sync::rclone::INSTALL_URL as RCLONE_INSTALL_URL;
-use irori_services::{RcloneInfo, SyncConflict, SyncStatus, WebDavLogin};
+use irori_services::{RcloneInfo, SyncConflict, SyncDevice, SyncStatus, WebDavLogin};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -53,6 +55,13 @@ pub struct SyncPanel {
     /// Titles of the games the conflicts name.
     titles: HashMap<String, String>,
     busy: bool,
+    /// Cloud copies being sent.
+    sending: bool,
+    /// Other computers' copies, once looked for.
+    devices: Option<Vec<SyncDevice>>,
+    finding: bool,
+    /// The computer and kind being brought back.
+    bringing: Option<(String, CopyKind)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -124,6 +133,10 @@ impl SyncPanel {
             saved_user: None,
             titles: HashMap::new(),
             busy: false,
+            sending: false,
+            devices: None,
+            finding: false,
+            bringing: None,
             _subscriptions: subscriptions,
         };
         this.refresh(cx);
@@ -575,6 +588,7 @@ impl Render for SyncPanel {
                         .child(muted(t("settings.sync.playtime_only_help"), cx)),
                 )
                 .child(self.render_status(busy, cx))
+                .child(self.render_copies(cx))
                 .child(
                     h_flex().child(
                         Button::new("sync-now")
@@ -597,7 +611,264 @@ impl Render for SyncPanel {
     }
 }
 
+const COPY_MODES: [CopyMode; 3] = [CopyMode::Off, CopyMode::Manual, CopyMode::Automatic];
+
+fn kind_label(kind: CopyKind) -> SharedString {
+    t(match kind {
+        CopyKind::Backups => "settings.sync.copies.backups",
+        CopyKind::Saves => "settings.sync.copies.saves",
+        CopyKind::Screenshots => "settings.sync.copies.screenshots",
+    })
+}
+
 impl SyncPanel {
+    fn set_copy_mode(&mut self, kind: CopyKind, mode: CopyMode, cx: &mut Context<Self>) {
+        backend(cx).settings.update_app(|s| match kind {
+            CopyKind::Backups => s.sync.copies.backups = mode,
+            CopyKind::Saves => s.sync.copies.saves = mode,
+            CopyKind::Screenshots => s.sync.copies.screenshots = mode,
+        });
+        cx.notify();
+    }
+
+    /// Send every kind that isn't off now.
+    fn send_copies(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.sending {
+            return;
+        }
+        self.sending = true;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.send_cloud_copies(None).await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.sending = false;
+                match result {
+                    Ok(reports) => {
+                        let sent: usize = reports.iter().map(|r| r.sent).sum();
+                        window.push_notification(
+                            Notification::success(counted(
+                                "settings.sync.copies.sent_one",
+                                "settings.sync.copies.sent_other",
+                                sent,
+                            )),
+                            cx,
+                        );
+                    }
+                    Err(e) => window.push_notification(
+                        Notification::error(format!("{e:#}"))
+                            .title(t("settings.sync.copies.failed")),
+                        cx,
+                    ),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn find_devices(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.finding = true;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.cloud_devices().await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.finding = false;
+                match result {
+                    Ok(devices) => this.devices = Some(devices),
+                    Err(e) => window.push_notification(
+                        Notification::error(format!("{e:#}"))
+                            .title(t("settings.sync.copies.find_failed")),
+                        cx,
+                    ),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn bring_back(
+        &mut self,
+        device: SyncDevice,
+        kind: CopyKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.bringing.is_some() {
+            return;
+        }
+        self.bringing = Some((device.id.clone(), kind));
+        cx.notify();
+        let b = backend(cx);
+        let name = device.name.clone();
+        let task = irori_ui::run(
+            cx,
+            async move { b.bring_back_cloud_copies(&device, kind).await },
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.bringing = None;
+                let note = match result {
+                    Ok(count) => Notification::success(t_args(
+                        if count == 1 {
+                            "settings.sync.copies.brought_one"
+                        } else {
+                            "settings.sync.copies.brought_other"
+                        },
+                        &[("count", &count.to_string()), ("device", &name)],
+                    )),
+                    Err(e) => Notification::error(format!("{e:#}"))
+                        .title(t("settings.sync.copies.bring_failed")),
+                };
+                window.push_notification(note, cx);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Cloud copies: a mode per kind, how the last copy went, sending now,
+    /// and bringing back another computer's.
+    fn render_copies(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let statuses = backend(cx).cloud_copies_status();
+        let any_on = statuses.iter().any(|s| s.mode != CopyMode::Off);
+        let mut out = v_flex()
+            .gap_2()
+            .child(irori_ui::style::caption(
+                t("settings.sync.copies.title"),
+                cx,
+            ))
+            .child(muted(t("settings.sync.copies.description"), cx));
+        for (row, status) in statuses.iter().enumerate() {
+            out = out.child(self.render_copy_row(row, status, cx));
+        }
+        out = out.child(
+            h_flex()
+                .gap_2()
+                .flex_wrap()
+                .child(
+                    Button::new("copies-send")
+                        .outline()
+                        .small()
+                        .icon(IconName::CloudUpload)
+                        .label(if self.sending {
+                            t("settings.sync.copies.sending")
+                        } else {
+                            t("settings.sync.copies.send_now")
+                        })
+                        .loading(self.sending)
+                        .disabled(self.sending || !any_on)
+                        .on_click(cx.listener(|this, _, window, cx| this.send_copies(window, cx))),
+                )
+                .child(
+                    Button::new("copies-find")
+                        .ghost()
+                        .small()
+                        .icon(IconName::CloudDownload)
+                        .label(t("settings.sync.copies.find"))
+                        .loading(self.finding)
+                        .disabled(self.finding)
+                        .on_click(cx.listener(|this, _, window, cx| this.find_devices(window, cx))),
+                ),
+        );
+        if let Some(devices) = &self.devices {
+            if devices.is_empty() {
+                out = out.child(muted(t("settings.sync.copies.no_devices"), cx));
+            }
+            for (row, device) in devices.iter().enumerate() {
+                out = out.child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .items_center()
+                        .child(div().min_w_0().truncate().child(device.name.clone()))
+                        .child(muted(
+                            t_args(
+                                "settings.sync.device_seen",
+                                &[
+                                    ("os", os_name(&device.os)),
+                                    ("time", &local_time(&device.updated)),
+                                ],
+                            ),
+                            cx,
+                        ))
+                        .children(CopyKind::ALL.iter().enumerate().map(|(i, kind)| {
+                            let (kind, device) = (*kind, device.clone());
+                            let loading = self
+                                .bringing
+                                .as_ref()
+                                .is_some_and(|(id, k)| *id == device.id && *k == kind);
+                            Button::new(("copies-bring", row * 3 + i))
+                                .outline()
+                                .xsmall()
+                                .label(kind_label(kind))
+                                .loading(loading)
+                                .disabled(self.bringing.is_some())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.bring_back(device.clone(), kind, window, cx)
+                                }))
+                        })),
+                );
+            }
+            out = out.child(muted(t("settings.sync.copies.bring_hint"), cx));
+        }
+        out
+    }
+
+    fn render_copy_row(
+        &self,
+        row: usize,
+        status: &CopyStatus,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let kind = status.kind;
+        let modes = ButtonGroup::new(SharedString::from(format!("copies-mode-{row}")))
+            .outline()
+            .xsmall()
+            .children(COPY_MODES.iter().enumerate().map(|(ix, m)| {
+                let label = match m {
+                    CopyMode::Off => t("settings.sync.copies.off"),
+                    CopyMode::Manual => t("settings.sync.copies.manual"),
+                    CopyMode::Automatic => t("settings.sync.copies.automatic"),
+                };
+                Button::new(SharedString::from(format!("copies-mode-{row}-{ix}")))
+                    .label(label)
+                    .selected(status.mode == *m)
+            }))
+            .on_click(cx.listener(move |this, clicked: &Vec<usize>, _, cx| {
+                if let Some(&ix) = clicked.first() {
+                    this.set_copy_mode(kind, COPY_MODES[ix], cx);
+                }
+            }));
+        let last = status.last.as_ref().map(|last| match &last.error {
+            Some(e) => SharedString::from(e.clone()),
+            None => t_args(
+                "settings.sync.copies.last",
+                &[
+                    ("time", &local_time(&last.at)),
+                    ("sent", &last.sent.to_string()),
+                    ("kept", &(last.sent + last.unchanged).to_string()),
+                ],
+            ),
+        });
+        h_flex()
+            .gap_3()
+            .items_center()
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .child(div().text_sm().truncate().child(kind_label(kind)))
+                    .when_some(last, |col, last| col.child(muted(last, cx))),
+            )
+            .child(modes)
+    }
+
     /// rclone: found or how to get it, and the remote to sync with.
     fn render_rclone(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut out = v_flex().gap_2();

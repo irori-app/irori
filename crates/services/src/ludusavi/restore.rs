@@ -391,6 +391,13 @@ pub fn configure(config: &str, title: &str, plan: &Plan) -> anyhow::Result<Strin
     Ok(serde_yaml_ng::to_string(&root)?)
 }
 
+/// The backup folder named in Ludusavi's configuration (`backup.path`).
+pub fn backup_path(config: &str) -> Option<std::path::PathBuf> {
+    let root: serde_yaml_ng::Value = serde_yaml_ng::from_str(config).ok()?;
+    let path = root.get("backup")?.get("path")?.as_str()?.trim();
+    (!path.is_empty()).then(|| irori_core::paths::expand_home(path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -547,6 +554,17 @@ mod tests {
         );
         // No settings yet.
         assert!(configure("", "Game", &p).unwrap().contains("redirects"));
+    }
+
+    #[test]
+    fn reads_the_backup_folder_from_ludusavis_settings() {
+        let config = "manifest:\n  url: x\nbackup:\n  path: /games/ludusavi-backup\n";
+        assert_eq!(
+            backup_path(config),
+            Some(std::path::PathBuf::from("/games/ludusavi-backup"))
+        );
+        assert_eq!(backup_path("backup: {}\n"), None);
+        assert_eq!(backup_path("{not yaml"), None);
     }
 
     #[test]

@@ -697,6 +697,15 @@ commands without a window.
   `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
   publishes only playtime, sessions and playtime removals (`merge::Scope`): its
   organisation stays its own.
+  Cloud copies (`sync/copies.rs`, `iroriSync.copies`: Off, Manual or Automatic per
+  kind) put Irori's scheduled backups, Ludusavi's backup folder and screenshots (not
+  clips) under `Irori sync/devices/<device id>/` at the same target, with a
+  `device.json`; only files new or changed since they were sent to that target go
+  (`state/cloud-copies.json`). Automatic copies ride the periodic tick every half hour
+  (2, 5, 15 then 30 minutes after failures) and never run while a game does. Another
+  computer's copies are brought back without replacing anything: backups into the
+  backup folder, saves into Ludusavi's (games it has no backups of), screenshots into
+  `Pictures/Irori/<computer>`.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on

@@ -1166,9 +1166,36 @@ pub struct SyncPrefs {
     pub rclone_remote: String,
     /// The rclone program; empty finds it on `PATH`.
     pub rclone_path: String,
+    /// Cloud copies of backups, Ludusavi's saves and screenshots at the
+    /// sync target.
+    pub copies: CopyPrefs,
     /// Exchange only playtime and sessions: this computer's favourites,
     /// categories and statuses stay here, and the others' don't change it.
     pub playtime_only: bool,
+}
+
+/// When a kind of cloud copy is sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyMode {
+    #[default]
+    Off,
+    /// Only when the user asks ("Send now").
+    Manual,
+    /// On its own, every so often, never while a game runs.
+    Automatic,
+}
+
+/// What goes to the sync target besides the library.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CopyPrefs {
+    /// Irori's scheduled backups (never the store sign-ins).
+    pub backups: CopyMode,
+    /// Ludusavi's backup folder.
+    pub saves: CopyMode,
+    /// The screenshots Irori finds (not clips).
+    pub screenshots: CopyMode,
 }
 
 /// Which of Irori's games Sunshine lists.

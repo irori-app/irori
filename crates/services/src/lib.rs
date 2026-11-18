@@ -511,6 +511,7 @@ impl Backend {
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
+            self.cloud_copies_when_due().await;
             self.sync_sunshine_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;

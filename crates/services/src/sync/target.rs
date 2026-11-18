@@ -197,6 +197,220 @@ impl Target {
     }
 }
 
+/// One entry of a folder at the target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteEntry {
+    pub name: String,
+    pub is_dir: bool,
+}
+
+/// Files by path relative to Irori's folder there (`devices/<id>/backups/
+/// a.json`), for the cloud copies ([`super::copies`]). Paths use `/` and
+/// are made by Irori from plain names.
+impl Target {
+    /// What a folder holds; empty when it doesn't exist.
+    pub async fn list_dir(&self, rel: &str) -> Result<Vec<RemoteEntry>> {
+        match self {
+            Target::Folder(root) => {
+                let dir = folder_dir(root)?.join(rel);
+                let mut out = Vec::new();
+                let mut entries = match tokio::fs::read_dir(&dir).await {
+                    Ok(entries) => entries,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+                    Err(e) => {
+                        return Err(e).with_context(|| format!("Cannot read {}", dir.display()));
+                    }
+                };
+                while let Some(entry) = entries.next_entry().await? {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if name.starts_with('.') || name.ends_with(".irori-part") {
+                        continue;
+                    }
+                    let is_dir = entry.file_type().await?.is_dir();
+                    out.push(RemoteEntry { name, is_dir });
+                }
+                out.sort_by(|a, b| a.name.cmp(&b.name));
+                Ok(out)
+            }
+            Target::WebDav { url, login } => {
+                let dir = format!("{}{}/", dir_url(url), encode_path(rel));
+                let response = dav(
+                    reqwest::Method::from_bytes(b"PROPFIND").expect("a valid method"),
+                    &dir,
+                    login,
+                )
+                .header("Depth", "1")
+                .header("Content-Type", "application/xml")
+                .body(PROPFIND)
+                .send()
+                .await
+                .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
+                if response.status() == reqwest::StatusCode::NOT_FOUND {
+                    return Ok(Vec::new());
+                }
+                let text = checked(response).await?.text().await?;
+                Ok(entries_of(&text, &dir))
+            }
+            Target::Rclone { rclone, remote } => Ok(rclone
+                .list(&rclone::remote_path(remote, &format!("{DIR}/{rel}")))
+                .await?
+                .into_iter()
+                .map(|e| RemoteEntry {
+                    name: e.name,
+                    is_dir: e.is_dir,
+                })
+                .collect()),
+        }
+    }
+
+    /// Copy the local file `from` to `rel`, making its folders.
+    pub async fn put_file(&self, rel: &str, from: &Path) -> Result<()> {
+        match self {
+            Target::Folder(root) => {
+                let to = folder_dir(root)?.join(rel);
+                let from = from.to_path_buf();
+                tokio::task::spawn_blocking(move || -> Result<()> {
+                    if let Some(parent) = to.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    // Through a sibling, so a sync program never sees half
+                    // a file.
+                    let mut part = to.clone().into_os_string();
+                    part.push(".irori-part");
+                    std::fs::copy(&from, &part)
+                        .with_context(|| format!("Cannot write {}", to.display()))?;
+                    std::fs::rename(&part, &to)?;
+                    Ok(())
+                })
+                .await?
+            }
+            Target::WebDav { url, login } => {
+                let mut made = dir_url(url);
+                mkcol(&made, login).await?;
+                let parts: Vec<&str> = rel.split('/').collect();
+                for part in &parts[..parts.len().saturating_sub(1)] {
+                    made = format!("{made}{}/", encode(part));
+                    mkcol(&made, login).await?;
+                }
+                let file = tokio::fs::File::open(from)
+                    .await
+                    .with_context(|| format!("Cannot read {}", from.display()))?;
+                let response = dav(
+                    reqwest::Method::PUT,
+                    &format!("{}{}", dir_url(url), encode_path(rel)),
+                    login,
+                )
+                .body(reqwest::Body::from(file))
+                .send()
+                .await
+                .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
+                checked(response).await?;
+                Ok(())
+            }
+            Target::Rclone { rclone, remote } => {
+                rclone
+                    .upload(from, &rclone::remote_path(remote, &format!("{DIR}/{rel}")))
+                    .await
+            }
+        }
+    }
+
+    /// Copy `rel` to the local file `to`, making its folders.
+    pub async fn get_file(&self, rel: &str, to: &Path) -> Result<()> {
+        if let Some(parent) = to.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .with_context(|| format!("Cannot create {}", parent.display()))?;
+        }
+        match self {
+            Target::Folder(root) => {
+                let from = folder_dir(root)?.join(rel);
+                tokio::fs::copy(&from, to)
+                    .await
+                    .with_context(|| format!("Cannot copy {}", from.display()))?;
+                Ok(())
+            }
+            Target::WebDav { url, login } => {
+                use tokio::io::AsyncWriteExt as _;
+                let response = dav(
+                    reqwest::Method::GET,
+                    &format!("{}{}", dir_url(url), encode_path(rel)),
+                    login,
+                )
+                .send()
+                .await
+                .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
+                let mut response = checked(response).await?;
+                let mut file = tokio::fs::File::create(to)
+                    .await
+                    .with_context(|| format!("Cannot write {}", to.display()))?;
+                while let Some(chunk) = response
+                    .chunk()
+                    .await
+                    .map_err(|e| without_url(e, "The download stopped"))?
+                {
+                    file.write_all(&chunk).await?;
+                }
+                file.flush().await?;
+                Ok(())
+            }
+            Target::Rclone { rclone, remote } => {
+                rclone
+                    .download(&rclone::remote_path(remote, &format!("{DIR}/{rel}")), to)
+                    .await
+            }
+        }
+    }
+
+    /// A key naming this target, so what was sent to one isn't taken as
+    /// sent to another.
+    pub fn key(&self) -> String {
+        match self {
+            Target::Folder(root) => format!("folder:{}", root.display()),
+            Target::WebDav { url, login } => format!("webdav:{}@{url}", login.username),
+            Target::Rclone { remote, .. } => format!("rclone:{remote}"),
+        }
+    }
+}
+
+/// Make a WebDAV folder; servers answer 405 when it exists.
+async fn mkcol(url: &str, login: &WebDavLogin) -> Result<()> {
+    let mkcol = reqwest::Method::from_bytes(b"MKCOL").expect("a valid method");
+    let made = dav(mkcol, url, login)
+        .send()
+        .await
+        .map_err(|e| without_url(e, "The WebDAV server can’t be reached"))?;
+    let status = made.status();
+    if !status.is_success() && status != reqwest::StatusCode::METHOD_NOT_ALLOWED {
+        checked(made).await?;
+    }
+    Ok(())
+}
+
+/// Percent-encode every segment of a relative path.
+fn encode_path(rel: &str) -> String {
+    rel.split('/').map(encode).collect::<Vec<_>>().join("/")
+}
+
+/// The entries of a PROPFIND answer for the folder at `dir`, without the
+/// folder itself.
+fn entries_of(xml: &str, dir: &str) -> Vec<RemoteEntry> {
+    let own = dir.trim_end_matches('/').rsplit('/').next().map(decode);
+    let mut out: Vec<RemoteEntry> = hrefs(xml)
+        .into_iter()
+        .filter_map(|href| {
+            let path = href.split(['?', '#']).next()?.to_string();
+            let is_dir = path.ends_with('/');
+            let name = decode(path.trim_end_matches('/').rsplit('/').next()?);
+            Some(RemoteEntry { name, is_dir })
+        })
+        .filter(|e| !(e.is_dir && Some(&e.name) == own.as_ref()) && !e.name.is_empty())
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out.dedup();
+    out
+}
+
 /// Irori's folder inside the chosen one. The chosen folder must exist: a
 /// share that isn't mounted or a drive of another system that isn't there
 /// is reported, not created anew.
@@ -361,6 +575,60 @@ mod tests {
             password: "hunter2".into(),
         };
         assert!(!format!("{login:?}").contains("hunter2"));
+    }
+
+    #[test]
+    fn lists_a_webdav_folder_without_itself() {
+        let xml = r#"<d:multistatus xmlns:d="DAV:">
+ <d:response><d:href>/dav/Irori%20sync/devices/ab/backups/</d:href></d:response>
+ <d:response><d:href>/dav/Irori%20sync/devices/ab/backups/irori-2026.json</d:href></d:response>
+ <d:response><d:href>/dav/Irori%20sync/devices/ab/backups/old/</d:href></d:response>
+</d:multistatus>"#;
+        let entries = entries_of(
+            xml,
+            "https://dav.example/dav/Irori%20sync/devices/ab/backups/",
+        );
+        assert_eq!(
+            entries,
+            [
+                RemoteEntry {
+                    name: "irori-2026.json".into(),
+                    is_dir: false
+                },
+                RemoteEntry {
+                    name: "old".into(),
+                    is_dir: true
+                }
+            ]
+        );
+        assert_eq!(encode_path("devices/a b/x.json"), "devices/a%20b/x.json");
+    }
+
+    #[tokio::test]
+    async fn moves_files_in_and_out_of_a_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = Target::Folder(dir.path().to_path_buf());
+        assert!(target.list_dir("devices").await.unwrap().is_empty());
+        let local = dir.path().join("shot.png");
+        std::fs::write(&local, b"png").unwrap();
+        target
+            .put_file("devices/ab/screenshots/x/shot.png", &local)
+            .await
+            .unwrap();
+        let listed = target.list_dir("devices/ab/screenshots").await.unwrap();
+        assert_eq!(
+            listed,
+            [RemoteEntry {
+                name: "x".into(),
+                is_dir: true
+            }]
+        );
+        let back = dir.path().join("back/shot.png");
+        target
+            .get_file("devices/ab/screenshots/x/shot.png", &back)
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&back).unwrap(), b"png");
     }
 
     #[tokio::test]

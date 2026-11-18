@@ -253,6 +253,18 @@ impl Backend {
         (!folder.trim().is_empty()).then(|| irori_core::paths::expand_home(&folder))
     }
 
+    /// Where Ludusavi keeps the backups: the folder chosen in settings,
+    /// else the one in Ludusavi's own configuration. `None` when Ludusavi
+    /// isn't installed or doesn't say.
+    pub(crate) async fn ludusavi_backup_root(&self) -> Option<PathBuf> {
+        if let Some(folder) = self.ludusavi_folder() {
+            return Some(folder);
+        }
+        let config = self.ludusavi().await?.config_path().await.ok()?;
+        let text = tokio::fs::read_to_string(&config).await.ok()?;
+        restore::backup_path(&text)
+    }
+
     /// The Wine prefix Ludusavi should search for `game`'s saves: its Proton
     /// or Wine prefix as Irori runs it, or Steam's for a Steam game. `None`
     /// for games that run natively, and before the prefix exists.
