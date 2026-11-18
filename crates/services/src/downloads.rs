@@ -505,7 +505,7 @@ const STOP_GRACE: Duration = Duration::from_secs(15);
 /// Run `work` until it finishes, or until `grace` after `cancel` fired. A
 /// store that misses the cancel (stuck fetching a manifest, a request with no
 /// timeout) must not hold up the whole queue; dropping the future stops it.
-async fn stop_within<T>(
+pub(crate) async fn stop_within<T>(
     work: impl Future<Output = T>,
     cancel: &CancellationToken,
     grace: Duration,

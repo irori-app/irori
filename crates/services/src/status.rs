@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use irori_core::process::CancellationToken;
 use irori_core::{Event, EventBus, GameId, GameStatus, InstallProgress, StatusKind};
 use parking_lot::Mutex;
 
@@ -19,6 +20,8 @@ struct Entry {
 #[derive(Clone)]
 pub struct StatusRegistry {
     inner: Arc<Mutex<HashMap<GameId, Entry>>>,
+    /// The tokens of launches being prepared, which cancelling fires.
+    launches: Arc<Mutex<HashMap<GameId, CancellationToken>>>,
     bus: EventBus,
 }
 
@@ -26,6 +29,7 @@ impl StatusRegistry {
     pub fn new(bus: EventBus) -> Self {
         Self {
             inner: Arc::default(),
+            launches: Arc::default(),
             bus,
         }
     }
@@ -110,6 +114,33 @@ impl StatusRegistry {
         StatusGuard {
             registry: self.clone(),
             id: id.clone(),
+            launch: false,
+        }
+    }
+
+    /// Enter [`StatusKind::Launching`] with the token that
+    /// [`Self::cancel_launch`] fires until the guard is dropped, which the
+    /// launch does once the game started (or the launch ended).
+    pub fn launch_guard(&self, id: &GameId) -> (StatusGuard, CancellationToken) {
+        let token = CancellationToken::new();
+        self.launches.lock().insert(id.clone(), token.clone());
+        self.set(id, StatusKind::Launching);
+        let guard = StatusGuard {
+            registry: self.clone(),
+            id: id.clone(),
+            launch: true,
+        };
+        (guard, token)
+    }
+
+    /// Cancel the launch of `id` while it is being prepared. Whether one was.
+    pub fn cancel_launch(&self, id: &GameId) -> bool {
+        match self.launches.lock().get(id) {
+            Some(token) => {
+                token.cancel();
+                true
+            }
+            None => false,
         }
     }
 }
@@ -117,6 +148,8 @@ impl StatusRegistry {
 pub struct StatusGuard {
     registry: StatusRegistry,
     id: GameId,
+    /// Holds the launch token of [`StatusRegistry::launch_guard`].
+    launch: bool,
 }
 
 impl StatusGuard {
@@ -127,6 +160,32 @@ impl StatusGuard {
 
 impl Drop for StatusGuard {
     fn drop(&mut self) {
+        if self.launch {
+            self.registry.launches.lock().remove(&self.id);
+        }
         self.registry.clear(&self.id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use irori_core::Runner;
+
+    #[test]
+    fn a_launch_can_be_cancelled_only_while_it_is_prepared() {
+        let statuses = StatusRegistry::new(EventBus::new());
+        let id = GameId::new(Runner::Gog, "1");
+        assert!(!statuses.cancel_launch(&id), "nothing to cancel");
+        let (guard, token) = statuses.launch_guard(&id);
+        assert_eq!(
+            statuses.get(&id).map(|s| s.kind),
+            Some(StatusKind::Launching)
+        );
+        assert!(statuses.cancel_launch(&id));
+        assert!(token.is_cancelled());
+        drop(guard);
+        assert!(statuses.get(&id).is_none());
+        assert!(!statuses.cancel_launch(&id), "the launch is over");
     }
 }

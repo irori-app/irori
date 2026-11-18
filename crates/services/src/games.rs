@@ -109,7 +109,83 @@ async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool)
 /// Sessions shorter than this that end in an error count as failed starts.
 const FAILED_START_SECONDS: u64 = 10;
 
+/// The user cancelled a launch while it was being prepared
+/// ([`Backend::cancel_launch`]). Found anywhere in an `anyhow` chain; it is
+/// the user's own doing, so screens show no error for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchCancelled;
+
+impl LaunchCancelled {
+    /// Whether `error` is a cancelled launch.
+    pub fn of(error: &anyhow::Error) -> bool {
+        error.chain().any(|e| e.is::<LaunchCancelled>())
+    }
+}
+
+impl std::fmt::Display for LaunchCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The launch was cancelled")
+    }
+}
+
+impl std::error::Error for LaunchCancelled {}
+
+/// How long a launch step that misses the cancel (a request with no
+/// timeout, a store that never checks the token) may go on before it is
+/// dropped. Processes it started end with the token on their own.
+const LAUNCH_CANCEL_GRACE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Refuse to go on with a cancelled launch.
+fn check_launch(cancel: &CancellationToken) -> Result<()> {
+    if cancel.is_cancelled() {
+        return Err(LaunchCancelled.into());
+    }
+    Ok(())
+}
+
+/// Run one step of a launch's preparation. A cancelled launch starts no
+/// step, and a step that was under way when the launch was cancelled ends
+/// it, whatever the step itself answered.
+async fn launch_step<T>(
+    cancel: &CancellationToken,
+    step: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    check_launch(cancel)?;
+    match crate::downloads::stop_within(step, cancel, LAUNCH_CANCEL_GRACE).await {
+        Some(result) if !cancel.is_cancelled() => result,
+        _ => Err(LaunchCancelled.into()),
+    }
+}
+
 impl Backend {
+    /// Cancel the launch of `id` while it is being prepared (saves syncing,
+    /// Wine or Proton being set up, the before-launch script). What the
+    /// launch started stops with it; nothing else on the system is touched.
+    /// Whether a launch was being prepared.
+    pub fn cancel_launch(&self, id: &GameId) -> bool {
+        self.statuses.cancel_launch(id)
+    }
+
+    /// End a launch cancelled after its store began: undo what it set up
+    /// for the session. The error to return.
+    async fn abandon_launch(
+        &self,
+        id: &GameId,
+        store: &irori_core::DynStore,
+        title: &str,
+        log_file: &Path,
+        mods: bool,
+    ) -> anyhow::Error {
+        if mods {
+            self.restore_mods(id, title).await;
+        }
+        if let Err(e) = store.after_exit(&id.app_name, 0).await {
+            tracing::warn!("after a cancelled launch of {id}: {e:#}");
+        }
+        append_log(log_file, "\nThe launch was cancelled.\n");
+        LaunchCancelled.into()
+    }
+
     pub fn is_running(&self, id: &GameId) -> bool {
         self.running.lock().contains_key(id)
     }
@@ -277,9 +353,16 @@ impl Backend {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner))?;
-        let guard = self.statuses.guard(id, StatusKind::Launching);
+        // Cancelling fires `cancel`: the steps below pass it on to what they
+        // start, and none starts once it fired.
+        let (guard, cancel) = self.statuses.launch_guard(id);
 
-        if game.browser_url.is_none() && !store.is_available(&id.app_name).await {
+        if game.browser_url.is_none()
+            && !launch_step(&cancel, async {
+                Ok(store.is_available(&id.app_name).await)
+            })
+            .await?
+        {
             bail!(
                 "The game files of {} were not found{}",
                 game.title,
@@ -310,7 +393,7 @@ impl Backend {
         if let Some(client) = &stream {
             client.apply(&mut settings, app.sunshine.match_client);
         }
-        let ctx = self.op_context(id, CancellationToken::new());
+        let ctx = self.op_context(id, cancel.clone());
         let target = Target {
             id,
             game: &game,
@@ -324,15 +407,24 @@ impl Backend {
             && self.is_online()
         {
             ctx.step.as_ref()("Syncing saves");
-            match self.save_locations(id).await {
+            match launch_step(&cancel, async { Ok(self.save_locations(id).await) }).await? {
                 // A save folder Irori can't work out is the game's setup,
                 // not the cloud's; the game page's cloud saves say so.
                 Err(e) => tracing::warn!("pre-launch save sync of {id}: {e:#}"),
                 Ok(saves) => {
-                    if let Err(e) = self
-                        .sync_saves_limited(id, &store, SyncDirection::Download, &saves)
-                        .await
-                    {
+                    let synced = launch_step(&cancel, async {
+                        Ok(self
+                            .sync_saves_limited(
+                                id,
+                                &store,
+                                SyncDirection::Download,
+                                &saves,
+                                &cancel,
+                            )
+                            .await)
+                    })
+                    .await?;
+                    if let Err(e) = synced {
                         // Playing on would build on saves the next upload
                         // overwrites, or that overwrite the cloud's; the
                         // caller asks the user.
@@ -353,7 +445,11 @@ impl Backend {
         // Another launcher starts its games with its own settings; Irori's
         // Wine, wrappers and variables would only apply to the opener.
         let mut environment = if id.runner.manages_installs() {
-            irori_runtime::prepare_launch(&app, &settings, target, &ctx).await?
+            launch_step(
+                &cancel,
+                irori_runtime::prepare_launch(&app, &settings, target, &ctx),
+            )
+            .await?
         } else {
             Default::default()
         };
@@ -361,6 +457,7 @@ impl Backend {
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;
         }
+        check_launch(&cancel)?;
         // prepare_launch refuses rather than leaving the sandbox out, so a
         // game set to run sandboxed that got this far is in one.
         let sandbox = (settings.sandbox.is_enabled()
@@ -388,7 +485,16 @@ impl Backend {
                     &log_file,
                 ));
             } else {
-                run_script(&settings.before_launch_script_path, &game, &log_file).await?;
+                launch_step(
+                    &cancel,
+                    run_script(
+                        &settings.before_launch_script_path,
+                        &game,
+                        &log_file,
+                        Some(&cancel),
+                    ),
+                )
+                .await?;
             }
         }
 
@@ -403,7 +509,25 @@ impl Backend {
             environment,
             settings: settings.clone(),
         };
-        let plan = store.launch(&id.app_name, &request, ctx).await?;
+        check_launch(&cancel)?;
+        // What the store set up for this session (GOG's Galaxy service, an
+        // Xbox launch view) ends with `after_exit`, also when the launch is
+        // cancelled once the store began.
+        let plan = match crate::downloads::stop_within(
+            store.launch(&id.app_name, &request, ctx),
+            &cancel,
+            LAUNCH_CANCEL_GRACE,
+        )
+        .await
+        {
+            Some(Ok(plan)) if !cancel.is_cancelled() => plan,
+            Some(Err(e)) if !cancel.is_cancelled() => return Err(e),
+            _ => {
+                return Err(self
+                    .abandon_launch(id, &store, &game.title, &log_file, false)
+                    .await);
+            }
+        };
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
         if id.runner.manages_installs()
@@ -427,6 +551,13 @@ impl Backend {
         // the details above (Wine warnings in a loop can add 100 MiB/s).
         let header = std::fs::metadata(&log_file).map(|m| m.len()).unwrap_or(0);
         let mods = self.apply_mods(id, &game, &log_file).await?;
+        // The last moment a cancel counts: from here on the game runs, and
+        // stopping it is Stop.
+        if cancel.is_cancelled() {
+            return Err(self
+                .abandon_launch(id, &store, &game.title, &log_file, mods)
+                .await);
+        }
         let spawned = process::spawn(&plan.command, Some(&log_file))
             .and_then(|child| Ok((child.id().context("game exited immediately")?, child)));
         let (pid, mut child) = match spawned {
@@ -616,7 +747,7 @@ impl Backend {
                 tracing::warn!("after-exit hook of {id}: {e:#}");
             }
             if !settings.after_launch_script_path.is_empty() {
-                let _ = run_script(&settings.after_launch_script_path, &game, &log_file).await;
+                let _ = run_script(&settings.after_launch_script_path, &game, &log_file, None).await;
             }
             if settings.auto_sync_saves && b.is_online() {
                 b.upload_after_session(&id, &game).await;
@@ -943,14 +1074,17 @@ impl Backend {
     }
 
     /// Sync like [`Self::sync_saves`], given up after [`SAVE_SYNC_TIMEOUT`].
+    /// `stop` (a cancelled launch) stops it too.
     async fn sync_saves_limited(
         &self,
         id: &GameId,
         store: &irori_core::DynStore,
         direction: SyncDirection,
         saves: &str,
+        stop: &CancellationToken,
     ) -> Result<String> {
-        let cancel = CancellationToken::new();
+        // A child, so giving up here never cancels the launch that waits.
+        let cancel = stop.child_token();
         let ctx = self.op_context(id, cancel.clone());
         let sync = store.sync_saves(&id.app_name, direction, saves, ctx);
         match tokio::time::timeout(SAVE_SYNC_TIMEOUT, sync).await {
@@ -984,7 +1118,13 @@ impl Backend {
             }
         };
         let Err(e) = self
-            .sync_saves_limited(id, &store, SyncDirection::Upload, &saves)
+            .sync_saves_limited(
+                id,
+                &store,
+                SyncDirection::Upload,
+                &saves,
+                &CancellationToken::new(),
+            )
             .await
         else {
             return;
@@ -1243,10 +1383,21 @@ pub(crate) fn append_log(path: &Path, text: &str) {
     }
 }
 
-async fn run_script(script: &str, game: &GameInfo, log_file: &Path) -> Result<()> {
+/// Run a before- or after-launch script and wait for it; `cancel` ends it
+/// (with everything in its process group).
+async fn run_script(
+    script: &str,
+    game: &GameInfo,
+    log_file: &Path,
+    cancel: Option<&CancellationToken>,
+) -> Result<()> {
     let spec =
         process::program_command(Path::new(script)).envs(crate::programs::identity_env(game));
-    let res = process::run(&spec, RunOptions::default().log_file(log_file)).await?;
+    let mut options = RunOptions::default().log_file(log_file);
+    if let Some(cancel) = cancel {
+        options = options.cancel(cancel.clone());
+    }
+    let res = process::run(&spec, options).await?;
     if !res.success() {
         tracing::warn!("script {script} exited with {:?}", res.code);
     }

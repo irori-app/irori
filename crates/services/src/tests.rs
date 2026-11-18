@@ -666,6 +666,74 @@ fn a_daemon_the_launcher_starts_does_not_hold_the_session() {
     assert!(took < std::time::Duration::from_secs(6), "{took:?}");
 }
 
+/// Wait up to five seconds for `done`.
+#[cfg(unix)]
+fn eventually(done: impl Fn() -> bool) -> bool {
+    for _ in 0..100 {
+        if done() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    done()
+}
+
+#[cfg(unix)]
+#[test]
+fn a_launch_cancelled_while_its_script_runs_starts_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let started = dir.path().join("started");
+    let script_pid = dir.path().join("script.pid");
+    let script = dir.path().join("before.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho $$ > {}.tmp; mv {0}.tmp {0}\nexec sleep 60\n",
+            script_pid.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (b, id) = play(
+        "cancel-while-preparing",
+        &format!("touch {}", started.display()),
+    );
+    b.settings.set_game_value(
+        &id,
+        "beforeLaunchScriptPath",
+        Some(serde_json::Value::String(script.display().to_string())),
+    );
+    let launch = {
+        let (b, id) = (b.clone(), id.clone());
+        b.runtime()
+            .spawn(async move { b.launch(&id, None, Vec::new()).await })
+    };
+    assert!(eventually(|| script_pid.is_file()), "the script runs");
+    assert_eq!(
+        b.statuses.get(&id).map(|s| s.kind),
+        Some(irori_core::StatusKind::Launching)
+    );
+    assert!(b.cancel_launch(&id));
+    let result = b
+        .runtime()
+        .block_on(async { tokio::time::timeout(std::time::Duration::from_secs(15), launch).await })
+        .expect("the launch ends at once")
+        .unwrap();
+    let e = result.expect_err("cancelled");
+    assert!(crate::LaunchCancelled::of(&e), "{e:#}");
+    assert!(!b.is_running(&id));
+    assert!(b.statuses.get(&id).is_none(), "the status is cleared");
+    assert!(!b.cancel_launch(&id), "nothing left to cancel");
+    let pid = std::fs::read_to_string(&script_pid).unwrap();
+    assert!(
+        eventually(|| !signal(pid.trim(), "-0")),
+        "the script was stopped"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(!started.exists(), "the game never started");
+}
+
 #[test]
 fn launch_presets_save_apply_and_go() {
     isolate_paths();
