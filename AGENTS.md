@@ -88,6 +88,7 @@ irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C st
 irori uninstall <runner>/<app> [--keep-files]
 irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
 irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date (Steam closed), or take them out
+irori displays [--json]                          the displays: modes, HDR and VRR (JSON versioned, for other tools)
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
@@ -766,14 +767,18 @@ commands without a window.
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
 - **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
-  the modes offered and HDR (on, capable), kept until a refresh. Linux reads
-  `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool
-  (`kscreen-doctor`, `hyprctl`, `wlr-randr`, `xrandr`; `irori_core::host` inside the
-  Flatpak), merged by connector name (`merge`); Windows uses `QueryDisplayConfig` and
-  advanced colour info; macOS `system_profiler`. Every parser is pure and tested in
+  the modes offered, HDR and variable refresh (on, capable, the EDID's range), kept
+  until a refresh. Linux reads `/sys/class/drm` (modes, EDID name, HDR metadata, an EDID
+  1.4 continuous refresh range wider than 10 Hz or AMD's FreeSync block for VRR) and
+  asks the compositor's tool (`kscreen-doctor`'s `vrrPolicy` and capabilities, `hyprctl`'s
+  `vrr`, `wlr-randr`'s `adaptive_sync`, `xrandr --props`' `vrr_capable`;
+  `irori_core::host` inside the Flatpak), merged by connector name (`merge`); Windows
+  uses `QueryDisplayConfig` and advanced colour info (VRR stays unknown: Windows keeps
+  it as one switch for every display); macOS `system_profiler`. Every parser is pure and tested in
   `displays/parse.rs`; unknown stays `None`, never a guess. Settings › System info lists
   them (`irori_settings` `displays.rs`), and the HDR and gamescope fields' help adds a
-  hint from them (`displays::hint`).
+  hint from them (`displays::hint`). `irori displays --json` prints the report with a
+  `version` for other tools; fields are added, never renamed.
 - **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
   only): Windows' own per-program choice in
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the

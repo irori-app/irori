@@ -462,6 +462,7 @@ fn sample_displays() -> irori_services::displays::DisplayReport {
         ],
         hdr_on: Some(false),
         hdr_capable: Some(true),
+        ..Default::default()
     };
     let off = Display {
         connector: "HDMI-A-1".into(),
