@@ -24,6 +24,7 @@ pub mod journal;
 mod kde;
 mod launcher_problem;
 pub mod lutris_summary;
+pub mod middle_scroll;
 pub mod models;
 pub mod motion;
 pub mod nav;

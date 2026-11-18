@@ -2055,6 +2055,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["animation", "accessibility"]),
     app(
+        "iroriUi.middleClickScroll",
+        "settings.field.ui_middle_click_scroll.label",
+        Appearance,
+        "settings.group.mouse",
+        Toggle,
+    )
+    .help("settings.field.ui_middle_click_scroll.help")
+    .keywords(&[
+        "middle",
+        "mouse",
+        "scroll",
+        "autoscroll",
+        "wheel",
+        "drag",
+        "scrollanywhere",
+    ]),
+    app(
         "iroriUi.fontFamily",
         "settings.field.ui_font_family.label",
         Appearance,

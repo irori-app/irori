@@ -1127,6 +1127,9 @@ pub struct UiPrefs {
     /// Width in rem of the game drawer beside the grid (`libraryDrawerWidth`).
     pub library_drawer_width: f32,
     pub reduce_motion: bool,
+    /// Hold the middle mouse button and move the mouse to scroll what is
+    /// under it (`middleClickScroll`, off unless turned on).
+    pub middle_click_scroll: bool,
     pub show_store_badges: bool,
     /// The game's categories on its cover in the grid (`coverCategories`,
     /// off unless turned on).
@@ -1323,6 +1326,7 @@ impl Default for UiPrefs {
             tile_size: 11.0,
             library_drawer_width: 26.0,
             reduce_motion: false,
+            middle_click_scroll: false,
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,

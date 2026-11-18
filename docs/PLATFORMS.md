@@ -139,6 +139,11 @@ With "Start maximized" (`iroriUi.startMaximized`, Settings › General) it alway
 opens maximized. macOS reports a zoomed window as an ordinary one, so Irori asks the
 window whether it is zoomed and keeps the size it had before to come back to.
 
+"Scroll with the middle button" (`iroriUi.middleClickScroll`, Settings › Appearance,
+off by default) scrolls whatever is under the pointer while the middle button is held
+and the mouse moves, by turning the movement into scroll-wheel events
+(`irori_ui::middle_scroll`); Big Picture keeps its own scrolling.
+
 Hidden games can be put behind a PIN (Filters › Hidden, or the palette): until it is
 entered they stay out of the library, search, Big Picture, the palette, the stats page
 and Year in review, `irori list` and Discord's "Playing" (Sunshine never lists hidden
