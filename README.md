@@ -267,7 +267,8 @@ build Irori yourself, see [Building](#building).
 
 ## Wine, Proton and Game Porting Toolkit
 
-- **Wine manager** for GE-Proton, Proton-CachyOS, Wine-GE and Kron4ek on Linux, and
+- **Wine manager** for GE-Proton, Proton-CachyOS, Proton-Wineland, DW-Proton, UMU-Proton,
+  Proton-EM, Proton-Sarek, Wine-GE and Kron4ek on Linux, and
   Wine, CrossOver and Game Porting Toolkit on macOS, plus the system, Steam, Lutris and
   Bottles builds already on your computer.
 - **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the

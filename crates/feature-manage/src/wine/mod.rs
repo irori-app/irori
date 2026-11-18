@@ -55,6 +55,10 @@ fn source_description(kind: ReleaseKind) -> SharedString {
         ReleaseKind::WineGe => t("manage.wine.source.wine_ge"),
         ReleaseKind::WineKron4ek => t("manage.wine.source.wine_kron4ek"),
         ReleaseKind::NexusRuntime => t("manage.wine.source.nexus_runtime"),
+        ReleaseKind::DwProton => t("manage.wine.source.dw_proton"),
+        ReleaseKind::UmuProton => t("manage.wine.source.umu_proton"),
+        ReleaseKind::ProtonEm => t("manage.wine.source.proton_em"),
+        ReleaseKind::ProtonSarek => t("manage.wine.source.proton_sarek"),
         ReleaseKind::WineCrossover
         | ReleaseKind::WineStagingMac
         | ReleaseKind::GamePortingToolkit => kind.type_str().into(),
@@ -767,8 +771,11 @@ impl Render for WineManagerView {
                             ),
                     )
                     .child(
+                        // Ten sources and the system tab don't fit a narrow
+                        // window; the menu reaches the ones scrolled away.
                         TabBar::new("wine-tabs")
                             .underline()
+                            .menu(true)
                             .selected_index(self.tab_ix)
                             .children(tabs)
                             .on_click(cx.listener(|this, ix: &usize, window, cx| {

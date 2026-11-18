@@ -1,5 +1,7 @@
-//! The Wine manager: downloadable Wine/Proton builds from GitHub releases
-//! (GE-Proton, Proton-CachyOS, Proton-Wineland, Wine-GE and Kron4ek's Wine builds), a cached
+//! The Wine manager: downloadable Wine/Proton builds from their projects'
+//! release pages (GE-Proton, Proton-CachyOS, Proton-Wineland, DW-Proton,
+//! UMU-Proton, Proton-EM, Proton-Sarek, Wine-GE and Kron4ek's Wine builds on
+//! GitHub; DW-Proton on its own Forgejo, dawn.wine), a cached
 //! release list with install state, and install/remove with progress,
 //! cancellation and SHA-512 or SHA-256 verification.
 //!
@@ -35,13 +37,26 @@ pub enum ReleaseKind {
     /// The open-source Proton build with `xgameruntime.dll` that Microsoft
     /// Store (GDK) games need; the Xbox store asks for it.
     NexusRuntime,
+    /// Dawn Winery's Proton (fixes for gacha and anime games), released on
+    /// its own Forgejo at dawn.wine; the GitHub copy is only a mirror.
+    DwProton,
+    /// The Proton umu itself downloads (Open Wine Components).
+    UmuProton,
+    /// Proton-EM, a development-oriented Proton (HDR and Wayland work).
+    ProtonEm,
+    /// Proton-Sarek, Proton for older GPUs (DXVK for Vulkan 1.1 hardware).
+    ProtonSarek,
 }
 
 impl ReleaseKind {
-    pub const ALL: [ReleaseKind; 9] = [
+    pub const ALL: [ReleaseKind; 13] = [
         ReleaseKind::GeProton,
         ReleaseKind::ProtonCachyOs,
         ReleaseKind::ProtonWineland,
+        ReleaseKind::DwProton,
+        ReleaseKind::UmuProton,
+        ReleaseKind::ProtonEm,
+        ReleaseKind::ProtonSarek,
         ReleaseKind::NexusRuntime,
         ReleaseKind::WineGe,
         ReleaseKind::WineKron4ek,
@@ -60,6 +75,10 @@ impl ReleaseKind {
                 Self::GeProton,
                 Self::ProtonCachyOs,
                 Self::ProtonWineland,
+                Self::DwProton,
+                Self::UmuProton,
+                Self::ProtonEm,
+                Self::ProtonSarek,
                 Self::NexusRuntime,
                 Self::WineGe,
                 Self::WineKron4ek,
@@ -88,6 +107,10 @@ impl ReleaseKind {
             Self::WineStagingMac => "Wine-Staging-macOS",
             Self::GamePortingToolkit => "Game-Porting-Toolkit",
             Self::NexusRuntime => "Nexus-Runtime",
+            Self::DwProton => "DW-Proton",
+            Self::UmuProton => "UMU-Proton",
+            Self::ProtonEm => "Proton-EM",
+            Self::ProtonSarek => "Proton-Sarek",
         }
     }
 
@@ -95,7 +118,8 @@ impl ReleaseKind {
         Self::ALL.into_iter().find(|k| k.type_str() == s)
     }
 
-    /// GitHub releases API endpoint.
+    /// The releases API endpoint: GitHub's, or for DW-Proton its Forgejo's,
+    /// which answers in the same shape.
     pub fn url(self) -> &'static str {
         match self {
             ReleaseKind::GeProton => {
@@ -119,6 +143,23 @@ impl ReleaseKind {
                 "https://api.github.com/repos/Gcenx/game-porting-toolkit/releases"
             }
             Self::NexusRuntime => "https://api.github.com/repos/domsvoboda/nexus-runtime/releases",
+            Self::DwProton => "https://dawn.wine/api/v1/repos/dawn-winery/dwproton/releases",
+            Self::UmuProton => {
+                "https://api.github.com/repos/Open-Wine-Components/umu-proton/releases"
+            }
+            Self::ProtonEm => "https://api.github.com/repos/BananaWorks07/Proton/releases",
+            Self::ProtonSarek => "https://api.github.com/repos/pythonlover02/Proton-Sarek/releases",
+        }
+    }
+
+    /// The list address asking for `count` releases: GitHub pages with
+    /// `per_page`, Forgejo with `limit`.
+    pub fn list_url(self, count: u32) -> String {
+        let url = self.url();
+        if url.starts_with("https://api.github.com/") {
+            format!("{url}?per_page={count}")
+        } else {
+            format!("{url}?limit={count}")
         }
     }
 
@@ -131,6 +172,10 @@ impl ReleaseKind {
                 | ReleaseKind::ProtonCachyOs
                 | ReleaseKind::ProtonWineland
                 | ReleaseKind::NexusRuntime
+                | ReleaseKind::DwProton
+                | ReleaseKind::UmuProton
+                | ReleaseKind::ProtonEm
+                | ReleaseKind::ProtonSarek
         )
     }
 }
@@ -285,6 +330,31 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
             name.starts_with("nexus-runtime-") && name.ends_with(suffix)
         }
         Some(ReleaseKind::GamePortingToolkit) => arm,
+        Some(ReleaseKind::DwProton) => {
+            let name = file_name_of(url);
+            let suffix = if arm {
+                "-aarch64.tar.xz"
+            } else {
+                "-x86_64.tar.xz"
+            };
+            name.starts_with("dwproton-") && name.ends_with(suffix)
+        }
+        // These publish x86-64 builds only, without an architecture in the
+        // name.
+        Some(ReleaseKind::UmuProton) => {
+            !arm && file_name_of(url).starts_with("UMU-Proton-") && is_tarball(url)
+        }
+        Some(ReleaseKind::ProtonEm) => {
+            !arm && file_name_of(url).starts_with("proton-EM-") && is_tarball(url)
+        }
+        // `-async` builds turn on DXVK's asynchronous shader compiling,
+        // which some online games' anticheat takes for cheating.
+        Some(ReleaseKind::ProtonSarek) => {
+            let name = file_name_of(url);
+            !arm && name.starts_with("Proton-Sarek")
+                && is_tarball(&name)
+                && !name.contains("-async")
+        }
         _ => true,
     }
 }
@@ -313,7 +383,11 @@ fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Opt
         ReleaseKind::GeProton
         | ReleaseKind::ProtonCachyOs
         | ReleaseKind::ProtonWineland
-        | ReleaseKind::NexusRuntime => assets
+        | ReleaseKind::NexusRuntime
+        | ReleaseKind::DwProton
+        | ReleaseKind::UmuProton
+        | ReleaseKind::ProtonEm
+        | ReleaseKind::ProtonSarek => assets
             .iter()
             .find(|a| is_compatible_download(ty, &a.browser_download_url, arch)),
         ReleaseKind::WineCrossover => assets
@@ -362,6 +436,12 @@ fn version_of(kind: ReleaseKind, tag: &str) -> String {
                 tag.strip_prefix("runtime-").unwrap_or(tag)
             )
         }
+        // Tags are `dwproton-11.0-17` and `EM-10.0-37`: the folder says
+        // which Proton it is.
+        ReleaseKind::DwProton => {
+            format!("DW-Proton-{}", tag.strip_prefix("dwproton-").unwrap_or(tag))
+        }
+        ReleaseKind::ProtonEm => format!("Proton-EM-{}", tag.strip_prefix("EM-").unwrap_or(tag)),
         k if k.type_str().contains("Wine") => format!("Wine-{tag}"),
         _ => tag.to_string(),
     }
@@ -422,8 +502,7 @@ pub async fn fetch_releases(kind: ReleaseKind, count: u32) -> Result<Vec<Release
         ReleaseKind::available().contains(&kind),
         "This runtime source is not available on this operating system"
     );
-    let url = format!("{}?per_page={count}", kind.url());
-    fetch_releases_at(kind, &url, host_arch()).await
+    fetch_releases_at(kind, &kind.list_url(count), host_arch()).await
 }
 
 async fn fetch_releases_at(kind: ReleaseKind, url: &str, arch: &str) -> Result<Vec<Release>> {
@@ -1343,6 +1422,93 @@ mod tests {
         assert_eq!(rel[1].version, "Wine-Kron4ek-10.17-staging");
         assert!(rel[1].download.ends_with("wine-10.17-staging-amd64.tar.xz"));
         assert!(releases_from_github(ReleaseKind::WineKron4ek, list, "aarch64").is_empty());
+    }
+
+    #[test]
+    fn newer_proton_sources() {
+        // Asset names as each project publishes them.
+        let dw = parse(serde_json::json!([gh(
+            "dwproton-11.0-17",
+            "2026-11-13",
+            &[
+                "dwproton-11.0-17-x86_64.sha512sum",
+                "dwproton-11.0-17-x86_64.tar.xz",
+                "dwproton-11.0-17-x86_64.tar.xz.torrent",
+            ]
+        )]));
+        let rel = releases_from_github(ReleaseKind::DwProton, dw.clone(), "x86_64");
+        assert_eq!(rel[0].version, "DW-Proton-latest");
+        assert_eq!(rel[1].version, "DW-Proton-11.0-17");
+        assert!(rel[1].download.ends_with("dwproton-11.0-17-x86_64.tar.xz"));
+        assert!(
+            rel[1]
+                .checksum
+                .ends_with("dwproton-11.0-17-x86_64.sha512sum")
+        );
+        assert!(releases_from_github(ReleaseKind::DwProton, dw, "aarch64").is_empty());
+
+        let umu = parse(serde_json::json!([gh(
+            "UMU-Proton-10.0-4",
+            "2026-03-30",
+            &["UMU-Proton-10.0-4.sha512sum", "UMU-Proton-10.0-4.tar.gz"]
+        )]));
+        let rel = releases_from_github(ReleaseKind::UmuProton, umu.clone(), "x86_64");
+        assert_eq!(rel[1].version, "UMU-Proton-10.0-4");
+        assert!(rel[1].download.ends_with("UMU-Proton-10.0-4.tar.gz"));
+        assert!(rel[1].checksum.ends_with("UMU-Proton-10.0-4.sha512sum"));
+        assert!(releases_from_github(ReleaseKind::UmuProton, umu, "aarch64").is_empty());
+
+        let em = parse(serde_json::json!([
+            gh(
+                "EM-10.0-37-HDR",
+                "2026-04-11",
+                &[
+                    "proton-EM-10.0-37-HDR.sha256sum",
+                    "proton-EM-10.0-37-HDR.tar.xz"
+                ]
+            ),
+            gh(
+                "EM-10.0-34",
+                "2026-03-01",
+                &["proton-EM-10.0-34.sha256sum", "proton-EM-10.0-34.tar.xz"]
+            ),
+        ]));
+        let rel = releases_from_github(ReleaseKind::ProtonEm, em, "x86_64");
+        assert_eq!(rel[1].version, "Proton-EM-10.0-37-HDR");
+        assert!(rel[1].checksum.ends_with("proton-EM-10.0-37-HDR.sha256sum"));
+        // The test builds aren't what `-latest` follows.
+        assert_eq!(rel[0].version, "Proton-EM-latest");
+        assert!(rel[0].download.ends_with("proton-EM-10.0-34.tar.xz"));
+
+        let sarek = parse(serde_json::json!([gh(
+            "Proton-Sarek10-29",
+            "2026-02-02",
+            &["Proton-Sarek10-29-async.tar.gz", "Proton-Sarek10-29.tar.gz"]
+        )]));
+        let rel = releases_from_github(ReleaseKind::ProtonSarek, sarek, "x86_64");
+        assert_eq!(rel[1].version, "Proton-Sarek10-29");
+        assert!(rel[1].download.ends_with("/Proton-Sarek10-29.tar.gz"));
+        assert!(rel[1].checksum.is_empty());
+
+        for kind in [
+            ReleaseKind::DwProton,
+            ReleaseKind::UmuProton,
+            ReleaseKind::ProtonEm,
+            ReleaseKind::ProtonSarek,
+        ] {
+            assert!(kind.is_proton());
+            assert_eq!(ReleaseKind::from_type(kind.type_str()), Some(kind));
+            assert!(ReleaseKind::for_host(irori_core::HostPlatform::Linux).contains(&kind));
+        }
+        assert_eq!(
+            ReleaseKind::DwProton.list_url(50),
+            "https://dawn.wine/api/v1/repos/dawn-winery/dwproton/releases?limit=50"
+        );
+        assert!(
+            ReleaseKind::GeProton
+                .list_url(5)
+                .ends_with("/releases?per_page=5")
+        );
     }
 
     #[test]
