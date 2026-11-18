@@ -1455,7 +1455,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
-  backups, art) and hide the Graphics, Tools and Log sections.
+  backups, art) and hide the Graphics, Tools and Log sections; their Launch and
+  Performance sections say why (and, on Linux, how to add MangoHud in Steam).
 - **Art** order: Steam's cache, the store's hashed addresses (asked once per app,
   `IStoreBrowseService/GetItems`), the fixed CDN paths. Store pages (`appdetails`) fill
   the game page in Irori's language.
