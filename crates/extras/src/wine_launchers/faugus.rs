@@ -106,6 +106,7 @@ pub fn plan(games_file: &Path) -> Result<LutrisPlan> {
                 wine_version: (!runner.is_empty()).then(|| runner.clone()),
                 arch: None,
                 env,
+                dll_overrides: Vec::new(),
             }
         };
         let mut planned = planned(

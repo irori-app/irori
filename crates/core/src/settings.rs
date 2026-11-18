@@ -157,6 +157,11 @@ pub struct GameSettings {
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
+    /// Wine DLL overrides, added to `WINEDLLOVERRIDES` for games run
+    /// through Wine or Proton (each replaces what the variable says about
+    /// its DLL). Irori-only.
+    #[serde(rename = "iroriDllOverrides")]
+    pub dll_overrides: Vec<crate::DllOverride>,
     /// List this game among Sunshine's applications while Irori keeps its
     /// games there. Irori-only; set per game.
     #[serde(rename = "iroriInSunshine")]
@@ -441,6 +446,7 @@ impl Default for GameSettings {
             enable_wow64: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
+            dll_overrides: Vec::new(),
             in_sunshine: true,
             discord_presence: true,
             ignore_game_updates: false,

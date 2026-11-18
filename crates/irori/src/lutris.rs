@@ -177,6 +177,7 @@ fn start_menu_games(bottles: &[bottles::Bottle], plan: &LutrisPlan) -> Vec<Plann
                         wine_version: Some(bottle.runner.clone()).filter(|r| !r.is_empty()),
                         arch: None,
                         env: Default::default(),
+                        dll_overrides: Vec::new(),
                     },
                     favourite: false,
                     hidden: false,
@@ -248,6 +249,7 @@ async fn apply_game(
             prefix,
             wine_version,
             env,
+            dll_overrides,
             ..
         } => {
             let Some(store) = sideload else {
@@ -291,6 +293,13 @@ async fn apply_game(
                         }
                     }
                     set_env(backend, &id, env);
+                    if !dll_overrides.is_empty() {
+                        backend.settings.set_game_value(
+                            &id,
+                            "iroriDllOverrides",
+                            serde_json::to_value(dll_overrides).ok(),
+                        );
+                    }
                     Some(id)
                 }
                 Err(e) => {

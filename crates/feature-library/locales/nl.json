@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "Thuismap verbergen",
   "library.lutris.consent.game": "Wat Spelen start",
   "library.lutris.consent.env": "Omgevingsvariabelen",
+  "library.lutris.consent.dll_overrides": "Wine-DLL-overrides, bewaard in de instellingen van het spel",
   "library.lutris.consent.shell_resolved": "Zoals het wordt uitgevoerd:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Het script vraagt om {requested}. Irori gebruikt {build}, de meest vergelijkbare versie die je hebt.",

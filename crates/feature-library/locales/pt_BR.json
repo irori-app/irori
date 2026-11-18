@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "Ocultar a pasta pessoal",
   "library.lutris.consent.game": "O que Jogar inicia",
   "library.lutris.consent.env": "Variáveis de ambiente",
+  "library.lutris.consent.dll_overrides": "Substituições de DLL do Wine, salvas nas configurações do jogo",
   "library.lutris.consent.shell_resolved": "Como será executado:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "O script pede {requested}. O Irori usa {build}, a versão mais próxima que você tem.",

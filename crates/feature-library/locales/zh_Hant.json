@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "隱藏家目錄",
   "library.lutris.consent.game": "「開始遊戲」將啟動的內容",
   "library.lutris.consent.env": "環境變數",
+  "library.lutris.consent.dll_overrides": "Wine DLL 覆寫（儲存在遊戲設定中）",
   "library.lutris.consent.shell_resolved": "實際執行內容：",
   "library.lutris.consent.wine": "Wine：{build}",
   "library.lutris.consent.wine_close": "指令碼要求 {requested}。Irori 將使用你現有最接近的版本 {build}。",

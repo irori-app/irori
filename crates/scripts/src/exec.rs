@@ -942,6 +942,11 @@ impl Runner<'_> {
             arch: g.arch.as_deref().map(|a| self.text(a, loc)).transpose()?,
             wine_version: self.script.wine_version().map(str::to_string),
             env: self.env(&BTreeMap::new(), loc)?,
+            dll_overrides: if is_wine {
+                self.script.dll_overrides.clone()
+            } else {
+                Vec::new()
+            },
             options,
             runner_options: self
                 .script

@@ -217,6 +217,36 @@ pub fn validate_env_key(
     Ok(key.to_string())
 }
 
+/// A DLL override row: the DLL's name and its mode in Wine's spelling (the
+/// mode may be typed as Wine or Lutris write it: `n,b`, `native`,
+/// `disabled`). `skip` is the row being edited.
+pub fn validate_dll_override(
+    name: &str,
+    mode: &str,
+    existing: &[String],
+    skip: Option<usize>,
+) -> Result<(String, String), String> {
+    let Some(dll) = irori_core::dll_override::dll_name(name) else {
+        return Err(t("settings.validate.dll_name_invalid").into());
+    };
+    let mode = match irori_core::DllMode::parse(mode) {
+        Some(m) if !mode.trim().is_empty() => m,
+        _ => return Err(t("settings.validate.dll_mode_invalid").into()),
+    };
+    let same = |a: &str| {
+        let a = a.trim().to_ascii_lowercase();
+        a.strip_suffix(".dll").map(str::to_owned).unwrap_or(a)
+    };
+    if existing
+        .iter()
+        .enumerate()
+        .any(|(i, k)| Some(i) != skip && same(k) == same(&dll))
+    {
+        return Err(t_args("settings.validate.env_name_taken", &[("name", &dll)]).into());
+    }
+    Ok((dll, mode.wine_value().to_string()))
+}
+
 /// Split `KEY=VALUE` typed into the name field while the value is empty.
 pub fn split_assignment(name: &str, value: &str) -> (String, String) {
     if value.trim().is_empty()
@@ -383,6 +413,25 @@ mod tests {
         assert!(validate_discord_client_id("12345").is_err());
         assert!(validate_discord_client_id("12345678901234567x9").is_err());
         assert!(validate_discord_client_id("123456789012345678901").is_err());
+    }
+
+    #[test]
+    fn dll_override_rows_validate_and_normalize() {
+        let existing = vec!["dxgi".to_string()];
+        assert_eq!(
+            validate_dll_override(" nvapi ", "Disabled", &existing, None),
+            Ok(("nvapi".into(), "d".into()))
+        );
+        assert_eq!(
+            validate_dll_override("d3d11", "native, builtin", &existing, None),
+            Ok(("d3d11".into(), "n,b".into()))
+        );
+        assert!(validate_dll_override("DXGI.dll", "b", &existing, None).is_err());
+        assert!(validate_dll_override("dxgi", "b", &existing, Some(0)).is_ok());
+        assert!(validate_dll_override("", "b", &existing, None).is_err());
+        assert!(validate_dll_override("a;b", "b", &existing, None).is_err());
+        assert!(validate_dll_override("x", "", &existing, None).is_err());
+        assert!(validate_dll_override("x", "sometimes", &existing, None).is_err());
     }
 
     #[test]

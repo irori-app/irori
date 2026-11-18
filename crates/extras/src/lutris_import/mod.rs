@@ -105,6 +105,8 @@ pub enum ImportKind {
         /// `win32` or `win64`, when set.
         arch: Option<String>,
         env: BTreeMap<String, String>,
+        /// Wine DLL overrides, for `iroriDllOverrides`.
+        dll_overrides: Vec<irori_core::DllOverride>,
     },
     /// Runner `linux`: a sideloaded native app.
     Native {
@@ -399,6 +401,7 @@ fn classify(
                 .game_str("arch")
                 .or_else(|| cascade.runner_str("arch")),
             env,
+            dll_overrides: cascade.dll_overrides(),
         },
         "linux" => ImportKind::Native {
             exe: entry,

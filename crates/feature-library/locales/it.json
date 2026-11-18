@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "Nascondi la cartella home",
   "library.lutris.consent.game": "Cosa avvia Gioca",
   "library.lutris.consent.env": "Variabili d’ambiente",
+  "library.lutris.consent.dll_overrides": "Override delle DLL di Wine, salvati nelle impostazioni del gioco",
   "library.lutris.consent.shell_resolved": "Come verrà eseguito:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Lo script richiede {requested}. Irori usa {build}, la versione più simile che hai.",

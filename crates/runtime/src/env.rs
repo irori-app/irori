@@ -131,6 +131,28 @@ pub fn add_dll_overrides(existing: Option<&str>, add: &[(&str, &str)]) -> String
     entries.join(";")
 }
 
+/// Add the game's own DLL overrides (`iroriDllOverrides`) to the
+/// `WINEDLLOVERRIDES` in `env`, under whatever letter case the user wrote
+/// the variable in. Each replaces what the variable said about its DLL;
+/// entries that can't be read are left out.
+pub fn apply_dll_overrides(env: &mut EnvMap, overrides: &[irori_core::DllOverride]) {
+    let pairs: Vec<(String, &'static str)> = overrides
+        .iter()
+        .filter_map(irori_core::DllOverride::wine_pair)
+        .collect();
+    if pairs.is_empty() {
+        return;
+    }
+    let key = env
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case("WINEDLLOVERRIDES"))
+        .cloned()
+        .unwrap_or_else(|| "WINEDLLOVERRIDES".to_string());
+    let add: Vec<(&str, &str)> = pairs.iter().map(|(d, m)| (d.as_str(), *m)).collect();
+    let value = add_dll_overrides(env.get(&key).map(String::as_str), &add);
+    env.insert(key, value);
+}
+
 /// `HEROIC_APP_SOURCE` value of a runner.
 pub fn app_source(runner: Runner) -> &'static str {
     match runner {
@@ -1161,5 +1183,38 @@ mod tests {
             add_dll_overrides(Some("DXGI.dll=b;;D3DCompiler_47=d"), &[("dxgi.dll", "n,b")]),
             "D3DCompiler_47=d;dxgi=n,b"
         );
+    }
+
+    #[test]
+    fn game_dll_overrides_join_the_users_variable() {
+        let overrides = [
+            irori_core::DllOverride::new("nvapi", "disabled").unwrap(),
+            irori_core::DllOverride::new("libglesv2", "builtin").unwrap(),
+            irori_core::DllOverride {
+                dll: "bad name".into(),
+                mode: "n".into(),
+            },
+        ];
+        // The user wrote the variable in their own case; it stays theirs.
+        let mut env = EnvMap::from([(
+            "WineDllOverrides".to_string(),
+            "nvapi=n;d3d11=n;winemenubuilder.exe=d".to_string(),
+        )]);
+        apply_dll_overrides(&mut env, &overrides);
+        assert_eq!(
+            env,
+            EnvMap::from([(
+                "WineDllOverrides".to_string(),
+                "d3d11=n;winemenubuilder.exe=d;nvapi=d;libglesv2=b".to_string()
+            )])
+        );
+
+        let mut env = EnvMap::new();
+        apply_dll_overrides(&mut env, &overrides);
+        assert_eq!(env["WINEDLLOVERRIDES"], "nvapi=d;libglesv2=b");
+
+        let mut env = EnvMap::new();
+        apply_dll_overrides(&mut env, &[]);
+        assert!(env.is_empty());
     }
 }

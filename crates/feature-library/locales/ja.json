@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "ホームフォルダーを隠す",
   "library.lutris.consent.game": "プレイで起動するもの",
   "library.lutris.consent.env": "環境変数",
+  "library.lutris.consent.dll_overrides": "Wine の DLL オーバーライド（ゲームの設定に保存）",
   "library.lutris.consent.shell_resolved": "実際に実行される内容:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "スクリプトは {requested} を要求しています。Irori は手元で最も近い {build} を使います。",

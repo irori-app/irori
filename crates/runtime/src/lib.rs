@@ -431,6 +431,7 @@ pub async fn prepare_launch(
         prefix::wine_env_for(app, &effective, &wc, &target.folder_id(), &host),
     );
     env::layer(&mut vars, env::game_debug_env(&effective, &host));
+    env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
     if wc.uses_umu
         && let Some(id) = hooks::hooks()
             .umu_id(target.id)

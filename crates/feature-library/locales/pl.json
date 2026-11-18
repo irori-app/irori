@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "Ukryj folder domowy",
   "library.lutris.consent.game": "Co uruchamia przycisk Graj",
   "library.lutris.consent.env": "Zmienne środowiskowe",
+  "library.lutris.consent.dll_overrides": "Nadpisania bibliotek DLL w Wine, zapisane w ustawieniach gry",
   "library.lutris.consent.shell_resolved": "W takiej postaci zostanie uruchomione:",
   "library.lutris.consent.wine": "Wine: {build}",
   "library.lutris.consent.wine_close": "Skrypt wymaga {requested}. Irori użyje {build}, najbliższej wersji, jaką masz.",

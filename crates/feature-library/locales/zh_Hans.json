@@ -656,6 +656,7 @@
   "library.lutris.consent.sandbox_home": "隐藏主文件夹",
   "library.lutris.consent.game": "“开始游戏”将启动的内容",
   "library.lutris.consent.env": "环境变量",
+  "library.lutris.consent.dll_overrides": "Wine DLL 覆盖（保存在游戏设置中）",
   "library.lutris.consent.shell_resolved": "实际运行内容：",
   "library.lutris.consent.wine": "Wine：{build}",
   "library.lutris.consent.wine_close": "脚本要求 {requested}。Irori 将使用你现有最接近的版本 {build}。",

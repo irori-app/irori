@@ -19,6 +19,9 @@ pub struct Script {
     pub system: Map<String, Value>,
     /// Runner sections such as `wine:` or `dosbox:`, by runner name.
     pub runner_sections: BTreeMap<String, Map<String, Value>>,
+    /// `wine: overrides:`: the game's Wine DLL overrides, kept in its
+    /// settings (`iroriDllOverrides`).
+    pub dll_overrides: Vec<irori_core::DllOverride>,
     /// Dependencies: every group is needed, any slug of a group will do.
     pub requires: Vec<Vec<String>>,
     /// Like `requires`, but the script adds to that game instead of

@@ -205,6 +205,8 @@ pub enum CustomKind {
     WineVersion,
     /// `KEY=VALUE` environment variable rows.
     EnvVars,
+    /// Wine DLL override rows: a DLL and its load mode.
+    DllOverrides,
     /// Wrapper command rows.
     Wrappers,
     /// GOG cloud-save locations.
@@ -2322,6 +2324,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
+    game(
+        "iroriDllOverrides",
+        "settings.field.dll_overrides.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Custom(CustomKind::DllOverrides),
+    )
+    .help("settings.field.dll_overrides.help")
+    .keywords(&[
+        "dll",
+        "overrides",
+        "winedlloverrides",
+        "native",
+        "builtin",
+        "disabled",
+        "lutris",
+    ]),
     game(
         "enableEsync",
         "settings.field.enable_esync.label",

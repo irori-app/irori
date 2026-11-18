@@ -80,6 +80,10 @@ script:
       type: REG_DWORD
   wine:
     version: wine-ge-8-26
+    overrides:
+      libglesv2: builtin
+      nvapi,nvapi64: disabled
+      powershell.exe:
   system:
     env:
       DXVK_HUD: fps
@@ -392,6 +396,15 @@ async fn runs_wine_setup_script() {
     assert_eq!(game.exe, Some(example.join("game.exe")));
     assert_eq!(game.prefix, Some(ctx.game_dir.clone()));
     assert_eq!(game.wine_version.as_deref(), Some("wine-ge-8-26"));
+    let overrides: Vec<_> = game
+        .dll_overrides
+        .iter()
+        .map(|o| format!("{}={}", o.dll, o.mode))
+        .collect();
+    assert_eq!(
+        overrides,
+        ["libglesv2=b", "nvapi=d", "nvapi64=d", "powershell.exe=d"]
+    );
     assert_eq!(out.record.slug, "example-game");
     assert_eq!(
         out.record.installer_slug.as_deref(),

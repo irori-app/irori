@@ -94,6 +94,8 @@ pub struct GameEntry {
     /// [`crate::match_wine_version`].
     pub wine_version: Option<String>,
     pub env: BTreeMap<String, String>,
+    /// The script's Wine DLL overrides (Wine scripts only).
+    pub dll_overrides: Vec<irori_core::DllOverride>,
     /// The rest of the game section, substituted.
     pub options: Map<String, Value>,
     /// The script's section for its runner.
