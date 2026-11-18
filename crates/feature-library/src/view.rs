@@ -4,6 +4,7 @@ mod bulk;
 mod panel;
 mod quick;
 pub(crate) mod remove;
+mod toolbar;
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -13,16 +14,15 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::AnimationExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariant, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
-use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement as _;
-use gpui_kit::component::slider::{Slider, SliderEvent, SliderState, SliderValue};
+use gpui_kit::component::slider::{SliderEvent, SliderState, SliderValue};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, Selectable as _, Sizable as _, StyledExt as _, ThemeStyled as _,
+    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, ThemeStyled as _,
     VirtualListScrollHandle, WindowExt as _, h_flex, v_flex, v_virtual_list,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -38,7 +38,6 @@ use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
-use irori_services::StoreFilter;
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
     ArtBackdrop, ArtImage, EmptyState, GameCover, SectionTitle, StoreBadge, art_image, art_img,
@@ -86,6 +85,8 @@ const SHORTCUT_TTL: Duration = Duration::from_secs(30);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Item {
     Top,
+    /// Room for the toolbar under the top row (see `toolbar.rs`).
+    Toolbar,
     Heading,
     /// The heading of `Frame::groups[ix]`.
     GroupHeading(usize),
@@ -109,6 +110,9 @@ struct FrameKey {
     metrics: GridMetrics,
     rem: Pixels,
     width: Pixels,
+    /// Height of the toolbar's room in the list, in whole pixels; zero
+    /// when the toolbar is in the header.
+    toolbar: u32,
 }
 
 /// Everything derived for the current frame. Rebuilt only when its inputs
@@ -129,6 +133,8 @@ struct Frame {
     items: Rc<Vec<Item>>,
     sizes: Rc<Vec<Size<Pixels>>>,
     key: Option<FrameKey>,
+    /// The toolbar sits in the list under the top row, not in the header.
+    toolbar_in_list: bool,
 }
 
 impl Default for Frame {
@@ -145,6 +151,7 @@ impl Default for Frame {
             items: Rc::default(),
             sizes: Rc::default(),
             key: None,
+            toolbar_in_list: false,
         }
     }
 }
@@ -197,6 +204,8 @@ pub struct LibraryView {
     selection: crate::selection::Selection,
     /// What the bulk bar offers for the picks, worked out once per change.
     bulk: bulk::BulkCache,
+    /// The toolbar held over the list, measured.
+    toolbar: toolbar::ListToolbar,
     /// The stores the library has games of, once per library revision.
     stores_with_games: filter::PerRevision<HashSet<Runner>>,
     launching: HashSet<GameId>,
@@ -331,6 +340,7 @@ impl LibraryView {
             focused_ix: None,
             panels: panel::Panels::new(ui.library_drawer_width),
             scroll_pending: false,
+            toolbar: Default::default(),
             hovered: None,
             menu_open: None,
             selection: crate::selection::Selection::default(),
@@ -610,6 +620,10 @@ impl LibraryView {
             LibraryLayout::Focus => grid::grid_metrics(available, layouts::FOCUS_TILE_REM),
             _ => grid::grid_metrics_at(available, self.tile_rem, self.density),
         };
+        // The top row isn't filtered, so the controls that filter sit under
+        // it; without one (or with nothing to show) they stay in the header.
+        let toolbar_in_list = top.is_some() && !games.is_empty();
+        let toolbar_height = self.toolbar_height(rem);
 
         let key = FrameKey {
             count: games.len(),
@@ -623,11 +637,19 @@ impl LibraryView {
             metrics,
             rem,
             width,
+            toolbar: if toolbar_in_list {
+                f32::from(toolbar_height).round() as u32
+            } else {
+                0
+            },
         };
         if self.frame.key.as_ref() != Some(&key) {
             let mut items = Vec::new();
             if top.is_some() {
                 items.push(Item::Top);
+                if toolbar_in_list {
+                    items.push(Item::Toolbar);
+                }
                 // Grouped lists head each section instead.
                 if groups.is_empty() {
                     items.push(Item::Heading);
@@ -655,7 +677,10 @@ impl LibraryView {
             let top_kind = top.as_ref().map(|(k, _)| *k);
             let sizes = items
                 .iter()
-                .map(|item| size(width, rem * item_rem(*item, top_kind, &metrics)))
+                .map(|item| match item {
+                    Item::Toolbar => size(width, toolbar_height),
+                    _ => size(width, rem * item_rem(*item, top_kind, &metrics)),
+                })
                 .collect();
             self.frame.items = Rc::new(items);
             self.frame.sizes = Rc::new(sizes);
@@ -669,6 +694,7 @@ impl LibraryView {
         self.frame.games = games;
         self.frame.groups = groups;
         self.frame.top = top;
+        self.frame.toolbar_in_list = toolbar_in_list;
         self.frame.stores = stores;
         self.frame.heading = if filter.has_categories() {
             filter.category_heading(&user).into()
@@ -1246,7 +1272,7 @@ impl LibraryView {
                     Some(Item::GroupHeading(_)) if upward => item - 1,
                     _ => item,
                 };
-                self.scroll.scroll_to_item(item, ScrollStrategy::Nearest);
+                self.reveal_item(item);
             }
             cx.notify();
         }
@@ -1447,6 +1473,7 @@ fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
             grid::HEADING_REM + grid::ROW_INSET_REM + art + caption + grid::GAP_REM
         }
         Item::Heading | Item::GroupHeading(_) => grid::HEADING_REM,
+        Item::Toolbar => toolbar::TOOLBAR_REM,
         Item::ListHeader => 2.25,
         Item::GridRow { .. } => metrics.row_rem,
         Item::ListRow(_) => metrics.list_row_rem,
@@ -1821,7 +1848,9 @@ impl LibraryView {
             .pb_3()
             .child(header)
             .children(self.render_steam_hint(cx))
-            .child(self.render_toolbar(&filter, cx))
+            .when(!self.frame.toolbar_in_list, |el| {
+                el.child(self.render_toolbar(&filter, cx))
+            })
     }
 
     /// A quiet suggestion, while it would help, to read the whole Steam
@@ -1877,262 +1906,6 @@ impl LibraryView {
                 )
                 .into_any_element(),
         )
-    }
-
-    fn render_toolbar(&mut self, filter: &ViewFilter, cx: &mut Context<Self>) -> impl IntoElement {
-        let stores = self.frame.stores.clone();
-        let current_store = match filter.store {
-            StoreFilter::Store(r) if stores.contains(&r) => Some(r),
-            _ => None,
-        };
-        let active = filter.active_count();
-        let model = self.filters.clone();
-        let sort = filter.sort;
-        let descending = filter.descending;
-        let searching = !filter.query.trim().is_empty();
-        let panel = self.filters_panel.clone();
-        let layout = self.layout;
-        let group = filter.group;
-
-        let store_switcher = (stores.len() > 1).then(|| {
-            let options: Vec<Option<Runner>> = std::iter::once(None)
-                .chain(stores.iter().copied().map(Some))
-                .collect();
-            let clicks = options.clone();
-            ButtonGroup::new("library-store")
-                .small()
-                .outline()
-                .children(options.iter().map(|store| {
-                    let (id, label): (&str, SharedString) = match store {
-                        Some(r) => (r.short_name(), r.short_name().into()),
-                        None => ("all", t("library.toolbar.all_stores")),
-                    };
-                    Button::new(SharedString::from(format!("store-{id}")))
-                        .label(label)
-                        .selected(*store == current_store)
-                }))
-                .on_click(cx.listener(move |this, clicked: &Vec<usize>, _, cx| {
-                    if let Some(&ix) = clicked.first() {
-                        let store = match clicks[ix] {
-                            Some(r) => StoreFilter::Store(r),
-                            None => StoreFilter::All,
-                        };
-                        this.update_filter(
-                            |f| {
-                                if f.store != store {
-                                    f.account = None;
-                                }
-                                f.store = store;
-                            },
-                            cx,
-                        );
-                    }
-                }))
-        });
-
-        // The shown store's accounts, when it has several.
-        let account_switcher =
-            filter.shown_store(&stores).and_then(|runner| {
-                let accounts: Vec<(String, String)> = models(cx)
-                    .accounts
-                    .read(cx)
-                    .accounts(runner)
-                    .iter()
-                    .filter(|a| a.signed_in)
-                    .map(|a| (a.account_id.clone(), a.display_name.clone()))
-                    .collect();
-                if accounts.len() < 2 {
-                    return None;
-                }
-                let current = filter
-                    .account
-                    .as_ref()
-                    .filter(|a| a.runner == runner)
-                    .map(|a| a.account_id.clone());
-                let options: Vec<Option<String>> = std::iter::once(None)
-                    .chain(accounts.iter().map(|(id, _)| Some(id.clone())))
-                    .collect();
-                let clicks = options.clone();
-                Some(
-                    ButtonGroup::new("library-account")
-                        .small()
-                        .outline()
-                        .children(options.iter().enumerate().map(|(ix, option)| {
-                            let label: SharedString = match option {
-                                Some(id) => accounts
-                                    .iter()
-                                    .find(|(a, _)| a == id)
-                                    .map(|(_, name)| name.clone())
-                                    .unwrap_or_default()
-                                    .into(),
-                                None => t("library.toolbar.all_accounts"),
-                            };
-                            Button::new(SharedString::from(format!("account-{ix}")))
-                                .label(label)
-                                .selected(*option == current)
-                        }))
-                        .on_click(cx.listener(move |this, clicked: &Vec<usize>, _, cx| {
-                            if let Some(&ix) = clicked.first() {
-                                let account = clicks[ix].clone().map(|account_id| {
-                                    crate::filter::AccountFilter { runner, account_id }
-                                });
-                                this.update_filter(|f| f.account = account, cx);
-                            }
-                        })),
-                )
-            });
-
-        let order = crate::i18n::sort_label(sort);
-        let sort_label = if searching {
-            t("library.toolbar.sort_best_match")
-        } else if descending {
-            t_args("library.toolbar.sort_reversed", &[("order", &order)])
-        } else {
-            t_args("library.toolbar.sort", &[("order", &order)])
-        };
-
-        h_flex()
-            .w_full()
-            .gap_2()
-            .flex_wrap()
-            .child(
-                div()
-                    .id("library-search")
-                    .w(rems(18.))
-                    .capture_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
-                        if e.keystroke.key == "escape" {
-                            this.escape_search(window, cx);
-                            cx.stop_propagation();
-                        }
-                    }))
-                    .child(
-                        Input::new(&self.search)
-                            .small()
-                            .prefix(Icon::new(IconName::Search).small())
-                            .cleanable(true),
-                    ),
-            )
-            .children(store_switcher)
-            .children(account_switcher)
-            .child(
-                Popover::new("library-filters-popover")
-                    .trigger(
-                        Button::new("library-filters")
-                            .small()
-                            .outline()
-                            .icon(IconName::ListFilter)
-                            .label(if active > 0 {
-                                t_args(
-                                    "library.toolbar.filters_active",
-                                    &[("count", &active.to_string())],
-                                )
-                            } else {
-                                t("library.toolbar.filters")
-                            }),
-                    )
-                    .content(move |_, _, _| panel.clone()),
-            )
-            .child(crate::dialogs::views::views_button(filter, cx))
-            .child(
-                Button::new("library-sort")
-                    .small()
-                    .outline()
-                    .icon(IconName::ArrowDownUp)
-                    .label(sort_label)
-                    .dropdown_caret(true)
-                    .dropdown_menu(move |menu, _, _| {
-                        quick::sort_menu(menu, &model, sort, descending)
-                    }),
-            )
-            .child(div().flex_1())
-            .when(layout == LibraryLayout::Grid, |this| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Icon::new(IconName::Image)
-                                .small()
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                        .child(
-                            Slider::new(&self.tile_slider)
-                                .accessibility_label(t("library.toolbar.tile_size"))
-                                .w(rems(7.)),
-                        ),
-                )
-            })
-            .child(
-                Button::new("library-random")
-                    .small()
-                    .outline()
-                    .icon(IconName::Dices)
-                    .tooltip(t("library.random.tooltip"))
-                    .on_click(|_, window, cx| crate::random::open_random_game(window, cx)),
-            )
-            .child(
-                Button::new("library-group")
-                    .small()
-                    .outline()
-                    .icon(IconName::Rows3)
-                    .selected(group != Grouping::None)
-                    .tooltip(t("library.toolbar.group_by"))
-                    .dropdown_menu({
-                        let model = self.filters.clone();
-                        move |menu, _, _| {
-                            let options = [
-                                (Grouping::None, "library.toolbar.group.none"),
-                                (Grouping::Status, "library.toolbar.group.status"),
-                                (Grouping::Mode, "library.toolbar.group.mode"),
-                                (Grouping::Genre, "library.toolbar.group.genre"),
-                                (Grouping::Category, "library.toolbar.group.category"),
-                            ];
-                            options.into_iter().fold(menu, |menu, (option, key)| {
-                                let model = model.clone();
-                                menu.item(
-                                    PopupMenuItem::new(t(key))
-                                        .checked(option == group)
-                                        .on_click(move |_, _, cx| {
-                                            model.update(cx, |m, cx| {
-                                                m.update(|f| f.group = option, cx)
-                                            })
-                                        }),
-                                )
-                            })
-                        }
-                    }),
-            )
-            .child(
-                Button::new("library-select")
-                    .small()
-                    .outline()
-                    .icon(IconName::ListChecks)
-                    .label(if self.selection.is_active() {
-                        t("library.bulk.done")
-                    } else {
-                        t("library.toolbar.select")
-                    })
-                    .selected(self.selection.is_active())
-                    .tooltip(t("library.toolbar.select_tooltip"))
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_selection_mode(cx))),
-            )
-            .child(
-                ButtonGroup::new("library-layout")
-                    .small()
-                    .outline()
-                    .children(layouts::LAYOUTS.into_iter().map(|l| {
-                        let (id, icon, label) = layout_button(l);
-                        Button::new(id)
-                            .icon(icon)
-                            .label(label.clone())
-                            .tooltip(label)
-                            .selected(layout == l)
-                    }))
-                    .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
-                        if let Some(l) = clicked.first().and_then(|ix| layouts::LAYOUTS.get(*ix)) {
-                            this.on_show_layout(*l, window, cx);
-                        }
-                    })),
-            )
     }
 
     fn render_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -2282,6 +2055,10 @@ impl LibraryView {
         .size_full();
 
         let layout = self.layout;
+        let list_toolbar = self.frame.toolbar_in_list.then(|| {
+            let filter = self.filters.read(cx).filter().clone();
+            self.render_list_toolbar(&filter, window, cx)
+        });
         let content = div()
             .image_cache(self.images.clone())
             .id("library-content")
@@ -2328,7 +2105,8 @@ impl LibraryView {
                 _ => el.flex_1().min_w_0(),
             })
             .child(list)
-            .vertical_scrollbar(&self.scroll);
+            .vertical_scrollbar(&self.scroll)
+            .children(list_toolbar);
         let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
             .then(|| self.render_drawer(window, cx));
         let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));
@@ -2367,6 +2145,8 @@ impl LibraryView {
                     .child(SectionTitle::new(self.frame.heading.clone()))
                     .into_any_element(),
                 Item::GroupHeading(ix) => self.render_group_heading(ix, cx),
+                // The toolbar is drawn over this room (`render_list_toolbar`).
+                Item::Toolbar => div().into_any_element(),
                 Item::ListHeader => self.render_list_header(cx),
                 Item::GridRow { start, end } => self.render_grid_row(start..end, window, cx),
                 Item::ListRow(ix) => self.render_list_row(ix, window, cx),

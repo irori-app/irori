@@ -555,7 +555,7 @@
   "library.time.years_one": "Rok temu",
   "library.time.years_other": "{count} r. temu",
   "library.time.yesterday": "Wczoraj",
-  "library.toolbar.all_stores": "Wszystkie",
+  "library.toolbar.all_stores": "Wszystkie sklepy",
   "library.toolbar.all_accounts": "Wszystkie konta",
   "library.toolbar.filters": "Filtry",
   "library.toolbar.filters_active": "Filtry · {count}",

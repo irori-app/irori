@@ -555,7 +555,7 @@
   "library.time.years_one": "Рік тому",
   "library.time.years_other": "{count} р. тому",
   "library.time.yesterday": "Учора",
-  "library.toolbar.all_stores": "Усі",
+  "library.toolbar.all_stores": "Усі магазини",
   "library.toolbar.all_accounts": "Усі облікові записи",
   "library.toolbar.filters": "Фільтри",
   "library.toolbar.filters_active": "Фільтри · {count}",

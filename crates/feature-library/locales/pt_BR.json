@@ -555,7 +555,7 @@
   "library.time.years_one": "Há 1 ano",
   "library.time.years_other": "Há {count} anos",
   "library.time.yesterday": "Ontem",
-  "library.toolbar.all_stores": "Todas",
+  "library.toolbar.all_stores": "Todas as lojas",
   "library.toolbar.all_accounts": "Todas as contas",
   "library.toolbar.filters": "Filtros",
   "library.toolbar.filters_active": "Filtros · {count}",

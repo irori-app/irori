@@ -555,7 +555,7 @@
   "library.time.years_one": "För 1 år sedan",
   "library.time.years_other": "För {count} år sedan",
   "library.time.yesterday": "I går",
-  "library.toolbar.all_stores": "Alla",
+  "library.toolbar.all_stores": "Alla butiker",
   "library.toolbar.all_accounts": "Alla konton",
   "library.toolbar.filters": "Filter",
   "library.toolbar.filters_active": "Filter · {count}",
