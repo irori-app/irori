@@ -880,6 +880,50 @@ impl Backend {
         }
     }
 
+    /// The game's Nexus Mods name (`skyrimspecialedition`): the user's
+    /// choice, else the one its Nexus mods came from, else its title in
+    /// lower case without spaces, which is how Nexus names most games.
+    pub async fn mod_nexus_domain(&self, id: &GameId) -> Result<String> {
+        let (game, _) = self.mod_game(id)?;
+        let lib = ModLibrary::for_game(id);
+        let list = self.spawn_blocking(move || lib.load()).await??;
+        Ok(nexus_domain_of(&list, &game.title))
+    }
+
+    pub async fn set_mod_nexus_domain(&self, id: &GameId, domain: String) -> Result<()> {
+        let domain = domain.trim().to_ascii_lowercase();
+        if !nexus::is_domain(&domain) {
+            bail!("“{domain}” is not a Nexus Mods game");
+        }
+        let (game, _) = self.mod_game(id)?;
+        self.edit_mods(id, |list| {
+            let guess = {
+                let mut plain = list.clone();
+                plain.nexus_domain = None;
+                nexus_domain_of(&plain, &game.title)
+            };
+            let wanted = (domain != guess).then_some(domain);
+            let changed = list.nexus_domain != wanted;
+            list.nexus_domain = wanted;
+            changed
+        })
+        .await
+    }
+
+    /// A page of the Nexus Mods game `domain`'s mods whose name holds
+    /// `query`, asked with the saved key.
+    pub async fn search_nexus(
+        &self,
+        domain: &str,
+        query: &str,
+        offset: u32,
+    ) -> Result<nexus::SearchPage> {
+        self.nexus_client()
+            .await?
+            .search(domain, query, offset)
+            .await
+    }
+
     pub async fn nexus_mod(
         &self,
         domain: &str,
@@ -1348,6 +1392,24 @@ fn new_entry(name: String, version: Option<String>, source: ModSource) -> ModEnt
     }
 }
 
+/// [`Backend::mod_nexus_domain`] for a mod list and title.
+fn nexus_domain_of(list: &ModList, title: &str) -> String {
+    if let Some(d) = list.nexus_domain.as_ref().filter(|d| nexus::is_domain(d)) {
+        return d.clone();
+    }
+    let from_mods = list.mods.iter().rev().find_map(|m| match &m.source {
+        ModSource::Nexus { domain, .. } => Some(domain.clone()),
+        _ => None,
+    });
+    from_mods.unwrap_or_else(|| {
+        title
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    })
+}
+
 /// What [`irori_mods::bethesda::apply`] wrote for this game.
 fn plugin_record(lib: &ModLibrary) -> PathBuf {
     lib.root().join("bethesda.json")
@@ -1452,6 +1514,32 @@ mod tests {
             Some("skse64_loader.EXE")
         );
         assert_eq!(find_loader(tmp.path(), &[], "f4se_loader.exe"), None);
+    }
+
+    #[test]
+    fn nexus_domains_come_from_choice_mods_or_title() {
+        let mut list = ModList::default();
+        assert_eq!(nexus_domain_of(&list, "Stardew Valley"), "stardewvalley");
+        list.mods.push(ModEntry {
+            source: ModSource::Nexus {
+                domain: "skyrimspecialedition".into(),
+                mod_id: 1,
+                file_id: 2,
+            },
+            ..new_entry(
+                "SkyUI".into(),
+                None,
+                ModSource::Archive {
+                    file_name: String::new(),
+                },
+            )
+        });
+        assert_eq!(
+            nexus_domain_of(&list, "The Elder Scrolls V: Skyrim Special Edition"),
+            "skyrimspecialedition"
+        );
+        list.nexus_domain = Some("skyrim".into());
+        assert_eq!(nexus_domain_of(&list, "x"), "skyrim");
     }
 
     #[test]

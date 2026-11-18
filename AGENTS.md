@@ -1611,7 +1611,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   a day) names each community's Steam/Epic ids, programs, loader and install
   rules; only BepInEx and MelonLoader communities install. Nexus Mods uses the
   user's personal API key (through `irori_secrets`, never logged); free accounts
-  install through `nxm://` links, which carry a one-time key. Thunderstore's
+  install through `nxm://` links, which carry a one-time key. The Nexus dialog
+  searches the game's mods by name through Nexus' documented GraphQL API v2
+  (`nexus::Client::search`, `/v2/graphql`, the text only as a variable, adult mods
+  left out) for the game's Nexus name (`Backend::mod_nexus_domain`: the user's,
+  else its Nexus mods', else its folded title; kept in `mods.json` once a search
+  finds something); a result lists its files, which Premium installs and free
+  accounts open on the site for the `nxm://` button. Thunderstore's
   `ror2mm://` links (`thunderstore::ModManagerLink`) name only a package; the
   link dialog (`irori_game::open_thunderstore_link_dialog`) preselects the game
   whose community lists it (`community_listings`).

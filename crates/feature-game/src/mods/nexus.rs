@@ -15,7 +15,7 @@ use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement, Render, Styled, Subscription, Window, div, rems,
 };
-use irori_mods::nexus::{self, ModFile, ModInfo, NexusUser, NxmLink};
+use irori_mods::nexus::{self, ModFile, ModInfo, NexusUser, NxmLink, SearchPage};
 use irori_services::ModProgress;
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
@@ -41,6 +41,11 @@ struct NexusDialog {
     user: Load<Option<NexusUser>>,
     key: Entity<InputState>,
     link: Entity<InputState>,
+    /// The game's Nexus Mods name, editable.
+    domain: Entity<InputState>,
+    query: Entity<InputState>,
+    /// The last search and the offset of its page.
+    results: Load<(SearchPage, u32)>,
     saving: bool,
     /// The mod whose files are listed.
     found: Load<(String, u64, ModInfo, Vec<ModFile>)>,
@@ -58,6 +63,10 @@ impl NexusDialog {
         let link = cx.new(|cx| {
             InputState::new(window, cx).placeholder("https://www.nexusmods.com/…/mods/…")
         });
+        let domain = cx.new(|cx| InputState::new(window, cx).placeholder("skyrimspecialedition"));
+        let query = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t("game.mods.nexus_search_placeholder"))
+        });
         let subscriptions = vec![
             cx.subscribe_in(&key, window, |this: &mut Self, _, e, window, cx| {
                 if let InputEvent::PressEnter { .. } = e {
@@ -69,17 +78,42 @@ impl NexusDialog {
                     this.find(window, cx)
                 }
             }),
+            cx.subscribe_in(&query, window, |this: &mut Self, _, e, window, cx| {
+                if let InputEvent::PressEnter { .. } = e {
+                    this.search(0, window, cx)
+                }
+            }),
+            cx.subscribe_in(&domain, window, |this: &mut Self, _, e, window, cx| {
+                if let InputEvent::PressEnter { .. } = e {
+                    this.search(0, window, cx)
+                }
+            }),
         ];
+        let game = panel.read(cx).id().clone();
         let this = Self {
             panel,
             user: Load::Loading,
             key,
             link,
+            domain,
+            query,
+            results: Load::Idle,
             saving: false,
             found: Load::Idle,
             handler_set: false,
             _subscriptions: subscriptions,
         };
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.mod_nexus_domain(&game).await });
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(domain) = task.await {
+                let _ = this.update_in(cx, |this, window, cx| {
+                    this.domain
+                        .update(cx, |d, cx| d.set_value(domain, window, cx));
+                });
+            }
+        })
+        .detach();
         let b = backend(cx);
         let task = irori_ui::state::run_infallible(cx, async move { b.nexus_user().await });
         cx.spawn_in(window, async move |this, cx| {
@@ -155,6 +189,204 @@ impl NexusDialog {
             });
         })
         .detach();
+    }
+
+    /// Search the game's mods on Nexus Mods, the page from `offset`, and
+    /// remember the game's Nexus name once it finds something.
+    fn search(&mut self, offset: u32, window: &mut Window, cx: &mut Context<Self>) {
+        let domain = self.domain.read(cx).value().trim().to_ascii_lowercase();
+        let query = self.query.read(cx).value().to_string();
+        if !nexus::is_domain(&domain) {
+            self.results = Load::Failed(t("game.mods.nexus_bad_game"));
+            cx.notify();
+            return;
+        }
+        self.results = Load::Loading;
+        cx.notify();
+        let b = backend(cx);
+        let id = self.panel.read(cx).id().clone();
+        let task = irori_ui::run(cx, async move {
+            let page = b.search_nexus(&domain, &query, offset).await?;
+            if !page.mods.is_empty() {
+                // Remembering is a convenience; the search itself worked.
+                let _ = b.set_mod_nexus_domain(&id, domain).await;
+            }
+            Ok((page, offset))
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.results = Load::from_result(result);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// List the files of a mod the search found.
+    fn open_mod(
+        &mut self,
+        domain: String,
+        mod_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.found = Load::Loading;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            let (info, files) = b.nexus_mod(&domain, mod_id).await?;
+            Ok((domain, mod_id, info, files))
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.found = Load::from_result(result);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn render_search(&self, cx: &mut Context<Self>) -> AnyElement {
+        let domain = self.domain.read(cx).value().trim().to_ascii_lowercase();
+        let theme = cx.theme();
+        let searching = matches!(self.results, Load::Loading);
+        let mut col = v_flex()
+            .gap_2()
+            .child(div().text_sm().child(t("game.mods.nexus_search_label")))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .w(rems(10.))
+                            .flex_shrink_0()
+                            .child(Input::new(&self.domain)),
+                    )
+                    .child(div().flex_1().min_w_0().child(Input::new(&self.query)))
+                    .child(
+                        Button::new("nexus-search")
+                            .outline()
+                            .small()
+                            .icon(IconName::Search)
+                            .label(t("game.mods.nexus_search"))
+                            .loading(searching)
+                            .disabled(searching)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.search(0, window, cx)),
+                            ),
+                    ),
+            );
+        match &self.results {
+            Load::Idle | Load::Loading => {}
+            Load::Failed(e) => {
+                col = col.child(div().text_sm().text_color(theme.danger).child(e.clone()));
+            }
+            Load::Ready((page, _)) if page.mods.is_empty() => {
+                col = col.child(
+                    div()
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(t("game.mods.nexus_no_results")),
+                );
+            }
+            Load::Ready((page, offset)) => {
+                let mut rows = v_flex().gap_1();
+                for (ix, m) in page.mods.iter().enumerate() {
+                    let (domain, mod_id) = (domain.clone(), m.mod_id);
+                    rows = rows.child(
+                        h_flex()
+                            .gap_2()
+                            .px_2()
+                            .py_1()
+                            .rounded(theme.radius)
+                            .border_1()
+                            .border_color(theme.border)
+                            .items_center()
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(div().truncate().text_sm().child(m.name.clone()))
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(t_args(
+                                                "game.mods.nexus_result_meta",
+                                                &[
+                                                    ("author", &m.author),
+                                                    ("downloads", &m.downloads.to_string()),
+                                                    ("endorsements", &m.endorsements.to_string()),
+                                                ],
+                                            )),
+                                    ),
+                            )
+                            .child(
+                                Button::new(("nexus-result", ix))
+                                    .small()
+                                    .ghost()
+                                    .label(t("game.mods.nexus_files"))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.open_mod(domain.clone(), mod_id, window, cx)
+                                    })),
+                            ),
+                    );
+                }
+                let offset = *offset;
+                let more = u64::from(offset) + u64::from(nexus::SEARCH_PAGE) < page.total;
+                col = col
+                    .child(
+                        div()
+                            .id("nexus-results")
+                            .max_h(rems(16.))
+                            .overflow_y_scrollbar()
+                            .child(rows),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(t_args(
+                                        "game.mods.nexus_results_count",
+                                        &[("count", &page.total.to_string())],
+                                    )),
+                            )
+                            .child(
+                                Button::new("nexus-prev")
+                                    .xsmall()
+                                    .ghost()
+                                    .icon(IconName::ChevronLeft)
+                                    .tooltip(t("game.mods.nexus_previous"))
+                                    .disabled(offset == 0)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        let to = offset.saturating_sub(nexus::SEARCH_PAGE);
+                                        this.search(to, window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("nexus-next")
+                                    .xsmall()
+                                    .ghost()
+                                    .icon(IconName::ChevronRight)
+                                    .tooltip(t("game.mods.nexus_next"))
+                                    .disabled(!more)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.search(offset + nexus::SEARCH_PAGE, window, cx)
+                                    })),
+                            ),
+                    );
+            }
+        }
+        col.into_any_element()
     }
 
     fn find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -373,6 +605,7 @@ impl NexusDialog {
 impl Render for NexusDialog {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let files = self.render_files(cx);
+        let search = self.render_search(cx);
         let theme = cx.theme();
         let user = match &self.user {
             Load::Ready(u) => u.clone(),
@@ -417,6 +650,7 @@ impl Render for NexusDialog {
                             ),
                     ),
             )
+            .child(search)
             .child(
                 v_flex()
                     .gap_2()

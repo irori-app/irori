@@ -1050,6 +1050,40 @@ fn nexus_links_parse_and_hide_their_key() {
 }
 
 #[tokio::test]
+async fn nexus_search_asks_graphql_with_the_text_as_a_variable() {
+    let server = TestServer::start(|req| {
+        if req.method != "POST" || req.path != "/v2/graphql" || req.header("apikey") != Some("k3y")
+        {
+            return Resp::status(404);
+        }
+        let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+        let vars = &body["variables"];
+        assert_eq!(vars["filter"]["gameDomainName"][0]["value"], "skyrim");
+        assert_eq!(vars["filter"]["nameStemmed"][0]["value"], "sky ui");
+        assert!(!body["query"].as_str().unwrap().contains("sky ui"));
+        Resp::json(json!({ "data": { "mods": { "totalCount": 2, "nodes": [
+            { "modId": 3863, "name": "SkyUI", "summary": "s", "author": "a", "version": "5.2",
+              "downloads": 10, "endorsements": "7", "thumbnailUrl": "https://img/x.png", "adultContent": false },
+            { "modId": 9, "name": "Adult", "adultContent": true },
+            { "name": "No id" }
+        ] } } }))
+    });
+    let client = nexus::Client::with_base(&server.base(), nexus::ApiKey("k3y".into()));
+    let page = client.search("skyrim", " sky* ui? ", 0).await.unwrap();
+    assert_eq!(page.total, 2);
+    assert_eq!(page.mods.len(), 1);
+    assert_eq!(page.mods[0].mod_id, 3863);
+    assert_eq!(page.mods[0].endorsements, 7);
+    assert_eq!(page.mods[0].thumbnail.as_deref(), Some("https://img/x.png"));
+    assert!(client.search("../x", "a", 0).await.is_err());
+    let empty = nexus::search_request("skyrim", "  ", 20);
+    assert!(empty["variables"]["filter"].get("nameStemmed").is_none());
+    assert_eq!(empty["variables"]["offset"], 20);
+    let failed = nexus::parse_search(&json!({ "errors": [{ "message": "bad" }] }));
+    assert!(format!("{:#}", failed.unwrap_err()).contains("bad"));
+}
+
+#[tokio::test]
 async fn nexus_client_sends_the_key_and_explains_refusals() {
     let server = TestServer::start(|req| {
         if req.header("apikey") != Some("k3y") {
