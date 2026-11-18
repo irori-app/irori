@@ -762,43 +762,6 @@ impl ReshadePanel {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn manifest(enabled: bool) -> Manifest {
-        serde_json::from_value(serde_json::json!({
-            "version": "6.8.0", "exe": "/g/Game.exe", "machine": "x64", "api": "dxgi",
-            "dll": "dxgi.dll", "dir": "/g", "enabled": enabled, "complete": true,
-            "overrides": ["dxgi", "d3dcompiler_47"], "files": []
-        }))
-        .unwrap()
-    }
-
-    #[test]
-    fn steams_line_follows_reshade() {
-        let on = manifest(true);
-        let line = wanted_line(Some("-novid"), Some(&on), &[])
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            line,
-            "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command% -novid"
-        );
-        assert_eq!(wanted_line(Some(&line), Some(&on), &[]), None);
-        // Turned off: the overrides leave, the rest of the line stays.
-        assert_eq!(
-            wanted_line(Some(&line), Some(&manifest(false)), &[]),
-            Some(Some("-novid".to_string()))
-        );
-        // Removed: the remembered DLLs leave; an empty line clears it.
-        let removed = vec!["dxgi".to_string(), "d3dcompiler_47".to_string()];
-        let only = "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command%";
-        assert_eq!(wanted_line(Some(only), None, &removed), Some(None));
-        assert_eq!(wanted_line(None, None, &[]), None);
-    }
-}
-
 impl Render for ReshadePanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.applies(cx) {
@@ -845,5 +808,42 @@ impl Render for ReshadePanel {
             .pt_2()
             .child(group_panel(cx).child(body).children(steam_line))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(enabled: bool) -> Manifest {
+        serde_json::from_value(serde_json::json!({
+            "version": "6.8.0", "exe": "/g/Game.exe", "machine": "x64", "api": "dxgi",
+            "dll": "dxgi.dll", "dir": "/g", "enabled": enabled, "complete": true,
+            "overrides": ["dxgi", "d3dcompiler_47"], "files": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn steams_line_follows_reshade() {
+        let on = manifest(true);
+        let line = wanted_line(Some("-novid"), Some(&on), &[])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            line,
+            "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command% -novid"
+        );
+        assert_eq!(wanted_line(Some(&line), Some(&on), &[]), None);
+        // Turned off: the overrides leave, the rest of the line stays.
+        assert_eq!(
+            wanted_line(Some(&line), Some(&manifest(false)), &[]),
+            Some(Some("-novid".to_string()))
+        );
+        // Removed: the remembered DLLs leave; an empty line clears it.
+        let removed = vec!["dxgi".to_string(), "d3dcompiler_47".to_string()];
+        let only = "WINEDLLOVERRIDES='dxgi=n,b;d3dcompiler_47=n,b' %command%";
+        assert_eq!(wanted_line(Some(only), None, &removed), Some(None));
+        assert_eq!(wanted_line(None, None, &[]), None);
     }
 }
