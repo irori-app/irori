@@ -13,6 +13,7 @@
 //! listed and stopped on the host (`irori_core::host`) instead.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use irori_core::GameWatch;
 use irori_core::host::{self, HostProcess};
@@ -28,6 +29,10 @@ pub(crate) struct SteamGameWatch {
     manifest: PathBuf,
     /// The game's processes found by the last check.
     pids: Mutex<Vec<Pid>>,
+    /// Whether any process belonging to the session has been observed yet.
+    seen_any: AtomicBool,
+    /// Whether an executable inside [`Self::install_path`] itself has started.
+    seen_direct: AtomicBool,
     /// Whether the game's processes are the host's, Irori being a Flatpak.
     on_host: bool,
 }
@@ -39,6 +44,8 @@ impl SteamGameWatch {
             install_path,
             manifest,
             pids: Mutex::new(Vec::new()),
+            seen_any: AtomicBool::new(false),
+            seen_direct: AtomicBool::new(false),
             on_host: cfg!(target_os = "linux") && host::is_flatpak(),
         }
     }
@@ -62,65 +69,129 @@ impl SteamGameWatch {
             )
     }
 
-    /// The game's processes now: the remembered ones when any of them still
-    /// is the game's, else whatever a full scan finds.
-    fn find(&self) -> Vec<Pid> {
-        if self.on_host {
-            return self.find_on_host();
+    fn is_direct_process(&self, exe: Option<&std::path::Path>, cmd: &[String]) -> bool {
+        is_direct_install_program(&self.install_path, exe, cmd)
+    }
+
+    fn is_direct_host_process(&self, process: &HostProcess) -> bool {
+        is_direct_install_program(&self.install_path, None, &process.args())
+            || command_line_starts_with_install_dir(&self.install_path, &process.command_line)
+    }
+
+    /// Scan processes for the session. When `allow_direct_narrowing` is true
+    /// and a process running directly from [`Self::install_path`] has already
+    /// appeared, subsequent polls only track direct game executables so
+    /// `reaper`/`wineserver` teardown does not delay exit detection.
+    fn find(&self, allow_direct_narrowing: bool) -> Vec<Pid> {
+        let found = if self.on_host {
+            self.find_on_host(allow_direct_narrowing)
+        } else {
+            self.find_local(allow_direct_narrowing)
+        };
+        if allow_direct_narrowing && !found.is_empty() {
+            self.seen_any.store(true, Ordering::Relaxed);
         }
-        let known = self.pids.lock().clone();
+        found
+    }
+
+    fn select_pids<T>(
+        &self,
+        allow_direct_narrowing: bool,
+        known: &[u32],
+        scan: impl Fn(Option<&[u32]>) -> T,
+        pick: impl Fn(&T, bool) -> Vec<Pid>,
+    ) -> Vec<Pid> {
+        let direct_only = allow_direct_narrowing && self.seen_direct.load(Ordering::Relaxed);
+        if allow_direct_narrowing && direct_only && !known.is_empty() {
+            let alive = pick(&scan(Some(known)), true);
+            if !alive.is_empty() {
+                *self.pids.lock() = alive.clone();
+                return alive;
+            }
+        }
+        let all = scan(None);
+        if !allow_direct_narrowing {
+            return pick(&all, false);
+        }
+        if direct_only {
+            let found = pick(&all, true);
+            *self.pids.lock() = found.clone();
+            return found;
+        }
+        let direct = pick(&all, true);
+        if !direct.is_empty() {
+            self.seen_direct.store(true, Ordering::Relaxed);
+            *self.pids.lock() = direct.clone();
+            return direct;
+        }
+        let found = pick(&all, false);
+        *self.pids.lock() = found.clone();
+        found
+    }
+
+    fn find_local(&self, allow_direct_narrowing: bool) -> Vec<Pid> {
+        let known: Vec<u32> = self.pids.lock().iter().map(|p| p.as_u32()).collect();
         let refresh = ProcessRefreshKind::nothing()
             .with_cmd(UpdateKind::Always)
             .with_exe(UpdateKind::Always);
-        let mut sys = System::new();
-        if !known.is_empty() {
-            sys.refresh_processes_specifics(ProcessesToUpdate::Some(&known), true, refresh);
-            // A PID can be reused by an unrelated process, so each one is
-            // checked again rather than only for existence.
-            let alive = self.matching(&sys);
-            if !alive.is_empty() {
-                *self.pids.lock() = alive.clone();
-                return alive;
-            }
-        }
-        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-        let found = self.matching(&sys);
-        *self.pids.lock() = found.clone();
-        found
+        self.select_pids(
+            allow_direct_narrowing,
+            &known,
+            |subset| {
+                let mut sys = System::new();
+                match subset {
+                    Some(ids) => {
+                        let pids: Vec<Pid> = ids.iter().map(|&id| Pid::from_u32(id)).collect();
+                        sys.refresh_processes_specifics(
+                            ProcessesToUpdate::Some(&pids),
+                            true,
+                            refresh,
+                        );
+                    }
+                    None => {
+                        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
+                    }
+                }
+                sys
+            },
+            |sys, direct| self.matching(sys, direct),
+        )
     }
 
-    /// [`Self::find`] among the host's processes. Runs on a blocking
+    /// [`Self::find_local`] among the host's processes. Runs on a blocking
     /// thread of the backend's runtime, as every check of a watch does.
-    fn find_on_host(&self) -> Vec<Pid> {
+    fn find_on_host(&self, allow_direct_narrowing: bool) -> Vec<Pid> {
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return Vec::new();
         };
-        let list = |pids: Option<Vec<u32>>| match runtime.block_on(host::processes(pids.as_deref()))
-        {
-            Ok(processes) => processes
-                .iter()
-                .filter(|p| self.is_game_host_process(p))
-                .map(|p| Pid::from_u32(p.pid))
-                .collect(),
-            Err(e) => {
-                tracing::warn!("listing the host's processes: {e:#}");
-                Vec::new()
-            }
-        };
         let known: Vec<u32> = self.pids.lock().iter().map(|p| p.as_u32()).collect();
-        if !known.is_empty() {
-            let alive = list(Some(known));
-            if !alive.is_empty() {
-                *self.pids.lock() = alive.clone();
-                return alive;
-            }
-        }
-        let found = list(None);
-        *self.pids.lock() = found.clone();
-        found
+        self.select_pids(
+            allow_direct_narrowing,
+            &known,
+            |subset| match runtime.block_on(host::processes(subset)) {
+                Ok(processes) => processes,
+                Err(e) => {
+                    tracing::warn!("listing the host's processes: {e:#}");
+                    Vec::new()
+                }
+            },
+            |processes, direct| {
+                processes
+                    .iter()
+                    .filter(|p| {
+                        if direct {
+                            self.is_direct_host_process(p)
+                        } else {
+                            self.is_game_host_process(p)
+                        }
+                    })
+                    .map(|p| Pid::from_u32(p.pid))
+                    .collect()
+            },
+        )
     }
 
-    fn matching(&self, sys: &System) -> Vec<Pid> {
+    fn matching(&self, sys: &System, direct_only: bool) -> Vec<Pid> {
         sys.processes()
             .iter()
             .filter(|(_, p)| {
@@ -129,7 +200,11 @@ impl SteamGameWatch {
                     .iter()
                     .map(|a| a.to_string_lossy().into_owned())
                     .collect();
-                self.is_game_process(p.exe(), &cmd)
+                if direct_only {
+                    self.is_direct_process(p.exe(), &cmd)
+                } else {
+                    self.is_game_process(p.exe(), &cmd)
+                }
             })
             .map(|(pid, _)| *pid)
             .collect()
@@ -138,18 +213,22 @@ impl SteamGameWatch {
 
 impl GameWatch for SteamGameWatch {
     fn running(&self) -> bool {
-        // Cheap first: a launch-time update or validation shows in the
-        // manifest before any game process exists. Flatpak Steam never sets
-        // these flags, which the process checks cover.
-        let preparing = scan::manifest_flags(&self.manifest)
-            .is_some_and(|flags| flags & state::LAUNCHING_OR_RUNNING != 0);
-        preparing || !self.find().is_empty()
+        if !self.find(true).is_empty() {
+            return true;
+        }
+        if self.seen_any.load(Ordering::Relaxed) {
+            return false;
+        }
+        // Before any game process has appeared, a launch-time update or
+        // validation shows in the manifest.
+        scan::manifest_flags(&self.manifest)
+            .is_some_and(|flags| flags & state::LAUNCHING_OR_RUNNING != 0)
     }
 
     /// Ends the reaper and the game's processes. The Steam client itself
     /// never matches, so it keeps running.
     fn stop(&self, force: bool) {
-        let pids = self.find();
+        let pids = self.find(false);
         if self.on_host {
             let pids: Vec<u32> = pids.iter().map(|p| p.as_u32()).collect();
             if let Ok(runtime) = tokio::runtime::Handle::try_current()
@@ -178,6 +257,14 @@ impl GameWatch for SteamGameWatch {
             }
         }
     }
+
+    fn wait_for_exit(&self, timeout: std::time::Duration) -> bool {
+        if self.on_host || !self.seen_direct.load(Ordering::Relaxed) {
+            return false;
+        }
+        let pids: Vec<u32> = self.pids.lock().iter().map(|p| p.as_u32()).collect();
+        irori_core::process::wait_pids_exit(&pids, timeout)
+    }
 }
 
 /// Whether `cmd` is the command line of the reaper Steam runs a game under
@@ -194,6 +281,74 @@ fn is_reaper_for(app_id: &str, cmd: &[String]) -> bool {
     }
     let wanted = format!("AppId={app_id}");
     cmd.iter().take_while(|a| *a != "--").any(|a| *a == wanted)
+}
+
+fn path_matches_install_prefix(
+    candidate: &str,
+    install_path: &str,
+    allow_space_boundary: bool,
+) -> bool {
+    let normalize = |s: &str| s.replace('\\', "/").to_lowercase();
+    let folder = normalize(install_path.trim_end_matches(['\\', '/']));
+    if folder.len() < 6 {
+        return false;
+    }
+    let n = normalize(candidate);
+    let matches_tail = |rest: &str| {
+        rest.is_empty() || rest.starts_with('/') || (allow_space_boundary && rest.starts_with(' '))
+    };
+    if let Some(rest) = n.strip_prefix(&folder)
+        && matches_tail(rest)
+    {
+        return true;
+    }
+    let tail_no_drive = folder.split_once(':').map_or(folder.as_str(), |(_, r)| r);
+    if !tail_no_drive.is_empty()
+        && n.len() >= 2
+        && n.as_bytes()[0].is_ascii_alphabetic()
+        && n.as_bytes()[1] == b':'
+        && let Some(rest) = n[2..].strip_prefix(tail_no_drive)
+        && matches_tail(rest)
+    {
+        return true;
+    }
+    let Some((_, common_tail)) = folder.split_once("/steamapps/common/") else {
+        return false;
+    };
+    if common_tail.is_empty() {
+        return false;
+    }
+    let marker = format!("/steamapps/common/{common_tail}");
+    if let Some((_, rest)) = n.split_once(&marker)
+        && !n.starts_with("c:/windows/")
+        && !n.contains("/ubuntu12_32/")
+        && !n.contains("/steamrt")
+        && !n.contains("/pressure-vessel/")
+        && !n.contains(" -- ")
+        && matches_tail(rest)
+    {
+        return true;
+    }
+    false
+}
+
+/// Whether the process's own executable (`exe` or `cmd[0]`, not a trailing
+/// argument passed to `reaper`, `pv-adverb`, `proton` or Wine's `steam.exe`)
+/// lives inside `install_path` (including Proton's `S:\steamapps\common\...`
+/// mount of the Steam library folder).
+fn is_direct_install_program(
+    install_path: &str,
+    exe: Option<&std::path::Path>,
+    cmd: &[String],
+) -> bool {
+    exe.is_some_and(|e| path_matches_install_prefix(&e.to_string_lossy(), install_path, false))
+        || cmd
+            .first()
+            .is_some_and(|a| path_matches_install_prefix(a, install_path, true))
+}
+
+fn command_line_starts_with_install_dir(install_path: &str, command_line: &str) -> bool {
+    path_matches_install_prefix(command_line, install_path, true)
 }
 
 #[cfg(test)]
@@ -269,5 +424,60 @@ mod tests {
         // A pending update alone is not a launch.
         write(state::FULLY_INSTALLED | 2);
         assert!(!watch.running());
+    }
+
+    #[test]
+    fn distinguishes_direct_game_executables_from_steam_and_proton_wrappers() {
+        let install = "/mnt/Asgard/SteamLibrary/steamapps/common/BangOnBalls";
+
+        assert!(is_direct_install_program(
+            install,
+            None,
+            &[r"S:\steamapps\common\BangOnBalls\BoB.exe".into()],
+        ));
+        assert!(is_direct_install_program(
+            install,
+            None,
+            &[
+                r"S:\steamapps\common\BangOnBalls\BoB\Binaries\Win64\BoB-Win64-Shipping.exe".into(),
+                "BoB".into(),
+            ],
+        ));
+        assert!(is_direct_install_program(
+            install,
+            Some(std::path::Path::new(
+                "/mnt/Asgard/SteamLibrary/steamapps/common/BangOnBalls/BoB.x86_64"
+            )),
+            &["BoB.x86_64".into()],
+        ));
+
+        assert!(!is_direct_install_program(
+            install,
+            Some(std::path::Path::new(
+                "/home/u/.local/share/Steam/ubuntu12_32/reaper"
+            )),
+            &args(
+                "/home/u/.local/share/Steam/ubuntu12_32/reaper SteamLaunch AppId=1227650 -- /mnt/Asgard/SteamLibrary/steamapps/common/BangOnBalls/BoB.exe",
+            ),
+        ));
+        assert!(!is_direct_install_program(
+            install,
+            Some(std::path::Path::new("/usr/bin/python3")),
+            &args(
+                "python3 /home/u/.local/share/Steam/compatibilitytools.d/Proton/proton waitforexitandrun /mnt/Asgard/SteamLibrary/steamapps/common/BangOnBalls/BoB.exe",
+            ),
+        ));
+        assert!(!is_direct_install_program(
+            install,
+            None,
+            &args(
+                r"c:\windows\system32\steam.exe /mnt/Asgard/SteamLibrary/steamapps/common/BangOnBalls/BoB.exe",
+            ),
+        ));
+        assert!(!is_direct_install_program(
+            install,
+            None,
+            &[r"S:\steamapps\common\BangOnBalls2\Game.exe".into()],
+        ));
     }
 }
