@@ -651,6 +651,19 @@ pub fn install_base(release: &Release, app: &AppSettings) -> PathBuf {
     locations::proton_downloads_dir(app)
 }
 
+fn should_rewrite_compat_tool_vdf(kind: ReleaseKind, version: &str) -> bool {
+    kind.is_proton() && version.ends_with("-latest")
+}
+
+async fn rewrite_latest_compat_tool_vdf(dir: &Path, version: &str) {
+    let dir = dir.to_path_buf();
+    let version = version.to_string();
+    let _ = tokio::task::spawn_blocking(move || {
+        crate::vdf::rewrite_compat_tool_file(&dir, &version);
+    })
+    .await;
+}
+
 fn file_name_of(url: &str) -> String {
     url.split('?')
         .next()
@@ -759,6 +772,10 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
     if let Err(e) = extracted.and_then(|r| r) {
         let _ = tokio::fs::remove_dir_all(&staging).await;
         return Err(e).with_context(|| format!("extracting {}", release.version));
+    }
+
+    if should_rewrite_compat_tool_vdf(kind, &release.version) {
+        rewrite_latest_compat_tool_vdf(&staging, &release.version).await;
     }
 
     let mut candidate = release.clone();
@@ -870,6 +887,12 @@ pub async fn rollback(release: &Release) -> Result<Release> {
         .with_context(|| format!("No earlier {} is kept", release.version))?;
     irori_core::fs_guard::check_deletable(&target, Some(&locations::home()), &[])?;
     swap_in_previous(&target, &previous).await?;
+    if release
+        .release_kind()
+        .is_some_and(|kind| should_rewrite_compat_tool_vdf(kind, &release.version))
+    {
+        rewrite_latest_compat_tool_vdf(&target, &release.version).await;
+    }
     let mut updated = release.clone();
     updated.previous_dir = None;
     updated.has_update = Some(true);
@@ -1532,5 +1555,33 @@ mod tests {
         assert_eq!(checksum_name("a-x86_64.tar.xz"), "a-x86_64.sha512sum");
         let back = serde_json::to_value(&store).unwrap();
         assert_eq!(back["wine-releases"][0]["installDir"], "/nonexistent");
+    }
+
+    #[test]
+    fn compat_tool_vdf_rewrite_applies_only_to_latest_proton_builds() {
+        for kind in [
+            ReleaseKind::GeProton,
+            ReleaseKind::ProtonCachyOs,
+            ReleaseKind::ProtonWineland,
+            ReleaseKind::NexusRuntime,
+        ] {
+            assert!(should_rewrite_compat_tool_vdf(
+                kind,
+                &format!("{}-latest", kind.type_str())
+            ));
+            assert!(!should_rewrite_compat_tool_vdf(kind, "GE-Proton10-20"));
+        }
+        for kind in [
+            ReleaseKind::WineGe,
+            ReleaseKind::WineKron4ek,
+            ReleaseKind::WineCrossover,
+            ReleaseKind::WineStagingMac,
+            ReleaseKind::GamePortingToolkit,
+        ] {
+            assert!(!should_rewrite_compat_tool_vdf(
+                kind,
+                &format!("{}-latest", kind.type_str())
+            ));
+        }
     }
 }
