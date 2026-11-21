@@ -251,6 +251,123 @@ fn verb(action: PowerAction) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KWinWindowCandidate {
+    pub match_id: String,
+    pub pid: Option<u32>,
+    pub resource_class: String,
+    pub resource_name: String,
+    pub desktop_file: String,
+}
+
+pub(super) fn is_irori_window_id(value: &str) -> bool {
+    let v = value.trim();
+    v.eq_ignore_ascii_case("irori") || v.eq_ignore_ascii_case("app.irori.irori")
+}
+
+pub(super) fn pick_kwin_window_match(
+    candidates: &[KWinWindowCandidate],
+    self_pid: u32,
+) -> Option<&str> {
+    let activate_candidates = || candidates.iter().filter(|c| c.match_id.starts_with("0_"));
+    if let Some(exact) = activate_candidates().find(|c| c.pid == Some(self_pid)) {
+        return Some(exact.match_id.as_str());
+    }
+    activate_candidates()
+        .find(|c| {
+            is_irori_window_id(&c.resource_class)
+                || is_irori_window_id(&c.resource_name)
+                || is_irori_window_id(&c.desktop_file)
+        })
+        .map(|c| c.match_id.as_str())
+}
+
+static KWIN_MATCH_ID: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
+
+pub(super) async fn activate_window() {
+    if let Err(e) = activate_kwin_window(std::process::id()).await {
+        tracing::debug!("activating window through KWin: {e}");
+    }
+}
+
+async fn activate_kwin_window(self_pid: u32) -> Result<()> {
+    use std::collections::HashMap;
+    use zbus::zvariant::OwnedValue;
+
+    type RunnerMatch = (
+        String,
+        String,
+        String,
+        i32,
+        f64,
+        HashMap<String, OwnedValue>,
+    );
+
+    let session = Connection::session().await?;
+    let runner = Proxy::new(
+        &session,
+        "org.kde.KWin",
+        "/WindowsRunner",
+        "org.kde.krunner1",
+    )
+    .await?;
+    let kwin = Proxy::new(&session, "org.kde.KWin", "/KWin", "org.kde.KWin").await?;
+    let cached = KWIN_MATCH_ID.lock().clone();
+    if let Some(cached) = cached {
+        if let Some(uuid) = cached.strip_prefix("0_")
+            && kwin
+                .call::<_, _, HashMap<String, OwnedValue>>("getWindowInfo", &(uuid,))
+                .await
+                .is_ok_and(|info| !info.is_empty())
+        {
+            runner
+                .call::<_, _, ()>("Run", &(cached.as_str(), ""))
+                .await?;
+            return Ok(());
+        }
+        *KWIN_MATCH_ID.lock() = None;
+    }
+    let matches: Vec<RunnerMatch> = runner.call("Match", &("irori",)).await?;
+    if matches.is_empty() {
+        return Ok(());
+    }
+    let mut candidates = Vec::new();
+    for (match_id, ..) in matches {
+        let Some(uuid) = match_id.strip_prefix("0_") else {
+            continue;
+        };
+        let Ok(info) = kwin
+            .call::<_, _, HashMap<String, OwnedValue>>("getWindowInfo", &(uuid,))
+            .await
+        else {
+            continue;
+        };
+        let pid = info.get("pid").and_then(|v| {
+            u32::try_from(v)
+                .ok()
+                .or_else(|| i32::try_from(v).ok().and_then(|p| u32::try_from(p).ok()))
+        });
+        let str_field = |key: &str| {
+            info.get(key)
+                .and_then(|v| <&str>::try_from(v).ok())
+                .unwrap_or_default()
+                .to_string()
+        };
+        candidates.push(KWinWindowCandidate {
+            match_id,
+            pid,
+            resource_class: str_field("resourceClass"),
+            resource_name: str_field("resourceName"),
+            desktop_file: str_field("desktopFile"),
+        });
+    }
+    if let Some(match_id) = pick_kwin_window_match(&candidates, self_pid) {
+        *KWIN_MATCH_ID.lock() = Some(match_id.to_string());
+        runner.call::<_, _, ()>("Run", &(match_id, "")).await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +410,47 @@ mod tests {
             Some(("CanSuspend", "Suspend"))
         );
         assert_eq!(logind_methods(PowerAction::LogOut), None);
+    }
+
+    #[test]
+    fn picks_own_kwin_window_and_ignores_unrelated_title_matches() {
+        let candidate =
+            |match_id: &str, pid: Option<u32>, class: &str, desktop: &str| KWinWindowCandidate {
+                match_id: match_id.into(),
+                pid,
+                resource_class: class.into(),
+                resource_name: class.into(),
+                desktop_file: desktop.into(),
+            };
+
+        let mixed = vec![
+            candidate("1_non_activate", Some(100), "irori", "irori"),
+            candidate("0_editor", Some(200), "kwrite", "org.kde.kwrite"),
+            candidate("0_other_irori", Some(300), "irori", "irori"),
+            candidate("0_own_irori", Some(400), "irori", "irori"),
+        ];
+        assert_eq!(
+            pick_kwin_window_match(&mixed, 400),
+            Some("0_own_irori"),
+            "prefers the exact PID over another instance and unrelated title matches"
+        );
+
+        let flatpak_or_pid_ns = vec![
+            candidate("0_editor", Some(200), "kwrite", "org.kde.kwrite"),
+            candidate(
+                "0_flatpak",
+                Some(9999),
+                "app.irori.Irori",
+                "app.irori.Irori",
+            ),
+        ];
+        assert_eq!(
+            pick_kwin_window_match(&flatpak_or_pid_ns, 400),
+            Some("0_flatpak"),
+            "falls back to Irori resourceClass/desktopFile when PIDs differ (such as Flatpak)"
+        );
+
+        let only_unrelated = vec![candidate("0_editor", Some(200), "kwrite", "org.kde.kwrite")];
+        assert_eq!(pick_kwin_window_match(&only_unrelated, 400), None);
     }
 }
