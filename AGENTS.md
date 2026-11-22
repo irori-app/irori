@@ -723,7 +723,9 @@ commands without a window.
   (2, 5, 15 then 30 minutes after failures) and never run while a game does. Another
   computer's copies are brought back without replacing anything: backups into the
   backup folder, saves into Ludusavi's (games it has no backups of), screenshots into
-  `Pictures/Irori/<computer>`.
+  `Pictures/Irori/<computer>`. `Backend::cloud_copy_sizes` says what each kind holds
+  here and what of it hasn't reached the current target (`copies::size_of`), which the
+  Sync page shows per kind and as a bar of their shares.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on
