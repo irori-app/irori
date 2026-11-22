@@ -53,19 +53,28 @@ pub enum HomeRow {
     /// The microphone in use: Left and Right switch to another.
     Input,
     Screenshot,
+    /// Save a clip of the replay buffer recording this session.
+    SaveReplay,
+    /// The game's play status: Left and Right (or A) step through them.
+    PlayStatus,
+    /// Close the overlay and bring the game's window to the front.
+    BackToGame,
     BackToIrori,
     QuitGame,
 }
 
 impl HomeRow {
     /// Every row, in their order.
-    pub const ALL: [HomeRow; 8] = [
+    pub const ALL: [HomeRow; 11] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
         HomeRow::Output,
         HomeRow::Microphone,
         HomeRow::Input,
         HomeRow::Screenshot,
+        HomeRow::SaveReplay,
+        HomeRow::PlayStatus,
+        HomeRow::BackToGame,
         HomeRow::BackToIrori,
         HomeRow::QuitGame,
     ];
@@ -79,6 +88,7 @@ impl HomeRow {
                 | HomeRow::Output
                 | HomeRow::Microphone
                 | HomeRow::Input
+                | HomeRow::PlayStatus
         )
     }
 }
@@ -88,17 +98,40 @@ impl HomeRow {
 pub struct HomeContext {
     /// The computer has a microphone (one was read).
     pub microphone: bool,
+    /// The replay buffer records this session.
+    pub replay: bool,
 }
 
-/// The Home tab's rows for `cx`: the microphone's only with one.
+/// The Home tab's rows for `cx`: the microphone's only with one, saving a
+/// clip only while the replay buffer records.
 pub fn home_rows(cx: HomeContext) -> Vec<HomeRow> {
     HomeRow::ALL
         .into_iter()
         .filter(|row| match row {
             HomeRow::Microphone | HomeRow::Input => cx.microphone,
+            HomeRow::SaveReplay => cx.replay,
             _ => true,
         })
         .collect()
+}
+
+/// The play status `step` places from `current` (none counts as before
+/// the first), wrapping around.
+pub fn next_status(
+    current: Option<irori_services::PlayStatus>,
+    step: i32,
+) -> irori_services::PlayStatus {
+    use irori_services::PlayStatus;
+    let len = PlayStatus::ALL.len() as i32;
+    let now = current
+        .and_then(|s| PlayStatus::ALL.iter().position(|p| *p == s))
+        .map_or(-1, |ix| ix as i32);
+    let next = if now < 0 && step < 0 {
+        len - 1
+    } else {
+        (now + step).rem_euclid(len)
+    };
+    PlayStatus::ALL[next as usize]
 }
 
 /// The output `step` places from the current one in `outputs` (by
@@ -452,10 +485,20 @@ mod tests {
 
     #[test]
     fn the_microphone_rows_show_with_a_microphone_and_the_focus_stays_put() {
-        let without = home_rows(HomeContext { microphone: false });
+        let without = home_rows(HomeContext::default());
         assert!(!without.contains(&HomeRow::Microphone) && !without.contains(&HomeRow::Input));
-        let with = home_rows(HomeContext { microphone: true });
-        assert_eq!(with, HomeRow::ALL);
+        assert!(!without.contains(&HomeRow::SaveReplay), "no replay buffer");
+        let with = home_rows(HomeContext {
+            microphone: true,
+            replay: false,
+        });
+        assert!(with.contains(&HomeRow::Microphone) && with.contains(&HomeRow::Input));
+        let all = home_rows(HomeContext {
+            microphone: true,
+            replay: true,
+        });
+        assert_eq!(all, HomeRow::ALL);
+        assert!(all.contains(&HomeRow::BackToGame) && all.contains(&HomeRow::PlayStatus));
 
         let mut nav = Nav::default();
         nav.set_home(without.clone());
@@ -473,6 +516,35 @@ mod tests {
         nav.set_focus(mic);
         nav.set_home(without);
         assert_eq!(nav.focus(Tab::Home, 6), 0);
+    }
+
+    #[test]
+    fn play_statuses_step_around() {
+        use irori_services::PlayStatus;
+        assert_eq!(next_status(None, 1), PlayStatus::ALL[0]);
+        assert_eq!(next_status(None, -1), PlayStatus::Abandoned);
+        assert_eq!(
+            next_status(Some(PlayStatus::Playing), 1),
+            PlayStatus::OnHold
+        );
+        assert_eq!(
+            next_status(Some(PlayStatus::Abandoned), 1),
+            PlayStatus::NotPlayed,
+            "wraps"
+        );
+        assert_eq!(
+            next_status(Some(PlayStatus::NotPlayed), -1),
+            PlayStatus::Abandoned
+        );
+        let mut nav = Nav::default();
+        let rows = HomeRow::ALL.to_vec();
+        let at = rows.iter().position(|r| *r == HomeRow::PlayStatus).unwrap();
+        nav.set_home(rows.clone());
+        nav.set_focus(at);
+        assert_eq!(
+            nav.input(Right, rows.len()),
+            Action::Adjust(HomeRow::PlayStatus, 1)
+        );
     }
 
     #[test]

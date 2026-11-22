@@ -563,9 +563,22 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   switched the same way (Linux: `pactl`'s default source, the outputs' monitors left
   out; macOS: Core Audio's default input device, muted through its mute switch, else
   by its level; Windows: the default capture device, through `IPolicyConfig`);
-  a screenshot; Back to Irori
+  a screenshot; saving a clip while the replay buffer records the session; the game's
+  play status (Left/Right or A step through them); Back to the game (closes the overlay
+  and brings the game's window to the front, see below); Back to Irori
   (the main window, reopened from the tray if it was closed); quitting the game, which
   asks first with Cancel focused and then stops it as the game page's Stop does.
+
+"Back to the game" (the overlay, and the command palette while a game runs) looks for a
+window owned by the session's processes (the process Irori started, what descends from
+it, on Linux its process group too): Hyprland's `hyprctl clients -j` and
+`dispatch focuswindow`, sway's `get_tree` and `[con_id=…] focus`, else X11's
+`_NET_CLIENT_LIST`/`_NET_WM_PID` and a pager's `_NET_ACTIVE_WINDOW` request (Xwayland
+games on other Wayland desktops too). GNOME and KDE Plasma on Wayland let no program
+raise another's native Wayland window: there the palette says so and the overlay only
+closes. Windows: `EnumWindows` and `SetForegroundWindow`, attached to the foreground
+window's input thread for that call when Windows refuses it. macOS: System Events makes
+the game's process frontmost.
 - **Screenshots**: what was taken during this session (the screenshot index, with the
   running session counted), shown large with A.
 - **Achievements**: unlocked out of total, what this session unlocked and what is next

@@ -1259,7 +1259,10 @@ Microsoft's approval page (`irori_manage::login`).
   `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
   turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
   (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
-  `overlay/level.rs`, a surface that exists only while it shows. `docs/PLATFORMS.md`,
+  `overlay/level.rs`, a surface that exists only while it shows. "Back to the game"
+  (overlay row, palette) is `Backend::focus_game_window` (`services/src/game_window/`:
+  Hyprland, sway, X11, Windows, macOS; `Raised::Unsupported` on GNOME/KDE Wayland,
+  where nothing is done). Home's rows come from `model::home_rows`. `docs/PLATFORMS.md`,
   "In-game overlay".
 
 ### 4.8 Engines (emulators)

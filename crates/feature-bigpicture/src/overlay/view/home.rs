@@ -118,6 +118,37 @@ impl OverlayView {
                     HomeRow::Screenshot => {
                         (IconName::Camera, t("bigpicture.overlay.screenshot"), None)
                     }
+                    HomeRow::SaveReplay => (
+                        IconName::Clapperboard,
+                        t("bigpicture.overlay.save_replay"),
+                        None,
+                    ),
+                    HomeRow::PlayStatus => {
+                        let status = irori_ui::play_status::of(&self.game, cx);
+                        let text = match status {
+                            Some(s) => irori_ui::play_status::label(s),
+                            None => t("bigpicture.overlay.no_status"),
+                        };
+                        let icon = status
+                            .map(irori_ui::play_status::icon)
+                            .unwrap_or(IconName::CircleDashed);
+                        let trailing = h_flex()
+                            .flex_shrink_1()
+                            .min_w_0()
+                            .gap_2()
+                            .items_center()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(Icon::new(IconName::ChevronLeft))
+                            .child(div().min_w_0().truncate().child(text))
+                            .child(Icon::new(IconName::ChevronRight))
+                            .into_any_element();
+                        (icon, irori_ui::play_status::title(), Some(trailing))
+                    }
+                    HomeRow::BackToGame => (
+                        IconName::AppWindow,
+                        t("bigpicture.overlay.back_to_game"),
+                        None,
+                    ),
                     HomeRow::BackToIrori => {
                         (IconName::House, t("bigpicture.overlay.back_to_irori"), None)
                     }
@@ -150,6 +181,27 @@ impl OverlayView {
                 )))
             })
             .into_any_element()
+    }
+
+    /// Set the game's play status `step` places from the current one.
+    pub(super) fn step_status(&mut self, step: i32, cx: &mut Context<Self>) {
+        let next = next_status(irori_ui::play_status::of(&self.game, cx), step);
+        irori_ui::play_status::set(&self.game, Some(next), cx);
+    }
+
+    /// Close the overlay and bring the game's window to the front. Where
+    /// the desktop doesn't allow that, closing is all there is to do: the
+    /// game is under the overlay.
+    pub(super) fn back_to_game(&mut self, cx: &mut Context<Self>) {
+        super::super::close(cx);
+        let backend = irori_ui::backend(cx);
+        let id = self.game.clone();
+        let b = backend.clone();
+        backend.spawn(async move {
+            if let Err(e) = b.focus_game_window(&id).await {
+                tracing::info!("bringing {id}'s window to the front: {e:#}");
+            }
+        });
     }
 
     /// Record from the microphone `step` places from the current one, then

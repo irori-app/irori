@@ -524,7 +524,7 @@ pub(crate) fn parse_input_volume(text: &str) -> Option<u32> {
 
 impl Backend {
     /// The process Irori started for the running game `id`.
-    fn game_process(&self, id: &GameId) -> Option<GameProcess> {
+    pub(crate) fn game_process(&self, id: &GameId) -> Option<GameProcess> {
         let pid = self.running_pid(id)?;
         let elapsed = self.playing_for(id).unwrap_or_default();
         let since = std::time::SystemTime::now()

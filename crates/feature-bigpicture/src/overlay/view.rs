@@ -27,8 +27,8 @@ use irori_ui::journal::shot_url;
 use irori_ui::models;
 
 use super::model::{
-    Action, Choice, HomeContext, HomeRow, Nav, SHOT_COLUMNS, Tab, home_rows, next_output, next_up,
-    progress, unlocked_since,
+    Action, Choice, HomeContext, HomeRow, Nav, SHOT_COLUMNS, Tab, home_rows, next_output,
+    next_status, next_up, progress, unlocked_since,
 };
 use crate::gamepad::{self, ControllerInfo, ControllerKind, GamepadInput};
 use crate::layout::home::Dir;
@@ -76,6 +76,8 @@ pub(super) struct OverlayView {
     armed: Option<usize>,
     /// Why turning a controller off failed.
     controller_error: Option<SharedString>,
+    /// The replay buffer records this session.
+    replay: bool,
     shots: Load<Vec<Screenshot>>,
     /// The screenshot shown large, by its place in `shots`.
     preview: Option<usize>,
@@ -103,8 +105,12 @@ impl OverlayView {
         let statuses = models(cx).statuses.clone();
         let settings = models(cx).settings.clone();
         let watched = game.clone();
+        let watched_replay = game.clone();
+        let library = models(cx).library.clone();
         let mut subscriptions = vec![
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
+            // The play status row follows the user data.
+            cx.observe(&library, |_, _, cx| cx.notify()),
             // The game exited, or the overlay was turned off: nothing to show.
             cx.observe(&statuses, move |_, statuses, cx| {
                 if !statuses.read(cx).is_playing(&watched) {
@@ -141,6 +147,7 @@ impl OverlayView {
             controllers: gamepad::controllers(),
             armed: None,
             controller_error: None,
+            replay: backend.replay().is_some_and(|r| r.game == watched_replay),
             shots: Load::Loading,
             preview: None,
             achievements: Load::Loading,
@@ -150,6 +157,8 @@ impl OverlayView {
             _tasks: Vec::new(),
             _subscriptions: subscriptions,
         };
+        // The rows that need nothing read yet.
+        view.set_audio(Load::Loading);
         view.load(window, cx);
         view
     }
@@ -271,7 +280,10 @@ impl OverlayView {
     /// Take the sound as read, and the Home rows it calls for.
     fn set_audio(&mut self, audio: Load<GameAudio>) {
         let microphone = matches!(&audio, Load::Ready(a) if a.microphone.is_some());
-        self.nav.set_home(home_rows(HomeContext { microphone }));
+        self.nav.set_home(home_rows(HomeContext {
+            microphone,
+            replay: self.replay,
+        }));
         self.audio = audio;
     }
 
@@ -338,6 +350,7 @@ impl OverlayView {
             }
             Action::Adjust(HomeRow::Output, step) => self.switch_output(step, window, cx),
             Action::Adjust(HomeRow::Input, step) => self.switch_input(step, window, cx),
+            Action::Adjust(HomeRow::PlayStatus, step) => self.step_status(step, cx),
             Action::Adjust(row, step) => {
                 let target = match row {
                     HomeRow::SystemVolume => VolumeTarget::System,
@@ -376,6 +389,12 @@ impl OverlayView {
                         b.take_screenshot(Some(id));
                     });
                 }
+                Some(HomeRow::SaveReplay) => {
+                    super::close(cx);
+                    irori_ui::backend(cx).save_clip();
+                }
+                Some(HomeRow::PlayStatus) => self.step_status(1, cx),
+                Some(HomeRow::BackToGame) => self.back_to_game(cx),
                 Some(HomeRow::BackToIrori) => super::back_to_irori(cx),
                 Some(HomeRow::QuitGame) => self.nav.ask_quit(),
                 None => {}

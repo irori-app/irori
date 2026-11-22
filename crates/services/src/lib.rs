@@ -25,6 +25,7 @@ mod facts;
 pub mod file_achievements;
 mod files;
 mod follow;
+pub mod game_window;
 mod games;
 pub mod gpu_preference;
 pub mod hidden_lock;
