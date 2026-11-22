@@ -337,7 +337,7 @@ async fn prepare_hud_plan(
                 theme_colors: app.hud.cached_theme_colors.clone(),
             };
             let rendered = hud::mangohud_conf::render_mangohud_conf(profile, &ctx);
-            hud::write_config_atomic(&file, &rendered).await?;
+            hud::write_config_live(&file, &rendered).await?;
             config_file = Some(file);
             mangohud_dir = Some(dir);
         }

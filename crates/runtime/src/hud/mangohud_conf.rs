@@ -219,6 +219,15 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     // (e) FPS & Frame Pacing block
     if profile.fps {
         out.push_str("fps\n");
+        if profile.fps_use_label {
+            out.push_str("fps_text=FPS\n");
+        }
+    }
+    match (profile.fps_avg, profile.fps_1_low) {
+        (true, true) => out.push_str("fps_metrics=avg,0.01\n"),
+        (true, false) => out.push_str("fps_metrics=avg\n"),
+        (false, true) => out.push_str("fps_metrics=0.01\n"),
+        (false, false) => {}
     }
     if profile.frametime {
         out.push_str("frametime\n");
@@ -383,5 +392,33 @@ mod tests {
         assert!(pos("ram") < pos("fps"));
         assert!(pos("fps") < pos("wine"));
         assert!(pos("wine") < pos("device_battery=gamepad"));
+    }
+
+    #[test]
+    fn emits_fps_label_and_fps_metrics_combinations() {
+        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        p.fps_use_label = true;
+        p.fps_avg = true;
+        p.fps_1_low = true;
+        let out = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l = lines(&out);
+        assert!(l.contains(&"fps_text=FPS"));
+        assert!(l.contains(&"fps_metrics=avg,0.01"));
+        assert!(
+            crate::hud::launch_env::format_mangohud_inline_config(&out)
+                .contains("fps_metrics=avg+0.01")
+        );
+
+        p.fps_1_low = false;
+        let out_avg = render_mangohud_conf(&p, &ConfRenderContext::default());
+        assert!(lines(&out_avg).contains(&"fps_metrics=avg"));
+
+        p.fps_avg = false;
+        p.fps_1_low = true;
+        p.fps_use_label = false;
+        let out_low = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l_low = lines(&out_low);
+        assert!(!l_low.contains(&"fps_text=FPS"));
+        assert!(l_low.contains(&"fps_metrics=0.01"));
     }
 }

@@ -272,6 +272,12 @@ struct HudLabels {
     group_metrics_fps: SharedString,
     metric_fps: SharedString,
     metric_fps_help: SharedString,
+    metric_fps_use_label: SharedString,
+    metric_fps_use_label_help: SharedString,
+    metric_fps_avg: SharedString,
+    metric_fps_avg_help: SharedString,
+    metric_fps_1_low: SharedString,
+    metric_fps_1_low_help: SharedString,
     metric_frametime: SharedString,
     metric_frametime_help: SharedString,
     metric_frame_timing: SharedString,
@@ -439,6 +445,12 @@ impl HudLabels {
             group_metrics_fps: t("settings.hud.group.metrics_fps"),
             metric_fps: t("settings.hud.metric.fps"),
             metric_fps_help: t("settings.hud.metric.fps_help"),
+            metric_fps_use_label: t("settings.hud.metric.fps_use_label"),
+            metric_fps_use_label_help: t("settings.hud.metric.fps_use_label_help"),
+            metric_fps_avg: t("settings.hud.metric.fps_avg"),
+            metric_fps_avg_help: t("settings.hud.metric.fps_avg_help"),
+            metric_fps_1_low: t("settings.hud.metric.fps_1_low"),
+            metric_fps_1_low_help: t("settings.hud.metric.fps_1_low_help"),
             metric_frametime: t("settings.hud.metric.frametime"),
             metric_frametime_help: t("settings.hud.metric.frametime_help"),
             metric_frame_timing: t("settings.hud.metric.frame_timing"),
@@ -896,14 +908,14 @@ impl HudPanel {
                         this.rebuild_gpu_options(window, cx);
                         this.sync_placeholders(window, cx);
                         this.sync_preview_and_display(cx);
-                        this.maybe_write_steam_config(cx);
+                        this.sync_live_mangohud_config(cx);
                         cx.notify();
                     });
                 }
             })
             .detach();
         } else if hud_backend == HudBackend::MangoHud {
-            panel.maybe_write_steam_config(cx);
+            panel.sync_live_mangohud_config(cx);
         }
 
         panel
@@ -983,11 +995,14 @@ impl HudPanel {
                     .set_game_value(id, "iroriGameHud", value);
             }
         }
-        self.maybe_write_steam_config(cx);
+        self.sync_live_mangohud_config(cx);
     }
 
-    fn maybe_write_steam_config(&self, cx: &App) {
-        if !self.is_steam() || self.backend != HudBackend::MangoHud {
+    /// Rewrite `<data>/mangohud/global.conf` or `<runner>_<app>.conf` in-place
+    /// on a background task so running games and Steam launches pick up edits
+    /// (such as FPS limit or metric changes) live via MangoHud's `inotify`.
+    fn sync_live_mangohud_config(&self, cx: &App) {
+        if self.backend != HudBackend::MangoHud {
             return;
         }
         let resolved =
@@ -1004,9 +1019,9 @@ impl HudPanel {
         };
         let body = render_mangohud_conf(&profile, &ctx);
         irori_ui::run(cx, async move {
-            if let Err(err) = irori_runtime::hud::write_config_atomic(&conf_path, &body).await {
+            if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &body).await {
                 tracing::warn!(
-                    "writing Steam MangoHud config {}: {err:#}",
+                    "writing live MangoHud config {}: {err:#}",
                     conf_path.display()
                 );
             }
@@ -1883,6 +1898,45 @@ impl HudPanel {
                 cx.listener(|this, on: &bool, window, cx| {
                     this.edit_mangohud(window, cx, |p| {
                         p.fps = *on;
+                        p.mark_custom();
+                    });
+                }),
+                cx,
+            ),
+            metric_switch_row(
+                "hud-metric-fps-use-label",
+                self.labels.metric_fps_use_label.clone(),
+                self.labels.metric_fps_use_label_help.clone(),
+                p.fps_use_label,
+                cx.listener(|this, on: &bool, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_use_label = *on;
+                        p.mark_custom();
+                    });
+                }),
+                cx,
+            ),
+            metric_switch_row(
+                "hud-metric-fps-avg",
+                self.labels.metric_fps_avg.clone(),
+                self.labels.metric_fps_avg_help.clone(),
+                p.fps_avg,
+                cx.listener(|this, on: &bool, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_avg = *on;
+                        p.mark_custom();
+                    });
+                }),
+                cx,
+            ),
+            metric_switch_row(
+                "hud-metric-fps-1-low",
+                self.labels.metric_fps_1_low.clone(),
+                self.labels.metric_fps_1_low_help.clone(),
+                p.fps_1_low,
+                cx.listener(|this, on: &bool, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_1_low = *on;
                         p.mark_custom();
                     });
                 }),

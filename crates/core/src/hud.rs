@@ -272,6 +272,9 @@ pub struct MangoHudProfile {
 
     // FPS & Frame Pacing group
     pub fps: bool,
+    pub fps_use_label: bool,
+    pub fps_avg: bool,
+    pub fps_1_low: bool,
     pub frametime: bool,
     pub frame_timing: bool,
     pub present_mode: bool,
@@ -341,6 +344,9 @@ impl MangoHudProfile {
             cpu_power: false,
             ram: false,
             fps: true,
+            fps_use_label: false,
+            fps_avg: false,
+            fps_1_low: false,
             frametime: false,
             frame_timing: false,
             present_mode: false,
@@ -398,6 +404,8 @@ impl MangoHudProfile {
         self.cpu_power = false;
         self.ram = false;
         self.fps = false;
+        self.fps_avg = false;
+        self.fps_1_low = false;
         self.frametime = false;
         self.frame_timing = false;
         self.present_mode = false;
@@ -456,6 +464,8 @@ impl MangoHudProfile {
                 self.cpu_power = true;
                 self.ram = true;
                 self.fps = true;
+                self.fps_avg = true;
+                self.fps_1_low = true;
                 self.frametime = true;
                 self.frame_timing = true;
                 self.present_mode = true;
@@ -506,6 +516,8 @@ impl MangoHudProfile {
             && !self.vram
             && !self.effective_cpu_stats()
             && !self.ram
+            && !self.fps_avg
+            && !self.fps_1_low
             && !self.frametime
             && !self.frame_timing
             && !self.present_mode
