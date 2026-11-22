@@ -1191,10 +1191,7 @@ mod tests {
         let off_global = GlobalHudSettings::default();
         assert_eq!(
             resolve_effective_hud(&off_global, &inherit, true, false, HudBackend::MangoHud),
-            ResolvedHud::MangoHudSystemDefault {
-                opengl_legacy_wrapper: false,
-                mangohud_dlsym: true,
-            }
+            ResolvedHud::MangoHudProfile(Box::new(off_global.mangohud.clone()))
         );
         assert_eq!(
             resolve_effective_hud(&off_global, &inherit, false, true, HudBackend::MetalHud),

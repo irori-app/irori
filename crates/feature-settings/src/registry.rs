@@ -2626,6 +2626,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "fps",
         "frametime",
         "performance",
+        "in-game stats",
+        "stats",
     ]),
     game(
         "panel.replay",

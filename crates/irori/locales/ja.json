@@ -178,6 +178,6 @@
   "shell.palette.ungroup_by_category": "ライブラリのカテゴリー別グループ化をやめる",
   "shell.palette.category_keywords": "カテゴリー スマート タグ グループ コレクション",
   "shell.palette.genre_keywords": "ジャンル アクション アドベンチャー ストラテジー パズル RPG シューティング",
-  "shell.palette.performance_hud": "パフォーマンスHUD",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス"
+  "shell.palette.performance_hud": "ゲーム内統計",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats"
 }

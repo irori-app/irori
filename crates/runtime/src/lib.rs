@@ -304,11 +304,7 @@ async fn prepare_hud_plan(
 
     if backend == irori_core::HudBackend::MangoHud
         && !deck_game_mode
-        && matches!(
-            resolved,
-            irori_core::ResolvedHud::MangoHudProfile(_)
-                | irori_core::ResolvedHud::MangoHudSystemDefault { .. }
-        )
+        && matches!(resolved, irori_core::ResolvedHud::MangoHudProfile(_))
     {
         let linux_env = tokio::task::spawn_blocking(hud::hardware_linux::detect_linux_hud_env)
             .await

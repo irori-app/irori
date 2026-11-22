@@ -178,6 +178,6 @@
   "shell.palette.ungroup_by_category": "Kütüphaneyi kategoriye göre gruplamayı bırak",
   "shell.palette.category_keywords": "kategori akıllı etiket grup koleksiyon",
   "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı",
-  "shell.palette.performance_hud": "Performans HUD",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans"
+  "shell.palette.performance_hud": "Oyun içi istatistikler",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats"
 }

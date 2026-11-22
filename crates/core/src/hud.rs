@@ -50,10 +50,9 @@ pub enum GlobalHudMode {
     #[default]
     Off,
     /// Apply Irori's managed profile (MangoHud.conf on Linux, Metal HUD on macOS).
+    /// Older settings saved as `systemDefault` load as this mode.
+    #[serde(alias = "systemDefault")]
     IroriProfile,
-    /// Linux: enable MangoHud using the user's external `~/.config/MangoHud/MangoHud.conf`.
-    /// macOS: enable Metal HUD with default alignment.
-    SystemDefault,
 }
 
 /// Per-game HUD override mode.
@@ -64,9 +63,9 @@ pub enum GameHudMode {
     #[default]
     InheritGlobal,
     /// Use a custom profile stored specifically for this game.
+    /// Older settings saved as `systemDefault` load as this mode.
+    #[serde(alias = "systemDefault")]
     Custom,
-    /// Use the system's default HUD configuration for this game.
-    SystemDefault,
     /// Explicitly disable the HUD for this game (`DISABLE_MANGOHUD=1` / `MTL_HUD_ENABLED=0`).
     Disabled,
 }
@@ -297,6 +296,42 @@ impl ThemeHudColors {
     }
 }
 
+/// Metric and layout toggles that presets overwrite, saved so switching back
+/// to [`HudPreset::Custom`] restores the user's own selection.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CustomPresetSnapshot {
+    pub gpu_stats: bool,
+    pub gpu_temp: bool,
+    pub gpu_junction_temp: bool,
+    pub gpu_mem_temp: bool,
+    pub gpu_core_clock: bool,
+    pub gpu_mem_clock: bool,
+    pub gpu_power: bool,
+    pub gpu_fan: bool,
+    pub vram: bool,
+    pub cpu_stats: bool,
+    pub cpu_temp: bool,
+    pub cpu_mhz: bool,
+    pub cpu_power: bool,
+    pub ram: bool,
+    pub fps: bool,
+    pub fps_avg: bool,
+    pub fps_1_low: bool,
+    pub frametime: bool,
+    pub frame_timing: bool,
+    pub present_mode: bool,
+    pub wine: bool,
+    pub winesync: bool,
+    pub fsr: bool,
+    pub hdr: bool,
+    pub gamemode: bool,
+    pub throttling_status: bool,
+    pub gamepad_battery: bool,
+    pub orientation: HudOrientation,
+    pub hud_compact: bool,
+}
+
 /// Complete MangoHud configuration managed by Irori.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -368,6 +403,10 @@ pub struct MangoHudProfile {
     // Native Linux OpenGL legacy wrapper (`mangohud` LD_PRELOAD)
     pub opengl_legacy_wrapper: bool,
     pub mangohud_dlsym: bool,
+
+    /// Last manual selection made under [`HudPreset::Custom`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_custom: Option<CustomPresetSnapshot>,
 }
 
 impl Default for MangoHudProfile {
@@ -429,6 +468,7 @@ impl MangoHudProfile {
             cpu_label_override: String::new(),
             opengl_legacy_wrapper: false,
             mangohud_dlsym: true,
+            saved_custom: None,
         };
         profile.apply_preset(preset);
         profile
@@ -436,11 +476,21 @@ impl MangoHudProfile {
 
     /// Apply a preset's metric and layout toggles while preserving the user's
     /// hotkey, GPU selection, custom labels, palette and legacy wrapper choice.
+    ///
+    /// Leaving [`HudPreset::Custom`] stores the current selection, and choosing
+    /// it again restores that selection.
     pub fn apply_preset(&mut self, preset: HudPreset) {
-        self.preset = preset;
         if preset == HudPreset::Custom {
+            self.preset = preset;
+            if let Some(snapshot) = self.saved_custom.clone() {
+                self.restore_custom_snapshot(&snapshot);
+            }
             return;
         }
+        if self.preset == HudPreset::Custom {
+            self.saved_custom = Some(self.custom_snapshot());
+        }
+        self.preset = preset;
         // Reset all metric toggles first.
         self.gpu_stats = false;
         self.gpu_temp = false;
@@ -586,8 +636,78 @@ impl MangoHudProfile {
     }
 
     /// Transition the preset indicator to [`HudPreset::Custom`] after a manual edit.
+    /// The current selection is saved so a later preset switch can restore it.
     pub fn mark_custom(&mut self) {
         self.preset = HudPreset::Custom;
+        self.saved_custom = Some(self.custom_snapshot());
+    }
+
+    /// Capture the toggles that presets overwrite.
+    pub fn custom_snapshot(&self) -> CustomPresetSnapshot {
+        CustomPresetSnapshot {
+            gpu_stats: self.gpu_stats,
+            gpu_temp: self.gpu_temp,
+            gpu_junction_temp: self.gpu_junction_temp,
+            gpu_mem_temp: self.gpu_mem_temp,
+            gpu_core_clock: self.gpu_core_clock,
+            gpu_mem_clock: self.gpu_mem_clock,
+            gpu_power: self.gpu_power,
+            gpu_fan: self.gpu_fan,
+            vram: self.vram,
+            cpu_stats: self.cpu_stats,
+            cpu_temp: self.cpu_temp,
+            cpu_mhz: self.cpu_mhz,
+            cpu_power: self.cpu_power,
+            ram: self.ram,
+            fps: self.fps,
+            fps_avg: self.fps_avg,
+            fps_1_low: self.fps_1_low,
+            frametime: self.frametime,
+            frame_timing: self.frame_timing,
+            present_mode: self.present_mode,
+            wine: self.wine,
+            winesync: self.winesync,
+            fsr: self.fsr,
+            hdr: self.hdr,
+            gamemode: self.gamemode,
+            throttling_status: self.throttling_status,
+            gamepad_battery: self.gamepad_battery,
+            orientation: self.orientation,
+            hud_compact: self.hud_compact,
+        }
+    }
+
+    /// Write a previously captured selection back into this profile.
+    pub fn restore_custom_snapshot(&mut self, snapshot: &CustomPresetSnapshot) {
+        self.gpu_stats = snapshot.gpu_stats;
+        self.gpu_temp = snapshot.gpu_temp;
+        self.gpu_junction_temp = snapshot.gpu_junction_temp;
+        self.gpu_mem_temp = snapshot.gpu_mem_temp;
+        self.gpu_core_clock = snapshot.gpu_core_clock;
+        self.gpu_mem_clock = snapshot.gpu_mem_clock;
+        self.gpu_power = snapshot.gpu_power;
+        self.gpu_fan = snapshot.gpu_fan;
+        self.vram = snapshot.vram;
+        self.cpu_stats = snapshot.cpu_stats;
+        self.cpu_temp = snapshot.cpu_temp;
+        self.cpu_mhz = snapshot.cpu_mhz;
+        self.cpu_power = snapshot.cpu_power;
+        self.ram = snapshot.ram;
+        self.fps = snapshot.fps;
+        self.fps_avg = snapshot.fps_avg;
+        self.fps_1_low = snapshot.fps_1_low;
+        self.frametime = snapshot.frametime;
+        self.frame_timing = snapshot.frame_timing;
+        self.present_mode = snapshot.present_mode;
+        self.wine = snapshot.wine;
+        self.winesync = snapshot.winesync;
+        self.fsr = snapshot.fsr;
+        self.hdr = snapshot.hdr;
+        self.gamemode = snapshot.gamemode;
+        self.throttling_status = snapshot.throttling_status;
+        self.gamepad_battery = snapshot.gamepad_battery;
+        self.orientation = snapshot.orientation;
+        self.hud_compact = snapshot.hud_compact;
     }
 }
 
@@ -675,11 +795,6 @@ pub enum ResolvedHud {
     Off,
     /// Explicitly suppress HUD for this game (`DISABLE_MANGOHUD=1` / `MTL_HUD_ENABLED=0`).
     Disabled,
-    /// Linux: enable MangoHud without a managed config file (uses user's system config).
-    MangoHudSystemDefault {
-        opengl_legacy_wrapper: bool,
-        mangohud_dlsym: bool,
-    },
     /// Linux: enable MangoHud with a specific Irori-managed profile.
     MangoHudProfile(Box<MangoHudProfile>),
     /// macOS: enable Metal Performance HUD with the selected corner alignment.
@@ -700,18 +815,6 @@ pub fn resolve_effective_hud(
         HudBackend::Unsupported => ResolvedHud::Off,
         HudBackend::MangoHud => match game.mode {
             GameHudMode::Disabled => ResolvedHud::Disabled,
-            GameHudMode::SystemDefault => ResolvedHud::MangoHudSystemDefault {
-                opengl_legacy_wrapper: game
-                    .custom_mangohud
-                    .as_ref()
-                    .map_or(global.mangohud.opengl_legacy_wrapper, |p| {
-                        p.opengl_legacy_wrapper
-                    }),
-                mangohud_dlsym: game
-                    .custom_mangohud
-                    .as_ref()
-                    .map_or(global.mangohud.mangohud_dlsym, |p| p.mangohud_dlsym),
-            },
             GameHudMode::Custom => ResolvedHud::MangoHudProfile(Box::new(
                 game.custom_mangohud
                     .clone()
@@ -721,25 +824,15 @@ pub fn resolve_effective_hud(
                 GlobalHudMode::IroriProfile => {
                     ResolvedHud::MangoHudProfile(Box::new(global.mangohud.clone()))
                 }
-                GlobalHudMode::SystemDefault => ResolvedHud::MangoHudSystemDefault {
-                    opengl_legacy_wrapper: global.mangohud.opengl_legacy_wrapper,
-                    mangohud_dlsym: global.mangohud.mangohud_dlsym,
-                },
-                GlobalHudMode::Off => {
-                    if legacy_show_mangohud {
-                        ResolvedHud::MangoHudSystemDefault {
-                            opengl_legacy_wrapper: false,
-                            mangohud_dlsym: true,
-                        }
-                    } else {
-                        ResolvedHud::Off
-                    }
+                // The legacy `showMangohud` toggle counts as "On".
+                GlobalHudMode::Off if legacy_show_mangohud => {
+                    ResolvedHud::MangoHudProfile(Box::new(global.mangohud.clone()))
                 }
+                GlobalHudMode::Off => ResolvedHud::Off,
             },
         },
         HudBackend::MetalHud => match game.mode {
             GameHudMode::Disabled => ResolvedHud::Disabled,
-            GameHudMode::SystemDefault => ResolvedHud::MetalHud(MetalHudSettings::default()),
             GameHudMode::Custom => ResolvedHud::MetalHud(
                 game.custom_metal
                     .clone()
@@ -747,14 +840,11 @@ pub fn resolve_effective_hud(
             ),
             GameHudMode::InheritGlobal => match global.mode {
                 GlobalHudMode::IroriProfile => ResolvedHud::MetalHud(global.metal.clone()),
-                GlobalHudMode::SystemDefault => ResolvedHud::MetalHud(MetalHudSettings::default()),
-                GlobalHudMode::Off => {
-                    if legacy_show_fps {
-                        ResolvedHud::MetalHud(MetalHudSettings::default())
-                    } else {
-                        ResolvedHud::Off
-                    }
+                // The legacy `showFps` toggle counts as "On".
+                GlobalHudMode::Off if legacy_show_fps => {
+                    ResolvedHud::MetalHud(global.metal.clone())
                 }
+                GlobalHudMode::Off => ResolvedHud::Off,
             },
         },
     }
@@ -868,5 +958,69 @@ mod tests {
             game.custom_metal.as_ref().unwrap().alignment,
             MetalHudAlignment::BottomLeft
         );
+    }
+
+    #[test]
+    fn legacy_system_default_values_load_as_on_and_custom() {
+        let global: GlobalHudSettings =
+            serde_json::from_str(r#"{"mode":"systemDefault"}"#).unwrap();
+        assert_eq!(global.mode, GlobalHudMode::IroriProfile);
+        let game: GameHudSettings = serde_json::from_str(r#"{"mode":"systemDefault"}"#).unwrap();
+        assert_eq!(game.mode, GameHudMode::Custom);
+    }
+
+    #[test]
+    fn legacy_toggle_with_global_off_resolves_to_irori_profile() {
+        let global = GlobalHudSettings::default();
+        let game = GameHudSettings::default();
+        let resolved = resolve_effective_hud(&global, &game, true, false, HudBackend::MangoHud);
+        assert_eq!(
+            resolved,
+            ResolvedHud::MangoHudProfile(Box::new(global.mangohud.clone()))
+        );
+        let resolved = resolve_effective_hud(&global, &game, false, false, HudBackend::MangoHud);
+        assert_eq!(resolved, ResolvedHud::Off);
+        let resolved = resolve_effective_hud(&global, &game, false, true, HudBackend::MetalHud);
+        assert_eq!(resolved, ResolvedHud::MetalHud(global.metal.clone()));
+    }
+
+    #[test]
+    fn custom_selection_survives_preset_switch_and_json_round_trip() {
+        let mut profile = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        profile.gpu_fan = true;
+        profile.ram = false;
+        profile.orientation = HudOrientation::Horizontal;
+        profile.hud_compact = true;
+        profile.mark_custom();
+        let expected = profile.custom_snapshot();
+
+        profile.apply_preset(HudPreset::BalancedGaming);
+        assert!(!profile.gpu_fan);
+        assert!(profile.ram);
+        assert_eq!(profile.orientation, HudOrientation::Vertical);
+
+        let json = serde_json::to_string(&profile).unwrap();
+        assert!(json.contains("savedCustom"));
+        let mut restored: MangoHudProfile = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, profile);
+
+        restored.apply_preset(HudPreset::Custom);
+        assert_eq!(restored.preset, HudPreset::Custom);
+        assert_eq!(restored.custom_snapshot(), expected);
+        assert!(restored.gpu_fan);
+        assert!(!restored.ram);
+        assert_eq!(restored.orientation, HudOrientation::Horizontal);
+        assert!(restored.hud_compact);
+    }
+
+    #[test]
+    fn profile_without_saved_custom_omits_the_field() {
+        let profile = MangoHudProfile::default();
+        let json = serde_json::to_string(&profile).unwrap();
+        assert!(!json.contains("savedCustom"));
+        let mut profile = profile;
+        let before = profile.custom_snapshot();
+        profile.apply_preset(HudPreset::Custom);
+        assert_eq!(profile.custom_snapshot(), before);
     }
 }

@@ -33,10 +33,10 @@ pub use events::{Event, EventBus, Notice, NoticeLevel};
 pub use game::*;
 pub use game_mode::GameMode;
 pub use hud::{
-    FpsLimitMethod, GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, GpuSelection,
-    HardwareVendor, HudBackend, HudColorPalette, HudOrientation, HudPosition, HudPreset,
-    MangoHudProfile, MetalHudAlignment, MetalHudSettings, ModifierSide, ResolvedHud,
-    ThemeHudColors,
+    CustomPresetSnapshot, FpsLimitMethod, GameHudMode, GameHudSettings, GlobalHudMode,
+    GlobalHudSettings, GpuSelection, HardwareVendor, HudBackend, HudColorPalette, HudOrientation,
+    HudPosition, HudPreset, MangoHudProfile, MetalHudAlignment, MetalHudSettings, ModifierSide,
+    ResolvedHud, ThemeHudColors,
 };
 pub use install::*;
 pub use launch::*;

@@ -36,7 +36,9 @@ use irori_runtime::hud::hardware_linux::{
     LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
 use irori_runtime::hud::launch_env::steam_launch_snippet;
-use irori_runtime::hud::mangohud_conf::{ConfRenderContext, render_mangohud_conf};
+use irori_runtime::hud::mangohud_conf::{
+    ConfRenderContext, render_mangohud_conf, resolve_effective_colors,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::theme_hud_colors;
 use irori_ui::{backend, models};
@@ -197,13 +199,10 @@ struct HudLabels {
     mode_game_help: SharedString,
     mode_off: SharedString,
     mode_irori_profile: SharedString,
-    mode_system_default: SharedString,
     mode_inherit_global: SharedString,
     mode_custom: SharedString,
     mode_disabled: SharedString,
     mode_off_note: SharedString,
-    mode_system_default_mangohud_note: SharedString,
-    mode_system_default_metal_note: SharedString,
     mode_disabled_note: SharedString,
     restore_from_global: SharedString,
     restore_from_global_help: SharedString,
@@ -353,6 +352,11 @@ struct HudLabels {
     metal_note: SharedString,
 }
 
+/// Chip tooltip: full metric name on the first line, help text on the second.
+fn metric_tip(name_key: &str, help_key: &str) -> SharedString {
+    SharedString::from(format!("{}\n{}", t(name_key), t(help_key)))
+}
+
 impl HudLabels {
     fn load() -> Self {
         Self {
@@ -363,13 +367,10 @@ impl HudLabels {
             mode_game_help: t("settings.hud.mode.game_help"),
             mode_off: t("settings.hud.mode.off"),
             mode_irori_profile: t("settings.hud.mode.irori_profile"),
-            mode_system_default: t("settings.hud.mode.system_default"),
             mode_inherit_global: t("settings.hud.mode.inherit_global"),
             mode_custom: t("settings.hud.mode.custom"),
             mode_disabled: t("settings.hud.mode.disabled"),
             mode_off_note: t("settings.hud.mode.off_note"),
-            mode_system_default_mangohud_note: t("settings.hud.mode.system_default_mangohud_note"),
-            mode_system_default_metal_note: t("settings.hud.mode.system_default_metal_note"),
             mode_disabled_note: t("settings.hud.mode.disabled_note"),
             restore_from_global: t("settings.hud.restore_from_global"),
             restore_from_global_help: t("settings.hud.restore_from_global_help"),
@@ -406,69 +407,141 @@ impl HudLabels {
 
             group_metrics_gpu: t("settings.hud.group.metrics_gpu"),
             metric_gpu_stats: t("settings.hud.metric.gpu_stats"),
-            metric_gpu_stats_help: t("settings.hud.metric.gpu_stats_help"),
+            metric_gpu_stats_help: metric_tip(
+                "settings.hud.metric.gpu_stats",
+                "settings.hud.metric.gpu_stats_help",
+            ),
             metric_gpu_stats_locked: t("settings.hud.metric.gpu_stats_locked"),
-            metric_gpu_temp: t("settings.hud.metric.gpu_temp"),
-            metric_gpu_temp_help: t("settings.hud.metric.gpu_temp_help"),
-            metric_gpu_junction_temp: t("settings.hud.metric.gpu_junction_temp"),
-            metric_gpu_junction_temp_help: t("settings.hud.metric.gpu_junction_temp_help"),
-            metric_gpu_mem_temp: t("settings.hud.metric.gpu_mem_temp"),
-            metric_gpu_mem_temp_help: t("settings.hud.metric.gpu_mem_temp_help"),
-            metric_gpu_core_clock: t("settings.hud.metric.gpu_core_clock"),
-            metric_gpu_core_clock_help: t("settings.hud.metric.gpu_core_clock_help"),
+            metric_gpu_temp: t("settings.hud.metric.gpu_temp_short"),
+            metric_gpu_temp_help: metric_tip(
+                "settings.hud.metric.gpu_temp",
+                "settings.hud.metric.gpu_temp_help",
+            ),
+            metric_gpu_junction_temp: t("settings.hud.metric.gpu_junction_temp_short"),
+            metric_gpu_junction_temp_help: metric_tip(
+                "settings.hud.metric.gpu_junction_temp",
+                "settings.hud.metric.gpu_junction_temp_help",
+            ),
+            metric_gpu_mem_temp: t("settings.hud.metric.gpu_mem_temp_short"),
+            metric_gpu_mem_temp_help: metric_tip(
+                "settings.hud.metric.gpu_mem_temp",
+                "settings.hud.metric.gpu_mem_temp_help",
+            ),
+            metric_gpu_core_clock: t("settings.hud.metric.gpu_core_clock_short"),
+            metric_gpu_core_clock_help: metric_tip(
+                "settings.hud.metric.gpu_core_clock",
+                "settings.hud.metric.gpu_core_clock_help",
+            ),
             metric_gpu_mem_clock: t("settings.hud.metric.gpu_mem_clock"),
-            metric_gpu_mem_clock_help: t("settings.hud.metric.gpu_mem_clock_help"),
-            metric_gpu_power: t("settings.hud.metric.gpu_power"),
-            metric_gpu_power_help: t("settings.hud.metric.gpu_power_help"),
-            metric_gpu_fan: t("settings.hud.metric.gpu_fan"),
-            metric_gpu_fan_help: t("settings.hud.metric.gpu_fan_help"),
+            metric_gpu_mem_clock_help: metric_tip(
+                "settings.hud.metric.gpu_mem_clock",
+                "settings.hud.metric.gpu_mem_clock_help",
+            ),
+            metric_gpu_power: t("settings.hud.metric.gpu_power_short"),
+            metric_gpu_power_help: metric_tip(
+                "settings.hud.metric.gpu_power",
+                "settings.hud.metric.gpu_power_help",
+            ),
+            metric_gpu_fan: t("settings.hud.metric.gpu_fan_short"),
+            metric_gpu_fan_help: metric_tip(
+                "settings.hud.metric.gpu_fan",
+                "settings.hud.metric.gpu_fan_help",
+            ),
             metric_vram: t("settings.hud.metric.vram"),
-            metric_vram_help: t("settings.hud.metric.vram_help"),
+            metric_vram_help: metric_tip(
+                "settings.hud.metric.vram",
+                "settings.hud.metric.vram_help",
+            ),
 
             group_metrics_cpu: t("settings.hud.group.metrics_cpu"),
             metric_cpu_stats: t("settings.hud.metric.cpu_stats"),
-            metric_cpu_stats_help: t("settings.hud.metric.cpu_stats_help"),
+            metric_cpu_stats_help: metric_tip(
+                "settings.hud.metric.cpu_stats",
+                "settings.hud.metric.cpu_stats_help",
+            ),
             metric_cpu_stats_locked: t("settings.hud.metric.cpu_stats_locked"),
-            metric_cpu_temp: t("settings.hud.metric.cpu_temp"),
-            metric_cpu_temp_help: t("settings.hud.metric.cpu_temp_help"),
-            metric_cpu_mhz: t("settings.hud.metric.cpu_mhz"),
-            metric_cpu_mhz_help: t("settings.hud.metric.cpu_mhz_help"),
-            metric_cpu_power: t("settings.hud.metric.cpu_power"),
-            metric_cpu_power_help: t("settings.hud.metric.cpu_power_help"),
-            metric_ram: t("settings.hud.metric.ram"),
-            metric_ram_help: t("settings.hud.metric.ram_help"),
+            metric_cpu_temp: t("settings.hud.metric.cpu_temp_short"),
+            metric_cpu_temp_help: metric_tip(
+                "settings.hud.metric.cpu_temp",
+                "settings.hud.metric.cpu_temp_help",
+            ),
+            metric_cpu_mhz: t("settings.hud.metric.cpu_mhz_short"),
+            metric_cpu_mhz_help: metric_tip(
+                "settings.hud.metric.cpu_mhz",
+                "settings.hud.metric.cpu_mhz_help",
+            ),
+            metric_cpu_power: t("settings.hud.metric.cpu_power_short"),
+            metric_cpu_power_help: metric_tip(
+                "settings.hud.metric.cpu_power",
+                "settings.hud.metric.cpu_power_help",
+            ),
+            metric_ram: t("settings.hud.metric.ram_short"),
+            metric_ram_help: metric_tip("settings.hud.metric.ram", "settings.hud.metric.ram_help"),
 
             group_metrics_fps: t("settings.hud.group.metrics_fps"),
             metric_fps: t("settings.hud.metric.fps"),
-            metric_fps_help: t("settings.hud.metric.fps_help"),
-            metric_fps_use_label: t("settings.hud.metric.fps_use_label"),
-            metric_fps_use_label_help: t("settings.hud.metric.fps_use_label_help"),
+            metric_fps_help: metric_tip("settings.hud.metric.fps", "settings.hud.metric.fps_help"),
+            metric_fps_use_label: t("settings.hud.metric.fps_use_label_short"),
+            metric_fps_use_label_help: metric_tip(
+                "settings.hud.metric.fps_use_label",
+                "settings.hud.metric.fps_use_label_help",
+            ),
             metric_fps_avg: t("settings.hud.metric.fps_avg"),
-            metric_fps_avg_help: t("settings.hud.metric.fps_avg_help"),
+            metric_fps_avg_help: metric_tip(
+                "settings.hud.metric.fps_avg",
+                "settings.hud.metric.fps_avg_help",
+            ),
             metric_fps_1_low: t("settings.hud.metric.fps_1_low"),
-            metric_fps_1_low_help: t("settings.hud.metric.fps_1_low_help"),
+            metric_fps_1_low_help: metric_tip(
+                "settings.hud.metric.fps_1_low",
+                "settings.hud.metric.fps_1_low_help",
+            ),
             metric_frametime: t("settings.hud.metric.frametime"),
-            metric_frametime_help: t("settings.hud.metric.frametime_help"),
+            metric_frametime_help: metric_tip(
+                "settings.hud.metric.frametime",
+                "settings.hud.metric.frametime_help",
+            ),
             metric_frame_timing: t("settings.hud.metric.frame_timing"),
-            metric_frame_timing_help: t("settings.hud.metric.frame_timing_help"),
+            metric_frame_timing_help: metric_tip(
+                "settings.hud.metric.frame_timing",
+                "settings.hud.metric.frame_timing_help",
+            ),
             metric_present_mode: t("settings.hud.metric.present_mode"),
-            metric_present_mode_help: t("settings.hud.metric.present_mode_help"),
+            metric_present_mode_help: metric_tip(
+                "settings.hud.metric.present_mode",
+                "settings.hud.metric.present_mode_help",
+            ),
 
             group_metrics_runtime: t("settings.hud.group.metrics_runtime"),
             metric_wine: t("settings.hud.metric.wine"),
-            metric_wine_help: t("settings.hud.metric.wine_help"),
+            metric_wine_help: metric_tip(
+                "settings.hud.metric.wine",
+                "settings.hud.metric.wine_help",
+            ),
             metric_winesync: t("settings.hud.metric.winesync"),
-            metric_winesync_help: t("settings.hud.metric.winesync_help"),
+            metric_winesync_help: metric_tip(
+                "settings.hud.metric.winesync",
+                "settings.hud.metric.winesync_help",
+            ),
             metric_fsr: t("settings.hud.metric.fsr"),
-            metric_fsr_help: t("settings.hud.metric.fsr_help"),
+            metric_fsr_help: metric_tip("settings.hud.metric.fsr", "settings.hud.metric.fsr_help"),
             metric_hdr: t("settings.hud.metric.hdr"),
-            metric_hdr_help: t("settings.hud.metric.hdr_help"),
+            metric_hdr_help: metric_tip("settings.hud.metric.hdr", "settings.hud.metric.hdr_help"),
             metric_gamemode: t("settings.hud.metric.gamemode"),
-            metric_gamemode_help: t("settings.hud.metric.gamemode_help"),
+            metric_gamemode_help: metric_tip(
+                "settings.hud.metric.gamemode",
+                "settings.hud.metric.gamemode_help",
+            ),
             metric_throttling_status: t("settings.hud.metric.throttling_status"),
-            metric_throttling_status_help: t("settings.hud.metric.throttling_status_help"),
+            metric_throttling_status_help: metric_tip(
+                "settings.hud.metric.throttling_status",
+                "settings.hud.metric.throttling_status_help",
+            ),
             metric_gamepad_battery: t("settings.hud.metric.gamepad_battery"),
-            metric_gamepad_battery_help: t("settings.hud.metric.gamepad_battery_help"),
+            metric_gamepad_battery_help: metric_tip(
+                "settings.hud.metric.gamepad_battery",
+                "settings.hud.metric.gamepad_battery_help",
+            ),
 
             fps_limit_label: t("settings.hud.fps_limit.label"),
             fps_limit_help: t("settings.hud.fps_limit.help"),
@@ -550,6 +623,11 @@ struct CachedDisplay {
     inherit_summary: SharedString,
     steam_snippet: Option<SharedString>,
     custom_swatches: [Hsla; 11],
+    /// Metric band titles with the enabled count (GPU, CPU, FPS, runtime).
+    band_titles: [SharedString; 4],
+    /// GPU, CPU and RAM sample colors for each palette button, in the order
+    /// hardware, Irori theme, monochrome, custom.
+    palette_dots: [[Hsla; 3]; 4],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -569,9 +647,13 @@ pub struct HudPanel {
     game: GameHudSettings,
     env: LinuxHudEnv,
     env_loaded: bool,
+    /// Legacy `showMangohud` (Linux) or `showFps` (macOS) toggle, which
+    /// counts as "On" while the global mode is Off.
+    legacy_on: bool,
     labels: HudLabels,
     display: CachedDisplay,
     language: LanguageStamp,
+    theme_stamp: (Hsla, Hsla, Hsla),
 
     preview: Entity<HudPreview>,
     shortcut: Entity<ShortcutRecorder>,
@@ -669,10 +751,7 @@ impl HudPanel {
             s
         });
 
-        let fps_limit_text = active_profile
-            .fps_limit
-            .map(|v| v.to_string())
-            .unwrap_or_default();
+        let fps_limit_text = custom_fps_text(active_profile.fps_limit);
         let fps_limit_placeholder = labels.fps_limit_placeholder.clone();
         let fps_limit_input = cx.new(|cx| {
             let mut s = InputState::new(window, cx).placeholder(fps_limit_placeholder);
@@ -779,16 +858,26 @@ impl HudPanel {
             |this, state, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
                     let raw = state.read(cx).value().trim().to_string();
+                    let current = this.active_mangohud().fps_limit;
                     let parsed = raw
                         .parse::<u32>()
                         .ok()
                         .filter(|&v| v > 0)
                         .map(|v| v.min(1000));
-                    let normalized = parsed.map(|v| v.to_string()).unwrap_or_default();
+                    // The field only holds values outside the shortcut chips, so an
+                    // empty field clears a custom limit but keeps a chip selection.
+                    let next = match parsed {
+                        Some(v) => Some(v),
+                        None if raw.is_empty() => current.filter(|&v| is_fps_preset(v)),
+                        None => current,
+                    };
+                    let normalized = custom_fps_text(next);
                     if state.read(cx).value().as_ref() != normalized {
                         state.update(cx, |s, cx| s.set_value(normalized, window, cx));
                     }
-                    this.edit_mangohud(window, cx, |p| p.fps_limit = parsed);
+                    if next != current {
+                        this.edit_mangohud(window, cx, |p| p.fps_limit = next);
+                    }
                 }
             },
         ));
@@ -857,7 +946,21 @@ impl HudPanel {
             }),
         );
 
-        let display = build_cached_display(&scope, hud_backend, &global, &game, &labels, cx);
+        let legacy_on = legacy_hud_toggle(&scope, hud_backend, cx);
+        let display = build_cached_display(
+            DisplayInputs {
+                scope: &scope,
+                hud_backend,
+                global: &global,
+                game: &game,
+                legacy_on,
+                env: &env,
+                labels: &labels,
+            },
+            cx,
+        );
+        let theme = cx.theme();
+        let theme_stamp = (theme.background, theme.foreground, theme.primary);
 
         let panel = Self {
             scope,
@@ -867,9 +970,11 @@ impl HudPanel {
             game,
             env,
             env_loaded,
+            legacy_on,
             labels,
             display,
             language: LanguageStamp::new(),
+            theme_stamp,
             preview,
             shortcut,
             gpu_select,
@@ -941,9 +1046,14 @@ impl HudPanel {
 
     fn is_editing_profile(&self) -> bool {
         match &self.scope {
-            HudPanelScope::Global => self.global.mode == GlobalHudMode::IroriProfile,
+            HudPanelScope::Global => self.global_on(),
             HudPanelScope::PerGame { .. } => self.game.mode == GameHudMode::Custom,
         }
+    }
+
+    /// Whether the global mode counts as "On", including the legacy toggle.
+    fn global_on(&self) -> bool {
+        global_hud_on(&self.global, self.legacy_on)
     }
 
     fn active_mangohud(&self) -> &MangoHudProfile {
@@ -1112,10 +1222,22 @@ impl HudPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.global.mode == mode {
+        let clears_legacy = mode == GlobalHudMode::Off && self.legacy_on;
+        if self.global.mode == mode && !clears_legacy {
             return;
         }
         self.global.mode = mode;
+        if clears_legacy {
+            // Off must match what games show, so the legacy toggle goes off too.
+            let metal = self.backend == HudBackend::MetalHud;
+            backend(cx).settings.update_app(|a| {
+                a.game.show_mangohud = false;
+                if metal {
+                    a.game.show_fps = false;
+                }
+            });
+            self.legacy_on = false;
+        }
         self.persist_current(cx);
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
@@ -1149,11 +1271,13 @@ impl HudPanel {
 
     fn reload_from_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (global, game) = read_hud_settings(&self.scope, cx);
-        if self.global == global && self.game == game {
+        let legacy_on = legacy_hud_toggle(&self.scope, self.backend, cx);
+        if self.global == global && self.game == game && self.legacy_on == legacy_on {
             return;
         }
         self.global = global;
         self.game = game;
+        self.legacy_on = legacy_on;
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
         cx.notify();
@@ -1223,7 +1347,7 @@ impl HudPanel {
                 .update(cx, |s, cx| s.set_value(val, window, cx));
         }
 
-        let fps_text = profile.fps_limit.map(|v| v.to_string()).unwrap_or_default();
+        let fps_text = custom_fps_text(profile.fps_limit);
         if !self
             .fps_limit_input
             .read(cx)
@@ -1266,12 +1390,22 @@ impl HudPanel {
         let backend = self.backend;
         self.preview
             .update(cx, |p, cx| p.set_state(backend, profile, metal, env, cx));
+        self.rebuild_display(cx);
+    }
+
+    fn rebuild_display(&mut self, cx: &App) {
+        let theme = cx.theme();
+        self.theme_stamp = (theme.background, theme.foreground, theme.primary);
         self.display = build_cached_display(
-            &self.scope,
-            self.backend,
-            &self.global,
-            &self.game,
-            &self.labels,
+            DisplayInputs {
+                scope: &self.scope,
+                hud_backend: self.backend,
+                global: &self.global,
+                game: &self.game,
+                legacy_on: self.legacy_on,
+                env: &self.env,
+                labels: &self.labels,
+            },
             cx,
         );
     }
@@ -1380,14 +1514,14 @@ impl HudPanel {
         let border = cx.theme().border;
         let mode_control: AnyElement = match &self.scope {
             HudPanelScope::Global => {
-                let current = self.global.mode;
+                let on = self.global_on();
                 h_flex()
                     .flex_wrap()
                     .gap_1p5()
                     .child(choice_button(
                         "hud-mode-off",
                         self.labels.mode_off.clone(),
-                        current == GlobalHudMode::Off,
+                        !on,
                         cx.listener(|this, _, window, cx| {
                             this.set_global_mode(GlobalHudMode::Off, window, cx);
                         }),
@@ -1395,17 +1529,9 @@ impl HudPanel {
                     .child(choice_button(
                         "hud-mode-irori",
                         self.labels.mode_irori_profile.clone(),
-                        current == GlobalHudMode::IroriProfile,
+                        on,
                         cx.listener(|this, _, window, cx| {
                             this.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-mode-system",
-                        self.labels.mode_system_default.clone(),
-                        current == GlobalHudMode::SystemDefault,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::SystemDefault, window, cx);
                         }),
                     ))
                     .into_any_element()
@@ -1429,14 +1555,6 @@ impl HudPanel {
                         current == GameHudMode::Custom,
                         cx.listener(|this, _, window, cx| {
                             this.set_game_mode(GameHudMode::Custom, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-system",
-                        self.labels.mode_system_default.clone(),
-                        current == GameHudMode::SystemDefault,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::SystemDefault, window, cx);
                         }),
                     ))
                     .child(choice_button(
@@ -1468,20 +1586,10 @@ impl HudPanel {
         ));
 
         let status_note: Option<SharedString> = match &self.scope {
-            HudPanelScope::Global => match self.global.mode {
-                GlobalHudMode::Off => Some(self.labels.mode_off_note.clone()),
-                GlobalHudMode::SystemDefault => Some(match self.backend {
-                    HudBackend::MetalHud => self.labels.mode_system_default_metal_note.clone(),
-                    _ => self.labels.mode_system_default_mangohud_note.clone(),
-                }),
-                GlobalHudMode::IroriProfile => None,
-            },
+            HudPanelScope::Global if self.global_on() => None,
+            HudPanelScope::Global => Some(self.labels.mode_off_note.clone()),
             HudPanelScope::PerGame { .. } => match self.game.mode {
                 GameHudMode::InheritGlobal => Some(self.display.inherit_summary.clone()),
-                GameHudMode::SystemDefault => Some(match self.backend {
-                    HudBackend::MetalHud => self.labels.mode_system_default_metal_note.clone(),
-                    _ => self.labels.mode_system_default_mangohud_note.clone(),
-                }),
                 GameHudMode::Disabled => Some(self.labels.mode_disabled_note.clone()),
                 GameHudMode::Custom => None,
             },
@@ -1530,20 +1638,19 @@ impl HudPanel {
 
     fn render_top_quick_card(&self, cx: &mut Context<Self>) -> AnyElement {
         let border = cx.theme().border;
-        let muted_fg = cx.theme().muted_foreground;
         let p = self.active_mangohud();
 
         // Row 1: Mode buttons (+ inline Restore button when PerGame::Custom)
         let mode_buttons: AnyElement = match &self.scope {
             HudPanelScope::Global => {
-                let current = self.global.mode;
+                let on = self.global_on();
                 h_flex()
                     .flex_wrap()
                     .gap_1p5()
                     .child(choice_button(
                         "hud-mode-off",
                         self.labels.mode_off.clone(),
-                        current == GlobalHudMode::Off,
+                        !on,
                         cx.listener(|this, _, window, cx| {
                             this.set_global_mode(GlobalHudMode::Off, window, cx);
                         }),
@@ -1551,17 +1658,9 @@ impl HudPanel {
                     .child(choice_button(
                         "hud-mode-irori",
                         self.labels.mode_irori_profile.clone(),
-                        current == GlobalHudMode::IroriProfile,
+                        on,
                         cx.listener(|this, _, window, cx| {
                             this.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-mode-system",
-                        self.labels.mode_system_default.clone(),
-                        current == GlobalHudMode::SystemDefault,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::SystemDefault, window, cx);
                         }),
                     ))
                     .into_any_element()
@@ -1586,14 +1685,6 @@ impl HudPanel {
                         current == GameHudMode::Custom,
                         cx.listener(|this, _, window, cx| {
                             this.set_game_mode(GameHudMode::Custom, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-system",
-                        self.labels.mode_system_default.clone(),
-                        current == GameHudMode::SystemDefault,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::SystemDefault, window, cx);
                         }),
                     ))
                     .child(choice_button(
@@ -1665,12 +1756,12 @@ impl HudPanel {
                 self.labels.preset_custom.clone(),
                 current_preset == HudPreset::Custom,
                 cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.mark_custom());
+                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::Custom));
                 }),
             ));
 
-        // Row 3: FPS Limit + Method inline right at the top
-        let mut fps_row = h_flex()
+        // Row 3: FPS limit values on top, limiter method below.
+        let mut fps_values = h_flex()
             .flex_wrap()
             .gap_1p5()
             .items_center()
@@ -1685,20 +1776,22 @@ impl HudPanel {
                 }),
             ));
         for (cap, id, text) in FPS_PRESETS {
-            fps_row = fps_row.child(choice_button(
+            fps_values = fps_values.child(choice_button(
                 id,
                 SharedString::new_static(text),
                 p.fps_limit == Some(cap),
                 cx.listener(move |this, _, window, cx| {
                     this.fps_limit_input
-                        .update(cx, |s, cx| s.set_value(text, window, cx));
+                        .update(cx, |s, cx| s.set_value("", window, cx));
                     this.edit_mangohud(window, cx, |p| p.fps_limit = Some(cap));
                 }),
             ));
         }
-        fps_row = fps_row
-            .child(Input::new(&self.fps_limit_input).small().w_20())
-            .child(div().w(px(1.)).h_4().mx_1().bg(border))
+        fps_values = fps_values.child(Input::new(&self.fps_limit_input).small().w_20());
+        let fps_methods = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .items_center()
             .child(
                 choice_button(
                     "hud-fps-method-late",
@@ -1725,23 +1818,24 @@ impl HudPanel {
                 )
                 .tooltip(self.labels.fps_limit_method_help.clone()),
             );
+        let fps_row = v_flex().gap_1p5().child(fps_values).child(fps_methods);
 
-        let compact_row = |label: SharedString, hint: SharedString, body: AnyElement| {
-            v_flex()
-                .w_full()
-                .px_4()
-                .py_2p5()
-                .gap_1p5()
-                .child(
-                    h_flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(div().text_xs().font_semibold().child(label))
-                        .child(div().text_xs().text_color(muted_fg).truncate().child(hint)),
-                )
-                .child(body)
-        };
+        let compact_row =
+            |info_id: &'static str, label: SharedString, hint: SharedString, body: AnyElement| {
+                v_flex()
+                    .w_full()
+                    .px_4()
+                    .py_2p5()
+                    .gap_1p5()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .child(div().text_xs().font_semibold().child(label))
+                            .child(info_button(info_id, hint)),
+                    )
+                    .child(body)
+            };
 
         let mode_hint = match &self.scope {
             HudPanelScope::Global => self.labels.mode_global_help.clone(),
@@ -1750,16 +1844,19 @@ impl HudPanel {
 
         group_panel(cx)
             .child(compact_row(
+                "hud-mode-info",
                 self.labels.mode_label.clone(),
                 mode_hint,
                 mode_buttons,
             ))
             .child(div().border_t_1().border_color(border).child(compact_row(
+                "hud-preset-info",
                 self.labels.presets_label.clone(),
                 self.labels.presets_help.clone(),
                 preset_buttons.into_any_element(),
             )))
             .child(div().border_t_1().border_color(border).child(compact_row(
+                "hud-fps-info",
                 self.labels.fps_limit_label.clone(),
                 self.labels.fps_limit_help.clone(),
                 fps_row.into_any_element(),
@@ -2194,24 +2291,27 @@ impl HudPanel {
                 .child(chips)
         };
 
+        let [gpu_title, cpu_title, fps_title, runtime_title] = self.display.band_titles.clone();
         group_panel(cx)
-            .child(band(self.labels.group_metrics_gpu.clone(), gpu_chips))
+            .child(band(gpu_title, gpu_chips))
             .child(
                 div()
                     .border_t_1()
                     .border_color(border)
-                    .child(band(self.labels.group_metrics_cpu.clone(), cpu_chips)),
+                    .child(band(cpu_title, cpu_chips)),
             )
             .child(
                 div()
                     .border_t_1()
                     .border_color(border)
-                    .child(band(self.labels.group_metrics_fps.clone(), fps_chips)),
+                    .child(band(fps_title, fps_chips)),
             )
-            .child(div().border_t_1().border_color(border).child(band(
-                self.labels.group_metrics_runtime.clone(),
-                runtime_chips,
-            )))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(band(runtime_title, runtime_chips)),
+            )
             .into_any_element()
     }
 
@@ -2490,40 +2590,54 @@ impl HudPanel {
         let palette_control = h_flex()
             .flex_wrap()
             .gap_1p5()
-            .child(choice_button(
-                "hud-palette-default",
-                self.labels.palette_mangohud_default.clone(),
-                p.palette == HudColorPalette::MangoHudDefault,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.palette = HudColorPalette::MangoHudDefault
-                    });
-                }),
-            ))
-            .child(choice_button(
-                "hud-palette-sync",
-                self.labels.palette_sync_irori_theme.clone(),
-                p.palette == HudColorPalette::SyncIroriTheme,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::SyncIroriTheme);
-                }),
-            ))
-            .child(choice_button(
-                "hud-palette-monochrome",
-                self.labels.palette_monochrome.clone(),
-                p.palette == HudColorPalette::Monochrome,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::Monochrome);
-                }),
-            ))
-            .child(choice_button(
-                "hud-palette-custom",
-                self.labels.palette_custom.clone(),
-                p.palette == HudColorPalette::Custom,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::Custom);
-                }),
-            ))
+            .child(
+                choice_button(
+                    "hud-palette-default",
+                    self.labels.palette_mangohud_default.clone(),
+                    p.palette == HudColorPalette::MangoHudDefault,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.palette = HudColorPalette::MangoHudDefault
+                        });
+                    }),
+                )
+                .child(palette_dots(self.display.palette_dots[0], border)),
+            )
+            .child(
+                choice_button(
+                    "hud-palette-sync",
+                    self.labels.palette_sync_irori_theme.clone(),
+                    p.palette == HudColorPalette::SyncIroriTheme,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.palette = HudColorPalette::SyncIroriTheme
+                        });
+                    }),
+                )
+                .child(palette_dots(self.display.palette_dots[1], border)),
+            )
+            .child(
+                choice_button(
+                    "hud-palette-monochrome",
+                    self.labels.palette_monochrome.clone(),
+                    p.palette == HudColorPalette::Monochrome,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::Monochrome);
+                    }),
+                )
+                .child(palette_dots(self.display.palette_dots[2], border)),
+            )
+            .child(
+                choice_button(
+                    "hud-palette-custom",
+                    self.labels.palette_custom.clone(),
+                    p.palette == HudColorPalette::Custom,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::Custom);
+                    }),
+                )
+                .child(palette_dots(self.display.palette_dots[3], border)),
+            )
             .into_any_element();
 
         let mut panel = group_panel(cx).child(field_row(
@@ -2609,11 +2723,7 @@ impl HudPanel {
         if !self.show_opengl_legacy() {
             return None;
         }
-        let mode_supports_wrapper = matches!(
-            self.game.mode,
-            GameHudMode::Custom | GameHudMode::SystemDefault
-        );
-        if !mode_supports_wrapper {
+        if self.game.mode != GameHudMode::Custom {
             return None;
         }
         let border = cx.theme().border;
@@ -2739,6 +2849,11 @@ impl Render for HudPanel {
         if self.language.changed() {
             cx.defer_in(window, |this, window, cx| this.retranslate(window, cx));
         }
+        let theme = cx.theme();
+        if (theme.background, theme.foreground, theme.primary) != self.theme_stamp {
+            // Palette sample colors follow the theme; rebuild only when it changes.
+            self.rebuild_display(cx);
+        }
         if self.backend == HudBackend::Unsupported {
             return div()
                 .py_3()
@@ -2827,6 +2942,70 @@ fn locked_metric_chip(id: &'static str, label: SharedString, reason: SharedStrin
         .disabled(true)
         .label(label)
         .tooltip(reason)
+}
+
+/// Focusable info icon that shows `help` in its tooltip.
+fn info_button(id: &'static str, help: SharedString) -> Button {
+    Button::new(id)
+        .ghost()
+        .xsmall()
+        .icon(IconName::Info)
+        .accessibility_label(help.clone())
+        .tooltip(help)
+}
+
+/// Three small color samples (GPU, CPU, RAM) shown inside a palette button.
+fn palette_dots(colors: [Hsla; 3], border: Hsla) -> gpui_kit::Div {
+    h_flex()
+        .gap(px(2.))
+        .children(colors.into_iter().map(|color| {
+            div()
+                .size(px(8.))
+                .rounded_full()
+                .bg(color)
+                .border_1()
+                .border_color(border)
+        }))
+}
+
+/// Text for the custom FPS field: empty when the limit matches a shortcut chip.
+fn custom_fps_text(limit: Option<u32>) -> String {
+    match limit {
+        Some(v) if !is_fps_preset(v) => v.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn is_fps_preset(value: u32) -> bool {
+    FPS_PRESETS.iter().any(|&(cap, _, _)| cap == value)
+}
+
+/// Whether the global mode counts as "On" (the legacy toggle turns Off into On).
+fn global_hud_on(global: &GlobalHudSettings, legacy_on: bool) -> bool {
+    match global.mode {
+        GlobalHudMode::IroriProfile => true,
+        GlobalHudMode::Off => legacy_on,
+    }
+}
+
+/// Legacy HUD toggle for `scope`: `showMangohud` on Linux, `showFps` on macOS.
+fn legacy_hud_toggle(scope: &HudPanelScope, hud_backend: HudBackend, cx: &App) -> bool {
+    let settings = &backend(cx).settings;
+    let (show_mangohud, show_fps) = match scope {
+        HudPanelScope::Global => {
+            let app = settings.app();
+            (app.game.show_mangohud, app.game.show_fps)
+        }
+        HudPanelScope::PerGame { id, .. } => {
+            let g = settings.game(id);
+            (g.show_mangohud, g.show_fps)
+        }
+    };
+    match hud_backend {
+        HudBackend::MangoHud => show_mangohud,
+        HudBackend::MetalHud => show_fps,
+        HudBackend::Unsupported => false,
+    }
 }
 
 fn compact_slider_cell(
@@ -3085,19 +3264,32 @@ fn parse_position_key(key: &str) -> Option<HudPosition> {
         .find(|p| p.as_mangohud_value() == key)
 }
 
-fn build_cached_display(
-    scope: &HudPanelScope,
+/// Panel state that [`build_cached_display`] reads.
+struct DisplayInputs<'a> {
+    scope: &'a HudPanelScope,
     hud_backend: HudBackend,
-    global: &GlobalHudSettings,
-    game: &GameHudSettings,
-    labels: &HudLabels,
-    cx: &App,
-) -> CachedDisplay {
+    global: &'a GlobalHudSettings,
+    game: &'a GameHudSettings,
+    legacy_on: bool,
+    env: &'a LinuxHudEnv,
+    labels: &'a HudLabels,
+}
+
+fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> CachedDisplay {
+    let DisplayInputs {
+        scope,
+        hud_backend,
+        global,
+        game,
+        legacy_on,
+        env,
+        labels,
+    } = inputs;
     let profile = effective_mangohud_profile(scope, global, game);
-    let global_mode_label = match global.mode {
-        GlobalHudMode::Off => labels.mode_off.as_ref(),
-        GlobalHudMode::IroriProfile => labels.mode_irori_profile.as_ref(),
-        GlobalHudMode::SystemDefault => labels.mode_system_default.as_ref(),
+    let global_mode_label = if global_hud_on(global, legacy_on) {
+        labels.mode_irori_profile.as_ref()
+    } else {
+        labels.mode_off.as_ref()
     };
     let inherit_summary = t_args(
         "settings.hud.mode.inherit_summary",
@@ -3119,6 +3311,89 @@ fn build_cached_display(
         rgb(val).into()
     });
 
+    let p = &profile;
+    let counts = [
+        tally(&[
+            p.effective_gpu_stats(),
+            p.gpu_temp,
+            p.gpu_junction_temp,
+            p.gpu_mem_temp,
+            p.gpu_core_clock,
+            p.gpu_mem_clock,
+            p.gpu_power,
+            p.gpu_fan,
+            p.vram,
+        ]),
+        tally(&[
+            p.effective_cpu_stats(),
+            p.cpu_temp,
+            p.cpu_mhz,
+            p.cpu_power,
+            p.ram,
+        ]),
+        tally(&[
+            p.fps,
+            p.fps_avg,
+            p.fps_1_low,
+            p.frametime,
+            p.frame_timing,
+            p.present_mode,
+            p.fps_use_label,
+        ]),
+        tally(&[
+            p.wine,
+            p.winesync,
+            p.fsr,
+            p.hdr,
+            p.gamemode,
+            p.throttling_status,
+            p.gamepad_battery,
+        ]),
+    ];
+    let groups = [
+        &labels.group_metrics_gpu,
+        &labels.group_metrics_cpu,
+        &labels.group_metrics_fps,
+        &labels.group_metrics_runtime,
+    ];
+    let band_titles = std::array::from_fn(|ix| {
+        let (on, total) = counts[ix];
+        let on = on.to_string();
+        let total = total.to_string();
+        t_args(
+            "settings.hud.metrics.band_count",
+            &[
+                ("group", groups[ix].as_ref()),
+                ("on", on.as_str()),
+                ("total", total.as_str()),
+            ],
+        )
+    });
+
+    let ctx = ConfRenderContext {
+        gpu_vendor: default_gpu_vendor(&profile.gpu_selection, &env.gpus),
+        cpu_vendor: env.cpu_vendor,
+        theme_colors: Some(theme_hud_colors(cx.theme())),
+        ..Default::default()
+    };
+    let mut sample = profile.clone();
+    let palette_dots = [
+        HudColorPalette::MangoHudDefault,
+        HudColorPalette::SyncIroriTheme,
+        HudColorPalette::Monochrome,
+        HudColorPalette::Custom,
+    ]
+    .map(|palette| {
+        sample.palette = palette;
+        let colors = resolve_effective_colors(&sample, &ctx).unwrap_or_default();
+        let d = ThemeHudColors::default();
+        [
+            hex_hsla(&colors.gpu_color, &d.gpu_color),
+            hex_hsla(&colors.cpu_color, &d.cpu_color),
+            hex_hsla(&colors.ram_color, &d.ram_color),
+        ]
+    });
+
     CachedDisplay {
         round_corners: SharedString::from(format!("{} px", profile.round_corners)),
         font_scale: SharedString::from(format!("{}%", (profile.font_scale * 100.0).round() as u32)),
@@ -3130,7 +3405,19 @@ fn build_cached_display(
         inherit_summary,
         steam_snippet,
         custom_swatches,
+        band_titles,
+        palette_dots,
     }
+}
+
+/// Count of enabled flags and the total, for a metric band title.
+fn tally(flags: &[bool]) -> (usize, usize) {
+    (flags.iter().filter(|&&f| f).count(), flags.len())
+}
+
+fn hex_hsla(hex: &str, fallback: &str) -> Hsla {
+    let clean = sanitize_hex6(hex, fallback);
+    rgb(u32::from_str_radix(&clean, 16).unwrap_or(0xFFFFFF)).into()
 }
 
 #[cfg(test)]
@@ -3199,6 +3486,34 @@ mod tests {
             let _ = window.draw(cx);
         })
         .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn legacy_toggle_shows_on_and_off_clears_it(cx: &mut TestAppContext) {
+        let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+        cx.update_window(handle, |_, window, cx| {
+            irori_ui::backend(cx).settings.update_app(|a| {
+                a.hud.mode = GlobalHudMode::Off;
+                a.game.show_mangohud = true;
+            });
+            panel.update(cx, |p, cx| {
+                p.reload_from_settings(window, cx);
+                assert!(p.global_on(), "legacy showMangohud counts as On");
+                assert!(p.is_editing_profile());
+                p.set_global_mode(GlobalHudMode::Off, window, cx);
+                assert!(!p.global_on());
+            });
+            assert!(!irori_ui::backend(cx).settings.app().game.show_mangohud);
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn custom_fps_field_only_shows_values_outside_the_chips() {
+        assert_eq!(custom_fps_text(None), "");
+        assert_eq!(custom_fps_text(Some(144)), "");
+        assert_eq!(custom_fps_text(Some(176)), "176");
     }
 
     #[gpui_kit::test]

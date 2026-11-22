@@ -140,7 +140,12 @@ impl SettingsSection {
         let key = match self {
             SettingsSection::General => "settings.page.general_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
-            SettingsSection::PerformanceHud => "settings.page.performance_hud_description",
+            SettingsSection::PerformanceHud => match irori_core::HudBackend::current() {
+                irori_core::HudBackend::MetalHud => {
+                    "settings.page.performance_hud_description_metal"
+                }
+                _ => "settings.page.performance_hud_description_mangohud",
+            },
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Storage => "settings.page.storage_description",
             SettingsSection::Advanced => "settings.page.advanced_description",

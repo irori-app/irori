@@ -54,9 +54,10 @@ struct PreviewLabels {
     title: SharedString,
     hidden_badge: SharedString,
     test_vulkan: SharedString,
-    test_running: SharedString,
+    close_vulkan: SharedString,
     test_failed: SharedString,
     metal_subtitle: SharedString,
+    empty: SharedString,
 }
 
 impl PreviewLabels {
@@ -65,9 +66,10 @@ impl PreviewLabels {
             title: t("settings.hud.preview.title"),
             hidden_badge: t("settings.hud.preview.hidden_badge"),
             test_vulkan: t("settings.hud.preview.test_vulkan"),
-            test_running: t("settings.hud.preview.test_running"),
+            close_vulkan: t("settings.hud.preview.close_vulkan"),
             test_failed: t("settings.hud.preview.test_failed"),
             metal_subtitle: t("settings.hud.preview.metal_subtitle"),
+            empty: t("settings.hud.preview.empty"),
         }
     }
 }
@@ -138,6 +140,8 @@ struct CachedPreview {
     horizontal_segments: Vec<PreviewHorizontalSegment>,
     extras: Vec<PreviewCell>,
     minimal_fps_only: bool,
+    /// No metric would be drawn, so the stage shows the empty message.
+    is_empty: bool,
     fps_only_value: SharedString,
     fps_only_color: Hsla,
     show_frametime_graph: bool,
@@ -263,6 +267,16 @@ impl HudPreview {
         self.theme_stamp = (theme.background, theme.foreground, theme.primary);
         let theme_colors = theme_hud_colors(theme);
         self.cache = build_cache(&self.profile, &self.metal, &self.env, &theme_colors);
+    }
+
+    /// Close the open `vkcube` window. The background task still reaps the
+    /// child with `child.wait()` after killing it.
+    fn close_vkcube_test(&mut self, cx: &mut Context<Self>) {
+        if let Some(running) = self.running.take() {
+            let _ = running.kill_tx.send(());
+        }
+        self.starting = false;
+        cx.notify();
     }
 
     fn launch_vkcube_test(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -617,24 +631,34 @@ impl Render for HudPreview {
                         Button::new("hud-test-vkcube")
                             .outline()
                             .small()
-                            .icon(IconName::Play)
+                            .icon(if is_running {
+                                IconName::X
+                            } else {
+                                IconName::Play
+                            })
                             .loading(self.starting)
                             .disabled(self.starting)
                             .label(if is_running {
-                                self.labels.test_running.clone()
+                                self.labels.close_vulkan.clone()
                             } else {
                                 self.labels.test_vulkan.clone()
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.launch_vkcube_test(window, cx);
+                                if this.running.is_some() {
+                                    this.close_vkcube_test(cx);
+                                } else {
+                                    this.launch_vkcube_test(window, cx);
+                                }
                             })),
                     ),
                 )
             });
 
+        // The stage hugs the HUD card; the minimum keeps corner and center
+        // positions readable when only a line or two is enabled.
         let mut stage = v_flex()
             .w_full()
-            .min_h(rems(13.))
+            .min_h(rems(6.))
             .rounded(theme.radius)
             .bg(stage_bg)
             .border_1()
@@ -642,6 +666,14 @@ impl Render for HudPreview {
             .overflow_hidden();
 
         stage = match self.backend {
+            HudBackend::MangoHud if self.cache.is_empty => {
+                stage.p_3().justify_center().items_center().child(
+                    div()
+                        .text_sm()
+                        .text_color(gpui_kit::hsla(0., 0., 1., 0.6))
+                        .child(self.labels.empty.clone()),
+                )
+            }
             HudBackend::MangoHud => {
                 let padded = if self.cache.hud_no_margin {
                     stage.p_0()
@@ -1226,6 +1258,12 @@ fn build_cache(
     }
 
     let minimal_fps_only = profile.is_minimal_fps_only();
+    let show_frametime_graph = profile.frame_timing && !minimal_fps_only;
+    let is_empty = !minimal_fps_only
+        && grid_rows.is_empty()
+        && horizontal_segments.is_empty()
+        && extras.is_empty()
+        && !show_frametime_graph;
 
     CachedPreview {
         palette,
@@ -1233,9 +1271,10 @@ fn build_cache(
         horizontal_segments,
         extras,
         minimal_fps_only,
+        is_empty,
         fps_only_value: fps_num,
         fps_only_color: fps_color,
-        show_frametime_graph: profile.frame_timing && !minimal_fps_only,
+        show_frametime_graph,
         frametime_minmax,
         horizontal: profile.orientation == HudOrientation::Horizontal,
         position: profile.position,
@@ -1305,6 +1344,36 @@ mod tests {
             .find(|r| r.label.as_ref() == "1%")
             .expect("1% row");
         assert_eq!(low_row.col2.as_ref().unwrap().unit.as_deref(), Some("FPS"));
+    }
+
+    #[test]
+    fn preview_reports_empty_when_every_metric_is_off() {
+        let mut profile = MangoHudProfile::from_preset(irori_core::HudPreset::BalancedGaming);
+        let base = profile.custom_snapshot();
+        let snapshot = irori_core::CustomPresetSnapshot {
+            orientation: base.orientation,
+            hud_compact: base.hud_compact,
+            ..Default::default()
+        };
+        profile.restore_custom_snapshot(&snapshot);
+        profile.fps_use_label = true;
+        let theme = irori_core::ThemeHudColors::default();
+        let cache = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &theme,
+        );
+        assert!(cache.is_empty);
+
+        profile.fps = true;
+        let cache = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &theme,
+        );
+        assert!(!cache.is_empty);
     }
 
     #[test]

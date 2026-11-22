@@ -178,6 +178,6 @@
   "shell.palette.ungroup_by_category": "Не группировать библиотеку по категории",
   "shell.palette.category_keywords": "категория умная метка группа коллекция",
   "shell.palette.genre_keywords": "жанр экшен приключения стратегия головоломка rpg шутер",
-  "shell.palette.performance_hud": "HUD производительности",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime счётчик производительность"
+  "shell.palette.performance_hud": "Статистика в игре",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime счётчик производительность статистика в игре in-game stats"
 }

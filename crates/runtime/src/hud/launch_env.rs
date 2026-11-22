@@ -57,24 +57,8 @@ pub fn build_hud_launch_plan(input: &HudLaunchInput<'_>) -> HudLaunchPlan {
             configure_mangohud_active(
                 &mut plan,
                 input,
-                true,
                 profile.opengl_legacy_wrapper,
                 profile.mangohud_dlsym,
-            );
-        }
-        (
-            HudBackend::MangoHud,
-            ResolvedHud::MangoHudSystemDefault {
-                opengl_legacy_wrapper,
-                mangohud_dlsym,
-            },
-        ) => {
-            configure_mangohud_active(
-                &mut plan,
-                input,
-                false,
-                *opengl_legacy_wrapper,
-                *mangohud_dlsym,
             );
         }
         (HudBackend::MetalHud, ResolvedHud::MetalHud(metal)) => {
@@ -93,7 +77,6 @@ pub fn build_hud_launch_plan(input: &HudLaunchInput<'_>) -> HudLaunchPlan {
 fn configure_mangohud_active(
     plan: &mut HudLaunchPlan,
     input: &HudLaunchInput<'_>,
-    is_profile: bool,
     opengl_legacy_wrapper: bool,
     mangohud_dlsym: bool,
 ) {
@@ -122,21 +105,17 @@ fn configure_mangohud_active(
         }
     }
 
-    if is_profile {
-        if let Some(cfg) = input.config_file {
-            plan.env_set.insert(
-                "MANGOHUD_CONFIGFILE".into(),
-                cfg.to_string_lossy().into_owned(),
-            );
-            plan.sandbox_ro_binds.push(cfg.to_path_buf());
-        }
-        if let Some(dir) = input.mangohud_dir
-            && !plan.sandbox_ro_binds.iter().any(|p| p == dir)
-        {
-            plan.sandbox_ro_binds.push(dir.to_path_buf());
-        }
-    } else {
-        plan.env_remove.push("MANGOHUD_CONFIGFILE".into());
+    if let Some(cfg) = input.config_file {
+        plan.env_set.insert(
+            "MANGOHUD_CONFIGFILE".into(),
+            cfg.to_string_lossy().into_owned(),
+        );
+        plan.sandbox_ro_binds.push(cfg.to_path_buf());
+    }
+    if let Some(dir) = input.mangohud_dir
+        && !plan.sandbox_ro_binds.iter().any(|p| p == dir)
+    {
+        plan.sandbox_ro_binds.push(dir.to_path_buf());
     }
 }
 
@@ -212,9 +191,6 @@ pub fn steam_launch_snippet(
             "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"{}\" %command%",
             conf_path.display()
         )),
-        (HudBackend::MangoHud, ResolvedHud::MangoHudSystemDefault { .. }) => {
-            Some("MANGOHUD=1 %command%".into())
-        }
         (HudBackend::MangoHud, ResolvedHud::Disabled) => {
             Some("DISABLE_MANGOHUD=1 MANGOHUD=0 %command%".into())
         }
@@ -264,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn linux_disabled_vs_profile_vs_system_default_precedence() {
+    fn linux_disabled_vs_profile_precedence() {
         let disabled = build_hud_launch_plan(&HudLaunchInput {
             backend: HudBackend::MangoHud,
             resolved: &ResolvedHud::Disabled,
@@ -315,29 +291,6 @@ mod tests {
                 PathBuf::from("/data/mangohud"),
             ]
         );
-
-        let sys_default = build_hud_launch_plan(&HudLaunchInput {
-            backend: HudBackend::MangoHud,
-            resolved: &ResolvedHud::MangoHudSystemDefault {
-                opengl_legacy_wrapper: false,
-                mangohud_dlsym: true,
-            },
-            config_file: Some(Path::new("/data/mangohud/global.conf")),
-            mangohud_dir: Some(Path::new("/data/mangohud")),
-            mangohud_bin_path: None,
-            is_native_linux_game: false,
-            gamescope_enabled: false,
-            deck_game_mode: false,
-        });
-        assert_eq!(sys_default.env_set["MANGOHUD"], "1");
-        assert!(!sys_default.env_set.contains_key("MANGOHUD_CONFIGFILE"));
-        assert!(
-            sys_default
-                .env_remove
-                .contains(&"MANGOHUD_CONFIGFILE".into())
-        );
-        assert!(sys_default.env_remove.contains(&"MANGOHUD_CONFIG".into()));
-        assert!(sys_default.env_remove.contains(&"DISABLE_MANGOHUD".into()));
     }
 
     #[test]
@@ -491,17 +444,6 @@ mod tests {
                 "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"/home/u/.local/share/irori/mangohud/steam_123.conf\" %command%"
                     .into()
             )
-        );
-        assert_eq!(
-            steam_launch_snippet(
-                HudBackend::MangoHud,
-                &ResolvedHud::MangoHudSystemDefault {
-                    opengl_legacy_wrapper: false,
-                    mangohud_dlsym: true
-                },
-                conf
-            ),
-            Some("MANGOHUD=1 %command%".into())
         );
         assert_eq!(
             steam_launch_snippet(HudBackend::MangoHud, &ResolvedHud::Disabled, conf),
