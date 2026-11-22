@@ -739,6 +739,23 @@ fn every_layout_draws_and_moves_and_the_editor_changes_them_live(cx: &mut TestAp
     cx.simulate_keystrokes(handle, "down down right");
     draw(cx);
 
+    // Page Up (LB) takes the accent back, Page Down (RB) makes it again.
+    let changed = cx.read(|cx| view.read(cx).look.editor.as_ref().unwrap().draft.clone());
+    cx.simulate_keystrokes(handle, "pageup");
+    cx.read(|cx| {
+        let editor = view.read(cx).look.editor.as_ref().unwrap();
+        assert_ne!(editor.draft, changed, "undone");
+        assert_eq!(editor.draft.name, "Hearth");
+        assert_eq!(editor.undone.len(), 1);
+    });
+    cx.simulate_keystrokes(handle, "pagedown");
+    cx.read(|cx| {
+        let editor = view.read(cx).look.editor.as_ref().unwrap();
+        assert_eq!(editor.draft, changed, "redone");
+        assert!(editor.undone.is_empty());
+    });
+    draw(cx);
+
     // Closing keeps the change as the user's own copy, and uses it.
     cx.simulate_keystrokes(handle, "escape");
     let copy = ThemeRef::User("hearth-mine".into());

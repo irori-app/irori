@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Najczęściej grane",
   "bigpicture.shelf.forgotten": "Zainstalowane, dawno nieuruchamiane",
   "bigpicture.shelf.pick_of_the_day": "Propozycja dnia",
-  "bigpicture.shelf.stores": "Po jednej na sklep"
+  "bigpicture.shelf.stores": "Po jednej na sklep",
+  "bigpicture.hint.undo": "Cofnij",
+  "bigpicture.hint.redo": "Ponów"
 }

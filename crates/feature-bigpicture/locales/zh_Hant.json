@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "最常玩",
   "bigpicture.shelf.forgotten": "已安裝但近期未玩",
   "bigpicture.shelf.pick_of_the_day": "今日推薦",
-  "bigpicture.shelf.stores": "每個商店一列"
+  "bigpicture.shelf.stores": "每個商店一列",
+  "bigpicture.hint.undo": "復原",
+  "bigpicture.hint.redo": "重做"
 }

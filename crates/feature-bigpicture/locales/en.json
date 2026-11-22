@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Most played",
   "bigpicture.shelf.forgotten": "Installed, not played lately",
   "bigpicture.shelf.pick_of_the_day": "Pick of the day",
-  "bigpicture.shelf.stores": "One per store"
+  "bigpicture.shelf.stores": "One per store",
+  "bigpicture.hint.undo": "Undo",
+  "bigpicture.hint.redo": "Redo"
 }

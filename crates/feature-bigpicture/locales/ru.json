@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Больше всего играл",
   "bigpicture.shelf.forgotten": "Установлены, давно не запускались",
   "bigpicture.shelf.pick_of_the_day": "Выбор дня",
-  "bigpicture.shelf.stores": "По одной на магазин"
+  "bigpicture.shelf.stores": "По одной на магазин",
+  "bigpicture.hint.undo": "Отменить",
+  "bigpicture.hint.redo": "Повторить"
 }

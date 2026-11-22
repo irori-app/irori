@@ -316,6 +316,12 @@ impl BigPictureView {
             } else {
                 out.push(one(Confirm, "bigpicture.hint.select"));
             }
+            if !editor.history.is_empty() {
+                out.push(one(PrevPage, "bigpicture.hint.undo"));
+            }
+            if !editor.undone.is_empty() {
+                out.push(one(NextPage, "bigpicture.hint.redo"));
+            }
             out.push(one(Back, "bigpicture.hint.done"));
             return out;
         }

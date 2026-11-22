@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Nejhranější",
   "bigpicture.shelf.forgotten": "Nainstalované, dlouho nehrané",
   "bigpicture.shelf.pick_of_the_day": "Tip dne",
-  "bigpicture.shelf.stores": "Jedna pro každý obchod"
+  "bigpicture.shelf.stores": "Jedna pro každý obchod",
+  "bigpicture.hint.undo": "Zpět",
+  "bigpicture.hint.redo": "Znovu"
 }

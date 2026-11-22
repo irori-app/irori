@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "よく遊んだゲーム",
   "bigpicture.shelf.forgotten": "インストール済み・最近遊んでいない",
   "bigpicture.shelf.pick_of_the_day": "今日のおすすめ",
-  "bigpicture.shelf.stores": "ストアごと"
+  "bigpicture.shelf.stores": "ストアごと",
+  "bigpicture.hint.undo": "元に戻す",
+  "bigpicture.hint.redo": "やり直す"
 }

@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Am meisten gespielt",
   "bigpicture.shelf.forgotten": "Installiert, lange nicht gespielt",
   "bigpicture.shelf.pick_of_the_day": "Tipp des Tages",
-  "bigpicture.shelf.stores": "Eins pro Store"
+  "bigpicture.shelf.stores": "Eins pro Store",
+  "bigpicture.hint.undo": "Rückgängig",
+  "bigpicture.hint.redo": "Wiederholen"
 }

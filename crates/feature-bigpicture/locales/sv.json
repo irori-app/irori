@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Mest spelade",
   "bigpicture.shelf.forgotten": "Installerade, inte spelade på länge",
   "bigpicture.shelf.pick_of_the_day": "Dagens val",
-  "bigpicture.shelf.stores": "En per butik"
+  "bigpicture.shelf.stores": "En per butik",
+  "bigpicture.hint.undo": "Ångra",
+  "bigpicture.hint.redo": "Gör om"
 }

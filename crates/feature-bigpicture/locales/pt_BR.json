@@ -298,5 +298,7 @@
   "bigpicture.shelf.most_played": "Mais jogados",
   "bigpicture.shelf.forgotten": "Instalados, sem jogar há um tempo",
   "bigpicture.shelf.pick_of_the_day": "Sugestão do dia",
-  "bigpicture.shelf.stores": "Uma por loja"
+  "bigpicture.shelf.stores": "Uma por loja",
+  "bigpicture.hint.undo": "Desfazer",
+  "bigpicture.hint.redo": "Refazer"
 }

@@ -1255,7 +1255,8 @@ Microsoft's approval page (`irori_manage::login`).
   bounded size, never a path or address, and ids are made by Irori, so a file
   can't name anything outside that folder. The editor (`view/editor.rs`, quick
   menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
-  close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
+  close; LB and RB (Page Up/Down) undo and redo its changes, up to a hundred, until
+  another theme is loaded into it. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
   `bigPictureOnController` (open Big Picture when a controller connects, or is
   connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
   name, so a pad switching mode counts, and one a system hid while Irori was in the
