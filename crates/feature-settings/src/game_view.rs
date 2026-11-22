@@ -27,6 +27,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::graphics_mods::GraphicsModsChanged;
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
+use crate::optiscaler::OptiscalerPanel;
 use crate::registry::FieldSection;
 use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
@@ -82,7 +83,7 @@ impl GameSection {
             "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
+            "tools" | "reshade" | "renodx" | "hdr" | "optiscaler" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -151,6 +152,7 @@ pub struct GameSettingsView {
     winetricks: Entity<WinetricksPanel>,
     reshade: Entity<ReshadePanel>,
     renodx: Entity<RenodxPanel>,
+    optiscaler: Entity<OptiscalerPanel>,
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
@@ -204,14 +206,20 @@ impl GameSettingsView {
             let id = id.clone();
             cx.new(|cx| RenodxPanel::new(id, window, cx))
         };
-        // RenoDX installs ReShade's build with add-on support, and removing
-        // ReShade removes RenoDX: each panel reads the other's change.
+        let optiscaler = {
+            let id = id.clone();
+            cx.new(|cx| OptiscalerPanel::new(id, window, cx))
+        };
+        // RenoDX installs ReShade's build with add-on support, removing ReShade
+        // removes RenoDX, and graphics mods may share or release proxy DLL slots:
+        // each panel reads the others' changes.
         let mods_changed = [
             cx.subscribe_in(
                 &reshade,
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.renodx.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
                 },
             ),
             cx.subscribe_in(
@@ -219,6 +227,15 @@ impl GameSettingsView {
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
+                },
+            ),
+            cx.subscribe_in(
+                &optiscaler,
+                window,
+                |this, _, _: &GraphicsModsChanged, window, cx| {
+                    this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.renodx.update(cx, |r, cx| r.refresh(window, cx));
                 },
             ),
         ];
@@ -242,6 +259,7 @@ impl GameSettingsView {
             winetricks,
             reshade,
             renodx,
+            optiscaler,
             steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
@@ -360,6 +378,7 @@ impl GameSettingsView {
         if section == GameSection::Tools {
             self.reshade.update(cx, |r, cx| r.activate(window, cx));
             self.renodx.update(cx, |r, cx| r.activate(window, cx));
+            self.optiscaler.update(cx, |o, cx| o.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -610,6 +629,11 @@ impl GameSettingsView {
                 cx,
             ))
             .child(self.renodx.clone())
+            .child(crate::widgets::group_heading(
+                t("settings.tools.group.optiscaler"),
+                cx,
+            ))
+            .child(self.optiscaler.clone())
             .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,

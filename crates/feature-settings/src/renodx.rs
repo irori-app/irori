@@ -674,6 +674,7 @@ mod tests {
             created_dirs: Vec::new(),
             addon,
             source: None,
+            optiscaler: None,
         }
     }
 

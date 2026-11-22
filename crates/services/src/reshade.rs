@@ -105,12 +105,23 @@ pub(crate) async fn load(kind: GraphicsMod, id: &GameId) -> Result<Option<Manife
 }
 
 impl Backend {
-    pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+    pub(crate) fn graphics_mod_game(
+        &self,
+        id: &GameId,
+        kind: GraphicsMod,
+    ) -> Result<Arc<GameInfo>> {
         let game = self.installed_game(id)?;
         if !supports_reshade(&game) {
-            bail!("ReShade can only be installed into Windows games Irori installed");
+            bail!(
+                "{} can only be installed into Windows games Irori installed",
+                kind.name()
+            );
         }
         Ok(game)
+    }
+
+    pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+        self.graphics_mod_game(id, GraphicsMod::Reshade)
     }
 
     pub(crate) fn graphics_mod_ready(&self, id: &GameId, kind: GraphicsMod) -> Result<Busy> {
@@ -246,7 +257,7 @@ impl Backend {
         kind: GraphicsMod,
         enabled: bool,
     ) -> Result<()> {
-        self.reshade_game(id)?;
+        self.graphics_mod_game(id, kind)?;
         let _busy = self.graphics_mod_ready(id, kind)?;
         let mut manifest = load(kind, id)
             .await?
@@ -360,6 +371,7 @@ mod tests {
             created_dirs: Vec::new(),
             addon: false,
             source: None,
+            optiscaler: None,
         }
     }
 

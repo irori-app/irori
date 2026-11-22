@@ -1549,7 +1549,7 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 
-### 4.12 ReShade and RenoDX
+### 4.12 ReShade, RenoDX and OptiScaler
 
 - **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
   natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
@@ -1608,6 +1608,27 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   off renames the add-on, and removing ReShade removes RenoDX first. The UI asks first
   when the game has anticheat, offers Update when the release's digest differs, and
   says under Wine that HDR also needs the display, session and Wine build.
+- **OptiScaler** (`irori_reshade::optiscaler`, services `optiscaler.rs`, UI
+  `irori_settings` `OptiscalerPanel` below RenoDX, route id `optiscaler`): upscaling
+  bridge for 64-bit Windows games, plus optional FakeNVAPI and OptiPatcher, from the
+  official GitHub releases (`optiscaler/OptiScaler`, `optiscaler/OptiScaler-nightly`,
+  `optiscaler/fakenvapi`, `optiscaler/OptiPatcher`). Release checks run only on demand
+  with a 15-minute TTL and ETag cache under `<cache>/reshade/optiscaler` (zero
+  background polling), verify SHA-256 digests, and stream `.7z` extraction via
+  `sevenz-rust2` guarded by `archive_guard`. Installs are journaled as
+  `GraphicsMod::Optiscaler` in `<data>/reshade/optiscaler/<runner>/<app>.json` with
+  `Manifest::optiscaler` recording channel, GPU driver mode (`MesaAuto` installs
+  `fakenvapi.dll` or `nvapi64.dll` and `fakenvapi.ini`; `Nvidia` skips FakeNVAPI),
+  proxy file (`dxgi.dll`, `version.dll`, `dbghelp.dll`, `d3d12.dll`, `wininet.dll`,
+  `winhttp.dll`, `winmm.dll` or `OptiScaler.asi`) and OptiPatcher toggle
+  (`plugins/OptiPatcher.asi` with surgical INI patching of `OptiScaler.ini` and
+  `fakenvapi.ini`). Refuses
+  untracked proxy files (`DllTaken`), renames to `.irori-disabled` when off, and keeps
+  user-modified files on removal. Under Wine/Proton, `Backend::optiscaler_launch_env`
+  merges `Manifest::overrides` into `WINEDLLOVERRIDES` through
+  `irori_runtime::env::add_dll_overrides` (skipping `OptiScaler.asi`) and sets
+  `PROTON_ENABLE_NVAPI=1` on Linux in NVIDIA mode when unset. The UI asks before
+  installing when anticheat is reported.
 
 ### 4.13 Xbox (Microsoft Store and PC Game Pass, Linux)
 
