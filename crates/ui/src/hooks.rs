@@ -74,6 +74,7 @@ type GameSettingsFn = Arc<dyn Fn(GameId, CloseFn, &mut Window, &mut App) -> AnyV
 type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
+type GameFn = Arc<dyn Fn(GameId, &mut Window, &mut App)>;
 
 /// The library's suggestion to read the Steam library from the Steam client
 /// (the Steam store and its dialog live outside the UI layer).
@@ -109,6 +110,9 @@ pub struct Hooks {
     /// the management screens).
     pub open_store_page: Option<StorePageFn>,
     pub steam_library_hint: Option<SteamLibraryHint>,
+    /// Ask to uninstall a game (the confirmation lives in the game
+    /// feature, which the settings don't depend on).
+    pub uninstall: Option<GameFn>,
 }
 
 impl Global for Hooks {}
@@ -240,6 +244,15 @@ pub fn game_settings(
         .try_global::<Hooks>()
         .and_then(|h| h.game_settings.clone())?;
     Some(hook(id, on_close, window, cx))
+}
+
+/// Ask to uninstall `id`, with the game feature's confirmation; without the
+/// hook, open the game's page, where Uninstall is.
+pub fn uninstall(id: GameId, window: &mut Window, cx: &mut App) {
+    match cx.try_global::<Hooks>().and_then(|h| h.uninstall.clone()) {
+        Some(open) => open(id, window, cx),
+        None => crate::navigate(crate::Route::Game(id), cx),
+    }
 }
 
 /// Show `url`, a page of `runner`'s website, in the store window; without

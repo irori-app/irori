@@ -795,9 +795,16 @@ commands without a window.
 - **Storage** (`storage.rs`, `Backend::storage_report`, `Backend::clean_up`): what games,
   prefixes, Wine builds, emulators and Irori's caches take per disk, measured on a
   blocking thread and cached in `<cache>/storage.json` by folder and modified time, plus
-  the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
-  logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
-  through `fs_guard::ensure_deletable`. Settings → Storage draws it.
+  the cleanups (download leftovers, unused prefixes, Steam's `compatdata` and
+  `shadercache` of apps no library has a manifest for, stray folders in the games folder
+  that no game, prefix or setting names, old Wine builds, DXVK/VKD3D-Proton and GPU driver
+  shader caches, art thumbnails, logs). `clean_up` rebuilds the report and deletes only
+  what it still offers, each item through `fs_guard::ensure_deletable`; what may hold saves
+  (prefixes, Steam's prefixes, stray folders) goes to the system's trash
+  (`irori_services::trash`: freedesktop trash, `~/.Trash`, the Recycle Bin) and is only
+  deleted where the disk has none. Settings → Storage draws it, with a list of installed
+  games by size or last played that opens their folder or uninstalls them
+  (`irori_ui::hooks::uninstall`).
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never

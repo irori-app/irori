@@ -56,6 +56,7 @@ pub mod storage;
 mod store_facts;
 pub mod sunshine;
 pub mod sync;
+pub mod trash;
 pub mod troubleshoot;
 pub mod updates;
 pub mod userdata;

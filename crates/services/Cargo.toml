@@ -73,6 +73,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security",
     "Win32_System_Shutdown",
     "Win32_System_Threading",
+    # Storage cleanups move items to the Recycle Bin (`trash`).
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 # The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI
