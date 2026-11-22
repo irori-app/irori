@@ -321,6 +321,8 @@ impl HudPreview {
                 if !row.label.is_empty() {
                     seg = seg.child(
                         div()
+                            .max_w(rems(11.))
+                            .truncate()
                             .font_semibold()
                             .text_color(row.label_color)
                             .child(row.label.clone()),
@@ -355,6 +357,8 @@ impl HudPreview {
                     line = line.child(
                         div()
                             .min_w(rems(3.5))
+                            .max_w(rems(11.))
+                            .truncate()
                             .font_semibold()
                             .text_color(row.label_color)
                             .child(row.label.clone()),
@@ -804,7 +808,7 @@ fn build_cache(
                 color: palette.text,
             });
         }
-        if let Some(cap) = profile.fps_limit {
+        if let Some(cap) = profile.fps_limit.filter(|&v| v > 0) {
             chips.push(PreviewChip {
                 text: SharedString::from(format!("CAP {cap}")),
                 color: palette.accent,
@@ -878,5 +882,46 @@ fn build_cache(
         alpha: profile.alpha.clamp(0.1, 1.0),
         no_display: profile.no_display,
         metal_alignment: metal.alignment,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_cache_omits_zero_fps_limit_cap() {
+        let mut profile = MangoHudProfile {
+            fps: true,
+            fps_limit: Some(0),
+            ..Default::default()
+        };
+        let theme = irori_core::ThemeHudColors::default();
+        let cache = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &theme,
+        );
+        let has_cap_zero = cache
+            .rows
+            .iter()
+            .flat_map(|r| &r.chips)
+            .any(|chip| chip.text.as_ref() == "CAP 0");
+        assert!(!has_cap_zero, "fps_limit=Some(0) must not emit CAP 0");
+
+        profile.fps_limit = Some(120);
+        let cache = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &theme,
+        );
+        let has_cap_120 = cache
+            .rows
+            .iter()
+            .flat_map(|r| &r.chips)
+            .any(|chip| chip.text.as_ref() == "CAP 120");
+        assert!(has_cap_120, "fps_limit=Some(120) must emit CAP 120");
     }
 }

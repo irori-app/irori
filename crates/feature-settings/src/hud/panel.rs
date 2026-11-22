@@ -31,7 +31,9 @@ use irori_core::{
     GpuSelection, HudBackend, HudColorPalette, HudOrientation, HudPosition, HudPreset,
     MangoHudProfile, MetalHudAlignment, MetalHudSettings, Paths, ResolvedHud, ThemeHudColors,
 };
-use irori_runtime::hud::hardware_linux::{LinuxHudEnv, default_gpu_short_label, resolve_pci_dev};
+use irori_runtime::hud::hardware_linux::{
+    LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, resolve_pci_dev,
+};
 use irori_runtime::hud::launch_env::steam_launch_snippet;
 use irori_runtime::hud::mangohud_conf::{ConfRenderContext, render_mangohud_conf};
 use irori_ui::i18n::{t, t_args};
@@ -601,7 +603,13 @@ impl HudPanel {
         let active_profile = effective_mangohud_profile(&scope, &global, &game);
         let active_metal = effective_metal_settings(&scope, &global, &game);
         let labels = HudLabels::load();
-        let env = LinuxHudEnv::default();
+        let cached_env = if hud_backend == HudBackend::MangoHud {
+            cached_linux_hud_env().cloned()
+        } else {
+            None
+        };
+        let env_loaded = hud_backend != HudBackend::MangoHud || cached_env.is_some();
+        let env = cached_env.unwrap_or_default();
 
         let preview = cx.new(|cx| {
             HudPreview::new(
@@ -860,7 +868,7 @@ impl HudPanel {
             global,
             game,
             env,
-            env_loaded: hud_backend != HudBackend::MangoHud,
+            env_loaded,
             labels,
             display,
             language: LanguageStamp::new(),
@@ -880,9 +888,16 @@ impl HudPanel {
             _subscriptions: subscriptions,
         };
 
-        if hud_backend == HudBackend::MangoHud {
+        if hud_backend == HudBackend::MangoHud && !env_loaded {
             let detect_task = irori_ui::state::run_infallible(cx, async {
-                irori_runtime::hud::hardware_linux::detect_linux_hud_env().clone()
+                tokio::task::spawn_blocking(
+                    irori_runtime::hud::hardware_linux::detect_linux_hud_env,
+                )
+                .await
+                .cloned()
+                .unwrap_or_else(|_| {
+                    irori_runtime::hud::hardware_linux::detect_linux_hud_env().clone()
+                })
             });
             cx.spawn_in(window, async move |this, cx| {
                 if let Some(env) = detect_task.await {
@@ -898,6 +913,8 @@ impl HudPanel {
                 }
             })
             .detach();
+        } else if hud_backend == HudBackend::MangoHud {
+            panel.maybe_write_steam_config(cx);
         }
 
         panel
@@ -2338,11 +2355,16 @@ impl HudPanel {
                     .child(
                         div()
                             .text_xs()
-                            .min_w(rems(4.5))
+                            .flex_1()
+                            .min_w_0()
                             .truncate()
                             .child(self.labels.color_slot_labels[ix].clone()),
                     )
-                    .child(Input::new(&self.color_inputs[ix]).small().w_24());
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .child(Input::new(&self.color_inputs[ix]).small().w_24()),
+                    );
                 grid = grid.child(item);
             }
             panel = panel.child(

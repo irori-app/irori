@@ -60,6 +60,11 @@ pub fn detect_linux_hud_env() -> &'static LinuxHudEnv {
     LINUX_HUD_ENV.get_or_init(detect_linux_hud_env_uncached)
 }
 
+/// Return the already-cached Linux HUD environment without performing I/O.
+pub fn cached_linux_hud_env() -> Option<&'static LinuxHudEnv> {
+    LINUX_HUD_ENV.get()
+}
+
 #[cfg(target_os = "linux")]
 fn detect_linux_hud_env_uncached() -> LinuxHudEnv {
     let mangohud_bin_path = find_executable_in_path("mangohud").or_else(|| {
