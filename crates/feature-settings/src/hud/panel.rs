@@ -17,7 +17,8 @@ use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -217,7 +218,9 @@ struct HudLabels {
     steam_copied: SharedString,
     steam_none_needed: SharedString,
 
-    group_presets: SharedString,
+    tab_metrics: SharedString,
+    tab_layout: SharedString,
+    tab_appearance: SharedString,
     presets_label: SharedString,
     presets_help: SharedString,
     preset_minimal_fps: SharedString,
@@ -232,9 +235,7 @@ struct HudLabels {
     gpu_selection_auto: SharedString,
     gpu_selection_all: SharedString,
     gpu_label_label: SharedString,
-    gpu_label_help: SharedString,
     cpu_label_label: SharedString,
-    cpu_label_help: SharedString,
     label_reset: SharedString,
 
     group_metrics_gpu: SharedString,
@@ -303,36 +304,27 @@ struct HudLabels {
     metric_gamepad_battery: SharedString,
     metric_gamepad_battery_help: SharedString,
 
-    group_performance: SharedString,
     fps_limit_label: SharedString,
     fps_limit_help: SharedString,
     fps_limit_off: SharedString,
     fps_limit_placeholder: SharedString,
-    fps_limit_method_label: SharedString,
     fps_limit_method_help: SharedString,
     fps_limit_method_late: SharedString,
     fps_limit_method_early: SharedString,
 
-    group_layout: SharedString,
     position_label: SharedString,
-    position_help: SharedString,
     position_labels: [SharedString; 8],
     orientation_label: SharedString,
-    orientation_help: SharedString,
     orientation_vertical: SharedString,
     orientation_horizontal: SharedString,
     round_corners_label: SharedString,
-    round_corners_help: SharedString,
     hud_compact_label: SharedString,
     hud_compact_help: SharedString,
     hud_no_margin_label: SharedString,
     hud_no_margin_help: SharedString,
     font_scale_label: SharedString,
-    font_scale_help: SharedString,
     background_alpha_label: SharedString,
-    background_alpha_help: SharedString,
     alpha_label: SharedString,
-    alpha_help: SharedString,
     toggle_hud_label: SharedString,
     toggle_hud_help: SharedString,
     no_display_label: SharedString,
@@ -392,7 +384,9 @@ impl HudLabels {
             steam_copied: t("settings.hud.steam.copied"),
             steam_none_needed: t("settings.hud.steam.none_needed"),
 
-            group_presets: t("settings.hud.group.presets"),
+            tab_metrics: t("settings.hud.tab.metrics"),
+            tab_layout: t("settings.hud.tab.layout"),
+            tab_appearance: t("settings.hud.tab.appearance"),
             presets_label: t("settings.hud.presets.label"),
             presets_help: t("settings.hud.presets.help"),
             preset_minimal_fps: t("settings.hud.preset.minimal_fps"),
@@ -407,9 +401,7 @@ impl HudLabels {
             gpu_selection_auto: t("settings.hud.gpu_selection.auto_dedicated"),
             gpu_selection_all: t("settings.hud.gpu_selection.all_gpus"),
             gpu_label_label: t("settings.hud.gpu_label.label"),
-            gpu_label_help: t("settings.hud.gpu_label.help"),
             cpu_label_label: t("settings.hud.cpu_label.label"),
-            cpu_label_help: t("settings.hud.cpu_label.help"),
             label_reset: t("settings.hud.label.reset"),
 
             group_metrics_gpu: t("settings.hud.group.metrics_gpu"),
@@ -478,19 +470,15 @@ impl HudLabels {
             metric_gamepad_battery: t("settings.hud.metric.gamepad_battery"),
             metric_gamepad_battery_help: t("settings.hud.metric.gamepad_battery_help"),
 
-            group_performance: t("settings.hud.group.performance"),
             fps_limit_label: t("settings.hud.fps_limit.label"),
             fps_limit_help: t("settings.hud.fps_limit.help"),
             fps_limit_off: t("settings.hud.fps_limit.off"),
             fps_limit_placeholder: t("settings.hud.fps_limit.placeholder"),
-            fps_limit_method_label: t("settings.hud.fps_limit_method.label"),
             fps_limit_method_help: t("settings.hud.fps_limit_method.help"),
             fps_limit_method_late: t("settings.hud.fps_limit_method.late"),
             fps_limit_method_early: t("settings.hud.fps_limit_method.early"),
 
-            group_layout: t("settings.hud.group.layout"),
             position_label: t("settings.hud.position.label"),
-            position_help: t("settings.hud.position.help"),
             position_labels: [
                 t("settings.hud.position.top_left"),
                 t("settings.hud.position.top_right"),
@@ -502,21 +490,16 @@ impl HudLabels {
                 t("settings.hud.position.middle_right"),
             ],
             orientation_label: t("settings.hud.orientation.label"),
-            orientation_help: t("settings.hud.orientation.help"),
             orientation_vertical: t("settings.hud.orientation.vertical"),
             orientation_horizontal: t("settings.hud.orientation.horizontal"),
             round_corners_label: t("settings.hud.round_corners.label"),
-            round_corners_help: t("settings.hud.round_corners.help"),
             hud_compact_label: t("settings.hud.hud_compact.label"),
             hud_compact_help: t("settings.hud.hud_compact.help"),
             hud_no_margin_label: t("settings.hud.hud_no_margin.label"),
             hud_no_margin_help: t("settings.hud.hud_no_margin.help"),
             font_scale_label: t("settings.hud.font_scale.label"),
-            font_scale_help: t("settings.hud.font_scale.help"),
             background_alpha_label: t("settings.hud.background_alpha.label"),
-            background_alpha_help: t("settings.hud.background_alpha.help"),
             alpha_label: t("settings.hud.alpha.label"),
-            alpha_help: t("settings.hud.alpha.help"),
             toggle_hud_label: t("settings.hud.toggle_hud.label"),
             toggle_hud_help: t("settings.hud.toggle_hud.help"),
             no_display_label: t("settings.hud.no_display.label"),
@@ -569,10 +552,19 @@ struct CachedDisplay {
     custom_swatches: [Hsla; 11],
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum HudTab {
+    #[default]
+    Metrics,
+    Layout,
+    Appearance,
+}
+
 /// Complete Performance HUD configuration panel for Global or Per-Game settings.
 pub struct HudPanel {
     scope: HudPanelScope,
     backend: HudBackend,
+    active_tab: HudTab,
     global: GlobalHudSettings,
     game: GameHudSettings,
     env: LinuxHudEnv,
@@ -870,6 +862,7 @@ impl HudPanel {
         let panel = Self {
             scope,
             backend: hud_backend,
+            active_tab: HudTab::Metrics,
             global,
             game,
             env,
@@ -1535,15 +1528,108 @@ impl HudPanel {
             .into_any_element()
     }
 
-    fn render_presets_section(&self, cx: &mut Context<Self>) -> AnyElement {
-        let current = self.active_mangohud().preset;
-        let buttons = h_flex()
+    fn render_top_quick_card(&self, cx: &mut Context<Self>) -> AnyElement {
+        let border = cx.theme().border;
+        let muted_fg = cx.theme().muted_foreground;
+        let p = self.active_mangohud();
+
+        // Row 1: Mode buttons (+ inline Restore button when PerGame::Custom)
+        let mode_buttons: AnyElement = match &self.scope {
+            HudPanelScope::Global => {
+                let current = self.global.mode;
+                h_flex()
+                    .flex_wrap()
+                    .gap_1p5()
+                    .child(choice_button(
+                        "hud-mode-off",
+                        self.labels.mode_off.clone(),
+                        current == GlobalHudMode::Off,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_global_mode(GlobalHudMode::Off, window, cx);
+                        }),
+                    ))
+                    .child(choice_button(
+                        "hud-mode-irori",
+                        self.labels.mode_irori_profile.clone(),
+                        current == GlobalHudMode::IroriProfile,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+                        }),
+                    ))
+                    .child(choice_button(
+                        "hud-mode-system",
+                        self.labels.mode_system_default.clone(),
+                        current == GlobalHudMode::SystemDefault,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_global_mode(GlobalHudMode::SystemDefault, window, cx);
+                        }),
+                    ))
+                    .into_any_element()
+            }
+            HudPanelScope::PerGame { .. } => {
+                let current = self.game.mode;
+                let mut row = h_flex()
+                    .flex_wrap()
+                    .gap_1p5()
+                    .items_center()
+                    .child(choice_button(
+                        "hud-game-mode-inherit",
+                        self.labels.mode_inherit_global.clone(),
+                        current == GameHudMode::InheritGlobal,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_game_mode(GameHudMode::InheritGlobal, window, cx);
+                        }),
+                    ))
+                    .child(choice_button(
+                        "hud-game-mode-custom",
+                        self.labels.mode_custom.clone(),
+                        current == GameHudMode::Custom,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_game_mode(GameHudMode::Custom, window, cx);
+                        }),
+                    ))
+                    .child(choice_button(
+                        "hud-game-mode-system",
+                        self.labels.mode_system_default.clone(),
+                        current == GameHudMode::SystemDefault,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_game_mode(GameHudMode::SystemDefault, window, cx);
+                        }),
+                    ))
+                    .child(choice_button(
+                        "hud-game-mode-disabled",
+                        self.labels.mode_disabled.clone(),
+                        current == GameHudMode::Disabled,
+                        cx.listener(|this, _, window, cx| {
+                            this.set_game_mode(GameHudMode::Disabled, window, cx);
+                        }),
+                    ));
+                if current == GameHudMode::Custom {
+                    row = row.child(
+                        Button::new("hud-restore-from-global")
+                            .ghost()
+                            .small()
+                            .icon(IconName::RotateCcw)
+                            .tooltip(self.labels.restore_from_global_help.clone())
+                            .label(self.labels.restore_from_global.clone())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.restore_game_from_global(window, cx);
+                            })),
+                    );
+                }
+                row.into_any_element()
+            }
+        };
+
+        // Row 2: 5 quick Presets
+        let current_preset = p.preset;
+        let preset_buttons = h_flex()
             .flex_wrap()
             .gap_1p5()
             .child(choice_button(
                 "hud-preset-minimal",
                 self.labels.preset_minimal_fps.clone(),
-                current == HudPreset::MinimalFps,
+                current_preset == HudPreset::MinimalFps,
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::MinimalFps));
                 }),
@@ -1551,7 +1637,7 @@ impl HudPanel {
             .child(choice_button(
                 "hud-preset-horizontal",
                 self.labels.preset_horizontal_compact.clone(),
-                current == HudPreset::HorizontalCompact,
+                current_preset == HudPreset::HorizontalCompact,
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| {
                         p.apply_preset(HudPreset::HorizontalCompact)
@@ -1561,7 +1647,7 @@ impl HudPanel {
             .child(choice_button(
                 "hud-preset-balanced",
                 self.labels.preset_balanced_gaming.clone(),
-                current == HudPreset::BalancedGaming,
+                current_preset == HudPreset::BalancedGaming,
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::BalancedGaming));
                 }),
@@ -1569,7 +1655,7 @@ impl HudPanel {
             .child(choice_button(
                 "hud-preset-full",
                 self.labels.preset_full_diagnostics.clone(),
-                current == HudPreset::FullDiagnostics,
+                current_preset == HudPreset::FullDiagnostics,
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::FullDiagnostics));
                 }),
@@ -1577,26 +1663,720 @@ impl HudPanel {
             .child(choice_button(
                 "hud-preset-custom",
                 self.labels.preset_custom.clone(),
-                current == HudPreset::Custom,
+                current_preset == HudPreset::Custom,
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| p.mark_custom());
                 }),
-            ))
-            .into_any_element();
+            ));
 
-        v_flex()
-            .w_full()
-            .child(group_heading(self.labels.group_presets.clone(), cx))
-            .child(group_panel(cx).child(field_row(
-                RowState {
-                    label: self.labels.presets_label.clone(),
-                    help: self.labels.presets_help.clone(),
-                    stacked: true,
-                    ..Default::default()
-                },
-                buttons,
-                cx,
+        // Row 3: FPS Limit + Method inline right at the top
+        let mut fps_row = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .items_center()
+            .child(choice_button(
+                "hud-fps-off",
+                self.labels.fps_limit_off.clone(),
+                p.fps_limit.is_none(),
+                cx.listener(|this, _, window, cx| {
+                    this.fps_limit_input
+                        .update(cx, |s, cx| s.set_value("", window, cx));
+                    this.edit_mangohud(window, cx, |p| p.fps_limit = None);
+                }),
+            ));
+        for (cap, id, text) in FPS_PRESETS {
+            fps_row = fps_row.child(choice_button(
+                id,
+                SharedString::new_static(text),
+                p.fps_limit == Some(cap),
+                cx.listener(move |this, _, window, cx| {
+                    this.fps_limit_input
+                        .update(cx, |s, cx| s.set_value(text, window, cx));
+                    this.edit_mangohud(window, cx, |p| p.fps_limit = Some(cap));
+                }),
+            ));
+        }
+        fps_row = fps_row
+            .child(Input::new(&self.fps_limit_input).small().w_20())
+            .child(div().w(px(1.)).h_4().mx_1().bg(border))
+            .child(
+                choice_button(
+                    "hud-fps-method-late",
+                    self.labels.fps_limit_method_late.clone(),
+                    p.fps_limit_method == FpsLimitMethod::Late,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.fps_limit_method = FpsLimitMethod::Late
+                        });
+                    }),
+                )
+                .tooltip(self.labels.fps_limit_method_help.clone()),
+            )
+            .child(
+                choice_button(
+                    "hud-fps-method-early",
+                    self.labels.fps_limit_method_early.clone(),
+                    p.fps_limit_method == FpsLimitMethod::Early,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.fps_limit_method = FpsLimitMethod::Early
+                        });
+                    }),
+                )
+                .tooltip(self.labels.fps_limit_method_help.clone()),
+            );
+
+        let compact_row = |label: SharedString, hint: SharedString, body: AnyElement| {
+            v_flex()
+                .w_full()
+                .px_4()
+                .py_2p5()
+                .gap_1p5()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().text_xs().font_semibold().child(label))
+                        .child(div().text_xs().text_color(muted_fg).truncate().child(hint)),
+                )
+                .child(body)
+        };
+
+        let mode_hint = match &self.scope {
+            HudPanelScope::Global => self.labels.mode_global_help.clone(),
+            HudPanelScope::PerGame { .. } => self.labels.mode_game_help.clone(),
+        };
+
+        group_panel(cx)
+            .child(compact_row(
+                self.labels.mode_label.clone(),
+                mode_hint,
+                mode_buttons,
+            ))
+            .child(div().border_t_1().border_color(border).child(compact_row(
+                self.labels.presets_label.clone(),
+                self.labels.presets_help.clone(),
+                preset_buttons.into_any_element(),
             )))
+            .child(div().border_t_1().border_color(border).child(compact_row(
+                self.labels.fps_limit_label.clone(),
+                self.labels.fps_limit_help.clone(),
+                fps_row.into_any_element(),
+            )))
+            .into_any_element()
+    }
+
+    fn render_tab_bar(&self, cx: &mut Context<Self>) -> AnyElement {
+        let active = self.active_tab;
+        h_flex()
+            .w_full()
+            .pt_2()
+            .gap_1p5()
+            .child(choice_button(
+                "hud-tab-metrics",
+                self.labels.tab_metrics.clone(),
+                active == HudTab::Metrics,
+                cx.listener(|this, _, _, cx| {
+                    this.active_tab = HudTab::Metrics;
+                    cx.notify();
+                }),
+            ))
+            .child(choice_button(
+                "hud-tab-layout",
+                self.labels.tab_layout.clone(),
+                active == HudTab::Layout,
+                cx.listener(|this, _, _, cx| {
+                    this.active_tab = HudTab::Layout;
+                    cx.notify();
+                }),
+            ))
+            .child(choice_button(
+                "hud-tab-appearance",
+                self.labels.tab_appearance.clone(),
+                active == HudTab::Appearance,
+                cx.listener(|this, _, _, cx| {
+                    this.active_tab = HudTab::Appearance;
+                    cx.notify();
+                }),
+            ))
+            .into_any_element()
+    }
+
+    fn render_metrics_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let border = cx.theme().border;
+        let muted_fg = cx.theme().muted_foreground;
+        let p = self.active_mangohud();
+        let gpu_locked = p.gpu_stats_locked();
+        let cpu_locked = p.cpu_stats_locked();
+
+        let gpu_chips = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .child(if gpu_locked {
+                locked_metric_chip(
+                    "hud-metric-gpu-stats",
+                    self.labels.metric_gpu_stats.clone(),
+                    self.labels.metric_gpu_stats_locked.clone(),
+                )
+            } else {
+                metric_chip(
+                    "hud-metric-gpu-stats",
+                    self.labels.metric_gpu_stats.clone(),
+                    self.labels.metric_gpu_stats_help.clone(),
+                    p.gpu_stats,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.gpu_stats = !p.gpu_stats;
+                            p.mark_custom();
+                        });
+                    }),
+                )
+            })
+            .child(metric_chip(
+                "hud-metric-gpu-temp",
+                self.labels.metric_gpu_temp.clone(),
+                self.labels.metric_gpu_temp_help.clone(),
+                p.gpu_temp,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_temp = !p.gpu_temp;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-junction",
+                self.labels.metric_gpu_junction_temp.clone(),
+                self.labels.metric_gpu_junction_temp_help.clone(),
+                p.gpu_junction_temp,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_junction_temp = !p.gpu_junction_temp;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-mem-temp",
+                self.labels.metric_gpu_mem_temp.clone(),
+                self.labels.metric_gpu_mem_temp_help.clone(),
+                p.gpu_mem_temp,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_mem_temp = !p.gpu_mem_temp;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-clock",
+                self.labels.metric_gpu_core_clock.clone(),
+                self.labels.metric_gpu_core_clock_help.clone(),
+                p.gpu_core_clock,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_core_clock = !p.gpu_core_clock;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-mem-clock",
+                self.labels.metric_gpu_mem_clock.clone(),
+                self.labels.metric_gpu_mem_clock_help.clone(),
+                p.gpu_mem_clock,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_mem_clock = !p.gpu_mem_clock;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-power",
+                self.labels.metric_gpu_power.clone(),
+                self.labels.metric_gpu_power_help.clone(),
+                p.gpu_power,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_power = !p.gpu_power;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gpu-fan",
+                self.labels.metric_gpu_fan.clone(),
+                self.labels.metric_gpu_fan_help.clone(),
+                p.gpu_fan,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_fan = !p.gpu_fan;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-vram",
+                self.labels.metric_vram.clone(),
+                self.labels.metric_vram_help.clone(),
+                p.vram,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.vram = !p.vram;
+                        p.mark_custom();
+                    });
+                }),
+            ));
+
+        let cpu_chips = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .child(if cpu_locked {
+                locked_metric_chip(
+                    "hud-metric-cpu-stats",
+                    self.labels.metric_cpu_stats.clone(),
+                    self.labels.metric_cpu_stats_locked.clone(),
+                )
+            } else {
+                metric_chip(
+                    "hud-metric-cpu-stats",
+                    self.labels.metric_cpu_stats.clone(),
+                    self.labels.metric_cpu_stats_help.clone(),
+                    p.cpu_stats,
+                    cx.listener(|this, _, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.cpu_stats = !p.cpu_stats;
+                            p.mark_custom();
+                        });
+                    }),
+                )
+            })
+            .child(metric_chip(
+                "hud-metric-cpu-temp",
+                self.labels.metric_cpu_temp.clone(),
+                self.labels.metric_cpu_temp_help.clone(),
+                p.cpu_temp,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.cpu_temp = !p.cpu_temp;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-cpu-mhz",
+                self.labels.metric_cpu_mhz.clone(),
+                self.labels.metric_cpu_mhz_help.clone(),
+                p.cpu_mhz,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.cpu_mhz = !p.cpu_mhz;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-cpu-power",
+                self.labels.metric_cpu_power.clone(),
+                self.labels.metric_cpu_power_help.clone(),
+                p.cpu_power,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.cpu_power = !p.cpu_power;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-ram",
+                self.labels.metric_ram.clone(),
+                self.labels.metric_ram_help.clone(),
+                p.ram,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.ram = !p.ram;
+                        p.mark_custom();
+                    });
+                }),
+            ));
+
+        let fps_chips = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .child(metric_chip(
+                "hud-metric-fps",
+                self.labels.metric_fps.clone(),
+                self.labels.metric_fps_help.clone(),
+                p.fps,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps = !p.fps;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-fps-avg",
+                self.labels.metric_fps_avg.clone(),
+                self.labels.metric_fps_avg_help.clone(),
+                p.fps_avg,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_avg = !p.fps_avg;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-fps-1-low",
+                self.labels.metric_fps_1_low.clone(),
+                self.labels.metric_fps_1_low_help.clone(),
+                p.fps_1_low,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_1_low = !p.fps_1_low;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-frametime",
+                self.labels.metric_frametime.clone(),
+                self.labels.metric_frametime_help.clone(),
+                p.frametime,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.frametime = !p.frametime;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-frame-timing",
+                self.labels.metric_frame_timing.clone(),
+                self.labels.metric_frame_timing_help.clone(),
+                p.frame_timing,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.frame_timing = !p.frame_timing;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-present-mode",
+                self.labels.metric_present_mode.clone(),
+                self.labels.metric_present_mode_help.clone(),
+                p.present_mode,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.present_mode = !p.present_mode;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-fps-use-label",
+                self.labels.metric_fps_use_label.clone(),
+                self.labels.metric_fps_use_label_help.clone(),
+                p.fps_use_label,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps_use_label = !p.fps_use_label;
+                        p.mark_custom();
+                    });
+                }),
+            ));
+
+        let runtime_chips = h_flex()
+            .flex_wrap()
+            .gap_1p5()
+            .child(metric_chip(
+                "hud-metric-wine",
+                self.labels.metric_wine.clone(),
+                self.labels.metric_wine_help.clone(),
+                p.wine,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.wine = !p.wine;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-winesync",
+                self.labels.metric_winesync.clone(),
+                self.labels.metric_winesync_help.clone(),
+                p.winesync,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.winesync = !p.winesync;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-fsr",
+                self.labels.metric_fsr.clone(),
+                self.labels.metric_fsr_help.clone(),
+                p.fsr,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fsr = !p.fsr;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-hdr",
+                self.labels.metric_hdr.clone(),
+                self.labels.metric_hdr_help.clone(),
+                p.hdr,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.hdr = !p.hdr;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-gamemode",
+                self.labels.metric_gamemode.clone(),
+                self.labels.metric_gamemode_help.clone(),
+                p.gamemode,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gamemode = !p.gamemode;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-throttling",
+                self.labels.metric_throttling_status.clone(),
+                self.labels.metric_throttling_status_help.clone(),
+                p.throttling_status,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.throttling_status = !p.throttling_status;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-metric-battery",
+                self.labels.metric_gamepad_battery.clone(),
+                self.labels.metric_gamepad_battery_help.clone(),
+                p.gamepad_battery,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gamepad_battery = !p.gamepad_battery;
+                        p.mark_custom();
+                    });
+                }),
+            ));
+
+        let band = |title: SharedString, chips: gpui_kit::Div| {
+            v_flex()
+                .w_full()
+                .px_4()
+                .py_3()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_semibold()
+                        .text_color(muted_fg)
+                        .child(title),
+                )
+                .child(chips)
+        };
+
+        group_panel(cx)
+            .child(band(self.labels.group_metrics_gpu.clone(), gpu_chips))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(band(self.labels.group_metrics_cpu.clone(), cpu_chips)),
+            )
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(band(self.labels.group_metrics_fps.clone(), fps_chips)),
+            )
+            .child(div().border_t_1().border_color(border).child(band(
+                self.labels.group_metrics_runtime.clone(),
+                runtime_chips,
+            )))
+            .into_any_element()
+    }
+
+    fn render_layout_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let border = cx.theme().border;
+        let muted_fg = cx.theme().muted_foreground;
+        let p = self.active_mangohud();
+
+        // Row 1: Position + Orientation side-by-side
+        let pos_orient_row = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_end()
+            .justify_between()
+            .gap_4()
+            .px_4()
+            .py_3()
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .child(self.labels.position_label.clone()),
+                    )
+                    .child(
+                        Select::new(&self.position_select)
+                            .id("hud-position-select")
+                            .accessibility_label(self.labels.position_label.clone())
+                            .w_48(),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .child(self.labels.orientation_label.clone()),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1p5()
+                            .child(choice_button(
+                                "hud-orientation-vertical",
+                                self.labels.orientation_vertical.clone(),
+                                p.orientation == HudOrientation::Vertical,
+                                cx.listener(|this, _, window, cx| {
+                                    this.edit_mangohud(window, cx, |p| {
+                                        p.orientation = HudOrientation::Vertical;
+                                        p.mark_custom();
+                                    });
+                                }),
+                            ))
+                            .child(choice_button(
+                                "hud-orientation-horizontal",
+                                self.labels.orientation_horizontal.clone(),
+                                p.orientation == HudOrientation::Horizontal,
+                                cx.listener(|this, _, window, cx| {
+                                    this.edit_mangohud(window, cx, |p| {
+                                        p.orientation = HudOrientation::Horizontal;
+                                        p.mark_custom();
+                                    });
+                                }),
+                            )),
+                    ),
+            );
+
+        // Row 2: 2x2 grid of compact sliders
+        let sliders_grid = v_flex()
+            .w_full()
+            .px_4()
+            .py_3()
+            .gap_3()
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_4()
+                    .child(compact_slider_cell(
+                        self.labels.font_scale_label.clone(),
+                        self.display.font_scale.clone(),
+                        &self.font_scale_slider,
+                        muted_fg,
+                    ))
+                    .child(compact_slider_cell(
+                        self.labels.round_corners_label.clone(),
+                        self.display.round_corners.clone(),
+                        &self.round_corners_slider,
+                        muted_fg,
+                    )),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_4()
+                    .child(compact_slider_cell(
+                        self.labels.background_alpha_label.clone(),
+                        self.display.background_alpha.clone(),
+                        &self.bg_alpha_slider,
+                        muted_fg,
+                    ))
+                    .child(compact_slider_cell(
+                        self.labels.alpha_label.clone(),
+                        self.display.alpha.clone(),
+                        &self.alpha_slider,
+                        muted_fg,
+                    )),
+            );
+
+        // Row 3: Quick layout toggle chips
+        let quick_toggles = h_flex()
+            .w_full()
+            .flex_wrap()
+            .px_4()
+            .py_3()
+            .gap_1p5()
+            .child(metric_chip(
+                "hud-layout-compact",
+                self.labels.hud_compact_label.clone(),
+                self.labels.hud_compact_help.clone(),
+                p.hud_compact,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.hud_compact = !p.hud_compact;
+                        p.mark_custom();
+                    });
+                }),
+            ))
+            .child(metric_chip(
+                "hud-layout-no-margin",
+                self.labels.hud_no_margin_label.clone(),
+                self.labels.hud_no_margin_help.clone(),
+                p.hud_no_margin,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| p.hud_no_margin = !p.hud_no_margin);
+                }),
+            ))
+            .child(metric_chip(
+                "hud-layout-no-display",
+                self.labels.no_display_label.clone(),
+                self.labels.no_display_help.clone(),
+                p.no_display,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| p.no_display = !p.no_display);
+                }),
+            ));
+
+        // Row 4: Shortcut recorder
+        let shortcut_row = field_row(
+            RowState {
+                label: self.labels.toggle_hud_label.clone(),
+                help: self.labels.toggle_hud_help.clone(),
+                ..Default::default()
+            },
+            self.shortcut.clone().into_any_element(),
+            cx,
+        );
+
+        group_panel(cx)
+            .child(pos_orient_row)
+            .child(div().border_t_1().border_color(border).child(sliders_grid))
+            .child(div().border_t_1().border_color(border).child(quick_toggles))
+            .child(div().border_t_1().border_color(border).child(shortcut_row))
             .into_any_element()
     }
 
@@ -1618,43 +2398,79 @@ impl HudPanel {
             cx,
         );
 
-        let gpu_label_control = h_flex()
-            .gap_1p5()
-            .items_center()
-            .child(Input::new(&self.gpu_label_input).small().w_48())
+        // GPU label & CPU label side-by-side in one compact row
+        let labels_row = h_flex()
+            .w_full()
+            .flex_wrap()
+            .gap_4()
+            .px_4()
+            .py_3()
             .child(
-                Button::new("hud-gpu-label-reset")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RotateCcw)
-                    .tooltip(self.labels.label_reset.clone())
-                    .disabled(profile.gpu_label_override.is_empty())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.gpu_label_input
-                            .update(cx, |s, cx| s.set_value("", window, cx));
-                        this.edit_mangohud(window, cx, |p| p.gpu_label_override.clear());
-                    })),
+                v_flex()
+                    .flex_1()
+                    .min_w(rems(13.))
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .child(self.labels.gpu_label_label.clone()),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1p5()
+                            .items_center()
+                            .child(Input::new(&self.gpu_label_input).small().flex_1())
+                            .child(
+                                Button::new("hud-gpu-label-reset")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::RotateCcw)
+                                    .tooltip(self.labels.label_reset.clone())
+                                    .disabled(profile.gpu_label_override.is_empty())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.gpu_label_input
+                                            .update(cx, |s, cx| s.set_value("", window, cx));
+                                        this.edit_mangohud(window, cx, |p| {
+                                            p.gpu_label_override.clear()
+                                        });
+                                    })),
+                            ),
+                    ),
             )
-            .into_any_element();
-
-        let cpu_label_control = h_flex()
-            .gap_1p5()
-            .items_center()
-            .child(Input::new(&self.cpu_label_input).small().w_48())
             .child(
-                Button::new("hud-cpu-label-reset")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::RotateCcw)
-                    .tooltip(self.labels.label_reset.clone())
-                    .disabled(profile.cpu_label_override.is_empty())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.cpu_label_input
-                            .update(cx, |s, cx| s.set_value("", window, cx));
-                        this.edit_mangohud(window, cx, |p| p.cpu_label_override.clear());
-                    })),
-            )
-            .into_any_element();
+                v_flex()
+                    .flex_1()
+                    .min_w(rems(13.))
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .child(self.labels.cpu_label_label.clone()),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1p5()
+                            .items_center()
+                            .child(Input::new(&self.cpu_label_input).small().flex_1())
+                            .child(
+                                Button::new("hud-cpu-label-reset")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::RotateCcw)
+                                    .tooltip(self.labels.label_reset.clone())
+                                    .disabled(profile.cpu_label_override.is_empty())
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.cpu_label_input
+                                            .update(cx, |s, cx| s.set_value("", window, cx));
+                                        this.edit_mangohud(window, cx, |p| {
+                                            p.cpu_label_override.clear()
+                                        });
+                                    })),
+                            ),
+                    ),
+            );
 
         v_flex()
             .w_full()
@@ -1662,678 +2478,9 @@ impl HudPanel {
             .child(
                 group_panel(cx)
                     .child(gpu_select_row)
-                    .child(div().border_t_1().border_color(border).child(field_row(
-                        RowState {
-                            label: self.labels.gpu_label_label.clone(),
-                            help: self.labels.gpu_label_help.clone(),
-                            ..Default::default()
-                        },
-                        gpu_label_control,
-                        cx,
-                    )))
-                    .child(div().border_t_1().border_color(border).child(field_row(
-                        RowState {
-                            label: self.labels.cpu_label_label.clone(),
-                            help: self.labels.cpu_label_help.clone(),
-                            ..Default::default()
-                        },
-                        cpu_label_control,
-                        cx,
-                    ))),
+                    .child(div().border_t_1().border_color(border).child(labels_row)),
             )
             .into_any_element()
-    }
-
-    fn render_metrics_gpu(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-        let gpu_locked = p.gpu_stats_locked();
-
-        let rows = [
-            field_row(
-                RowState {
-                    label: self.labels.metric_gpu_stats.clone(),
-                    help: self.labels.metric_gpu_stats_help.clone(),
-                    disabled_reason: gpu_locked
-                        .then(|| self.labels.metric_gpu_stats_locked.clone()),
-                    ..Default::default()
-                },
-                Switch::new("hud-metric-gpu-stats")
-                    .checked(p.effective_gpu_stats())
-                    .disabled(gpu_locked)
-                    .accessibility_label(self.labels.metric_gpu_stats.clone())
-                    .on_change(cx.listener(|this, on: &bool, window, cx| {
-                        this.edit_mangohud(window, cx, |p| {
-                            p.gpu_stats = *on;
-                            p.mark_custom();
-                        });
-                    }))
-                    .into_any_element(),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-temp",
-                self.labels.metric_gpu_temp.clone(),
-                self.labels.metric_gpu_temp_help.clone(),
-                p.gpu_temp,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_temp = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-junction",
-                self.labels.metric_gpu_junction_temp.clone(),
-                self.labels.metric_gpu_junction_temp_help.clone(),
-                p.gpu_junction_temp,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_junction_temp = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-mem-temp",
-                self.labels.metric_gpu_mem_temp.clone(),
-                self.labels.metric_gpu_mem_temp_help.clone(),
-                p.gpu_mem_temp,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_mem_temp = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-clock",
-                self.labels.metric_gpu_core_clock.clone(),
-                self.labels.metric_gpu_core_clock_help.clone(),
-                p.gpu_core_clock,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_core_clock = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-mem-clock",
-                self.labels.metric_gpu_mem_clock.clone(),
-                self.labels.metric_gpu_mem_clock_help.clone(),
-                p.gpu_mem_clock,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_mem_clock = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-power",
-                self.labels.metric_gpu_power.clone(),
-                self.labels.metric_gpu_power_help.clone(),
-                p.gpu_power,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_power = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gpu-fan",
-                self.labels.metric_gpu_fan.clone(),
-                self.labels.metric_gpu_fan_help.clone(),
-                p.gpu_fan,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gpu_fan = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-vram",
-                self.labels.metric_vram.clone(),
-                self.labels.metric_vram_help.clone(),
-                p.vram,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.vram = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_metrics_gpu.clone(), rows, border, cx)
-    }
-
-    fn render_metrics_cpu(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-        let cpu_locked = p.cpu_stats_locked();
-
-        let rows = [
-            field_row(
-                RowState {
-                    label: self.labels.metric_cpu_stats.clone(),
-                    help: self.labels.metric_cpu_stats_help.clone(),
-                    disabled_reason: cpu_locked
-                        .then(|| self.labels.metric_cpu_stats_locked.clone()),
-                    ..Default::default()
-                },
-                Switch::new("hud-metric-cpu-stats")
-                    .checked(p.effective_cpu_stats())
-                    .disabled(cpu_locked)
-                    .accessibility_label(self.labels.metric_cpu_stats.clone())
-                    .on_change(cx.listener(|this, on: &bool, window, cx| {
-                        this.edit_mangohud(window, cx, |p| {
-                            p.cpu_stats = *on;
-                            p.mark_custom();
-                        });
-                    }))
-                    .into_any_element(),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-cpu-temp",
-                self.labels.metric_cpu_temp.clone(),
-                self.labels.metric_cpu_temp_help.clone(),
-                p.cpu_temp,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.cpu_temp = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-cpu-mhz",
-                self.labels.metric_cpu_mhz.clone(),
-                self.labels.metric_cpu_mhz_help.clone(),
-                p.cpu_mhz,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.cpu_mhz = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-cpu-power",
-                self.labels.metric_cpu_power.clone(),
-                self.labels.metric_cpu_power_help.clone(),
-                p.cpu_power,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.cpu_power = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-ram",
-                self.labels.metric_ram.clone(),
-                self.labels.metric_ram_help.clone(),
-                p.ram,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.ram = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_metrics_cpu.clone(), rows, border, cx)
-    }
-
-    fn render_metrics_fps(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-
-        let rows = [
-            metric_switch_row(
-                "hud-metric-fps",
-                self.labels.metric_fps.clone(),
-                self.labels.metric_fps_help.clone(),
-                p.fps,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fps = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-fps-use-label",
-                self.labels.metric_fps_use_label.clone(),
-                self.labels.metric_fps_use_label_help.clone(),
-                p.fps_use_label,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fps_use_label = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-fps-avg",
-                self.labels.metric_fps_avg.clone(),
-                self.labels.metric_fps_avg_help.clone(),
-                p.fps_avg,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fps_avg = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-fps-1-low",
-                self.labels.metric_fps_1_low.clone(),
-                self.labels.metric_fps_1_low_help.clone(),
-                p.fps_1_low,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fps_1_low = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-frametime",
-                self.labels.metric_frametime.clone(),
-                self.labels.metric_frametime_help.clone(),
-                p.frametime,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.frametime = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-frame-timing",
-                self.labels.metric_frame_timing.clone(),
-                self.labels.metric_frame_timing_help.clone(),
-                p.frame_timing,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.frame_timing = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-present-mode",
-                self.labels.metric_present_mode.clone(),
-                self.labels.metric_present_mode_help.clone(),
-                p.present_mode,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.present_mode = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_metrics_fps.clone(), rows, border, cx)
-    }
-
-    fn render_metrics_runtime(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-
-        let rows = [
-            metric_switch_row(
-                "hud-metric-wine",
-                self.labels.metric_wine.clone(),
-                self.labels.metric_wine_help.clone(),
-                p.wine,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.wine = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-winesync",
-                self.labels.metric_winesync.clone(),
-                self.labels.metric_winesync_help.clone(),
-                p.winesync,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.winesync = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-fsr",
-                self.labels.metric_fsr.clone(),
-                self.labels.metric_fsr_help.clone(),
-                p.fsr,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fsr = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-hdr",
-                self.labels.metric_hdr.clone(),
-                self.labels.metric_hdr_help.clone(),
-                p.hdr,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.hdr = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gamemode",
-                self.labels.metric_gamemode.clone(),
-                self.labels.metric_gamemode_help.clone(),
-                p.gamemode,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gamemode = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-throttling",
-                self.labels.metric_throttling_status.clone(),
-                self.labels.metric_throttling_status_help.clone(),
-                p.throttling_status,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.throttling_status = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-metric-gamepad-battery",
-                self.labels.metric_gamepad_battery.clone(),
-                self.labels.metric_gamepad_battery_help.clone(),
-                p.gamepad_battery,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.gamepad_battery = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_metrics_runtime.clone(), rows, border, cx)
-    }
-
-    fn render_performance_section(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-
-        let mut fps_controls = h_flex()
-            .flex_wrap()
-            .gap_1p5()
-            .items_center()
-            .child(choice_button(
-                "hud-fps-off",
-                self.labels.fps_limit_off.clone(),
-                p.fps_limit.is_none(),
-                cx.listener(|this, _, window, cx| {
-                    this.fps_limit_input
-                        .update(cx, |s, cx| s.set_value("", window, cx));
-                    this.edit_mangohud(window, cx, |p| p.fps_limit = None);
-                }),
-            ));
-        for (cap, id, text) in FPS_PRESETS {
-            fps_controls = fps_controls.child(choice_button(
-                id,
-                SharedString::new_static(text),
-                p.fps_limit == Some(cap),
-                cx.listener(move |this, _, window, cx| {
-                    this.fps_limit_input
-                        .update(cx, |s, cx| s.set_value(text, window, cx));
-                    this.edit_mangohud(window, cx, |p| p.fps_limit = Some(cap));
-                }),
-            ));
-        }
-        fps_controls = fps_controls.child(Input::new(&self.fps_limit_input).small().w_24());
-
-        let method_control = h_flex()
-            .flex_wrap()
-            .gap_1p5()
-            .child(choice_button(
-                "hud-fps-method-late",
-                self.labels.fps_limit_method_late.clone(),
-                p.fps_limit_method == FpsLimitMethod::Late,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.fps_limit_method = FpsLimitMethod::Late);
-                }),
-            ))
-            .child(choice_button(
-                "hud-fps-method-early",
-                self.labels.fps_limit_method_early.clone(),
-                p.fps_limit_method == FpsLimitMethod::Early,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.fps_limit_method = FpsLimitMethod::Early);
-                }),
-            ))
-            .into_any_element();
-
-        let rows = [
-            field_row(
-                RowState {
-                    label: self.labels.fps_limit_label.clone(),
-                    help: self.labels.fps_limit_help.clone(),
-                    stacked: true,
-                    ..Default::default()
-                },
-                fps_controls.into_any_element(),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.fps_limit_method_label.clone(),
-                    help: self.labels.fps_limit_method_help.clone(),
-                    ..Default::default()
-                },
-                method_control,
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_performance.clone(), rows, border, cx)
-    }
-
-    fn render_layout_section(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let p = self.active_mangohud();
-
-        let orientation_control = h_flex()
-            .gap_1p5()
-            .child(choice_button(
-                "hud-orientation-vertical",
-                self.labels.orientation_vertical.clone(),
-                p.orientation == HudOrientation::Vertical,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.orientation = HudOrientation::Vertical;
-                        p.mark_custom();
-                    });
-                }),
-            ))
-            .child(choice_button(
-                "hud-orientation-horizontal",
-                self.labels.orientation_horizontal.clone(),
-                p.orientation == HudOrientation::Horizontal,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.orientation = HudOrientation::Horizontal;
-                        p.mark_custom();
-                    });
-                }),
-            ))
-            .into_any_element();
-
-        let rows = [
-            field_row(
-                RowState {
-                    label: self.labels.position_label.clone(),
-                    help: self.labels.position_help.clone(),
-                    ..Default::default()
-                },
-                Select::new(&self.position_select)
-                    .id("hud-position-select")
-                    .accessibility_label(self.labels.position_label.clone())
-                    .w_48()
-                    .into_any_element(),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.orientation_label.clone(),
-                    help: self.labels.orientation_help.clone(),
-                    ..Default::default()
-                },
-                orientation_control,
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.round_corners_label.clone(),
-                    help: self.labels.round_corners_help.clone(),
-                    ..Default::default()
-                },
-                slider_control(
-                    &self.round_corners_slider,
-                    self.labels.round_corners_label.clone(),
-                    self.display.round_corners.clone(),
-                ),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-layout-compact",
-                self.labels.hud_compact_label.clone(),
-                self.labels.hud_compact_help.clone(),
-                p.hud_compact,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.hud_compact = *on;
-                        p.mark_custom();
-                    });
-                }),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-layout-no-margin",
-                self.labels.hud_no_margin_label.clone(),
-                self.labels.hud_no_margin_help.clone(),
-                p.hud_no_margin,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.hud_no_margin = *on);
-                }),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.font_scale_label.clone(),
-                    help: self.labels.font_scale_help.clone(),
-                    ..Default::default()
-                },
-                slider_control(
-                    &self.font_scale_slider,
-                    self.labels.font_scale_label.clone(),
-                    self.display.font_scale.clone(),
-                ),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.background_alpha_label.clone(),
-                    help: self.labels.background_alpha_help.clone(),
-                    ..Default::default()
-                },
-                slider_control(
-                    &self.bg_alpha_slider,
-                    self.labels.background_alpha_label.clone(),
-                    self.display.background_alpha.clone(),
-                ),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.alpha_label.clone(),
-                    help: self.labels.alpha_help.clone(),
-                    ..Default::default()
-                },
-                slider_control(
-                    &self.alpha_slider,
-                    self.labels.alpha_label.clone(),
-                    self.display.alpha.clone(),
-                ),
-                cx,
-            ),
-            field_row(
-                RowState {
-                    label: self.labels.toggle_hud_label.clone(),
-                    help: self.labels.toggle_hud_help.clone(),
-                    ..Default::default()
-                },
-                self.shortcut.clone().into_any_element(),
-                cx,
-            ),
-            metric_switch_row(
-                "hud-layout-no-display",
-                self.labels.no_display_label.clone(),
-                self.labels.no_display_help.clone(),
-                p.no_display,
-                cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.no_display = *on);
-                }),
-                cx,
-            ),
-        ];
-
-        render_divided_group(self.labels.group_layout.clone(), rows, border, cx)
     }
 
     fn render_colors_section(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -2607,20 +2754,27 @@ impl Render for HudPanel {
                 .gap_2()
                 .children(self.render_missing_mangohud())
                 .children(self.render_steam_section(cx))
-                .child(self.render_mode_section(cx))
-                .when(editing, |v| {
-                    v.child(div().pt_4().child(self.preview.clone()))
-                        .child(self.render_presets_section(cx))
-                        .child(self.render_hardware_section(cx))
-                        .child(self.render_metrics_gpu(cx))
-                        .child(self.render_metrics_cpu(cx))
-                        .child(self.render_metrics_fps(cx))
-                        .child(self.render_metrics_runtime(cx))
-                        .child(self.render_performance_section(cx))
-                        .child(self.render_layout_section(cx))
-                        .child(self.render_colors_section(cx))
+                .when(!editing, |v| {
+                    v.child(self.render_mode_section(cx))
+                        .children(self.render_opengl_section(cx))
                 })
-                .children(self.render_opengl_section(cx))
+                .when(editing, |v| {
+                    let tab_body = match self.active_tab {
+                        HudTab::Metrics => self.render_metrics_tab(cx),
+                        HudTab::Layout => self.render_layout_tab(cx),
+                        HudTab::Appearance => v_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(self.render_colors_section(cx))
+                            .child(self.render_hardware_section(cx))
+                            .children(self.render_opengl_section(cx))
+                            .into_any_element(),
+                    };
+                    v.child(self.preview.clone())
+                        .child(self.render_top_quick_card(cx))
+                        .child(self.render_tab_bar(cx))
+                        .child(tab_body)
+                })
                 .into_any_element(),
             HudBackend::MetalHud => v_flex()
                 .w_full()
@@ -2649,6 +2803,64 @@ fn choice_button(
         Button::new(id).outline()
     };
     btn.small().label(label).on_click(on_click)
+}
+
+fn metric_chip(
+    id: &'static str,
+    label: SharedString,
+    help: SharedString,
+    active: bool,
+    on_click: impl Fn(&gpui_kit::ClickEvent, &mut Window, &mut App) + 'static,
+) -> Button {
+    let btn = if active {
+        Button::new(id).primary()
+    } else {
+        Button::new(id).outline()
+    };
+    btn.small().label(label).tooltip(help).on_click(on_click)
+}
+
+fn locked_metric_chip(id: &'static str, label: SharedString, reason: SharedString) -> Button {
+    Button::new(id)
+        .primary()
+        .small()
+        .disabled(true)
+        .label(label)
+        .tooltip(reason)
+}
+
+fn compact_slider_cell(
+    label: SharedString,
+    value_label: SharedString,
+    state: &Entity<SliderState>,
+    muted_fg: Hsla,
+) -> gpui_kit::Div {
+    v_flex()
+        .flex_1()
+        .min_w_0()
+        .gap_1()
+        .child(
+            h_flex()
+                .w_full()
+                .justify_between()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_semibold()
+                        .truncate()
+                        .child(label.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .flex_shrink_0()
+                        .child(value_label),
+                ),
+        )
+        .child(Slider::new(state).accessibility_label(label))
 }
 
 fn metric_switch_row(
@@ -2692,28 +2904,6 @@ fn render_divided_group<const N: usize>(
         .w_full()
         .child(group_heading(heading, cx))
         .child(panel)
-        .into_any_element()
-}
-
-fn slider_control(
-    state: &Entity<SliderState>,
-    a11y_label: SharedString,
-    value_label: SharedString,
-) -> AnyElement {
-    h_flex()
-        .gap_3()
-        .w_72()
-        .items_center()
-        .child(Slider::new(state).accessibility_label(a11y_label).flex_1())
-        .child(
-            div()
-                .w_16()
-                .flex_shrink_0()
-                .whitespace_nowrap()
-                .text_sm()
-                .text_right()
-                .child(value_label),
-        )
         .into_any_element()
 }
 
