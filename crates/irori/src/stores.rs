@@ -189,6 +189,7 @@ pub fn hooks() -> Hooks {
             dismiss: Arc::new(irori_manage::dismiss_steam_client_library_hint),
         }),
         uninstall: Some(Arc::new(irori_game::open_uninstall_dialog)),
+        game_setup: Some(Arc::new(irori_settings::setup_card)),
     }
 }
 

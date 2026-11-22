@@ -75,6 +75,7 @@ type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
 type GameFn = Arc<dyn Fn(GameId, &mut Window, &mut App)>;
+type GameViewFn = Arc<dyn Fn(GameId, &mut Window, &mut App) -> AnyView>;
 
 /// The library's suggestion to read the Steam library from the Steam client
 /// (the Steam store and its dialog live outside the UI layer).
@@ -113,6 +114,9 @@ pub struct Hooks {
     /// Ask to uninstall a game (the confirmation lives in the game
     /// feature, which the settings don't depend on).
     pub uninstall: Option<GameFn>,
+    /// Make the Setup card of one game for its page: what its settings
+    /// change, by section (the settings feature draws it).
+    pub game_setup: Option<GameViewFn>,
 }
 
 impl Global for Hooks {}
@@ -230,6 +234,14 @@ pub fn game_panel(
         .try_global::<Hooks>()
         .and_then(|h| h.game_panel.clone())?;
     Some(hook(id, panel, window, cx))
+}
+
+/// The Setup card of `id` for its game page; `None` without the hook.
+pub fn game_setup(id: GameId, window: &mut Window, cx: &mut App) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.game_setup.clone())?;
+    Some(hook(id, window, cx))
 }
 
 /// The settings of `id` for a screen that shows them in place, closed with

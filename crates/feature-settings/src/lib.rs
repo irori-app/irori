@@ -40,6 +40,7 @@ mod renodx;
 mod replay;
 mod reshade;
 mod saves;
+mod setup_card;
 mod steam_compat;
 mod steam_launch;
 mod storage;
@@ -58,6 +59,7 @@ pub use form::{FormTarget, GameSettingsForm, SettingsForm};
 pub use game_view::{GameSection, GameSettingsView};
 pub use i18n::CATALOGS;
 pub use logs::LogViewer;
+pub use setup_card::setup_card;
 pub use stores::install_store_handles;
 pub use view::{SettingsSection, SettingsView};
 

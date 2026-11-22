@@ -256,7 +256,12 @@ irori-sign-in     (standalone; Irori links it only on macOS/Windows)
   same goes for another feature's views: the library's Focus view and grid drawer show
   the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`), and
   Big Picture shows a game's settings in place through `irori_ui::hooks::game_settings`
-  (`GameSettingsView::embedded`), so they never take the user out of it.
+  (`GameSettingsView::embedded`), so they never take the user out of it. The game
+  page's Setup card (what the game's settings change, by section) comes from the
+  settings feature through `irori_ui::hooks::game_setup` (`irori_settings::setup_card`,
+  `setup_card::changed_sections`), and Storage uninstalls through
+  `irori_ui::hooks::uninstall`. A game's settings open on "Changed" (route id
+  `changed`) to list only what differs from the defaults, each with its reset.
 
 ## 4. Architecture
 

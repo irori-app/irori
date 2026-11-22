@@ -77,6 +77,8 @@ pub enum FormTarget {
 enum FormFilter {
     Sections(Vec<FieldSection>),
     Query(String),
+    /// Only the fields the game changes from the defaults, every section.
+    Changed,
 }
 
 /// Select item: a stable key and a label.
@@ -322,6 +324,13 @@ impl SettingsForm {
     /// Show only these sections (in this order).
     pub fn set_sections(&mut self, sections: Vec<FieldSection>, cx: &mut Context<Self>) {
         self.filter = FormFilter::Sections(sections);
+        cx.notify();
+    }
+
+    /// Show only the fields that differ from the game defaults (game
+    /// target), grouped by section, each with its reset.
+    pub fn set_changed_only(&mut self, cx: &mut Context<Self>) {
+        self.filter = FormFilter::Changed;
         cx.notify();
     }
 
@@ -590,6 +599,7 @@ impl SettingsForm {
             match &self.filter {
                 FormFilter::Sections(s) => s.contains(&f.section),
                 FormFilter::Query(q) => f.matches(q),
+                FormFilter::Changed => self.is_overridden(f),
             }
         })
     }
@@ -2409,7 +2419,7 @@ impl Render for SettingsForm {
         }
         let multi_section = match &self.filter {
             FormFilter::Sections(s) => s.len() > 1,
-            FormFilter::Query(_) => true,
+            FormFilter::Query(_) | FormFilter::Changed => true,
         };
         let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
         let border = cx.theme().border;
