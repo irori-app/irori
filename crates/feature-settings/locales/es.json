@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Sonidos de navegación",
   "settings.field.nav_sounds.help": "Un tono breve en Big Picture al mover el foco, abrir o cerrar algo o cambiar de pestaña. Al elegirlo suena una muestra. En Linux necesita pw-play, paplay o aplay.",
   "settings.field.nav_sound_volume.label": "Volumen de los sonidos de navegación",
-  "settings.field.nav_sound_volume.help": "En porcentaje, de 1 a 100. Incluso a 100 los tonos quedan muy por debajo del sonido de un juego."
+  "settings.field.nav_sound_volume.help": "En porcentaje, de 1 a 100. Incluso a 100 los tonos quedan muy por debajo del sonido de un juego.",
+  "settings.field.idle_minutes.label": "Pantalla de reposo tras",
+  "settings.field.idle_minutes.help": "Minutos sin actividad antes de que Big Picture muestre la pantalla de reposo; 0 no la muestra nunca. Cualquier botón, tecla o movimiento del ratón devuelve Big Picture.",
+  "settings.field.idle_screen.label": "Pantalla de reposo",
+  "settings.option.idle_screen.slideshow": "Arte de tus juegos, uno tras otro",
+  "settings.option.idle_screen.dim": "Oscurecida, con el reloj"
 }

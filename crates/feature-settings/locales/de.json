@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Navigationstöne",
   "settings.field.nav_sounds.help": "Ein kurzer Ton in Big Picture, wenn der Fokus wandert, sich etwas öffnet oder schließt oder der Tab wechselt. Die Auswahl spielt eine Probe. Unter Linux wird pw-play, paplay oder aplay benötigt.",
   "settings.field.nav_sound_volume.label": "Lautstärke der Navigationstöne",
-  "settings.field.nav_sound_volume.help": "In Prozent, von 1 bis 100. Auch bei 100 bleiben die Töne deutlich leiser als ein Spiel."
+  "settings.field.nav_sound_volume.help": "In Prozent, von 1 bis 100. Auch bei 100 bleiben die Töne deutlich leiser als ein Spiel.",
+  "settings.field.idle_minutes.label": "Ruhebildschirm nach",
+  "settings.field.idle_minutes.help": "Minuten ohne Eingabe, bis Big Picture den Ruhebildschirm zeigt; 0 zeigt ihn nie. Jede Taste und jede Mausbewegung holt Big Picture zurück.",
+  "settings.field.idle_screen.label": "Ruhebildschirm",
+  "settings.option.idle_screen.slideshow": "Bilder deiner Spiele nacheinander",
+  "settings.option.idle_screen.dim": "Abgedunkelt, mit Uhr"
 }

@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Звуки навигации",
   "settings.field.nav_sounds.help": "Короткий звук в Big Picture при перемещении фокуса, открытии или закрытии чего-либо и смене вкладки. При выборе звучит образец. В Linux нужен pw-play, paplay или aplay.",
   "settings.field.nav_sound_volume.label": "Громкость звуков навигации",
-  "settings.field.nav_sound_volume.help": "В процентах, от 1 до 100. Даже на 100 звуки заметно тише игры."
+  "settings.field.nav_sound_volume.help": "В процентах, от 1 до 100. Даже на 100 звуки заметно тише игры.",
+  "settings.field.idle_minutes.label": "Экран ожидания через",
+  "settings.field.idle_minutes.help": "Минуты без ввода до показа экрана ожидания в Big Picture; 0 — никогда. Любая кнопка, клавиша или движение мыши возвращает Big Picture.",
+  "settings.field.idle_screen.label": "Экран ожидания",
+  "settings.option.idle_screen.slideshow": "Обложки ваших игр по очереди",
+  "settings.option.idle_screen.dim": "Затемнённый, с часами"
 }

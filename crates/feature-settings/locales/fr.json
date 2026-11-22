@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Sons de navigation",
   "settings.field.nav_sounds.help": "Un son bref dans Big Picture quand la sélection bouge, qu’un élément s’ouvre ou se ferme ou que l’onglet change. Le choix joue un exemple. Sous Linux, pw-play, paplay ou aplay est nécessaire.",
   "settings.field.nav_sound_volume.label": "Volume des sons de navigation",
-  "settings.field.nav_sound_volume.help": "En pourcentage, de 1 à 100. Même à 100, les sons restent bien sous le son d’un jeu."
+  "settings.field.nav_sound_volume.help": "En pourcentage, de 1 à 100. Même à 100, les sons restent bien sous le son d’un jeu.",
+  "settings.field.idle_minutes.label": "Écran de veille après",
+  "settings.field.idle_minutes.help": "Minutes sans action avant que Big Picture affiche l’écran de veille ; 0 ne l’affiche jamais. Un bouton, une touche ou un mouvement de souris ramène Big Picture.",
+  "settings.field.idle_screen.label": "Écran de veille",
+  "settings.option.idle_screen.slideshow": "Les images de vos jeux, l’une après l’autre",
+  "settings.option.idle_screen.dim": "Assombri, avec l’horloge"
 }

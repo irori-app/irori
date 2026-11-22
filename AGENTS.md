@@ -1202,6 +1202,11 @@ Microsoft's approval page (`irori_manage::login`).
   macOS, `pw-play`/`paplay`/`aplay` on Linux. A move sounds only when the focus moved
   (`nav_cue`) and not while the last tone still plays; changing the setting plays a
   sample.
+- **Idle screen** (`view/idle.rs`, `iroriBigPicture.idleMinutes`, 0 = off by default,
+  and `idleScreen`: slideshow of Home's art or dimmed, both with the clock): one timer
+  task sleeps until the screen is due and again for what is left after input, so input
+  only stamps a time; the dimmed screen needs no timer. Any input, mouse movement or
+  click wakes Big Picture and does nothing else.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of

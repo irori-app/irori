@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "ナビゲーション音",
   "settings.field.nav_sounds.help": "Big Picture でフォーカスの移動、項目の開閉、タブの切り替え時に短い音を鳴らします。選ぶと見本が鳴ります。Linux では pw-play、paplay、aplay のいずれかが必要です。",
   "settings.field.nav_sound_volume.label": "ナビゲーション音の音量",
-  "settings.field.nav_sound_volume.help": "1〜100 のパーセントで指定します。100 でもゲームの音よりかなり控えめです。"
+  "settings.field.nav_sound_volume.help": "1〜100 のパーセントで指定します。100 でもゲームの音よりかなり控えめです。",
+  "settings.field.idle_minutes.label": "アイドル画面までの時間",
+  "settings.field.idle_minutes.help": "Big Picture がアイドル画面を表示するまでの無操作の分数。0 で表示しません。ボタン、キー、マウスの動きで Big Picture に戻ります。",
+  "settings.field.idle_screen.label": "アイドル画面",
+  "settings.option.idle_screen.slideshow": "ゲームのアートを順番に表示",
+  "settings.option.idle_screen.dim": "暗くして時計を表示"
 }

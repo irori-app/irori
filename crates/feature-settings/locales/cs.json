@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Zvuky navigace",
   "settings.field.nav_sounds.help": "Krátký tón v Big Picture při posunu výběru, otevření či zavření něčeho nebo změně karty. Po výběru zazní ukázka. V Linuxu je potřeba pw-play, paplay nebo aplay.",
   "settings.field.nav_sound_volume.label": "Hlasitost zvuků navigace",
-  "settings.field.nav_sound_volume.help": "V procentech, od 1 do 100. I na 100 zůstávají tóny výrazně pod zvukem hry."
+  "settings.field.nav_sound_volume.help": "V procentech, od 1 do 100. I na 100 zůstávají tóny výrazně pod zvukem hry.",
+  "settings.field.idle_minutes.label": "Spořič po",
+  "settings.field.idle_minutes.help": "Minuty bez vstupu, než Big Picture ukáže spořič; 0 jej nikdy neukáže. Jakékoli tlačítko, klávesa nebo pohyb myši vrátí Big Picture zpět.",
+  "settings.field.idle_screen.label": "Spořič",
+  "settings.option.idle_screen.slideshow": "Obrázky vašich her jeden po druhém",
+  "settings.option.idle_screen.dim": "Ztmavený, s hodinami"
 }

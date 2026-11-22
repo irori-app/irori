@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Navigeringsljud",
   "settings.field.nav_sounds.help": "En kort ton i Big Picture när markeringen flyttas, något öppnas eller stängs eller fliken byts. Valet spelar ett exempel. På Linux behövs pw-play, paplay eller aplay.",
   "settings.field.nav_sound_volume.label": "Volym för navigeringsljud",
-  "settings.field.nav_sound_volume.help": "I procent, från 1 till 100. Även på 100 ligger tonerna gott under ett spels ljud."
+  "settings.field.nav_sound_volume.help": "I procent, från 1 till 100. Även på 100 ligger tonerna gott under ett spels ljud.",
+  "settings.field.idle_minutes.label": "Viloskärm efter",
+  "settings.field.idle_minutes.help": "Minuter utan inmatning innan Big Picture visar viloskärmen; 0 visar den aldrig. Varje knapp, tangent eller musrörelse tar tillbaka Big Picture.",
+  "settings.field.idle_screen.label": "Viloskärm",
+  "settings.option.idle_screen.slideshow": "Dina spels bilder, en i taget",
+  "settings.option.idle_screen.dim": "Mörklagd, med klockan"
 }

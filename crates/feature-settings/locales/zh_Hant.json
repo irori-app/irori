@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "導覽音效",
   "settings.field.nav_sounds.help": "在 Big Picture 中移動焦點、開啟或關閉內容、切換分頁時播放短促提示音。選擇後會播放範例。Linux 上需要 pw-play、paplay 或 aplay。",
   "settings.field.nav_sound_volume.label": "導覽音效音量",
-  "settings.field.nav_sound_volume.help": "百分比，1 到 100。即使為 100，提示音也遠低於遊戲聲音。"
+  "settings.field.nav_sound_volume.help": "百分比，1 到 100。即使為 100，提示音也遠低於遊戲聲音。",
+  "settings.field.idle_minutes.label": "閒置畫面等待時間",
+  "settings.field.idle_minutes.help": "無操作多少分鐘後 Big Picture 顯示閒置畫面；0 表示永不顯示。按任意按鍵或移動滑鼠即可返回 Big Picture。",
+  "settings.field.idle_screen.label": "閒置畫面",
+  "settings.option.idle_screen.slideshow": "依序顯示遊戲圖片",
+  "settings.option.idle_screen.dim": "變暗並顯示時鐘"
 }

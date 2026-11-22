@@ -827,6 +827,17 @@ const NAV_SOUNDS: &[ChoiceOption] = &[
     ),
 ];
 
+const IDLE_SCREEN: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("slideshow"),
+        Key("settings.option.idle_screen.slideshow"),
+    ),
+    opt(
+        ChoiceValue::Str("dim"),
+        Key("settings.option.idle_screen.dim"),
+    ),
+];
+
 const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("start"),
@@ -2040,6 +2051,30 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.nav_sound_volume.help")
     .keywords(&["sound", "volume", "loudness", "big picture"]),
+    app(
+        "iroriBigPicture.idleMinutes",
+        "settings.field.idle_minutes.label",
+        Controller,
+        "settings.group.big_picture",
+        Text(TextKind::Number { min: 0, max: 1440 }),
+    )
+    .help("settings.field.idle_minutes.help")
+    .keywords(&[
+        "idle",
+        "screensaver",
+        "attract",
+        "slideshow",
+        "dim",
+        "big picture",
+    ]),
+    app(
+        "iroriBigPicture.idleScreen",
+        "settings.field.idle_screen.label",
+        Controller,
+        "settings.group.big_picture",
+        Choice(IDLE_SCREEN),
+    )
+    .keywords(&["idle", "screensaver", "slideshow", "dim", "big picture"]),
     // ---- Appearance ----
     app(
         "iroriUi.theme",

@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Navigation sounds",
   "settings.field.nav_sounds.help": "A short tone in Big Picture when the focus moves, something opens or closes, or the tab changes. Choosing one plays a sample. On Linux it needs pw-play, paplay or aplay.",
   "settings.field.nav_sound_volume.label": "Navigation sound volume",
-  "settings.field.nav_sound_volume.help": "In percent, from 1 to 100. Even at 100 the tones stay well under a game’s sound."
+  "settings.field.nav_sound_volume.help": "In percent, from 1 to 100. Even at 100 the tones stay well under a game’s sound.",
+  "settings.field.idle_minutes.label": "Idle screen after",
+  "settings.field.idle_minutes.help": "Minutes without input before Big Picture shows the idle screen; 0 never shows it. Any button, key or mouse movement brings Big Picture back.",
+  "settings.field.idle_screen.label": "Idle screen",
+  "settings.option.idle_screen.slideshow": "Your games’ art, one after another",
+  "settings.option.idle_screen.dim": "Darkened, with the clock"
 }

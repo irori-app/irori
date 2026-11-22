@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Dźwięki nawigacji",
   "settings.field.nav_sounds.help": "Krótki dźwięk w Big Picture przy przesunięciu zaznaczenia, otwarciu lub zamknięciu czegoś albo zmianie karty. Wybór odtwarza próbkę. W Linuksie potrzebny jest pw-play, paplay lub aplay.",
   "settings.field.nav_sound_volume.label": "Głośność dźwięków nawigacji",
-  "settings.field.nav_sound_volume.help": "W procentach, od 1 do 100. Nawet przy 100 dźwięki są wyraźnie cichsze od gry."
+  "settings.field.nav_sound_volume.help": "W procentach, od 1 do 100. Nawet przy 100 dźwięki są wyraźnie cichsze od gry.",
+  "settings.field.idle_minutes.label": "Ekran bezczynności po",
+  "settings.field.idle_minutes.help": "Minuty bez działań, po których Big Picture pokazuje ekran bezczynności; 0 nigdy go nie pokazuje. Dowolny przycisk, klawisz lub ruch myszy przywraca Big Picture.",
+  "settings.field.idle_screen.label": "Ekran bezczynności",
+  "settings.option.idle_screen.slideshow": "Grafiki twoich gier, jedna po drugiej",
+  "settings.option.idle_screen.dim": "Przyciemniony, z zegarem"
 }

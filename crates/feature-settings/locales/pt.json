@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Sons de navegação",
   "settings.field.nav_sounds.help": "Um som curto no Big Picture quando o foco se move, algo abre ou fecha ou o separador muda. Ao escolher, toca uma amostra. No Linux é preciso pw-play, paplay ou aplay.",
   "settings.field.nav_sound_volume.label": "Volume dos sons de navegação",
-  "settings.field.nav_sound_volume.help": "Em percentagem, de 1 a 100. Mesmo a 100 os sons ficam bem abaixo do som de um jogo."
+  "settings.field.nav_sound_volume.help": "Em percentagem, de 1 a 100. Mesmo a 100 os sons ficam bem abaixo do som de um jogo.",
+  "settings.field.idle_minutes.label": "Ecrã de repouso após",
+  "settings.field.idle_minutes.help": "Minutos sem atividade até o Big Picture mostrar o ecrã de repouso; 0 nunca o mostra. Qualquer botão, tecla ou movimento do rato traz o Big Picture de volta.",
+  "settings.field.idle_screen.label": "Ecrã de repouso",
+  "settings.option.idle_screen.slideshow": "Imagens dos seus jogos, uma após outra",
+  "settings.option.idle_screen.dim": "Escurecido, com o relógio"
 }

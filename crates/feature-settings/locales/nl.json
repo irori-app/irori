@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Navigatiegeluiden",
   "settings.field.nav_sounds.help": "Een korte toon in Big Picture als de focus verschuift, iets opent of sluit of het tabblad wisselt. Kiezen speelt een voorbeeld af. Op Linux is pw-play, paplay of aplay nodig.",
   "settings.field.nav_sound_volume.label": "Volume van navigatiegeluiden",
-  "settings.field.nav_sound_volume.help": "In procenten, van 1 tot 100. Zelfs op 100 blijven de tonen ruim onder het geluid van een spel."
+  "settings.field.nav_sound_volume.help": "In procenten, van 1 tot 100. Zelfs op 100 blijven de tonen ruim onder het geluid van een spel.",
+  "settings.field.idle_minutes.label": "Rustscherm na",
+  "settings.field.idle_minutes.help": "Minuten zonder invoer voordat Big Picture het rustscherm toont; 0 toont het nooit. Elke knop, toets of muisbeweging brengt Big Picture terug.",
+  "settings.field.idle_screen.label": "Rustscherm",
+  "settings.option.idle_screen.slideshow": "Afbeeldingen van je spellen, een voor een",
+  "settings.option.idle_screen.dim": "Verduisterd, met de klok"
 }

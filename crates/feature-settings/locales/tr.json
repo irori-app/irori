@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Gezinme sesleri",
   "settings.field.nav_sounds.help": "Big Picture'da odak hareket ettiğinde, bir şey açılıp kapandığında veya sekme değiştiğinde kısa bir ses. Seçince bir örnek çalar. Linux'ta pw-play, paplay veya aplay gerekir.",
   "settings.field.nav_sound_volume.label": "Gezinme sesi düzeyi",
-  "settings.field.nav_sound_volume.help": "Yüzde olarak, 1 ile 100 arası. 100'de bile sesler bir oyunun sesinin epey altında kalır."
+  "settings.field.nav_sound_volume.help": "Yüzde olarak, 1 ile 100 arası. 100'de bile sesler bir oyunun sesinin epey altında kalır.",
+  "settings.field.idle_minutes.label": "Bekleme ekranı süresi",
+  "settings.field.idle_minutes.help": "Big Picture bekleme ekranını göstermeden önce girişsiz geçen dakika; 0 hiç göstermez. Herhangi bir düğme, tuş veya fare hareketi Big Picture'ı geri getirir.",
+  "settings.field.idle_screen.label": "Bekleme ekranı",
+  "settings.option.idle_screen.slideshow": "Oyunlarının görselleri, birbiri ardına",
+  "settings.option.idle_screen.dim": "Karartılmış, saatli"
 }

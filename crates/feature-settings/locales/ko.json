@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "탐색 소리",
   "settings.field.nav_sounds.help": "Big Picture에서 포커스 이동, 항목 열기·닫기, 탭 변경 시 짧은 소리를 냅니다. 선택하면 샘플이 재생됩니다. Linux에서는 pw-play, paplay 또는 aplay가 필요합니다.",
   "settings.field.nav_sound_volume.label": "탐색 소리 음량",
-  "settings.field.nav_sound_volume.help": "1에서 100까지의 백분율입니다. 100이어도 게임 소리보다 훨씬 작습니다."
+  "settings.field.nav_sound_volume.help": "1에서 100까지의 백분율입니다. 100이어도 게임 소리보다 훨씬 작습니다.",
+  "settings.field.idle_minutes.label": "대기 화면 표시 시간",
+  "settings.field.idle_minutes.help": "Big Picture가 대기 화면을 표시하기까지 입력이 없는 시간(분)입니다. 0이면 표시하지 않습니다. 버튼, 키, 마우스 움직임으로 Big Picture로 돌아옵니다.",
+  "settings.field.idle_screen.label": "대기 화면",
+  "settings.option.idle_screen.slideshow": "게임 아트를 차례로 표시",
+  "settings.option.idle_screen.dim": "어둡게, 시계 표시"
 }

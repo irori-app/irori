@@ -1435,5 +1435,10 @@
   "settings.field.nav_sounds.label": "Sunete de navigare",
   "settings.field.nav_sounds.help": "Un sunet scurt în Big Picture când selecția se mută, ceva se deschide sau se închide ori se schimbă fila. Alegerea redă o mostră. Pe Linux e nevoie de pw-play, paplay sau aplay.",
   "settings.field.nav_sound_volume.label": "Volumul sunetelor de navigare",
-  "settings.field.nav_sound_volume.help": "În procente, de la 1 la 100. Chiar și la 100 sunetele rămân mult sub sunetul unui joc."
+  "settings.field.nav_sound_volume.help": "În procente, de la 1 la 100. Chiar și la 100 sunetele rămân mult sub sunetul unui joc.",
+  "settings.field.idle_minutes.label": "Ecran de repaus după",
+  "settings.field.idle_minutes.help": "Minute fără activitate până când Big Picture arată ecranul de repaus; 0 nu îl arată niciodată. Orice buton, tastă sau mișcare a mouse-ului readuce Big Picture.",
+  "settings.field.idle_screen.label": "Ecran de repaus",
+  "settings.option.idle_screen.slideshow": "Imaginile jocurilor tale, una după alta",
+  "settings.option.idle_screen.dim": "Întunecat, cu ceasul"
 }
