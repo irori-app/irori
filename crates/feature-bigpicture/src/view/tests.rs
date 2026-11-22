@@ -1036,3 +1036,21 @@ fn sound_output_entry_names_the_output_and_explains_what_it_cant_do(cx: &mut Tes
         );
     });
 }
+
+#[test]
+fn inputs_sound_only_when_they_do_something() {
+    use crate::nav_sound::Cue;
+    use gamepad::GamepadInput as I;
+    assert_eq!(super::nav_cue(I::Down, true, false), Some(Cue::Move));
+    assert_eq!(super::nav_cue(I::Down, false, false), None, "at an edge");
+    assert_eq!(
+        super::nav_cue(I::Down, false, true),
+        Some(Cue::Move),
+        "editor"
+    );
+    assert_eq!(super::nav_cue(I::Confirm, false, false), Some(Cue::Confirm));
+    assert_eq!(super::nav_cue(I::Back, true, false), Some(Cue::Back));
+    assert_eq!(super::nav_cue(I::Back, false, false), None);
+    assert_eq!(super::nav_cue(I::NextPage, true, false), Some(Cue::Tab));
+    assert_eq!(super::nav_cue(I::Menu, true, false), Some(Cue::Confirm));
+}

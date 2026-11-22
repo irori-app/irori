@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "必须有一个按键用于确认，另一个用于返回。",
   "settings.controller_map.not_changed": "按键未更改",
   "settings.controller_map.everywhere": "更改会应用到 Big Picture、覆盖层和其他所有界面。Guide、十字键和摇杆的功能保持不变。",
-  "settings.controller_map.reset": "重置按键"
+  "settings.controller_map.reset": "重置按键",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "关",
+  "settings.option.nav_sounds.soft": "柔和",
+  "settings.option.nav_sounds.classic": "经典",
+  "settings.field.nav_sounds.label": "导航音效",
+  "settings.field.nav_sounds.help": "在 Big Picture 中移动焦点、打开或关闭内容、切换标签页时播放短促提示音。选择后会播放示例。Linux 上需要 pw-play、paplay 或 aplay。",
+  "settings.field.nav_sound_volume.label": "导航音效音量",
+  "settings.field.nav_sound_volume.help": "百分比，1 到 100。即使为 100，提示音也远低于游戏声音。"
 }

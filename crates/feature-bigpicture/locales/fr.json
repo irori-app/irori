@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Encore 1 en attente",
   "bigpicture.overlay.more_unlocks_other": "Encore {count} en attente",
   "bigpicture.overlay.select": "Choisir",
-  "bigpicture.overlay.close": "Fermer"
+  "bigpicture.overlay.close": "Fermer",
+  "bigpicture.menu.sounds": "Sons : {sounds}",
+  "bigpicture.sounds.off": "Désactivés",
+  "bigpicture.sounds.soft": "Doux",
+  "bigpicture.sounds.classic": "Classiques"
 }

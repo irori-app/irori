@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Bir düğme onaylamalı, başka bir düğme geri dönmeli.",
   "settings.controller_map.not_changed": "Düğme değiştirilmedi",
   "settings.controller_map.everywhere": "Değişiklikler Big Picture'da, katmanda ve diğer tüm ekranlarda geçerlidir. Guide, yön tuşları ve çubuklar görevlerini korur.",
-  "settings.controller_map.reset": "Düğmeleri sıfırla"
+  "settings.controller_map.reset": "Düğmeleri sıfırla",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Kapalı",
+  "settings.option.nav_sounds.soft": "Yumuşak",
+  "settings.option.nav_sounds.classic": "Klasik",
+  "settings.field.nav_sounds.label": "Gezinme sesleri",
+  "settings.field.nav_sounds.help": "Big Picture'da odak hareket ettiğinde, bir şey açılıp kapandığında veya sekme değiştiğinde kısa bir ses. Seçince bir örnek çalar. Linux'ta pw-play, paplay veya aplay gerekir.",
+  "settings.field.nav_sound_volume.label": "Gezinme sesi düzeyi",
+  "settings.field.nav_sound_volume.help": "Yüzde olarak, 1 ile 100 arası. 100'de bile sesler bir oyunun sesinin epey altında kalır."
 }

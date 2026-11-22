@@ -1195,6 +1195,13 @@ Microsoft's approval page (`irori_manage::login`).
   (`gamepad/drawing.rs`, an SVG of theme colours without text, labels laid over it) per
   place (Irori's screens, Big Picture, the overlay, Guide held) and moves a job to
   another button by swapping it with that button's job (`ButtonMap::assigning`).
+- **Navigation sounds** (`nav_sound.rs`, `iroriBigPicture.sounds`/`soundVolume`, off
+  by default; the quick menu cycles them): tones made in code (`samples`, pure and
+  tested) are written once as WAV files under `<cache>/bigpicture-sounds` and played by
+  the system, never by a linked audio library: `PlaySoundW` on Windows, `afplay` on
+  macOS, `pw-play`/`paplay`/`aplay` on Linux. A move sounds only when the focus moved
+  (`nav_cue`) and not while the last tone still plays; changing the setting plays a
+  sample.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of

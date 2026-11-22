@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Um botão tem de confirmar e outro de voltar.",
   "settings.controller_map.not_changed": "Botão não alterado",
   "settings.controller_map.everywhere": "As alterações aplicam-se no Big Picture, na sobreposição e em todos os outros ecrãs. Guide, o direcional e os manípulos mantêm as suas funções.",
-  "settings.controller_map.reset": "Repor botões"
+  "settings.controller_map.reset": "Repor botões",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Desligados",
+  "settings.option.nav_sounds.soft": "Suaves",
+  "settings.option.nav_sounds.classic": "Clássicos",
+  "settings.field.nav_sounds.label": "Sons de navegação",
+  "settings.field.nav_sounds.help": "Um som curto no Big Picture quando o foco se move, algo abre ou fecha ou o separador muda. Ao escolher, toca uma amostra. No Linux é preciso pw-play, paplay ou aplay.",
+  "settings.field.nav_sound_volume.label": "Volume dos sons de navegação",
+  "settings.field.nav_sound_volume.help": "Em percentagem, de 1 a 100. Mesmo a 100 os sons ficam bem abaixo do som de um jogo."
 }

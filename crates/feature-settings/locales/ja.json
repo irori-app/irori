@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "決定するボタンと戻るボタンが必要です。",
   "settings.controller_map.not_changed": "ボタンは変更されませんでした",
   "settings.controller_map.everywhere": "変更は Big Picture、オーバーレイ、その他すべての画面に適用されます。Guide、十字キー、スティックの役割は変わりません。",
-  "settings.controller_map.reset": "ボタンをリセット"
+  "settings.controller_map.reset": "ボタンをリセット",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "オフ",
+  "settings.option.nav_sounds.soft": "ソフト",
+  "settings.option.nav_sounds.classic": "クラシック",
+  "settings.field.nav_sounds.label": "ナビゲーション音",
+  "settings.field.nav_sounds.help": "Big Picture でフォーカスの移動、項目の開閉、タブの切り替え時に短い音を鳴らします。選ぶと見本が鳴ります。Linux では pw-play、paplay、aplay のいずれかが必要です。",
+  "settings.field.nav_sound_volume.label": "ナビゲーション音の音量",
+  "settings.field.nav_sound_volume.help": "1〜100 のパーセントで指定します。100 でもゲームの音よりかなり控えめです。"
 }

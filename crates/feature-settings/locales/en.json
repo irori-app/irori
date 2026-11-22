@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "One button must confirm and another must go back.",
   "settings.controller_map.not_changed": "Button not changed",
   "settings.controller_map.everywhere": "Changes apply in Big Picture, the overlay and every other screen. Guide, the D-pad and the sticks keep their jobs.",
-  "settings.controller_map.reset": "Reset buttons"
+  "settings.controller_map.reset": "Reset buttons",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Off",
+  "settings.option.nav_sounds.soft": "Soft",
+  "settings.option.nav_sounds.classic": "Classic",
+  "settings.field.nav_sounds.label": "Navigation sounds",
+  "settings.field.nav_sounds.help": "A short tone in Big Picture when the focus moves, something opens or closes, or the tab changes. Choosing one plays a sample. On Linux it needs pw-play, paplay or aplay.",
+  "settings.field.nav_sound_volume.label": "Navigation sound volume",
+  "settings.field.nav_sound_volume.help": "In percent, from 1 to 100. Even at 100 the tones stay well under a game’s sound."
 }

@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Eén knop moet bevestigen en een andere teruggaan.",
   "settings.controller_map.not_changed": "Knop niet gewijzigd",
   "settings.controller_map.everywhere": "Wijzigingen gelden in Big Picture, de overlay en elk ander scherm. Guide, de D-pad en de sticks houden hun taak.",
-  "settings.controller_map.reset": "Knoppen herstellen"
+  "settings.controller_map.reset": "Knoppen herstellen",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Uit",
+  "settings.option.nav_sounds.soft": "Zacht",
+  "settings.option.nav_sounds.classic": "Klassiek",
+  "settings.field.nav_sounds.label": "Navigatiegeluiden",
+  "settings.field.nav_sounds.help": "Een korte toon in Big Picture als de focus verschuift, iets opent of sluit of het tabblad wisselt. Kiezen speelt een voorbeeld af. Op Linux is pw-play, paplay of aplay nodig.",
+  "settings.field.nav_sound_volume.label": "Volume van navigatiegeluiden",
+  "settings.field.nav_sound_volume.help": "In procenten, van 1 tot 100. Zelfs op 100 blijven de tonen ruim onder het geluid van een spel."
 }

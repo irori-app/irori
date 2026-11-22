@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Czeka jeszcze 1",
   "bigpicture.overlay.more_unlocks_other": "Czeka jeszcze {count}",
   "bigpicture.overlay.select": "Wybierz",
-  "bigpicture.overlay.close": "Zamknij"
+  "bigpicture.overlay.close": "Zamknij",
+  "bigpicture.menu.sounds": "Dźwięki: {sounds}",
+  "bigpicture.sounds.off": "Wyłączone",
+  "bigpicture.sounds.soft": "Łagodne",
+  "bigpicture.sounds.classic": "Klasyczne"
 }

@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Čeká ještě 1",
   "bigpicture.overlay.more_unlocks_other": "Čeká ještě {count}",
   "bigpicture.overlay.select": "Vybrat",
-  "bigpicture.overlay.close": "Zavřít"
+  "bigpicture.overlay.close": "Zavřít",
+  "bigpicture.menu.sounds": "Zvuky: {sounds}",
+  "bigpicture.sounds.off": "Vypnuto",
+  "bigpicture.sounds.soft": "Jemné",
+  "bigpicture.sounds.classic": "Klasické"
 }

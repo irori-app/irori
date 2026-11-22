@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Un bouton doit valider et un autre revenir en arrière.",
   "settings.controller_map.not_changed": "Bouton inchangé",
   "settings.controller_map.everywhere": "Les changements valent dans Big Picture, la superposition et tous les autres écrans. Guide, la croix et les sticks gardent leur rôle.",
-  "settings.controller_map.reset": "Réinitialiser les boutons"
+  "settings.controller_map.reset": "Réinitialiser les boutons",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Désactivés",
+  "settings.option.nav_sounds.soft": "Doux",
+  "settings.option.nav_sounds.classic": "Classiques",
+  "settings.field.nav_sounds.label": "Sons de navigation",
+  "settings.field.nav_sounds.help": "Un son bref dans Big Picture quand la sélection bouge, qu’un élément s’ouvre ou se ferme ou que l’onglet change. Le choix joue un exemple. Sous Linux, pw-play, paplay ou aplay est nécessaire.",
+  "settings.field.nav_sound_volume.label": "Volume des sons de navigation",
+  "settings.field.nav_sound_volume.help": "En pourcentage, de 1 à 100. Même à 100, les sons restent bien sous le son d’un jeu."
 }

@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "1 till väntar",
   "bigpicture.overlay.more_unlocks_other": "{count} till väntar",
   "bigpicture.overlay.select": "Välj",
-  "bigpicture.overlay.close": "Stäng"
+  "bigpicture.overlay.close": "Stäng",
+  "bigpicture.menu.sounds": "Ljud: {sounds}",
+  "bigpicture.sounds.off": "Av",
+  "bigpicture.sounds.soft": "Mjuka",
+  "bigpicture.sounds.classic": "Klassiska"
 }

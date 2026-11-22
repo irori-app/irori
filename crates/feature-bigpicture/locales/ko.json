@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "1개 더 대기 중",
   "bigpicture.overlay.more_unlocks_other": "{count}개 더 대기 중",
   "bigpicture.overlay.select": "선택",
-  "bigpicture.overlay.close": "닫기"
+  "bigpicture.overlay.close": "닫기",
+  "bigpicture.menu.sounds": "소리: {sounds}",
+  "bigpicture.sounds.off": "끔",
+  "bigpicture.sounds.soft": "부드럽게",
+  "bigpicture.sounds.classic": "클래식"
 }

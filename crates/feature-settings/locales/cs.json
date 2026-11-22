@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Jedno tlačítko musí potvrzovat a jiné vracet zpět.",
   "settings.controller_map.not_changed": "Tlačítko nezměněno",
   "settings.controller_map.everywhere": "Změny platí v Big Picture, překryvu i na všech ostatních obrazovkách. Guide, křížový ovladač a páčky si své funkce ponechají.",
-  "settings.controller_map.reset": "Obnovit tlačítka"
+  "settings.controller_map.reset": "Obnovit tlačítka",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Vypnuto",
+  "settings.option.nav_sounds.soft": "Jemné",
+  "settings.option.nav_sounds.classic": "Klasické",
+  "settings.field.nav_sounds.label": "Zvuky navigace",
+  "settings.field.nav_sounds.help": "Krátký tón v Big Picture při posunu výběru, otevření či zavření něčeho nebo změně karty. Po výběru zazní ukázka. V Linuxu je potřeba pw-play, paplay nebo aplay.",
+  "settings.field.nav_sound_volume.label": "Hlasitost zvuků navigace",
+  "settings.field.nav_sound_volume.help": "V procentech, od 1 do 100. I na 100 zůstávají tóny výrazně pod zvukem hry."
 }

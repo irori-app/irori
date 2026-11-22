@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Одна кнопка має підтверджувати, інша — повертати назад.",
   "settings.controller_map.not_changed": "Кнопку не змінено",
   "settings.controller_map.everywhere": "Зміни діють у Big Picture, оверлеї та на всіх інших екранах. Guide, хрестовина й стики зберігають свої функції.",
-  "settings.controller_map.reset": "Скинути кнопки"
+  "settings.controller_map.reset": "Скинути кнопки",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Вимк.",
+  "settings.option.nav_sounds.soft": "М’які",
+  "settings.option.nav_sounds.classic": "Класичні",
+  "settings.field.nav_sounds.label": "Звуки навігації",
+  "settings.field.nav_sounds.help": "Короткий звук у Big Picture під час переміщення фокуса, відкриття чи закриття чогось або зміни вкладки. Під час вибору звучить зразок. У Linux потрібен pw-play, paplay або aplay.",
+  "settings.field.nav_sound_volume.label": "Гучність звуків навігації",
+  "settings.field.nav_sound_volume.help": "У відсотках, від 1 до 100. Навіть на 100 звуки помітно тихіші за гру."
 }

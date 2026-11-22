@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Mais 1 aguardando",
   "bigpicture.overlay.more_unlocks_other": "Mais {count} aguardando",
   "bigpicture.overlay.select": "Selecionar",
-  "bigpicture.overlay.close": "Fechar"
+  "bigpicture.overlay.close": "Fechar",
+  "bigpicture.menu.sounds": "Sons: {sounds}",
+  "bigpicture.sounds.off": "Desligados",
+  "bigpicture.sounds.soft": "Suaves",
+  "bigpicture.sounds.classic": "Clássicos"
 }

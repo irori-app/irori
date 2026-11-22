@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "1 tane daha bekliyor",
   "bigpicture.overlay.more_unlocks_other": "{count} tane daha bekliyor",
   "bigpicture.overlay.select": "Seç",
-  "bigpicture.overlay.close": "Kapat"
+  "bigpicture.overlay.close": "Kapat",
+  "bigpicture.menu.sounds": "Sesler: {sounds}",
+  "bigpicture.sounds.off": "Kapalı",
+  "bigpicture.sounds.soft": "Yumuşak",
+  "bigpicture.sounds.classic": "Klasik"
 }

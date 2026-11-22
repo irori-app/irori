@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "En knapp måste bekräfta och en annan gå tillbaka.",
   "settings.controller_map.not_changed": "Knappen ändrades inte",
   "settings.controller_map.everywhere": "Ändringar gäller i Big Picture, överlägget och alla andra skärmar. Guide, styrkorset och spakarna behåller sina uppgifter.",
-  "settings.controller_map.reset": "Återställ knappar"
+  "settings.controller_map.reset": "Återställ knappar",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Av",
+  "settings.option.nav_sounds.soft": "Mjuka",
+  "settings.option.nav_sounds.classic": "Klassiska",
+  "settings.field.nav_sounds.label": "Navigeringsljud",
+  "settings.field.nav_sounds.help": "En kort ton i Big Picture när markeringen flyttas, något öppnas eller stängs eller fliken byts. Valet spelar ett exempel. På Linux behövs pw-play, paplay eller aplay.",
+  "settings.field.nav_sound_volume.label": "Volym för navigeringsljud",
+  "settings.field.nav_sound_volume.help": "I procent, från 1 till 100. Även på 100 ligger tonerna gott under ett spels ljud."
 }

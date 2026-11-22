@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Încă 1 în așteptare",
   "bigpicture.overlay.more_unlocks_other": "Încă {count} în așteptare",
   "bigpicture.overlay.select": "Selectează",
-  "bigpicture.overlay.close": "Închide"
+  "bigpicture.overlay.close": "Închide",
+  "bigpicture.menu.sounds": "Sunete: {sounds}",
+  "bigpicture.sounds.off": "Oprite",
+  "bigpicture.sounds.soft": "Blânde",
+  "bigpicture.sounds.classic": "Clasice"
 }

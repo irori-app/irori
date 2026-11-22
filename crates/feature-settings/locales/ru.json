@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Одна кнопка должна подтверждать, другая — возвращать назад.",
   "settings.controller_map.not_changed": "Кнопка не изменена",
   "settings.controller_map.everywhere": "Изменения действуют в Big Picture, оверлее и на всех остальных экранах. Guide, крестовина и стики сохраняют свои функции.",
-  "settings.controller_map.reset": "Сбросить кнопки"
+  "settings.controller_map.reset": "Сбросить кнопки",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Выкл.",
+  "settings.option.nav_sounds.soft": "Мягкие",
+  "settings.option.nav_sounds.classic": "Классические",
+  "settings.field.nav_sounds.label": "Звуки навигации",
+  "settings.field.nav_sounds.help": "Короткий звук в Big Picture при перемещении фокуса, открытии или закрытии чего-либо и смене вкладки. При выборе звучит образец. В Linux нужен pw-play, paplay или aplay.",
+  "settings.field.nav_sound_volume.label": "Громкость звуков навигации",
+  "settings.field.nav_sound_volume.help": "В процентах, от 1 до 100. Даже на 100 звуки заметно тише игры."
 }

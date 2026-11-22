@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "확인 버튼과 뒤로 가기 버튼이 하나씩 있어야 합니다.",
   "settings.controller_map.not_changed": "버튼이 변경되지 않았습니다",
   "settings.controller_map.everywhere": "변경 사항은 Big Picture, 오버레이, 다른 모든 화면에 적용됩니다. Guide, 방향 패드, 스틱의 기능은 그대로입니다.",
-  "settings.controller_map.reset": "버튼 초기화"
+  "settings.controller_map.reset": "버튼 초기화",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "끔",
+  "settings.option.nav_sounds.soft": "부드럽게",
+  "settings.option.nav_sounds.classic": "클래식",
+  "settings.field.nav_sounds.label": "탐색 소리",
+  "settings.field.nav_sounds.help": "Big Picture에서 포커스 이동, 항목 열기·닫기, 탭 변경 시 짧은 소리를 냅니다. 선택하면 샘플이 재생됩니다. Linux에서는 pw-play, paplay 또는 aplay가 필요합니다.",
+  "settings.field.nav_sound_volume.label": "탐색 소리 음량",
+  "settings.field.nav_sound_volume.help": "1에서 100까지의 백분율입니다. 100이어도 게임 소리보다 훨씬 작습니다."
 }

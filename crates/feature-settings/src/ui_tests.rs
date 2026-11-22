@@ -163,8 +163,8 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
         // The in-game overlay's switch is among the controller rows, and so
         // are the button held to open Big Picture and how long, hiding the
-        // pointer and the button map.
-        assert_eq!(app_form.read(cx).visible_count(), 10);
+        // pointer, the button map and Big Picture's navigation sounds.
+        assert_eq!(app_form.read(cx).visible_count(), 12);
         assert!(general > 20);
     });
 }
@@ -198,7 +198,9 @@ fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppCo
         backend.settings.app().controller.confirm_button,
         ConfirmButton::East
     );
-    backend.settings.update_app(|s| s.controller = Default::default());
+    backend
+        .settings
+        .update_app(|s| s.controller = Default::default());
     cx.run_until_parked();
 }
 

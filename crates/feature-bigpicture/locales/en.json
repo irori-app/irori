@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "1 more waiting",
   "bigpicture.overlay.more_unlocks_other": "{count} more waiting",
   "bigpicture.overlay.select": "Select",
-  "bigpicture.overlay.close": "Close"
+  "bigpicture.overlay.close": "Close",
+  "bigpicture.menu.sounds": "Sounds: {sounds}",
+  "bigpicture.sounds.off": "Off",
+  "bigpicture.sounds.soft": "Soft",
+  "bigpicture.sounds.classic": "Classic"
 }

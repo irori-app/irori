@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Nog 1 wacht",
   "bigpicture.overlay.more_unlocks_other": "Nog {count} wachten",
   "bigpicture.overlay.select": "Kiezen",
-  "bigpicture.overlay.close": "Sluiten"
+  "bigpicture.overlay.close": "Sluiten",
+  "bigpicture.menu.sounds": "Geluiden: {sounds}",
+  "bigpicture.sounds.off": "Uit",
+  "bigpicture.sounds.soft": "Zacht",
+  "bigpicture.sounds.classic": "Klassiek"
 }

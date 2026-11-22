@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Un buton trebuie să confirme și altul să meargă înapoi.",
   "settings.controller_map.not_changed": "Butonul nu a fost schimbat",
   "settings.controller_map.everywhere": "Modificările se aplică în Big Picture, în suprapunere și pe orice alt ecran. Guide, D-pad-ul și stick-urile își păstrează rolul.",
-  "settings.controller_map.reset": "Resetează butoanele"
+  "settings.controller_map.reset": "Resetează butoanele",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Oprite",
+  "settings.option.nav_sounds.soft": "Blânde",
+  "settings.option.nav_sounds.classic": "Clasice",
+  "settings.field.nav_sounds.label": "Sunete de navigare",
+  "settings.field.nav_sounds.help": "Un sunet scurt în Big Picture când selecția se mută, ceva se deschide sau se închide ori se schimbă fila. Alegerea redă o mostră. Pe Linux e nevoie de pw-play, paplay sau aplay.",
+  "settings.field.nav_sound_volume.label": "Volumul sunetelor de navigare",
+  "settings.field.nav_sound_volume.help": "În procente, de la 1 la 100. Chiar și la 100 sunetele rămân mult sub sunetul unui joc."
 }

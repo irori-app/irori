@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Eine Taste muss bestätigen und eine andere zurückgehen.",
   "settings.controller_map.not_changed": "Taste nicht geändert",
   "settings.controller_map.everywhere": "Änderungen gelten in Big Picture, im Overlay und überall sonst. Guide, Steuerkreuz und Sticks behalten ihre Aufgaben.",
-  "settings.controller_map.reset": "Tasten zurücksetzen"
+  "settings.controller_map.reset": "Tasten zurücksetzen",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Aus",
+  "settings.option.nav_sounds.soft": "Sanft",
+  "settings.option.nav_sounds.classic": "Klassisch",
+  "settings.field.nav_sounds.label": "Navigationstöne",
+  "settings.field.nav_sounds.help": "Ein kurzer Ton in Big Picture, wenn der Fokus wandert, sich etwas öffnet oder schließt oder der Tab wechselt. Die Auswahl spielt eine Probe. Unter Linux wird pw-play, paplay oder aplay benötigt.",
+  "settings.field.nav_sound_volume.label": "Lautstärke der Navigationstöne",
+  "settings.field.nav_sound_volume.help": "In Prozent, von 1 bis 100. Auch bei 100 bleiben die Töne deutlich leiser als ein Spiel."
 }

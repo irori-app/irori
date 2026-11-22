@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "Ещё 1 в очереди",
   "bigpicture.overlay.more_unlocks_other": "Ещё {count} в очереди",
   "bigpicture.overlay.select": "Выбрать",
-  "bigpicture.overlay.close": "Закрыть"
+  "bigpicture.overlay.close": "Закрыть",
+  "bigpicture.menu.sounds": "Звуки: {sounds}",
+  "bigpicture.sounds.off": "Выкл.",
+  "bigpicture.sounds.soft": "Мягкие",
+  "bigpicture.sounds.classic": "Классические"
 }

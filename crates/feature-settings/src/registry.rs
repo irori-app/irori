@@ -812,6 +812,21 @@ const LIBRARY_LAYOUT: &[ChoiceOption] = &[
     ),
 ];
 
+const NAV_SOUNDS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("off"),
+        Key("settings.option.nav_sounds.off"),
+    ),
+    opt(
+        ChoiceValue::Str("soft"),
+        Key("settings.option.nav_sounds.soft"),
+    ),
+    opt(
+        ChoiceValue::Str("classic"),
+        Key("settings.option.nav_sounds.classic"),
+    ),
+];
+
 const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("start"),
@@ -2000,6 +2015,31 @@ pub static FIELDS: &[FieldSpec] = &[
         "controller",
     ])
     .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriBigPicture.sounds",
+        "settings.field.nav_sounds.label",
+        Controller,
+        "settings.group.big_picture",
+        Choice(NAV_SOUNDS),
+    )
+    .help("settings.field.nav_sounds.help")
+    .keywords(&[
+        "sound",
+        "sounds",
+        "audio",
+        "beep",
+        "navigation",
+        "big picture",
+    ]),
+    app(
+        "iroriBigPicture.soundVolume",
+        "settings.field.nav_sound_volume.label",
+        Controller,
+        "settings.group.big_picture",
+        Text(TextKind::Number { min: 1, max: 100 }),
+    )
+    .help("settings.field.nav_sound_volume.help")
+    .keywords(&["sound", "volume", "loudness", "big picture"]),
     // ---- Appearance ----
     app(
         "iroriUi.theme",

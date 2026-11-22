@@ -21,6 +21,7 @@ use irori_ui::i18n::{t, t_args};
 use crate::layout::HomeLayout;
 use crate::text::store_name;
 use crate::theme::ShelfKind;
+use irori_core::big_picture_prefs::NavSounds;
 
 /// A shelf of games on Home.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -691,6 +692,8 @@ pub enum MenuItem {
     InterfaceSize(u32),
     /// Cycles Home's layout; carries the current one.
     Layout(HomeLayout),
+    /// Cycles the navigation sounds; carries the current choice.
+    Sounds(NavSounds),
     /// Opens the theme editor.
     Themes,
     ToggleFullscreen,
@@ -711,6 +714,12 @@ impl MenuItem {
                 &[("percent", percent.to_string().as_str())],
             );
         }
+        if let MenuItem::Sounds(sounds) = self {
+            return t_args(
+                "bigpicture.menu.sounds",
+                &[("sounds", sounds_label(sounds).as_str())],
+            );
+        }
         if let MenuItem::Layout(layout) = self {
             return t_args(
                 "bigpicture.menu.layout",
@@ -718,7 +727,9 @@ impl MenuItem {
             );
         }
         t(match self {
-            MenuItem::InterfaceSize(_) | MenuItem::Layout(_) => unreachable!("handled above"),
+            MenuItem::InterfaceSize(_) | MenuItem::Layout(_) | MenuItem::Sounds(_) => {
+                unreachable!("handled above")
+            }
             MenuItem::Themes => "bigpicture.menu.themes",
             MenuItem::SoundOutput => "bigpicture.overlay.output",
             MenuItem::PauseDownloads => "bigpicture.menu.pause_downloads",
@@ -738,6 +749,7 @@ impl MenuItem {
             MenuItem::SoundOutput => IconName::Volume2,
             MenuItem::InterfaceSize(_) => IconName::ZoomIn,
             MenuItem::Layout(_) => IconName::LayoutDashboard,
+            MenuItem::Sounds(_) => IconName::Music,
             MenuItem::Themes => IconName::Palette,
             MenuItem::ToggleFullscreen => IconName::Maximize,
             MenuItem::SetUpEmulation => IconName::Joystick,
@@ -757,6 +769,7 @@ impl MenuItem {
             MenuItem::SoundOutput => "bp-menu-sound-output",
             MenuItem::InterfaceSize(_) => "bp-menu-size",
             MenuItem::Layout(_) => "bp-menu-layout",
+            MenuItem::Sounds(_) => "bp-menu-sounds",
             MenuItem::Themes => "bp-menu-themes",
             MenuItem::ToggleFullscreen => "bp-menu-fullscreen",
             MenuItem::SetUpEmulation => "bp-menu-emulation",
@@ -781,14 +794,33 @@ pub fn power_label(action: PowerAction) -> &'static str {
     }
 }
 
+/// The name of a navigation sounds choice.
+pub fn sounds_label(sounds: NavSounds) -> SharedString {
+    t(match sounds {
+        NavSounds::Off => "bigpicture.sounds.off",
+        NavSounds::Soft => "bigpicture.sounds.soft",
+        NavSounds::Classic => "bigpicture.sounds.classic",
+    })
+}
+
+/// The navigation sounds after `current`: off, soft, classic, off.
+pub fn next_sounds(current: NavSounds) -> NavSounds {
+    match current {
+        NavSounds::Off => NavSounds::Soft,
+        NavSounds::Soft => NavSounds::Classic,
+        NavSounds::Classic => NavSounds::Off,
+    }
+}
+
 /// Quick menu entries given the download queue state, the interface size
-/// in percent, Home's layout and the power actions the system allows (last,
-/// after leaving Big Picture and quitting Irori).
+/// in percent, Home's layout, the navigation sounds and the power actions
+/// the system allows (last, after leaving Big Picture and quitting Irori).
 pub fn menu_items(
     has_downloads: bool,
     paused: bool,
     scale: u32,
     layout: HomeLayout,
+    sounds: NavSounds,
     power: &[PowerAction],
 ) -> Vec<MenuItem> {
     let mut out = Vec::with_capacity(9 + power.len());
@@ -803,6 +835,7 @@ pub fn menu_items(
         MenuItem::InterfaceSize(scale),
         MenuItem::Layout(layout),
         MenuItem::Themes,
+        MenuItem::Sounds(sounds),
         MenuItem::ToggleFullscreen,
         MenuItem::SoundOutput,
         MenuItem::SetUpEmulation,
@@ -1387,22 +1420,25 @@ mod tests {
     #[test]
     fn menu_offers_download_control_only_with_downloads() {
         assert_eq!(
-            menu_items(false, false, 100, HomeLayout::Shelves, &[])[0],
+            menu_items(false, false, 100, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::InterfaceSize(100)
         );
         assert_eq!(
-            menu_items(true, false, 100, HomeLayout::Shelves, &[])[0],
+            menu_items(true, false, 100, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::PauseDownloads
         );
         assert_eq!(
-            menu_items(true, true, 150, HomeLayout::Shelves, &[])[0],
+            menu_items(true, true, 150, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::ResumeDownloads
         );
-        let items = menu_items(true, true, 150, HomeLayout::Wall, &[]);
+        let items = menu_items(true, true, 150, HomeLayout::Wall, NavSounds::Off, &[]);
         assert_eq!(items[1], MenuItem::InterfaceSize(150));
         assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
         assert_eq!(items[3], MenuItem::Themes);
-        assert_eq!(items[5], MenuItem::SoundOutput, "after Toggle fullscreen");
+        assert_eq!(items[4], MenuItem::Sounds(NavSounds::Off));
+        assert_eq!(items[6], MenuItem::SoundOutput, "after Toggle fullscreen");
+        assert_eq!(next_sounds(NavSounds::Off), NavSounds::Soft);
+        assert_eq!(next_sounds(NavSounds::Classic), NavSounds::Off);
         assert_eq!(items.last(), Some(&MenuItem::QuitIrori));
     }
 
@@ -1413,6 +1449,7 @@ mod tests {
             false,
             100,
             HomeLayout::Shelves,
+            NavSounds::Off,
             &[PowerAction::PowerOff, PowerAction::Sleep],
         );
         let quit = items
@@ -1426,7 +1463,7 @@ mod tests {
                 MenuItem::Power(PowerAction::Sleep)
             ]
         );
-        let none = menu_items(false, false, 100, HomeLayout::Shelves, &[]);
+        let none = menu_items(false, false, 100, HomeLayout::Shelves, NavSounds::Off, &[]);
         assert!(!none.iter().any(|i| matches!(i, MenuItem::Power(_))));
         let ids: std::collections::HashSet<_> = PowerAction::ALL
             .map(|a| MenuItem::Power(a).id())

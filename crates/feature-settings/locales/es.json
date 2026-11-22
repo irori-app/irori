@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Un botón debe confirmar y otro volver atrás.",
   "settings.controller_map.not_changed": "No se cambió el botón",
   "settings.controller_map.everywhere": "Los cambios se aplican en Big Picture, la superposición y todas las demás pantallas. Guide, la cruceta y los sticks conservan sus funciones.",
-  "settings.controller_map.reset": "Restablecer botones"
+  "settings.controller_map.reset": "Restablecer botones",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Desactivados",
+  "settings.option.nav_sounds.soft": "Suaves",
+  "settings.option.nav_sounds.classic": "Clásicos",
+  "settings.field.nav_sounds.label": "Sonidos de navegación",
+  "settings.field.nav_sounds.help": "Un tono breve en Big Picture al mover el foco, abrir o cerrar algo o cambiar de pestaña. Al elegirlo suena una muestra. En Linux necesita pw-play, paplay o aplay.",
+  "settings.field.nav_sound_volume.label": "Volumen de los sonidos de navegación",
+  "settings.field.nav_sound_volume.help": "En porcentaje, de 1 a 100. Incluso a 100 los tonos quedan muy por debajo del sonido de un juego."
 }

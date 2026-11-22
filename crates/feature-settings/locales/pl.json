@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Jeden przycisk musi potwierdzać, a inny cofać.",
   "settings.controller_map.not_changed": "Nie zmieniono przycisku",
   "settings.controller_map.everywhere": "Zmiany działają w Big Picture, nakładce i na każdym innym ekranie. Guide, krzyżak i drążki zachowują swoje funkcje.",
-  "settings.controller_map.reset": "Przywróć przyciski"
+  "settings.controller_map.reset": "Przywróć przyciski",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Wyłączone",
+  "settings.option.nav_sounds.soft": "Łagodne",
+  "settings.option.nav_sounds.classic": "Klasyczne",
+  "settings.field.nav_sounds.label": "Dźwięki nawigacji",
+  "settings.field.nav_sounds.help": "Krótki dźwięk w Big Picture przy przesunięciu zaznaczenia, otwarciu lub zamknięciu czegoś albo zmianie karty. Wybór odtwarza próbkę. W Linuksie potrzebny jest pw-play, paplay lub aplay.",
+  "settings.field.nav_sound_volume.label": "Głośność dźwięków nawigacji",
+  "settings.field.nav_sound_volume.help": "W procentach, od 1 do 100. Nawet przy 100 dźwięki są wyraźnie cichsze od gry."
 }

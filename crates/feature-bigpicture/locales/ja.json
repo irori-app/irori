@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "あと 1 件",
   "bigpicture.overlay.more_unlocks_other": "あと {count} 件",
   "bigpicture.overlay.select": "選択",
-  "bigpicture.overlay.close": "閉じる"
+  "bigpicture.overlay.close": "閉じる",
+  "bigpicture.menu.sounds": "サウンド: {sounds}",
+  "bigpicture.sounds.off": "オフ",
+  "bigpicture.sounds.soft": "ソフト",
+  "bigpicture.sounds.classic": "クラシック"
 }

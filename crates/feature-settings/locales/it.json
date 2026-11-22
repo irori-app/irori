@@ -1427,5 +1427,13 @@
   "settings.controller_map.stranded": "Un pulsante deve confermare e un altro tornare indietro.",
   "settings.controller_map.not_changed": "Pulsante non modificato",
   "settings.controller_map.everywhere": "Le modifiche valgono in Big Picture, nell’overlay e in ogni altra schermata. Guide, croce direzionale e stick mantengono la loro funzione.",
-  "settings.controller_map.reset": "Ripristina i pulsanti"
+  "settings.controller_map.reset": "Ripristina i pulsanti",
+  "settings.group.big_picture": "Big Picture",
+  "settings.option.nav_sounds.off": "Disattivati",
+  "settings.option.nav_sounds.soft": "Morbidi",
+  "settings.option.nav_sounds.classic": "Classici",
+  "settings.field.nav_sounds.label": "Suoni di navigazione",
+  "settings.field.nav_sounds.help": "Un breve suono in Big Picture quando la selezione si sposta, qualcosa si apre o si chiude o cambia la scheda. La scelta riproduce un esempio. Su Linux serve pw-play, paplay o aplay.",
+  "settings.field.nav_sound_volume.label": "Volume dei suoni di navigazione",
+  "settings.field.nav_sound_volume.help": "In percentuale, da 1 a 100. Anche a 100 i suoni restano ben sotto l’audio di un gioco."
 }

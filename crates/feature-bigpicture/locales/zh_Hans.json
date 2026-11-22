@@ -289,5 +289,9 @@
   "bigpicture.overlay.more_unlocks_one": "还有 1 个",
   "bigpicture.overlay.more_unlocks_other": "还有 {count} 个",
   "bigpicture.overlay.select": "选择",
-  "bigpicture.overlay.close": "关闭"
+  "bigpicture.overlay.close": "关闭",
+  "bigpicture.menu.sounds": "音效：{sounds}",
+  "bigpicture.sounds.off": "关",
+  "bigpicture.sounds.soft": "柔和",
+  "bigpicture.sounds.classic": "经典"
 }

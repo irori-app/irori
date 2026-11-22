@@ -204,6 +204,33 @@ pub struct BigPictureView {
 /// A library revision and the user data it was read with, by identity.
 type ShowKey = (u64, usize);
 
+/// Where the focus is and what is open, for the navigation sounds.
+type NavKey = (
+    Tab,
+    Option<(GameId, usize)>,
+    (bool, bool, bool),
+    Option<Overlay>,
+    FocusGrid,
+    LibraryFocus,
+    usize,
+);
+
+/// The sound an input makes: a move or a tab change only when it moved
+/// something (a direction at an edge is silent), opening and playing always,
+/// closing when something closed. The theme editor's rows aren't followed,
+/// so its directions always sound.
+fn nav_cue(input: GamepadInput, changed: bool, editing: bool) -> Option<crate::nav_sound::Cue> {
+    use crate::nav_sound::Cue;
+    match input {
+        GamepadInput::Confirm | GamepadInput::Alt => Some(Cue::Confirm),
+        GamepadInput::Menu if changed => Some(Cue::Confirm),
+        GamepadInput::Back if changed => Some(Cue::Back),
+        GamepadInput::PrevPage | GamepadInput::NextPage if changed => Some(Cue::Tab),
+        input if input.is_directional() && (changed || editing) => Some(Cue::Move),
+        _ => None,
+    }
+}
+
 /// The current time in the interface language's usual clock format.
 fn clock_text() -> SharedString {
     let now = chrono::Local::now();
@@ -530,7 +557,34 @@ impl BigPictureView {
 
     // ---- input ---------------------------------------------------------
 
+    /// What a navigation sound follows: where the focus is and what is
+    /// open.
+    fn nav_key(&self) -> NavKey {
+        (
+            self.tab,
+            self.page.as_ref().map(|p| (p.id.clone(), p.ix)),
+            (
+                self.show_log,
+                self.settings.is_some(),
+                self.look.editor.is_some(),
+            ),
+            self.overlay.clone(),
+            self.grid.clone(),
+            self.library.focus,
+            self.library.ix,
+        )
+    }
+
     fn on_input(&mut self, input: GamepadInput, window: &mut Window, cx: &mut Context<Self>) {
+        let before = self.nav_key();
+        let editing = self.look.editor.is_some();
+        self.route_input(input, window, cx);
+        if let Some(cue) = nav_cue(input, before != self.nav_key(), editing) {
+            crate::nav_sound::play(cue, cx);
+        }
+    }
+
+    fn route_input(&mut self, input: GamepadInput, window: &mut Window, cx: &mut Context<Self>) {
         if input == GamepadInput::Guide {
             self.overlay = None;
             crate::exit_big_picture(cx);
