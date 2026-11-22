@@ -313,20 +313,25 @@ impl GameSettingsView {
 
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
-    /// log; Wine & Proton becomes its Steam Play choice (Linux), and
-    /// Performance keeps only the replay buffer (Linux).
-    fn sections(&self) -> Vec<GameSection> {
+    /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
+    /// keeps only the replay buffer (Linux), and Tools is shown for installed
+    /// Windows games (ReShade, RenoDX, OptiScaler).
+    fn sections(&self, cx: &Context<Self>) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
         }
         let linux = cfg!(target_os = "linux");
+        let graphics_mods = backend(cx)
+            .game(&self.id)
+            .is_some_and(|g| irori_services::supports_reshade(&g));
         GameSection::ALL
             .into_iter()
             .filter(|s| match s {
                 GameSection::Wine => self.steam_compat.is_some(),
                 GameSection::Performance => linux,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
-                GameSection::Gpu | GameSection::Tools | GameSection::Log => false,
+                GameSection::Tools => graphics_mods,
+                GameSection::Gpu | GameSection::Log => false,
             })
             .collect()
     }
@@ -341,7 +346,7 @@ impl GameSettingsView {
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
         if self.id.runner == Runner::Steam {
-            return self.sections()[0];
+            return self.sections(cx)[0];
         }
         if self.uses_wine(cx) {
             GameSection::Wine
@@ -356,7 +361,7 @@ impl GameSettingsView {
     }
 
     fn open(&mut self, section: GameSection, window: &mut Window, cx: &mut Context<Self>) {
-        let section = if self.sections().contains(&section) {
+        let section = if self.sections(cx).contains(&section) {
             section
         } else {
             self.default_section(cx)
@@ -372,7 +377,7 @@ impl GameSettingsView {
         if section == GameSection::Log {
             self.log.update(cx, |l, cx| l.start(window, cx));
         }
-        if section == GameSection::Tools && self.uses_wine(cx) {
+        if section == GameSection::Tools && self.id.runner != Runner::Steam && self.uses_wine(cx) {
             self.winetricks.update(cx, |w, cx| w.activate(window, cx));
         }
         if section == GameSection::Tools {
@@ -531,6 +536,26 @@ impl GameSettingsView {
     }
 
     fn render_tools(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.id.runner == Runner::Steam {
+            return v_flex()
+                .w_full()
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.reshade"),
+                    cx,
+                ))
+                .child(self.reshade.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.renodx"),
+                    cx,
+                ))
+                .child(self.renodx.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.optiscaler"),
+                    cx,
+                ))
+                .child(self.optiscaler.clone())
+                .into_any_element();
+        }
         let enabled = self.uses_wine(cx);
         let reason = (!enabled).then(|| t("settings.tools.windows_only"));
         let tools = [
@@ -678,7 +703,7 @@ impl Render for GameSettingsView {
                     .cleanable(true)
                     .mb_2(),
             )
-            .children(self.sections().into_iter().map(|s| {
+            .children(self.sections(cx).into_iter().map(|s| {
                 nav_button(
                     ElementId::Name(format!("game-settings-nav-{}", s.id()).into()),
                     s.icon(),

@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "OptiScaler’ı kur",
   "settings.optiscaler.apply": "Değişiklikleri uygula",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "{program} yanında {dll} olarak kurulu. Oyunda OptiScaler’ı açmak için Insert tuşuna basın.",
+  "settings.optiscaler.installed_help": "{program} yanında {dll} olarak kurulu. Oyunda OptiScaler’ı açmak için {key} tuşuna basın.",
   "settings.optiscaler.wine_note": "Oyun başladığında Irori, Wine’a oyun klasöründen {dlls} dosyalarını yüklemesini söyler.",
   "settings.optiscaler.nvidia_note": "Oyun Proton ile başladığında Irori, PROTON_ENABLE_NVAPI=1 değerini ayarlar.",
   "settings.optiscaler.catalog_failed": "OptiScaler sürümleri denetlenemedi: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Microsoft Store ve PC Game Pass oyunlarınızı yükleyip oynamak için bir Microsoft hesabıyla oturum açın. Oyunlar Wine yöneticisindeki Nexus Runtime ile çalışır.",
   "settings.field.xbox_market.label": "Microsoft Store bölgesi",
   "settings.field.xbox_market.help": "Kitaplık, katalog ve lisanslar için iki harfli ülke kodu (US, DE, GB…). Boş bırakılırsa arayüz dilini izler.",
-  "settings.field.xbox_market.off": "Önce Xbox mağazasını açın."
+  "settings.field.xbox_market.off": "Önce Xbox mağazasını açın.",
+  "settings.optiscaler.shortcut.default_insert": "Otomatik (Insert)",
+  "settings.optiscaler.shortcut.help": "Oyunda OptiScaler arayüzünü açan tuş (OptiScaler.ini içine [Menu] ShortcutKey yazar). Tıklayıp bir tuşa basın veya iptal için Esc tuşuna basın.",
+  "settings.optiscaler.shortcut.label": "Menü kısayol tuşu",
+  "settings.optiscaler.shortcut.listening": "Bir tuşa basın…",
+  "settings.optiscaler.shortcut.reset": "Sıfırla",
+  "settings.optiscaler.steam_note": "Steam bu oyunu Proton ile başlatır. Irori, oyunun Proton önekinde Wine DLL geçersiz kılmalarını eşitler; Steam başlatma seçeneklerine gerek yoktur."
 }

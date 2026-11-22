@@ -260,6 +260,7 @@ impl Backend {
 
         if same_channel_and_dir {
             let prev = previous.expect("checked is_some_and");
+            let prev_overrides = prev.overrides.clone();
             let manifest = optiscaler::reconfigure(
                 journal,
                 prev,
@@ -271,6 +272,10 @@ impl Backend {
                 cancel,
             )
             .await?;
+            if manifest.enabled {
+                self.sync_steam_user_reg(id, &manifest.overrides, &prev_overrides)
+                    .await;
+            }
             return Ok(manifest);
         }
 
@@ -353,6 +358,10 @@ impl Backend {
             }
         }
 
+        let prev_overrides = previous
+            .as_ref()
+            .map(|p| p.overrides.clone())
+            .unwrap_or_default();
         let mut keep_previous_for_update = None;
         if let Some(prev) = previous {
             if prev.complete && prev.dir == found.dir {
@@ -374,6 +383,8 @@ impl Backend {
         };
         let result = optiscaler::install(request, step, progress, cancel).await?;
         let manifest = result.manifest;
+        self.sync_steam_user_reg(id, &manifest.overrides, &prev_overrides)
+            .await;
         tracing::info!(
             "installed OptiScaler {} for {id} as {} in {}",
             manifest.version,
@@ -520,6 +531,7 @@ mod tests {
                 gpu_driver: GpuDriverMode::MesaAuto,
                 proxy_dll: ProxyDll::Dxgi,
                 enable_optipatcher: false,
+                shortcut_key: None,
             },
             &["dxgi", "nvapi64"],
         );
@@ -562,6 +574,7 @@ mod tests {
                 gpu_driver: GpuDriverMode::MesaAuto,
                 proxy_dll: ProxyDll::OptiScalerAsi,
                 enable_optipatcher: false,
+                shortcut_key: None,
             },
             &["OptiScaler.asi", "nvapi64"],
         );
@@ -576,6 +589,7 @@ mod tests {
                 gpu_driver: GpuDriverMode::Nvidia,
                 proxy_dll: ProxyDll::OptiScalerAsi,
                 enable_optipatcher: true,
+                shortcut_key: None,
             },
             &["OptiScaler.asi"],
         );
@@ -593,6 +607,7 @@ mod tests {
                 gpu_driver: GpuDriverMode::Nvidia,
                 proxy_dll: ProxyDll::Version,
                 enable_optipatcher: false,
+                shortcut_key: None,
             },
             &["version"],
         );
@@ -630,6 +645,7 @@ mod tests {
             gpu_driver: GpuDriverMode::MesaAuto,
             proxy_dll: ProxyDll::Dxgi,
             enable_optipatcher: false,
+            shortcut_key: None,
         };
         let manifest = optiscaler_manifest(stable_cfg, &["dxgi", "nvapi64"]);
 
@@ -698,6 +714,7 @@ mod tests {
             gpu_driver: GpuDriverMode::MesaAuto,
             proxy_dll: ProxyDll::Version,
             enable_optipatcher: true,
+            shortcut_key: None,
         };
         let mut base = optiscaler_manifest(cfg, &["version", "nvapi64"]);
         base.dir = dir.path().to_path_buf();
@@ -748,6 +765,7 @@ mod tests {
                         gpu_driver: GpuDriverMode::MesaAuto,
                         proxy_dll: ProxyDll::Winmm,
                         enable_optipatcher: true,
+                        shortcut_key: None,
                     },
                     chosen_exe: None,
                 },
@@ -770,6 +788,7 @@ mod tests {
                     gpu_driver: GpuDriverMode::MesaAuto,
                     proxy_dll: ProxyDll::Version,
                     enable_optipatcher: true,
+                    shortcut_key: None,
                 },
                 chosen_exe: None,
             },
@@ -881,6 +900,7 @@ mod tests {
             gpu_driver: GpuDriverMode::Nvidia,
             proxy_dll: ProxyDll::Version,
             enable_optipatcher: false,
+            shortcut_key: None,
         };
         let mut opti_base = optiscaler_manifest(cfg, &["version"]);
         opti_base.dir = dir.path().to_path_buf();
@@ -919,5 +939,39 @@ mod tests {
         assert_eq!(report.removed, 1);
         assert!(!dir.path().join("version.dll").exists());
         assert!(!GraphicsMod::Optiscaler.journal_path(&id).exists());
+    }
+
+    #[test]
+    fn steam_windows_games_support_graphics_mods() {
+        use irori_core::{GameInfo, InstallPlatform, InstalledInfo, Runner};
+        let win = GameInfo {
+            runner: Some(Runner::Steam),
+            app_name: "400".into(),
+            title: "Portal".into(),
+            is_installed: true,
+            install: Some(InstalledInfo {
+                install_path: "/games/Portal".into(),
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize();
+        assert!(crate::supports_reshade(&win));
+
+        let native = GameInfo {
+            runner: Some(Runner::Steam),
+            app_name: "400".into(),
+            title: "Portal".into(),
+            is_installed: true,
+            install: Some(InstalledInfo {
+                install_path: "/games/Portal".into(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize();
+        assert!(!crate::supports_reshade(&native));
     }
 }

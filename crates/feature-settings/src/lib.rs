@@ -36,6 +36,7 @@ mod launch_presets;
 mod launch_programs;
 mod logs;
 mod optiscaler;
+mod optiscaler_key;
 pub mod registry;
 mod renodx;
 mod replay;

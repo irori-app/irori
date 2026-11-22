@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "Installera OptiScaler",
   "settings.optiscaler.apply": "Tillämpa ändringar",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "Installerad som {dll} bredvid {program}. Tryck Insert i spelet för att öppna OptiScaler.",
+  "settings.optiscaler.installed_help": "Installerad som {dll} bredvid {program}. Tryck {key} i spelet för att öppna OptiScaler.",
   "settings.optiscaler.wine_note": "När spelet startar säger Irori åt Wine att läsa in {dlls} från spelets mapp.",
   "settings.optiscaler.nvidia_note": "När spelet startar med Proton sätter Irori PROTON_ENABLE_NVAPI=1.",
   "settings.optiscaler.catalog_failed": "Det gick inte att kontrollera OptiScaler-utgåvor: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Logga in med ett Microsoft-konto för att installera och spela dina spel från Microsoft Store och PC Game Pass. De körs med Nexus Runtime från Wine-hanteraren.",
   "settings.field.xbox_market.label": "Region för Microsoft Store",
   "settings.field.xbox_market.help": "Landskod med två bokstäver (US, DE, GB…) för biblioteket, katalogen och licenserna. Tomt följer gränssnittets språk.",
-  "settings.field.xbox_market.off": "Slå först på Xbox-butiken."
+  "settings.field.xbox_market.off": "Slå först på Xbox-butiken.",
+  "settings.optiscaler.shortcut.default_insert": "Automatisk (Insert)",
+  "settings.optiscaler.shortcut.help": "Tangent som öppnar OptiScaler-överlägget i spelet (skriver [Menu] ShortcutKey i OptiScaler.ini). Klicka och tryck på en tangent, eller Esc för att avbryta.",
+  "settings.optiscaler.shortcut.label": "Genvägstangent för meny",
+  "settings.optiscaler.shortcut.listening": "Tryck på en tangent…",
+  "settings.optiscaler.shortcut.reset": "Återställ",
+  "settings.optiscaler.steam_note": "Steam startar det här spelet med Proton. Irori synkroniserar Wine-DLL-åsidosättningar i spelets Proton-prefix, så inga startalternativ i Steam behövs."
 }

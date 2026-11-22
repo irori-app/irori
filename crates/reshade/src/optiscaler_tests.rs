@@ -203,6 +203,7 @@ fn proxy_dll_names_overrides_and_serde_round_trip() {
         gpu_driver: GpuDriverMode::Nvidia,
         proxy_dll: ProxyDll::OptiScalerAsi,
         enable_optipatcher: true,
+        ..Default::default()
     };
     let json = serde_json::to_string(&cfg).unwrap();
     assert_eq!(
@@ -380,6 +381,7 @@ fn surgical_ini_patcher_preserves_comments_formatting_and_unknown_keys() {
         gpu_driver: GpuDriverMode::MesaAuto,
         proxy_dll: ProxyDll::Dxgi,
         enable_optipatcher: true,
+        ..Default::default()
     };
     let patched = patch_optiscaler_ini(original, &cfg);
     assert!(patched.starts_with("\u{feff}; Top header comment\r\n"));
@@ -396,6 +398,7 @@ fn surgical_ini_patcher_preserves_comments_formatting_and_unknown_keys() {
         gpu_driver: GpuDriverMode::Nvidia,
         proxy_dll: ProxyDll::Winmm,
         enable_optipatcher: false,
+        ..Default::default()
     };
     let patched_nv = patch_optiscaler_ini(&patched, &cfg_nv);
     assert!(patched_nv.contains("  LoadAsiPlugins = false ; keep this inline comment\r\n"));
@@ -410,6 +413,7 @@ fn surgical_ini_patcher_inserts_missing_keys_and_appends_missing_sections() {
         gpu_driver: GpuDriverMode::MesaAuto,
         proxy_dll: ProxyDll::Dxgi,
         enable_optipatcher: true,
+        ..Default::default()
     };
     let out = patch_optiscaler_ini(input, &cfg);
     assert_eq!(
@@ -740,6 +744,7 @@ async fn installs_mesa_auto_with_fakenvapi_and_optipatcher_and_removes_cleanly()
             gpu_driver: GpuDriverMode::MesaAuto,
             proxy_dll: ProxyDll::Dxgi,
             enable_optipatcher: true,
+            ..Default::default()
         },
         journal: journal_path.clone(),
         cache: cache.path().to_path_buf(),
@@ -826,6 +831,7 @@ async fn installs_nvidia_mode_without_fakenvapi_and_supports_asi_proxy() {
                 gpu_driver: GpuDriverMode::Nvidia,
                 proxy_dll: ProxyDll::Winmm,
                 enable_optipatcher: false,
+                ..Default::default()
             },
             journal: journal_nv.clone(),
             cache: cache.path().to_path_buf(),
@@ -865,6 +871,7 @@ async fn installs_nvidia_mode_without_fakenvapi_and_supports_asi_proxy() {
                 gpu_driver: GpuDriverMode::MesaAuto,
                 proxy_dll: ProxyDll::OptiScalerAsi,
                 enable_optipatcher: false,
+                ..Default::default()
             },
             journal: journal_asi,
             cache: cache.path().to_path_buf(),
@@ -976,6 +983,7 @@ async fn reconfigure_renames_proxy_without_network_and_preserves_custom_ini() {
                 gpu_driver: GpuDriverMode::Nvidia,
                 proxy_dll: ProxyDll::Dxgi,
                 enable_optipatcher: false,
+                ..Default::default()
             },
             journal: journal_path.clone(),
             cache: cache.path().to_path_buf(),
@@ -1018,6 +1026,7 @@ async fn reconfigure_renames_proxy_without_network_and_preserves_custom_ini() {
             gpu_driver: GpuDriverMode::Nvidia,
             proxy_dll: ProxyDll::Version,
             enable_optipatcher: false,
+            ..Default::default()
         },
         cache.path().to_path_buf(),
         offline_endpoints,
@@ -1044,6 +1053,7 @@ async fn reconfigure_renames_proxy_without_network_and_preserves_custom_ini() {
             gpu_driver: GpuDriverMode::MesaAuto,
             proxy_dll: ProxyDll::Version,
             enable_optipatcher: true,
+            ..Default::default()
         },
         cache.path().to_path_buf(),
         mock.endpoints(),
@@ -1080,6 +1090,7 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
         gpu_driver: GpuDriverMode::MesaAuto,
         proxy_dll: ProxyDll::Dxgi,
         enable_optipatcher: false,
+        ..Default::default()
     };
     let first = install(
         OptiscalerInstallRequest {
@@ -1159,6 +1170,7 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
         gpu_driver: GpuDriverMode::MesaAuto,
         proxy_dll: ProxyDll::Dxgi,
         enable_optipatcher: true,
+        ..Default::default()
     };
     let third = install(
         OptiscalerInstallRequest {
@@ -1215,4 +1227,78 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
     let kept_ini = std::fs::read_to_string(&ini_path).unwrap();
     assert!(kept_ini.contains("ShortcutKey=0x2E"));
     assert!(kept_ini.contains("LoadAsiPlugins=false"));
+}
+
+#[test]
+fn patch_ini_applies_shortcut_key_and_preserves_comments() {
+    let opti_in = concat!(
+        "[Menu]\r\n",
+        "; default is Insert\r\n",
+        "ShortcutKey=auto\r\n",
+        "\r\n",
+        "[Plugins]\r\n",
+        "LoadAsiPlugins=false\r\n",
+        "\r\n",
+        "[fakenvapi]\r\n",
+        "UseFakenvapi=true\r\n",
+    );
+    let cfg = OptiscalerConfig {
+        channel: OptiscalerChannel::Stable,
+        gpu_driver: GpuDriverMode::MesaAuto,
+        proxy_dll: ProxyDll::Dxgi,
+        enable_optipatcher: false,
+        shortcut_key: Some("0x2e".into()),
+    };
+    let out = patch_optiscaler_ini(opti_in, &cfg);
+    assert!(out.contains("ShortcutKey=0x2E\r\n"));
+    assert!(out.contains("; default is Insert\r\n"));
+
+    // Leaving shortcut_key as None keeps existing ShortcutKey untouched.
+    let untouched = patch_optiscaler_ini(
+        &out,
+        &OptiscalerConfig {
+            shortcut_key: None,
+            ..cfg
+        },
+    );
+    assert!(untouched.contains("ShortcutKey=0x2E\r\n"));
+}
+
+#[test]
+fn sync_wine_user_reg_overrides_adds_updates_and_removes_entries_surgically() {
+    let dir = tempfile::tempdir().unwrap();
+    let reg = dir.path().join("user.reg");
+    let initial = concat!(
+        "WINE REGISTRY Version 2\n\n",
+        "[Software\\\\Wine\\\\DllOverrides] 1784681205\n",
+        "#time=1dd197391f92142\n",
+        "\"atiadlxx\"=\"disabled\"\n",
+        "\"atl100\"=\"native,builtin\"\n\n",
+        "[Software\\\\Wine\\\\Fonts] 1784681205\n",
+        "\"LogPixels\"=dword:00000060\n",
+    );
+    std::fs::write(&reg, initial).unwrap();
+
+    // Add winmm.dll and dxgi.dll (normalizes .dll suffix and ignores .asi).
+    assert!(sync_wine_user_reg_overrides(&reg, &["winmm.dll", "OptiScaler.asi"], &[]).unwrap());
+    let after_add = std::fs::read_to_string(&reg).unwrap();
+    assert!(after_add.contains("\"winmm\"=\"native,builtin\"\n"));
+    assert!(!after_add.contains("OptiScaler.asi"));
+    assert!(after_add.contains("\"atiadlxx\"=\"disabled\"\n"));
+    assert!(after_add.contains("[Software\\\\Wine\\\\Fonts]"));
+
+    // Idempotent second call performs zero disk writes.
+    assert!(!sync_wine_user_reg_overrides(&reg, &["winmm"], &[]).unwrap());
+
+    // Switch winmm -> version and remove winmm cleanly.
+    assert!(sync_wine_user_reg_overrides(&reg, &["version"], &["winmm"]).unwrap());
+    let after_swap = std::fs::read_to_string(&reg).unwrap();
+    assert!(!after_swap.contains("\"winmm\""));
+    assert!(after_swap.contains("\"version\"=\"native,builtin\"\n"));
+
+    // Removing version leaves untouched Wine overrides intact.
+    assert!(sync_wine_user_reg_overrides(&reg, &[], &["version"]).unwrap());
+    let after_remove = std::fs::read_to_string(&reg).unwrap();
+    assert!(!after_remove.contains("\"version\""));
+    assert!(after_remove.contains("\"atl100\"=\"native,builtin\"\n"));
 }

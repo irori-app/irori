@@ -971,6 +971,7 @@ mod tests {
             gpu_driver: GpuDriverMode::MesaAuto,
             proxy_dll: ProxyDll::Winmm,
             enable_optipatcher: true,
+            ..Default::default()
         });
 
         let files = vec![

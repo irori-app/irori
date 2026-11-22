@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "Instalează OptiScaler",
   "settings.optiscaler.apply": "Aplică modificările",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "Instalat ca {dll} lângă {program}. Apasă Insert în joc pentru a deschide OptiScaler.",
+  "settings.optiscaler.installed_help": "Instalat ca {dll} lângă {program}. Apasă {key} în joc pentru a deschide OptiScaler.",
   "settings.optiscaler.wine_note": "La pornirea jocului, Irori îi spune lui Wine să încarce {dlls} din folderul jocului.",
   "settings.optiscaler.nvidia_note": "La pornirea jocului cu Proton, Irori setează PROTON_ENABLE_NVAPI=1.",
   "settings.optiscaler.catalog_failed": "Nu s-au putut verifica versiunile OptiScaler: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Conectează-te cu un cont Microsoft pentru a instala și juca jocurile tale din Microsoft Store și PC Game Pass. Rulează prin Nexus Runtime din managerul Wine.",
   "settings.field.xbox_market.label": "Regiunea Microsoft Store",
   "settings.field.xbox_market.help": "Cod de țară din două litere (US, DE, GB…) pentru bibliotecă, catalog și licențe. Gol urmează limba interfeței.",
-  "settings.field.xbox_market.off": "Activează mai întâi magazinul Xbox."
+  "settings.field.xbox_market.off": "Activează mai întâi magazinul Xbox.",
+  "settings.optiscaler.shortcut.default_insert": "Automat (Insert)",
+  "settings.optiscaler.shortcut.help": "Tasta care deschide interfața OptiScaler în joc (scrie [Menu] ShortcutKey în OptiScaler.ini). Dă clic și apasă o tastă, sau Esc pentru a anula.",
+  "settings.optiscaler.shortcut.label": "Tastă rapidă meniu",
+  "settings.optiscaler.shortcut.listening": "Apasă o tastă…",
+  "settings.optiscaler.shortcut.reset": "Resetează",
+  "settings.optiscaler.steam_note": "Steam pornește acest joc cu Proton. Irori sincronizează suprascrierile DLL Wine în prefixul Proton al jocului, fără a necesita opțiuni de lansare Steam."
 }

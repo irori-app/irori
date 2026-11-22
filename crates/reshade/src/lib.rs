@@ -37,6 +37,7 @@ pub mod install;
 pub mod journal;
 pub mod layer;
 pub mod optiscaler;
+pub mod optiscaler_keys;
 pub mod pe;
 pub mod renodx;
 

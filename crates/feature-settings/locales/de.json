@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "OptiScaler installieren",
   "settings.optiscaler.apply": "Änderungen anwenden",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "Installiert als {dll} neben {program}. Drücke im Spiel Einfg, um OptiScaler zu öffnen.",
+  "settings.optiscaler.installed_help": "Installiert als {dll} neben {program}. Drücke im Spiel {key}, um OptiScaler zu öffnen.",
   "settings.optiscaler.wine_note": "Beim Spielstart weist Irori Wine an, {dlls} aus dem Spielordner zu laden.",
   "settings.optiscaler.nvidia_note": "Beim Spielstart unter Proton setzt Irori PROTON_ENABLE_NVAPI=1.",
   "settings.optiscaler.catalog_failed": "OptiScaler-Releases konnten nicht geprüft werden: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Melde dich mit einem Microsoft-Konto an, um deine Spiele aus dem Microsoft Store und PC Game Pass zu installieren und zu spielen. Sie laufen mit der Nexus Runtime aus der Wine-Verwaltung.",
   "settings.field.xbox_market.label": "Region des Microsoft Store",
   "settings.field.xbox_market.help": "Zweistelliger Ländercode (US, DE, GB…) für Bibliothek, Katalog und Lizenzen. Leer folgt der Sprache der Oberfläche.",
-  "settings.field.xbox_market.off": "Schalte zuerst den Xbox-Store ein."
+  "settings.field.xbox_market.off": "Schalte zuerst den Xbox-Store ein.",
+  "settings.optiscaler.shortcut.default_insert": "Automatisch (Insert)",
+  "settings.optiscaler.shortcut.help": "Taste zum Öffnen des OptiScaler-Overlays im Spiel (schreibt [Menu] ShortcutKey in OptiScaler.ini). Klicken und Taste drücken oder Esc zum Abbrechen.",
+  "settings.optiscaler.shortcut.label": "Menü-Tastenkürzel",
+  "settings.optiscaler.shortcut.listening": "Taste drücken…",
+  "settings.optiscaler.shortcut.reset": "Zurücksetzen",
+  "settings.optiscaler.steam_note": "Steam startet dieses Spiel mit Proton. Irori synchronisiert Wine-DLL-Overrides im Proton-Prefix des Spiels, sodass keine Steam-Startoptionen nötig sind."
 }

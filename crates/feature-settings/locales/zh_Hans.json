@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "安装 OptiScaler",
   "settings.optiscaler.apply": "应用更改",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "已作为 {dll} 安装在 {program} 旁。在游戏内按 Insert 键可打开 OptiScaler。",
+  "settings.optiscaler.installed_help": "已作为 {dll} 安装在 {program} 旁。在游戏内按 {key} 键可打开 OptiScaler。",
   "settings.optiscaler.wine_note": "游戏启动时，Irori 会让 Wine 从游戏文件夹加载 {dlls}。",
   "settings.optiscaler.nvidia_note": "在 Proton 下启动游戏时，Irori 会设置 PROTON_ENABLE_NVAPI=1。",
   "settings.optiscaler.catalog_failed": "无法检查 OptiScaler 发布版本：{error}。",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "使用 Microsoft 帐户登录，即可安装并游玩你的 Microsoft Store 和 PC Game Pass 游戏。游戏通过 Wine 管理器中的 Nexus Runtime 运行。",
   "settings.field.xbox_market.label": "Microsoft Store 区域",
   "settings.field.xbox_market.help": "用于游戏库、目录和许可证的两字母国家/地区代码（US、DE、GB…）。留空则跟随界面语言。",
-  "settings.field.xbox_market.off": "请先开启 Xbox 商店。"
+  "settings.field.xbox_market.off": "请先开启 Xbox 商店。",
+  "settings.optiscaler.shortcut.default_insert": "自动 (Insert)",
+  "settings.optiscaler.shortcut.help": "在游戏中打开 OptiScaler 界面的按键 (写入 OptiScaler.ini 的 [Menu] ShortcutKey)。点击后按下按键，或按 Esc 取消。",
+  "settings.optiscaler.shortcut.label": "菜单快捷键",
+  "settings.optiscaler.shortcut.listening": "请按下按键…",
+  "settings.optiscaler.shortcut.reset": "重置",
+  "settings.optiscaler.steam_note": "Steam 使用 Proton 启动此游戏。Irori 会在游戏的 Proton 前缀中同步 Wine DLL 覆盖，无需设置 Steam 启动选项。"
 }

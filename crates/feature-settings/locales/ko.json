@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "OptiScaler 설치",
   "settings.optiscaler.apply": "변경 사항 적용",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "{program} 옆에 {dll}로 설치됨. 게임에서 Insert 키를 눌러 OptiScaler를 엽니다.",
+  "settings.optiscaler.installed_help": "{program} 옆에 {dll}로 설치됨. 게임에서 {key} 키를 눌러 OptiScaler를 엽니다.",
   "settings.optiscaler.wine_note": "게임이 시작될 때 Irori가 Wine에 게임 폴더의 {dlls}을(를) 불러오도록 지시합니다.",
   "settings.optiscaler.nvidia_note": "Proton으로 게임을 시작할 때 Irori가 PROTON_ENABLE_NVAPI=1을 설정합니다.",
   "settings.optiscaler.catalog_failed": "OptiScaler 릴리스를 확인하지 못했습니다: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Microsoft 계정으로 로그인하면 Microsoft Store 및 PC Game Pass 게임을 설치하고 플레이할 수 있습니다. 게임은 Wine 관리자의 Nexus Runtime으로 실행됩니다.",
   "settings.field.xbox_market.label": "Microsoft Store 지역",
   "settings.field.xbox_market.help": "라이브러리, 카탈로그, 라이선스에 사용할 두 글자 국가 코드(US, DE, GB…)입니다. 비워 두면 인터페이스 언어를 따릅니다.",
-  "settings.field.xbox_market.off": "먼저 Xbox 스토어를 켜세요."
+  "settings.field.xbox_market.off": "먼저 Xbox 스토어를 켜세요.",
+  "settings.optiscaler.shortcut.default_insert": "자동 (Insert)",
+  "settings.optiscaler.shortcut.help": "게임 내에서 OptiScaler 오버레이를 여는 키 (OptiScaler.ini의 [Menu] ShortcutKey에 기록). 클릭 후 키를 누르거나 Esc로 취소합니다.",
+  "settings.optiscaler.shortcut.label": "메뉴 단축키",
+  "settings.optiscaler.shortcut.listening": "키를 누르세요…",
+  "settings.optiscaler.shortcut.reset": "초기화",
+  "settings.optiscaler.steam_note": "Steam은 이 게임을 Proton으로 실행합니다. Irori가 게임의 Proton 프리픽스에 Wine DLL 재정의를 동기화하므로 Steam 시작 옵션이 필요하지 않습니다."
 }

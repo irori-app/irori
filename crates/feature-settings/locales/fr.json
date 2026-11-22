@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "Installer OptiScaler",
   "settings.optiscaler.apply": "Appliquer les changements",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "Installé comme {dll} à côté de {program}. Appuyez sur Inser dans le jeu pour ouvrir OptiScaler.",
+  "settings.optiscaler.installed_help": "Installé comme {dll} à côté de {program}. Appuyez sur {key} dans le jeu pour ouvrir OptiScaler.",
   "settings.optiscaler.wine_note": "Au lancement du jeu, Irori demande à Wine de charger {dlls} depuis le dossier du jeu.",
   "settings.optiscaler.nvidia_note": "Au lancement du jeu avec Proton, Irori définit PROTON_ENABLE_NVAPI=1.",
   "settings.optiscaler.catalog_failed": "Impossible de vérifier les versions d’OptiScaler : {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Connectez-vous avec un compte Microsoft pour installer et jouer à vos jeux du Microsoft Store et du PC Game Pass. Ils tournent avec Nexus Runtime du gestionnaire Wine.",
   "settings.field.xbox_market.label": "Région du Microsoft Store",
   "settings.field.xbox_market.help": "Code pays à deux lettres (US, DE, GB…) pour la bibliothèque, le catalogue et les licences. Vide : suit la langue de l’interface.",
-  "settings.field.xbox_market.off": "Activez d’abord la boutique Xbox."
+  "settings.field.xbox_market.off": "Activez d’abord la boutique Xbox.",
+  "settings.optiscaler.shortcut.default_insert": "Automatique (Insert)",
+  "settings.optiscaler.shortcut.help": "Touche qui ouvre l’interface OptiScaler en jeu (écrit [Menu] ShortcutKey dans OptiScaler.ini). Cliquez et appuyez sur une touche, ou Échap pour annuler.",
+  "settings.optiscaler.shortcut.label": "Touche de raccourci du menu",
+  "settings.optiscaler.shortcut.listening": "Appuyez sur une touche…",
+  "settings.optiscaler.shortcut.reset": "Réinitialiser",
+  "settings.optiscaler.steam_note": "Steam lance ce jeu avec Proton. Irori synchronise les substitutions de DLL Wine dans le préfixe Proton du jeu, aucune option de lancement Steam n’est requise."
 }

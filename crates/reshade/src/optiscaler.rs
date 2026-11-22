@@ -174,16 +174,15 @@ impl ProxyDll {
 
 /// Per-game OptiScaler configuration persisted in the install manifest.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct OptiscalerConfig {
-    #[serde(default)]
     pub channel: OptiscalerChannel,
-    #[serde(default)]
     pub gpu_driver: GpuDriverMode,
-    #[serde(default)]
     pub proxy_dll: ProxyDll,
-    #[serde(default)]
     pub enable_optipatcher: bool,
+    /// Per-game `[Menu] ShortcutKey` override (`None` = leave at default / user's INI).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shortcut_key: Option<String>,
 }
 
 /// Release API endpoints; use [`OptiscalerEndpoints::official`] outside tests.
@@ -1187,29 +1186,30 @@ fn find_inline_comment(s: &str) -> Option<usize> {
 /// Surgically patch `OptiScaler.ini` for `config`:
 /// - `[Plugins]` `Path=plugins` (when OptiPatcher is enabled) and `LoadAsiPlugins=true|false`
 /// - `[fakenvapi]` `UseFakenvapi=true|false`
+/// - `[Menu]` `ShortcutKey` when configured in `config.shortcut_key`
 pub fn patch_optiscaler_ini(input: &str, config: &OptiscalerConfig) -> String {
     let use_fakenvapi = match config.gpu_driver {
         GpuDriverMode::MesaAuto => "true",
         GpuDriverMode::Nvidia => "false",
     };
+    let mut updates: Vec<(&str, &str, &str)> = Vec::with_capacity(4);
     if config.enable_optipatcher {
-        patch_ini(
-            input,
-            &[
-                ("Plugins", "Path", "plugins"),
-                ("Plugins", "LoadAsiPlugins", "true"),
-                ("fakenvapi", "UseFakenvapi", use_fakenvapi),
-            ],
-        )
+        updates.push(("Plugins", "Path", "plugins"));
+        updates.push(("Plugins", "LoadAsiPlugins", "true"));
     } else {
-        patch_ini(
-            input,
-            &[
-                ("Plugins", "LoadAsiPlugins", "false"),
-                ("fakenvapi", "UseFakenvapi", use_fakenvapi),
-            ],
-        )
+        updates.push(("Plugins", "LoadAsiPlugins", "false"));
     }
+    updates.push(("fakenvapi", "UseFakenvapi", use_fakenvapi));
+
+    let normalized_shortcut = config
+        .shortcut_key
+        .as_deref()
+        .and_then(crate::optiscaler_keys::normalize_shortcut_key);
+    if let Some(ref key) = normalized_shortcut {
+        updates.push(("Menu", "ShortcutKey", key.as_str()));
+    }
+
+    patch_ini(input, &updates)
 }
 
 /// Surgically patch `fakenvapi.ini` with any requested `(section, key, value)`
@@ -1649,6 +1649,8 @@ pub async fn install(
 ///   and zero hashing.
 /// - Toggling `gpu_driver` or `enable_optipatcher` fetches/adds or removes only
 ///   the affected companion files and surgically patches `OptiScaler.ini`.
+/// - Changing `shortcut_key` patches `[Menu] ShortcutKey` in `OptiScaler.ini`
+///   in-place with zero network requests.
 #[allow(clippy::too_many_arguments)]
 pub async fn reconfigure(
     journal_path: PathBuf,
@@ -1932,39 +1934,57 @@ fn apply_reconfigure_companions(
         }
     }
 
-    // 4. Surgical OptiScaler.ini patch when FakeNVAPI or OptiPatcher toggles changed.
+    // 4. Surgical OptiScaler.ini patch when FakeNVAPI, OptiPatcher, or ShortcutKey changed.
     if old_config.gpu_driver != new_config.gpu_driver
         || old_config.enable_optipatcher != new_config.enable_optipatcher
+        || old_config.shortcut_key != new_config.shortcut_key
     {
-        let ini_rel = Path::new("OptiScaler.ini");
-        let ini_path = dir.join(ini_rel);
-        if ini_path.is_file() {
-            let tracked_unmodified = manifest
-                .files
-                .iter()
-                .position(|r| r.path == ini_rel)
-                .filter(|&idx| {
-                    let rec = &manifest.files[idx];
-                    std::fs::symlink_metadata(&ini_path)
-                        .ok()
-                        .is_some_and(|m| m.is_file() && m.len() == rec.size)
-                        && journal::sha256_file_with_size(&ini_path)
-                            .is_ok_and(|(h, _)| h == rec.sha256)
-                });
-            let raw = read_small_text(&ini_path)?;
-            let patched = patch_optiscaler_ini(&raw, new_config);
-            if patched != raw {
-                let bytes = patched.into_bytes();
-                json_store::write_bytes(&ini_path, &bytes)
-                    .with_context(|| format!("Could not save {}", ini_path.display()))?;
-                if let Some(idx) = tracked_unmodified {
-                    manifest.files[idx].sha256 = journal::sha256_bytes(&bytes);
-                    manifest.files[idx].size = bytes.len() as u64;
-                }
+        let reset_shortcut = old_config.shortcut_key.is_some() && new_config.shortcut_key.is_none();
+        patch_tracked_ini_in_place(dir, manifest, Path::new("OptiScaler.ini"), |raw| {
+            let mut cfg = new_config.clone();
+            if reset_shortcut {
+                cfg.shortcut_key = Some(crate::optiscaler_keys::SHORTCUT_AUTO.to_string());
             }
-        }
+            patch_optiscaler_ini(raw, &cfg)
+        })?;
     }
 
+    Ok(())
+}
+
+fn patch_tracked_ini_in_place(
+    dir: &Path,
+    manifest: &mut Manifest,
+    ini_rel: &Path,
+    patch_fn: impl FnOnce(&str) -> String,
+) -> Result<()> {
+    let ini_path = dir.join(ini_rel);
+    if !ini_path.is_file() {
+        return Ok(());
+    }
+    let raw = read_small_text(&ini_path)?;
+    let patched = patch_fn(&raw);
+    if patched == raw {
+        return Ok(());
+    }
+    let tracked_unmodified = manifest
+        .files
+        .iter()
+        .position(|r| r.path == ini_rel)
+        .filter(|&idx| {
+            let rec = &manifest.files[idx];
+            std::fs::symlink_metadata(&ini_path)
+                .ok()
+                .is_some_and(|m| m.is_file() && m.len() == rec.size)
+                && journal::sha256_file_with_size(&ini_path).is_ok_and(|(h, _)| h == rec.sha256)
+        });
+    let bytes = patched.into_bytes();
+    json_store::write_bytes(&ini_path, &bytes)
+        .with_context(|| format!("Could not save {}", ini_path.display()))?;
+    if let Some(idx) = tracked_unmodified {
+        manifest.files[idx].sha256 = journal::sha256_bytes(&bytes);
+        manifest.files[idx].size = bytes.len() as u64;
+    }
     Ok(())
 }
 
@@ -2062,6 +2082,161 @@ fn version_in_use(lower_asset_name: &str, versions: &[String]) -> bool {
         (!core.is_empty() && lower_asset_name.contains(&core))
             || (!compact.is_empty() && lower_asset_name.contains(&compact))
     })
+}
+
+/// Surgically add or remove `"<dll>"="native,builtin"` entries in the
+/// `[Software\\Wine\\DllOverrides]` section of a Wine/Proton prefix `user.reg`.
+///
+/// Returns `Ok(true)` if the file was modified, `Ok(false)` if `user_reg` does
+/// not exist yet or already matched the requested state.
+pub fn sync_wine_user_reg_overrides(
+    user_reg: &Path,
+    add: &[&str],
+    remove: &[&str],
+) -> Result<bool> {
+    if !user_reg.is_file() || (add.is_empty() && remove.is_empty()) {
+        return Ok(false);
+    }
+    let raw_bytes = std::fs::read(user_reg)
+        .with_context(|| format!("Could not read {}", user_reg.display()))?;
+    let raw = String::from_utf8_lossy(&raw_bytes);
+    let eol = if raw.contains("\r\n") { "\r\n" } else { "\n" };
+
+    let add_clean: Vec<String> = add
+        .iter()
+        .map(|s| {
+            s.trim()
+                .strip_suffix(".dll")
+                .or_else(|| s.trim().strip_suffix(".DLL"))
+                .unwrap_or(s.trim())
+                .to_ascii_lowercase()
+        })
+        .filter(|s| !s.is_empty() && !s.ends_with(".asi"))
+        .collect();
+    let remove_clean: Vec<String> = remove
+        .iter()
+        .map(|s| {
+            s.trim()
+                .strip_suffix(".dll")
+                .or_else(|| s.trim().strip_suffix(".DLL"))
+                .unwrap_or(s.trim())
+                .to_ascii_lowercase()
+        })
+        .filter(|s| !s.is_empty() && !add_clean.iter().any(|a| a == s))
+        .collect();
+
+    if add_clean.is_empty() && remove_clean.is_empty() {
+        return Ok(false);
+    }
+
+    let mut out_lines: Vec<String> = Vec::new();
+    let mut in_overrides = false;
+    let mut found_section = false;
+    let mut applied_add = vec![false; add_clean.len()];
+
+    let flush_adds = |out: &mut Vec<String>, applied: &mut [bool]| {
+        let mut trailing_blanks = 0usize;
+        while out
+            .len()
+            .checked_sub(trailing_blanks + 1)
+            .and_then(|idx| out.get(idx))
+            .is_some_and(|l| l.trim().is_empty())
+        {
+            trailing_blanks += 1;
+        }
+        let insert_at = out.len() - trailing_blanks;
+        let mut to_insert = Vec::new();
+        for (idx, name) in add_clean.iter().enumerate() {
+            if !applied[idx] {
+                to_insert.push(format!("\"{name}\"=\"native,builtin\"{eol}"));
+                applied[idx] = true;
+            }
+        }
+        if !to_insert.is_empty() {
+            if insert_at > 0 && !out[insert_at - 1].ends_with('\n') {
+                out[insert_at - 1].push_str(eol);
+            }
+            out.splice(insert_at..insert_at, to_insert);
+        }
+    };
+
+    for raw_line in raw.split_inclusive('\n') {
+        let (line_no_eol, line_eol) = if let Some(s) = raw_line.strip_suffix("\r\n") {
+            (s, "\r\n")
+        } else if let Some(s) = raw_line.strip_suffix('\n') {
+            (s, "\n")
+        } else {
+            (raw_line, "")
+        };
+        let trimmed = line_no_eol.trim_start();
+        if trimmed.starts_with('[')
+            && let Some(end) = trimmed.find(']')
+        {
+            if in_overrides {
+                flush_adds(&mut out_lines, &mut applied_add);
+                in_overrides = false;
+            }
+            let sec = &trimmed[1..end];
+            if sec.eq_ignore_ascii_case(r"Software\\Wine\\DllOverrides") {
+                in_overrides = true;
+                found_section = true;
+            }
+            out_lines.push(raw_line.to_string());
+            continue;
+        }
+
+        if in_overrides
+            && let Some(rest) = trimmed.strip_prefix('"')
+            && let Some(end_q) = rest.find('"')
+        {
+            let key = &rest[..end_q];
+            if remove_clean.iter().any(|r| r.eq_ignore_ascii_case(key)) {
+                continue;
+            }
+            if let Some(idx) = add_clean.iter().position(|a| a.eq_ignore_ascii_case(key)) {
+                applied_add[idx] = true;
+                out_lines.push(format!(
+                    "\"{}\"=\"native,builtin\"{line_eol}",
+                    add_clean[idx]
+                ));
+                continue;
+            }
+        }
+        out_lines.push(raw_line.to_string());
+    }
+
+    if in_overrides {
+        flush_adds(&mut out_lines, &mut applied_add);
+    }
+
+    if !found_section && applied_add.iter().any(|a| !*a) {
+        if let Some(last) = out_lines.last_mut()
+            && !last.ends_with('\n')
+        {
+            last.push_str(eol);
+        }
+        if out_lines.last().is_some_and(|l| !l.trim().is_empty()) {
+            out_lines.push(eol.to_string());
+        }
+        out_lines.push(format!("[Software\\\\Wine\\\\DllOverrides]{eol}"));
+        for (idx, name) in add_clean.iter().enumerate() {
+            if !applied_add[idx] {
+                out_lines.push(format!("\"{name}\"=\"native,builtin\"{eol}"));
+                applied_add[idx] = true;
+            }
+        }
+    }
+
+    let mut result = String::with_capacity(raw.len() + 64);
+    for line in out_lines {
+        result.push_str(&line);
+    }
+    if result.as_bytes() == raw_bytes {
+        return Ok(false);
+    }
+    json_store::write_bytes(user_reg, result.as_bytes())
+        .with_context(|| format!("Could not save {}", user_reg.display()))?;
+    Ok(true)
 }
 
 #[cfg(test)]

@@ -19,9 +19,10 @@ use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _,
     PathPromptOptions, Render, SharedString, Styled as _, Subscription, Window, div,
 };
-use irori_core::GameId;
 use irori_core::process::CancellationToken;
+use irori_core::{GameId, Runner};
 use irori_reshade::optiscaler::{GpuDriverMode, OptiscalerChannel, OptiscalerConfig, ProxyDll};
+use irori_reshade::optiscaler_keys::vk_display_name;
 use irori_reshade::{GraphicsMod, Manifest, Step};
 use irori_services::{OptiscalerInstallParams, OptiscalerStatus, supports_reshade};
 use irori_ui::backend;
@@ -32,6 +33,7 @@ use crate::graphics_mods::{
     self, GraphicsModsChanged, Report, progress_channel, removed_notification, step_text,
 };
 use crate::i18n::LanguageStamp;
+use crate::optiscaler_key::{KeyCaptured, OptiscalerKeyCapture};
 use crate::widgets::{RowState, field_row, group_panel, muted};
 
 const CHANNEL_STABLE: &str = "stable";
@@ -85,6 +87,8 @@ struct Labels {
     choose_program: SharedString,
     choose_prompt: SharedString,
     open_folder: SharedString,
+    shortcut_label: SharedString,
+    shortcut_help: SharedString,
 }
 
 impl Labels {
@@ -119,6 +123,8 @@ impl Labels {
             choose_program: t("settings.optiscaler.choose_program"),
             choose_prompt: t("settings.optiscaler.choose_prompt"),
             open_folder: t("settings.optiscaler.open_folder"),
+            shortcut_label: t("settings.optiscaler.shortcut.label"),
+            shortcut_help: t("settings.optiscaler.shortcut.help"),
         }
     }
 }
@@ -192,29 +198,48 @@ fn proxy_items() -> Vec<ChoiceItem> {
 }
 
 /// Summary text under the installed OptiScaler row.
-pub(crate) fn installed_help(status: &OptiscalerStatus, manifest: &Manifest) -> String {
+pub(crate) fn installed_help(
+    status: &OptiscalerStatus,
+    manifest: &Manifest,
+    runner: Runner,
+) -> String {
     let program = manifest
         .exe
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let shortcut = manifest
+        .optiscaler
+        .as_ref()
+        .and_then(|c| c.shortcut_key.as_deref())
+        .unwrap_or("");
+    let key_name = vk_display_name(shortcut);
     let mut lines = vec![
         t_args(
             "settings.optiscaler.installed_help",
-            &[("dll", &manifest.dll), ("program", &program)],
+            &[
+                ("dll", &manifest.dll),
+                ("program", &program),
+                ("key", key_name.as_ref()),
+            ],
         )
         .to_string(),
     ];
     if !cfg!(target_os = "windows") && !manifest.overrides.is_empty() {
-        let dlls = manifest
-            .overrides
-            .iter()
-            .map(|d| format!("{d}.dll"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        lines.push(t_args("settings.optiscaler.wine_note", &[("dlls", &dlls)]).to_string());
+        if runner == Runner::Steam {
+            lines.push(t("settings.optiscaler.steam_note").to_string());
+        } else {
+            let dlls = manifest
+                .overrides
+                .iter()
+                .map(|d| format!("{d}.dll"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(t_args("settings.optiscaler.wine_note", &[("dlls", &dlls)]).to_string());
+        }
     }
     if cfg!(target_os = "linux")
+        && runner != Runner::Steam
         && manifest
             .optiscaler
             .as_ref()
@@ -286,6 +311,7 @@ pub(crate) struct OptiscalerPanel {
     channel_select: Entity<SelectState<Vec<ChoiceItem>>>,
     driver_select: Entity<SelectState<Vec<ChoiceItem>>>,
     proxy_select: Entity<SelectState<Vec<ChoiceItem>>>,
+    key_capture: Entity<OptiscalerKeyCapture>,
     labels: Labels,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
@@ -324,6 +350,9 @@ impl OptiscalerPanel {
                 cx,
             );
             s
+        });
+        let key_capture = cx.new(|cx| {
+            OptiscalerKeyCapture::new("optiscaler-game-shortcut", config.shortcut_key.clone(), cx)
         });
 
         let sub_channel = cx.subscribe_in(
@@ -371,6 +400,17 @@ impl OptiscalerPanel {
                 }
             },
         );
+        let sub_key = cx.subscribe_in(
+            &key_capture,
+            window,
+            |this, _, event: &KeyCaptured, _, cx| {
+                if this.config.shortcut_key != event.0 {
+                    this.config.shortcut_key = event.0.clone();
+                    this.config_initialized = true;
+                    cx.notify();
+                }
+            },
+        );
 
         Self {
             id,
@@ -386,9 +426,10 @@ impl OptiscalerPanel {
             channel_select,
             driver_select,
             proxy_select,
+            key_capture,
             labels,
             language: LanguageStamp::new(),
-            _subscriptions: vec![sub_channel, sub_driver, sub_proxy],
+            _subscriptions: vec![sub_channel, sub_driver, sub_proxy, sub_key],
         }
     }
 
@@ -430,6 +471,9 @@ impl OptiscalerPanel {
             .update(cx, |s, cx| s.set_selected_value(&driver, window, cx));
         self.proxy_select
             .update(cx, |s, cx| s.set_selected_value(&proxy, window, cx));
+        let shortcut = self.config.shortcut_key.clone();
+        self.key_capture
+            .update(cx, |k, cx| k.set_value(shortcut, cx));
     }
 
     fn refresh_language(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -605,11 +649,18 @@ impl OptiscalerPanel {
         self.run_change(false, window, cx);
     }
 
+    fn set_busy(&mut self, busy: Option<Busy>, cx: &mut Context<Self>) {
+        self.busy = busy;
+        let disabled = busy.is_some();
+        self.key_capture
+            .update(cx, |k, cx| k.set_disabled(disabled, cx));
+    }
+
     fn run_change(&mut self, update_version: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy.is_some() {
             return;
         }
-        self.busy = Some(Busy::Installing);
+        self.set_busy(Some(Busy::Installing), cx);
         self.step = None;
         self.percent = None;
         let cancel = CancellationToken::new();
@@ -652,7 +703,7 @@ impl OptiscalerPanel {
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
-                this.busy = None;
+                this.set_busy(None, cx);
                 this.cancel = None;
                 this.step = None;
                 match result {
@@ -693,7 +744,7 @@ impl OptiscalerPanel {
         if self.busy.is_some() {
             return;
         }
-        self.busy = Some(Busy::Toggling);
+        self.set_busy(Some(Busy::Toggling), cx);
         let b = backend(cx);
         let id = self.id.clone();
         let task = irori_ui::run(
@@ -703,7 +754,7 @@ impl OptiscalerPanel {
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
-                this.busy = None;
+                this.set_busy(None, cx);
                 if let Err(e) = result {
                     window.push_notification(
                         Notification::error(error_text(&e)).title(t("settings.optiscaler.failed")),
@@ -745,7 +796,7 @@ impl OptiscalerPanel {
         if self.busy.is_some() {
             return;
         }
-        self.busy = Some(Busy::Removing);
+        self.set_busy(Some(Busy::Removing), cx);
         let b = backend(cx);
         let id = self.id.clone();
         let title = self.title(cx);
@@ -753,7 +804,7 @@ impl OptiscalerPanel {
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
-                this.busy = None;
+                this.set_busy(None, cx);
                 match result {
                     Ok(report) => {
                         this.chosen_exe = None;
@@ -817,7 +868,7 @@ impl OptiscalerPanel {
                         "settings.optiscaler.installed_label",
                         &[("version", &manifest.version)],
                     ),
-                    help: installed_help(status, manifest).into(),
+                    help: installed_help(status, manifest, self.id.runner).into(),
                     error: incomplete.then(|| self.labels.incomplete.clone()),
                     ..Default::default()
                 };
@@ -988,6 +1039,17 @@ impl OptiscalerPanel {
         )
         .into_any_element();
 
+        let shortcut_row = field_row(
+            RowState {
+                label: self.labels.shortcut_label.clone(),
+                help: self.labels.shortcut_help.clone(),
+                ..Default::default()
+            },
+            self.key_capture.clone().into_any_element(),
+            cx,
+        )
+        .into_any_element();
+
         let target_folder = self.target_dir(status, cx);
         let open_folder_btn = {
             let folder = target_folder.clone();
@@ -1034,6 +1096,7 @@ impl OptiscalerPanel {
             .child(divider(driver_row))
             .child(divider(proxy_row))
             .child(divider(optipatcher_row))
+            .child(divider(shortcut_row))
             .child(divider(target_row))
             .into_any_element()
     }
@@ -1185,6 +1248,7 @@ mod tests {
         crate::i18n::register();
         let cfg = OptiscalerConfig {
             gpu_driver: GpuDriverMode::Nvidia,
+            shortcut_key: Some("0x2E".into()),
             ..Default::default()
         };
         let manifest = sample_manifest(cfg);
@@ -1193,15 +1257,25 @@ mod tests {
             catalog_error: Some("offline".into()),
             ..Default::default()
         };
-        let help = installed_help(&status, &manifest);
+        let help = installed_help(&status, &manifest, Runner::Sideload);
         assert!(help.contains("dxgi.dll"), "{help}");
         assert!(help.contains("Foo-Win64-Shipping.exe"), "{help}");
+        assert!(help.contains("Delete"), "{help}");
         assert!(help.contains("offline"), "{help}");
         if !cfg!(target_os = "windows") {
             assert!(help.contains("dxgi.dll, nvapi64.dll"), "{help}");
         }
         if cfg!(target_os = "linux") {
             assert!(help.contains("PROTON_ENABLE_NVAPI=1"), "{help}");
+        }
+
+        let steam_help = installed_help(&status, &manifest, Runner::Steam);
+        if !cfg!(target_os = "windows") {
+            assert!(steam_help.contains("Proton"), "{steam_help}");
+            assert!(
+                !steam_help.contains("PROTON_ENABLE_NVAPI=1"),
+                "{steam_help}"
+            );
         }
     }
 

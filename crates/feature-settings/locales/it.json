@@ -1081,7 +1081,7 @@
   "settings.optiscaler.install": "Installa OptiScaler",
   "settings.optiscaler.apply": "Applica modifiche",
   "settings.optiscaler.installed_label": "OptiScaler {version}",
-  "settings.optiscaler.installed_help": "Installato come {dll} accanto a {program}. Premi Ins nel gioco per aprire OptiScaler.",
+  "settings.optiscaler.installed_help": "Installato come {dll} accanto a {program}. Premi {key} nel gioco per aprire OptiScaler.",
   "settings.optiscaler.wine_note": "All’avvio del gioco, Irori dice a Wine di caricare {dlls} dalla cartella del gioco.",
   "settings.optiscaler.nvidia_note": "All’avvio del gioco con Proton, Irori imposta PROTON_ENABLE_NVAPI=1.",
   "settings.optiscaler.catalog_failed": "Impossibile controllare le versioni di OptiScaler: {error}.",
@@ -1296,5 +1296,11 @@
   "settings.field.xbox.help": "Accedi con un account Microsoft per installare e giocare ai tuoi giochi di Microsoft Store e PC Game Pass. Girano con Nexus Runtime del gestore di Wine.",
   "settings.field.xbox_market.label": "Area di Microsoft Store",
   "settings.field.xbox_market.help": "Codice paese di due lettere (US, DE, GB…) per libreria, catalogo e licenze. Se vuoto segue la lingua dell’interfaccia.",
-  "settings.field.xbox_market.off": "Attiva prima lo Store Xbox."
+  "settings.field.xbox_market.off": "Attiva prima lo Store Xbox.",
+  "settings.optiscaler.shortcut.default_insert": "Automatico (Insert)",
+  "settings.optiscaler.shortcut.help": "Tasto che apre il menu di OptiScaler in gioco (scrive [Menu] ShortcutKey in OptiScaler.ini). Clicca e premi un tasto, o Esc per annullare.",
+  "settings.optiscaler.shortcut.label": "Tasto rapido del menu",
+  "settings.optiscaler.shortcut.listening": "Premi un tasto…",
+  "settings.optiscaler.shortcut.reset": "Ripristina",
+  "settings.optiscaler.steam_note": "Steam avvia questo gioco con Proton. Irori sincronizza gli override DLL di Wine nel prefisso Proton del gioco, senza bisogno di opzioni di avvio di Steam."
 }
