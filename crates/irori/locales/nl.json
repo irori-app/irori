@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} geüpdatet naar {version}",
   "shell.palette.storage": "Opslag en opruimen",
   "shell.palette.storage_keywords": "schijf station ruimte grootte vrij vrijmaken opruimen verwijderen wissen",
+  "shell.palette.feedback_keywords": "hulp feedback bug fout melding probleem idee vraag github ondersteuning",
   "shell.search.placeholder": "Games en opdrachten zoeken…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Je bent offline. Geïnstalleerde games die het ondersteunen, starten nog steeds.",

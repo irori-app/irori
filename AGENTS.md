@@ -1105,6 +1105,10 @@ Other parts:
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
   and later), following the theme as it changes.
+- Help and feedback (`irori_settings::feedback`, Settings → About and the palette):
+  report a problem opens GitHub's new-issue form with the version, install kind,
+  system, desktop and GPUs filled in (never paths, names or logs), plus ideas,
+  questions and known issues; nothing is sent until the user submits it there.
 
 ### 4.6 Store sign-in
 

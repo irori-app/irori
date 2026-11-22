@@ -27,6 +27,7 @@ mod backup;
 mod controllers;
 mod displays;
 mod epic;
+pub mod feedback;
 mod form;
 mod game_view;
 mod graphics_mods;

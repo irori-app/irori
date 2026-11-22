@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} обновлён до {version}",
   "shell.palette.storage": "Хранилище и очистка",
   "shell.palette.storage_keywords": "диск накопитель место размер свободно освободить очистка очистить удалить хранилище disk storage",
+  "shell.palette.feedback_keywords": "помощь отзыв ошибка баг сообщить проблема идея вопрос github поддержка",
   "shell.search.placeholder": "Поиск игр и команд…",
   "shell.offline": "Не в сети",
   "shell.offline.tooltip": "Вы не в сети. Установленные игры, которые это поддерживают, всё равно запустятся.",

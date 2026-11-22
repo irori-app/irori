@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} updated to {version}",
   "shell.palette.storage": "Storage and cleanup",
   "shell.palette.storage_keywords": "disk drive space size free clean cleanup delete",
+  "shell.palette.feedback_keywords": "help feedback bug issue report problem idea question github support",
   "shell.search.placeholder": "Search games and commands…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "You're offline. Installed games that support it still launch.",

@@ -26,6 +26,7 @@ use irori_ui::i18n::{t, t_args};
 use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
+use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
 use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
@@ -196,6 +197,8 @@ pub struct SettingsView {
     preview: Entity<AppearancePreview>,
     storage: Entity<StoragePanel>,
     sysinfo: SysInfoState,
+    /// A problem report is reading this computer's facts.
+    reporting: bool,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
@@ -235,6 +238,7 @@ impl SettingsView {
             preview: cx.new(AppearancePreview::new),
             storage: storage.clone(),
             sysinfo: SysInfoState::default(),
+            reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring.
             _subscriptions: vec![sub, cx.observe(&storage, |_, _, cx| cx.notify())],
@@ -605,6 +609,69 @@ impl SettingsView {
         v_flex().gap_4().child(list).into_any_element()
     }
 
+    fn open_feedback(&mut self, way: Feedback, window: &mut Window, cx: &mut Context<Self>) {
+        if way == Feedback::Report {
+            if self.reporting {
+                return;
+            }
+            self.reporting = true;
+            cx.notify();
+        }
+        let task = feedback::open(way, window, cx);
+        cx.spawn(async move |this, cx| {
+            task.await;
+            this.update(cx, |this, cx| {
+                this.reporting = false;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Help and feedback: one row per way to reach the project.
+    fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let border = cx.theme().border;
+        Feedback::ALL
+            .into_iter()
+            .enumerate()
+            .fold(panel(cx), |list, (i, way)| {
+                let button = if way == Feedback::Report {
+                    "settings.about.feedback.report_open"
+                } else {
+                    "settings.about.feedback.open"
+                };
+                list.child(
+                    h_flex()
+                        .gap_3()
+                        .px_4()
+                        .py_3()
+                        .when(i > 0, |r| r.border_t_1().border_color(border))
+                        .child(Icon::new(way.icon()).text_color(cx.theme().muted_foreground))
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().text_sm().font_medium().child(t(way.label_key())))
+                                .child(muted(t(way.help_key()), cx)),
+                        )
+                        .child(
+                            Button::new(ElementId::Name(
+                                format!("feedback-{}", way.label_key()).into(),
+                            ))
+                            .outline()
+                            .small()
+                            .icon(IconName::ExternalLink)
+                            .label(t(button))
+                            .loading(way == Feedback::Report && self.reporting)
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| this.open_feedback(way, window, cx),
+                            )),
+                        ),
+                )
+            })
+    }
+
     fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
         let credits: [(SharedString, SharedString); 6] = [
             (t("settings.about.credit_gpui"), "Apache-2.0".into()),
@@ -628,6 +695,8 @@ impl SettingsView {
                     .child(muted(t("settings.about.tagline"), cx)),
             )
             .child(self.app_update.clone())
+            .child(group_heading(t("settings.about.feedback.title"), cx))
+            .child(self.render_feedback(cx))
             .child(group_heading(t("settings.about.third_party"), cx))
             .child(credits.into_iter().fold(panel(cx), |p, (name, license)| {
                 p.child(

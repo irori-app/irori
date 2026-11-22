@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} 已更新至 {version}",
   "shell.palette.storage": "儲存空間與清理",
   "shell.palette.storage_keywords": "磁碟 硬碟 空間 大小 可用 釋放 清理 刪除 儲存 storage",
+  "shell.palette.feedback_keywords": "說明 意見 回饋 錯誤 回報 問題 建議 提問 github 支援",
   "shell.search.placeholder": "搜尋遊戲與指令…",
   "shell.offline": "離線",
   "shell.offline.tooltip": "你目前處於離線狀態。支援離線的已安裝遊戲仍可啟動。",
