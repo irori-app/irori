@@ -206,7 +206,9 @@ fn main() -> Result<()> {
         }
 
         // Steam's Game Mode has no tray to come back from.
-        let start_hidden = (cli.minimized || backend.settings.app().start_in_tray)
+        let qa_hud = irori_settings::hud::qa_hud_backend_override().is_some();
+        let start_hidden = !qa_hud
+            && (cli.minimized || backend.settings.app().start_in_tray)
             && !irori_core::platform::in_steam_gamepad_ui()
             && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
                 || app.lock().tray.is_some())
@@ -216,7 +218,7 @@ fn main() -> Result<()> {
             let app_settings = backend.settings.app();
             let game_mode = app_settings.ui.big_picture_in_game_mode
                 && irori_core::platform::in_steam_gamepad_ui();
-            if app_settings.start_in_console_mode || game_mode {
+            if !qa_hud && (app_settings.start_in_console_mode || game_mode) {
                 nav::navigate(Route::BigPicture, cx);
             }
         }

@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Group the library by category",
   "shell.palette.ungroup_by_category": "Stop grouping the library by category",
   "shell.palette.category_keywords": "category smart tag group collection",
-  "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter"
+  "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter",
+  "shell.palette.performance_hud": "Performance HUD",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime counter performance"
 }

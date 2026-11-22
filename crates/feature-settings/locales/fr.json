@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam gère son propre environnement de lancement",
   "settings.hud.toggle_hud.help": "Appuyez sur cette combinaison en jeu pour afficher ou masquer le HUD.",
   "settings.hud.toggle_hud.label": "Raccourci d'affichage",
-  "settings.hud.unsupported": "Le HUD de performances n'est pas disponible sur cette plateforme."
+  "settings.hud.unsupported": "Le HUD de performances n'est pas disponible sur cette plateforme.",
+  "settings.page.performance_hud": "HUD de performances",
+  "settings.page.performance_hud_description": "Configurez le compteur de FPS, les capteurs matériels et le limiteur d'images en jeu.",
+  "settings.group.performance_hud": "HUD de performances",
+  "settings.field.panel_performance_hud.label": "HUD de performances"
 }

@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam zarządza własnym środowiskiem uruchamiania",
   "settings.hud.toggle_hud.help": "Naciśnij tę kombinację klawiszy w grze, aby pokazać lub ukryć nakładkę.",
   "settings.hud.toggle_hud.label": "Skrót przełączania",
-  "settings.hud.unsupported": "Nakładka wydajności (HUD) nie jest dostępna na tej platformie."
+  "settings.hud.unsupported": "Nakładka wydajności (HUD) nie jest dostępna na tej platformie.",
+  "settings.page.performance_hud": "HUD wydajności",
+  "settings.page.performance_hud_description": "Skonfiguruj licznik FPS, czujniki sprzętowe i ogranicznik klatek w grze.",
+  "settings.group.performance_hud": "HUD wydajności",
+  "settings.field.panel_performance_hud.label": "HUD wydajności"
 }

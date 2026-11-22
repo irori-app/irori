@@ -192,3 +192,39 @@ fn installed_windows_games_offer_reshade_and_renodx() {
     assert!(!offers(game(true, irori_core::InstallPlatform::Linux)));
     assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
 }
+
+#[test]
+fn performance_hud_palette_entry_follows_host_support() {
+    let mut targets = Vec::new();
+    let library = LibraryCommands {
+        grouped: None,
+        grouped_by_mode: None,
+        grouped_by_genre: None,
+        grouped_by_category: None,
+        categories: &[],
+        views: &[],
+        layout: LibraryLayout::Grid,
+        install: None,
+        favourites: None,
+        quick_controls: false,
+        hidden_pin: None,
+    };
+    Palette::items(
+        &[],
+        None,
+        None,
+        library,
+        false,
+        &[],
+        (false, false),
+        &mut targets,
+    );
+    let has_hud = targets
+        .iter()
+        .any(|t| matches!(t, PaletteTarget::Route(Route::Settings(sec)) if sec.as_ref() == "hud"));
+    assert_eq!(
+        has_hud,
+        irori_core::HudBackend::current().is_supported()
+            || irori_settings::hud::qa_hud_backend_override().is_some()
+    );
+}

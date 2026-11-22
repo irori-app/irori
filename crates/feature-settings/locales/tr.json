@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam kendi başlatma ortamını yönetir",
   "settings.hud.toggle_hud.help": "Katmanı oyun içinde göstermek veya gizlemek için bu tuş kombinasyonuna basın.",
   "settings.hud.toggle_hud.label": "Açma/kapatma kısayolu",
-  "settings.hud.unsupported": "Performans HUD bu platformda kullanılamıyor."
+  "settings.hud.unsupported": "Performans HUD bu platformda kullanılamıyor.",
+  "settings.page.performance_hud": "Performans HUD",
+  "settings.page.performance_hud_description": "Oyun içi FPS sayacını, donanım sensörlerini ve kare hızı sınırlayıcısını yapılandırın.",
+  "settings.group.performance_hud": "Performans HUD",
+  "settings.field.panel_performance_hud.label": "Performans HUD"
 }

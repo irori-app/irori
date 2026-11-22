@@ -936,7 +936,15 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     lift_modal_dim(cx);
-    set_latest_theme_hud_colors(theme_hud_colors(Theme::global(cx)));
+    let hud_colors = theme_hud_colors(Theme::global(cx));
+    set_latest_theme_hud_colors(hud_colors.clone());
+    if let Some(backend) = crate::state::try_backend(cx)
+        && backend.settings.app().hud.cached_theme_colors.as_ref() != Some(&hud_colors)
+    {
+        backend.settings.update_app(|a| {
+            a.hud.cached_theme_colors = Some(hud_colors);
+        });
+    }
 }
 
 static LATEST_HUD_COLORS: OnceLock<RwLock<Option<ThemeHudColors>>> = OnceLock::new();

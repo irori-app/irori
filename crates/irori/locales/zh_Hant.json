@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "依分類將遊戲庫分組",
   "shell.palette.ungroup_by_category": "停止依分類將遊戲庫分組",
   "shell.palette.category_keywords": "分類 智慧 標籤 分組 收藏",
-  "shell.palette.genre_keywords": "類型 動作 冒險 策略 解謎 角色扮演 射擊"
+  "shell.palette.genre_keywords": "類型 動作 冒險 策略 解謎 角色扮演 射擊",
+  "shell.palette.performance_hud": "效能 HUD",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆蓋層 overlay fps 幀時間 計數器 效能"
 }

@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam 使用独立的启动环境",
   "settings.hud.toggle_hud.help": "在游戏中按下此组合键以显示或隐藏浮层。",
   "settings.hud.toggle_hud.label": "显示切换快捷键",
-  "settings.hud.unsupported": "性能 HUD 在此平台上不可用。"
+  "settings.hud.unsupported": "性能 HUD 在此平台上不可用。",
+  "settings.page.performance_hud": "性能 HUD",
+  "settings.page.performance_hud_description": "配置游戏内 FPS 计数器、硬件传感器和帧率限制器。",
+  "settings.group.performance_hud": "性能 HUD",
+  "settings.field.panel_performance_hud.label": "性能 HUD"
 }

@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Gruppera biblioteket efter kategori",
   "shell.palette.ungroup_by_category": "Sluta gruppera biblioteket efter kategori",
   "shell.palette.category_keywords": "kategori smart tagg grupp samling",
-  "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel"
+  "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel",
+  "shell.palette.performance_hud": "Prestanda-HUD",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal överlägg overlay fps frametime räknare prestanda"
 }

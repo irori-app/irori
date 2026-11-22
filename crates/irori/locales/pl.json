@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Grupuj bibliotekę według kategorii",
   "shell.palette.ungroup_by_category": "Przestań grupować bibliotekę według kategorii",
   "shell.palette.category_keywords": "kategoria inteligentna etykieta grupa kolekcja",
-  "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka"
+  "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka",
+  "shell.palette.performance_hud": "HUD wydajności",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność"
 }

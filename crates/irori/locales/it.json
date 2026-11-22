@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Raggruppa la libreria per categoria",
   "shell.palette.ungroup_by_category": "Non raggruppare più la libreria per categoria",
   "shell.palette.category_keywords": "categoria intelligente etichetta gruppo raccolta",
-  "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto"
+  "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto",
+  "shell.palette.performance_hud": "HUD delle prestazioni",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime contatore prestazioni"
 }

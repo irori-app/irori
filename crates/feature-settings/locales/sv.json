@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam hanterar sin egen startmiljö",
   "settings.hud.toggle_hud.help": "Tryck på denna tangentkombination i spel för att visa eller dölja överlägget.",
   "settings.hud.toggle_hud.label": "Växlingsgenväg",
-  "settings.hud.unsupported": "Prestanda-HUD är inte tillgänglig på den här plattformen."
+  "settings.hud.unsupported": "Prestanda-HUD är inte tillgänglig på den här plattformen.",
+  "settings.page.performance_hud": "Prestanda-HUD",
+  "settings.page.performance_hud_description": "Konfigurera FPS-räknare, hårdvarusensorer och bildfrekvensbegränsare i spel.",
+  "settings.group.performance_hud": "Prestanda-HUD",
+  "settings.field.panel_performance_hud.label": "Prestanda-HUD"
 }

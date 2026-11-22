@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam керує власним середовищем запуску",
   "settings.hud.toggle_hud.help": "Натисніть цю комбінацію клавіш у грі, щоб показати або приховати оверлей.",
   "settings.hud.toggle_hud.label": "Гаряча клавіша перемикання",
-  "settings.hud.unsupported": "Оверлей продуктивності недоступний на цій платформі."
+  "settings.hud.unsupported": "Оверлей продуктивності недоступний на цій платформі.",
+  "settings.page.performance_hud": "HUD продуктивності",
+  "settings.page.performance_hud_description": "Налаштуйте лічильник FPS, датчики обладнання та обмежувач кадрів у грі.",
+  "settings.group.performance_hud": "HUD продуктивності",
+  "settings.field.panel_performance_hud.label": "HUD продуктивності"
 }

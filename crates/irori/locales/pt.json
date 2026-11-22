@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Agrupar a biblioteca por categoria",
   "shell.palette.ungroup_by_category": "Deixar de agrupar a biblioteca por categoria",
   "shell.palette.category_keywords": "categoria inteligente etiqueta grupo coleção",
-  "shell.palette.genre_keywords": "género ação aventura estratégia quebra-cabeças rpg tiros"
+  "shell.palette.genre_keywords": "género ação aventura estratégia quebra-cabeças rpg tiros",
+  "shell.palette.performance_hud": "HUD de desempenho",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal sobreposição overlay fps frametime contador desempenho"
 }

@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam manages its own launch environment",
   "settings.hud.toggle_hud.help": "Press this key combination in-game to show or hide the overlay.",
   "settings.hud.toggle_hud.label": "Toggle shortcut",
-  "settings.hud.unsupported": "Performance HUD is not available on this platform."
+  "settings.hud.unsupported": "Performance HUD is not available on this platform.",
+  "settings.page.performance_hud": "Performance HUD",
+  "settings.page.performance_hud_description": "Configure the in-game FPS counter, hardware sensors and frame limiter.",
+  "settings.group.performance_hud": "Performance HUD",
+  "settings.field.panel_performance_hud.label": "Performance HUD"
 }

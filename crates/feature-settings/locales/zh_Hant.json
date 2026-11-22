@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam 使用獨立的啟動環境",
   "settings.hud.toggle_hud.help": "在遊戲中按下此組合鍵以顯示或隱藏覆蓋層。",
   "settings.hud.toggle_hud.label": "顯示切換快捷鍵",
-  "settings.hud.unsupported": "效能 HUD 在此平台上無法使用。"
+  "settings.hud.unsupported": "效能 HUD 在此平台上無法使用。",
+  "settings.page.performance_hud": "效能 HUD",
+  "settings.page.performance_hud_description": "設定遊戲內 FPS 計數器、硬體感測器與幀率限制器。",
+  "settings.group.performance_hud": "效能 HUD",
+  "settings.field.panel_performance_hud.label": "效能 HUD"
 }

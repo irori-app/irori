@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam управляет собственной средой запуска",
   "settings.hud.toggle_hud.help": "Нажмите это сочетание клавиш в игре, чтобы показать или скрыть оверлей.",
   "settings.hud.toggle_hud.label": "Клавиша переключения",
-  "settings.hud.unsupported": "Оверлей производительности недоступен на этой платформе."
+  "settings.hud.unsupported": "Оверлей производительности недоступен на этой платформе.",
+  "settings.page.performance_hud": "HUD производительности",
+  "settings.page.performance_hud_description": "Настройте счётчик FPS, датчики оборудования и ограничитель кадров в игре.",
+  "settings.group.performance_hud": "HUD производительности",
+  "settings.field.panel_performance_hud.label": "HUD производительности"
 }

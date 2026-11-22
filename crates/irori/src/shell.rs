@@ -842,6 +842,9 @@ pub fn launch_game(id: GameId, window: &mut Window, cx: &mut App) {
 /// Default route at startup: the welcome flow until the user finished or
 /// skipped it, else the library.
 pub fn initial_route(cx: &App) -> Route {
+    if irori_settings::hud::qa_hud_backend_override().is_some() {
+        return Route::Settings("hud".into());
+    }
     if wants_onboarding(cx) {
         Route::Onboarding
     } else {

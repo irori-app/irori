@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam gestiona su propio entorno de lanzamiento",
   "settings.hud.toggle_hud.help": "Pulsa esta combinación de teclas en el juego para mostrar u ocultar el HUD.",
   "settings.hud.toggle_hud.label": "Atajo para alternar",
-  "settings.hud.unsupported": "El HUD de rendimiento no está disponible en esta plataforma."
+  "settings.hud.unsupported": "El HUD de rendimiento no está disponible en esta plataforma.",
+  "settings.page.performance_hud": "HUD de rendimiento",
+  "settings.page.performance_hud_description": "Configura el contador de FPS, los sensores de hardware y el limitador de fotogramas en el juego.",
+  "settings.group.performance_hud": "HUD de rendimiento",
+  "settings.field.panel_performance_hud.label": "HUD de rendimiento"
 }

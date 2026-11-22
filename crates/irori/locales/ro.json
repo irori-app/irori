@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Grupează biblioteca după categorie",
   "shell.palette.ungroup_by_category": "Nu mai grupa biblioteca după categorie",
   "shell.palette.category_keywords": "categorie inteligentă etichetă grup colecție",
-  "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter"
+  "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter",
+  "shell.palette.performance_hud": "HUD de performanță",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal suprapunere overlay fps frametime contor performanță"
 }

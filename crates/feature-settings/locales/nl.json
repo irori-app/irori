@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam beheert zijn eigen startomgeving",
   "settings.hud.toggle_hud.help": "Druk op deze toetscombinatie in een game om de overlay te tonen of verbergen.",
   "settings.hud.toggle_hud.label": "Sneltoets wisselen",
-  "settings.hud.unsupported": "Prestatie-HUD is niet beschikbaar op dit platform."
+  "settings.hud.unsupported": "Prestatie-HUD is niet beschikbaar op dit platform.",
+  "settings.page.performance_hud": "Prestatie-HUD",
+  "settings.page.performance_hud_description": "Configureer de FPS-teller, hardwaresensoren en frameratebegrenzer in games.",
+  "settings.group.performance_hud": "Prestatie-HUD",
+  "settings.field.panel_performance_hud.label": "Prestatie-HUD"
 }

@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam gestisce il proprio ambiente di avvio",
   "settings.hud.toggle_hud.help": "Premi questa combinazione di tasti in gioco per mostrare o nascondere l'overlay.",
   "settings.hud.toggle_hud.label": "Scorciatoia di attivazione",
-  "settings.hud.unsupported": "L'HUD prestazioni non è disponibile su questa piattaforma."
+  "settings.hud.unsupported": "L'HUD prestazioni non è disponibile su questa piattaforma.",
+  "settings.page.performance_hud": "HUD delle prestazioni",
+  "settings.page.performance_hud_description": "Configura il contatore FPS, i sensori hardware e il limitatore di fotogrammi in gioco.",
+  "settings.group.performance_hud": "HUD delle prestazioni",
+  "settings.field.panel_performance_hud.label": "HUD delle prestazioni"
 }

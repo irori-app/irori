@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "O Steam gere o seu próprio ambiente de arranque",
   "settings.hud.toggle_hud.help": "Prima esta combinação de teclas no jogo para mostrar ou ocultar a sobreposição.",
   "settings.hud.toggle_hud.label": "Atalho para alternar",
-  "settings.hud.unsupported": "O HUD de desempenho não está disponível nesta plataforma."
+  "settings.hud.unsupported": "O HUD de desempenho não está disponível nesta plataforma.",
+  "settings.page.performance_hud": "HUD de desempenho",
+  "settings.page.performance_hud_description": "Configure o contador de FPS, os sensores de hardware e o limitador de fotogramas no jogo.",
+  "settings.group.performance_hud": "HUD de desempenho",
+  "settings.field.panel_performance_hud.label": "HUD de desempenho"
 }

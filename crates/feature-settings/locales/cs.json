@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam spravuje vlastní spouštěcí prostředí",
   "settings.hud.toggle_hud.help": "Stisknutím této kombinace kláves ve hře zobrazíte nebo skryjete překryv.",
   "settings.hud.toggle_hud.label": "Zkratka přepnutí",
-  "settings.hud.unsupported": "Překryv výkonu není na této platformě dostupný."
+  "settings.hud.unsupported": "Překryv výkonu není na této platformě dostupný.",
+  "settings.page.performance_hud": "HUD výkonu",
+  "settings.page.performance_hud_description": "Nastavte herní počítadlo FPS, hardwarové senzory a omezovač snímků.",
+  "settings.group.performance_hud": "HUD výkonu",
+  "settings.field.panel_performance_hud.label": "HUD výkonu"
 }

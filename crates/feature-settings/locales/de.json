@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam verwaltet seine eigene Startumgebung",
   "settings.hud.toggle_hud.help": "Drücke diese Tastenkombination im Spiel, um das Overlay ein- oder auszublenden.",
   "settings.hud.toggle_hud.label": "Tastenkürzel zum Umschalten",
-  "settings.hud.unsupported": "Das Performance-HUD ist auf dieser Plattform nicht verfügbar."
+  "settings.hud.unsupported": "Das Performance-HUD ist auf dieser Plattform nicht verfügbar.",
+  "settings.page.performance_hud": "Leistungs-HUD",
+  "settings.page.performance_hud_description": "FPS-Zähler, Hardwaresensoren und Bildratenbegrenzer im Spiel konfigurieren.",
+  "settings.group.performance_hud": "Leistungs-HUD",
+  "settings.field.panel_performance_hud.label": "Leistungs-HUD"
 }

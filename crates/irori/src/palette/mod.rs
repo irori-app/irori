@@ -283,6 +283,18 @@ impl Palette {
             PaletteTarget::Route(Route::Settings("storage".into())),
             targets,
         );
+        if irori_core::HudBackend::current().is_supported()
+            || irori_settings::hud::qa_hud_backend_override().is_some()
+        {
+            push(
+                CommandItem::new()
+                    .label(t("shell.palette.performance_hud"))
+                    .keywords([t("shell.palette.performance_hud_keywords")])
+                    .icon(IconName::Gauge),
+                PaletteTarget::Route(Route::Settings("hud".into())),
+                targets,
+            );
+        }
         for &runner in stores {
             push(
                 CommandItem::new()

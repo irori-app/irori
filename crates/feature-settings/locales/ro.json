@@ -1428,5 +1428,9 @@
   "settings.hud.steam.title": "Steam își gestionează propriul mediu de lansare",
   "settings.hud.toggle_hud.help": "Apasă această combinație în joc pentru a afișa sau ascunde suprapunerea.",
   "settings.hud.toggle_hud.label": "Scurtătură comutare",
-  "settings.hud.unsupported": "HUD-ul de performanță nu este disponibil pe această platformă."
+  "settings.hud.unsupported": "HUD-ul de performanță nu este disponibil pe această platformă.",
+  "settings.page.performance_hud": "HUD de performanță",
+  "settings.page.performance_hud_description": "Configurează contorul FPS, senzorii hardware și limitatorul de cadre din joc.",
+  "settings.group.performance_hud": "HUD de performanță",
+  "settings.field.panel_performance_hud.label": "HUD de performanță"
 }

@@ -555,6 +555,10 @@ struct CachedDisplay {
 pub struct HudPanel {
     scope: HudPanelScope,
     backend: HudBackend,
+    /// Temporary debug-only QA flag: display `IroriProfile` in-memory when
+    /// `IRORI_QA_HUD_VIEW` boots against a fresh `IRORI_HOME` whose saved mode
+    /// is `Off`, without persisting to disk.
+    qa_force_profile: bool,
     global: GlobalHudSettings,
     game: GameHudSettings,
     env: LinuxHudEnv,
@@ -587,7 +591,13 @@ impl HudPanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let hud_backend = backend_override.unwrap_or_else(HudBackend::current);
-        let (global, game) = read_hud_settings(&scope, cx);
+        let (mut global, game) = read_hud_settings(&scope, cx);
+        let qa_force_profile = crate::hud::qa_hud_backend_override().is_some()
+            && matches!(scope, HudPanelScope::Global)
+            && global.mode == GlobalHudMode::Off;
+        if qa_force_profile {
+            global.mode = GlobalHudMode::IroriProfile;
+        }
         let active_profile = effective_mangohud_profile(&scope, &global, &game);
         let active_metal = effective_metal_settings(&scope, &global, &game);
         let labels = HudLabels::load();
@@ -846,6 +856,7 @@ impl HudPanel {
         let panel = Self {
             scope,
             backend: hud_backend,
+            qa_force_profile,
             global,
             game,
             env,
@@ -1081,6 +1092,7 @@ impl HudPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.qa_force_profile = false;
         if self.global.mode == mode {
             return;
         }
@@ -1117,7 +1129,10 @@ impl HudPanel {
     }
 
     fn reload_from_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (global, game) = read_hud_settings(&self.scope, cx);
+        let (mut global, game) = read_hud_settings(&self.scope, cx);
+        if self.qa_force_profile && global.mode == GlobalHudMode::Off {
+            global.mode = GlobalHudMode::IroriProfile;
+        }
         if self.global == global && self.game == game {
             return;
         }

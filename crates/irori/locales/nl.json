@@ -177,5 +177,7 @@
   "shell.palette.group_by_category": "Bibliotheek groeperen op categorie",
   "shell.palette.ungroup_by_category": "Bibliotheek niet meer groeperen op categorie",
   "shell.palette.category_keywords": "categorie slim label groep collectie",
-  "shell.palette.genre_keywords": "genre actie avontuur strategie puzzel rpg shooter"
+  "shell.palette.genre_keywords": "genre actie avontuur strategie puzzel rpg shooter",
+  "shell.palette.performance_hud": "Prestatie-HUD",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime teller prestaties"
 }
