@@ -130,7 +130,9 @@ impl ShortcutRecorder {
         self.has_modifiers = combo_has_modifiers(&self.combo);
         self.modifier_side = combo_modifier_side(&self.combo);
         let cb = self.on_change.clone();
-        cb(combo, window, cx);
+        window.defer(cx, move |window, cx| {
+            cb(combo, window, cx);
+        });
         cx.notify();
     }
 
