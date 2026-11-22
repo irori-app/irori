@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "dalla voce del database di umu per il suo store",
   "settings.umu.source.steam": "dal suo ID app di Steam",
   "settings.umu.source.title": "trovato per titolo nel database di umu",
-  "settings.umu.use": "Usa"
+  "settings.umu.use": "Usa",
+  "settings.field.hide_pointer.label": "Nascondi il puntatore quando usi un controller",
+  "settings.field.hide_pointer.help": "Premere un pulsante o muovere uno stick nasconde il puntatore finché il mouse non si muove di nuovo."
 }

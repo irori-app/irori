@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "umu veritabanının mağazasına ait kaydından",
   "settings.umu.source.steam": "Steam uygulama kimliğinden",
   "settings.umu.source.title": "umu veritabanında başlığıyla eşleşti",
-  "settings.umu.use": "Kullan"
+  "settings.umu.use": "Kullan",
+  "settings.field.hide_pointer.label": "Oyun kumandası kullanılırken işaretçiyi gizle",
+  "settings.field.hide_pointer.help": "Bir düğmeye veya analog çubuğa basmak, fare yeniden hareket edene kadar işaretçiyi gizler."
 }

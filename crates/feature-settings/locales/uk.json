@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "за записом бази umu для його магазину",
   "settings.umu.source.steam": "за ID застосунку Steam",
   "settings.umu.source.title": "знайдено за назвою в базі umu",
-  "settings.umu.use": "Вибрати"
+  "settings.umu.use": "Вибрати",
+  "settings.field.hide_pointer.label": "Приховувати вказівник під час використання контролера",
+  "settings.field.hide_pointer.help": "Натискання кнопки чи стика приховує вказівник миші, доки миша знову не зрушить."
 }

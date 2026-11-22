@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "from the umu database’s entry for its store",
   "settings.umu.source.steam": "from its Steam app id",
   "settings.umu.source.title": "matched by its title in the umu database",
-  "settings.umu.use": "Use"
+  "settings.umu.use": "Use",
+  "settings.field.hide_pointer.label": "Hide the pointer while using a controller",
+  "settings.field.hide_pointer.help": "A button or stick press hides the mouse pointer until the mouse moves again."
 }

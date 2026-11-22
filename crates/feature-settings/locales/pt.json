@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "pela entrada da base de dados do umu para a loja",
   "settings.umu.source.steam": "pelo ID da aplicação Steam",
   "settings.umu.source.title": "encontrado pelo título na base de dados do umu",
-  "settings.umu.use": "Usar"
+  "settings.umu.use": "Usar",
+  "settings.field.hide_pointer.label": "Ocultar o ponteiro ao usar um comando",
+  "settings.field.hide_pointer.help": "Premir um botão ou mover um manípulo oculta o ponteiro até o rato voltar a mexer-se."
 }

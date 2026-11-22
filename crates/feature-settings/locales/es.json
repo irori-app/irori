@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "según la entrada de la base de datos de umu para su tienda",
   "settings.umu.source.steam": "según su ID de aplicación de Steam",
   "settings.umu.source.title": "encontrado por su título en la base de datos de umu",
-  "settings.umu.use": "Usar"
+  "settings.umu.use": "Usar",
+  "settings.field.hide_pointer.label": "Ocultar el puntero al usar un mando",
+  "settings.field.hide_pointer.help": "Pulsar un botón o mover un stick oculta el puntero hasta que vuelvas a mover el ratón."
 }

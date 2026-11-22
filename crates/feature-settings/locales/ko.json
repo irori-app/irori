@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "umu 데이터베이스의 스토어 항목에서",
   "settings.umu.source.steam": "Steam 앱 ID에서",
   "settings.umu.source.title": "umu 데이터베이스에서 제목으로 찾음",
-  "settings.umu.use": "사용"
+  "settings.umu.use": "사용",
+  "settings.field.hide_pointer.label": "컨트롤러 사용 중 포인터 숨기기",
+  "settings.field.hide_pointer.help": "버튼이나 스틱을 누르면 마우스를 다시 움직일 때까지 포인터가 숨겨집니다."
 }

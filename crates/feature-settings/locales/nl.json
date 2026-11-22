@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "uit de vermelding in de umu-database voor de winkel",
   "settings.umu.source.steam": "uit de Steam-app-id",
   "settings.umu.source.title": "gevonden op titel in de umu-database",
-  "settings.umu.use": "Gebruiken"
+  "settings.umu.use": "Gebruiken",
+  "settings.field.hide_pointer.label": "Aanwijzer verbergen bij gebruik van een controller",
+  "settings.field.hide_pointer.help": "Een druk op een knop of stick verbergt de muisaanwijzer tot de muis weer beweegt."
 }

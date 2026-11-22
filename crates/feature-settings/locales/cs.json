@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "podle záznamu databáze umu pro jeho obchod",
   "settings.umu.source.steam": "podle jejího ID aplikace Steam",
   "settings.umu.source.title": "nalezeno podle názvu v databázi umu",
-  "settings.umu.use": "Použít"
+  "settings.umu.use": "Použít",
+  "settings.field.hide_pointer.label": "Skrýt ukazatel při ovládání ovladačem",
+  "settings.field.hide_pointer.help": "Stisk tlačítka nebo páčky skryje ukazatel myši, dokud se myš znovu nepohne."
 }

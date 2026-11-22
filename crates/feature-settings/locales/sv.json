@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "från umu-databasens post för dess butik",
   "settings.umu.source.steam": "från dess Steam-app-id",
   "settings.umu.source.title": "hittat via titeln i umu-databasen",
-  "settings.umu.use": "Använd"
+  "settings.umu.use": "Använd",
+  "settings.field.hide_pointer.label": "Dölj pekaren när en handkontroll används",
+  "settings.field.hide_pointer.help": "Ett tryck på en knapp eller spak döljer muspekaren tills musen rör sig igen."
 }

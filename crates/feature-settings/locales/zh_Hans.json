@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "来自 umu 数据库中其商店的条目",
   "settings.umu.source.steam": "来自其 Steam 应用 ID",
   "settings.umu.source.title": "按标题在 umu 数据库中匹配",
-  "settings.umu.use": "使用"
+  "settings.umu.use": "使用",
+  "settings.field.hide_pointer.label": "使用手柄时隐藏指针",
+  "settings.field.hide_pointer.help": "按下按键或摇杆后，鼠标指针会隐藏，直到再次移动鼠标。"
 }

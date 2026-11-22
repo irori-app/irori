@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "d’après l’entrée de la base umu pour sa boutique",
   "settings.umu.source.steam": "d’après son identifiant d’application Steam",
   "settings.umu.source.title": "trouvé par son titre dans la base umu",
-  "settings.umu.use": "Utiliser"
+  "settings.umu.use": "Utiliser",
+  "settings.field.hide_pointer.label": "Masquer le pointeur pendant l’utilisation d’une manette",
+  "settings.field.hide_pointer.help": "Un appui sur un bouton ou un stick masque le pointeur jusqu’à ce que la souris bouge de nouveau."
 }

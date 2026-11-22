@@ -28,6 +28,8 @@
 //! 4. Guide + X (Square on PlayStation) saves a clip of the replay buffer,
 //!    also while a game has the window. With the overlay on, Guide + RB takes
 //!    a screenshot and Guide + Up/Down change the system's volume.
+//! 5. A routed input hides the mouse pointer until the mouse moves
+//!    (`iroriController.hidePointer`, [`pointer`]).
 //!
 //! Holding Start (or Select, `iroriUi.bigPictureHoldButton`) for
 //! `iroriUi.bigPictureHoldMs` (a second unless changed) opens Big Picture
@@ -62,6 +64,7 @@ mod evdev;
 pub(crate) mod grab;
 mod hint;
 mod input;
+pub(crate) mod pointer;
 mod reader;
 
 use std::cell::{Cell, RefCell};
@@ -328,6 +331,7 @@ pub fn install(cx: &mut App) {
         .detach();
     }
 
+    pointer::install(cx);
     let (tx, mut rx) = futures::channel::mpsc::unbounded();
     let model = cx.new(|_| GamepadModel::default());
     cx.set_global(GamepadGlobal {
@@ -551,6 +555,13 @@ fn game_running(cx: &App) -> bool {
         .is_some_and(|m| m.statuses.read(cx).playing().next().is_some())
 }
 
+/// Whether controller input hides the mouse pointer
+/// (`iroriController.hidePointer`).
+fn hides_pointer(cx: &App) -> bool {
+    cx.try_global::<irori_ui::Models>()
+        .is_none_or(|m| m.settings.read(cx).app.controller.hide_pointer)
+}
+
 fn active_window(cx: &mut App) -> Option<AnyWindowHandle> {
     if let Some(window) = cx.active_window() {
         return Some(window);
@@ -566,7 +577,11 @@ fn active_window(cx: &mut App) -> Option<AnyWindowHandle> {
 pub fn dispatch_input(input: GamepadInput, cx: &mut App) {
     match active_window(cx) {
         Some(handle) => {
-            let _ = handle.update(cx, |_, window, cx| route_in_window(input, window, cx));
+            let hide = hides_pointer(cx);
+            let _ = handle.update(cx, |_, window, cx| {
+                pointer::hide(hide, window, cx);
+                route_in_window(input, window, cx);
+            });
         }
         None if input == GamepadInput::Guide && !game_running(cx) => {
             if let Some(handle) = cx.windows().into_iter().next() {

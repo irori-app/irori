@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "umu データベースのストア別の項目から",
   "settings.umu.source.steam": "Steam アプリ ID から",
   "settings.umu.source.title": "umu データベースでタイトルから一致",
-  "settings.umu.use": "使用"
+  "settings.umu.use": "使用",
+  "settings.field.hide_pointer.label": "コントローラー使用中はポインターを隠す",
+  "settings.field.hide_pointer.help": "ボタンやスティックを操作すると、マウスを動かすまでポインターが隠れます。"
 }

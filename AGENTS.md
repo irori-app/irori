@@ -1177,6 +1177,12 @@ Microsoft's approval page (`irori_manage::login`).
   list) must leave one that moves nothing at its edge unhandled (`cx.propagate()`, as
   the library grid does), or a controller is stuck in it. Menu opens the palette,
   which reaches every screen.
+- A routed controller input hides the mouse pointer until the mouse moves
+  (`gamepad/pointer.rs`, `iroriController.hidePointer`, on by default). GPUI has no
+  public call for that, so the input first counts as keyboard input (an unbound F24
+  press, which also drops hover looks) and then a global action is taken, which GPUI's
+  default `CursorHideMode::OnTypingAndAction` turns into hiding the pointer. Never
+  bind F24.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of

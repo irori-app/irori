@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "aus dem Eintrag der umu-Datenbank für seinen Store",
   "settings.umu.source.steam": "aus seiner Steam-App-ID",
   "settings.umu.source.title": "über den Titel in der umu-Datenbank gefunden",
-  "settings.umu.use": "Verwenden"
+  "settings.umu.use": "Verwenden",
+  "settings.field.hide_pointer.label": "Mauszeiger bei Controller-Eingaben ausblenden",
+  "settings.field.hide_pointer.help": "Ein Druck auf eine Taste oder einen Stick blendet den Mauszeiger aus, bis die Maus wieder bewegt wird."
 }

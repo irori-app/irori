@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "din intrarea bazei de date umu pentru magazinul său",
   "settings.umu.source.steam": "din ID-ul aplicației Steam",
   "settings.umu.source.title": "găsit după titlu în baza de date umu",
-  "settings.umu.use": "Folosește"
+  "settings.umu.use": "Folosește",
+  "settings.field.hide_pointer.label": "Ascunde cursorul când folosești un controller",
+  "settings.field.hide_pointer.help": "O apăsare de buton sau de stick ascunde cursorul până când mouse-ul se mișcă din nou."
 }

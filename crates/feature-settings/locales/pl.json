@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "z wpisu bazy umu dla jego sklepu",
   "settings.umu.source.steam": "z identyfikatora aplikacji Steam",
   "settings.umu.source.title": "dopasowano po tytule w bazie umu",
-  "settings.umu.use": "Użyj"
+  "settings.umu.use": "Użyj",
+  "settings.field.hide_pointer.label": "Ukrywaj wskaźnik podczas używania kontrolera",
+  "settings.field.hide_pointer.help": "Naciśnięcie przycisku lub drążka ukrywa wskaźnik myszy, dopóki mysz znów się nie poruszy."
 }

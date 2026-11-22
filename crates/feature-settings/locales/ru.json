@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "по записи базы umu для его магазина",
   "settings.umu.source.steam": "по ID приложения Steam",
   "settings.umu.source.title": "найдено по названию в базе umu",
-  "settings.umu.use": "Выбрать"
+  "settings.umu.use": "Выбрать",
+  "settings.field.hide_pointer.label": "Скрывать указатель при использовании контроллера",
+  "settings.field.hide_pointer.help": "Нажатие кнопки или стика скрывает указатель мыши, пока мышь снова не сдвинется."
 }

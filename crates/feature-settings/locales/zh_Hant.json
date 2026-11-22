@@ -1370,5 +1370,7 @@
   "settings.umu.source.store": "來自 umu 資料庫中其商店的項目",
   "settings.umu.source.steam": "來自其 Steam 應用程式 ID",
   "settings.umu.source.title": "依標題在 umu 資料庫中比對",
-  "settings.umu.use": "使用"
+  "settings.umu.use": "使用",
+  "settings.field.hide_pointer.label": "使用控制器時隱藏指標",
+  "settings.field.hide_pointer.help": "按下按鍵或搖桿後，滑鼠指標會隱藏，直到再次移動滑鼠。"
 }

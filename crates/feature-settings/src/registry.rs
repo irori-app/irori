@@ -1887,6 +1887,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.disable_controller.help")
     .keywords(&["gamepad", "controller", "joystick"]),
     app(
+        "iroriController.hidePointer",
+        "settings.field.hide_pointer.label",
+        General,
+        "settings.group.controller",
+        Toggle,
+    )
+    .help("settings.field.hide_pointer.help")
+    .keywords(&[
+        "mouse",
+        "pointer",
+        "cursor",
+        "hide",
+        "gamepad",
+        "controller",
+    ])
+    .requires(NEEDS_CONTROLLER),
+    app(
         "gamepadInitialRepeatDelay",
         "settings.field.gamepad_initial_repeat_delay.label",
         General,
