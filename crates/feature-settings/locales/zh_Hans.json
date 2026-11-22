@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "显示已连接手柄的电量。",
   "settings.hud.metric.gpu_core_clock": "GPU 核心频率",
   "settings.hud.metric.gpu_core_clock_help": "以 MHz 显示当前 GPU 核心频率。",
+  "settings.hud.metric.gpu_mem_clock": "显存频率",
+  "settings.hud.metric.gpu_mem_clock_help": "以 MHz 显示 GPU 显存频率。",
   "settings.hud.metric.gpu_fan": "GPU 风扇转速",
   "settings.hud.metric.gpu_fan_help": "以 RPM 显示 GPU 散热风扇转速。",
   "settings.hud.metric.gpu_junction_temp": "GPU 热点 (结温) 温度",

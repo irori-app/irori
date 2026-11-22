@@ -3,19 +3,24 @@
 use std::fmt::Write as _;
 
 use irori_core::hud::{DEFAULT_TOGGLE_HUD, sanitize_hex6, sanitize_hud_label};
-use irori_core::{HudColorPalette, HudOrientation, MangoHudProfile, ThemeHudColors};
+use irori_core::{
+    HardwareVendor, HudColorPalette, HudOrientation, MangoHudProfile, ThemeHudColors,
+};
 
 /// Runtime context supplied when rendering a `MangoHud.conf` file.
 #[derive(Debug, Clone, Default)]
 pub struct ConfRenderContext {
     pub detected_gpu_label: String,
     pub detected_cpu_label: String,
+    pub gpu_vendor: HardwareVendor,
+    pub cpu_vendor: HardwareVendor,
     pub pci_dev: Option<String>,
     pub theme_colors: Option<ThemeHudColors>,
 }
 
 /// Resolve the active 6-digit hex color palette for `profile`, returning `None`
-/// when `HudColorPalette::MangoHudDefault` is selected.
+/// when `HudColorPalette::MangoHudDefault` is selected without hardware vendor
+/// tinting.
 pub fn resolve_palette_colors(
     profile: &MangoHudProfile,
     theme_colors: Option<&ThemeHudColors>,
@@ -25,6 +30,26 @@ pub fn resolve_palette_colors(
         HudColorPalette::Monochrome => Some(ThemeHudColors::monochrome()),
         HudColorPalette::SyncIroriTheme => Some(theme_colors.cloned().unwrap_or_default()),
         HudColorPalette::Custom => Some(profile.custom_colors.clone()),
+    }
+}
+
+/// Resolve effective colors for `profile` and `ctx`, automatically applying
+/// hardware-vendor colors (AMD red, NVIDIA green, Intel blue) when
+/// [`HudColorPalette::MangoHudDefault`] is active and a silicon vendor was
+/// identified.
+pub fn resolve_effective_colors(
+    profile: &MangoHudProfile,
+    ctx: &ConfRenderContext,
+) -> Option<ThemeHudColors> {
+    match profile.palette {
+        HudColorPalette::MangoHudDefault => {
+            if ctx.gpu_vendor.is_known() || ctx.cpu_vendor.is_known() {
+                Some(ThemeHudColors::for_hardware(ctx.gpu_vendor, ctx.cpu_vendor))
+            } else {
+                None
+            }
+        }
+        _ => resolve_palette_colors(profile, ctx.theme_colors.as_ref()),
     }
 }
 
@@ -94,7 +119,7 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     }
 
     // (b) Palette colors + optional FPS color change
-    if let Some(colors) = resolve_palette_colors(profile, ctx.theme_colors.as_ref()) {
+    if let Some(colors) = resolve_effective_colors(profile, ctx) {
         let defaults = ThemeHudColors::default();
         let _ = writeln!(
             out,
@@ -179,6 +204,9 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         }
         if profile.gpu_core_clock {
             out.push_str("gpu_core_clock\n");
+        }
+        if profile.gpu_mem_clock {
+            out.push_str("gpu_mem_clock\n");
         }
         if profile.gpu_power {
             out.push_str("gpu_power\n");
@@ -374,6 +402,7 @@ mod tests {
             detected_cpu_label: "i5-14600K".into(),
             pci_dev: Some("0000:03:00.0".into()),
             theme_colors: None,
+            ..Default::default()
         };
         let out = render_mangohud_conf(&p, &ctx);
         let l = lines(&out);
@@ -420,5 +449,37 @@ mod tests {
         let l_low = lines(&out_low);
         assert!(!l_low.contains(&"fps_text=FPS"));
         assert!(l_low.contains(&"fps_metrics=0.01"));
+    }
+
+    #[test]
+    fn default_palette_applies_hardware_vendor_colors_and_emits_gpu_mem_clock() {
+        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        p.gpu_mem_clock = true;
+        let ctx = ConfRenderContext {
+            detected_gpu_label: "RX 9070 XT".into(),
+            detected_cpu_label: "i5-14600K".into(),
+            gpu_vendor: HardwareVendor::Amd,
+            cpu_vendor: HardwareVendor::Intel,
+            ..Default::default()
+        };
+        let out = render_mangohud_conf(&p, &ctx);
+        let l = lines(&out);
+        assert!(l.contains(&"gpu_color=ED1C24"));
+        assert!(l.contains(&"vram_color=ED1C24"));
+        assert!(l.contains(&"cpu_color=0095FF"));
+        assert!(l.contains(&"ram_color=00C23D"));
+        assert!(l.contains(&"engine_color=FFFFFF"));
+        assert!(l.contains(&"gpu_mem_clock"));
+
+        let ctx_nv = ConfRenderContext {
+            gpu_vendor: HardwareVendor::Nvidia,
+            cpu_vendor: HardwareVendor::Amd,
+            ..Default::default()
+        };
+        let out_nv = render_mangohud_conf(&p, &ctx_nv);
+        let l_nv = lines(&out_nv);
+        assert!(l_nv.contains(&"gpu_color=76B900"));
+        assert!(l_nv.contains(&"vram_color=76B900"));
+        assert!(l_nv.contains(&"cpu_color=ED1C24"));
     }
 }

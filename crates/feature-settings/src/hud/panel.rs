@@ -32,7 +32,7 @@ use irori_core::{
     MangoHudProfile, MetalHudAlignment, MetalHudSettings, Paths, ResolvedHud, ThemeHudColors,
 };
 use irori_runtime::hud::hardware_linux::{
-    LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, resolve_pci_dev,
+    LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
 use irori_runtime::hud::launch_env::steam_launch_snippet;
 use irori_runtime::hud::mangohud_conf::{ConfRenderContext, render_mangohud_conf};
@@ -249,6 +249,8 @@ struct HudLabels {
     metric_gpu_mem_temp_help: SharedString,
     metric_gpu_core_clock: SharedString,
     metric_gpu_core_clock_help: SharedString,
+    metric_gpu_mem_clock: SharedString,
+    metric_gpu_mem_clock_help: SharedString,
     metric_gpu_power: SharedString,
     metric_gpu_power_help: SharedString,
     metric_gpu_fan: SharedString,
@@ -422,6 +424,8 @@ impl HudLabels {
             metric_gpu_mem_temp_help: t("settings.hud.metric.gpu_mem_temp_help"),
             metric_gpu_core_clock: t("settings.hud.metric.gpu_core_clock"),
             metric_gpu_core_clock_help: t("settings.hud.metric.gpu_core_clock_help"),
+            metric_gpu_mem_clock: t("settings.hud.metric.gpu_mem_clock"),
+            metric_gpu_mem_clock_help: t("settings.hud.metric.gpu_mem_clock_help"),
             metric_gpu_power: t("settings.hud.metric.gpu_power"),
             metric_gpu_power_help: t("settings.hud.metric.gpu_power_help"),
             metric_gpu_fan: t("settings.hud.metric.gpu_fan"),
@@ -1014,6 +1018,8 @@ impl HudPanel {
         let ctx = ConfRenderContext {
             detected_gpu_label: default_gpu_short_label(&profile.gpu_selection, &self.env.gpus),
             detected_cpu_label: self.env.cpu_label.clone(),
+            gpu_vendor: default_gpu_vendor(&profile.gpu_selection, &self.env.gpus),
+            cpu_vendor: self.env.cpu_vendor,
             pci_dev: resolve_pci_dev(&profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_hud_colors(cx.theme())),
         };
@@ -1752,6 +1758,19 @@ impl HudPanel {
                 cx.listener(|this, on: &bool, window, cx| {
                     this.edit_mangohud(window, cx, |p| {
                         p.gpu_core_clock = *on;
+                        p.mark_custom();
+                    });
+                }),
+                cx,
+            ),
+            metric_switch_row(
+                "hud-metric-gpu-mem-clock",
+                self.labels.metric_gpu_mem_clock.clone(),
+                self.labels.metric_gpu_mem_clock_help.clone(),
+                p.gpu_mem_clock,
+                cx.listener(|this, on: &bool, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_mem_clock = *on;
                         p.mark_custom();
                     });
                 }),

@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Visar batterinivån för ansluten handkontroll.",
   "settings.hud.metric.gpu_core_clock": "GPU-kärnfrekvens",
   "settings.hud.metric.gpu_core_clock_help": "Visar aktuell GPU-kärnfrekvens i MHz.",
+  "settings.hud.metric.gpu_mem_clock": "VRAM-klockfrekvens",
+  "settings.hud.metric.gpu_mem_clock_help": "Visar GPU-videominnets frekvens i MHz.",
   "settings.hud.metric.gpu_fan": "GPU-fläkthastighet",
   "settings.hud.metric.gpu_fan_help": "Visar GPU-fläktens varvtal i RPM.",
   "settings.hud.metric.gpu_junction_temp": "GPU-hotspot (junction)-temperatur",

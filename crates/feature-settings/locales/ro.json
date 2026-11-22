@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Afișează nivelul bateriei controlerului conectat.",
   "settings.hud.metric.gpu_core_clock": "Frecvență nucleu GPU",
   "settings.hud.metric.gpu_core_clock_help": "Afișează frecvența curentă a nucleului GPU în MHz.",
+  "settings.hud.metric.gpu_mem_clock": "Frecvență VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Afișează frecvența memoriei video a GPU-ului în MHz.",
   "settings.hud.metric.gpu_fan": "Viteză ventilator GPU",
   "settings.hud.metric.gpu_fan_help": "Afișează turația ventilatorului GPU în RPM.",
   "settings.hud.metric.gpu_junction_temp": "Temperatură hotspot (junction) GPU",

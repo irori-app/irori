@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use irori_core::GpuSelection;
+use irori_core::{GpuSelection, HardwareVendor};
 
 /// One graphics adapter detected via `/sys/class/drm/card*/device/`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +29,7 @@ pub struct LinuxHudEnv {
     pub mangohud_bin_path: Option<PathBuf>,
     pub vkcube_bin_path: Option<PathBuf>,
     pub cpu_label: String,
+    pub cpu_vendor: HardwareVendor,
     pub gpus: Vec<DetectedGpu>,
 }
 
@@ -79,7 +80,8 @@ fn detect_linux_hud_env_uncached() -> LinuxHudEnv {
             .any(|dir| has_mangohud_layer_manifest(dir));
     let vkcube_bin_path =
         find_executable_in_path("vkcube").or_else(|| find_executable_in_path("vkcube-wayland"));
-    let cpu_label = shorten_cpu_label(&detect_cpu_model_linux());
+    let (raw_cpu_model, cpu_vendor) = detect_cpu_info_linux();
+    let cpu_label = shorten_cpu_label(&raw_cpu_model);
     let gpus = detect_gpus_linux();
 
     LinuxHudEnv {
@@ -87,6 +89,7 @@ fn detect_linux_hud_env_uncached() -> LinuxHudEnv {
         mangohud_bin_path,
         vkcube_bin_path,
         cpu_label,
+        cpu_vendor,
         gpus,
     }
 }
@@ -165,13 +168,16 @@ pub fn clean_sysfs_hex(raw: &str) -> Option<String> {
     }
 }
 
-/// Parse the first CPU model line from a `/proc/cpuinfo`-formatted reader.
+/// Parse the first CPU model line and hardware CPUID `vendor_id` from a
+/// `/proc/cpuinfo`-formatted reader in a single pass.
 ///
-/// Stops reading immediately on the first `model name` line. On ARM64/SoC
-/// layouts without `model name`, falls back to the `Model` field if present.
-pub fn parse_cpu_model_from_reader<R: BufRead>(mut reader: R) -> Option<String> {
+/// Stops reading immediately on the first `model name` line (`vendor_id`
+/// precedes `model name` in Linux x86 `/proc/cpuinfo`). On ARM64/SoC layouts
+/// without `model name`, falls back to the `Model` field if present.
+pub fn parse_cpu_info_from_reader<R: BufRead>(mut reader: R) -> (Option<String>, HardwareVendor) {
     let mut line = String::with_capacity(128);
     let mut arm_model_fallback: Option<String> = None;
+    let mut vendor = HardwareVendor::Unknown;
 
     loop {
         line.clear();
@@ -187,8 +193,16 @@ pub fn parse_cpu_model_from_reader<R: BufRead>(mut reader: R) -> Option<String> 
         if val.is_empty() {
             continue;
         }
+        if key.eq_ignore_ascii_case("vendor_id") && vendor == HardwareVendor::Unknown {
+            vendor = match val {
+                "GenuineIntel" => HardwareVendor::Intel,
+                "AuthenticAMD" => HardwareVendor::Amd,
+                _ => HardwareVendor::Unknown,
+            };
+            continue;
+        }
         if key.eq_ignore_ascii_case("model name") {
-            return Some(val.to_string());
+            return (Some(val.to_string()), vendor);
         }
         // ARM64 / Raspberry Pi cpuinfo uses uppercase `Model`, distinct from
         // x86's lowercase numeric `model` stepping field.
@@ -199,35 +213,51 @@ pub fn parse_cpu_model_from_reader<R: BufRead>(mut reader: R) -> Option<String> 
             arm_model_fallback = Some(val.to_string());
         }
     }
-    arm_model_fallback
+    (arm_model_fallback, vendor)
+}
+
+/// Parse the first CPU model line from a `/proc/cpuinfo`-formatted reader.
+pub fn parse_cpu_model_from_reader<R: BufRead>(reader: R) -> Option<String> {
+    parse_cpu_info_from_reader(reader).0
 }
 
 /// Resolve a CPU model string from cpuinfo, devicetree model, or host arch.
+#[cfg(test)]
 fn resolve_cpu_model_with_fallbacks<R: BufRead>(
     cpuinfo: Option<R>,
     devicetree_model: Option<&str>,
     arch: &str,
 ) -> String {
-    if let Some(model) = cpuinfo.and_then(parse_cpu_model_from_reader) {
-        return model;
+    resolve_cpu_info_with_fallbacks(cpuinfo, devicetree_model, arch).0
+}
+
+fn resolve_cpu_info_with_fallbacks<R: BufRead>(
+    cpuinfo: Option<R>,
+    devicetree_model: Option<&str>,
+    arch: &str,
+) -> (String, HardwareVendor) {
+    if let Some((model, vendor)) = cpuinfo.map(parse_cpu_info_from_reader)
+        && let Some(model) = model
+    {
+        return (model, vendor);
     }
     if let Some(dt) = devicetree_model {
         let trimmed = dt.trim_end_matches('\0').trim();
         if !trimmed.is_empty() {
-            return trimmed.to_string();
+            return (trimmed.to_string(), HardwareVendor::Unknown);
         }
     }
-    arch.to_string()
+    (arch.to_string(), HardwareVendor::Unknown)
 }
 
 #[cfg(target_os = "linux")]
-fn detect_cpu_model_linux() -> String {
+fn detect_cpu_info_linux() -> (String, HardwareVendor) {
     let cpuinfo = File::open("/proc/cpuinfo")
         .or_else(|_| File::open("/run/host/proc/cpuinfo"))
         .ok()
         .map(BufReader::new);
     let dt = std::fs::read_to_string("/sys/firmware/devicetree/base/model").ok();
-    resolve_cpu_model_with_fallbacks(cpuinfo, dt.as_deref(), std::env::consts::ARCH)
+    resolve_cpu_info_with_fallbacks(cpuinfo, dt.as_deref(), std::env::consts::ARCH)
 }
 
 /// Shorten a full CPU model name toward <= 14 characters for the HUD label.
@@ -809,6 +839,43 @@ pub fn resolve_pci_dev(selection: &GpuSelection, gpus: &[DetectedGpu]) -> Option
     }
 }
 
+/// Map a PCI-SIG hardware vendor ID (`1002`, `10de`, `8086`) to [`HardwareVendor`].
+pub fn gpu_vendor_from_pci_id(vendor_id: &str) -> HardwareVendor {
+    match clean_sysfs_hex(vendor_id).as_deref() {
+        Some("1002") => HardwareVendor::Amd,
+        Some("10de") => HardwareVendor::Nvidia,
+        Some("8086") => HardwareVendor::Intel,
+        _ => HardwareVendor::Unknown,
+    }
+}
+
+/// Choose the active GPU's [`HardwareVendor`] for `selection` given detected `gpus`.
+pub fn default_gpu_vendor(selection: &GpuSelection, gpus: &[DetectedGpu]) -> HardwareVendor {
+    let chosen = match selection {
+        GpuSelection::ByHardwareId {
+            vendor_id,
+            device_id,
+            subvendor_id,
+            subdevice_id,
+        } => find_gpu_by_hardware_id(
+            gpus,
+            vendor_id,
+            device_id,
+            subvendor_id.as_deref(),
+            subdevice_id.as_deref(),
+        )
+        .or_else(|| gpus.iter().find(|g| g.is_dedicated))
+        .or_else(|| gpus.first()),
+        GpuSelection::AutoDedicated | GpuSelection::AllGpus => gpus
+            .iter()
+            .find(|g| g.is_dedicated)
+            .or_else(|| gpus.first()),
+    };
+    chosen
+        .map(|g| gpu_vendor_from_pci_id(&g.vendor_id))
+        .unwrap_or(HardwareVendor::Unknown)
+}
+
 /// Choose the default short GPU label for `selection` given detected `gpus`.
 pub fn default_gpu_short_label(selection: &GpuSelection, gpus: &[DetectedGpu]) -> String {
     let chosen = match selection {
@@ -1083,5 +1150,22 @@ C 00  Unclassified device
         };
         assert_eq!(resolve_pci_dev(&by_id, &both), Some("0000:10:00.0".into()));
         assert_eq!(default_gpu_short_label(&by_id, &both), "Raphael");
+    }
+
+    #[test]
+    fn detects_cpu_and_gpu_hardware_vendors() {
+        let intel = b"processor\t: 0\nvendor_id\t: GenuineIntel\nmodel name\t: Intel(R) Core(TM) i5-14600K\n";
+        let (model, vendor) = parse_cpu_info_from_reader(&intel[..]);
+        assert_eq!(model.as_deref(), Some("Intel(R) Core(TM) i5-14600K"));
+        assert_eq!(vendor, HardwareVendor::Intel);
+
+        let amd = b"processor\t: 0\nvendor_id\t: AuthenticAMD\nmodel name\t: AMD Ryzen 7 7800X3D 8-Core Processor\n";
+        let (_, amd_vendor) = parse_cpu_info_from_reader(&amd[..]);
+        assert_eq!(amd_vendor, HardwareVendor::Amd);
+
+        assert_eq!(gpu_vendor_from_pci_id("0x1002\n"), HardwareVendor::Amd);
+        assert_eq!(gpu_vendor_from_pci_id("10de"), HardwareVendor::Nvidia);
+        assert_eq!(gpu_vendor_from_pci_id("0x8086"), HardwareVendor::Intel);
+        assert_eq!(gpu_vendor_from_pci_id("1af4"), HardwareVendor::Unknown);
     }
 }

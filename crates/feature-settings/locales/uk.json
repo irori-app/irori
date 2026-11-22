@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Показує рівень заряду підключеного контролера.",
   "settings.hud.metric.gpu_core_clock": "Частота ядра GPU",
   "settings.hud.metric.gpu_core_clock_help": "Показує поточну частоту ядра GPU в МГц.",
+  "settings.hud.metric.gpu_mem_clock": "Частота VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Показує частоту відеопам’яті GPU у МГц.",
   "settings.hud.metric.gpu_fan": "Швидкість вентилятора GPU",
   "settings.hud.metric.gpu_fan_help": "Показує оберти вентилятора охолодження GPU в об/хв.",
   "settings.hud.metric.gpu_junction_temp": "Температура hotspot (junction) GPU",

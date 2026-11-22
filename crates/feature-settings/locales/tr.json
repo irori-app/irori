@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Bağlı kumandanın pil seviyesini gösterir.",
   "settings.hud.metric.gpu_core_clock": "GPU çekirdek saat hızı",
   "settings.hud.metric.gpu_core_clock_help": "Anlık GPU çekirdek frekansını MHz cinsinden gösterir.",
+  "settings.hud.metric.gpu_mem_clock": "VRAM saati",
+  "settings.hud.metric.gpu_mem_clock_help": "GPU video belleği frekansını MHz cinsinden gösterir.",
   "settings.hud.metric.gpu_fan": "GPU fan hızı",
   "settings.hud.metric.gpu_fan_help": "GPU soğutma fanı hızını RPM cinsinden gösterir.",
   "settings.hud.metric.gpu_junction_temp": "GPU sıcak nokta (junction) sıcaklığı",

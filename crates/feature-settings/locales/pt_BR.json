@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Exibe o nível de bateria do controle conectado.",
   "settings.hud.metric.gpu_core_clock": "Clock do núcleo da GPU",
   "settings.hud.metric.gpu_core_clock_help": "Exibe a frequência atual do núcleo da GPU em MHz.",
+  "settings.hud.metric.gpu_mem_clock": "Clock da VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Exibe a frequência da memória de vídeo da GPU em MHz.",
   "settings.hud.metric.gpu_fan": "Velocidade da ventoinha GPU",
   "settings.hud.metric.gpu_fan_help": "Exibe a rotação da ventoinha da GPU em RPM.",
   "settings.hud.metric.gpu_junction_temp": "Temperatura hotspot (junction) da GPU",

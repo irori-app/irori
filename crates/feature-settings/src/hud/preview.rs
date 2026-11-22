@@ -22,12 +22,14 @@ use gpui_kit::{
 };
 use irori_core::hud::{sanitize_hex6, sanitize_hud_label};
 use irori_core::{
-    HudBackend, HudColorPalette, HudOrientation, HudPosition, MangoHudProfile, MetalHudAlignment,
-    MetalHudSettings, Paths, ThemeHudColors,
+    HardwareVendor, HudBackend, HudColorPalette, HudOrientation, HudPosition, MangoHudProfile,
+    MetalHudAlignment, MetalHudSettings, Paths, ThemeHudColors,
 };
-use irori_runtime::hud::hardware_linux::{LinuxHudEnv, default_gpu_short_label, resolve_pci_dev};
+use irori_runtime::hud::hardware_linux::{
+    LinuxHudEnv, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
+};
 use irori_runtime::hud::mangohud_conf::{
-    ConfRenderContext, render_mangohud_conf, resolve_palette_colors,
+    ConfRenderContext, render_mangohud_conf, resolve_effective_colors,
 };
 use irori_ui::backend;
 use irori_ui::i18n::t;
@@ -39,6 +41,13 @@ use crate::i18n::LanguageStamp;
 /// Sample Metal HUD bar heights (in pixels).
 const METAL_BARS_PX: [f32; 16] = [
     5.0, 5.5, 5.0, 6.0, 5.5, 5.0, 7.0, 5.5, 5.0, 5.5, 6.5, 5.0, 5.5, 5.0, 5.5, 5.0,
+];
+
+/// Deterministic vertical offsets (top margin in px inside a 16px plot) for the
+/// MangoHud-style jagged green frametime waveform.
+const FRAMETIME_WAVE_TOP_PX: [f32; 38] = [
+    8.0, 8.0, 7.0, 9.0, 6.0, 9.0, 8.0, 7.0, 8.0, 8.0, 8.0, 7.0, 9.0, 7.0, 8.0, 8.0, 6.0, 9.0, 7.0,
+    8.0, 8.0, 8.0, 7.0, 8.0, 9.0, 7.0, 8.0, 8.0, 7.0, 8.0, 5.0, 10.0, 7.0, 8.0, 8.0, 7.0, 8.0, 8.0,
 ];
 
 struct PreviewLabels {
@@ -77,9 +86,35 @@ struct PreviewPalette {
     accent: Hsla,
 }
 
+/// One MangoHud metric cell rendered as a bold primary value plus an optional
+/// tiny top-aligned superscript unit (`120` + `FPS`, `1886` + `MHz`, `42°C` + `Jnc`).
+#[derive(Clone)]
 struct PreviewCell {
-    text: SharedString,
+    value: SharedString,
+    unit: Option<SharedString>,
     color: Hsla,
+}
+
+impl PreviewCell {
+    fn plain(value: impl Into<SharedString>, color: Hsla) -> Self {
+        Self {
+            value: value.into(),
+            unit: None,
+            color,
+        }
+    }
+
+    fn with_unit(
+        value: impl Into<SharedString>,
+        unit: impl Into<SharedString>,
+        color: Hsla,
+    ) -> Self {
+        Self {
+            value: value.into(),
+            unit: Some(unit.into()),
+            color,
+        }
+    }
 }
 
 /// One row of MangoHud's 3-column `legacy_layout=false` vertical grid.
@@ -215,6 +250,8 @@ impl HudPreview {
                 &self.env.gpus,
             ),
             detected_cpu_label: self.env.cpu_label.clone(),
+            gpu_vendor: default_gpu_vendor(&self.profile.gpu_selection, &self.env.gpus),
+            cpu_vendor: self.env.cpu_vendor,
             pci_dev: resolve_pci_dev(&self.profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_colors),
         };
@@ -319,25 +356,31 @@ impl HudPreview {
     fn render_mangohud_card(&self, cx: &Context<Self>) -> impl IntoElement {
         let c = &self.cache;
         let mono = cx.theme().mono_font_family.clone();
-        let card_pad_x = if c.hud_compact { px(8.) } else { px(12.) };
-        let card_pad_y = if c.hud_compact { px(6.) } else { px(9.) };
+        let card_pad_x = if c.hud_compact { px(6.) } else { px(10.) };
+        let card_pad_y = if c.hud_compact { px(5.) } else { px(8.) };
 
         let mut card = div()
             .bg(c.palette.bg)
             .rounded(px(f32::from(c.round_corners)))
             .px(card_pad_x)
             .py(card_pad_y)
-            .font_family(mono)
-            .text_xs()
-            .border_1()
-            .border_color(gpui_kit::hsla(0., 0., 1., 0.08));
+            .font_family(mono);
+
+        if c.round_corners > 0 {
+            card = card
+                .border_1()
+                .border_color(gpui_kit::hsla(0., 0., 1., 0.06));
+        }
 
         let inner = if c.minimal_fps_only {
-            div()
-                .text_base()
-                .font_bold()
-                .text_color(c.fps_only_color)
-                .child(c.fps_only_value.clone())
+            render_metric_cell(
+                &PreviewCell::with_unit(
+                    c.fps_only_value.clone(),
+                    SharedString::new_static("FPS"),
+                    c.fps_only_color,
+                ),
+                true,
+            )
         } else if c.horizontal {
             let mut bar = h_flex().flex_wrap().items_center().gap_3();
             for seg_data in &c.horizontal_segments {
@@ -347,13 +390,15 @@ impl HudPreview {
                         div()
                             .max_w(rems(11.))
                             .truncate()
-                            .font_semibold()
+                            .text_size(px(13.))
+                            .font_bold()
+                            .line_height(gpui_kit::relative(1.05))
                             .text_color(seg_data.label_color)
                             .child(seg_data.label.clone()),
                     );
                 }
                 for cell in &seg_data.cells {
-                    seg = seg.child(div().text_color(cell.color).child(cell.text.clone()));
+                    seg = seg.child(render_metric_cell(cell, false));
                 }
                 bar = bar.child(seg);
             }
@@ -362,51 +407,55 @@ impl HudPreview {
                 for chip in &c.extras {
                     extra_seg = extra_seg.child(
                         div()
-                            .font_medium()
+                            .text_xs()
+                            .font_semibold()
                             .text_color(chip.color)
-                            .child(chip.text.clone()),
+                            .child(chip.value.clone()),
                     );
                 }
                 bar = bar.child(extra_seg);
             }
             if c.show_frametime_graph {
-                bar = bar.child(render_frametime_line_compact(c.palette.frametime));
+                bar = bar.child(render_frametime_wave_compact(c.palette.frametime));
             }
             bar
         } else {
-            // MangoHud's `legacy_layout=false` 3-column table layout.
+            // MangoHud's `legacy_layout=false` 3-column table layout with bold
+            // primary numbers and tiny superscript units (`FPS`, `ms`, `MHz`, `W`, `GiB`, `Jnc`).
             let mut stack =
                 v_flex()
-                    .min_w(rems(17.5))
-                    .gap(if c.hud_compact { px(1.) } else { px(3.) });
+                    .min_w(rems(19.))
+                    .gap(if c.hud_compact { px(1.) } else { px(2.) });
             for row in &c.grid_rows {
                 let col1 = div()
-                    .w(rems(6.8))
+                    .w(rems(7.2))
                     .max_w(rems(11.))
                     .truncate()
-                    .font_semibold()
+                    .text_size(px(14.))
+                    .font_bold()
+                    .line_height(gpui_kit::relative(1.05))
                     .text_color(row.label_color)
                     .child(row.label.clone());
 
                 let col2 = h_flex()
-                    .w(rems(5.2))
+                    .w(rems(5.6))
                     .justify_end()
                     .when_some(row.col2.as_ref(), |el, cell| {
-                        el.text_color(cell.color).child(cell.text.clone())
+                        el.child(render_metric_cell(cell, false))
                     });
 
                 let col3 = h_flex()
-                    .w(rems(5.2))
+                    .w(rems(5.6))
                     .justify_end()
                     .when_some(row.col3.as_ref(), |el, cell| {
-                        el.text_color(cell.color).child(cell.text.clone())
+                        el.child(render_metric_cell(cell, false))
                     });
 
                 stack = stack.child(
                     h_flex()
                         .w_full()
                         .items_center()
-                        .gap_2()
+                        .gap_1p5()
                         .child(col1)
                         .child(col2)
                         .child(col3),
@@ -417,9 +466,10 @@ impl HudPreview {
                 for chip in &c.extras {
                     extra_row = extra_row.child(
                         div()
-                            .font_medium()
+                            .text_xs()
+                            .font_semibold()
                             .text_color(chip.color)
-                            .child(chip.text.clone()),
+                            .child(chip.value.clone()),
                     );
                 }
                 stack = stack.child(extra_row);
@@ -584,7 +634,7 @@ impl Render for HudPreview {
 
         let mut stage = v_flex()
             .w_full()
-            .min_h(rems(11.5))
+            .min_h(rems(13.))
             .rounded(theme.radius)
             .bg(stage_bg)
             .border_1()
@@ -616,6 +666,32 @@ impl Render for HudPreview {
             .child(header)
             .child(stage)
     }
+}
+
+fn render_metric_cell(cell: &PreviewCell, large: bool) -> gpui_kit::Div {
+    let val_px = if large { 18.0 } else { 14.0 };
+    let unit_px = if large { 10.0 } else { 8.5 };
+    h_flex()
+        .items_start()
+        .gap(px(1.))
+        .text_color(cell.color)
+        .child(
+            div()
+                .text_size(px(val_px))
+                .font_bold()
+                .line_height(gpui_kit::relative(1.05))
+                .child(cell.value.clone()),
+        )
+        .when_some(cell.unit.as_ref(), |row, unit| {
+            row.child(
+                div()
+                    .text_size(px(unit_px))
+                    .font_bold()
+                    .line_height(gpui_kit::relative(1.05))
+                    .pt(px(0.5))
+                    .child(unit.clone()),
+            )
+        })
 }
 
 fn align_mangohud(stage: gpui_kit::Div, pos: HudPosition) -> gpui_kit::Div {
@@ -658,30 +734,42 @@ fn render_frametime_graph_block(
                 .gap_3()
                 .child(
                     div()
-                        .text_xs()
+                        .text_size(px(10.))
+                        .font_bold()
+                        .line_height(gpui_kit::relative(1.05))
                         .text_color(engine_color)
                         .child(SharedString::new_static("Frametime")),
                 )
-                .child(div().text_xs().text_color(text_color).child(minmax)),
+                .child(
+                    div()
+                        .text_size(px(10.))
+                        .font_semibold()
+                        .line_height(gpui_kit::relative(1.05))
+                        .text_color(text_color)
+                        .child(minmax),
+                ),
         )
-        .child(
-            div()
-                .w_full()
-                .h(px(18.))
-                .px_1()
-                .flex()
-                .items_center()
-                .child(div().w_full().h(px(2.)).rounded(px(1.)).bg(line_color)),
-        )
+        .child(h_flex().w_full().h(px(18.)).items_start().children(
+            FRAMETIME_WAVE_TOP_PX.iter().map(|&top| {
+                div()
+                    .flex_1()
+                    .h_full()
+                    .pt(px(top))
+                    .child(div().w_full().h(px(1.5)).bg(line_color))
+            }),
+        ))
 }
 
-fn render_frametime_line_compact(color: Hsla) -> impl IntoElement {
-    div()
-        .w(px(48.))
-        .h(px(12.))
-        .flex()
-        .items_center()
-        .child(div().w_full().h(px(2.)).rounded(px(1.)).bg(color))
+fn render_frametime_wave_compact(color: Hsla) -> impl IntoElement {
+    h_flex().w(px(48.)).h(px(14.)).items_start().children(
+        FRAMETIME_WAVE_TOP_PX.iter().take(16).map(|&top| {
+            div()
+                .flex_1()
+                .h_full()
+                .pt(px((top - 2.0).max(1.0)))
+                .child(div().w_full().h(px(1.5)).bg(color))
+        }),
+    )
 }
 
 fn render_metal_bars(color: Hsla) -> impl IntoElement {
@@ -702,17 +790,17 @@ fn hex_to_hsla(hex: &str, fallback: &str, alpha: f32) -> Hsla {
 
 fn resolve_preview_palette(
     profile: &MangoHudProfile,
+    gpu_vendor: HardwareVendor,
+    cpu_vendor: HardwareVendor,
     theme_colors: &ThemeHudColors,
 ) -> PreviewPalette {
-    let colors = match profile.palette {
-        HudColorPalette::MangoHudDefault => ThemeHudColors::default(),
-        HudColorPalette::SyncIroriTheme => resolve_palette_colors(profile, Some(theme_colors))
-            .unwrap_or_else(|| theme_colors.clone()),
-        HudColorPalette::Monochrome => resolve_palette_colors(profile, Some(theme_colors))
-            .unwrap_or_else(ThemeHudColors::monochrome),
-        HudColorPalette::Custom => resolve_palette_colors(profile, Some(theme_colors))
-            .unwrap_or_else(|| profile.custom_colors.clone()),
+    let ctx = ConfRenderContext {
+        gpu_vendor,
+        cpu_vendor,
+        theme_colors: Some(theme_colors.clone()),
+        ..Default::default()
     };
+    let colors = resolve_effective_colors(profile, &ctx).unwrap_or_default();
     let d = ThemeHudColors::default();
     PreviewPalette {
         bg: hex_to_hsla(
@@ -775,7 +863,9 @@ fn build_cache(
     env: &LinuxHudEnv,
     theme_colors: &ThemeHudColors,
 ) -> CachedPreview {
-    let palette = resolve_preview_palette(profile, theme_colors);
+    let gpu_vendor = default_gpu_vendor(&profile.gpu_selection, &env.gpus);
+    let cpu_vendor = env.cpu_vendor;
+    let palette = resolve_preview_palette(profile, gpu_vendor, cpu_vendor, theme_colors);
     let gpu_label: SharedString = {
         let custom = sanitize_hud_label(&profile.gpu_label_override);
         if !custom.is_empty() {
@@ -800,15 +890,15 @@ fn build_cache(
         }
     };
 
-    let sim_fps = profile.fps_limit.filter(|&v| v > 0).unwrap_or(144);
+    let sim_fps = profile.fps_limit.filter(|&v| v > 0).unwrap_or(120);
     let sim_ms = 1000.0_f32 / (sim_fps as f32);
     let fps_color = fps_value_color(sim_fps, profile, &palette);
-    let fps_str: SharedString = format!("{sim_fps} FPS").into();
-    let ms_str: SharedString = format!("{sim_ms:.1} ms").into();
+    let fps_num: SharedString = format!("{sim_fps}").into();
+    let ms_num: SharedString = format!("{sim_ms:.1}").into();
     let frametime_minmax: SharedString = format!(
         "min: {:.1}ms, max: {:.1}ms",
-        (sim_ms * 0.96).max(0.1),
-        sim_ms * 1.04
+        (sim_ms * 0.72).max(0.1),
+        sim_ms * 1.38
     )
     .into();
 
@@ -816,57 +906,61 @@ fn build_cache(
     let mut horizontal_segments = Vec::new();
     let mut extras = Vec::new();
 
-    // GPU block (2 value columns per row, wrapping extra metrics onto a continuation line).
+    // GPU block (2 value columns per row, wrapping extra metrics onto continuation lines).
     if profile.effective_gpu_stats() {
-        let mut cells = vec![PreviewCell {
-            text: SharedString::new_static("98%"),
-            color: palette.text,
-        }];
+        let mut cells = vec![PreviewCell::plain(
+            SharedString::new_static("62%"),
+            palette.text,
+        )];
         if profile.gpu_temp {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("68°C"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::plain(
+                SharedString::new_static("58°C"),
+                palette.text,
+            ));
         }
         if profile.gpu_junction_temp {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("79°C Jnc"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("64°C"),
+                SharedString::new_static("Jnc"),
+                palette.text,
+            ));
         }
-        // When VRAM is off, keep VRAM temp visible inside the GPU block; when VRAM is on,
-        // MangoHud displays `gpu_mem_temp` in column 3 of the VRAM row.
         if profile.gpu_mem_temp && !profile.vram {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("74°C Mem"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("60°C"),
+                SharedString::new_static("Mem"),
+                palette.text,
+            ));
         }
         if profile.gpu_core_clock {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("2640 MHz"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("1886"),
+                SharedString::new_static("MHz"),
+                palette.text,
+            ));
+        }
+        if profile.gpu_mem_clock && !profile.vram {
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("1324"),
+                SharedString::new_static("MHz"),
+                palette.text,
+            ));
         }
         if profile.gpu_power {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("245.0 W"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("89.7"),
+                SharedString::new_static("W"),
+                palette.text,
+            ));
         }
         if profile.gpu_fan {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("1850 RPM"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("1650"),
+                SharedString::new_static("RPM"),
+                palette.text,
+            ));
         }
-        let h_cells: Vec<PreviewCell> = cells
-            .iter()
-            .map(|c| PreviewCell {
-                text: c.text.clone(),
-                color: c.color,
-            })
-            .collect();
+        let h_cells = cells.clone();
         push_wrapped_grid_rows(&mut grid_rows, gpu_label.clone(), palette.gpu, cells);
         horizontal_segments.push(PreviewHorizontalSegment {
             label: gpu_label,
@@ -875,70 +969,107 @@ fn build_cache(
         });
     }
 
-    // VRAM row (`VRAM  8.4 GiB  74°C` matching real MangoHud).
+    // VRAM row (`VRAM  4.9 GiB  60°C`, followed by `1324 MHz` when `gpu_mem_clock` is on).
     if profile.vram {
-        let vram_cell = PreviewCell {
-            text: SharedString::new_static("8.4 GiB"),
-            color: palette.text,
-        };
-        let mem_temp_cell = profile.gpu_mem_temp.then_some(PreviewCell {
-            text: SharedString::new_static("74°C"),
-            color: palette.text,
-        });
-        let mut h_cells = vec![PreviewCell {
-            text: vram_cell.text.clone(),
-            color: vram_cell.color,
-        }];
-        if let Some(ref mt) = mem_temp_cell {
-            h_cells.push(PreviewCell {
-                text: mt.text.clone(),
-                color: mt.color,
+        let mut cells = vec![PreviewCell::with_unit(
+            SharedString::new_static("4.9"),
+            SharedString::new_static("GiB"),
+            palette.text,
+        )];
+        if profile.gpu_mem_temp {
+            cells.push(PreviewCell::plain(
+                SharedString::new_static("60°C"),
+                palette.text,
+            ));
+        }
+        if profile.gpu_mem_clock {
+            // Ensure `gpu_mem_clock` lands on the continuation line below VRAM when temp is absent too.
+            if !profile.gpu_mem_temp {
+                let first = cells.remove(0);
+                grid_rows.push(PreviewGridRow {
+                    label: SharedString::new_static("VRAM"),
+                    label_color: palette.vram,
+                    col2: Some(first.clone()),
+                    col3: None,
+                });
+                let clk = PreviewCell::with_unit(
+                    SharedString::new_static("1324"),
+                    SharedString::new_static("MHz"),
+                    palette.text,
+                );
+                grid_rows.push(PreviewGridRow {
+                    label: SharedString::new_static(""),
+                    label_color: palette.vram,
+                    col2: Some(clk.clone()),
+                    col3: None,
+                });
+                horizontal_segments.push(PreviewHorizontalSegment {
+                    label: SharedString::new_static("VRAM"),
+                    label_color: palette.vram,
+                    cells: vec![first, clk],
+                });
+            } else {
+                cells.push(PreviewCell::with_unit(
+                    SharedString::new_static("1324"),
+                    SharedString::new_static("MHz"),
+                    palette.text,
+                ));
+                let h_cells = cells.clone();
+                push_wrapped_grid_rows(
+                    &mut grid_rows,
+                    SharedString::new_static("VRAM"),
+                    palette.vram,
+                    cells,
+                );
+                horizontal_segments.push(PreviewHorizontalSegment {
+                    label: SharedString::new_static("VRAM"),
+                    label_color: palette.vram,
+                    cells: h_cells,
+                });
+            }
+        } else {
+            let h_cells = cells.clone();
+            push_wrapped_grid_rows(
+                &mut grid_rows,
+                SharedString::new_static("VRAM"),
+                palette.vram,
+                cells,
+            );
+            horizontal_segments.push(PreviewHorizontalSegment {
+                label: SharedString::new_static("VRAM"),
+                label_color: palette.vram,
+                cells: h_cells,
             });
         }
-        grid_rows.push(PreviewGridRow {
-            label: SharedString::new_static("VRAM"),
-            label_color: palette.vram,
-            col2: Some(vram_cell),
-            col3: mem_temp_cell,
-        });
-        horizontal_segments.push(PreviewHorizontalSegment {
-            label: SharedString::new_static("VRAM"),
-            label_color: palette.vram,
-            cells: h_cells,
-        });
     }
 
     // CPU block (2 value columns per row, wrapping clock/power onto a continuation line).
     if profile.effective_cpu_stats() {
-        let mut cells = vec![PreviewCell {
-            text: SharedString::new_static("42%"),
-            color: palette.text,
-        }];
+        let mut cells = vec![PreviewCell::plain(
+            SharedString::new_static("15%"),
+            palette.text,
+        )];
         if profile.cpu_temp {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("61°C"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::plain(
+                SharedString::new_static("57°C"),
+                palette.text,
+            ));
         }
         if profile.cpu_mhz {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("4950 MHz"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("5400"),
+                SharedString::new_static("MHz"),
+                palette.text,
+            ));
         }
         if profile.cpu_power {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("65.0 W"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                SharedString::new_static("83.0"),
+                SharedString::new_static("W"),
+                palette.text,
+            ));
         }
-        let h_cells: Vec<PreviewCell> = cells
-            .iter()
-            .map(|c| PreviewCell {
-                text: c.text.clone(),
-                color: c.color,
-            })
-            .collect();
+        let h_cells = cells.clone();
         push_wrapped_grid_rows(&mut grid_rows, cpu_label.clone(), palette.cpu, cells);
         horizontal_segments.push(PreviewHorizontalSegment {
             label: cpu_label,
@@ -949,58 +1080,53 @@ fn build_cache(
 
     // RAM row.
     if profile.ram {
+        let ram_cell = PreviewCell::with_unit(
+            SharedString::new_static("10.5"),
+            SharedString::new_static("GiB"),
+            palette.text,
+        );
         grid_rows.push(PreviewGridRow {
             label: SharedString::new_static("RAM"),
             label_color: palette.ram,
-            col2: Some(PreviewCell {
-                text: SharedString::new_static("14.2 GiB"),
-                color: palette.text,
-            }),
+            col2: Some(ram_cell.clone()),
             col3: None,
         });
         horizontal_segments.push(PreviewHorizontalSegment {
             label: SharedString::new_static("RAM"),
             label_color: palette.ram,
-            cells: vec![PreviewCell {
-                text: SharedString::new_static("14.2 GiB"),
-                color: palette.text,
-            }],
+            cells: vec![ram_cell],
         });
     }
 
-    // FPS & Frametime block (mirrors MangoHud's `VULKAN` or `FPS` label + `fps_metrics`).
+    // FPS & Frametime block (keeps `VULKAN` API name on the left by default with small `FPS` next to numbers).
     if profile.fps || profile.frametime || profile.present_mode {
         let mut cells = Vec::new();
         if profile.fps {
-            cells.push(PreviewCell {
-                text: fps_str.clone(),
-                color: fps_color,
-            });
+            cells.push(PreviewCell::with_unit(
+                fps_num.clone(),
+                SharedString::new_static("FPS"),
+                fps_color,
+            ));
         }
         if profile.frametime {
-            cells.push(PreviewCell {
-                text: ms_str,
-                color: palette.text,
-            });
+            cells.push(PreviewCell::with_unit(
+                ms_num,
+                SharedString::new_static("ms"),
+                palette.text,
+            ));
         }
         if profile.present_mode {
-            cells.push(PreviewCell {
-                text: SharedString::new_static("Mailbox"),
-                color: palette.text,
-            });
+            cells.push(PreviewCell::plain(
+                SharedString::new_static("Mailbox"),
+                palette.text,
+            ));
         }
         let row_label = if profile.fps_use_label {
             SharedString::new_static("FPS")
         } else {
             SharedString::new_static("VULKAN")
         };
-        let h_cells: Vec<PreviewCell> = cells
-            .iter()
-            .map(|c| PreviewCell {
-                text: c.text.clone(),
-                color: c.color,
-            })
-            .collect();
+        let h_cells = cells.clone();
         push_wrapped_grid_rows(&mut grid_rows, row_label.clone(), palette.engine, cells);
         horizontal_segments.push(PreviewHorizontalSegment {
             label: row_label,
@@ -1010,40 +1136,44 @@ fn build_cache(
     }
 
     if profile.fps_avg || profile.fps_1_low {
-        let avg_fps = ((sim_fps as f32) * 0.98).round().max(1.0) as u32;
-        let low_1_fps = ((sim_fps as f32) * 0.85).round().max(1.0) as u32;
+        let avg_fps = ((sim_fps as f32) * 0.94).round().max(1.0) as u32;
+        let low_1_fps = ((sim_fps as f32) * 0.78).round().max(1.0) as u32;
         let mut h_cells = Vec::new();
         if profile.fps_avg {
-            let avg_text: SharedString = format!("{avg_fps} FPS").into();
+            let avg_num: SharedString = format!("{avg_fps}").into();
             grid_rows.push(PreviewGridRow {
                 label: SharedString::new_static("AVG"),
                 label_color: palette.engine,
-                col2: Some(PreviewCell {
-                    text: avg_text.clone(),
-                    color: palette.text,
-                }),
+                col2: Some(PreviewCell::with_unit(
+                    avg_num,
+                    SharedString::new_static("FPS"),
+                    palette.text,
+                )),
                 col3: None,
             });
-            h_cells.push(PreviewCell {
-                text: format!("AVG {avg_fps}").into(),
-                color: palette.text,
-            });
+            h_cells.push(PreviewCell::with_unit(
+                format!("AVG {avg_fps}"),
+                SharedString::new_static("FPS"),
+                palette.text,
+            ));
         }
         if profile.fps_1_low {
-            let low_text: SharedString = format!("{low_1_fps} FPS").into();
+            let low_num: SharedString = format!("{low_1_fps}").into();
             grid_rows.push(PreviewGridRow {
                 label: SharedString::new_static("1%"),
                 label_color: palette.engine,
-                col2: Some(PreviewCell {
-                    text: low_text,
-                    color: palette.text,
-                }),
+                col2: Some(PreviewCell::with_unit(
+                    low_num,
+                    SharedString::new_static("FPS"),
+                    palette.text,
+                )),
                 col3: None,
             });
-            h_cells.push(PreviewCell {
-                text: format!("1% {low_1_fps}").into(),
-                color: palette.text,
-            });
+            h_cells.push(PreviewCell::with_unit(
+                format!("1% {low_1_fps}"),
+                SharedString::new_static("FPS"),
+                palette.text,
+            ));
         }
         horizontal_segments.push(PreviewHorizontalSegment {
             label: SharedString::new_static(""),
@@ -1053,46 +1183,46 @@ fn build_cache(
     }
 
     if profile.wine {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("Proton 9.0"),
-            color: palette.accent,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("Proton 9.0"),
+            palette.accent,
+        ));
     }
     if profile.winesync {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("NTSYNC"),
-            color: palette.accent,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("NTSYNC"),
+            palette.accent,
+        ));
     }
     if profile.fsr {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("FSR ON"),
-            color: palette.gpu,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("FSR ON"),
+            palette.gpu,
+        ));
     }
     if profile.hdr {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("HDR ON"),
-            color: palette.accent,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("HDR ON"),
+            palette.accent,
+        ));
     }
     if profile.gamemode {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("GAMEMODE ON"),
-            color: palette.gpu,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("GAMEMODE ON"),
+            palette.gpu,
+        ));
     }
     if profile.throttling_status {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("THR: NO"),
-            color: palette.text,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("THR: NO"),
+            palette.text,
+        ));
     }
     if profile.gamepad_battery {
-        extras.push(PreviewCell {
-            text: SharedString::new_static("PAD 85%"),
-            color: palette.battery,
-        });
+        extras.push(PreviewCell::plain(
+            SharedString::new_static("PAD 85%"),
+            palette.battery,
+        ));
     }
 
     let minimal_fps_only = profile.is_minimal_fps_only();
@@ -1103,7 +1233,7 @@ fn build_cache(
         horizontal_segments,
         extras,
         minimal_fps_only,
-        fps_only_value: fps_str,
+        fps_only_value: fps_num,
         fps_only_color: fps_color,
         show_frametime_graph: profile.frame_timing && !minimal_fps_only,
         frametime_minmax,
@@ -1123,7 +1253,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn preview_cache_reflects_fps_limit_and_label_and_metrics() {
+    fn preview_cache_reflects_fps_limit_superscript_units_and_metrics() {
         let mut profile = MangoHudProfile {
             fps: true,
             frametime: true,
@@ -1142,11 +1272,12 @@ mod tests {
             .iter()
             .find(|r| r.label.as_ref() == "VULKAN")
             .expect("VULKAN row");
-        assert_eq!(fps_row.col2.as_ref().unwrap().text.as_ref(), "144 FPS");
-        assert_eq!(fps_row.col3.as_ref().unwrap().text.as_ref(), "6.9 ms");
+        assert_eq!(fps_row.col2.as_ref().unwrap().value.as_ref(), "120");
+        assert_eq!(fps_row.col2.as_ref().unwrap().unit.as_deref(), Some("FPS"));
+        assert_eq!(fps_row.col3.as_ref().unwrap().value.as_ref(), "8.3");
+        assert_eq!(fps_row.col3.as_ref().unwrap().unit.as_deref(), Some("ms"));
 
         profile.fps_limit = Some(30);
-        profile.fps_use_label = true;
         profile.fps_avg = true;
         profile.fps_1_low = true;
         let cache = build_cache(
@@ -1158,31 +1289,49 @@ mod tests {
         let fps_row = cache
             .grid_rows
             .iter()
-            .find(|r| r.label.as_ref() == "FPS")
-            .expect("FPS label row");
-        assert_eq!(fps_row.col2.as_ref().unwrap().text.as_ref(), "30 FPS");
-        assert_eq!(fps_row.col3.as_ref().unwrap().text.as_ref(), "33.3 ms");
-        assert!(cache.grid_rows.iter().any(|r| r.label.as_ref() == "AVG"));
-        assert!(cache.grid_rows.iter().any(|r| r.label.as_ref() == "1%"));
+            .find(|r| r.label.as_ref() == "VULKAN")
+            .expect("VULKAN row");
+        assert_eq!(fps_row.col2.as_ref().unwrap().value.as_ref(), "30");
+        assert_eq!(fps_row.col3.as_ref().unwrap().value.as_ref(), "33.3");
+        let avg_row = cache
+            .grid_rows
+            .iter()
+            .find(|r| r.label.as_ref() == "AVG")
+            .expect("AVG row");
+        assert_eq!(avg_row.col2.as_ref().unwrap().unit.as_deref(), Some("FPS"));
+        let low_row = cache
+            .grid_rows
+            .iter()
+            .find(|r| r.label.as_ref() == "1%")
+            .expect("1% row");
+        assert_eq!(low_row.col2.as_ref().unwrap().unit.as_deref(), Some("FPS"));
     }
 
     #[test]
-    fn preview_places_vram_temp_on_vram_row() {
+    fn preview_places_vram_temp_and_mem_clock_on_vram_block() {
         let mut profile = MangoHudProfile::from_preset(irori_core::HudPreset::BalancedGaming);
         profile.vram = true;
         profile.gpu_mem_temp = true;
+        profile.gpu_mem_clock = true;
         let cache = build_cache(
             &profile,
             &MetalHudSettings::default(),
             &LinuxHudEnv::default(),
             &irori_core::ThemeHudColors::default(),
         );
-        let vram_row = cache
+        let idx = cache
             .grid_rows
             .iter()
-            .find(|r| r.label.as_ref() == "VRAM")
+            .position(|r| r.label.as_ref() == "VRAM")
             .expect("VRAM row");
-        assert_eq!(vram_row.col2.as_ref().unwrap().text.as_ref(), "8.4 GiB");
-        assert_eq!(vram_row.col3.as_ref().unwrap().text.as_ref(), "74°C");
+        let vram_row = &cache.grid_rows[idx];
+        assert_eq!(vram_row.col2.as_ref().unwrap().value.as_ref(), "4.9");
+        assert_eq!(vram_row.col2.as_ref().unwrap().unit.as_deref(), Some("GiB"));
+        assert_eq!(vram_row.col3.as_ref().unwrap().value.as_ref(), "60°C");
+
+        let clk_row = &cache.grid_rows[idx + 1];
+        assert_eq!(clk_row.label.as_ref(), "");
+        assert_eq!(clk_row.col2.as_ref().unwrap().value.as_ref(), "1324");
+        assert_eq!(clk_row.col2.as_ref().unwrap().unit.as_deref(), Some("MHz"));
     }
 }

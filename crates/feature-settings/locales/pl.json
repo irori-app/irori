@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Pokazuje poziom naładowania podłączonego kontrolera.",
   "settings.hud.metric.gpu_core_clock": "Taktowanie rdzenia GPU",
   "settings.hud.metric.gpu_core_clock_help": "Pokazuje bieżące taktowanie rdzenia GPU w MHz.",
+  "settings.hud.metric.gpu_mem_clock": "Taktowanie VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Wyświetla częstotliwość pamięci wideo GPU w MHz.",
   "settings.hud.metric.gpu_fan": "Prędkość wentylatora GPU",
   "settings.hud.metric.gpu_fan_help": "Pokazuje prędkość wentylatora chłodzenia GPU w RPM.",
   "settings.hud.metric.gpu_junction_temp": "Temperatura hotspot (junction) GPU",

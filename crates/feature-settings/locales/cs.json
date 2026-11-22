@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Zobrazí úroveň nabití připojeného herního ovladače.",
   "settings.hud.metric.gpu_core_clock": "Takt jádra GPU",
   "settings.hud.metric.gpu_core_clock_help": "Zobrazí aktuální frekvenci jádra GPU v MHz.",
+  "settings.hud.metric.gpu_mem_clock": "Takt VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Zobrazí frekvenci videopaměti GPU v MHz.",
   "settings.hud.metric.gpu_fan": "Otáčky ventilátoru GPU",
   "settings.hud.metric.gpu_fan_help": "Zobrazí rychlost ventilátoru chlazení GPU v RPM.",
   "settings.hud.metric.gpu_junction_temp": "Teplota hotspotu (junction) GPU",

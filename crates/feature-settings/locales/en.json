@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Show connected controller battery level.",
   "settings.hud.metric.gpu_core_clock": "GPU core clock",
   "settings.hud.metric.gpu_core_clock_help": "Show current GPU core frequency in MHz.",
+  "settings.hud.metric.gpu_mem_clock": "VRAM clock",
+  "settings.hud.metric.gpu_mem_clock_help": "Show GPU video memory frequency in MHz.",
   "settings.hud.metric.gpu_fan": "GPU fan speed",
   "settings.hud.metric.gpu_fan_help": "Show GPU cooling fan speed in RPM.",
   "settings.hud.metric.gpu_junction_temp": "GPU hotspot (junction) temperature",

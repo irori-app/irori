@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "Affiche le niveau de batterie de la manette connectée.",
   "settings.hud.metric.gpu_core_clock": "Fréquence cœur GPU",
   "settings.hud.metric.gpu_core_clock_help": "Affiche la fréquence actuelle du cœur GPU en MHz.",
+  "settings.hud.metric.gpu_mem_clock": "Fréquence VRAM",
+  "settings.hud.metric.gpu_mem_clock_help": "Affiche la fréquence de la mémoire vidéo du GPU en MHz.",
   "settings.hud.metric.gpu_fan": "Vitesse du ventilateur GPU",
   "settings.hud.metric.gpu_fan_help": "Affiche la vitesse du ventilateur GPU en tr/min.",
   "settings.hud.metric.gpu_junction_temp": "Température hotspot (jonction) GPU",

@@ -190,6 +190,36 @@ pub enum GpuSelection {
     },
 }
 
+/// Hardware vendor identified deterministically from Linux PCI vendor IDs
+/// (`1002`, `10de`, `8086`) or x86 CPUID `vendor_id` (`GenuineIntel`,
+/// `AuthenticAMD`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HardwareVendor {
+    Amd,
+    Nvidia,
+    Intel,
+    #[default]
+    Unknown,
+}
+
+impl HardwareVendor {
+    /// Whether the vendor was positively identified.
+    pub const fn is_known(self) -> bool {
+        !matches!(self, Self::Unknown)
+    }
+
+    /// Official brand-aligned 6-digit uppercase hex color legible on dark HUDs.
+    pub const fn brand_hex(self, fallback: &'static str) -> &'static str {
+        match self {
+            Self::Amd => "ED1C24",
+            Self::Nvidia => "76B900",
+            Self::Intel => "0095FF",
+            Self::Unknown => fallback,
+        }
+    }
+}
+
 /// Pure RGB hex color palette decoupled from GPUI types.
 ///
 /// Every field holds a 6-digit uppercase hexadecimal `RRGGBB` string without a
@@ -245,6 +275,26 @@ impl ThemeHudColors {
             accent_color: "FFFFFF".into(),
         }
     }
+
+    /// Hardware-aware default palette tinting GPU/VRAM and CPU labels by their
+    /// detected silicon vendors (AMD red, NVIDIA green, Intel blue).
+    pub fn for_hardware(gpu: HardwareVendor, cpu: HardwareVendor) -> Self {
+        let gpu_hex = gpu.brand_hex("2E9762");
+        let cpu_hex = cpu.brand_hex("2E97CB");
+        Self {
+            background_color: "000000".into(),
+            text_color: "FFFFFF".into(),
+            gpu_color: gpu_hex.into(),
+            cpu_color: cpu_hex.into(),
+            vram_color: gpu_hex.into(),
+            ram_color: "00C23D".into(),
+            engine_color: "FFFFFF".into(),
+            frametime_color: "00FF00".into(),
+            io_color: "A491D3".into(),
+            battery_color: "00FF00".into(),
+            accent_color: gpu_hex.into(),
+        }
+    }
 }
 
 /// Complete MangoHud configuration managed by Irori.
@@ -259,6 +309,7 @@ pub struct MangoHudProfile {
     pub gpu_junction_temp: bool,
     pub gpu_mem_temp: bool,
     pub gpu_core_clock: bool,
+    pub gpu_mem_clock: bool,
     pub gpu_power: bool,
     pub gpu_fan: bool,
     pub vram: bool,
@@ -335,6 +386,7 @@ impl MangoHudProfile {
             gpu_junction_temp: false,
             gpu_mem_temp: false,
             gpu_core_clock: false,
+            gpu_mem_clock: false,
             gpu_power: false,
             gpu_fan: false,
             vram: false,
@@ -395,6 +447,7 @@ impl MangoHudProfile {
         self.gpu_junction_temp = false;
         self.gpu_mem_temp = false;
         self.gpu_core_clock = false;
+        self.gpu_mem_clock = false;
         self.gpu_power = false;
         self.gpu_fan = false;
         self.vram = false;
@@ -455,6 +508,7 @@ impl MangoHudProfile {
                 self.gpu_junction_temp = true;
                 self.gpu_mem_temp = true;
                 self.gpu_core_clock = true;
+                self.gpu_mem_clock = true;
                 self.gpu_power = true;
                 self.gpu_fan = true;
                 self.vram = true;
@@ -489,6 +543,7 @@ impl MangoHudProfile {
             || self.gpu_junction_temp
             || self.gpu_mem_temp
             || self.gpu_core_clock
+            || self.gpu_mem_clock
             || self.gpu_power
             || self.gpu_fan
     }

@@ -330,6 +330,11 @@ async fn prepare_hud_plan(
                     &linux_env.gpus,
                 ),
                 detected_cpu_label: linux_env.cpu_label.clone(),
+                gpu_vendor: hud::hardware_linux::default_gpu_vendor(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                cpu_vendor: linux_env.cpu_vendor,
                 pci_dev: hud::hardware_linux::resolve_pci_dev(
                     &profile.gpu_selection,
                     &linux_env.gpus,

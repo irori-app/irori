@@ -1335,6 +1335,8 @@
   "settings.hud.metric.gamepad_battery_help": "接続中のコントローラーのバッテリー残量を表示します。",
   "settings.hud.metric.gpu_core_clock": "GPU コアクロック",
   "settings.hud.metric.gpu_core_clock_help": "現在の GPU コア周波数を MHz で表示します。",
+  "settings.hud.metric.gpu_mem_clock": "VRAMクロック",
+  "settings.hud.metric.gpu_mem_clock_help": "GPUビデオメモリの周波数をMHzで表示します。",
   "settings.hud.metric.gpu_fan": "GPU ファン速度",
   "settings.hud.metric.gpu_fan_help": "GPU 冷却ファンの回転数を RPM で表示します。",
   "settings.hud.metric.gpu_junction_temp": "GPU ホットスポット (ジャンクション) 温度",
