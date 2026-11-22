@@ -13,6 +13,11 @@
 //! `<game> <date> <time>.mp4` and announces. The recorder process is found by
 //! its output folder, which belongs to the session, so the Flatpak's process
 //! inside its sandbox is found the same way as a native one.
+//!
+//! A recorder that stops by itself during the session (a GPU reset, a
+//! monitor unplugged) is started again a few times, waiting longer each
+//! time ([`restart_delay`]), unless the settings say not to. A saved clip is
+//! linked in that day's journal note of the game.
 
 pub mod bindings;
 mod shortcut;
@@ -42,6 +47,19 @@ const PROGRAM: &str = "gpu-screen-recorder";
 const CONTAINER: &str = "mp4";
 /// How long the recorder gets to stop before its process group is ended.
 const STOP_GRACE: Duration = Duration::from_secs(5);
+/// A recorder that ran this long before stopping starts its restarts over.
+const RAN_WELL: Duration = Duration::from_secs(60);
+/// How long the recorder gets to describe itself.
+const INFO_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long to wait before starting a recorder that stopped by itself for
+/// the `attempt`-th time this session (0 first), or `None` to give up: a
+/// recorder that can't run on this system would otherwise start forever.
+pub fn restart_delay(attempt: u32) -> Option<Duration> {
+    [2, 10, 30]
+        .get(attempt as usize)
+        .map(|s| Duration::from_secs(*s))
+}
 
 /// A gpu-screen-recorder Irori can run.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +107,59 @@ impl Recorder {
                 .args(args),
         }
     }
+
+    /// The command that asks the recorder about this system (`--info`).
+    fn info_command(&self) -> CommandSpec {
+        match self {
+            Self::Native(program) => CommandSpec::new(program).arg("--info"),
+            Self::Flatpak => CommandSpec::new("flatpak")
+                .arg("run")
+                .arg(format!("--command={PROGRAM}"))
+                .arg(FLATPAK_ID)
+                .arg("--info"),
+        }
+    }
+}
+
+/// What the recorder says about itself and this system.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecorderInfo {
+    pub version: Option<String>,
+    /// Video codecs the GPU encodes (`h264`, `hevc`, `av1`…).
+    pub codecs: Vec<String>,
+    /// Monitors it can record, by connector name, with their size.
+    pub monitors: Vec<(String, String)>,
+    /// Whether it can record one program's sound (PipeWire).
+    pub app_audio: Option<bool>,
+}
+
+/// Read `gpu-screen-recorder --info`: `section=<name>` lines, then a value
+/// per line, `key|value` where it has one. Unknown sections and lines are
+/// skipped, so a newer recorder's additions don't break it.
+pub fn parse_info(text: &str) -> RecorderInfo {
+    let mut info = RecorderInfo::default();
+    let mut section = "";
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if let Some(name) = line.strip_prefix("section=") {
+            section = name;
+            continue;
+        }
+        let (key, value) = line.split_once('|').unwrap_or((line, ""));
+        match (section, key) {
+            ("system_info", "gsr_version") => info.version = Some(value.to_string()),
+            ("system_info", "supports_app_audio") => info.app_audio = Some(value == "yes"),
+            ("video_codecs", codec) if !codec.ends_with("_software") => {
+                info.codecs.push(codec.to_string())
+            }
+            // Monitors carry their size; the other capture options
+            // (`window`, `portal`, `focused`, `region`) don't.
+            ("capture_options", name) if !value.is_empty() => {
+                info.monitors.push((name.to_string(), value.to_string()))
+            }
+            _ => {}
+        }
+    }
+    info
 }
 
 /// The bitrate, in kbit/s, of a quality preset. A constant bitrate keeps the
@@ -110,10 +181,31 @@ pub fn buffer_mib(settings: &ReplaySettings) -> u64 {
     kbps * 1000 / 8 * u64::from(settings.seconds.max(1)) / (1024 * 1024)
 }
 
-/// The recorder's arguments for a replay buffer writing into `dir`.
-pub fn args(settings: &ReplaySettings, dir: &Path) -> Vec<String> {
+/// Whether `name` reads like a monitor's connector (`DP-1`, `HDMI-A-1`,
+/// `eDP-1`), so a setting can't pass the recorder another option.
+fn is_connector(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with('-')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// A `WxH` size of plain numbers, as `-s` takes it.
+fn size(text: &str) -> Option<String> {
+    let (w, h) = text.trim().split_once('x')?;
+    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+    (w >= 320 && h >= 240).then(|| format!("{w}x{h}"))
+}
+
+/// The recorder's arguments for a replay buffer writing into `dir`. `app`
+/// is the game's program name, whose sound "game" audio records.
+pub fn args(settings: &ReplaySettings, dir: &Path, app: Option<&str>) -> Vec<String> {
+    let monitor = settings.monitor.trim();
     let capture = if settings.capture == "portal" {
         "portal"
+    } else if is_connector(monitor) {
+        monitor
     } else {
         "screen"
     };
@@ -123,7 +215,7 @@ pub fn args(settings: &ReplaySettings, dir: &Path) -> Vec<String> {
         "-c".into(),
         CONTAINER.into(),
         "-f".into(),
-        "60".into(),
+        settings.fps.clamp(10, 240).to_string(),
         "-r".into(),
         settings.seconds.clamp(5, 1800).to_string(),
         "-bm".into(),
@@ -137,9 +229,21 @@ pub fn args(settings: &ReplaySettings, dir: &Path) -> Vec<String> {
         // Ask what to record once, not at every game.
         args.extend(["-restore-portal-session".into(), "yes".into()]);
     }
-    match settings.audio.as_str() {
-        "none" => {}
-        "desktop_and_mic" => args.extend(["-a".into(), "default_output|default_input".into()]),
+    if let codec @ ("h264" | "hevc" | "av1") = settings.codec.as_str() {
+        args.extend(["-k".into(), codec.into()]);
+    }
+    if let Some(size) = size(&settings.resolution) {
+        args.extend(["-s".into(), size]);
+    }
+    match (
+        settings.audio.as_str(),
+        app.filter(|a| !a.trim().is_empty()),
+    ) {
+        ("none", _) => {}
+        ("desktop_and_mic", _) => args.extend(["-a".into(), "default_output|default_input".into()]),
+        // PipeWire names a program's stream after it; Wine's after the
+        // `.exe`, as the recorder matches without letter case.
+        ("game", Some(app)) => args.extend(["-a".into(), format!("app:{}", app.trim())]),
         _ => args.extend(["-a".into(), "default_output".into()]),
     }
     args.extend(["-o".into(), dir.to_string_lossy().into_owned()]);
@@ -208,6 +312,8 @@ struct Active {
     title: String,
     dir: PathBuf,
     seconds: u32,
+    /// What it records, for its status.
+    settings: ReplaySettings,
     cancel: CancellationToken,
     /// The user asked it to stop (the session ended): an exit is no failure.
     stopping: Arc<std::sync::atomic::AtomicBool>,
@@ -227,6 +333,24 @@ pub struct ReplayInfo {
     pub game: GameId,
     pub title: String,
     pub seconds: u32,
+    /// The settings it records with.
+    pub settings: ReplaySettings,
+}
+
+/// A clip linked in a journal note: `entry` with `clip` among its pictures,
+/// or `None` when it is there already or the note links all it can.
+pub fn note_with_clip(
+    entry: Option<crate::journal::JournalEntry>,
+    clip: &str,
+) -> Option<crate::journal::JournalEntry> {
+    let mut entry = entry.unwrap_or_default();
+    if entry.screenshots.iter().any(|p| p == clip)
+        || entry.screenshots.len() >= crate::journal::MAX_LINKED_SCREENSHOTS
+    {
+        return None;
+    }
+    entry.screenshots.push(clip.to_string());
+    Some(entry)
 }
 
 impl Backend {
@@ -236,7 +360,25 @@ impl Backend {
             game: a.id.clone(),
             title: a.title.clone(),
             seconds: a.seconds,
+            settings: a.settings.clone(),
         })
+    }
+
+    /// The recorder on this system and what it can do, or `None` when there
+    /// is none. Runs it once (`--info`), so the settings ask only when shown.
+    pub async fn replay_recorder_info(&self) -> Option<(Recorder, RecorderInfo)> {
+        let recorder = self.spawn_blocking(Recorder::detect).await.ok().flatten()?;
+        let spec = recorder.info_command();
+        let info =
+            match tokio::time::timeout(INFO_TIMEOUT, irori_core::process::output(&spec)).await {
+                Ok(Ok(text)) => parse_info(&text),
+                Ok(Err(e)) => {
+                    tracing::debug!("gpu-screen-recorder --info: {e:#}");
+                    RecorderInfo::default()
+                }
+                Err(_) => RecorderInfo::default(),
+            };
+        Some((recorder, info))
     }
 
     /// Start a replay buffer for a session of `title`, when the game's
@@ -244,7 +386,13 @@ impl Backend {
     /// notice; the game plays regardless. Looking for the recorder takes a
     /// lookup on `PATH` and two `stat`s, so the buffer is known to record
     /// (or not) when this returns.
-    pub(crate) fn start_replay(&self, id: &GameId, title: &str, settings: &ReplaySettings) {
+    pub(crate) fn start_replay(
+        &self,
+        id: &GameId,
+        title: &str,
+        settings: &ReplaySettings,
+        app: Option<String>,
+    ) {
         if !settings.enabled || !cfg!(target_os = "linux") || self.replay.active.lock().is_some() {
             return;
         }
@@ -261,7 +409,7 @@ impl Backend {
             ));
             return;
         };
-        if let Err(e) = self.run_replay(recorder, id, title, settings) {
+        if let Err(e) = self.run_replay(recorder, id, title, settings, app.as_deref()) {
             tracing::warn!("replay buffer for {id}: {e:#}");
             self.bus.notice(not_recording(
                 Notice::new(NoticeLevel::Warning, "The replay buffer isn't recording")
@@ -277,28 +425,31 @@ impl Backend {
         id: &GameId,
         title: &str,
         settings: &ReplaySettings,
+        app: Option<&str>,
     ) -> Result<()> {
         let dir = game_folder(&clips_root(settings), title);
         std::fs::create_dir_all(&dir)
             .with_context(|| format!("Could not create {}", dir.display()))?;
-        let spec = recorder.command(args(settings, &dir), &dir);
+        let spec = recorder.command(args(settings, &dir, app), &dir);
         let cancel = CancellationToken::new();
         let stopping = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let b = self.clone();
-        let (game, name) = (id.clone(), title.to_owned());
-        let on_line = move |stream: Stream, line: &str| {
-            if stream != Stream::Stdout {
-                return;
-            }
-            match parse_output(line) {
-                Output::Saved(path) => b.clip_saved(&game, &name, path),
-                Output::SaveFailed => b.bus.notice(
-                    Notice::new(NoticeLevel::Error, "The clip wasn't saved")
-                        .keys("shell.notice.clip_failed", None, &[])
-                        .game(game.clone()),
-                ),
-                Output::Other => {}
-            }
+        let (journal, restart) = (settings.journal, settings.restart);
+        let on_line = {
+            let (b, game, name) = (self.clone(), id.clone(), title.to_owned());
+            Arc::new(move |stream: Stream, line: &str| {
+                if stream != Stream::Stdout {
+                    return;
+                }
+                match parse_output(line) {
+                    Output::Saved(path) => b.clip_saved(&game, &name, path, journal),
+                    Output::SaveFailed => b.bus.notice(
+                        Notice::new(NoticeLevel::Error, "The clip wasn't saved")
+                            .keys("shell.notice.clip_failed", None, &[])
+                            .game(game.clone()),
+                    ),
+                    Output::Other => {}
+                }
+            })
         };
         // Held until the buffer is registered, so a recorder that fails at
         // once finds it to clear.
@@ -307,20 +458,47 @@ impl Backend {
             let (b, id, cancel, stopping) =
                 (self.clone(), id.clone(), cancel.clone(), stopping.clone());
             self.spawn(async move {
-                let options = RunOptions::default().on_line(on_line).cancel(cancel);
-                let result = irori_core::process::run(&spec, options).await;
-                let stopped = stopping.load(std::sync::atomic::Ordering::Relaxed);
+                let mut attempt = 0;
+                let reason = loop {
+                    let on_line = on_line.clone();
+                    let options = RunOptions::default()
+                        .on_line(move |stream, line| on_line(stream, line))
+                        .cancel(cancel.clone());
+                    let started = std::time::Instant::now();
+                    let result = irori_core::process::run(&spec, options).await;
+                    let stopped = stopping.load(std::sync::atomic::Ordering::Relaxed);
+                    let reason = match result {
+                        Ok(r) if stopped || r.success() || cancel.is_cancelled() => None,
+                        Ok(r) => Some(r.error_summary()),
+                        Err(e) => Some(format!("{e:#}")),
+                    };
+                    let Some(reason) = reason else { break None };
+                    if started.elapsed() >= RAN_WELL {
+                        attempt = 0;
+                    }
+                    let Some(delay) = restart.then(|| restart_delay(attempt)).flatten() else {
+                        break Some(reason);
+                    };
+                    attempt += 1;
+                    tracing::warn!(
+                        "the replay buffer of {id} stopped ({reason}); starting it again in {}s",
+                        delay.as_secs()
+                    );
+                    tokio::select! {
+                        () = tokio::time::sleep(delay) => {}
+                        () = cancel.cancelled() => break None,
+                    }
+                    if stopping.load(std::sync::atomic::Ordering::Relaxed) {
+                        break None;
+                    }
+                };
                 {
                     let mut active = b.replay.active.lock();
                     if active.as_ref().is_some_and(|a| a.id == id) {
                         *active = None;
                     }
                 }
-                let reason = match result {
-                    Ok(r) if stopped || r.success() => return,
-                    Ok(r) => r.error_summary(),
-                    Err(e) => format!("{e:#}"),
-                };
+                let Some(reason) = reason else { return };
                 tracing::warn!("the replay buffer of {id} stopped: {reason}");
                 b.bus.notice(
                     Notice::new(NoticeLevel::Warning, "The replay buffer stopped")
@@ -336,6 +514,7 @@ impl Backend {
             title: title.to_owned(),
             dir,
             seconds: settings.seconds,
+            settings: settings.clone(),
             cancel,
             stopping,
             task,
@@ -399,8 +578,9 @@ impl Backend {
         });
     }
 
-    /// Give the clip the recorder wrote its final name, and say so.
-    fn clip_saved(&self, id: &GameId, title: &str, path: PathBuf) {
+    /// Give the clip the recorder wrote its final name, link it in today's
+    /// journal note of the game when `journal`, and say so.
+    fn clip_saved(&self, id: &GameId, title: &str, path: PathBuf, journal: bool) {
         let at = chrono::Local::now().naive_local();
         let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         let target = free_path(&dir, &clip_name(title, at, CONTAINER));
@@ -413,6 +593,17 @@ impl Backend {
         };
         tracing::info!("clip of {id} saved to {}", path.display());
         let shown = path.display().to_string();
+        if journal {
+            let day = at.date();
+            let note = self
+                .userdata
+                .snapshot()
+                .journal_entry(&id.key(), day)
+                .cloned();
+            if let Some(note) = note_with_clip(note, &shown) {
+                self.userdata.set_journal_entry(id, day, Some(note));
+            }
+        }
         self.bus.notice(
             Notice::new(NoticeLevel::Success, format!("Clip of {title} saved"))
                 .message(shown)
@@ -466,7 +657,7 @@ mod tests {
 
     #[test]
     fn records_the_screen_at_a_constant_bitrate_with_the_desktop_sound() {
-        let a = args(&settings(), Path::new("/clips/Hades"));
+        let a = args(&settings(), Path::new("/clips/Hades"), Some("Hades.exe"));
         assert_eq!(
             a.join(" "),
             "-w screen -c mp4 -f 60 -r 60 -bm cbr -q 35000 -v no -a default_output -o /clips/Hades"
@@ -482,7 +673,7 @@ mod tests {
             capture: "portal".into(),
             ..settings()
         };
-        let a = args(&s, Path::new("/c"));
+        let a = args(&s, Path::new("/c"), None);
         let text = a.join(" ");
         assert!(text.starts_with("-w portal "));
         assert!(text.contains(" -r 1800 "));
@@ -497,9 +688,95 @@ mod tests {
                 ..settings()
             },
             Path::new("/c"),
+            None,
         );
         assert!(!silent.contains(&"-a".to_string()));
         assert_eq!(silent[1], "screen");
+    }
+
+    #[test]
+    fn frame_rate_codec_size_monitor_and_game_sound_follow_the_settings() {
+        let s = ReplaySettings {
+            fps: 144,
+            codec: "av1".into(),
+            resolution: "1920x1080".into(),
+            monitor: "DP-2".into(),
+            audio: "game".into(),
+            ..settings()
+        };
+        let text = args(&s, Path::new("/c"), Some("Hades.exe")).join(" ");
+        assert!(text.starts_with("-w DP-2 "), "{text}");
+        assert!(text.contains(" -f 144 "));
+        assert!(text.contains(" -k av1 -s 1920x1080 "));
+        assert!(text.contains(" -a app:Hades.exe "));
+        // Without the game's program name, the desktop's sound.
+        let text = args(&s, Path::new("/c"), None).join(" ");
+        assert!(text.contains(" -a default_output "));
+        // Nothing a setting holds becomes another option.
+        let odd = ReplaySettings {
+            fps: 9000,
+            codec: "--danger".into(),
+            resolution: "-1x5".into(),
+            monitor: "-o /etc".into(),
+            ..settings()
+        };
+        let text = args(&odd, Path::new("/c"), None).join(" ");
+        assert!(text.starts_with("-w screen "));
+        assert!(text.contains(" -f 240 "));
+        assert!(!text.contains(" -k ") && !text.contains(" -s "));
+        // The portal wins over a monitor.
+        let portal = ReplaySettings {
+            capture: "portal".into(),
+            ..s
+        };
+        assert!(
+            args(&portal, Path::new("/c"), None)
+                .join(" ")
+                .starts_with("-w portal ")
+        );
+    }
+
+    #[test]
+    fn a_recorder_that_keeps_stopping_is_given_up() {
+        assert_eq!(restart_delay(0), Some(Duration::from_secs(2)));
+        assert_eq!(restart_delay(2), Some(Duration::from_secs(30)));
+        assert_eq!(restart_delay(3), None);
+    }
+
+    #[test]
+    fn reads_what_the_recorder_says_about_the_system() {
+        let info = parse_info(
+            "section=system_info\ndisplay_server|wayland\nsupports_app_audio|yes\n\
+             gsr_version|5.1.0\nsection=gpu_info\nvendor|amd\nsection=video_codecs\n\
+             h264\nhevc\nav1\nh264_software\nsection=capture_options\nwindow\nportal\n\
+             DP-1|2560x1440\nHDMI-A-1|1920x1080\nsection=future\nthing|1\n",
+        );
+        assert_eq!(info.version.as_deref(), Some("5.1.0"));
+        assert_eq!(info.app_audio, Some(true));
+        assert_eq!(info.codecs, ["h264", "hevc", "av1"]);
+        assert_eq!(
+            info.monitors,
+            [
+                ("DP-1".to_string(), "2560x1440".to_string()),
+                ("HDMI-A-1".to_string(), "1920x1080".to_string())
+            ]
+        );
+        assert_eq!(parse_info("garbage"), RecorderInfo::default());
+    }
+
+    #[test]
+    fn a_clip_is_linked_once_in_the_days_note() {
+        let note = note_with_clip(None, "/v/Hades/a.mp4").unwrap();
+        assert_eq!(note.screenshots, ["/v/Hades/a.mp4"]);
+        assert!(note_with_clip(Some(note.clone()), "/v/Hades/a.mp4").is_none());
+        let full = crate::journal::JournalEntry {
+            text: "Beat the boss".into(),
+            screenshots: (0..crate::journal::MAX_LINKED_SCREENSHOTS)
+                .map(|i| format!("/s/{i}.png"))
+                .collect(),
+            ..Default::default()
+        };
+        assert!(note_with_clip(Some(full), "/v/b.mp4").is_none());
     }
 
     #[test]

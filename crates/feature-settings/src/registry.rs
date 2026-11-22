@@ -1104,8 +1104,61 @@ const REPLAY_AUDIO: &[ChoiceOption] = &[
         Key("settings.option.replay_audio.desktop_and_mic"),
     ),
     opt(
+        ChoiceValue::Str("game"),
+        Key("settings.option.replay_audio.game"),
+    ),
+    opt(
         ChoiceValue::Str("none"),
         Key("settings.option.replay_audio.none"),
+    ),
+];
+
+const REPLAY_FPS: &[ChoiceOption] = &[
+    opt(ChoiceValue::Num(30), Key("settings.option.replay_fps.30")),
+    opt(ChoiceValue::Num(60), Key("settings.option.replay_fps.60")),
+    opt(ChoiceValue::Num(120), Key("settings.option.replay_fps.120")),
+    opt(ChoiceValue::Num(144), Key("settings.option.replay_fps.144")),
+];
+
+const REPLAY_CODEC: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.replay_codec.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("h264"),
+        Key("settings.option.replay_codec.h264"),
+    ),
+    opt(
+        ChoiceValue::Str("hevc"),
+        Key("settings.option.replay_codec.hevc"),
+    ),
+    opt(
+        ChoiceValue::Str("av1"),
+        Key("settings.option.replay_codec.av1"),
+    ),
+];
+
+const REPLAY_RESOLUTION: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("native"),
+        Key("settings.option.replay_resolution.native"),
+    ),
+    opt(
+        ChoiceValue::Str("3840x2160"),
+        Key("settings.option.replay_resolution.2160"),
+    ),
+    opt(
+        ChoiceValue::Str("2560x1440"),
+        Key("settings.option.replay_resolution.1440"),
+    ),
+    opt(
+        ChoiceValue::Str("1920x1080"),
+        Key("settings.option.replay_resolution.1080"),
+    ),
+    opt(
+        ChoiceValue::Str("1280x720"),
+        Key("settings.option.replay_resolution.720"),
     ),
 ];
 
@@ -2822,6 +2875,73 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .placeholder(Key("settings.field.replay_folder.placeholder"))
     .keywords(&["replay", "clip", "folder", "videos", "output"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.fps",
+        "settings.field.replay_fps.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_FPS),
+    )
+    .keywords(&["replay", "clip", "fps", "frame rate", "framerate"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.codec",
+        "settings.field.replay_codec.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_CODEC),
+    )
+    .help("settings.field.replay_codec.help")
+    .keywords(&["replay", "clip", "codec", "h264", "hevc", "av1", "encoder"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.resolution",
+        "settings.field.replay_resolution.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Choice(REPLAY_RESOLUTION),
+    )
+    .help("settings.field.replay_resolution.help")
+    .keywords(&["replay", "clip", "resolution", "size", "1080p", "scale"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.monitor",
+        "settings.field.replay_monitor.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Text(TextKind::Plain),
+    )
+    .placeholder(Key("settings.field.replay_monitor.placeholder"))
+    .help("settings.field.replay_monitor.help")
+    .keywords(&[
+        "replay",
+        "clip",
+        "monitor",
+        "display",
+        "screen",
+        "connector",
+    ])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.restart",
+        "settings.field.replay_restart.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Toggle,
+    )
+    .help("settings.field.replay_restart.help")
+    .keywords(&["replay", "clip", "restart", "crash", "recorder"])
+    .requires(NEEDS_REPLAY),
+    game(
+        "iroriReplay.journal",
+        "settings.field.replay_journal.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Toggle,
+    )
+    .help("settings.field.replay_journal.help")
+    .keywords(&["replay", "clip", "journal", "note", "diary"])
     .requires(NEEDS_REPLAY),
     game(
         "enableDXVKFpsLimit",

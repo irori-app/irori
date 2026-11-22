@@ -721,7 +721,18 @@ impl Backend {
         }
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
-        self.start_replay(id, &game.title, &settings.replay);
+        // The game's own program names its sound for "game" audio.
+        let sound_app = game
+            .install
+            .as_ref()
+            .and_then(|i| crate::gpu_preference::game_program(&plan.command, &i.install_path))
+            .and_then(|p| {
+                p.rsplit(['/', '\\'])
+                    .next()
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+            });
+        self.start_replay(id, &game.title, &settings.replay, sound_app);
         let backups = (settings.ludusavi_interval > 0).then(|| {
             let stop = CancellationToken::new();
             let (b, id, title) = (self.clone(), id.clone(), game.title.clone());

@@ -810,7 +810,11 @@ commands without a window.
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
   bundled. `Backend::save_clip` sends it SIGUSR1 (the process is found by its `-o`
   folder, which also finds the Flatpak's); the path it prints is renamed to
-  `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
+  `<game> <date> <time>.mp4`, linked in that day's journal note (`iroriReplay.journal`)
+  and announced with a notice. Frame rate, codec, size limit, monitor and game-only
+  sound (`-a app:<program>`) are settings; a recorder that stops by itself is started
+  again up to three times (`restart_delay`, `iroriReplay.restart`); the settings show
+  what `--info` says (version, codecs, monitors). Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
   one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
