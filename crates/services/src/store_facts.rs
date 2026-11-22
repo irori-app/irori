@@ -188,13 +188,15 @@ impl StoreFactsService {
 
 impl Backend {
     /// A game's store-page details. Age ratings and game modes in them are
-    /// kept, so the library knows them from then on.
+    /// kept, so the library knows them from then on. Media the page lacks
+    /// come from the Steam app the game is linked to.
     pub async fn extra_info(&self, id: &GameId) -> Result<irori_core::ExtraInfo> {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner.store_name()))?;
         let mut info = store.extra_info(&id.app_name).await?;
         self.fill_from_igdb(id, &mut info).await;
+        self.fill_from_steam(id, &mut info).await;
         if self
             .store_facts
             .learn_store_page(id.key(), &info.age_ratings, &info.game_modes)

@@ -36,6 +36,7 @@ pub mod journal;
 mod library;
 pub mod ludusavi;
 pub mod mangohud;
+pub mod media;
 pub mod mods;
 mod network;
 pub mod play_status;

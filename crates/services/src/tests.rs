@@ -1194,6 +1194,54 @@ fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     b.settings.update_app(|s| s.igdb = false);
 }
 
+#[test]
+fn a_linked_steam_app_lends_its_screenshots() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Sideload,
+            &[("steam-linked", "Linked Game")],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        if req.path.starts_with("/api/appdetails?appids=4242") {
+            Resp::json(serde_json::json!({"4242": {"success": true, "data": {
+                "screenshots": [{"path_full": "https://cdn/shot.jpg"}]
+            }}}))
+        } else {
+            Resp::status(404)
+        }
+    });
+    crate::media::steam::set_endpoints(irori_steam_api::Endpoints {
+        api: server.base(),
+        store: server.base(),
+        assets: server.base(),
+    });
+    b.rebuild_library();
+    let id = GameId::new(Runner::Sideload, "steam-linked");
+    let rt = b.runtime();
+
+    // Not linked: Steam isn't asked.
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert!(info.screenshots.is_empty());
+    assert!(server.requests().is_empty());
+
+    b.settings.set_game_value(
+        &id,
+        "iroriSteamAppId",
+        Some(serde_json::Value::String("4242".into())),
+    );
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.screenshots, ["https://cdn/shot.jpg"]);
+    // Kept for the run: the page is asked once.
+    rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(server.requests().len(), 1);
+}
+
 #[cfg(unix)]
 #[test]
 fn removing_a_prefix_forgets_it() {

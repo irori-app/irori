@@ -598,6 +598,11 @@ commands without a window.
   art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
   asked while the setting is off; the Modify dialog's title and art overrides win
   over everything.
+- **Store media for other stores' games** (`media/steam.rs`): after the IGDB fill,
+  `Backend::extra_info` gives a non-Steam game whose `iroriSteamAppId` names a Steam
+  app that app's store-page screenshots (keyless `appdetails`, kept in memory for the
+  run), only when its own page has none. Amazon's library entries carry their own
+  screenshots (`Details::screenshots`).
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
