@@ -15,7 +15,7 @@ use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
     AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease, HoldTimer,
-    PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
+    PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device,
 };
 use super::{Battery, ControllerInfo};
 use parking_lot::Mutex;
@@ -365,8 +365,9 @@ impl Reader {
                 if device.ignored {
                     return;
                 }
-                let input = map_button(button, device.kind);
-                if input == GamepadInput::Guide {
+                // `None`: the user gave this button no job.
+                let input = super::bindings::input(button, device.kind);
+                if input == Some(GamepadInput::Guide) {
                     self.guide.press(usize::from(id), Instant::now());
                     return;
                 }
@@ -384,6 +385,9 @@ impl Reader {
                 // A chord with Guide held (X: a clip; with the overlay's
                 // shortcuts RB: a screenshot, Up/Down: the volume), even
                 // while a game has the window.
+                let Some(input) = input else {
+                    return;
+                };
                 let overlay = self.shared.overlay.load(Ordering::Relaxed);
                 if let Some(chord) = Chord::of(input, overlay)
                     && self.guide.chord(usize::from(id), Instant::now())
@@ -402,14 +406,16 @@ impl Reader {
                 let Some(device) = self.devices.get(&id) else {
                     return;
                 };
-                let input = map_button(button, device.kind);
+                let input = super::bindings::input(button, device.kind);
                 if self.holding == Some(button) {
                     match self.hold.release(usize::from(id), Instant::now()) {
                         HoldRelease::NotHeld => {}
                         HoldRelease::Tap => {
                             self.holding = None;
                             self.send_hold(HoldEvent::Cancelled);
-                            self.press(id, Source::DPad, input);
+                            if let Some(input) = input {
+                                self.press(id, Source::DPad, input);
+                            }
                             return;
                         }
                         HoldRelease::Completed => {
@@ -423,12 +429,16 @@ impl Reader {
                         }
                     }
                 }
-                if input == GamepadInput::Guide {
-                    if self.guide.release(usize::from(id), Instant::now()) {
-                        self.press(id, Source::DPad, input);
+                match input {
+                    Some(GamepadInput::Guide) => {
+                        if self.guide.release(usize::from(id), Instant::now()) {
+                            self.press(id, Source::DPad, GamepadInput::Guide);
+                        }
                     }
-                } else if input.is_directional() {
-                    self.release(id, Source::DPad, input);
+                    Some(input) if input.is_directional() => {
+                        self.release(id, Source::DPad, input);
+                    }
+                    _ => {}
                 }
             }
             EventType::AxisChanged(axis @ (Axis::LeftStickX | Axis::LeftStickY), value, _) => {

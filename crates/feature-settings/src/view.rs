@@ -37,6 +37,7 @@ use crate::widgets::{group_heading, muted, nav_button, panel};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     General,
+    Controller,
     GameDefaults,
     Appearance,
     Storage,
@@ -49,8 +50,9 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 10] = [
+    pub const ALL: [SettingsSection; 11] = [
         SettingsSection::General,
+        SettingsSection::Controller,
         SettingsSection::GameDefaults,
         SettingsSection::Appearance,
         SettingsSection::Storage,
@@ -66,6 +68,7 @@ impl SettingsSection {
     pub fn id(self) -> &'static str {
         match self {
             SettingsSection::General => "general",
+            SettingsSection::Controller => "controller",
             SettingsSection::GameDefaults => "game-defaults",
             SettingsSection::Appearance => "appearance",
             SettingsSection::Storage => "storage",
@@ -84,6 +87,7 @@ impl SettingsSection {
             "game-defaults" | "games" | "games_settings" | "wine" | "defaults" => {
                 SettingsSection::GameDefaults
             }
+            "controller" | "controllers" | "gamepad" | "buttons" => SettingsSection::Controller,
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
@@ -99,6 +103,7 @@ impl SettingsSection {
     fn label_key(self) -> &'static str {
         match self {
             SettingsSection::General => "settings.page.general",
+            SettingsSection::Controller => "settings.page.controller",
             SettingsSection::GameDefaults => "settings.page.game_defaults",
             SettingsSection::Appearance => "settings.page.appearance",
             SettingsSection::Storage => "settings.page.storage",
@@ -119,6 +124,7 @@ impl SettingsSection {
     fn description(self) -> SharedString {
         let key = match self {
             SettingsSection::General => "settings.page.general_description",
+            SettingsSection::Controller => "settings.page.controller_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Storage => "settings.page.storage_description",
@@ -135,6 +141,7 @@ impl SettingsSection {
     fn icon(self) -> IconName {
         match self {
             SettingsSection::General => IconName::Settings,
+            SettingsSection::Controller => IconName::Gamepad2,
             SettingsSection::GameDefaults => IconName::Gamepad2,
             SettingsSection::Appearance => IconName::Palette,
             SettingsSection::Storage => IconName::HardDrive,
@@ -165,6 +172,7 @@ impl SettingsSection {
     fn field_section(self) -> Option<FieldSection> {
         match self {
             SettingsSection::General => Some(FieldSection::General),
+            SettingsSection::Controller => Some(FieldSection::Controller),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
             SettingsSection::Saves => Some(FieldSection::Saves),
@@ -742,6 +750,7 @@ impl Render for SettingsView {
                         .child(self.app_form.clone())
                         .into_any_element(),
                     SettingsSection::General
+                    | SettingsSection::Controller
                     | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),

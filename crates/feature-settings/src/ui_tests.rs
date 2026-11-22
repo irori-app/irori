@@ -162,11 +162,44 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
         // The in-game overlay's switch is among the controller rows, and so
-        // are the button held to open Big Picture and how long, and hiding
-        // the pointer.
-        assert_eq!(app_form.read(cx).visible_count(), 9);
+        // are the button held to open Big Picture and how long, hiding the
+        // pointer and the button map.
+        assert_eq!(app_form.read(cx).visible_count(), 10);
         assert!(general > 20);
     });
+}
+
+#[gpui_kit::test]
+fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppContext) {
+    use irori_core::controller_prefs::ConfirmButton;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("gamepad".into(), window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    let backend = cx.update(|cx| {
+        assert_eq!(view.read(cx).section(), SettingsSection::Controller);
+        irori_ui::backend(cx)
+    });
+    backend
+        .settings
+        .update_app(|s| s.controller.confirm_button = ConfirmButton::East);
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        backend.settings.app().controller.confirm_button,
+        ConfirmButton::East
+    );
+    backend.settings.update_app(|s| s.controller = Default::default());
+    cx.run_until_parked();
 }
 
 #[gpui_kit::test]

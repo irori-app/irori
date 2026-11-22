@@ -1183,6 +1183,18 @@ Microsoft's approval page (`irori_manage::login`).
   press, which also drops hover looks) and then a global action is taken, which GPUI's
   default `CursorHideMode::OnTypingAndAction` turns into hiding the pointer. Never
   bind F24.
+- **Button map** (`gamepad/bindings.rs`, `iroriController`): one map for the whole app
+  turns a physical button into its job. `confirmButton` (automatic: the right button on
+  Nintendo's layout; bottom; right), `glyphs` (the family buttons are shown as, which
+  also decides the automatic confirm button) and `buttons` (a button's id to a job, only
+  the buttons the user changed) feed it; the reader thread, the overlay's evdev reader
+  and every hint (`ControllerKind::glyph`) read the global, so a change applies to the
+  next press. Guide, the D-pad and the sticks keep their jobs, and a map leaving nothing
+  to confirm or go back with is never used. Settings → Controller
+  (`irori_settings` `controller_map.rs`) draws the controller in hand
+  (`gamepad/drawing.rs`, an SVG of theme colours without text, labels laid over it) per
+  place (Irori's screens, Big Picture, the overlay, Guide held) and moves a job to
+  another button by swapping it with that button's job (`ButtonMap::assigning`).
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of

@@ -24,6 +24,7 @@ mod app_update;
 mod appearance;
 mod artwork;
 mod backup;
+mod controller_map;
 mod controllers;
 mod displays;
 mod epic;

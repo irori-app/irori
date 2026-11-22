@@ -108,31 +108,13 @@ impl ControllerKind {
         }
     }
 
-    /// Glyph printed on the button that produces `input` on this family.
+    /// Glyph printed on the button that produces `input` on this family,
+    /// with the buttons' jobs in use (`bindings`); `?` when no button
+    /// gives it.
     pub fn glyph(self, input: GamepadInput) -> &'static str {
-        let playstation = matches!(
-            self,
-            ControllerKind::PlayStation4 | ControllerKind::PlayStation5
-        );
-        match input {
-            GamepadInput::Confirm if playstation => "✕",
-            GamepadInput::Back if playstation => "○",
-            GamepadInput::Alt if playstation => "□",
-            GamepadInput::Menu if playstation => "△",
-            GamepadInput::PrevPage if playstation => "L1",
-            GamepadInput::NextPage if playstation => "R1",
-            GamepadInput::PrevPage if self == ControllerKind::Nintendo => "L",
-            GamepadInput::NextPage if self == ControllerKind::Nintendo => "R",
-            GamepadInput::Confirm => "A",
-            GamepadInput::Back => "B",
-            GamepadInput::Alt => "X",
-            GamepadInput::Menu => "Y",
-            GamepadInput::PrevPage => "LB",
-            GamepadInput::NextPage => "RB",
-            GamepadInput::Guide => "Guide",
-            GamepadInput::Up | GamepadInput::Down | GamepadInput::Left | GamepadInput::Right => {
-                "D-pad"
-            }
+        match super::bindings::button_for(input, self) {
+            Some(button) => self.button_label(button),
+            None => "?",
         }
     }
 
@@ -172,27 +154,10 @@ pub enum PadButton {
     DPadRight,
 }
 
-/// The normalized input a physical button produces on a controller family.
+/// The input a physical button produces on a controller family before the
+/// user changes anything (see `bindings` for the map in use).
 pub fn map_button(button: PadButton, kind: ControllerKind) -> GamepadInput {
-    let swap = kind.swaps_face_buttons();
-    match button {
-        PadButton::South if swap => GamepadInput::Back,
-        PadButton::East if swap => GamepadInput::Confirm,
-        PadButton::North if swap => GamepadInput::Alt,
-        PadButton::West if swap => GamepadInput::Menu,
-        PadButton::South => GamepadInput::Confirm,
-        PadButton::East => GamepadInput::Back,
-        PadButton::West => GamepadInput::Alt,
-        PadButton::North => GamepadInput::Menu,
-        PadButton::Start | PadButton::Select => GamepadInput::Menu,
-        PadButton::LeftShoulder => GamepadInput::PrevPage,
-        PadButton::RightShoulder => GamepadInput::NextPage,
-        PadButton::Guide => GamepadInput::Guide,
-        PadButton::DPadUp => GamepadInput::Up,
-        PadButton::DPadDown => GamepadInput::Down,
-        PadButton::DPadLeft => GamepadInput::Left,
-        PadButton::DPadRight => GamepadInput::Right,
-    }
+    super::bindings::base_input(button, kind.swaps_face_buttons())
 }
 
 /// Analog stick deflection beyond which a direction is pressed.

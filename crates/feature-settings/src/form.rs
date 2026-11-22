@@ -36,6 +36,7 @@ use serde_json::Value;
 
 use crate::appearance::{AccentPicker, FontPicker};
 use crate::artwork::ArtworkPanel;
+use crate::controller_map::ButtonMapPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::i18n::LanguageStamp;
@@ -723,6 +724,7 @@ impl SettingsForm {
     ) {
         let view: Option<AnyView> = match kind {
             PanelKind::Controllers => Some(cx.new(ControllersPanel::new).into()),
+            PanelKind::ButtonMap => Some(cx.new(ButtonMapPanel::new).into()),
             PanelKind::EosOverlay => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)

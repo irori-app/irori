@@ -73,6 +73,9 @@ pub enum FieldSection {
     Artwork,
     /// Ludusavi, which backs up the saves of every game.
     Saves,
+    /// What the controller's buttons do, the pointer, repeat timing, Big
+    /// Picture's button and the in-game overlay.
+    Controller,
 }
 
 impl FieldSection {
@@ -87,8 +90,9 @@ impl FieldSection {
     ];
 
     /// Sections holding application-wide fields.
-    pub const APP: [FieldSection; 4] = [
+    pub const APP: [FieldSection; 5] = [
         FieldSection::General,
+        FieldSection::Controller,
         FieldSection::Appearance,
         FieldSection::Advanced,
         FieldSection::Saves,
@@ -107,6 +111,7 @@ impl FieldSection {
             FieldSection::CloudSaves => "settings.section.game_saves",
             FieldSection::Saves => "settings.section.saves",
             FieldSection::Artwork => "settings.section.artwork",
+            FieldSection::Controller => "settings.section.controller",
         }
     }
 
@@ -261,6 +266,9 @@ pub enum PanelKind {
     SteamLaunchOptions,
     /// One game's umu id: the one used, its source, a database search.
     Umu,
+    /// What each controller button does, drawn on the controller, with the
+    /// buttons' jobs changeable.
+    ButtonMap,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -691,7 +699,8 @@ impl FieldSpec {
 
 use FieldKind::{Action, Choice, Custom, Panel, Text, Toggle};
 use FieldSection::{
-    Advanced, Appearance, Artwork, CloudSaves, General, Gpu, Launch, Performance, Saves, Wine,
+    Advanced, Appearance, Artwork, CloudSaves, Controller, General, Gpu, Launch, Performance,
+    Saves, Wine,
 };
 use Scope::{App, GameOnly, Shared};
 
@@ -1861,9 +1870,28 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.download_no_https.help")
     .keywords(&["https", "lancache", "cdn", "cache"]),
     app(
+        "panel.button-map",
+        "settings.field.panel_button_map.label",
+        Controller,
+        "settings.group.buttons",
+        Panel(PanelKind::ButtonMap),
+    )
+    .keywords(&[
+        "gamepad",
+        "controller",
+        "buttons",
+        "bindings",
+        "remap",
+        "rebind",
+        "confirm",
+        "nintendo",
+        "glyphs",
+        "layout",
+    ]),
+    app(
         "panel.controllers",
         "settings.field.panel_controllers.label",
-        General,
+        Controller,
         "settings.group.controller",
         Panel(PanelKind::Controllers),
     )
@@ -1880,7 +1908,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "disableController",
         "settings.field.disable_controller.label",
-        General,
+        Controller,
         "settings.group.controller",
         Toggle,
     )
@@ -1889,7 +1917,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "iroriController.hidePointer",
         "settings.field.hide_pointer.label",
-        General,
+        Controller,
         "settings.group.controller",
         Toggle,
     )
@@ -1906,7 +1934,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "gamepadInitialRepeatDelay",
         "settings.field.gamepad_initial_repeat_delay.label",
-        General,
+        Controller,
         "settings.group.controller",
         Text(TextKind::Number { min: 50, max: 500 }),
     )
@@ -1916,7 +1944,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "gamepadRepeatDelay",
         "settings.field.gamepad_repeat_delay.label",
-        General,
+        Controller,
         "settings.group.controller",
         Text(TextKind::Number { min: 5, max: 150 }),
     )
@@ -1926,7 +1954,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "iroriUi.bigPictureHoldButton",
         "settings.field.big_picture_hold_button.label",
-        General,
+        Controller,
         "settings.group.controller",
         Choice(BIG_PICTURE_HOLD),
     )
@@ -1944,7 +1972,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "iroriUi.bigPictureHoldMs",
         "settings.field.big_picture_hold_ms.label",
-        General,
+        Controller,
         "settings.group.controller",
         Text(TextKind::Number {
             min: 300,
@@ -1957,7 +1985,7 @@ pub static FIELDS: &[FieldSpec] = &[
     app(
         "iroriOverlay.enabled",
         "settings.field.overlay.label",
-        General,
+        Controller,
         "settings.group.controller",
         Toggle,
     )
@@ -3919,10 +3947,13 @@ mod tests {
             "gamepadRepeatDelay",
             "iroriUi.bigPictureHoldButton",
             "iroriUi.bigPictureHoldMs",
+            "iroriController.hidePointer",
+            "panel.button-map",
         ] {
             assert!(pads.contains(&p), "{p}");
-            assert_eq!(find(p).unwrap().section, FieldSection::General);
+            assert_eq!(find(p).unwrap().section, FieldSection::Controller);
         }
+        assert!(paths("rebind").contains(&"panel.button-map"));
         assert!(paths("egl").contains(&"panel.egl-sync"));
         assert!(paths("eos overlay").contains(&"panel.eos-overlay"));
         assert!(paths("discord").contains(&"discordClientId"));
