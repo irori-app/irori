@@ -11,6 +11,8 @@ mod headless;
 mod import;
 mod instance;
 mod lutris;
+#[cfg(not(target_os = "linux"))]
+mod menu_theme;
 mod pages;
 mod palette;
 mod placement;
@@ -21,6 +23,7 @@ mod shell;
 mod sidebar;
 mod stores;
 mod strings;
+mod title_bar;
 #[cfg(target_os = "linux")]
 mod tray;
 #[cfg(not(target_os = "linux"))]
@@ -664,7 +667,24 @@ fn start_tray(
     if let Some(handle) = tray::start(tx, settings.dark_tray_icon) {
         app.lock().tray = Some(handle.clone());
         watch_recent_for_tray(handle, cx);
+        follow_theme_in_menus(cx);
     }
+}
+
+/// Draw the tray's menu in Irori's light or dark, as its window is
+/// (Windows; macOS menus follow the system on their own).
+#[cfg(not(target_os = "linux"))]
+fn follow_theme_in_menus(cx: &mut App) {
+    use gpui_kit::component::{ActiveTheme as _, Theme};
+    let last = std::rc::Rc::new(std::cell::Cell::new(None));
+    let apply = move |cx: &mut App| {
+        let dark = cx.theme().is_dark();
+        if last.replace(Some(dark)) != Some(dark) {
+            menu_theme::follow(dark);
+        }
+    };
+    apply(cx);
+    cx.observe_global::<Theme>(apply).detach();
 }
 
 /// Keep the tray's "Recently played" menu in step with the library model.

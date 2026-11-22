@@ -34,7 +34,9 @@ use gpui_kit::{
     StyledImage as _, Subscription, WeakEntity, Window, canvas, div, linear_color_stop,
     linear_gradient, point, px, rems, size,
 };
-use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
+use irori_core::settings::{
+    CoverCaption, CoverHover, Density, LibraryBackground, LibraryLayout, UiPrefs,
+};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
@@ -607,7 +609,10 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_rem = layouts::focus_column_rem(layouts::focus_columns(body_rem));
+        let focus_rem = layouts::focus_column_rem(layouts::focus_columns_for(
+            self.ui_prefs.library_focus_columns,
+            body_rem,
+        ));
         let list_rem = match self.layout {
             LibraryLayout::Grid if self.panels.drawer_open => {
                 body_rem - layouts::drawer_width(self.panels.drawer_rem, body_rem)
@@ -616,9 +621,15 @@ impl LibraryView {
             _ => body_rem,
         };
         let available = list_rem - 2.0 * grid::EDGE_REM;
+        let caption = self.ui_prefs.cover_caption;
         let metrics = match self.layout {
-            LibraryLayout::Focus => grid::grid_metrics(available, layouts::FOCUS_TILE_REM),
-            _ => grid::grid_metrics_at(available, self.tile_rem, self.density),
+            LibraryLayout::Focus => grid::grid_metrics_for(
+                available,
+                layouts::FOCUS_TILE_REM,
+                Density::Comfortable,
+                caption,
+            ),
+            _ => grid::grid_metrics_for(available, self.tile_rem, self.density, caption),
         };
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
@@ -2110,7 +2121,10 @@ impl LibraryView {
             })
             .child(list)
             .vertical_scrollbar(&self.scroll)
-            .children(list_toolbar);
+            .children(list_toolbar)
+            .when(layout == LibraryLayout::Focus, |el| {
+                el.child(self.render_focus_handle(cx))
+            });
         let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
             .then(|| self.render_drawer(window, cx));
         let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));
@@ -2122,6 +2136,7 @@ impl LibraryView {
             .w_full()
             .items_start()
             .on_drag_move(cx.listener(Self::on_drawer_drag))
+            .on_drag_move(cx.listener(Self::on_focus_drag))
             .child(measure)
             .child(content)
             .children(focus_page)
@@ -2291,6 +2306,13 @@ impl LibraryView {
             let ui = &models(cx).settings.read(cx).app.ui;
             (ui.show_store_badges, ui.cover_categories)
         };
+        let (corners, caption_kind, hover, favourite_star) = (
+            self.ui_prefs.cover_corners,
+            self.ui_prefs.cover_caption,
+            self.ui_prefs.cover_hover,
+            self.ui_prefs.cover_favourite,
+        );
+        let lifts = hover == CoverHover::Lift;
         let focus_view = self.layout == LibraryLayout::Focus;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
@@ -2317,7 +2339,7 @@ impl LibraryView {
         let theme = cx.theme();
         let scrim = theme.background.opacity(0.88);
         let muted = theme.muted_foreground;
-        let radius = theme.radius_lg;
+        let radius = irori_ui::components::cover_radius(corners, cx);
 
         // An entry of several stores' copies says so.
         let copies = models(cx).library.read(cx).snapshot.copies_of(&id).len();
@@ -2351,7 +2373,7 @@ impl LibraryView {
                     )
                 },
             )
-            .when(state.favourite, |el| {
+            .when(state.favourite && favourite_star, |el| {
                 el.child(
                     div()
                         .p_1()
@@ -2458,12 +2480,12 @@ impl LibraryView {
         let cover = div()
             .relative()
             .rounded(radius)
-            .when(active, |el| el.shadow_lg())
+            .when(active && lifts, |el| el.shadow_lg())
             .when(keyboard, |el| el.focus_ring_style(window, cx))
             .child(
                 div()
                     .when(dim, |el| el.opacity(0.45))
-                    .child(GameCover::new(game.clone()).width(width)),
+                    .child(GameCover::new(game.clone()).width(width).radius(radius)),
             )
             .when(active || selected, |el| {
                 el.child(
@@ -2546,41 +2568,50 @@ impl LibraryView {
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 this.click_game(&click_id, e.modifiers(), e.click_count(), window, cx)
             }))
-            // Pointed-at and focused covers rise a little off the grid.
+            // Pointed-at and focused covers rise a little off the grid,
+            // unless the user keeps them in place.
             .child(cover.with_spring(
                 SharedString::from(format!("tile-lift:{key}")),
-                SpringAnimation::new(HOVER_SPRING).to(if active { 1.0 } else { 0.0 }),
+                SpringAnimation::new(HOVER_SPRING).to(if active && lifts { 1.0 } else { 0.0 }),
                 |el, lift: f32| el.top(px(-TILE_LIFT_PX * lift)),
             ))
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_semibold()
-                            .truncate()
-                            .when(dim, |el| el.text_color(muted))
-                            .child(game.title.clone()),
-                    )
-                    .when(!caption_text.is_empty() || played.is_some(), |el| {
-                        el.child(
-                            h_flex()
-                                .min_w_0()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(muted)
-                                .when_some(played, |el, played| {
-                                    el.child(Icon::new(IconName::Clock).xsmall().flex_none())
-                                        .child(div().flex_none().child(played))
-                                        .when(!caption_text.is_empty(), |el| {
-                                            el.child(div().flex_none().child("·"))
-                                        })
-                                })
-                                .child(div().min_w_0().truncate().child(caption_text)),
+            .when(caption_kind != CoverCaption::None, |tile| {
+                tile.child(
+                    v_flex()
+                        .min_w_0()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .truncate()
+                                .when(dim, |el| el.text_color(muted))
+                                .child(game.title.clone()),
                         )
-                    }),
-            )
+                        .when(
+                            caption_kind == CoverCaption::Full
+                                && (!caption_text.is_empty() || played.is_some()),
+                            |el| {
+                                el.child(
+                                    h_flex()
+                                        .min_w_0()
+                                        .gap_1()
+                                        .text_xs()
+                                        .text_color(muted)
+                                        .when_some(played, |el, played| {
+                                            el.child(
+                                                Icon::new(IconName::Clock).xsmall().flex_none(),
+                                            )
+                                            .child(div().flex_none().child(played))
+                                            .when(!caption_text.is_empty(), |el| {
+                                                el.child(div().flex_none().child("·"))
+                                            })
+                                        })
+                                        .child(div().min_w_0().truncate().child(caption_text)),
+                                )
+                            },
+                        ),
+                )
+            })
             .context_menu(move |menu, window, cx| {
                 game_menu(menu, &view, &menu_game, in_recent, window, cx)
             })

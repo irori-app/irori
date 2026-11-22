@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} aktualizováno na {version}",
   "shell.palette.storage": "Úložiště a úklid",
   "shell.palette.storage_keywords": "disk jednotka místo velikost volné uvolnit vyčistit úklid smazat",
+  "shell.palette.feedback_keywords": "nápověda zpětná vazba chyba hlášení problém nápad otázka github podpora",
   "shell.search.placeholder": "Hledat hry a příkazy…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Jste offline. Nainstalované hry, které to podporují, se přesto spustí.",

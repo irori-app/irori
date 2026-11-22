@@ -822,6 +822,12 @@ commands without a window.
   the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
   logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
   through `fs_guard::ensure_deletable`. Settings → Storage draws it.
+- **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
+  folder, the defaults', the launchers' and the installed games', each with the
+  installed games running in it (a launcher's game counts for the prefix holding its
+  folder); games uninstalled since are only "was the prefix of". Steam's, native and
+  browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
+  deleting stays with Storage's unused-prefix cleanup.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
@@ -1088,7 +1094,13 @@ cx.spawn_in(window, async move |this, cx| {
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
 `SectionTitle`, `ProgressSummary`, `StoreBadge`. Style helpers are in `style.rs`
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
-in `motion.rs`.
+in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
+(through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
+grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
+the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
+row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
+dragging its edge or with the arrow keys on it.
 
 **Feature crates:**
 
@@ -1126,7 +1138,20 @@ Other parts:
   gets a native menu.
 - `palette.rs` is the Ctrl/Cmd+K command palette.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
-  (`tray-icon`, kept on the main thread).
+  (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
+  Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
+  and later), following the theme as it changes.
+- `title_bar.rs`: on Linux with client-side decorations, when the desktop's button
+  layout (`App::button_layout`, GNOME's `button-layout`) isn't gpui-kit's minimize,
+  maximize, close on the right, the shell draws this bar with the buttons where the
+  desktop puts them, and redraws when the layout changes.
+- Help and feedback (`irori_settings::feedback`, Settings → About and the palette):
+  report a problem opens GitHub's new-issue form with the version, install kind,
+  system, desktop and GPUs filled in (never paths, names or logs); ideas and questions
+  open the same form (the repository has no discussions). Each carries its label
+  (`bug`, `enhancement`, `question`) and, since GitHub applies it only for triagers, a
+  body whose first line names the kind. Known issues opens the issue list; nothing is
+  sent until the user submits the form.
 
 ### 4.6 Store sign-in
 
@@ -1247,7 +1272,8 @@ Microsoft's approval page (`irori_manage::login`).
   `bigPictureOnController` (open Big Picture when a controller connects, or is
   connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
   name, so a pad switching mode counts, and one a system hid while Irori was in the
-  background is no news when it returns).
+  background is no news when it returns), `bigPictureFullscreen` (on by default; off,
+  Big Picture stays in the window as it is).
 - The mouse works on every screen: covers, rows, chips and switchers take hover and
   clicks, and the wheel goes through `layout/wheel.rs`, which turns travel into the
   controller's moves (per layout: along the strip on Spotlight, Cinema and Carousel), so

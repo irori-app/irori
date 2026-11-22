@@ -104,6 +104,9 @@ enum PaletteTarget {
     SaveClip,
     /// Make the interface larger, smaller or its default size.
     InterfaceSize(SizeStep),
+    /// Report a problem, suggest an idea, ask a question or read the
+    /// known issues, in the browser.
+    Feedback(irori_settings::feedback::Feedback),
 }
 
 /// The library's state that its palette commands change.
@@ -276,6 +279,16 @@ impl Palette {
                     .keywords([t("shell.palette.interface_size_keywords")])
                     .icon(icon),
                 PaletteTarget::InterfaceSize(step),
+                targets,
+            );
+        }
+        for way in irori_settings::feedback::Feedback::ALL {
+            push(
+                CommandItem::new()
+                    .label(t(way.label_key()))
+                    .keywords([t("shell.palette.feedback_keywords")])
+                    .icon(way.icon()),
+                PaletteTarget::Feedback(way),
                 targets,
             );
         }
@@ -839,6 +852,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::GraphicsMods(id) => irori_game::ops::open_settings(&id, "reshade", cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
+        PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         PaletteTarget::PlayAsPcGame(id) => {
             irori_library::open_play_as_pc_game_dialog(&id, window, cx)

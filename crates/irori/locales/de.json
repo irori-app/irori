@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} auf {version} aktualisiert",
   "shell.palette.storage": "Speicher und Aufräumen",
   "shell.palette.storage_keywords": "festplatte laufwerk speicher platz größe frei aufräumen bereinigen löschen disk",
+  "shell.palette.feedback_keywords": "hilfe feedback fehler bug issue melden problem idee frage github support",
   "shell.search.placeholder": "Spiele und Befehle suchen…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Du bist offline. Installierte Spiele, die das unterstützen, starten trotzdem.",

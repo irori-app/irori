@@ -818,6 +818,57 @@ const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     ),
 ];
 
+const COVER_CORNERS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("square"),
+        Key("settings.option.cover_corners.square"),
+    ),
+    opt(
+        ChoiceValue::Str("rounded"),
+        Key("settings.option.cover_corners.rounded"),
+    ),
+    opt(
+        ChoiceValue::Str("round"),
+        Key("settings.option.cover_corners.round"),
+    ),
+];
+
+const COVER_CAPTION: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("full"),
+        Key("settings.option.cover_caption.full"),
+    ),
+    opt(
+        ChoiceValue::Str("title"),
+        Key("settings.option.cover_caption.title"),
+    ),
+    opt(
+        ChoiceValue::Str("none"),
+        Key("settings.option.cover_caption.none"),
+    ),
+];
+
+const COVER_HOVER: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("lift"),
+        Key("settings.option.cover_hover.lift"),
+    ),
+    opt(
+        ChoiceValue::Str("outline"),
+        Key("settings.option.cover_hover.outline"),
+    ),
+];
+
+const FOCUS_COLUMNS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.focus_columns.auto"),
+    ),
+    opt(ChoiceValue::Num(1), Verbatim("1")),
+    opt(ChoiceValue::Num(2), Verbatim("2")),
+    opt(ChoiceValue::Num(3), Verbatim("3")),
+];
+
 const DENSITY: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("compact"),
@@ -1543,6 +1594,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.big_picture_on_controller.help")
     .keywords(&["controller", "gamepad", "console", "big picture", "connect"]),
     app(
+        "iroriUi.bigPictureFullscreen",
+        "settings.field.big_picture_fullscreen.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.big_picture_fullscreen.help")
+    .keywords(&["fullscreen", "window", "console", "big picture"]),
+    app(
         "addDesktopShortcuts",
         "settings.field.add_desktop_shortcuts.label",
         General,
@@ -2180,6 +2240,48 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_cover_categories.help")
     .keywords(&["category", "categories", "tag", "cover", "label"]),
+    app(
+        "iroriUi.coverCorners",
+        "settings.field.ui_cover_corners.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_CORNERS),
+    )
+    .keywords(&["cover", "corner", "round", "square", "radius"]),
+    app(
+        "iroriUi.coverCaption",
+        "settings.field.ui_cover_caption.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_CAPTION),
+    )
+    .help("settings.field.ui_cover_caption.help")
+    .keywords(&["cover", "caption", "title", "name", "text", "label"]),
+    app(
+        "iroriUi.coverHover",
+        "settings.field.ui_cover_hover.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_HOVER),
+    )
+    .keywords(&["cover", "hover", "lift", "pointer", "focus", "animation"]),
+    app(
+        "iroriUi.libraryFocusColumns",
+        "settings.field.ui_focus_columns.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COLUMNS),
+    )
+    .help("settings.field.ui_focus_columns.help")
+    .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.coverFavourite",
+        "settings.field.ui_cover_favourite.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .keywords(&["cover", "favourite", "favorite", "star"]),
     app(
         "iroriUi.libraryQuickControls",
         "settings.field.ui_library_quick_controls.label",

@@ -1099,6 +1099,42 @@ impl Density {
     }
 }
 
+/// The corners of the library's covers (`coverCorners`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverCorners {
+    Square,
+    /// The theme's large radius.
+    #[default]
+    Rounded,
+    /// Twice the theme's large radius.
+    Round,
+}
+
+/// What the library writes under each cover (`coverCaption`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverCaption {
+    /// The title and a line about the game (install state, size, playtime).
+    #[default]
+    Full,
+    /// Only the title.
+    Title,
+    /// Nothing: the covers alone.
+    None,
+}
+
+/// How a cover answers the pointer and the keyboard focus (`coverHover`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverHover {
+    /// It rises a little, with a shadow and a ring.
+    #[default]
+    Lift,
+    /// Only the ring.
+    Outline,
+}
+
 /// The art cache's default cap in MiB.
 pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
 
@@ -1398,6 +1434,18 @@ pub struct UiPrefs {
     pub library_background_strength: u32,
     /// How much of the theme's background is laid over it, in percent.
     pub library_background_dim: u32,
+    /// Big Picture fills the screen (`bigPictureFullscreen`, on unless
+    /// turned off); off, it shows in the window as it is.
+    pub big_picture_fullscreen: bool,
+    pub cover_corners: CoverCorners,
+    pub cover_caption: CoverCaption,
+    pub cover_hover: CoverHover,
+    /// The star on favourites' covers (`coverFavourite`, on unless turned
+    /// off).
+    pub cover_favourite: bool,
+    /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
+    /// 1 to 3); 0 fits as many as the window allows.
+    pub library_focus_columns: u32,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1591,6 +1639,12 @@ impl Default for UiPrefs {
             library_background_picture: String::new(),
             library_background_strength: 70,
             library_background_dim: 20,
+            big_picture_fullscreen: true,
+            cover_corners: CoverCorners::Rounded,
+            cover_caption: CoverCaption::Full,
+            cover_hover: CoverHover::Lift,
+            cover_favourite: true,
+            library_focus_columns: 0,
         }
     }
 }
@@ -1798,6 +1852,26 @@ mod tests {
         assert_eq!(ui.big_picture_theme, "user:x");
         assert!(ui.big_picture_on_controller);
         assert!(!UiPrefs::default().big_picture_on_controller);
+        assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
+        let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
+        assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn cover_options_read_their_keys_and_default_to_todays_look() {
+        let ui = UiPrefs::default();
+        assert_eq!(ui.cover_corners, CoverCorners::Rounded);
+        assert_eq!(ui.cover_caption, CoverCaption::Full);
+        assert_eq!(ui.cover_hover, CoverHover::Lift);
+        assert!(ui.cover_favourite);
+        let ui: UiPrefs = serde_json::from_str(
+            r#"{"coverCorners":"square","coverCaption":"title","coverHover":"outline","coverFavourite":false}"#,
+        )
+        .unwrap();
+        assert_eq!(ui.cover_corners, CoverCorners::Square);
+        assert_eq!(ui.cover_caption, CoverCaption::Title);
+        assert_eq!(ui.cover_hover, CoverHover::Outline);
+        assert!(!ui.cover_favourite);
     }
 
     #[test]

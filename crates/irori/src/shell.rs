@@ -10,8 +10,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Decorations, Entity, FocusHandle,
+    Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
@@ -134,6 +134,8 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 this.save_placement(window, cx);
             }),
+            // The desktop moved its window buttons (Linux).
+            cx.observe_button_layout_changed(window, |_, _, cx| cx.notify()),
             // "Follow system" follows the system while Irori runs, too.
             cx.observe_window_appearance(window, |_, window, cx| {
                 let prefs = models(cx).settings.read(cx).app.ui.clone();
@@ -354,16 +356,33 @@ impl AppShell {
         cx.notify();
     }
 
-    fn render_title_bar(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut title_bar = TitleBar::new();
-        if glass::current(cx).is_translucent() {
-            // One flat tint, like the sidebar, instead of gpui-kit's gradient.
-            title_bar = title_bar.bg(glass::chrome(cx.theme().title_bar, cx));
-        }
+    fn render_title_bar(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // One flat tint, like the sidebar, instead of the title bar's gradient.
+        let flat = glass::current(cx)
+            .is_translucent()
+            .then(|| glass::chrome(cx.theme().title_bar, cx));
         let open_palette = cx.listener(|this, _, window, cx| {
             this.palette.open(window, cx);
         });
-        title_bar.child(title_bar_content(cx, open_palette))
+        let content = title_bar_content(cx, open_palette);
+        // The desktop's own button layout, where Irori draws the buttons.
+        let desktop = cx
+            .button_layout()
+            .filter(|l| !crate::title_bar::is_kits_layout(l))
+            .filter(|_| matches!(window.window_decorations(), Decorations::Client { .. }));
+        if let Some(layout) = desktop {
+            let bar = crate::title_bar::DesktopTitleBar::new(layout, content);
+            return match flat {
+                Some(color) => bar.flat(color),
+                None => bar,
+            }
+            .into_any_element();
+        }
+        let mut title_bar = TitleBar::new();
+        if let Some(color) = flat {
+            title_bar = title_bar.bg(color);
+        }
+        title_bar.child(content).into_any_element()
     }
 
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {

@@ -14,7 +14,7 @@ pub use backdrop::{
 pub use brand::BrandMark;
 pub use cover::{
     ArtImage, GameCover, art_arrival, art_image, art_img, art_is_fresh, art_loading, art_missing,
-    missing_art_fill, physical_width,
+    cover_radius, missing_art_fill, physical_width,
 };
 pub use empty::EmptyState;
 pub use page::{PageHeader, SectionTitle};

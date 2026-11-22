@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} actualizado a {version}",
   "shell.palette.storage": "Almacenamiento y limpieza",
   "shell.palette.storage_keywords": "disco unidad espacio tamaño libre liberar limpiar limpieza eliminar borrar",
+  "shell.palette.feedback_keywords": "ayuda comentarios error fallo incidencia informar problema idea pregunta github soporte",
   "shell.search.placeholder": "Buscar juegos y comandos…",
   "shell.offline": "Sin conexión",
   "shell.offline.tooltip": "Estás sin conexión. Los juegos instalados que lo admiten se pueden iniciar igualmente.",

@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} оновлено до {version}",
   "shell.palette.storage": "Сховище й очищення",
   "shell.palette.storage_keywords": "диск накопичувач місце розмір вільно звільнити очищення очистити видалити сховище disk storage",
+  "shell.palette.feedback_keywords": "допомога відгук помилка баг повідомити проблема ідея запитання github підтримка",
   "shell.search.placeholder": "Пошук ігор і команд…",
   "shell.offline": "Не в мережі",
   "shell.offline.tooltip": "Ви не в мережі. Встановлені ігри, які це підтримують, все одно запустяться.",

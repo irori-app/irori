@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name}, {version} sürümüne güncellendi",
   "shell.palette.storage": "Depolama ve temizlik",
   "shell.palette.storage_keywords": "disk sürücü alan boyut boş boşalt temizle temizlik sil depolama storage",
+  "shell.palette.feedback_keywords": "yardım geri bildirim hata sorun bildir fikir soru github destek",
   "shell.search.placeholder": "Oyun ve komut ara…",
   "shell.offline": "Çevrimdışı",
   "shell.offline.tooltip": "Çevrimdışısın. Destekleyen yüklü oyunlar yine de başlar.",

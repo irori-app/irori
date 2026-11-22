@@ -18,6 +18,7 @@
   "shell.notice.component_updated": "{name} aggiornato a {version}",
   "shell.palette.storage": "Spazio di archiviazione e pulizia",
   "shell.palette.storage_keywords": "disco unità spazio dimensione libero libera pulisci pulizia elimina",
+  "shell.palette.feedback_keywords": "aiuto feedback bug errore segnalazione problema idea domanda github supporto",
   "shell.search.placeholder": "Cerca giochi e comandi…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Sei offline. I giochi installati che lo supportano si avviano comunque.",
