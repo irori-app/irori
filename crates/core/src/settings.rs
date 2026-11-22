@@ -336,6 +336,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriReplay")]
     pub replay: ReplaySettings,
+    /// Per-game Performance HUD override (MangoHud on Linux, Metal HUD on
+    /// macOS). Inherits the global HUD profile by default. Irori-only.
+    #[serde(rename = "iroriGameHud", default)]
+    pub game_hud: crate::hud::GameHudSettings,
 }
 
 /// The sandbox a game runs in (`iroriSandbox`). Off when nothing is blocked.
@@ -549,6 +553,7 @@ impl Default for GameSettings {
             igdb_id: String::new(),
             steam_app_id: String::new(),
             replay: ReplaySettings::default(),
+            game_hud: crate::hud::GameHudSettings::default(),
         }
     }
 }
@@ -842,6 +847,10 @@ pub struct AppSettings {
     /// Linux only for now.
     #[serde(rename = "iroriOverlay")]
     pub overlay: OverlayPrefs,
+    /// Global Performance HUD settings (MangoHud on Linux, Metal HUD on macOS).
+    /// Irori-only.
+    #[serde(rename = "iroriHud", default)]
+    pub hud: crate::hud::GlobalHudSettings,
 }
 
 impl Default for AppSettings {
@@ -876,6 +885,7 @@ impl Default for AppSettings {
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
             overlay: OverlayPrefs::default(),
+            hud: crate::hud::GlobalHudSettings::default(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,

@@ -382,6 +382,7 @@ mod tests {
     fn wine(kind: WineKind, uses_umu: bool) -> LaunchEnvironment {
         LaunchEnvironment {
             env: [("WINEPREFIX".to_string(), "/p".to_string())].into(),
+            env_remove: Vec::new(),
             wrappers: vec![vec!["gamescope".into(), "--".into()]],
             wine: Some(WineLaunch {
                 bin: PathBuf::from(if uses_umu { "/umu-run" } else { "/proton" }),

@@ -203,6 +203,7 @@ mod tests {
             },
             environment: LaunchEnvironment {
                 env,
+                env_remove: Vec::new(),
                 wrappers: vec![vec!["gamemoderun".into()]],
                 wine,
             },

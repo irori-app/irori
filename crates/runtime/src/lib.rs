@@ -11,6 +11,7 @@ pub mod download;
 pub mod env;
 pub mod graphics;
 pub mod hooks;
+pub mod hud;
 pub mod locations;
 pub mod mac_driver;
 pub mod manager;
@@ -356,6 +357,7 @@ pub async fn prepare_launch(
         parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
         return Ok(LaunchEnvironment {
             env: vars,
+            env_remove: Vec::new(),
             wrappers: wrappers::setup_wrappers(settings, &parts),
             wine: None,
         });
@@ -452,6 +454,7 @@ pub async fn prepare_launch(
 
     Ok(LaunchEnvironment {
         env: vars,
+        env_remove: Vec::new(),
         wrappers: wrappers::setup_wrappers(settings, &parts),
         wine: Some(WineLaunch {
             bin: wc.runner_bin(),

@@ -294,6 +294,7 @@ async fn installs_updates_repairs_launches_and_uninstalls() {
         settings: GameSettings::default(),
         environment: LaunchEnvironment {
             env: Default::default(),
+            env_remove: Vec::new(),
             wrappers: vec![],
             wine: Some(WineLaunch {
                 bin: "/nonexistent/wine".into(),

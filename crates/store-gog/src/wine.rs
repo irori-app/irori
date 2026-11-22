@@ -185,6 +185,7 @@ mod tests {
         env.insert("MANGOHUD".into(), "1".into());
         LaunchEnvironment {
             env,
+            env_remove: Vec::new(),
             wrappers: vec![vec!["gamemoderun".into()]],
             wine: Some(WineLaunch {
                 bin: if uses_umu {

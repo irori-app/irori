@@ -161,6 +161,7 @@ mod tests {
     fn env(wrappers: Vec<Vec<&str>>, w: Option<WineLaunch>) -> LaunchEnvironment {
         LaunchEnvironment {
             env: Default::default(),
+            env_remove: Vec::new(),
             wrappers: wrappers
                 .into_iter()
                 .map(|v| v.into_iter().map(String::from).collect())

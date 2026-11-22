@@ -179,6 +179,19 @@ impl Paths {
         self.data.join("logs")
     }
 
+    /// Directory holding Irori-generated MangoHud configuration files.
+    pub fn mangohud_dir(&self) -> PathBuf {
+        self.data.join("mangohud")
+    }
+
+    /// Path to an Irori-generated MangoHud configuration file (`<name>.conf`).
+    pub fn mangohud_config_file(&self, name: &str) -> PathBuf {
+        self.mangohud_dir().join(format!(
+            "{}.conf",
+            crate::hud::sanitize_game_id_for_filename(name)
+        ))
+    }
+
     pub fn game_log_file(&self, id: &GameId) -> PathBuf {
         self.logs_dir().join("games").join(format!(
             "{}-{}.log",
