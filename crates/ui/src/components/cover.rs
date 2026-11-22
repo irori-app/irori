@@ -7,9 +7,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, Background, ElementId, Hsla, Img, IntoElement, ObjectFit, ParentElement,
     Pixels, Rems, RenderOnce, SharedString, Styled, StyledImage as _, Window, div, img,
-    linear_color_stop, linear_gradient, rems, rgb,
+    linear_color_stop, linear_gradient, px, rems, rgb,
 };
 use irori_core::GameInfo;
+use irori_core::settings::CoverCorners;
 
 use crate::art::{Art, art_store};
 use crate::motion::fade_in;
@@ -146,6 +147,17 @@ fn system_cover(system: &str, title: &SharedString, small: bool) -> Option<AnyEl
 pub fn physical_width(width: Rems, window: &Window) -> u32 {
     let logical: f32 = (window.rem_size() * width.0).into();
     (logical * window.scale_factor()).ceil() as u32
+}
+
+/// The corner radius of library covers in the user's `coverCorners`.
+pub fn cover_radius(corners: CoverCorners, cx: &App) -> Pixels {
+    let large = cx.theme().radius_lg;
+    match corners {
+        CoverCorners::Square => Pixels::ZERO,
+        CoverCorners::Rounded => large,
+        // At least a little rounder than the theme's, which may be square.
+        CoverCorners::Round => (large * 2.).max(px(12.)),
+    }
 }
 
 /// A 2:3 cover tile. Pulses while its art loads; a game without cover art

@@ -3,12 +3,23 @@
 
 use std::ops::Range;
 
-use irori_core::settings::Density;
+use irori_core::settings::{CoverCaption, Density};
 
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
 /// Room under the cover for the title and status lines, in rem.
 pub const CAPTION_REM: f32 = 2.75;
+/// Room under the cover for the title alone, in rem.
+pub const TITLE_ONLY_REM: f32 = 1.75;
+
+/// Room under each cover for what `caption` writes there, in rem.
+pub fn caption_rem(caption: CoverCaption) -> f32 {
+    match caption {
+        CoverCaption::Full => CAPTION_REM,
+        CoverCaption::Title => TITLE_ONLY_REM,
+        CoverCaption::None => 0.0,
+    }
+}
 /// Space above each row so a focused tile's ring is not clipped, in rem.
 pub const ROW_INSET_REM: f32 = 0.25;
 /// Horizontal content inset of the scroll region, in rem.
@@ -81,6 +92,16 @@ pub fn grid_metrics(available_rem: f32, preferred_rem: f32) -> GridMetrics {
 
 /// [`grid_metrics`] at a density: covers, gaps and list rows scaled by it.
 pub fn grid_metrics_at(available_rem: f32, preferred_rem: f32, density: Density) -> GridMetrics {
+    grid_metrics_for(available_rem, preferred_rem, density, CoverCaption::Full)
+}
+
+/// [`grid_metrics_at`] with `caption` under each cover.
+pub fn grid_metrics_for(
+    available_rem: f32,
+    preferred_rem: f32,
+    density: Density,
+    caption: CoverCaption,
+) -> GridMetrics {
     let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM) * density.cover_scale();
     let gap = GAP_REM * density.spacing_scale();
     let available = available_rem.max(preferred);
@@ -90,7 +111,7 @@ pub fn grid_metrics_at(available_rem: f32, preferred_rem: f32, density: Density)
     GridMetrics {
         columns,
         tile_rem,
-        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + CAPTION_REM + gap,
+        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + caption_rem(caption) + gap,
         gap_rem: gap,
         list_row_rem: LIST_ROW_REM * density.row_scale(),
     }
@@ -218,6 +239,17 @@ mod tests {
         // Top-section art comes on top, and tiny windows keep a floor.
         assert_eq!(cached_images(7, 21.3, 48.75, 10), 94);
         assert_eq!(cached_images(1, 3.75, 1.0, 0), MIN_CACHED_IMAGES);
+    }
+
+    #[test]
+    fn rows_leave_room_for_the_caption_shown() {
+        let full = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Full);
+        let title = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Title);
+        let none = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::None);
+        assert_eq!(full, grid_metrics(60.0, 11.0));
+        assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
+        assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
+        assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
     }
 
     #[test]

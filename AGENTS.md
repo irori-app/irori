@@ -1070,7 +1070,10 @@ cx.spawn_in(window, async move |this, cx| {
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
 `SectionTitle`, `ProgressSummary`, `StoreBadge`. Style helpers are in `style.rs`
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
-in `motion.rs`.
+in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
+(through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
+grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+and `coverFavourite`.
 
 **Feature crates:**
 
