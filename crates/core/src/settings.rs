@@ -1359,6 +1359,9 @@ pub struct UiPrefs {
     pub library_background_strength: u32,
     /// How much of the theme's background is laid over it, in percent.
     pub library_background_dim: u32,
+    /// Big Picture fills the screen (`bigPictureFullscreen`, on unless
+    /// turned off); off, it shows in the window as it is.
+    pub big_picture_fullscreen: bool,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1552,6 +1555,7 @@ impl Default for UiPrefs {
             library_background_picture: String::new(),
             library_background_strength: 70,
             library_background_dim: 20,
+            big_picture_fullscreen: true,
         }
     }
 }
@@ -1759,6 +1763,9 @@ mod tests {
         assert_eq!(ui.big_picture_theme, "user:x");
         assert!(ui.big_picture_on_controller);
         assert!(!UiPrefs::default().big_picture_on_controller);
+        assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
+        let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
+        assert!(!ui.big_picture_fullscreen);
     }
 
     #[test]

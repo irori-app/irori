@@ -309,6 +309,8 @@
   "settings.field.big_picture_in_game_mode.label": "Abrir o Big Picture no modo de jogo da Steam",
   "settings.field.big_picture_on_controller.label": "Abrir o Big Picture quando um controle for conectado",
   "settings.field.big_picture_on_controller.help": "Conectar ou parear um controle com o Irori aberto, ou abrir o Irori com um conectado, traz o Irori para a frente no Big Picture. Nada muda enquanto um jogo está rodando.",
+  "settings.field.big_picture_fullscreen.label": "Mostrar o Big Picture em tela cheia",
+  "settings.field.big_picture_fullscreen.help": "Desativado, o Big Picture abre na janela do Irori do jeito que ela está, para uma segunda tela ou uma janela ao lado de outras. Ao sair do Big Picture, a janela volta ao estado anterior de qualquer forma.",
   "settings.field.check_for_updates_on_startup.label": "Verificar atualizações de jogos ao iniciar",
   "settings.field.check_for_app_updates.help": "Uma vez por dia, no GitHub. O Flatpak e os pacotes da distribuição atualizam o Irori junto com o resto do sistema.",
   "settings.field.check_for_app_updates.label": "Procurar novas versões do Irori",

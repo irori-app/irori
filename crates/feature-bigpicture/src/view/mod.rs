@@ -211,8 +211,8 @@ fn clock_text() -> SharedString {
 }
 
 impl BigPictureView {
-    /// Build the view, enter fullscreen (remembering the previous state) and
-    /// take keyboard focus.
+    /// Build the view, enter fullscreen (remembering the previous state)
+    /// unless `bigPictureFullscreen` is off, and take keyboard focus.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus = cx.focus_handle();
         let m = models(cx).clone();
@@ -270,16 +270,18 @@ impl BigPictureView {
         cx.on_release(|_, cx| irori_ui::theme::set_zoom(1.0, cx))
             .detach();
 
+        // Fullscreen unless the user keeps Big Picture in the window; only a
+        // state Big Picture changed is put back.
         let restore_fullscreen = window.is_fullscreen();
-        if !restore_fullscreen {
+        if !restore_fullscreen && m.settings.read(cx).app.ui.big_picture_fullscreen {
             window.toggle_fullscreen();
+            cx.on_release_in(window, move |_, window, _| {
+                if window.is_fullscreen() != restore_fullscreen {
+                    window.toggle_fullscreen();
+                }
+            })
+            .detach();
         }
-        cx.on_release_in(window, move |_, window, _| {
-            if window.is_fullscreen() != restore_fullscreen {
-                window.toggle_fullscreen();
-            }
-        })
-        .detach();
 
         let clock_task = cx.spawn(async move |this, cx| {
             loop {

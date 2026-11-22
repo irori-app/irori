@@ -23,6 +23,7 @@ mod shell;
 mod sidebar;
 mod stores;
 mod strings;
+mod title_bar;
 #[cfg(target_os = "linux")]
 mod tray;
 #[cfg(not(target_os = "linux"))]

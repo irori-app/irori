@@ -1111,6 +1111,10 @@ Other parts:
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
   and later), following the theme as it changes.
+- `title_bar.rs`: on Linux with client-side decorations, when the desktop's button
+  layout (`App::button_layout`, GNOME's `button-layout`) isn't gpui-kit's minimize,
+  maximize, close on the right, the shell draws this bar with the buttons where the
+  desktop puts them, and redraws when the layout changes.
 - Help and feedback (`irori_settings::feedback`, Settings → About and the palette):
   report a problem opens GitHub's new-issue form with the version, install kind,
   system, desktop and GPUs filled in (never paths, names or logs), plus ideas,
@@ -1235,7 +1239,8 @@ Microsoft's approval page (`irori_manage::login`).
   `bigPictureOnController` (open Big Picture when a controller connects, or is
   connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
   name, so a pad switching mode counts, and one a system hid while Irori was in the
-  background is no news when it returns).
+  background is no news when it returns), `bigPictureFullscreen` (on by default; off,
+  Big Picture stays in the window as it is).
 - The mouse works on every screen: covers, rows, chips and switchers take hover and
   clicks, and the wheel goes through `layout/wheel.rs`, which turns travel into the
   controller's moves (per layout: along the strip on Spotlight, Cinema and Carousel), so

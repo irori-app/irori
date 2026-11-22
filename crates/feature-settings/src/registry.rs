@@ -1530,6 +1530,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.big_picture_on_controller.help")
     .keywords(&["controller", "gamepad", "console", "big picture", "connect"]),
     app(
+        "iroriUi.bigPictureFullscreen",
+        "settings.field.big_picture_fullscreen.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.big_picture_fullscreen.help")
+    .keywords(&["fullscreen", "window", "console", "big picture"]),
+    app(
         "addDesktopShortcuts",
         "settings.field.add_desktop_shortcuts.label",
         General,
