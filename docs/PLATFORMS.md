@@ -705,6 +705,31 @@ reuses process ids and has no process groups). Screenshots copy the monitor of t
 foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
 the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
 
+### Frame rate limit and MangoHud
+
+A game's frame limit is Heroic's "Limit frame rate" and its value (`enableDXVKFpsLimit`,
+`DXVKFpsCap`), so a cap imported from Heroic stays. On Linux one limiter applies it per
+launch (`iroriFpsLimiter`, `irori_runtime::frame_limit`): Automatic picks gamescope when
+the game runs in it (its `-r`, unless gamescope's own limit is set), else MangoHud when it
+shows, else DXVK (`DXVK_FRAME_RATE`) for a Windows game, else MangoHud loaded hidden, the
+only limiter a native game has; a limiter chosen that can't apply falls back to
+Automatic. The other limiters stay off, so one limit never goes through two. On Windows
+and macOS DXVK is the only limiter.
+
+A game launched with MangoHud gets a configuration file of its own for the session,
+`<state>/mangohud/<runner>-<app>.conf`, named by `MANGOHUD_CONFIGFILE`: the user's own
+configuration (their `MANGOHUD_CONFIGFILE`, else `MangoHud/MangoHud.conf` in the
+configuration folder; per-program files aren't read) and then Irori's `fps_limit` and
+`no_display`. MangoHud watches that file, so the in-game overlay's "Show MangoHud" and
+"Frame rate limit" rows change it while the game runs; the file is rewritten in place
+(MangoHud watches the file itself) and removed when the session ends. "Start MangoHud
+hidden" (`iroriMangohudHidden`) loads it without drawing until the overlay shows it. The
+limit row shows only while MangoHud is the session's limiter or nothing limits it. A
+`MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then
+the limit and the hidden start go into that variable and can't change during play, and
+the overlay offers no MangoHud rows. In a sandboxed game the file's folder is bound
+read-only. Games Steam starts aren't covered: Irori doesn't start their MangoHud.
+
 ### Mods
 
 A game's mods sit in `<data>/mods/<runner>/<app>/` and go into the game only

@@ -573,7 +573,8 @@ impl FieldSpec {
                 self.path,
                 "useGameMode"
                     | "showMangohud"
-                    | "iroriMangohudFpsLimit"
+                    | "iroriMangohudHidden"
+                    | "iroriFpsLimiter"
                     | "nvidiaPrime"
                     | "enableFsync"
                     | "iroriNtsync"
@@ -1148,6 +1149,24 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     "settings.requires.fps_limit",
 )];
 const NEEDS_MANGOHUD: &[Condition] = &[when("showMangohud", true, "settings.requires.mangohud")];
+
+/// On Linux the frame limit goes through the limiter chosen below it
+/// (`irori_runtime::frame_limit`); elsewhere through DXVK.
+const FPS_LIMIT_HELP: &str = if cfg!(target_os = "linux") {
+    "settings.field.enable_dxvk_fps_limit.help_linux"
+} else {
+    "settings.field.enable_dxvk_fps_limit.help"
+};
+
+const FPS_LIMITER: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.fps_limiter.auto"),
+    ),
+    opt(ChoiceValue::Str("gamescope"), Verbatim("gamescope")),
+    opt(ChoiceValue::Str("mangohud"), Verbatim("MangoHud")),
+    opt(ChoiceValue::Str("dxvk"), Verbatim("DXVK")),
+];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
     true,
@@ -2832,15 +2851,14 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.show_mangohud.help")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
     game(
-        "iroriMangohudFpsLimit",
-        "settings.field.mangohud_fps_limit.label",
+        "iroriMangohudHidden",
+        "settings.field.mangohud_hidden.label",
         Performance,
         "settings.group.system",
-        Text(TextKind::Digits { max_len: 4 }),
+        Toggle,
     )
-    .help("settings.field.mangohud_fps_limit.help")
-    .placeholder(Verbatim("60"))
-    .keywords(&["mangohud", "fps", "limit", "cap", "frame rate", "fps_limit"])
+    .help("settings.field.mangohud_hidden.help")
+    .keywords(&["mangohud", "hidden", "overlay", "no_display", "hud"])
     .requires(NEEDS_MANGOHUD),
     game(
         "showFps",
@@ -2930,8 +2948,16 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.frame_rate",
         Toggle,
     )
-    .help("settings.field.enable_dxvk_fps_limit.help")
-    .keywords(&["fps", "limit", "cap", "dxvk", "frame rate"]),
+    .help(FPS_LIMIT_HELP)
+    .keywords(&[
+        "fps",
+        "limit",
+        "cap",
+        "dxvk",
+        "frame rate",
+        "mangohud",
+        "fps_limit",
+    ]),
     game(
         "DXVKFpsCap",
         "settings.field.dxvk_fps_cap.label",
@@ -2941,6 +2967,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .placeholder(Verbatim("60"))
     .keywords(&["fps", "limit", "cap"])
+    .requires(NEEDS_FPS_LIMIT),
+    // Linux only (`supported_on_host`): DXVK is the only limiter elsewhere.
+    game(
+        "iroriFpsLimiter",
+        "settings.field.fps_limiter.label",
+        Performance,
+        "settings.group.frame_rate",
+        Choice(FPS_LIMITER),
+    )
+    .help("settings.field.fps_limiter.help")
+    .keywords(&["fps", "limit", "limiter", "gamescope", "mangohud", "dxvk"])
     .requires(NEEDS_FPS_LIMIT),
     game(
         "gamescope.iroriEnabled",

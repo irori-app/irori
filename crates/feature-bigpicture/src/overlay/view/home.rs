@@ -2,6 +2,9 @@
 //! actions, in the order [`super::super::model::home_rows`] gives them.
 
 use super::*;
+use irori_services::mangohud::MangoState;
+
+use super::super::model::next_limit;
 
 /// What a device row shows: the device in use, between the arrows that
 /// switch it when there are several.
@@ -115,6 +118,43 @@ impl OverlayView {
                         t("bigpicture.overlay.input"),
                         Some(device_text(&self.inputs, cx)),
                     ),
+                    HomeRow::MangoHud => {
+                        let on = self.mangohud.is_some_and(|m| m.visible);
+                        let text = if on {
+                            t("bigpicture.overlay.on")
+                        } else {
+                            t("bigpicture.overlay.off")
+                        };
+                        let trailing = div()
+                            .flex_shrink_0()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(text)
+                            .into_any_element();
+                        let icon = if on { IconName::Eye } else { IconName::EyeOff };
+                        (icon, t("bigpicture.overlay.mangohud_show"), Some(trailing))
+                    }
+                    HomeRow::FrameLimit => {
+                        let text = match self.mangohud.and_then(|m| m.fps_limit) {
+                            Some(fps) => {
+                                t_args("bigpicture.overlay.fps", &[("fps", &fps.to_string())])
+                            }
+                            None => t("bigpicture.overlay.no_limit"),
+                        };
+                        let trailing = h_flex()
+                            .flex_shrink_0()
+                            .gap_2()
+                            .items_center()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(Icon::new(IconName::ChevronLeft))
+                            .child(div().min_w(rems(4.)).text_center().child(text))
+                            .child(Icon::new(IconName::ChevronRight))
+                            .into_any_element();
+                        (
+                            IconName::Gauge,
+                            t("bigpicture.overlay.frame_limit"),
+                            Some(trailing),
+                        )
+                    }
                     HomeRow::Screenshot => {
                         (IconName::Camera, t("bigpicture.overlay.screenshot"), None)
                     }
@@ -180,7 +220,62 @@ impl OverlayView {
                     &[("error", e.as_ref())],
                 )))
             })
+            .when_some(self.mangohud_error.clone(), |d, e| {
+                d.child(div().text_sm().text_color(theme.danger).child(e))
+            })
             .into_any_element()
+    }
+
+    /// Show MangoHud when it is hidden, hide it when it shows.
+    pub(super) fn toggle_mangohud(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(state) = self.mangohud {
+            let visible = !state.visible;
+            self.change_mangohud(MangoState { visible, ..state }, window, cx);
+        }
+    }
+
+    /// Move MangoHud's frame limit `step` places along the presets
+    /// ([`super::super::model::FRAME_LIMITS`]).
+    pub(super) fn step_frame_limit(
+        &mut self,
+        step: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(state) = self.mangohud.filter(|m| m.limits) {
+            let fps_limit = next_limit(state.fps_limit, step);
+            self.change_mangohud(MangoState { fps_limit, ..state }, window, cx);
+        }
+    }
+
+    /// Write MangoHud's new state, which it applies at once; the row shows
+    /// it right away and the file's answer when it comes.
+    fn change_mangohud(&mut self, state: MangoState, window: &mut Window, cx: &mut Context<Self>) {
+        let before = self.mangohud;
+        self.mangohud = Some(state);
+        let backend = irori_ui::backend(cx);
+        let id = self.game.clone();
+        let task = irori_ui::run(cx, async move { backend.set_mangohud(&id, state).await });
+        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(now) => {
+                        this.mangohud = Some(now);
+                        this.mangohud_error = None;
+                    }
+                    Err(e) => {
+                        this.mangohud = before;
+                        this.mangohud_error = Some(t_args(
+                            "bigpicture.overlay.mangohud_failed",
+                            &[("error", format!("{e:#}").as_str())],
+                        ));
+                    }
+                }
+                this.refresh_home();
+                cx.notify();
+            });
+        }));
     }
 
     /// Set the game's play status `step` places from the current one.

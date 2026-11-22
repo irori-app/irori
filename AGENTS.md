@@ -1265,7 +1265,11 @@ Microsoft's approval page (`irori_manage::login`).
   where nothing is done). Home's rows come from `model::home_rows`. On Windows
   Back + Start opens it while a game runs (`gamepad/xinput.rs`, XInput read only then;
   `iroriOverlay.backStart`), and the panel takes the foreground and gives it back
-  (`window::Foreground`). `docs/PLATFORMS.md`,
+  (`window::Foreground`). MangoHud's rows (show/hide, frame limit) write the session's
+  MangoHud file (`irori_runtime::mangohud`, `Backend::mangohud`/`set_mangohud`), which
+  `prepare_launch` writes and `finish_session` removes; one frame limit
+  (`enableDXVKFpsLimit`/`DXVKFpsCap`) goes through one limiter
+  (`irori_runtime::frame_limit`, `iroriFpsLimiter`). `docs/PLATFORMS.md`,
   "In-game overlay".
 
 ### 4.8 Engines (emulators)

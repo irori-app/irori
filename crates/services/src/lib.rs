@@ -35,6 +35,7 @@ mod inhibit;
 pub mod journal;
 mod library;
 pub mod ludusavi;
+pub mod mangohud;
 pub mod mods;
 mod network;
 pub mod play_status;

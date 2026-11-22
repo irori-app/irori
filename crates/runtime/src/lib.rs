@@ -9,11 +9,13 @@
 pub mod discovery;
 pub mod download;
 pub mod env;
+pub mod frame_limit;
 pub mod graphics;
 pub mod hooks;
 pub mod locations;
 pub mod mac_driver;
 pub mod manager;
+pub mod mangohud;
 pub mod prefix;
 pub mod protontricks;
 pub mod release_checks;
@@ -226,10 +228,60 @@ fn find_on_path(name: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// The launch's frame limit and limiter ([`frame_limit`]), the settings
+/// the rest of the launch reads (only that limiter switched on), and
+/// whether MangoHud loads: when it shows, or when it limits (hidden then).
+/// Steam Deck's Game Mode has Steam's own MangoHud and gamescope.
+fn frame_limits(
+    settings: &GameSettings,
+    platform: InstallPlatform,
+    deck_game_mode: bool,
+) -> (GameSettings, Option<frame_limit::FrameLimit>, bool) {
+    let linux = cfg!(target_os = "linux") && !deck_game_mode;
+    let cx = frame_limit::LimitContext {
+        linux: cfg!(target_os = "linux"),
+        gamescope: linux && wrappers::gamescope_enabled(&settings.gamescope),
+        mangohud: linux && find_on_path("mangohud").is_some(),
+        wine: platform.needs_wine(),
+    };
+    let limit = frame_limit::resolve(settings, cx);
+    let mangohud = linux
+        && (settings.show_mangohud
+            || limit.is_some_and(|l| l.limiter == frame_limit::Limiter::MangoHud));
+    (frame_limit::apply(settings, limit), limit, mangohud)
+}
+
+/// MangoHud's file or variable for the session ([`mangohud::prepare`]):
+/// hidden unless it shows (and isn't started hidden), with the limit when
+/// it is the launch's limiter.
+async fn mangohud_env(
+    id: &irori_core::GameId,
+    settings: &GameSettings,
+    limit: Option<frame_limit::FrameLimit>,
+    vars: &mut env::EnvMap,
+    host: &HostEnv,
+) {
+    let ours = limit.filter(|l| l.limiter == frame_limit::Limiter::MangoHud);
+    let limits = limit.is_none() || ours.is_some();
+    let hidden = settings.mangohud_hidden || !settings.show_mangohud;
+    let (id, mut moved, host) = (id.clone(), vars.clone(), host.clone());
+    // A small file read and written: off the async workers all the same.
+    let done = tokio::task::spawn_blocking(move || {
+        mangohud::prepare(&id, &mut moved, &host, hidden, ours.map(|l| l.fps), limits);
+        moved
+    })
+    .await;
+    match done {
+        Ok(back) => *vars = back,
+        Err(e) => tracing::warn!("setting MangoHud up: {e}"),
+    }
+}
+
 /// Resolve MangoHud, GameMode and gamescope (Heroic's `prepareLaunch` steps
 /// 7–9). A missing program fails the launch: Heroic only logs a missing
 /// gamescope, which leaves the game running without what was asked for.
-async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
+/// `mangohud` says whether MangoHud loads ([`frame_limits`]).
+async fn wrapper_parts(settings: &GameSettings, mangohud: bool) -> Result<WrapperParts> {
     if !cfg!(target_os = "linux") {
         return Ok(WrapperParts::default());
     }
@@ -240,7 +292,7 @@ async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
         ""
     };
     let mut parts = WrapperParts::default();
-    if settings.show_mangohud && !deck_game_mode {
+    if mangohud {
         let bin = find_on_path("mangohud").ok_or_else(|| {
             anyhow!("Mangohud is enabled, but `mangohud` executable could not be found on $PATH{flatpak_hint}")
         })?;
@@ -273,7 +325,7 @@ async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
         let mut cmd = vec![bin.to_string_lossy().into_owned()];
         cmd.extend(wrappers::gamescope_args(
             &settings.gamescope,
-            settings.show_mangohud,
+            mangohud,
             new_cli,
         ));
         parts.gamescope = cmd;
@@ -330,7 +382,10 @@ pub async fn prepare_launch(
         });
     }
 
-    let mut parts = wrapper_parts(settings).await?;
+    let deck = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let (adjusted, limit, mangohud) = frame_limits(settings, target.platform, deck);
+    let settings = &adjusted;
+    let mut parts = wrapper_parts(settings, mangohud).await?;
     let fixes = if cfg!(target_os = "linux") {
         hooks::hooks().known_fixes_env(target.id).await
     } else {
@@ -355,6 +410,9 @@ pub async fn prepare_launch(
         );
         env::layer(&mut vars, graphics_env(app, settings, &host).await);
         env::layer(&mut vars, fixes);
+        if mangohud {
+            mangohud_env(target.id, settings, limit, &mut vars, &host).await;
+        }
         parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
         return Ok(LaunchEnvironment {
             env: vars,
@@ -447,6 +505,9 @@ pub async fn prepare_launch(
     {
         vars.insert("GAMEID".into(), found.id);
     }
+    if mangohud {
+        mangohud_env(target.id, &effective, limit, &mut vars, &host).await;
+    }
     parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
 
     Ok(LaunchEnvironment {
@@ -518,6 +579,15 @@ async fn sandbox_wrapper(
         if let Some(p) = vars.get(key).map(PathBuf::from).filter(|p| p.is_absolute()) {
             tool_dirs.push(p);
         }
+    }
+    // MangoHud's file for the session, which it reads and watches.
+    if let Some(dir) = vars
+        .get("MANGOHUD_CONFIGFILE")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        tool_dirs.push(dir);
     }
     let plan = sandbox::SandboxPlan {
         settings: settings.sandbox,
@@ -1099,7 +1169,7 @@ mod tests {
             use_game_mode: true,
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, false).await.unwrap_err();
         assert!(err.to_string().contains("gamemoderun"));
     }
 
@@ -1116,7 +1186,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, false).await.unwrap_err();
         assert!(err.to_string().contains("gamescope"));
     }
 

@@ -78,6 +78,10 @@ pub(super) struct OverlayView {
     controller_error: Option<SharedString>,
     /// The replay buffer records this session.
     replay: bool,
+    /// MangoHud in this session, when Irori can change it.
+    mangohud: Option<irori_services::mangohud::MangoState>,
+    /// Why the last change to MangoHud failed.
+    mangohud_error: Option<SharedString>,
     shots: Load<Vec<Screenshot>>,
     /// The screenshot shown large, by its place in `shots`.
     preview: Option<usize>,
@@ -148,6 +152,8 @@ impl OverlayView {
             armed: None,
             controller_error: None,
             replay: backend.replay().is_some_and(|r| r.game == watched_replay),
+            mangohud: None,
+            mangohud_error: None,
             shots: Load::Loading,
             preview: None,
             achievements: Load::Loading,
@@ -193,6 +199,18 @@ impl OverlayView {
             let result = inputs.await;
             let _ = this.update(cx, |this, cx| {
                 this.inputs = loaded(result);
+                cx.notify();
+            });
+        }));
+
+        let b = backend.clone();
+        let id = self.game.clone();
+        let mangohud = irori_ui::state::run_infallible(cx, async move { b.mangohud(&id).await });
+        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+            let state = mangohud.await.flatten();
+            let _ = this.update(cx, |this, cx| {
+                this.mangohud = state;
+                this.refresh_home();
                 cx.notify();
             });
         }));
@@ -279,12 +297,18 @@ impl OverlayView {
 
     /// Take the sound as read, and the Home rows it calls for.
     fn set_audio(&mut self, audio: Load<GameAudio>) {
-        let microphone = matches!(&audio, Load::Ready(a) if a.microphone.is_some());
+        self.audio = audio;
+        self.refresh_home();
+    }
+
+    /// The Home rows for what is known now.
+    fn refresh_home(&mut self) {
+        let microphone = matches!(&self.audio, Load::Ready(a) if a.microphone.is_some());
         self.nav.set_home(home_rows(HomeContext {
             microphone,
             replay: self.replay,
+            mangohud: self.mangohud,
         }));
-        self.audio = audio;
     }
 
     /// How many rows the shown tab has.
@@ -351,6 +375,7 @@ impl OverlayView {
             Action::Adjust(HomeRow::Output, step) => self.switch_output(step, window, cx),
             Action::Adjust(HomeRow::Input, step) => self.switch_input(step, window, cx),
             Action::Adjust(HomeRow::PlayStatus, step) => self.step_status(step, cx),
+            Action::Adjust(HomeRow::FrameLimit, step) => self.step_frame_limit(step, window, cx),
             Action::Adjust(row, step) => {
                 let target = match row {
                     HomeRow::SystemVolume => VolumeTarget::System,
@@ -394,6 +419,8 @@ impl OverlayView {
                     irori_ui::backend(cx).save_clip();
                 }
                 Some(HomeRow::PlayStatus) => self.step_status(1, cx),
+                Some(HomeRow::MangoHud) => self.toggle_mangohud(window, cx),
+                Some(HomeRow::FrameLimit) => self.step_frame_limit(1, window, cx),
                 Some(HomeRow::BackToGame) => self.back_to_game(cx),
                 Some(HomeRow::BackToIrori) => super::back_to_irori(cx),
                 Some(HomeRow::QuitGame) => self.nav.ask_quit(),

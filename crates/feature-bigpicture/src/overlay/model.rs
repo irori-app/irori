@@ -52,6 +52,10 @@ pub enum HomeRow {
     Microphone,
     /// The microphone in use: Left and Right switch to another.
     Input,
+    /// Show or hide MangoHud (A).
+    MangoHud,
+    /// MangoHud's frame limit: Left and Right step through [`FRAME_LIMITS`].
+    FrameLimit,
     Screenshot,
     /// Save a clip of the replay buffer recording this session.
     SaveReplay,
@@ -65,12 +69,14 @@ pub enum HomeRow {
 
 impl HomeRow {
     /// Every row, in their order.
-    pub const ALL: [HomeRow; 11] = [
+    pub const ALL: [HomeRow; 13] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
         HomeRow::Output,
         HomeRow::Microphone,
         HomeRow::Input,
+        HomeRow::MangoHud,
+        HomeRow::FrameLimit,
         HomeRow::Screenshot,
         HomeRow::SaveReplay,
         HomeRow::PlayStatus,
@@ -89,6 +95,7 @@ impl HomeRow {
                 | HomeRow::Microphone
                 | HomeRow::Input
                 | HomeRow::PlayStatus
+                | HomeRow::FrameLimit
         )
     }
 }
@@ -100,6 +107,8 @@ pub struct HomeContext {
     pub microphone: bool,
     /// The replay buffer records this session.
     pub replay: bool,
+    /// MangoHud runs with the game and Irori can change it.
+    pub mangohud: Option<irori_services::mangohud::MangoState>,
 }
 
 /// The Home tab's rows for `cx`: the microphone's only with one, saving a
@@ -110,9 +119,28 @@ pub fn home_rows(cx: HomeContext) -> Vec<HomeRow> {
         .filter(|row| match row {
             HomeRow::Microphone | HomeRow::Input => cx.microphone,
             HomeRow::SaveReplay => cx.replay,
+            HomeRow::MangoHud => cx.mangohud.is_some(),
+            // Another limiter limits the session: changing MangoHud's would add one.
+            HomeRow::FrameLimit => cx.mangohud.is_some_and(|m| m.limits),
             _ => true,
         })
         .collect()
+}
+
+/// The frame limits the overlay steps through, after "no limit".
+pub const FRAME_LIMITS: [u32; 10] = [30, 40, 45, 50, 60, 72, 90, 120, 144, 165];
+
+/// The limit one step from `current` (`None` is "no limit", before the
+/// lowest; one step down from it wraps to the highest, and up from the
+/// highest back to none). A limit not in [`FRAME_LIMITS`] moves to the
+/// nearest one that way.
+pub fn next_limit(current: Option<u32>, step: i32) -> Option<u32> {
+    match (current, step >= 0) {
+        (None, true) => FRAME_LIMITS.first().copied(),
+        (None, false) => FRAME_LIMITS.last().copied(),
+        (Some(now), true) => FRAME_LIMITS.iter().copied().find(|l| *l > now),
+        (Some(now), false) => FRAME_LIMITS.iter().rev().copied().find(|l| *l < now),
+    }
 }
 
 /// The play status `step` places from `current` (none counts as before
@@ -472,9 +500,17 @@ mod tests {
         nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Input, 1));
         nav.input(Down, rows);
-        assert_eq!(nav.input(Right, rows), Action::None, "not a value");
+        assert_eq!(nav.input(Right, rows), Action::None, "MangoHud: a switch");
         assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 5));
-        assert_eq!(nav.home_row(5), Some(HomeRow::Screenshot));
+        assert_eq!(nav.home_row(5), Some(HomeRow::MangoHud));
+        nav.input(Down, rows);
+        assert_eq!(
+            nav.input(Left, rows),
+            Action::Adjust(HomeRow::FrameLimit, -1)
+        );
+        nav.input(Down, rows);
+        assert_eq!(nav.input(Right, rows), Action::None, "not a value");
+        assert_eq!(nav.home_row(7), Some(HomeRow::Screenshot));
         for _ in 0..10 {
             nav.input(Down, rows);
         }
@@ -490,12 +526,16 @@ mod tests {
         assert!(!without.contains(&HomeRow::SaveReplay), "no replay buffer");
         let with = home_rows(HomeContext {
             microphone: true,
-            replay: false,
+            ..Default::default()
         });
         assert!(with.contains(&HomeRow::Microphone) && with.contains(&HomeRow::Input));
         let all = home_rows(HomeContext {
             microphone: true,
             replay: true,
+            mangohud: Some(irori_services::mangohud::MangoState {
+                limits: true,
+                ..Default::default()
+            }),
         });
         assert_eq!(all, HomeRow::ALL);
         assert!(all.contains(&HomeRow::BackToGame) && all.contains(&HomeRow::PlayStatus));
@@ -516,6 +556,34 @@ mod tests {
         nav.set_focus(mic);
         nav.set_home(without);
         assert_eq!(nav.focus(Tab::Home, 6), 0);
+    }
+
+    #[test]
+    fn frame_limits_step_through_the_presets_and_none() {
+        assert_eq!(next_limit(None, 1), Some(30));
+        assert_eq!(next_limit(Some(30), 1), Some(40));
+        assert_eq!(next_limit(Some(165), 1), None, "past the highest: none");
+        assert_eq!(next_limit(None, -1), Some(165));
+        assert_eq!(next_limit(Some(30), -1), None);
+        // A limit of the user's own moves to the nearest preset.
+        assert_eq!(next_limit(Some(100), 1), Some(120));
+        assert_eq!(next_limit(Some(100), -1), Some(90));
+
+        use irori_services::mangohud::MangoState;
+        let shown = |limits| HomeContext {
+            mangohud: Some(MangoState {
+                visible: true,
+                fps_limit: None,
+                limits,
+            }),
+            ..Default::default()
+        };
+        let rows = home_rows(shown(true));
+        assert!(rows.contains(&HomeRow::MangoHud) && rows.contains(&HomeRow::FrameLimit));
+        let rows = home_rows(shown(false));
+        assert!(rows.contains(&HomeRow::MangoHud) && !rows.contains(&HomeRow::FrameLimit));
+        let rows = home_rows(HomeContext::default());
+        assert!(!rows.contains(&HomeRow::MangoHud), "no MangoHud");
     }
 
     #[test]

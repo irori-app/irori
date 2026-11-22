@@ -191,11 +191,14 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
-    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
-    /// games of every kind while MangoHud is on; empty for none. Linux only;
-    /// Irori-only.
-    #[serde(rename = "iroriMangohudFpsLimit")]
-    pub mangohud_fps_limit: String,
+    /// MangoHud loads with the game without drawing, until the in-game
+    /// overlay shows it. Linux only; Irori-only.
+    #[serde(rename = "iroriMangohudHidden")]
+    pub mangohud_hidden: bool,
+    /// What applies the frame limit (`enableDXVKFpsLimit`, `DXVKFpsCap`):
+    /// see `irori_runtime::frame_limit`. Linux only; Irori-only.
+    #[serde(rename = "iroriFpsLimiter")]
+    pub fps_limiter: FpsLimiter,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -523,7 +526,8 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
-            mangohud_fps_limit: String::new(),
+            mangohud_hidden: false,
+            fps_limiter: FpsLimiter::Auto,
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
@@ -1271,6 +1275,31 @@ impl OverlayPrefs {
     }
 }
 
+/// What applies a game's frame limit (`iroriFpsLimiter`). Values a newer
+/// Irori writes read as [`FpsLimiter::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FpsLimiter {
+    /// gamescope, else a shown MangoHud, else DXVK, else a hidden MangoHud.
+    #[default]
+    Auto,
+    Gamescope,
+    #[serde(rename = "mangohud")]
+    MangoHud,
+    Dxvk,
+}
+
+impl<'de> Deserialize<'de> for FpsLimiter {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "gamescope" => FpsLimiter::Gamescope,
+            "mangohud" => FpsLimiter::MangoHud,
+            "dxvk" => FpsLimiter::Dxvk,
+            _ => FpsLimiter::Auto,
+        })
+    }
+}
+
 /// Where the in-game overlay's panel sits. Values a newer Irori writes read
 /// as [`OverlaySide::Center`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
@@ -1844,6 +1873,25 @@ mod tests {
         assert_eq!(json["bigPictureHoldMs"], 1000);
         let back: UiPrefs = serde_json::from_value(json).unwrap();
         assert_eq!(back.big_picture_hold_button, HoldButton::Off);
+    }
+
+    #[test]
+    fn the_frame_limiter_reads_leniently() {
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriFpsLimiter":"mangohud","iroriMangohudHidden":true}"#)
+                .unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::MangoHud);
+        assert!(gs.mangohud_hidden);
+        let gs: GameSettings = serde_json::from_str(r#"{"iroriFpsLimiter":"vsync"}"#).unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::Auto, "unknown");
+        let json = serde_json::to_value(GameSettings::default()).unwrap();
+        assert_eq!(json["iroriFpsLimiter"], "auto");
+        let back = serde_json::to_value(GameSettings {
+            fps_limiter: FpsLimiter::MangoHud,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(back["iroriFpsLimiter"], "mangohud");
     }
 
     #[test]
