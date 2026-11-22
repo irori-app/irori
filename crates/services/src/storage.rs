@@ -466,7 +466,7 @@ impl Measurer {
 
 /// Where `path` really is, following links (a games folder linked to another
 /// disk counts for that disk).
-fn resolve(path: &Path) -> PathBuf {
+pub(crate) fn resolve(path: &Path) -> PathBuf {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     // Windows canonical paths are verbatim (`\\?\C:\…`); drives mount at `C:\`.
     if cfg!(windows)
@@ -492,7 +492,7 @@ fn read_drives() -> Vec<Drive> {
 
 /// Every absolute path a JSON document names, for state files whose layout
 /// this module doesn't know (third-party launchers' setups).
-fn paths_in_json(value: &serde_json::Value, out: &mut Vec<PathBuf>) {
+pub(crate) fn paths_in_json(value: &serde_json::Value, out: &mut Vec<PathBuf>) {
     match value {
         serde_json::Value::String(s) if Path::new(s).is_absolute() => out.push(PathBuf::from(s)),
         serde_json::Value::Array(items) => items.iter().for_each(|v| paths_in_json(v, out)),

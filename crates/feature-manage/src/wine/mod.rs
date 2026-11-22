@@ -1,8 +1,10 @@
 //! The Wine manager ([`Route::WineManager`](irori_ui::Route::WineManager)):
-//! downloadable Proton/Wine builds per source, and every build found on this
-//! system with the user's custom Wine paths.
+//! downloadable Proton/Wine builds per source, every build found on this
+//! system with the user's custom Wine paths, and the Wine prefixes with the
+//! games using them.
 
 mod installed;
+mod prefixes;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -99,6 +101,8 @@ pub struct WineManagerView {
     limited_until: Option<u64>,
     search: Entity<InputState>,
     system: Option<SystemState>,
+    /// The Prefixes tab, once opened.
+    prefixes: Option<prefixes::PrefixState>,
     ops: Entity<WineOps>,
     seen_revision: u64,
     ticking: bool,
@@ -133,7 +137,20 @@ impl WineManagerView {
                 if this.system.is_some() {
                     this.load_system(window, cx);
                 }
+                if this.prefixes.is_some() {
+                    this.load_prefixes(window, cx);
+                }
             }),
+            // Installs and uninstalls change who uses a prefix.
+            cx.observe_in(
+                &models(cx).library.clone(),
+                window,
+                |this, _, window, cx| {
+                    if this.prefixes.is_some() {
+                        this.load_prefixes(window, cx);
+                    }
+                },
+            ),
         ];
         let seen_revision = ops.read(cx).revision;
         let mut this = Self {
@@ -143,6 +160,7 @@ impl WineManagerView {
             limited_until: None,
             search,
             system: None,
+            prefixes: None,
             ops,
             seen_revision,
             ticking: false,
@@ -159,6 +177,11 @@ impl WineManagerView {
         ReleaseKind::available().get(self.tab_ix).copied()
     }
 
+    /// The Prefixes tab, after the sources and "On this system".
+    fn on_prefixes(&self) -> bool {
+        self.tab_ix == ReleaseKind::available().len() + 1
+    }
+
     fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.tab_ix = ix;
         self.search.update(cx, |s, cx| s.set_value("", window, cx));
@@ -167,6 +190,11 @@ impl WineManagerView {
                 self.load_list(kind, false, window, cx)
             }
             Some(_) => {}
+            None if self.on_prefixes() => {
+                if self.prefixes.is_none() {
+                    self.load_prefixes(window, cx)
+                }
+            }
             None if self.system.is_none() => self.load_system(window, cx),
             None => {}
         }
@@ -286,6 +314,7 @@ impl WineManagerView {
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.tab_kind() {
             Some(kind) => self.load_list(kind, true, window, cx),
+            None if self.on_prefixes() => self.load_prefixes(window, cx),
             None => self.load_system(window, cx),
         }
     }
@@ -784,12 +813,27 @@ impl Render for WineManagerView {
         let tabs = ReleaseKind::available()
             .iter()
             .map(|k| Tab::new().label(source_label(*k)))
-            .chain(std::iter::once(
+            .chain([
                 Tab::new().label(t("manage.wine.tab.system")),
-            ));
+                Tab::new().label(t("manage.wine.tab.prefixes")),
+            ]);
+        let on_prefixes = self.on_prefixes();
         let content = match self.tab_kind() {
             Some(kind) => self.render_source(kind, cx),
+            None if on_prefixes => self.render_prefixes(cx),
             None => self.render_system(cx),
+        };
+        // The prefix list is virtual and scrolls itself.
+        let body = if on_prefixes {
+            content
+        } else {
+            div()
+                .id("wine-body")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scrollbar()
+                .child(div().px_6().py_4().child(content))
+                .into_any_element()
         };
         let description = if cfg!(target_os = "macos") {
             t("manage.wine.description_macos")
@@ -838,13 +882,6 @@ impl Render for WineManagerView {
                             })),
                     ),
             )
-            .child(
-                div()
-                    .id("wine-body")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scrollbar()
-                    .child(div().px_6().py_4().child(content)),
-            )
+            .child(body)
     }
 }

@@ -798,6 +798,12 @@ commands without a window.
   the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
   logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
   through `fs_guard::ensure_deletable`. Settings → Storage draws it.
+- **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
+  folder, the defaults', the launchers' and the installed games', each with the
+  installed games running in it (a launcher's game counts for the prefix holding its
+  folder); games uninstalled since are only "was the prefix of". Steam's, native and
+  browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
+  deleting stays with Storage's unused-prefix cleanup.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
