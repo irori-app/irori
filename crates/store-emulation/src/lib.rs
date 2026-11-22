@@ -34,7 +34,8 @@ use irori_core::{
 };
 use irori_engines::launch::{GameFile, LaunchInput};
 use irori_engines::{
-    BiosMissing, EngineKind, EngineMissing, EngineRef, EngineUnavailable, Host, bios, systems,
+    BiosMissing, EngineKind, EngineMissing, EngineRef, EngineUnavailable, Host, Origin, bios,
+    systems,
 };
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -757,6 +758,7 @@ impl Store for EmulationStore {
             }
         }
 
+        let is_flatpak = installation.origin == Origin::Flatpak;
         let first_time_hotkey = tokio::task::spawn_blocking(move || -> Result<_> {
             let values = m.option_values(&values_set);
             let command = irori_engines::launch::command(&LaunchInput {
@@ -792,14 +794,169 @@ impl Store for EmulationStore {
             );
         }
         let env = &request.environment;
+        let mut command = command
+            .envs(env.env.clone())
+            .env_removes(env.env_remove.clone())
+            .args(request.extra_args.clone());
+        let wrappers = if is_flatpak {
+            apply_hud_to_flatpak_launch(&mut command, env)
+        } else {
+            env.wrappers.clone()
+        };
         Ok(LaunchPlan {
-            command: command
-                .envs(env.env.clone())
-                .args(request.extra_args.clone())
-                .wrapped(&env.wrappers),
+            command: command.wrapped(&wrappers),
             track_wineserver: false,
             watch: None,
         })
+    }
+}
+
+fn is_flatpak_hud_var(key: &str) -> bool {
+    key.starts_with("MANGOHUD") || key == "DISABLE_MANGOHUD"
+}
+
+fn is_mangohud_wrapper(wrapper: &[String]) -> bool {
+    wrapper
+        .first()
+        .and_then(|bin| Path::new(bin).file_name())
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "mangohud")
+}
+
+/// Format a multi-line `MangoHud.conf` body for inline `MANGOHUD_CONFIG`
+/// (`fps_value=30,60` -> `fps_value=30+60`).
+fn format_inline_mangohud_config(conf: &str) -> String {
+    conf.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.replace(',', "+"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// For `Origin::Flatpak` launches (`flatpak run ... <AppId>`), strip any outer
+/// `mangohud` wrapper and inject `--filesystem=<mangohud_dir>:ro`,
+/// `--unset-env=<K>`, and `--env=<K>=<V>` immediately after `"run"` and
+/// strictly before the Flatpak App ID.
+fn apply_hud_to_flatpak_launch(
+    command: &mut irori_core::process::CommandSpec,
+    env: &irori_core::LaunchEnvironment,
+) -> Vec<Vec<String>> {
+    let wrappers: Vec<Vec<String>> = env
+        .wrappers
+        .iter()
+        .filter(|w| !is_mangohud_wrapper(w))
+        .cloned()
+        .collect();
+
+    let is_flatpak = command
+        .program
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n == "flatpak");
+    let is_run = command
+        .args
+        .first()
+        .and_then(|a| a.to_str())
+        .is_some_and(|a| a == "run");
+    if !is_flatpak || !is_run {
+        return wrappers;
+    }
+
+    let mut injected: Vec<std::ffi::OsString> = Vec::new();
+    if let Some(cfg_file) = env.env.get("MANGOHUD_CONFIGFILE")
+        && let Some(dir) = Path::new(cfg_file)
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+    {
+        injected.push(format!("--filesystem={}:ro", dir.display()).into());
+    }
+    for key in &env.env_remove {
+        if is_flatpak_hud_var(key) {
+            injected.push(format!("--unset-env={key}").into());
+        }
+    }
+    for (key, val) in &env.env {
+        if is_flatpak_hud_var(key) {
+            let effective = if key == "MANGOHUD_CONFIG" && val.contains('\n') {
+                format_inline_mangohud_config(val)
+            } else {
+                val.clone()
+            };
+            injected.push(format!("--env={key}={effective}").into());
+        }
+    }
+    if !injected.is_empty() {
+        command.args.splice(1..1, injected);
+    }
+    wrappers
+}
+
+#[cfg(test)]
+mod flatpak_hud_tests {
+    use super::*;
+    use irori_core::LaunchEnvironment;
+    use irori_core::process::CommandSpec;
+
+    #[test]
+    fn flatpak_launch_injects_hud_flags_before_app_id_and_strips_outer_mangohud() {
+        let mut env = LaunchEnvironment::default();
+        env.env.insert("MANGOHUD".into(), "1".into());
+        env.env.insert(
+            "MANGOHUD_CONFIGFILE".into(),
+            "/home/u/.local/share/irori/mangohud/global.conf".into(),
+        );
+        env.env_remove.push("MANGOHUD_CONFIG".into());
+        env.env_remove.push("DISABLE_MANGOHUD".into());
+        env.wrappers = vec![
+            vec!["/usr/bin/mangohud".into()],
+            vec!["/usr/bin/gamemoderun".into()],
+        ];
+
+        let mut spec = CommandSpec::new("flatpak").args([
+            "run",
+            "--filesystem=/roms",
+            "org.libretro.RetroArch",
+            "--fullscreen",
+            "/roms/game.sfc",
+        ]);
+
+        let wrappers = apply_hud_to_flatpak_launch(&mut spec, &env);
+        assert_eq!(wrappers, vec![vec!["/usr/bin/gamemoderun"]]);
+
+        let wrapped = spec.wrapped(&wrappers);
+        assert_eq!(wrapped.program, PathBuf::from("/usr/bin/gamemoderun"));
+
+        let args: Vec<String> = wrapped
+            .args
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        let run_idx = args.iter().position(|a| a == "run").unwrap();
+        let app_idx = args
+            .iter()
+            .position(|a| a == "org.libretro.RetroArch")
+            .unwrap();
+        let fs_idx = args
+            .iter()
+            .position(|a| a == "--filesystem=/home/u/.local/share/irori/mangohud:ro")
+            .unwrap();
+        let env_idx = args.iter().position(|a| a == "--env=MANGOHUD=1").unwrap();
+        let cfg_idx = args
+            .iter()
+            .position(|a| {
+                a == "--env=MANGOHUD_CONFIGFILE=/home/u/.local/share/irori/mangohud/global.conf"
+            })
+            .unwrap();
+        let unset_idx = args
+            .iter()
+            .position(|a| a == "--unset-env=DISABLE_MANGOHUD")
+            .unwrap();
+
+        assert!(run_idx < fs_idx && fs_idx < app_idx);
+        assert!(run_idx < env_idx && env_idx < app_idx);
+        assert!(run_idx < cfg_idx && cfg_idx < app_idx);
+        assert!(run_idx < unset_idx && unset_idx < app_idx);
     }
 }
 
