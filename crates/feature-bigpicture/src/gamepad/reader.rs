@@ -14,8 +14,8 @@ use gilrs::LinuxGamepadExt as _;
 use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
-    AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease, HoldTimer,
-    PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
+    AxisChange, Chord, Chords, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease,
+    HoldTimer, PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
 };
 use super::{Battery, ControllerInfo};
 use parking_lot::Mutex;
@@ -28,8 +28,9 @@ pub(crate) struct SharedConfig {
     pub disabled: AtomicBool,
     pub initial_ms: AtomicU32,
     pub repeat_ms: AtomicU32,
-    /// The in-game overlay is on, and with it Guide + RB / Up / Down.
-    pub overlay: AtomicBool,
+    /// The in-game overlay's chords that are on (Guide + RB / Up / Down),
+    /// as [`Self::set_chords`] packs them.
+    chords: AtomicU8,
     /// The event devices of the controllers read (Linux), which the overlay
     /// holds from the game while it is open.
     pub devices: Mutex<Vec<(PathBuf, ControllerKind)>>,
@@ -45,17 +46,30 @@ pub(crate) struct SharedConfig {
 }
 
 impl SharedConfig {
-    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32, overlay: bool) -> Self {
+    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32, chords: Chords) -> Self {
         Self {
             disabled: AtomicBool::new(disabled),
             initial_ms: AtomicU32::new(initial_ms),
             repeat_ms: AtomicU32::new(repeat_ms),
-            overlay: AtomicBool::new(overlay),
+            chords: AtomicU8::new(pack(chords)),
             devices: Mutex::new(Vec::new()),
             hold_button: AtomicU8::new(0),
             hold_ms: AtomicU32::new(1000),
             big_picture: AtomicBool::new(false),
             focus_changes: AtomicU64::new(0),
+        }
+    }
+
+    /// Follow the overlay's chord settings.
+    pub(crate) fn set_chords(&self, chords: Chords) {
+        self.chords.store(pack(chords), Ordering::Relaxed);
+    }
+
+    fn chords(&self) -> Chords {
+        let bits = self.chords.load(Ordering::Relaxed);
+        Chords {
+            screenshot: bits & 1 != 0,
+            volume: bits & 2 != 0,
         }
     }
 
@@ -91,6 +105,11 @@ impl SharedConfig {
             Duration::from_millis(self.repeat_ms.load(Ordering::Relaxed) as u64),
         )
     }
+}
+
+/// [`Chords`] as the bits [`SharedConfig`] keeps.
+fn pack(chords: Chords) -> u8 {
+    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1)
 }
 
 /// What the reader reports to the GPUI side.
@@ -384,8 +403,8 @@ impl Reader {
                 // A chord with Guide held (X: a clip; with the overlay's
                 // shortcuts RB: a screenshot, Up/Down: the volume), even
                 // while a game has the window.
-                let overlay = self.shared.overlay.load(Ordering::Relaxed);
-                if let Some(chord) = Chord::of(input, overlay)
+                let chords = self.shared.chords();
+                if let Some(chord) = Chord::of(input, chords)
                     && self.guide.chord(usize::from(id), Instant::now())
                 {
                     if self.enabled() {

@@ -82,9 +82,9 @@ use parking_lot::RwLock;
 
 pub use hint::HoldHintView;
 pub use input::{
-    Chord, ConnectWatch, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, HoldRelease,
-    HoldTimer, InputSource, PadButton, PadIdentity, Repeater, SteamIgnoreList, StickAxis,
-    hold_button, is_ignored_device, keyboard_equivalent, map_button,
+    Chord, Chords, ConnectWatch, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap,
+    HoldRelease, HoldTimer, InputSource, PadButton, PadIdentity, Repeater, SteamIgnoreList,
+    StickAxis, hold_button, is_ignored_device, keyboard_equivalent, map_button,
 };
 use reader::{HoldEvent, Message, SharedConfig};
 
@@ -286,7 +286,7 @@ pub fn install(cx: &mut App) {
                     overlay_shortcuts(app),
                 )
             })
-            .unwrap_or((false, 300, 50, false));
+            .unwrap_or((false, 300, 50, Chords::default()));
         let shared = SharedConfig::new(disabled, initial, repeat, overlay);
         if let Some(settings) = &settings {
             shared.set_hold(&settings.read(cx).app.ui);
@@ -321,9 +321,7 @@ pub fn install(cx: &mut App) {
             shared
                 .repeat_ms
                 .store(app.gamepad_repeat_delay, Ordering::Relaxed);
-            shared
-                .overlay
-                .store(overlay_shortcuts(app), Ordering::Relaxed);
+            shared.set_chords(overlay_shortcuts(app));
         })
         .detach();
     }
@@ -380,9 +378,12 @@ fn focus_changed(cx: &App) {
     }
 }
 
-/// Whether the overlay's controller shortcuts are on.
-fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> bool {
-    crate::overlay::support::Support::current().available && app.overlay.enabled
+/// The overlay's controller shortcuts that are on.
+fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> Chords {
+    Chords::from_prefs(
+        &app.overlay,
+        crate::overlay::support::Support::current().available,
+    )
 }
 
 /// Hold the controllers from the game while the overlay is open (see
@@ -789,7 +790,7 @@ mod tests {
             let (tx, _rx) = futures::channel::mpsc::unbounded();
             cx.set_global(GamepadGlobal {
                 model: model.clone(),
-                shared: Arc::new(SharedConfig::new(false, 300, 50, false)),
+                shared: Arc::new(SharedConfig::new(false, 300, 50, Chords::default())),
                 tx,
             });
             model

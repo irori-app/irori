@@ -676,16 +676,36 @@ pub enum Chord {
     VolumeDown,
 }
 
+/// Which of the in-game overlay's chords are on (`iroriOverlay`'s
+/// `screenshotChord` and `volumeChords`, while the overlay is).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Chords {
+    pub screenshot: bool,
+    pub volume: bool,
+}
+
+impl Chords {
+    /// The chords the overlay's settings turn on; none while it is off or
+    /// the system has no overlay (`available`).
+    pub fn from_prefs(prefs: &irori_core::settings::OverlayPrefs, available: bool) -> Self {
+        let on = available && prefs.enabled;
+        Chords {
+            screenshot: on && prefs.screenshot_chord,
+            volume: on && prefs.volume_chords,
+        }
+    }
+}
+
 impl Chord {
     /// The chord `input` makes with Guide. Only the clip is there without
-    /// the in-game overlay's shortcuts (`overlay`), which come with its
-    /// setting.
-    pub fn of(input: GamepadInput, overlay: bool) -> Option<Self> {
+    /// the in-game overlay's shortcuts (`chords`), which come with its
+    /// settings.
+    pub fn of(input: GamepadInput, chords: Chords) -> Option<Self> {
         match input {
             GamepadInput::Alt => Some(Chord::Clip),
-            GamepadInput::NextPage if overlay => Some(Chord::Screenshot),
-            GamepadInput::Up if overlay => Some(Chord::VolumeUp),
-            GamepadInput::Down if overlay => Some(Chord::VolumeDown),
+            GamepadInput::NextPage if chords.screenshot => Some(Chord::Screenshot),
+            GamepadInput::Up if chords.volume => Some(Chord::VolumeUp),
+            GamepadInput::Down if chords.volume => Some(Chord::VolumeDown),
             _ => None,
         }
     }
@@ -1023,17 +1043,44 @@ mod tests {
     }
 
     #[test]
-    fn chords_follow_the_overlay_setting() {
+    fn chords_follow_the_overlay_settings() {
         use GamepadInput::*;
-        assert_eq!(Chord::of(Alt, false), Some(Chord::Clip));
-        assert_eq!(Chord::of(Alt, true), Some(Chord::Clip));
-        assert_eq!(Chord::of(NextPage, false), None);
-        assert_eq!(Chord::of(NextPage, true), Some(Chord::Screenshot));
-        assert_eq!(Chord::of(Up, true), Some(Chord::VolumeUp));
-        assert_eq!(Chord::of(Down, true), Some(Chord::VolumeDown));
-        assert_eq!(Chord::of(Up, false), None);
-        assert_eq!(Chord::of(Confirm, true), None);
-        assert_eq!(Chord::of(PrevPage, true), None);
+        let off = Chords::default();
+        let on = Chords {
+            screenshot: true,
+            volume: true,
+        };
+        assert_eq!(Chord::of(Alt, off), Some(Chord::Clip));
+        assert_eq!(Chord::of(Alt, on), Some(Chord::Clip));
+        assert_eq!(Chord::of(NextPage, off), None);
+        assert_eq!(Chord::of(NextPage, on), Some(Chord::Screenshot));
+        assert_eq!(Chord::of(Up, on), Some(Chord::VolumeUp));
+        assert_eq!(Chord::of(Down, on), Some(Chord::VolumeDown));
+        assert_eq!(Chord::of(Up, off), None);
+        assert_eq!(Chord::of(Confirm, on), None);
+        assert_eq!(Chord::of(PrevPage, on), None);
+        // Each can be turned off on its own.
+        let shots = Chords {
+            screenshot: true,
+            volume: false,
+        };
+        assert_eq!(Chord::of(NextPage, shots), Some(Chord::Screenshot));
+        assert_eq!(Chord::of(Up, shots), None);
+        let volume = Chords {
+            screenshot: false,
+            volume: true,
+        };
+        assert_eq!(Chord::of(NextPage, volume), None);
+        assert_eq!(Chord::of(Down, volume), Some(Chord::VolumeDown));
+        let prefs = irori_core::settings::OverlayPrefs {
+            enabled: true,
+            volume_chords: false,
+            ..Default::default()
+        };
+        assert_eq!(Chords::from_prefs(&prefs, true), shots);
+        assert_eq!(Chords::from_prefs(&prefs, false), off, "not on this system");
+        let disabled = irori_core::settings::OverlayPrefs::default();
+        assert_eq!(Chords::from_prefs(&disabled, true), off, "overlay off");
     }
 
     #[test]

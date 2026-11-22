@@ -235,6 +235,8 @@ pub enum CustomKind {
 pub enum PanelKind {
     /// Connected controllers with a refresh button.
     Controllers,
+    /// What the in-game overlay can do on this computer.
+    Overlay,
     /// Epic Online Services overlay: status, install, update, remove.
     EosOverlay,
     /// Link legendary with an Epic Games Launcher installation.
@@ -1219,6 +1221,27 @@ const OVERLAY_HELP: &str = if cfg!(windows) {
     "settings.field.overlay.help"
 };
 
+const NEEDS_OVERLAY: &[Condition] = &[when(
+    "iroriOverlay.enabled",
+    true,
+    "settings.requires.overlay",
+)];
+
+const OVERLAY_SIDE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("center"),
+        Key("settings.option.overlay_side.center"),
+    ),
+    opt(
+        ChoiceValue::Str("left"),
+        Key("settings.option.overlay_side.left"),
+    ),
+    opt(
+        ChoiceValue::Str("right"),
+        Key("settings.option.overlay_side.right"),
+    ),
+];
+
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
     false,
@@ -1941,7 +1964,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "iroriOverlay.enabled",
         "settings.field.overlay.label",
         General,
-        "settings.group.controller",
+        "settings.group.overlay",
         Toggle,
     )
     .help(OVERLAY_HELP)
@@ -1955,6 +1978,53 @@ pub static FIELDS: &[FieldSpec] = &[
         "controller",
     ])
     .requires(NEEDS_CONTROLLER),
+    app(
+        "panel.overlay",
+        "settings.field.panel_overlay.label",
+        General,
+        "settings.group.overlay",
+        Panel(PanelKind::Overlay),
+    )
+    .keywords(&["overlay", "in-game", "layer-shell", "wayland", "controller"]),
+    app(
+        "iroriOverlay.side",
+        "settings.field.overlay_side.label",
+        General,
+        "settings.group.overlay",
+        Choice(OVERLAY_SIDE),
+    )
+    .keywords(&["overlay", "position", "left", "right", "centre", "center"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.screenshotChord",
+        "settings.field.overlay_screenshot_chord.label",
+        General,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_screenshot_chord.help")
+    .keywords(&["overlay", "guide", "rb", "r1", "screenshot", "shortcut"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.volumeChords",
+        "settings.field.overlay_volume_chords.label",
+        General,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_volume_chords.help")
+    .keywords(&["overlay", "guide", "volume", "shortcut"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.volumeStep",
+        "settings.field.overlay_volume_step.label",
+        General,
+        "settings.group.overlay",
+        Text(TextKind::Number { min: 1, max: 25 }),
+    )
+    .help("settings.field.overlay_volume_step.help")
+    .keywords(&["overlay", "volume", "step", "percent"])
+    .requires(NEEDS_OVERLAY),
     // ---- Appearance ----
     app(
         "iroriUi.theme",

@@ -95,6 +95,19 @@ pub fn enabled(cx: &App) -> bool {
             .is_some_and(|m| m.settings.read(cx).app.overlay.enabled)
 }
 
+/// The overlay's settings (defaults before the models exist).
+pub(crate) fn prefs(cx: &App) -> irori_core::settings::OverlayPrefs {
+    cx.try_global::<irori_ui::Models>()
+        .map(|m| m.settings.read(cx).app.overlay.clone())
+        .unwrap_or_default()
+}
+
+/// How far one press of a volume control moves a volume, in percent
+/// (`iroriOverlay.volumeStep`).
+pub(crate) fn volume_step(cx: &App) -> i32 {
+    prefs(cx).volume_step()
+}
+
 /// The game the overlay is for: the one Irori started last that runs.
 fn running_game(cx: &App) -> Option<GameId> {
     let models = cx.try_global::<irori_ui::Models>()?;

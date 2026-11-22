@@ -42,6 +42,7 @@ use crate::i18n::LanguageStamp;
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
+use crate::overlay::OverlayPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
     PanelKind, Scope, TextKind,
@@ -723,6 +724,7 @@ impl SettingsForm {
     ) {
         let view: Option<AnyView> = match kind {
             PanelKind::Controllers => Some(cx.new(ControllersPanel::new).into()),
+            PanelKind::Overlay => Some(cx.new(OverlayPanel::new).into()),
             PanelKind::EosOverlay => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)

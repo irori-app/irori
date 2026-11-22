@@ -292,12 +292,7 @@ impl OverlayView {
                 } else {
                     VolumeTarget::Game
                 };
-                self.change_audio(
-                    target,
-                    Some(step * irori_services::audio::VOLUME_STEP),
-                    window,
-                    cx,
-                );
+                self.change_audio(target, Some(step * super::volume_step(cx)), window, cx);
             }
             Action::Quit => self.quit(window, cx),
         }

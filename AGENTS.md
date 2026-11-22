@@ -1246,8 +1246,11 @@ Microsoft's approval page (`irori_manage::login`).
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume. What differs per system is one table,
-  `overlay/support.rs`; macOS and Windows use GPUI's pop-up window (a non-activating
+  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
+  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`window::placement`). What differs per system is one table,
+  `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
+  reads too; macOS and Windows use GPUI's pop-up window (a non-activating
   panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and

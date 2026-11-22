@@ -2,7 +2,8 @@
 //!
 //! On a Wayland desktop with the wlr layer-shell protocol (KDE Plasma,
 //! sway, Hyprland, COSMIC, niri, labwc) it is a layer surface on the
-//! overlay layer, centred on the output, that never takes the keyboard on
+//! overlay layer, centred on the output or at its left or right edge
+//! (`iroriOverlay.side`), that never takes the keyboard on
 //! its own (`on-demand`: a click on it gives it the keyboard, the game
 //! keeps it otherwise). Compositors without layer-shell (GNOME) get an
 //! ordinary window, which the desktop may show behind a fullscreen game,
@@ -27,28 +28,46 @@
 
 use anyhow::Result;
 use gpui_kit::{
-    AnyWindowHandle, App, Bounds, Entity, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowKind, WindowOptions, px, size,
+    AnyWindowHandle, App, Bounds, Entity, Pixels, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowKind, WindowOptions, point, px, size,
 };
+use irori_core::settings::OverlaySide;
 
 /// The overlay's largest size, in logical pixels (the window exists before
 /// any rem does); smaller screens get 90% of theirs.
 const WIDTH: f32 = 880.;
 const HEIGHT: f32 = 620.;
 
+/// Space between a panel at a side and the screen's edge.
+const EDGE_MARGIN: f32 = 24.;
+
+/// Where the panel goes on a screen with `screen` bounds: its size (at most
+/// [`WIDTH`] × [`HEIGHT`], 90% of a smaller screen), centred, or at the left
+/// or right edge [`EDGE_MARGIN`] in and centred vertically (`iroriOverlay.side`).
+pub(super) fn placement(side: OverlaySide, screen: Bounds<Pixels>) -> Bounds<Pixels> {
+    let width = px(WIDTH).min(screen.size.width * 0.9);
+    let height = px(HEIGHT).min(screen.size.height * 0.9);
+    let margin = px(EDGE_MARGIN).min((screen.size.width - width) / 2.);
+    let y = screen.origin.y + (screen.size.height - height) / 2.;
+    let x = match side {
+        OverlaySide::Center => screen.origin.x + (screen.size.width - width) / 2.,
+        OverlaySide::Left => screen.origin.x + margin,
+        OverlaySide::Right => screen.origin.x + screen.size.width - width - margin,
+    };
+    Bounds::new(point(x, y), size(width, height))
+}
+
 fn options(kind: WindowKind, focus: bool, cx: &App) -> WindowOptions {
     let screen = cx
         .primary_display()
-        .map(|d| d.bounds().size)
-        .unwrap_or(size(px(WIDTH), px(HEIGHT)));
-    let width = px(WIDTH).min(screen.width * 0.9);
-    let height = px(HEIGHT).min(screen.height * 0.9);
+        .map(|d| d.bounds())
+        .unwrap_or(Bounds::new(
+            point(px(0.), px(0.)),
+            size(px(WIDTH), px(HEIGHT)),
+        ));
+    let bounds = placement(super::prefs(cx).side, screen);
     WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-            None,
-            size(width, height),
-            cx,
-        ))),
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         focus,
         show: true,
@@ -71,10 +90,23 @@ pub(super) fn open<V: gpui_kit::Render>(
     #[cfg(target_os = "linux")]
     if cx.compositor_name() == "Wayland" {
         use gpui_kit::layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions};
+        // A layer surface is placed by its anchor, not by its bounds.
+        let (anchor, margin) = match super::prefs(cx).side {
+            OverlaySide::Center => (Anchor::empty(), None),
+            OverlaySide::Left => (
+                Anchor::LEFT,
+                Some((px(0.), px(0.), px(0.), px(EDGE_MARGIN))),
+            ),
+            OverlaySide::Right => (
+                Anchor::RIGHT,
+                Some((px(0.), px(EDGE_MARGIN), px(0.), px(0.))),
+            ),
+        };
         let layer = WindowKind::LayerShell(LayerShellOptions {
             namespace: "irori-overlay".into(),
             layer: Layer::Overlay,
-            anchor: Anchor::empty(),
+            anchor,
+            margin,
             keyboard_interactivity: KeyboardInteractivity::OnDemand,
             ..LayerShellOptions::default()
         });
@@ -113,4 +145,32 @@ pub(super) fn covered_by_exclusive_fullscreen() -> bool {
 /// Take the overlay's surface away.
 pub(super) fn close(handle: AnyWindowHandle, cx: &mut App) {
     let _ = handle.update(cx, |_, window, _| window.remove_window());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_panel_sits_where_the_setting_says() {
+        let screen = Bounds::new(point(px(100.), px(0.)), size(px(1920.), px(1080.)));
+        let centre = placement(OverlaySide::Center, screen);
+        assert_eq!(centre.size, size(px(WIDTH), px(HEIGHT)));
+        assert_eq!(
+            centre.origin,
+            point(px(100. + (1920. - WIDTH) / 2.), px(230.))
+        );
+        let left = placement(OverlaySide::Left, screen);
+        assert_eq!(left.origin, point(px(100. + EDGE_MARGIN), px(230.)));
+        let right = placement(OverlaySide::Right, screen);
+        assert_eq!(
+            right.origin.x + right.size.width,
+            px(100. + 1920. - EDGE_MARGIN)
+        );
+        // A small screen: 90% of it, and the margin never pushes it off.
+        let small = Bounds::new(point(px(0.), px(0.)), size(px(800.), px(600.)));
+        let right = placement(OverlaySide::Right, small);
+        assert_eq!(right.size, size(px(720.), px(540.)));
+        assert!(right.origin.x >= px(0.) && right.origin.x + right.size.width <= px(800.));
+    }
 }

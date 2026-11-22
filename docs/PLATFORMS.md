@@ -583,6 +583,13 @@ Shortcuts that work without opening it, also while the game has the window: Guid
 (R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
 still saves a clip of the replay buffer.
 
+Settings › General › In-game overlay also places the panel (centred, or at the left or
+right edge, `iroriOverlay.side`), turns the screenshot and volume chords off one by one
+(`screenshotChord`, `volumeChords`), sets how far one volume press goes (`volumeStep`,
+1–25%, for the panel and the chords), and says what the overlay can do on this computer:
+its surface on this desktop, whether the controllers connected are held from the game,
+whether a game's own volume can be changed, and its keyboard shortcut.
+
 The surface on Linux. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
 Hyprland, COSMIC, niri, labwc) the overlay is a layer surface on the overlay layer,
 centred on the output, with on-demand keyboard interactivity: it never takes the
