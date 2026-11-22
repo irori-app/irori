@@ -16,6 +16,7 @@
   "shell.nav.forward": "Adelante (Alt+Derecha)",
   "shell.notice.component_update_failed": "No se pudo actualizar {name}",
   "shell.notice.component_updated": "{name} actualizado a {version}",
+  "shell.palette.edit_actions": "Editar las acciones de {title}",
   "shell.palette.storage": "Almacenamiento y limpieza",
   "shell.palette.storage_keywords": "disco unidad espacio tamaño libre liberar limpiar limpieza eliminar borrar",
   "shell.palette.feedback_keywords": "ayuda comentarios error fallo incidencia informar problema idea pregunta github soporte",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "Dejar de agrupar la biblioteca por género",
   "shell.palette.group_by_category": "Agrupar la biblioteca por categoría",
   "shell.palette.ungroup_by_category": "Dejar de agrupar la biblioteca por categoría",
+  "shell.palette.user_action": "{action} para {title}",
+  "shell.palette.user_action_keywords": "acción herramienta programa enlace gestor de mods editor",
   "shell.palette.category_keywords": "categoría inteligente etiqueta grupo colección",
   "shell.palette.genre_keywords": "género acción aventura estrategia puzle rol disparos"
 }

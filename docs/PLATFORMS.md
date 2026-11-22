@@ -462,9 +462,17 @@ Distribution packages exist for Arch, Fedora (Copr), Nobara, openSUSE, Debian/Ub
 and others.
 
 The recorder is started as
-`gpu-screen-recorder -w screen -c mp4 -f 60 -r <seconds> -bm cbr -q <kbit/s> -v no -a default_output -o <clips>/<game>`
+`gpu-screen-recorder -w screen -c mp4 -f <fps> -r <seconds> -bm cbr -q <kbit/s> -v no -a default_output -o <clips>/<game>`
 (`-w portal -restore-portal-session yes` when the desktop should be asked once what to
-record; `default_output|default_input` mixes in the microphone; no `-a` without sound).
+record; `-w <connector>` for a chosen monitor; `default_output|default_input` mixes in
+the microphone; `app:<program>` records only the game's sound, named after its
+program, which needs PipeWire; no `-a` without sound; `-k h264|hevc|av1` for a chosen
+codec and `-s <W>x<H>` for a size limit). The frame rate is 30, 60, 120 or 144. The
+settings run `gpu-screen-recorder --info` once when shown and list its version, the
+codecs the GPU encodes and the monitors it can record, and say which game records now.
+A recorder that stops by itself during the session is started again after 2, 10 and
+30 seconds (a run of a minute or more starts the count over), unless
+`iroriReplay.restart` is off; then the buffer stops with a notice.
 Quality presets are constant bitrates (10, 20, 35 and 60 Mbit/s) because a constant
 bitrate keeps the buffer the same size whatever is on screen, as the recorder advises
 for replays; the settings show the resulting memory, about bitrate × length (35 Mbit/s
@@ -475,8 +483,9 @@ install set up; a user Flatpak install asks for a password or needs portal captu
 A clip is saved by sending the recorder SIGUSR1. The recorder process is found by its
 `-o` folder, so the Flatpak's process inside its sandbox is found like a native one.
 It prints the saved `Replay_<date>_<time>.mp4`, which Irori renames to
-`<game> <date> <time>.mp4` and confirms with a notice (a desktop notification while the
-game has focus). The session's end sends SIGINT, which stops the recorder without
+`<game> <date> <time>.mp4`, links in that day's journal note of the game (unless
+`iroriReplay.journal` is off), and confirms with a notice (a desktop notification while
+the game has focus). The session's end sends SIGINT, which stops the recorder without
 saving. Ways to save:
 
 - a controller: hold Guide and press X (Square on PlayStation, X on Nintendo layouts),

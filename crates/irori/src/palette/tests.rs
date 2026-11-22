@@ -184,7 +184,7 @@ fn installed_windows_games_offer_reshade_and_renodx() {
         ..Default::default()
     };
     let offers = |g: GameInfo| {
-        game::rows(&g, None)
+        game::rows(&g, None, &[])
             .into_iter()
             .any(|(_, target)| matches!(target, PaletteTarget::GraphicsMods(_)))
     };

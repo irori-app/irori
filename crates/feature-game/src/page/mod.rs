@@ -146,6 +146,9 @@ pub struct GamePage {
     compat: Load<CompatibilityInfo>,
     /// EOS overlay controls (Epic Windows installs with a store handle).
     overlay: Option<Entity<EosOverlayPanel>>,
+    /// What the game's settings change, from the settings feature (an
+    /// installed game's page only).
+    setup: Option<gpui_kit::AnyView>,
     /// The Mods tab, made when first opened.
     mods: Option<Entity<crate::mods::ModsPanel>>,
     files_available: bool,
@@ -287,6 +290,7 @@ impl GamePage {
             selected_option: None,
             compat: Load::Idle,
             overlay: None,
+            setup: None,
             mods: None,
             files_available: true,
             shortcuts_exist: None,
@@ -365,6 +369,9 @@ impl GamePage {
             let game = game.clone();
             cx.new(|cx| EosOverlayPanel::new(game, window, cx))
         });
+        if game.is_installed && self.setup.is_none() {
+            self.setup = irori_ui::hooks::game_setup(self.id.clone(), window, cx);
+        }
         if !game.is_installed {
             self.launch_options.clear();
             self.selected_option = None;

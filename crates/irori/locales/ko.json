@@ -16,6 +16,7 @@
   "shell.nav.forward": "앞으로 (Alt+→)",
   "shell.notice.component_update_failed": "{name}을(를) 업데이트할 수 없습니다",
   "shell.notice.component_updated": "{name}을(를) {version}(으)로 업데이트했습니다",
+  "shell.palette.edit_actions": "{title}의 동작 편집",
   "shell.palette.storage": "저장 공간 및 정리",
   "shell.palette.storage_keywords": "디스크 드라이브 공간 크기 여유 확보 정리 삭제 저장소 storage",
   "shell.palette.feedback_keywords": "도움말 피드백 버그 오류 신고 문제 아이디어 질문 github 지원",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "라이브러리 장르별 묶기 해제",
   "shell.palette.group_by_category": "라이브러리를 범주별로 묶기",
   "shell.palette.ungroup_by_category": "라이브러리 범주별 묶기 해제",
+  "shell.palette.user_action": "{title}의 {action}",
+  "shell.palette.user_action_keywords": "동작 도구 프로그램 링크 모드 관리자 편집기",
   "shell.palette.category_keywords": "범주 스마트 태그 그룹 컬렉션",
   "shell.palette.genre_keywords": "장르 액션 어드벤처 전략 퍼즐 RPG 슈팅"
 }

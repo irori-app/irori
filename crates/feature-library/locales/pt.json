@@ -287,6 +287,7 @@
   "library.list.store": "Loja",
   "library.list.title": "Título",
   "library.menu.no_categories": "Ainda não há categorias",
+  "library.menu.actions": "Ações",
   "library.menu.add_to": "Adicionar a",
   "library.menu.in_smart": "Em: {names}",
   "library.no_match.clear": "Limpar pesquisa e filtros",

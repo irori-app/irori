@@ -279,6 +279,7 @@ impl GamePage {
         let side = v_flex()
             .gap_4()
             .child(details)
+            .when(game.is_installed, |v| v.children(self.setup.clone()))
             .children(self.overlay.clone());
         let row = |d: gpui_kit::Div| d.w_full().flex().flex_row().items_start().gap_8();
         let body = match layout {

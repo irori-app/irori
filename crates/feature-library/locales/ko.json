@@ -287,6 +287,7 @@
   "library.list.store": "스토어",
   "library.list.title": "제목",
   "library.menu.no_categories": "아직 범주가 없습니다",
+  "library.menu.actions": "동작",
   "library.menu.add_to": "추가",
   "library.menu.in_smart": "포함: {names}",
   "library.no_match.clear": "검색 및 필터 지우기",

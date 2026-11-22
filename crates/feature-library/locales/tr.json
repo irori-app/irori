@@ -287,6 +287,7 @@
   "library.list.store": "Mağaza",
   "library.list.title": "Başlık",
   "library.menu.no_categories": "Henüz kategori yok",
+  "library.menu.actions": "Eylemler",
   "library.menu.add_to": "Şuraya ekle",
   "library.menu.in_smart": "Şurada: {names}",
   "library.no_match.clear": "Aramayı ve filtreleri temizle",

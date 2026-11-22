@@ -16,6 +16,7 @@
   "shell.nav.forward": "Вперёд (Alt+Вправо)",
   "shell.notice.component_update_failed": "Не удалось обновить {name}",
   "shell.notice.component_updated": "{name} обновлён до {version}",
+  "shell.palette.edit_actions": "Изменить действия игры {title}",
   "shell.palette.storage": "Хранилище и очистка",
   "shell.palette.storage_keywords": "диск накопитель место размер свободно освободить очистка очистить удалить хранилище disk storage",
   "shell.palette.feedback_keywords": "помощь отзыв ошибка баг сообщить проблема идея вопрос github поддержка",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "Не группировать библиотеку по жанру",
   "shell.palette.group_by_category": "Группировать библиотеку по категории",
   "shell.palette.ungroup_by_category": "Не группировать библиотеку по категории",
+  "shell.palette.user_action": "{action} для {title}",
+  "shell.palette.user_action_keywords": "действие инструмент программа ссылка менеджер модов редактор",
   "shell.palette.category_keywords": "категория умная метка группа коллекция",
   "shell.palette.genre_keywords": "жанр экшен приключения стратегия головоломка rpg шутер"
 }

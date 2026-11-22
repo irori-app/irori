@@ -16,6 +16,7 @@
   "shell.nav.forward": "Вперед (Alt+Праворуч)",
   "shell.notice.component_update_failed": "Не вдалося оновити {name}",
   "shell.notice.component_updated": "{name} оновлено до {version}",
+  "shell.palette.edit_actions": "Змінити дії гри {title}",
   "shell.palette.storage": "Сховище й очищення",
   "shell.palette.storage_keywords": "диск накопичувач місце розмір вільно звільнити очищення очистити видалити сховище disk storage",
   "shell.palette.feedback_keywords": "допомога відгук помилка баг повідомити проблема ідея запитання github підтримка",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "Не групувати бібліотеку за жанром",
   "shell.palette.group_by_category": "Групувати бібліотеку за категорією",
   "shell.palette.ungroup_by_category": "Не групувати бібліотеку за категорією",
+  "shell.palette.user_action": "{action} для {title}",
+  "shell.palette.user_action_keywords": "дія інструмент програма посилання менеджер модів редактор",
   "shell.palette.category_keywords": "категорія розумна мітка група колекція",
   "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер"
 }

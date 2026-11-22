@@ -16,6 +16,7 @@
   "shell.nav.forward": "下一頁 (Alt+→)",
   "shell.notice.component_update_failed": "無法更新 {name}",
   "shell.notice.component_updated": "{name} 已更新至 {version}",
+  "shell.palette.edit_actions": "編輯 {title} 的動作",
   "shell.palette.storage": "儲存空間與清理",
   "shell.palette.storage_keywords": "磁碟 硬碟 空間 大小 可用 釋放 清理 刪除 儲存 storage",
   "shell.palette.feedback_keywords": "說明 意見 回饋 錯誤 回報 問題 建議 提問 github 支援",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "停止依類型將遊戲庫分組",
   "shell.palette.group_by_category": "依分類將遊戲庫分組",
   "shell.palette.ungroup_by_category": "停止依分類將遊戲庫分組",
+  "shell.palette.user_action": "{title} 的 {action}",
+  "shell.palette.user_action_keywords": "動作 工具 程式 連結 模組管理器 編輯器",
   "shell.palette.category_keywords": "分類 智慧 標籤 分組 收藏",
   "shell.palette.genre_keywords": "類型 動作 冒險 策略 解謎 角色扮演 射擊"
 }

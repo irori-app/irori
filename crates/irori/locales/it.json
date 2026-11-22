@@ -16,6 +16,7 @@
   "shell.nav.forward": "Avanti (Alt+Destra)",
   "shell.notice.component_update_failed": "Impossibile aggiornare {name}",
   "shell.notice.component_updated": "{name} aggiornato a {version}",
+  "shell.palette.edit_actions": "Modifica le azioni di {title}",
   "shell.palette.storage": "Spazio di archiviazione e pulizia",
   "shell.palette.storage_keywords": "disco unità spazio dimensione libero libera pulisci pulizia elimina",
   "shell.palette.feedback_keywords": "aiuto feedback bug errore segnalazione problema idea domanda github supporto",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "Non raggruppare più la libreria per genere",
   "shell.palette.group_by_category": "Raggruppa la libreria per categoria",
   "shell.palette.ungroup_by_category": "Non raggruppare più la libreria per categoria",
+  "shell.palette.user_action": "{action} per {title}",
+  "shell.palette.user_action_keywords": "azione strumento programma link gestore mod editor",
   "shell.palette.category_keywords": "categoria intelligente etichetta gruppo raccolta",
   "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto"
 }

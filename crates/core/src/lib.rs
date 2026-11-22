@@ -28,6 +28,7 @@ pub mod runner;
 pub mod settings;
 pub mod status;
 pub mod store;
+pub mod user_actions;
 pub mod util;
 
 pub use age_rating::{AgeRating, RatingSystem};
@@ -46,6 +47,7 @@ pub use store::{
     AchievementSignal, ClientAction, DynStore, InstallInfoQuery, LoginApproval, LoginFlow,
     MAIN_ACCOUNT, OpContext, SessionExpired, SettingsFn, Store, StoreAccount,
 };
+pub use user_actions::UserAction;
 
 pub use anyhow;
 pub use async_trait::async_trait;

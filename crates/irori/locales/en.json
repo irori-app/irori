@@ -16,6 +16,7 @@
   "shell.nav.forward": "Forward (Alt+Right)",
   "shell.notice.component_update_failed": "{name} failed to update",
   "shell.notice.component_updated": "{name} updated to {version}",
+  "shell.palette.edit_actions": "Edit the actions of {title}",
   "shell.palette.storage": "Storage and cleanup",
   "shell.palette.storage_keywords": "disk drive space size free clean cleanup delete",
   "shell.palette.feedback_keywords": "help feedback bug issue report problem idea question github support",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "Stop grouping the library by genre",
   "shell.palette.group_by_category": "Group the library by category",
   "shell.palette.ungroup_by_category": "Stop grouping the library by category",
+  "shell.palette.user_action": "{action} for {title}",
+  "shell.palette.user_action_keywords": "action tool program link mod manager editor",
   "shell.palette.category_keywords": "category smart tag group collection",
   "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter"
 }

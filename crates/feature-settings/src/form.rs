@@ -51,6 +51,7 @@ use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
 use crate::umu::UmuPanel;
+use crate::user_actions::UserActionsPanel;
 use crate::value::{
     bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
     plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
@@ -77,6 +78,8 @@ pub enum FormTarget {
 enum FormFilter {
     Sections(Vec<FieldSection>),
     Query(String),
+    /// Only the fields the game changes from the defaults, every section.
+    Changed,
 }
 
 /// Select item: a stable key and a label.
@@ -322,6 +325,13 @@ impl SettingsForm {
     /// Show only these sections (in this order).
     pub fn set_sections(&mut self, sections: Vec<FieldSection>, cx: &mut Context<Self>) {
         self.filter = FormFilter::Sections(sections);
+        cx.notify();
+    }
+
+    /// Show only the fields that differ from the game defaults (game
+    /// target), grouped by section, each with its reset.
+    pub fn set_changed_only(&mut self, cx: &mut Context<Self>) {
+        self.filter = FormFilter::Changed;
         cx.notify();
     }
 
@@ -590,6 +600,7 @@ impl SettingsForm {
             match &self.filter {
                 FormFilter::Sections(s) => s.contains(&f.section),
                 FormFilter::Query(q) => f.matches(q),
+                FormFilter::Changed => self.is_overridden(f),
             }
         })
     }
@@ -729,6 +740,13 @@ impl SettingsForm {
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EglSyncPanel::new(epic, window, cx)).into()),
+            PanelKind::UserActions => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UserActionsPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
             PanelKind::LaunchPrograms => {
                 let target = self.target.clone();
                 Some(
@@ -2403,7 +2421,7 @@ impl Render for SettingsForm {
         }
         let multi_section = match &self.filter {
             FormFilter::Sections(s) => s.len() > 1,
-            FormFilter::Query(_) => true,
+            FormFilter::Query(_) | FormFilter::Changed => true,
         };
         let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
         let border = cx.theme().border;

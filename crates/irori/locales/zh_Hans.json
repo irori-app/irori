@@ -16,6 +16,7 @@
   "shell.nav.forward": "前进 (Alt+→)",
   "shell.notice.component_update_failed": "无法更新 {name}",
   "shell.notice.component_updated": "{name} 已更新到 {version}",
+  "shell.palette.edit_actions": "编辑 {title} 的操作",
   "shell.palette.storage": "存储空间和清理",
   "shell.palette.storage_keywords": "磁盘 硬盘 空间 大小 可用 释放 清理 删除 存储 storage",
   "shell.palette.feedback_keywords": "帮助 反馈 错误 漏洞 报告 问题 建议 提问 github 支持",
@@ -182,6 +183,8 @@
   "shell.palette.ungroup_by_genre": "停止按类型对游戏库分组",
   "shell.palette.group_by_category": "按分类对游戏库分组",
   "shell.palette.ungroup_by_category": "停止按分类对游戏库分组",
+  "shell.palette.user_action": "{title} 的 {action}",
+  "shell.palette.user_action_keywords": "操作 工具 程序 链接 模组管理器 编辑器",
   "shell.palette.category_keywords": "分类 智能 标签 分组 收藏",
   "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击"
 }

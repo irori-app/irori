@@ -874,7 +874,8 @@ impl GamePage {
     }
 
     /// Play as a split button: launch options (when the store offers
-    /// several) and one-off variants (verbose logs, no update check).
+    /// several), the user's own actions and one-off variants (verbose logs,
+    /// no update check).
     fn render_play_button(&self, cx: &mut Context<Self>) -> AnyElement {
         let play = self.render_play_pill(cx);
         let page = cx.entity();
@@ -883,7 +884,8 @@ impl GamePage {
         } else {
             Vec::new()
         };
-        if options.is_empty() && !self.id.runner.manages_installs() {
+        let has_actions = !irori_ui::user_actions::list(&self.id, cx).is_empty();
+        if options.is_empty() && !has_actions && !self.id.runner.manages_installs() {
             return play;
         }
         let current = self.selected_option.clone();
@@ -896,7 +898,7 @@ impl GamePage {
             .icon(IconName::ChevronDown)
             .accessibility_label(t("game.hero.play_with"))
             .tooltip(t("game.hero.play_with"))
-            .dropdown_menu(move |mut menu, _, _| {
+            .dropdown_menu(move |mut menu, _, cx| {
                 menu = menu.label(t("game.hero.play_with"));
                 for option in &options {
                     let page = page.clone();
@@ -925,6 +927,7 @@ impl GamePage {
                         )
                         .separator();
                 }
+                menu = irori_ui::user_actions::menu_items(menu, &id, true, cx).separator();
                 for (label, icon, params) in super::menu::PLAY_VARIANTS {
                     let page = page.clone();
                     let option = current.clone();

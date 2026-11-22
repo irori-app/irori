@@ -1,4 +1,6 @@
-//! Settings of one game (`Route::GameSettings`).
+//! Settings of one game (`Route::GameSettings`). Its first section,
+//! "Changed", lists only what the game changes from the game defaults, each
+//! with its own reset.
 
 use std::collections::HashSet;
 
@@ -37,6 +39,8 @@ use crate::winetricks::WinetricksPanel;
 /// Sections of a game's settings page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameSection {
+    /// What the game changes from the defaults, from every section.
+    Changed,
     Wine,
     Performance,
     Gpu,
@@ -48,7 +52,8 @@ pub enum GameSection {
 }
 
 impl GameSection {
-    pub const ALL: [GameSection; 8] = [
+    pub const ALL: [GameSection; 9] = [
+        GameSection::Changed,
         GameSection::Wine,
         GameSection::Performance,
         GameSection::Gpu,
@@ -62,6 +67,7 @@ impl GameSection {
     /// Route id of the section.
     pub fn id(self) -> &'static str {
         match self {
+            GameSection::Changed => "changed",
             GameSection::Wine => "wine",
             GameSection::Performance => "performance",
             GameSection::Gpu => "gpu",
@@ -76,11 +82,12 @@ impl GameSection {
     /// Parse a route id. Unknown ids open the first section that applies.
     pub fn from_id(id: &str) -> Option<Self> {
         Some(match id {
+            "changed" | "overrides" => GameSection::Changed,
             "wine" | "proton" => GameSection::Wine,
             "performance" | "other" => GameSection::Performance,
             "gpu" | "graphics" | "frame-generation" => GameSection::Gpu,
             "art" | "artwork" | "metadata" => GameSection::Artwork,
-            "launch" | "advanced" => GameSection::Launch,
+            "launch" | "advanced" | "actions" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
             "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
@@ -91,6 +98,7 @@ impl GameSection {
     /// Name of the section in the interface language.
     pub fn label(self) -> SharedString {
         t(match self {
+            GameSection::Changed => "settings.game.section.changed",
             GameSection::Wine => "settings.game.section.wine",
             GameSection::Performance => "settings.game.section.performance",
             GameSection::Gpu => "settings.game.section.gpu",
@@ -104,6 +112,7 @@ impl GameSection {
 
     fn icon(self) -> IconName {
         match self {
+            GameSection::Changed => IconName::RotateCcw,
             GameSection::Wine => IconName::Wine,
             GameSection::Performance => IconName::Gauge,
             GameSection::Gpu => IconName::Gpu,
@@ -314,6 +323,7 @@ impl GameSettingsView {
         GameSection::ALL
             .into_iter()
             .filter(|s| match s {
+                GameSection::Changed => true,
                 GameSection::Wine => self.steam_compat.is_some(),
                 GameSection::Performance => linux,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
@@ -333,7 +343,8 @@ impl GameSettingsView {
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
         if self.id.runner == Runner::Steam {
-            return self.sections()[0];
+            // The first section after "Changed".
+            return self.sections()[1];
         }
         if self.uses_wine(cx) {
             GameSection::Wine
@@ -377,9 +388,12 @@ impl GameSettingsView {
     fn apply_filter(&mut self, cx: &mut Context<Self>) {
         let q = self.query.trim().to_string();
         let section = self.section.field_section();
+        let changed = self.section == GameSection::Changed;
         self.form.update(cx, |f, cx| {
             if !q.is_empty() {
                 f.set_query(&q, cx);
+            } else if changed {
+                f.set_changed_only(cx);
             } else if let Some(s) = section {
                 f.set_sections(vec![s], cx);
             }
@@ -681,10 +695,18 @@ impl Render for GameSettingsView {
                     .mb_2(),
             )
             .children(self.sections().into_iter().map(|s| {
+                let label = if s == GameSection::Changed {
+                    t_args(
+                        "settings.game.section.changed_count",
+                        &[("count", &overridden.to_string())],
+                    )
+                } else {
+                    self.label_of(s)
+                };
                 nav_button(
                     ElementId::Name(format!("game-settings-nav-{}", s.id()).into()),
                     s.icon(),
-                    self.label_of(s),
+                    label,
                     !searching && s == self.section,
                     cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
                 )
@@ -778,6 +800,10 @@ impl Render for GameSettingsView {
                 panel.into_any_element()
             } else if !searching && self.section == GameSection::Tools {
                 self.render_tools(cx)
+            } else if !searching && self.section == GameSection::Changed && overridden == 0 {
+                EmptyState::new(IconName::CircleCheck, t("settings.game.changed.none_title"))
+                    .description(t("settings.game.changed.none"))
+                    .into_any_element()
             } else if searching && self.form.read(cx).visible_count() == 0 {
                 EmptyState::new(
                     IconName::Search,

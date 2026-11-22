@@ -287,6 +287,7 @@
   "library.list.store": "Winkel",
   "library.list.title": "Titel",
   "library.menu.no_categories": "Nog geen categorieën",
+  "library.menu.actions": "Acties",
   "library.menu.add_to": "Toevoegen aan",
   "library.menu.in_smart": "In: {names}",
   "library.no_match.clear": "Zoekopdracht en filters wissen",

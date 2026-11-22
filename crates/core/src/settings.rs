@@ -316,6 +316,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLaunchPrograms")]
     pub launch_programs: Vec<crate::launch_extras::LaunchProgram>,
+    /// Actions beside the game's Play button: programs and links. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriActions")]
+    pub actions: Vec<crate::user_actions::UserAction>,
     /// Back up the game's saves with Ludusavi after every session.
     /// Irori-only.
     #[serde(rename = "iroriLudusaviAutoBackup")]
@@ -447,13 +451,29 @@ pub struct ReplaySettings {
     /// gpu-screen-recorder's quality preset: `medium`, `high`, `very_high`
     /// or `ultra`.
     pub quality: String,
-    /// `desktop` (what the speakers play), `desktop_and_mic` or `none`.
+    /// `desktop` (what the speakers play), `desktop_and_mic`, `game` (only
+    /// the game's own sound, through PipeWire) or `none`.
     pub audio: String,
-    /// `screen` (the first monitor) or `portal` (the desktop asks once
-    /// what to record).
+    /// `screen` (a monitor: [`ReplaySettings::monitor`], else the first) or
+    /// `portal` (the desktop asks once what to record).
     pub capture: String,
     /// Where clips go, in a folder per game; empty for Videos/Irori.
     pub folder: String,
+    /// Frames a second the clip records.
+    pub fps: u32,
+    /// The video codec: `auto` (the recorder picks what the GPU encodes),
+    /// `h264`, `hevc` or `av1`.
+    pub codec: String,
+    /// The largest size a clip is recorded at (`1920x1080`), scaled down
+    /// from the screen; `native` keeps the screen's.
+    pub resolution: String,
+    /// The monitor recorded with `screen` capture, by connector name
+    /// (`DP-1`); empty for the first one.
+    pub monitor: String,
+    /// Start the recorder again when it stops by itself during the session.
+    pub restart: bool,
+    /// Link each saved clip in that day's journal note of the game.
+    pub journal: bool,
 }
 
 impl Default for ReplaySettings {
@@ -465,6 +485,12 @@ impl Default for ReplaySettings {
             audio: "desktop".into(),
             capture: "screen".into(),
             folder: String::new(),
+            fps: 60,
+            codec: "auto".into(),
+            resolution: "native".into(),
+            monitor: String::new(),
+            restart: true,
+            journal: true,
         }
     }
 }
@@ -561,6 +587,7 @@ impl Default for GameSettings {
             lutris_script: None,
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
+            actions: Vec::new(),
             ludusavi_auto_backup: false,
             ludusavi_interval: 0,
             ludusavi_title: String::new(),

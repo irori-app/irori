@@ -57,8 +57,10 @@ pub mod storage;
 mod store_facts;
 pub mod sunshine;
 pub mod sync;
+pub mod trash;
 pub mod troubleshoot;
 pub mod updates;
+pub mod user_actions;
 pub mod userdata;
 mod windows_files;
 
@@ -94,7 +96,7 @@ pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtende
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};
-pub use replay::{Recorder, ReplayInfo, ShortcutState};
+pub use replay::{Recorder, RecorderInfo, ReplayInfo, ShortcutState};
 pub use reshade::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
