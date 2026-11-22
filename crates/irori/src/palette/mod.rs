@@ -283,9 +283,7 @@ impl Palette {
             PaletteTarget::Route(Route::Settings("storage".into())),
             targets,
         );
-        if irori_core::HudBackend::current().is_supported()
-            || irori_settings::hud::qa_hud_backend_override().is_some()
-        {
+        if irori_core::HudBackend::current().is_supported() {
             push(
                 CommandItem::new()
                     .label(t("shell.palette.performance_hud"))

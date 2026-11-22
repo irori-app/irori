@@ -27,7 +27,7 @@ use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
 use crate::form::{FormTarget, SettingsForm};
-use crate::hud::{HudPanel, HudPanelScope, qa_hud_backend_override};
+use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
@@ -68,10 +68,7 @@ impl SettingsSection {
     /// Whether this settings section is available on the current host.
     pub fn supported_on_host(self) -> bool {
         match self {
-            SettingsSection::PerformanceHud => {
-                irori_core::HudBackend::current().is_supported()
-                    || qa_hud_backend_override().is_some()
-            }
+            SettingsSection::PerformanceHud => irori_core::HudBackend::current().is_supported(),
             _ => true,
         }
     }
@@ -247,8 +244,7 @@ impl SettingsView {
         );
         let app_form = cx.new(|cx| SettingsForm::new(FormTarget::App, window, cx));
         let defaults_form = cx.new(|cx| SettingsForm::new(FormTarget::Defaults, window, cx));
-        let hud = cx
-            .new(|cx| HudPanel::new(HudPanelScope::Global, qa_hud_backend_override(), window, cx));
+        let hud = cx.new(|cx| HudPanel::new(HudPanelScope::Global, None, window, cx));
         // The upload name identifies the log at the paste service and in the
         // upload history, so it stays the same in every language.
         let log =

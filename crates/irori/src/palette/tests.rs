@@ -222,9 +222,5 @@ fn performance_hud_palette_entry_follows_host_support() {
     let has_hud = targets
         .iter()
         .any(|t| matches!(t, PaletteTarget::Route(Route::Settings(sec)) if sec.as_ref() == "hud"));
-    assert_eq!(
-        has_hud,
-        irori_core::HudBackend::current().is_supported()
-            || irori_settings::hud::qa_hud_backend_override().is_some()
-    );
+    assert_eq!(has_hud, irori_core::HudBackend::current().is_supported());
 }

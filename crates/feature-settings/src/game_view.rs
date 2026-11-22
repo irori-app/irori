@@ -302,8 +302,7 @@ impl GameSettingsView {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
         }
-        let has_performance = cfg!(any(target_os = "linux", target_os = "macos"))
-            || crate::hud::qa_hud_backend_override().is_some();
+        let has_performance = cfg!(any(target_os = "linux", target_os = "macos"));
         GameSection::ALL
             .into_iter()
             .filter(|s| match s {

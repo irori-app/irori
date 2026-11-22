@@ -35,7 +35,7 @@ use crate::appearance::{AccentPicker, FontPicker};
 use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
-use crate::hud::{HudPanel, HudPanelScope, qa_hud_backend_override};
+use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::LanguageStamp;
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
@@ -696,7 +696,7 @@ impl SettingsForm {
                                     is_native_linux,
                                     is_steam,
                                 },
-                                qa_hud_backend_override(),
+                                None,
                                 window,
                                 cx,
                             )

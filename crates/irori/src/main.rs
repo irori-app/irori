@@ -205,33 +205,18 @@ fn main() -> Result<()> {
             );
         }
 
-        // Steam's Game Mode has no tray to come back from.
-        let qa_hud = irori_settings::hud::qa_hud_backend_override().is_some();
+        // Pre-warm Linux HUD hardware detection in the background so opening
+        // Performance HUD settings shows real GPU/CPU names on the first frame.
         #[cfg(target_os = "linux")]
-        {
-            #[cfg(debug_assertions)]
-            if qa_hud {
-                // Pre-warm synchronously in QA mode so Frame 1 immediately
-                // shows real GPU/CPU labels and the Vulkan test button.
-                let _ = irori_runtime::hud::hardware_linux::detect_linux_hud_env();
-            } else {
-                backend.spawn(async {
-                    let _ = tokio::task::spawn_blocking(
-                        irori_runtime::hud::hardware_linux::detect_linux_hud_env,
-                    )
-                    .await;
-                });
-            }
-            #[cfg(not(debug_assertions))]
-            backend.spawn(async {
-                let _ = tokio::task::spawn_blocking(
-                    irori_runtime::hud::hardware_linux::detect_linux_hud_env,
-                )
-                .await;
-            });
-        }
-        let start_hidden = !qa_hud
-            && (cli.minimized || backend.settings.app().start_in_tray)
+        backend.spawn(async {
+            let _ = tokio::task::spawn_blocking(
+                irori_runtime::hud::hardware_linux::detect_linux_hud_env,
+            )
+            .await;
+        });
+
+        // Steam's Game Mode has no tray to come back from.
+        let start_hidden = (cli.minimized || backend.settings.app().start_in_tray)
             && !irori_core::platform::in_steam_gamepad_ui()
             && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
                 || app.lock().tray.is_some())
@@ -241,7 +226,7 @@ fn main() -> Result<()> {
             let app_settings = backend.settings.app();
             let game_mode = app_settings.ui.big_picture_in_game_mode
                 && irori_core::platform::in_steam_gamepad_ui();
-            if !qa_hud && (app_settings.start_in_console_mode || game_mode) {
+            if app_settings.start_in_console_mode || game_mode {
                 nav::navigate(Route::BigPicture, cx);
             }
         }

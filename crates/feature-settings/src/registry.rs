@@ -553,10 +553,9 @@ impl FieldSpec {
             return false;
         }
         // Per-game Performance HUD is available on Linux (MangoHud) and macOS
-        // (Metal HUD), hidden on Windows unless the debug QA override is set.
+        // (Metal HUD), hidden on Windows.
         if self.path == "panel.performance-hud" {
-            return irori_core::HudBackend::current().is_supported()
-                || crate::hud::qa_hud_backend_override().is_some();
+            return irori_core::HudBackend::current().is_supported();
         }
         // DXVK_HUD=fps is Linux-only.
         if self.path == "showFps" {
@@ -3822,7 +3821,6 @@ mod tests {
         assert_eq!(
             hud.supported_on_host(),
             cfg!(any(target_os = "linux", target_os = "macos"))
-                || crate::hud::qa_hud_backend_override().is_some()
         );
 
         let legacy_mango = find("showMangohud").expect("showMangohud");
