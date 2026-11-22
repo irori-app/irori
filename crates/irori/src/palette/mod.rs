@@ -24,6 +24,14 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
+/// The game whose page is open: the game, its play status and its own
+/// actions with their place.
+type OpenGame = (
+    Arc<GameInfo>,
+    Option<PlayStatus>,
+    Vec<(usize, irori_core::UserAction)>,
+);
+
 /// What confirming a palette row does.
 #[derive(Clone)]
 enum PaletteTarget {
@@ -90,6 +98,10 @@ enum PaletteTarget {
     Troubleshoot(GameId),
     /// Show a game's ReShade and RenoDX (its settings' Tools section).
     GraphicsMods(GameId),
+    /// Run one of the actions the user added to a game, by its place.
+    UserAction(GameId, usize),
+    /// Edit the actions of a game.
+    EditActions(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
     /// Turn a ROM library entry into an added PC game.
@@ -161,7 +173,7 @@ impl Palette {
     fn items(
         games: &[Arc<GameInfo>],
         replay: Option<&str>,
-        open: Option<(Arc<GameInfo>, Option<PlayStatus>)>,
+        open: Option<OpenGame>,
         library: LibraryCommands<'_>,
         sync: bool,
         stores: &[Runner],
@@ -197,8 +209,8 @@ impl Palette {
                 targets,
             );
         }
-        if let Some((game, current)) = open {
-            for (item, target) in game::rows(&game, current) {
+        if let Some((game, current, actions)) = open {
+            for (item, target) in game::rows(&game, current, &actions) {
                 push(item, target, targets);
             }
         }
@@ -639,6 +651,10 @@ impl Palette {
             };
             (games, open)
         };
+        let open = open.map(|(game, status)| {
+            let actions = irori_ui::user_actions::list(&game.id(), cx);
+            (game, status, actions)
+        });
         let mut targets = Vec::new();
         let grouped = irori_library::groups_by_status(cx);
         let grouped_by_mode = irori_library::groups_by_mode(cx);
@@ -670,7 +686,7 @@ impl Palette {
         // The shown game's cloud saves, when its store keeps them.
         let syncable = open
             .as_ref()
-            .map(|(game, _)| game.clone())
+            .map(|(game, _, _)| game.clone())
             .filter(|game| irori_game::offers_sync(game, cx));
         let mut items = Self::items(
             &games,
@@ -837,6 +853,8 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::GraphicsMods(id) => irori_game::ops::open_settings(&id, "reshade", cx),
+        PaletteTarget::UserAction(id, index) => irori_ui::user_actions::run(id, index, window, cx),
+        PaletteTarget::EditActions(id) => irori_ui::user_actions::edit(&id, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),

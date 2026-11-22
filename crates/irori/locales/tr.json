@@ -16,6 +16,7 @@
   "shell.nav.forward": "İleri (Alt+Sağ)",
   "shell.notice.component_update_failed": "{name} güncellenemedi",
   "shell.notice.component_updated": "{name}, {version} sürümüne güncellendi",
+  "shell.palette.edit_actions": "{title} eylemlerini düzenle",
   "shell.palette.storage": "Depolama ve temizlik",
   "shell.palette.storage_keywords": "disk sürücü alan boyut boş boşalt temizle temizlik sil depolama storage",
   "shell.search.placeholder": "Oyun ve komut ara…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Kitaplığı türe göre gruplamayı bırak",
   "shell.palette.group_by_category": "Kütüphaneyi kategoriye göre grupla",
   "shell.palette.ungroup_by_category": "Kütüphaneyi kategoriye göre gruplamayı bırak",
+  "shell.palette.user_action": "{title} için {action}",
+  "shell.palette.user_action_keywords": "eylem araç program bağlantı mod yöneticisi düzenleyici",
   "shell.palette.category_keywords": "kategori akıllı etiket grup koleksiyon",
   "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı"
 }

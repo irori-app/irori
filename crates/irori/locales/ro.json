@@ -16,6 +16,7 @@
   "shell.nav.forward": "Înainte (Alt+Dreapta)",
   "shell.notice.component_update_failed": "{name} nu a putut fi actualizat",
   "shell.notice.component_updated": "{name} actualizat la {version}",
+  "shell.palette.edit_actions": "Editează acțiunile pentru {title}",
   "shell.palette.storage": "Spațiu de stocare și curățare",
   "shell.palette.storage_keywords": "disc unitate spațiu dimensiune liber eliberează curăță curățare șterge stocare storage",
   "shell.search.placeholder": "Caută jocuri și comenzi…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Nu mai grupa biblioteca după gen",
   "shell.palette.group_by_category": "Grupează biblioteca după categorie",
   "shell.palette.ungroup_by_category": "Nu mai grupa biblioteca după categorie",
+  "shell.palette.user_action": "{action} pentru {title}",
+  "shell.palette.user_action_keywords": "acțiune unealtă program link manager moduri editor",
   "shell.palette.category_keywords": "categorie inteligentă etichetă grup colecție",
   "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter"
 }

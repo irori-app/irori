@@ -16,6 +16,7 @@
   "shell.nav.forward": "Vpřed (Alt+Vpravo)",
   "shell.notice.component_update_failed": "{name} se nepodařilo aktualizovat",
   "shell.notice.component_updated": "{name} aktualizováno na {version}",
+  "shell.palette.edit_actions": "Upravit akce hry {title}",
   "shell.palette.storage": "Úložiště a úklid",
   "shell.palette.storage_keywords": "disk jednotka místo velikost volné uvolnit vyčistit úklid smazat",
   "shell.search.placeholder": "Hledat hry a příkazy…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Přestat seskupovat knihovnu podle žánru",
   "shell.palette.group_by_category": "Seskupit knihovnu podle kategorie",
   "shell.palette.ungroup_by_category": "Přestat seskupovat knihovnu podle kategorie",
+  "shell.palette.user_action": "{action} pro {title}",
+  "shell.palette.user_action_keywords": "akce nástroj program odkaz správce módů editor",
   "shell.palette.category_keywords": "kategorie chytrá štítek skupina sbírka",
   "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka"
 }

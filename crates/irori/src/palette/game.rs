@@ -1,24 +1,50 @@
 //! The command palette's rows for the game whose page is open: its play
-//! status, troubleshooting, Steam Play, playing a ROM as a PC game, ReShade
-//! and RenoDX, Steam shortcuts and save backups.
+//! status, the user's own actions, troubleshooting, Steam Play, playing a
+//! ROM as a PC game, ReShade and RenoDX, Steam shortcuts and save backups.
 
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::command::CommandItem;
-use irori_core::{GameInfo, Runner};
+use irori_core::{GameInfo, Runner, UserAction};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 
 use super::PaletteTarget;
 
-/// The rows for `game`, whose play status is `current`, in the order the
-/// palette lists them.
+/// The rows for `game`, whose play status is `current` and whose own
+/// actions are `actions` (with their place), in the order the palette lists
+/// them.
 pub(super) fn rows(
     game: &GameInfo,
     current: Option<PlayStatus>,
+    actions: &[(usize, UserAction)],
 ) -> Vec<(CommandItem, PaletteTarget)> {
     let mut rows = Vec::new();
     let mut push = |item: CommandItem, target: PaletteTarget| rows.push((item, target));
+    if game.is_installed {
+        for (index, action) in actions {
+            push(
+                CommandItem::new()
+                    .label(t_args(
+                        "shell.palette.user_action",
+                        &[("action", &action.label()), ("title", &game.title)],
+                    ))
+                    .keywords([t("shell.palette.user_action_keywords")])
+                    .icon(irori_ui::user_actions::icon(action)),
+                PaletteTarget::UserAction(game.id(), *index),
+            );
+        }
+        push(
+            CommandItem::new()
+                .label(t_args(
+                    "shell.palette.edit_actions",
+                    &[("title", &game.title)],
+                ))
+                .keywords([t("shell.palette.user_action_keywords")])
+                .icon(IconName::Pencil),
+            PaletteTarget::EditActions(game.id()),
+        );
+    }
     let keywords = [irori_ui::play_status::title()];
     for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
         let label = t_args(

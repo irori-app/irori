@@ -16,6 +16,7 @@
   "shell.nav.forward": "Vooruit (Alt+Rechts)",
   "shell.notice.component_update_failed": "{name} kon niet worden geüpdatet",
   "shell.notice.component_updated": "{name} geüpdatet naar {version}",
+  "shell.palette.edit_actions": "Acties van {title} bewerken",
   "shell.palette.storage": "Opslag en opruimen",
   "shell.palette.storage_keywords": "schijf station ruimte grootte vrij vrijmaken opruimen verwijderen wissen",
   "shell.search.placeholder": "Games en opdrachten zoeken…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Bibliotheek niet meer groeperen op genre",
   "shell.palette.group_by_category": "Bibliotheek groeperen op categorie",
   "shell.palette.ungroup_by_category": "Bibliotheek niet meer groeperen op categorie",
+  "shell.palette.user_action": "{action} voor {title}",
+  "shell.palette.user_action_keywords": "actie hulpmiddel programma link modbeheerder editor",
   "shell.palette.category_keywords": "categorie slim label groep collectie",
   "shell.palette.genre_keywords": "genre actie avontuur strategie puzzel rpg shooter"
 }

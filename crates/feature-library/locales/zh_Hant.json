@@ -287,6 +287,7 @@
   "library.list.store": "商店",
   "library.list.title": "名稱",
   "library.menu.no_categories": "尚無分類",
+  "library.menu.actions": "動作",
   "library.menu.add_to": "加入至",
   "library.menu.in_smart": "所在：{names}",
   "library.no_match.clear": "清除搜尋和篩選",

@@ -1604,6 +1604,18 @@ fn game_menu(
                     move |sub, _, cx| irori_ui::play_status::menu(sub, &status_id, cx),
                 );
                 menu = copies_menu(menu, &copies_view, game, window, cx);
+                if game.is_installed && !irori_ui::user_actions::list(&game.id(), cx).is_empty() {
+                    let actions_id = game.id();
+                    menu = menu.submenu_with_icon(
+                        Some(Icon::new(IconName::SquareTerminal)),
+                        t("library.menu.actions"),
+                        window,
+                        cx,
+                        move |sub, _, cx| {
+                            irori_ui::user_actions::menu_items(sub, &actions_id, false, cx)
+                        },
+                    );
+                }
             }
         }
     }

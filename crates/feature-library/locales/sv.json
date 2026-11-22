@@ -287,6 +287,7 @@
   "library.list.store": "Butik",
   "library.list.title": "Titel",
   "library.menu.no_categories": "Inga kategorier än",
+  "library.menu.actions": "Åtgärder",
   "library.menu.add_to": "Lägg till i",
   "library.menu.in_smart": "I: {names}",
   "library.no_match.clear": "Rensa sökning och filter",

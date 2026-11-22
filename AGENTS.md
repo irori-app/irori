@@ -873,6 +873,13 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
+- **User actions** (`user_actions.rs`, per-game `iroriActions`, `irori_core::UserAction`):
+  programs and links the user adds beside Play. `Backend::run_user_action` hands a link
+  to the system's opener, starts a program from its folder, or (outside Windows, a
+  Windows build) runs it in the game's prefix through `run_in_prefix`; one that counts
+  as playing holds the Playing status and records a session like a launch. Screens list
+  and run them through `irori_ui::user_actions` (Play's split menu, the game menu, the
+  library's context menu, the palette); the game settings' Launch section edits them.
 - **Launching** (`games.rs`). Until the game starts (status `Launching`),
   `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
   steps 2 to 5 get it, so what they start ends with it, none starts once it fired,

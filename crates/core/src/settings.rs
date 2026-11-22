@@ -316,6 +316,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLaunchPrograms")]
     pub launch_programs: Vec<crate::launch_extras::LaunchProgram>,
+    /// Actions beside the game's Play button: programs and links. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriActions")]
+    pub actions: Vec<crate::user_actions::UserAction>,
     /// Back up the game's saves with Ludusavi after every session.
     /// Irori-only.
     #[serde(rename = "iroriLudusaviAutoBackup")]
@@ -583,6 +587,7 @@ impl Default for GameSettings {
             lutris_script: None,
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
+            actions: Vec::new(),
             ludusavi_auto_backup: false,
             ludusavi_interval: 0,
             ludusavi_title: String::new(),

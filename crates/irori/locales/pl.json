@@ -16,6 +16,7 @@
   "shell.nav.forward": "Dalej (Alt+Prawo)",
   "shell.notice.component_update_failed": "Nie udało się zaktualizować {name}",
   "shell.notice.component_updated": "Zaktualizowano {name} do {version}",
+  "shell.palette.edit_actions": "Edytuj akcje gry {title}",
   "shell.palette.storage": "Miejsce na dysku i czyszczenie",
   "shell.palette.storage_keywords": "dysk miejsce rozmiar wolne zwolnij wyczyść czyszczenie usuń pamięć storage disk",
   "shell.search.placeholder": "Szukaj gier i poleceń…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Przestań grupować bibliotekę według gatunku",
   "shell.palette.group_by_category": "Grupuj bibliotekę według kategorii",
   "shell.palette.ungroup_by_category": "Przestań grupować bibliotekę według kategorii",
+  "shell.palette.user_action": "{action} dla {title}",
+  "shell.palette.user_action_keywords": "akcja narzędzie program link menedżer modów edytor",
   "shell.palette.category_keywords": "kategoria inteligentna etykieta grupa kolekcja",
   "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka"
 }

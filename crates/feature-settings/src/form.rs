@@ -50,6 +50,7 @@ use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
 use crate::umu::UmuPanel;
+use crate::user_actions::UserActionsPanel;
 use crate::value::{
     bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
     plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
@@ -727,6 +728,13 @@ impl SettingsForm {
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EglSyncPanel::new(epic, window, cx)).into()),
+            PanelKind::UserActions => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UserActionsPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
             PanelKind::LaunchPrograms => {
                 let target = self.target.clone();
                 Some(

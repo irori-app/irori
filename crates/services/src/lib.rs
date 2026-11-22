@@ -59,6 +59,7 @@ pub mod sync;
 pub mod trash;
 pub mod troubleshoot;
 pub mod updates;
+pub mod user_actions;
 pub mod userdata;
 mod windows_files;
 

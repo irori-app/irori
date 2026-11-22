@@ -287,6 +287,7 @@
   "library.list.store": "Магазин",
   "library.list.title": "Назва",
   "library.menu.no_categories": "Категорій поки немає",
+  "library.menu.actions": "Дії",
   "library.menu.add_to": "Додати до",
   "library.menu.in_smart": "У: {names}",
   "library.no_match.clear": "Скинути пошук і фільтри",

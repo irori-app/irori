@@ -245,6 +245,8 @@ pub enum PanelKind {
     Artwork,
     /// Programs started alongside the game.
     LaunchPrograms,
+    /// The user's own actions beside the game's Play button.
+    UserActions,
     /// Launch presets: apply, save, apply to several games.
     LaunchPresets,
     /// Ludusavi: where it was found, or how to get it.
@@ -629,6 +631,7 @@ impl FieldSpec {
                     | "iroriBeforeLaunchScriptAlongside"
                     | "afterLaunchScriptPath"
                     | "panel.launchPrograms"
+                    | "panel.actions"
                     | "iroriLudusaviAutoBackup"
                     | "iroriLudusaviInterval"
                     | "panel.save-backups"
@@ -3462,6 +3465,24 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .keywords(&["script", "after", "post-exit"]),
+    game_only(
+        "panel.actions",
+        "settings.field.panel_actions.label",
+        Launch,
+        "settings.group.actions",
+        Panel(PanelKind::UserActions),
+    )
+    .help("settings.field.panel_actions.help")
+    .keywords(&[
+        "action",
+        "actions",
+        "mod manager",
+        "tool",
+        "editor",
+        "link",
+        "wiki",
+        "beside play",
+    ]),
     game(
         "panel.launchPrograms",
         "settings.field.panel_launch_programs.label",

@@ -80,7 +80,7 @@ impl GameSection {
             "performance" | "other" => GameSection::Performance,
             "gpu" | "graphics" | "frame-generation" => GameSection::Gpu,
             "art" | "artwork" | "metadata" => GameSection::Artwork,
-            "launch" | "advanced" => GameSection::Launch,
+            "launch" | "advanced" | "actions" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
             "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,

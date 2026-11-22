@@ -16,6 +16,7 @@
   "shell.nav.forward": "Vorwärts (Alt+Rechts)",
   "shell.notice.component_update_failed": "{name} konnte nicht aktualisiert werden",
   "shell.notice.component_updated": "{name} auf {version} aktualisiert",
+  "shell.palette.edit_actions": "Aktionen von {title} bearbeiten",
   "shell.palette.storage": "Speicher und Aufräumen",
   "shell.palette.storage_keywords": "festplatte laufwerk speicher platz größe frei aufräumen bereinigen löschen disk",
   "shell.search.placeholder": "Spiele und Befehle suchen…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Bibliothek nicht mehr nach Genre gruppieren",
   "shell.palette.group_by_category": "Bibliothek nach Kategorie gruppieren",
   "shell.palette.ungroup_by_category": "Bibliothek nicht mehr nach Kategorie gruppieren",
+  "shell.palette.user_action": "{action} für {title}",
+  "shell.palette.user_action_keywords": "aktion werkzeug programm link mod-manager editor",
   "shell.palette.category_keywords": "Kategorie intelligent Schlagwort Gruppe Sammlung",
   "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter"
 }

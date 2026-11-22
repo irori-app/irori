@@ -16,6 +16,7 @@
   "shell.nav.forward": "Suivant (Alt+Droite)",
   "shell.notice.component_update_failed": "Échec de la mise à jour de {name}",
   "shell.notice.component_updated": "{name} mis à jour vers {version}",
+  "shell.palette.edit_actions": "Modifier les actions de {title}",
   "shell.palette.storage": "Stockage et nettoyage",
   "shell.palette.storage_keywords": "disque lecteur espace taille libre libérer nettoyer nettoyage supprimer",
   "shell.search.placeholder": "Rechercher des jeux et des commandes…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Ne plus regrouper la bibliothèque par genre",
   "shell.palette.group_by_category": "Regrouper la bibliothèque par catégorie",
   "shell.palette.ungroup_by_category": "Ne plus regrouper la bibliothèque par catégorie",
+  "shell.palette.user_action": "{action} pour {title}",
+  "shell.palette.user_action_keywords": "action outil programme lien gestionnaire de mods éditeur",
   "shell.palette.category_keywords": "catégorie intelligente étiquette groupe collection",
   "shell.palette.genre_keywords": "genre action aventure stratégie réflexion jeu de rôle tir"
 }

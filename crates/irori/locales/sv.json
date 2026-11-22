@@ -16,6 +16,7 @@
   "shell.nav.forward": "Framåt (Alt+Höger)",
   "shell.notice.component_update_failed": "{name} kunde inte uppdateras",
   "shell.notice.component_updated": "{name} uppdaterad till {version}",
+  "shell.palette.edit_actions": "Redigera åtgärderna för {title}",
   "shell.palette.storage": "Lagring och rensning",
   "shell.palette.storage_keywords": "disk enhet utrymme storlek ledigt frigör rensa rensning ta bort lagring storage",
   "shell.search.placeholder": "Sök spel och kommandon…",
@@ -181,6 +182,8 @@
   "shell.palette.ungroup_by_genre": "Sluta gruppera biblioteket efter genre",
   "shell.palette.group_by_category": "Gruppera biblioteket efter kategori",
   "shell.palette.ungroup_by_category": "Sluta gruppera biblioteket efter kategori",
+  "shell.palette.user_action": "{action} för {title}",
+  "shell.palette.user_action_keywords": "åtgärd verktyg program länk modhanterare redigerare",
   "shell.palette.category_keywords": "kategori smart tagg grupp samling",
   "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel"
 }

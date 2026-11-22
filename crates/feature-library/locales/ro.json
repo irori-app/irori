@@ -287,6 +287,7 @@
   "library.list.store": "Magazin",
   "library.list.title": "Titlu",
   "library.menu.no_categories": "Nicio categorie încă",
+  "library.menu.actions": "Acțiuni",
   "library.menu.add_to": "Adaugă în",
   "library.menu.in_smart": "În: {names}",
   "library.no_match.clear": "Șterge căutarea și filtrele",

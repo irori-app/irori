@@ -170,6 +170,8 @@ pub(super) fn build_menu(
                 },
             ));
         }
+        // The user's own actions, then the way to add or edit them.
+        menu = irori_ui::user_actions::menu_items(menu, id, true, cx);
         if id.runner == Runner::Emulation {
             let i = id.clone();
             menu = menu.item(item("game.play_with.menu", IconName::Joystick).on_click(

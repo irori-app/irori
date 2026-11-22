@@ -48,6 +48,7 @@ mod sunshine;
 mod sync;
 mod treemap;
 mod umu;
+mod user_actions;
 pub mod value;
 mod view;
 mod widgets;
