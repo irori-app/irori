@@ -30,6 +30,7 @@ mod epic;
 mod form;
 mod game_view;
 mod graphics_mods;
+pub mod hud;
 mod i18n;
 mod igdb;
 mod launch_presets;
