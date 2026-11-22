@@ -15,7 +15,7 @@ use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
     AxisChange, Chord, Chords, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease,
-    HoldTimer, PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
+    HoldTimer, PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device,
 };
 use super::{Battery, ControllerInfo};
 use parking_lot::Mutex;
