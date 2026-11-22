@@ -207,12 +207,13 @@ impl BigPictureView {
     pub(super) fn menu(&self, cx: &App) -> Vec<MenuItem> {
         let m = models(cx);
         let queue = &m.downloads.read(cx).queue;
-        let scale = m.settings.read(cx).app.ui.big_picture_scale;
+        let app = &m.settings.read(cx).app;
         menu_items(
             !queue.active.is_empty(),
             queue.paused,
-            scale,
+            app.ui.big_picture_scale,
             self.look.layout(),
+            app.big_picture.sounds,
             &self.power,
         )
     }
@@ -257,6 +258,14 @@ impl BigPictureView {
                 task.detach();
             }
             MenuItem::Layout(_) => self.next_layout(cx),
+            MenuItem::Sounds(current) => {
+                let next = crate::model::next_sounds(current);
+                let task = irori_ui::run(cx, async move {
+                    b.settings.update_app(|app| app.big_picture.sounds = next);
+                    Ok::<_, anyhow::Error>(())
+                });
+                task.detach();
+            }
             MenuItem::Themes => self.open_editor(window, cx),
             MenuItem::ToggleFullscreen => window.toggle_fullscreen(),
             MenuItem::SetUpEmulation => {

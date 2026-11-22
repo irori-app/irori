@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "Бали: {points}",
   "bigpicture.overlay.notice.points_other": "Бали: {points}",
   "bigpicture.overlay.select": "Вибрати",
-  "bigpicture.overlay.close": "Закрити"
+  "bigpicture.overlay.close": "Закрити",
+  "bigpicture.menu.sounds": "Звуки: {sounds}",
+  "bigpicture.sounds.off": "Вимк.",
+  "bigpicture.sounds.soft": "М’які",
+  "bigpicture.sounds.classic": "Класичні",
+  "bigpicture.shelf.playing": "Граю",
+  "bigpicture.shelf.most_played": "Найбільше грав",
+  "bigpicture.shelf.forgotten": "Встановлені, давно не запускалися",
+  "bigpicture.shelf.pick_of_the_day": "Вибір дня",
+  "bigpicture.shelf.stores": "По одній на крамницю",
+  "bigpicture.hint.undo": "Скасувати",
+  "bigpicture.hint.redo": "Повторити"
 }

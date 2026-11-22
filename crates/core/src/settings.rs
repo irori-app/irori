@@ -738,6 +738,12 @@ pub struct AppSettings {
     pub default_steam_path: String,
     pub default_wine_prefix_dir: String,
     pub disable_controller: bool,
+    /// How controller input behaves (`iroriController`). Irori-only.
+    #[serde(rename = "iroriController")]
+    pub controller: crate::controller_prefs::ControllerPrefs,
+    /// Big Picture's sounds and idle screen (`iroriBigPicture`). Irori-only.
+    #[serde(rename = "iroriBigPicture")]
+    pub big_picture: crate::big_picture_prefs::BigPicturePrefs,
     pub disable_playtime_sync: bool,
     pub disable_logs: bool,
     pub disable_animations: bool,
@@ -963,6 +969,8 @@ impl Default for AppSettings {
             default_steam_path: crate::platform::steam_dir().to_string_lossy().into_owned(),
             default_wine_prefix_dir: games.join("Prefixes").to_string_lossy().into_owned(),
             disable_controller: false,
+            controller: Default::default(),
+            big_picture: Default::default(),
             disable_playtime_sync: false,
             disable_logs: false,
             disable_animations: false,

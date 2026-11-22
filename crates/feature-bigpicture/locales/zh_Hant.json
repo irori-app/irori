@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points} 點",
   "bigpicture.overlay.notice.points_other": "{points} 點",
   "bigpicture.overlay.select": "選擇",
-  "bigpicture.overlay.close": "關閉"
+  "bigpicture.overlay.close": "關閉",
+  "bigpicture.menu.sounds": "音效：{sounds}",
+  "bigpicture.sounds.off": "關",
+  "bigpicture.sounds.soft": "柔和",
+  "bigpicture.sounds.classic": "經典",
+  "bigpicture.shelf.playing": "在玩",
+  "bigpicture.shelf.most_played": "最常玩",
+  "bigpicture.shelf.forgotten": "已安裝但近期未玩",
+  "bigpicture.shelf.pick_of_the_day": "今日推薦",
+  "bigpicture.shelf.stores": "每個商店一列",
+  "bigpicture.hint.undo": "復原",
+  "bigpicture.hint.redo": "重做"
 }

@@ -5,6 +5,8 @@ pub mod achievement_cache;
 pub mod achievement_sets;
 pub mod age_rating;
 pub mod archive_guard;
+pub mod big_picture_prefs;
+pub mod controller_prefs;
 pub mod dll_override;
 pub mod events;
 pub mod fs_guard;

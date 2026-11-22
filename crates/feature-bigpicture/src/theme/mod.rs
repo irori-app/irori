@@ -413,16 +413,31 @@ pub enum ShelfKind {
     PlanToPlay,
     /// One shelf per emulated system.
     Systems,
+    /// Games the user marked "Playing".
+    Playing,
+    /// The games played longest.
+    MostPlayed,
+    /// Installed games not played for a long while, or never.
+    Forgotten,
+    /// One installed game to try, a new one each day.
+    PickOfTheDay,
+    /// One shelf per store.
+    Stores,
 }
 
 impl ShelfKind {
-    pub const ALL: [ShelfKind; 6] = [
+    pub const ALL: [ShelfKind; 11] = [
         ShelfKind::ContinuePlaying,
         ShelfKind::Favourites,
         ShelfKind::Installed,
         ShelfKind::RecentlyAdded,
         ShelfKind::PlanToPlay,
         ShelfKind::Systems,
+        ShelfKind::Playing,
+        ShelfKind::MostPlayed,
+        ShelfKind::Forgotten,
+        ShelfKind::PickOfTheDay,
+        ShelfKind::Stores,
     ];
 
     /// Home's shelves unless a theme says otherwise.
@@ -441,6 +456,11 @@ impl ShelfKind {
             ShelfKind::RecentlyAdded => "recently_added",
             ShelfKind::PlanToPlay => "plan_to_play",
             ShelfKind::Systems => "systems",
+            ShelfKind::Playing => "playing",
+            ShelfKind::MostPlayed => "most_played",
+            ShelfKind::Forgotten => "forgotten",
+            ShelfKind::PickOfTheDay => "pick_of_the_day",
+            ShelfKind::Stores => "stores",
         }
     }
 
@@ -452,6 +472,11 @@ impl ShelfKind {
             ShelfKind::RecentlyAdded => "bigpicture.shelf.recently_added",
             ShelfKind::PlanToPlay => "bigpicture.shelf.plan_to_play",
             ShelfKind::Systems => "bigpicture.shelf.systems",
+            ShelfKind::Playing => "bigpicture.shelf.playing",
+            ShelfKind::MostPlayed => "bigpicture.shelf.most_played",
+            ShelfKind::Forgotten => "bigpicture.shelf.forgotten",
+            ShelfKind::PickOfTheDay => "bigpicture.shelf.pick_of_the_day",
+            ShelfKind::Stores => "bigpicture.shelf.stores",
         })
     }
 }

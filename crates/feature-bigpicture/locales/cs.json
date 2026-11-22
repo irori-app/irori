@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "Body: {points}",
   "bigpicture.overlay.notice.points_other": "Body: {points}",
   "bigpicture.overlay.select": "Vybrat",
-  "bigpicture.overlay.close": "Zavřít"
+  "bigpicture.overlay.close": "Zavřít",
+  "bigpicture.menu.sounds": "Zvuky: {sounds}",
+  "bigpicture.sounds.off": "Vypnuto",
+  "bigpicture.sounds.soft": "Jemné",
+  "bigpicture.sounds.classic": "Klasické",
+  "bigpicture.shelf.playing": "Hraji",
+  "bigpicture.shelf.most_played": "Nejhranější",
+  "bigpicture.shelf.forgotten": "Nainstalované, dlouho nehrané",
+  "bigpicture.shelf.pick_of_the_day": "Tip dne",
+  "bigpicture.shelf.stores": "Jedna pro každý obchod",
+  "bigpicture.hint.undo": "Zpět",
+  "bigpicture.hint.redo": "Znovu"
 }

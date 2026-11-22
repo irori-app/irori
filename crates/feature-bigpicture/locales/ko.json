@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points}점",
   "bigpicture.overlay.notice.points_other": "{points}점",
   "bigpicture.overlay.select": "선택",
-  "bigpicture.overlay.close": "닫기"
+  "bigpicture.overlay.close": "닫기",
+  "bigpicture.menu.sounds": "소리: {sounds}",
+  "bigpicture.sounds.off": "끔",
+  "bigpicture.sounds.soft": "부드럽게",
+  "bigpicture.sounds.classic": "클래식",
+  "bigpicture.shelf.playing": "플레이 중",
+  "bigpicture.shelf.most_played": "가장 많이 플레이함",
+  "bigpicture.shelf.forgotten": "설치됨, 최근에 플레이하지 않음",
+  "bigpicture.shelf.pick_of_the_day": "오늘의 추천",
+  "bigpicture.shelf.stores": "스토어별",
+  "bigpicture.hint.undo": "실행 취소",
+  "bigpicture.hint.redo": "다시 실행"
 }

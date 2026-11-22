@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points} punto",
   "bigpicture.overlay.notice.points_other": "{points} punti",
   "bigpicture.overlay.select": "Seleziona",
-  "bigpicture.overlay.close": "Chiudi"
+  "bigpicture.overlay.close": "Chiudi",
+  "bigpicture.menu.sounds": "Suoni: {sounds}",
+  "bigpicture.sounds.off": "Disattivati",
+  "bigpicture.sounds.soft": "Morbidi",
+  "bigpicture.sounds.classic": "Classici",
+  "bigpicture.shelf.playing": "In corso",
+  "bigpicture.shelf.most_played": "Più giocati",
+  "bigpicture.shelf.forgotten": "Installati, non giocati di recente",
+  "bigpicture.shelf.pick_of_the_day": "Scelta del giorno",
+  "bigpicture.shelf.stores": "Uno per negozio",
+  "bigpicture.hint.undo": "Annulla",
+  "bigpicture.hint.redo": "Ripeti"
 }

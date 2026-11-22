@@ -1226,6 +1226,42 @@ Microsoft's approval page (`irori_manage::login`).
   list) must leave one that moves nothing at its edge unhandled (`cx.propagate()`, as
   the library grid does), or a controller is stuck in it. Menu opens the palette,
   which reaches every screen.
+- A routed controller input hides the mouse pointer until the mouse moves
+  (`gamepad/pointer.rs`, `iroriController.hidePointer`, on by default). GPUI has no
+  public call for that, so the input first counts as keyboard input (an unbound F24
+  press, which also drops hover looks) and then a global action is taken, which GPUI's
+  default `CursorHideMode::OnTypingAndAction` turns into hiding the pointer. Never
+  bind F24.
+- **Button map** (`gamepad/bindings.rs`, `iroriController`): one map for the whole app
+  turns a physical button into its job. `confirmButton` (automatic: the right button on
+  Nintendo's layout; bottom; right), `glyphs` (the family buttons are shown as, which
+  also decides the automatic confirm button) and `buttons` (a button's id to a job, only
+  the buttons the user changed) feed it; the reader thread, the overlay's evdev reader
+  and every hint (`ControllerKind::glyph`) read the global, so a change applies to the
+  next press. Guide, the D-pad and the sticks keep their jobs, and a map leaving nothing
+  to confirm or go back with is never used. Settings → Controller
+  (`irori_settings` `controller_map.rs`) draws the controller in hand
+  (`gamepad/drawing.rs`, an SVG of theme colours without text, labels laid over it) per
+  place (Irori's screens, Big Picture, the overlay, Guide held) and moves a job to
+  another button by swapping it with that button's job (`ButtonMap::assigning`).
+- **Navigation sounds** (`nav_sound.rs`, `iroriBigPicture.sounds`/`soundVolume`, off
+  by default; the quick menu cycles them): tones made in code (`samples`, pure and
+  tested) are written once as WAV files under `<cache>/bigpicture-sounds` and played by
+  the system, never by a linked audio library: `PlaySoundW` on Windows, `afplay` on
+  macOS, `pw-play`/`paplay`/`aplay` on Linux. A move sounds only when the focus moved
+  (`nav_cue`) and not while the last tone still plays; changing the setting plays a
+  sample.
+- **Idle screen** (`view/idle.rs`, `iroriBigPicture.idleMinutes`, 0 = off by default,
+  and `idleScreen`: slideshow of Home's art or dimmed, both with the clock): one timer
+  task sleeps until the screen is due and again for what is left after input, so input
+  only stamps a time; the dimmed screen needs no timer. Any input, mouse movement or
+  click wakes Big Picture and does nothing else.
+- **Shelf kinds** (`theme::ShelfKind`, built in `model::build_rows_on`, pure and
+  tested): Continue playing, Favourites, Installed, Recently added, Plan to play, one per
+  system, Playing, Most played, Installed and not played for 90 days, Pick of the day
+  (one installed game not beaten or abandoned, the same all day) and one per store. A
+  theme naming a kind an older Irori doesn't know is refused there, as any unknown
+  value is.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of
@@ -1268,7 +1304,8 @@ Microsoft's approval page (`irori_manage::login`).
   bounded size, never a path or address, and ids are made by Irori, so a file
   can't name anything outside that folder. The editor (`view/editor.rs`, quick
   menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
-  close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
+  close; LB and RB (Page Up/Down) undo and redo its changes, up to a hundred, until
+  another theme is loaded into it. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
   `bigPictureOnController` (open Big Picture when a controller connects, or is
   connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
   name, so a pad switching mode counts, and one a system hid while Irori was in the

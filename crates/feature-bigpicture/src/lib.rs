@@ -11,6 +11,7 @@ pub mod gamepad;
 mod grid;
 mod layout;
 mod model;
+pub mod nav_sound;
 pub mod overlay;
 mod text;
 mod theme;
@@ -84,6 +85,7 @@ pub fn init(cx: &mut App) {
     bind_keys(cx);
     gamepad::install(cx);
     overlay::install(cx);
+    nav_sound::install(cx);
 }
 
 /// Keyboard equivalents of the controller inputs inside Big Picture: arrows

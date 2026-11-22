@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points} point",
   "bigpicture.overlay.notice.points_other": "{points} points",
   "bigpicture.overlay.select": "Choisir",
-  "bigpicture.overlay.close": "Fermer"
+  "bigpicture.overlay.close": "Fermer",
+  "bigpicture.menu.sounds": "Sons : {sounds}",
+  "bigpicture.sounds.off": "Désactivés",
+  "bigpicture.sounds.soft": "Doux",
+  "bigpicture.sounds.classic": "Classiques",
+  "bigpicture.shelf.playing": "En cours",
+  "bigpicture.shelf.most_played": "Les plus joués",
+  "bigpicture.shelf.forgotten": "Installés, pas joués récemment",
+  "bigpicture.shelf.pick_of_the_day": "Suggestion du jour",
+  "bigpicture.shelf.stores": "Une par boutique",
+  "bigpicture.hint.undo": "Annuler",
+  "bigpicture.hint.redo": "Rétablir"
 }

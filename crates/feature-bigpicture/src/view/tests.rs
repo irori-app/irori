@@ -739,6 +739,23 @@ fn every_layout_draws_and_moves_and_the_editor_changes_them_live(cx: &mut TestAp
     cx.simulate_keystrokes(handle, "down down right");
     draw(cx);
 
+    // Page Up (LB) takes the accent back, Page Down (RB) makes it again.
+    let changed = cx.read(|cx| view.read(cx).look.editor.as_ref().unwrap().draft.clone());
+    cx.simulate_keystrokes(handle, "pageup");
+    cx.read(|cx| {
+        let editor = view.read(cx).look.editor.as_ref().unwrap();
+        assert_ne!(editor.draft, changed, "undone");
+        assert_eq!(editor.draft.name, "Hearth");
+        assert_eq!(editor.undone.len(), 1);
+    });
+    cx.simulate_keystrokes(handle, "pagedown");
+    cx.read(|cx| {
+        let editor = view.read(cx).look.editor.as_ref().unwrap();
+        assert_eq!(editor.draft, changed, "redone");
+        assert!(editor.undone.is_empty());
+    });
+    draw(cx);
+
     // Closing keeps the change as the user's own copy, and uses it.
     cx.simulate_keystrokes(handle, "escape");
     let copy = ThemeRef::User("hearth-mine".into());
@@ -1035,4 +1052,22 @@ fn sound_output_entry_names_the_output_and_explains_what_it_cant_do(cx: &mut Tes
                 .contains(irori_ui::i18n::t("bigpicture.overlay.output_unavailable").as_str())
         );
     });
+}
+
+#[test]
+fn inputs_sound_only_when_they_do_something() {
+    use crate::nav_sound::Cue;
+    use gamepad::GamepadInput as I;
+    assert_eq!(super::nav_cue(I::Down, true, false), Some(Cue::Move));
+    assert_eq!(super::nav_cue(I::Down, false, false), None, "at an edge");
+    assert_eq!(
+        super::nav_cue(I::Down, false, true),
+        Some(Cue::Move),
+        "editor"
+    );
+    assert_eq!(super::nav_cue(I::Confirm, false, false), Some(Cue::Confirm));
+    assert_eq!(super::nav_cue(I::Back, true, false), Some(Cue::Back));
+    assert_eq!(super::nav_cue(I::Back, false, false), None);
+    assert_eq!(super::nav_cue(I::NextPage, true, false), Some(Cue::Tab));
+    assert_eq!(super::nav_cue(I::Menu, true, false), Some(Cue::Confirm));
 }

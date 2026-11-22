@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points} punt",
   "bigpicture.overlay.notice.points_other": "{points} punten",
   "bigpicture.overlay.select": "Kiezen",
-  "bigpicture.overlay.close": "Sluiten"
+  "bigpicture.overlay.close": "Sluiten",
+  "bigpicture.menu.sounds": "Geluiden: {sounds}",
+  "bigpicture.sounds.off": "Uit",
+  "bigpicture.sounds.soft": "Zacht",
+  "bigpicture.sounds.classic": "Klassiek",
+  "bigpicture.shelf.playing": "Aan het spelen",
+  "bigpicture.shelf.most_played": "Meest gespeeld",
+  "bigpicture.shelf.forgotten": "Geïnstalleerd, lang niet gespeeld",
+  "bigpicture.shelf.pick_of_the_day": "Keuze van de dag",
+  "bigpicture.shelf.stores": "Eén per winkel",
+  "bigpicture.hint.undo": "Ongedaan maken",
+  "bigpicture.hint.redo": "Opnieuw"
 }

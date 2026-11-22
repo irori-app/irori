@@ -296,5 +296,16 @@
   "bigpicture.overlay.notice.points_one": "{points} punct",
   "bigpicture.overlay.notice.points_other": "Puncte: {points}",
   "bigpicture.overlay.select": "Selectează",
-  "bigpicture.overlay.close": "Închide"
+  "bigpicture.overlay.close": "Închide",
+  "bigpicture.menu.sounds": "Sunete: {sounds}",
+  "bigpicture.sounds.off": "Oprite",
+  "bigpicture.sounds.soft": "Blânde",
+  "bigpicture.sounds.classic": "Clasice",
+  "bigpicture.shelf.playing": "În curs",
+  "bigpicture.shelf.most_played": "Cele mai jucate",
+  "bigpicture.shelf.forgotten": "Instalate, nejucate de mult",
+  "bigpicture.shelf.pick_of_the_day": "Recomandarea zilei",
+  "bigpicture.shelf.stores": "Câte unul pe magazin",
+  "bigpicture.hint.undo": "Anulează",
+  "bigpicture.hint.redo": "Refă"
 }

@@ -3,14 +3,14 @@
 //! is grabbed gilrs sees nothing of it, so Irori reads its events itself.
 //!
 //! The kernel's gamepad codes name buttons by position (`BTN_SOUTH` is the
-//! bottom face button on every family), as gilrs does, so [`map_button`]
-//! applies unchanged. Only what the overlay needs is read: the bottom and
+//! bottom face button on every family), as gilrs does, so the button map
+//! (`bindings`) applies unchanged. Only what the overlay needs is read: the bottom and
 //! right face buttons, the shoulders, Guide, the D-pad (as buttons or as a
 //! hat) and the left stick. Pure logic, tested without hardware.
 
 use std::collections::BTreeSet;
 
-use super::input::{AxisChange, ControllerKind, GamepadInput, PadButton, StickAxis, map_button};
+use super::input::{AxisChange, ControllerKind, GamepadInput, PadButton, StickAxis};
 
 pub const EV_KEY: u16 = 0x01;
 pub const EV_ABS: u16 = 0x03;
@@ -112,7 +112,9 @@ impl RawPad {
         let Some(button) = button(code) else {
             return Vec::new();
         };
-        let input = map_button(button, self.kind);
+        let Some(input) = super::bindings::input(button, self.kind) else {
+            return Vec::new();
+        };
         match value {
             // 2 is the kernel's autorepeat; directions repeat on Irori's timing.
             0 => {

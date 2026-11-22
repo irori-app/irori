@@ -26,6 +26,7 @@ mod commands;
 mod compact;
 mod editor;
 mod home;
+mod idle;
 mod library;
 mod log;
 mod look;
@@ -197,12 +198,41 @@ pub struct BigPictureView {
     hero_gen: u64,
     hero_task: Option<Task<()>>,
     _clock_task: Task<()>,
+    /// The idle screen and its timer.
+    idle: idle::Idle,
     _editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
 /// A library revision and the user data it was read with, by identity.
 type ShowKey = (u64, usize);
+
+/// Where the focus is and what is open, for the navigation sounds.
+type NavKey = (
+    Tab,
+    Option<(GameId, usize)>,
+    (bool, bool, bool),
+    Option<Overlay>,
+    FocusGrid,
+    LibraryFocus,
+    usize,
+);
+
+/// The sound an input makes: a move or a tab change only when it moved
+/// something (a direction at an edge is silent), opening and playing always,
+/// closing when something closed. The theme editor's rows aren't followed,
+/// so its directions always sound.
+fn nav_cue(input: GamepadInput, changed: bool, editing: bool) -> Option<crate::nav_sound::Cue> {
+    use crate::nav_sound::Cue;
+    match input {
+        GamepadInput::Confirm | GamepadInput::Alt => Some(Cue::Confirm),
+        GamepadInput::Menu if changed => Some(Cue::Confirm),
+        GamepadInput::Back if changed => Some(Cue::Back),
+        GamepadInput::PrevPage | GamepadInput::NextPage if changed => Some(Cue::Tab),
+        input if input.is_directional() && (changed || editing) => Some(Cue::Move),
+        _ => None,
+    }
+}
 
 /// The current time in the interface language's usual clock format.
 fn clock_text() -> SharedString {
@@ -228,6 +258,7 @@ impl BigPictureView {
                 irori_ui::theme::set_zoom(ui.big_picture_zoom(), cx);
                 this.look.follow_settings(&ui);
                 this.refresh(cx);
+                this.schedule_idle(cx);
                 cx.notify();
             }),
             cx.observe(&m.statuses, |_, _, cx| cx.notify()),
@@ -335,6 +366,7 @@ impl BigPictureView {
             hero_gen: 0,
             hero_task: None,
             _clock_task: clock_task,
+            idle: idle::Idle::new(),
             _editor_subscription: None,
             _subscriptions: subscriptions,
         };
@@ -344,6 +376,7 @@ impl BigPictureView {
         this.refresh(cx);
         this.show_requested_game(cx);
         this.hero = this.focused_game().cloned();
+        this.schedule_idle(cx);
         this
     }
 
@@ -532,7 +565,39 @@ impl BigPictureView {
 
     // ---- input ---------------------------------------------------------
 
+    /// What a navigation sound follows: where the focus is and what is
+    /// open.
+    fn nav_key(&self) -> NavKey {
+        (
+            self.tab,
+            self.page.as_ref().map(|p| (p.id.clone(), p.ix)),
+            (
+                self.show_log,
+                self.settings.is_some(),
+                self.look.editor.is_some(),
+            ),
+            self.overlay.clone(),
+            self.grid.clone(),
+            self.library.focus,
+            self.library.ix,
+        )
+    }
+
     fn on_input(&mut self, input: GamepadInput, window: &mut Window, cx: &mut Context<Self>) {
+        // An input that wakes Big Picture from the idle screen does nothing
+        // else.
+        if self.note_input(cx) {
+            return;
+        }
+        let before = self.nav_key();
+        let editing = self.look.editor.is_some();
+        self.route_input(input, window, cx);
+        if let Some(cue) = nav_cue(input, before != self.nav_key(), editing) {
+            crate::nav_sound::play(cue, cx);
+        }
+    }
+
+    fn route_input(&mut self, input: GamepadInput, window: &mut Window, cx: &mut Context<Self>) {
         if input == GamepadInput::Guide {
             self.overlay = None;
             crate::exit_big_picture(cx);
@@ -1194,6 +1259,9 @@ impl Render for BigPictureView {
                     .on_scroll_wheel(
                         cx.listener(|this, e: &ScrollWheelEvent, w, cx| this.on_wheel(e, w, cx)),
                     )
+                    .on_mouse_move(cx.listener(|this, _: &gpui_kit::MouseMoveEvent, _, cx| {
+                        this.note_input(cx);
+                    }))
                     .child(self.render_backdrop(c, window, cx))
                     .child(
                         v_flex()
@@ -1220,5 +1288,6 @@ impl Render for BigPictureView {
             .when_some(self.render_settings(c, metrics, cx), |d, settings| {
                 d.child(settings)
             })
+            .when_some(self.render_idle(c, cx), |d, idle| d.child(idle))
     }
 }
