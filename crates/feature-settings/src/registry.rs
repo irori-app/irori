@@ -1151,6 +1151,19 @@ const NEEDS_NVAPI: &[Condition] = &[when(
     true,
     "settings.requires.dxvk_nvapi",
 )];
+const NEEDS_ACHIEVEMENT_NOTICES: &[Condition] = &[when(
+    "iroriAchievementNotices",
+    true,
+    "settings.requires.achievement_notices",
+)];
+
+/// A line an unlock notice may show under the achievement's name; the
+/// overlay's corner notices show them too, so they don't need the notices.
+const fn achievement_line(path: &'static str, label: &'static str) -> FieldSpec {
+    app(path, label, General, "settings.group.library", Toggle)
+        .help("settings.field.achievement_toast_line.help")
+        .keywords(&["achievements", "unlocked", "notification", "toast", "lines"])
+}
 const NEEDS_LSFG: &[Condition] = &[when("iroriLsfg.enabled", true, "settings.requires.lsfg")];
 const NEEDS_VKD3D: &[Condition] = &[when("autoInstallVkd3d", true, "settings.requires.vkd3d")];
 const NEEDS_SUNSHINE: &[Condition] = &[when(
@@ -1613,6 +1626,43 @@ pub static FIELDS: &[FieldSpec] = &[
         "notification",
         "retroachievements",
     ]),
+    app(
+        "iroriAchievementToast.overGame",
+        "settings.field.achievement_toast_over_game.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.achievement_toast_over_game.help")
+    .keywords(&[
+        "achievements",
+        "unlocked",
+        "overlay",
+        "in-game",
+        "toast",
+        "popup",
+    ])
+    .requires(NEEDS_ACHIEVEMENT_NOTICES),
+    achievement_line(
+        "iroriAchievementToast.showGame",
+        "settings.field.achievement_toast_game.label",
+    ),
+    achievement_line(
+        "iroriAchievementToast.showDescription",
+        "settings.field.achievement_toast_description.label",
+    ),
+    achievement_line(
+        "iroriAchievementToast.showRarity",
+        "settings.field.achievement_toast_rarity.label",
+    ),
+    achievement_line(
+        "iroriAchievementToast.showProgress",
+        "settings.field.achievement_toast_progress.label",
+    ),
+    achievement_line(
+        "iroriAchievementToast.showPoints",
+        "settings.field.achievement_toast_points.label",
+    ),
     app(
         "iroriFileAchievements",
         "settings.field.file_achievements.label",

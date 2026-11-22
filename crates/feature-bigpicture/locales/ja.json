@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "実績を解除しました",
   "bigpicture.overlay.more_unlocks_one": "あと 1 件",
   "bigpicture.overlay.more_unlocks_other": "あと {count} 件",
+  "bigpicture.overlay.sets": "実績セット",
+  "bigpicture.overlay.set_other": "その他の実績",
+  "bigpicture.overlay.set_not_owned": "DLC未所有",
+  "bigpicture.overlay.set_complete": "コンプリート",
+  "bigpicture.overlay.notice.rarity": "プレイヤーの {percent}%",
+  "bigpicture.overlay.notice.points_one": "{points} ポイント",
+  "bigpicture.overlay.notice.points_other": "{points} ポイント",
   "bigpicture.overlay.select": "選択",
   "bigpicture.overlay.close": "閉じる"
 }

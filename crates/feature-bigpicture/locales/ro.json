@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Realizare deblocată",
   "bigpicture.overlay.more_unlocks_one": "Încă 1 în așteptare",
   "bigpicture.overlay.more_unlocks_other": "Încă {count} în așteptare",
+  "bigpicture.overlay.sets": "Seturi de realizări",
+  "bigpicture.overlay.set_other": "Alte realizări",
+  "bigpicture.overlay.set_not_owned": "DLC nedeținut",
+  "bigpicture.overlay.set_complete": "Finalizat",
+  "bigpicture.overlay.notice.rarity": "{percent}% dintre jucători",
+  "bigpicture.overlay.notice.points_one": "{points} punct",
+  "bigpicture.overlay.notice.points_other": "Puncte: {points}",
   "bigpicture.overlay.select": "Selectează",
   "bigpicture.overlay.close": "Închide"
 }

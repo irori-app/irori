@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Logro desbloqueado",
   "bigpicture.overlay.more_unlocks_one": "1 más en espera",
   "bigpicture.overlay.more_unlocks_other": "{count} más en espera",
+  "bigpicture.overlay.sets": "Conjuntos de logros",
+  "bigpicture.overlay.set_other": "Otros logros",
+  "bigpicture.overlay.set_not_owned": "DLC no adquirido",
+  "bigpicture.overlay.set_complete": "Completado",
+  "bigpicture.overlay.notice.rarity": "{percent} % de los jugadores",
+  "bigpicture.overlay.notice.points_one": "{points} punto",
+  "bigpicture.overlay.notice.points_other": "{points} puntos",
   "bigpicture.overlay.select": "Seleccionar",
   "bigpicture.overlay.close": "Cerrar"
 }

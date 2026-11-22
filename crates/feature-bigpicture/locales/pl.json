@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Odblokowano osiągnięcie",
   "bigpicture.overlay.more_unlocks_one": "Czeka jeszcze 1",
   "bigpicture.overlay.more_unlocks_other": "Czeka jeszcze {count}",
+  "bigpicture.overlay.sets": "Zestawy osiągnięć",
+  "bigpicture.overlay.set_other": "Pozostałe osiągnięcia",
+  "bigpicture.overlay.set_not_owned": "Nie posiadasz DLC",
+  "bigpicture.overlay.set_complete": "Ukończono",
+  "bigpicture.overlay.notice.rarity": "{percent}% graczy",
+  "bigpicture.overlay.notice.points_one": "Punkty: {points}",
+  "bigpicture.overlay.notice.points_other": "Punkty: {points}",
   "bigpicture.overlay.select": "Wybierz",
   "bigpicture.overlay.close": "Zamknij"
 }

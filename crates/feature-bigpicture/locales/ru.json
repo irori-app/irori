@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Достижение получено",
   "bigpicture.overlay.more_unlocks_one": "Ещё 1 в очереди",
   "bigpicture.overlay.more_unlocks_other": "Ещё {count} в очереди",
+  "bigpicture.overlay.sets": "Наборы достижений",
+  "bigpicture.overlay.set_other": "Другие достижения",
+  "bigpicture.overlay.set_not_owned": "DLC не куплено",
+  "bigpicture.overlay.set_complete": "Завершено",
+  "bigpicture.overlay.notice.rarity": "{percent}% игроков",
+  "bigpicture.overlay.notice.points_one": "Очки: {points}",
+  "bigpicture.overlay.notice.points_other": "Очки: {points}",
   "bigpicture.overlay.select": "Выбрать",
   "bigpicture.overlay.close": "Закрыть"
 }

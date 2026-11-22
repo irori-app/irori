@@ -276,9 +276,11 @@ and `launch.rs` before changing anything below the UI.
 - Operations: `install`, `update` and `repair` take an `OpContext` and return an
   `Outcome`. Also `uninstall(RemoveArgs)`, `import`, `set_install_path`, and
   `launch` → `LaunchPlan`.
-- Optional, with defaults: cloud saves, achievements (`achievements`, and
-  `forget_achievements` to drop a cached answer after a session), `remote_playtime`
-  (minutes by app name), `after_exit`, extras, `forget_install`, `set_version_pinned`.
+- Optional, with defaults: cloud saves, achievements (`achievements`,
+  `forget_achievements` to drop a cached answer after a session, and
+  `achievement_signal`: how the store tells that a running game unlocked one),
+  `remote_playtime` (minutes by app name), `after_exit`, extras, `forget_install`,
+  `set_version_pinned`.
 - Accounts, with defaults for stores with one login: `accounts`, `can_add_account`,
   `account_login_flow`/`account_login`/`account_logout`/`refresh_account` by slot,
   and `game_account`.
@@ -323,7 +325,9 @@ and `launch.rs` before changing anything below the UI.
 - Variants: `LibraryChanged(Runner)`, `LibraryUpdated(rev)`, `GameChanged`, `Status`,
   `StatusCleared`, `AccountChanged`, `DownloadQueueChanged`, `WineVersionsChanged`,
   `SettingsChanged`, `GameSettingsChanged`, `Connectivity`, `Notice`, `GameExited`,
-  `SunshineChanged`.
+  `SunshineChanged`, `AchievementSignal` (a store's raw "this running game unlocked
+  something") and `AchievementsUnlocked` (services saw new unlocks; the UI takes them
+  with `Backend::take_live_unlocks`).
 - Events carry *identities, not data*: receivers re-read state from the service that
   owns it.
 - Emit `LibraryChanged(runner)` after a store's catalogue or install state changes,
@@ -628,10 +632,30 @@ commands without a window.
   shown unfiltered there, never lost.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
-  (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that
-  file; "Check played games" (`scan_achievements`) asks stores one game at a time.
+  (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock
+  ever answered, which only grows: an unlock a later answer leaves out stays, at the
+  earliest time any answer gave it; `Backend::achievement_history`). The stats page
+  totals that file (period counts from the history); the game page's timeline puts
+  each day's unlocks on it, days without a session Irori saw included. "Check played
+  games" (`scan_achievements`) asks stores one game at a time.
   After a session the game's cached answer is dropped and asked again; with
-  `iroriAchievementNotices` on, new unlocks raise a notice. Stores cache their answers
+  `iroriAchievementNotices` on, new unlocks raise a notice.
+  - **While playing**, with notices on, `watch_achievements_while_playing` notes the
+    game's unlocks when the session starts and then follows the store's
+    `Store::achievement_signal`: `Events` (GOG: comet tells the store of every unlock
+    a game makes through the Galaxy service, `irori_gog_galaxy::Service::unlocks`; the
+    store merges them into its answers before GOG's API has them and emits
+    `Event::AchievementSignal`) or `Files` (Steam: the game's
+    `appcache/stats/UserGameStats_<account>_<app>.bin`, watched with `notify`). With
+    a signal nothing is asked in between; without one, the game's own files are read
+    every minute and the store asked every three, only during the session. New
+    unlocks go to `Backend::take_live_unlocks` and `Event::AchievementsUnlocked`; the
+    UI shows them over the game (`irori_ui::hooks::show_unlocks`, Big Picture's
+    `overlay::show_unlocks`), else as a notice. On Windows, while GOG Galaxy's own
+    communication service runs it holds port 9977, so comet doesn't start and GOG
+    games fall back to asking every three minutes; Irori doesn't talk to Galaxy's
+    service (it reports unlocks to GOG, which the next answer has).
+  Stores cache their answers
   with `irori_core::achievement_cache` (15 minutes; stale answers stand in offline).
   Sources: GOG and Epic web APIs, Steam's `IPlayerService` (definitions are public;
   unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
@@ -1252,7 +1276,19 @@ Microsoft's approval page (`irori_manage::login`).
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
   `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
-  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay".
+  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay". Its Achievements tab
+  lists the game's sets (`irori_core::achievement_sets`, as the game page counts them)
+  and leaves a set the player can't earn out of "Next up".
+- **Unlocks over the game** (`overlay/notice.rs`, `iroriAchievementToast`): what
+  services report as it unlocks (`irori_ui::hooks::show_unlocks`) shows as a card in
+  the top right corner, one after another, with the lines the user chose (game,
+  description, rarity, progress, points; `model::Toast`). It shares its queue with the
+  overlay's corner notices (`overlay::toasts`, one timer), so each unlock shows once,
+  in the panel while it is open. The card's surface never takes the focus: a
+  layer-shell surface anchored top right without keyboard on Wayland (none without
+  layer-shell: the unlock becomes a notice), GPUI's pop-up window elsewhere; it exists
+  only while a card shows. While Irori's window is in front, or Windows has a game in
+  exclusive fullscreen, unlocks are notices instead.
 
 ### 4.8 Engines (emulators)
 

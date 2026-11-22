@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Achievement unlocked",
   "bigpicture.overlay.more_unlocks_one": "1 more waiting",
   "bigpicture.overlay.more_unlocks_other": "{count} more waiting",
+  "bigpicture.overlay.sets": "Achievement sets",
+  "bigpicture.overlay.set_other": "Other achievements",
+  "bigpicture.overlay.set_not_owned": "DLC not owned",
+  "bigpicture.overlay.set_complete": "Complete",
+  "bigpicture.overlay.notice.rarity": "{percent}% of players",
+  "bigpicture.overlay.notice.points_one": "{points} point",
+  "bigpicture.overlay.notice.points_other": "{points} points",
   "bigpicture.overlay.select": "Select",
   "bigpicture.overlay.close": "Close"
 }

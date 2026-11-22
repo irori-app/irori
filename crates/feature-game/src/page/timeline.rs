@@ -1,10 +1,14 @@
-//! Play history of the game, from `sessions.jsonl`. The timeline shows one
-//! row per day played (newest first) on a rail: the date with the session
-//! count or start time under it, the time played, the longest day and failed
-//! starts marked, a quiet line where the game rested for a while, and where it
-//! all began at the bottom. Hovering or focusing a day lists its sessions'
-//! times. The sessions view lists every session on its own, and the
-//! journal view the user's notes per day (see [`super::journal`]).
+//! Play history of the game, from `sessions.jsonl` and the achievements it
+//! unlocked (the unlock history `irori_services::achievements` keeps). The
+//! timeline shows one row per day played (newest first) on a rail: the date
+//! with the session count or start time under it, the time played, the
+//! achievements unlocked, the longest day and failed starts marked, a quiet
+//! line where the game rested for a while, and where it all began at the
+//! bottom. A day with unlocks but no session Irori saw (played before
+//! Irori, or elsewhere) shows its unlocks alone. Hovering or focusing a day
+//! lists its sessions' times and its unlocks. The sessions view lists every
+//! session on its own, and the journal view the user's notes per day (see
+//! [`super::journal`]).
 //!
 //! Rows are virtualized, so years of history cost what fits in the panel.
 //! The list is one Tab stop; the arrow keys, Home and End move between days,
@@ -81,6 +85,8 @@ pub(crate) struct PlayDay {
     pub longest: bool,
     /// The day's sessions, earliest first.
     pub spans: Vec<Span>,
+    /// The names of the achievements unlocked that day, earliest first.
+    pub unlocks: Vec<String>,
 }
 
 /// A line of the timeline.
@@ -112,14 +118,26 @@ pub(crate) struct Timeline {
     pub sessions: Vec<Span>,
     /// Sessions that ran, not counting failed starts.
     pub played: u32,
-    /// The first day in the history.
+    /// The first day a session in the history was on.
     pub since: Option<NaiveDate>,
 }
 
 /// Group `spans` (in any order) into days, newest first. `first_played` is
 /// the first play the playtime record knows of, which may predate the
 /// history; the timeline closes on the earlier of the two.
+#[cfg(test)]
 pub(crate) fn build(spans: &[Span], first_played: Option<NaiveDate>) -> Timeline {
+    build_with(spans, first_played, &[])
+}
+
+/// [`build`], with the achievements unlocked at local times (`unlocks`, in
+/// any order) on their days; a day with unlocks but no session gets a row
+/// of its own, and the timeline closes no later than the first unlock.
+pub(crate) fn build_with(
+    spans: &[Span],
+    first_played: Option<NaiveDate>,
+    unlocks: &[(NaiveDateTime, String)],
+) -> Timeline {
     let mut sessions = spans.to_vec();
     sessions.sort_by_key(|s| std::cmp::Reverse(s.start));
     let mut days: Vec<PlayDay> = Vec::new();
@@ -133,6 +151,7 @@ pub(crate) fn build(spans: &[Span], first_played: Option<NaiveDate>) -> Timeline
                 crashes: 0,
                 longest: false,
                 spans: Vec::new(),
+                unlocks: Vec::new(),
             });
         }
         let d = days.last_mut().expect("pushed above");
@@ -151,6 +170,24 @@ pub(crate) fn build(spans: &[Span], first_played: Option<NaiveDate>) -> Timeline
         d.longest = true;
     }
     let since = days.last().map(|d| d.day);
+    let mut unlocks = unlocks.to_vec();
+    unlocks.sort_by_key(|(at, _)| *at);
+    for (at, name) in unlocks {
+        let day = at.date();
+        match days.iter_mut().find(|d| d.day == day) {
+            Some(d) => d.unlocks.push(name),
+            None => days.push(PlayDay {
+                day,
+                seconds: 0,
+                sessions: 0,
+                crashes: 0,
+                longest: false,
+                spans: Vec::new(),
+                unlocks: vec![name],
+            }),
+        }
+    }
+    days.sort_by_key(|d| std::cmp::Reverse(d.day));
     let mut rows = Vec::with_capacity(days.len() * 2 + 1);
     for (ix, d) in days.iter().enumerate() {
         rows.push(TimelineRow::Day(d.clone()));
@@ -161,10 +198,10 @@ pub(crate) fn build(spans: &[Span], first_played: Option<NaiveDate>) -> Timeline
             }
         }
     }
-    let start = match (since, first_played) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (a, b) => a.or(b),
-    };
+    let start = [days.last().map(|d| d.day), first_played]
+        .into_iter()
+        .flatten()
+        .min();
     if let Some(start) = start.filter(|_| !rows.is_empty()) {
         rows.push(TimelineRow::Start(start));
     }
@@ -365,24 +402,36 @@ impl GamePage {
         if self.timeline.data.ready().is_none() {
             self.timeline.data = Load::Loading;
         }
-        let reader = b.clone();
-        let job = b.spawn_blocking(move || {
-            let spans: Vec<Span> = reader
-                .sessions()
+        let id = self.id.clone();
+        let task = irori_ui::run(cx, async move {
+            let unlocks: Vec<(NaiveDateTime, String)> = b
+                .achievement_history(&id)
+                .await
                 .into_iter()
-                .filter(|s| s.game == key)
-                .filter_map(|s| {
-                    let started = chrono::DateTime::parse_from_rfc3339(&s.started).ok()?;
-                    Some(Span {
-                        start: started.with_timezone(&Local).naive_local(),
-                        seconds: s.seconds,
-                        crashed: s.crashed,
-                    })
+                .filter_map(|u| {
+                    let at = chrono::DateTime::parse_from_rfc3339(&u.at).ok()?;
+                    Some((at.with_timezone(&Local).naive_local(), u.name))
                 })
                 .collect();
-            build(&spans, first_played)
+            let reader = b.clone();
+            let job = b.spawn_blocking(move || {
+                let spans: Vec<Span> = reader
+                    .sessions()
+                    .into_iter()
+                    .filter(|s| s.game == key)
+                    .filter_map(|s| {
+                        let started = chrono::DateTime::parse_from_rfc3339(&s.started).ok()?;
+                        Some(Span {
+                            start: started.with_timezone(&Local).naive_local(),
+                            seconds: s.seconds,
+                            crashed: s.crashed,
+                        })
+                    })
+                    .collect();
+                build_with(&spans, first_played, &unlocks)
+            });
+            Ok(job.await?)
         });
-        let task = irori_ui::run(cx, async move { Ok(job.await?) });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -766,16 +815,28 @@ impl GamePage {
                         "game.timeline.sessions_other",
                     ))
                 };
-                // The session times of the day under the pointer or the keyboard.
-                let times = active.then(|| {
-                    d.spans
-                        .iter()
-                        .map(|s| {
-                            let end = s.start + chrono::Duration::seconds(s.seconds as i64);
-                            format!("{}–{}", clock(s.start.time()), clock(end.time()))
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" · ")
+                // The session times and unlocks of the day under the pointer
+                // or the keyboard.
+                let times = active
+                    .then(|| {
+                        d.spans
+                            .iter()
+                            .map(|s| {
+                                let end = s.start + chrono::Duration::seconds(s.seconds as i64);
+                                format!("{}–{}", clock(s.start.time()), clock(end.time()))
+                            })
+                            .chain(d.unlocks.iter().cloned())
+                            .collect::<Vec<_>>()
+                            .join(" · ")
+                    })
+                    .filter(|t| !t.is_empty());
+                let played = d.sessions + d.crashes > 0;
+                let unlocked = (!d.unlocks.is_empty()).then(|| {
+                    plural(
+                        d.unlocks.len() as i64,
+                        "game.timeline.unlocks_one",
+                        "game.timeline.unlocks_other",
+                    )
                 });
                 let highlight = cx.theme().muted.opacity(0.5);
                 h_flex()
@@ -810,7 +871,19 @@ impl GamePage {
                                     .gap_2()
                                     .text_sm()
                                     .text_color(ink.text)
-                                    .child(played_line(d.seconds))
+                                    .when(played, |r| r.child(played_line(d.seconds)))
+                                    .when(!played, |r| {
+                                        r.child(
+                                            div()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_color(ink.panel_muted)
+                                                .child(t("game.timeline.unlocked_only")),
+                                        )
+                                    })
+                                    .when_some(unlocked, |r, text| {
+                                        r.child(Tag::success().xsmall().child(text))
+                                    })
                                     .when(d.longest, |r| {
                                         r.child(
                                             Tag::info()
@@ -986,6 +1059,42 @@ mod tests {
         };
         let hours: Vec<u32> = d.spans.iter().map(|s| s.start.hour()).collect();
         assert_eq!(hours, [19, 20, 22]);
+    }
+
+    #[test]
+    fn unlocks_join_their_days_or_make_their_own() {
+        let spans = [span(10, 3, 18, 600, false), span(10, 5, 18, 600, false)];
+        let unlocks = [
+            (at(10, 5, 20), "Later".to_string()),
+            (at(10, 5, 19), "Earlier".to_string()),
+            (at(10, 4, 12), "Played elsewhere".to_string()),
+            (at(9, 1, 12), "Before Irori".to_string()),
+        ];
+        let t = build_with(&spans, None, &unlocks);
+        let days: Vec<(String, Vec<String>, u32)> = t
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                TimelineRow::Day(d) => Some((
+                    d.day.format("%m-%d").to_string(),
+                    d.unlocks.clone(),
+                    d.sessions,
+                )),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            days,
+            [
+                ("10-05".into(), vec!["Earlier".into(), "Later".into()], 1),
+                ("10-04".into(), vec!["Played elsewhere".into()], 0),
+                ("10-03".into(), vec![], 1),
+                ("09-01".into(), vec!["Before Irori".into()], 0),
+            ]
+        );
+        assert_eq!(t.played, 2, "unlocks aren't sessions");
+        assert_eq!(t.since, NaiveDate::from_ymd_opt(2026, 10, 3));
+        assert_eq!(shape(&t).last().unwrap(), "start 09-01");
     }
 
     #[test]

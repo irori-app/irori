@@ -74,7 +74,9 @@ use tokio::runtime::Runtime;
 use tokio::sync::{Notify, broadcast};
 
 pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
-pub use achievements::{AchievementIndex, AchievementTotals, GameAchievements, Unlock};
+pub use achievements::{
+    AchievementIndex, AchievementTotals, GameAchievements, Unlock, unlock_notice,
+};
 pub use app_update::{AppUpdateStatus, InstallKind, Release};
 pub use audio::{GameAudio, Volume, VolumeTarget};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};

@@ -564,20 +564,39 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   asks first with Cancel focused and then stops it as the game page's Stop does.
 - **Screenshots**: what was taken during this session (the screenshot index, with the
   running session counted), shown large with A.
-- **Achievements**: unlocked out of total, what this session unlocked and what is next
-  (furthest progress first, then the most common). Opening the overlay asks the store
-  afresh, at most once a minute per game.
+- **Achievements**: unlocked out of total, the game's achievement sets (the base game,
+  each DLC) with their progress, what this session unlocked and what is next (furthest
+  progress first, then the most common; never from a DLC the player doesn't own).
+  Opening the overlay asks the store afresh, at most once a minute per game.
 - **Journal**: today's note for the game, written or edited in the usual editor. Typing
   needs the keyboard, so click the overlay first.
 
 Unlocks the session made are announced one after another in the overlay's corner, with
-their picture, when it opens (each once per run of Irori). With "Announce new
-achievements" on (`iroriAchievementNotices`), unlocks are also announced while the
-overlay is closed: during the session Irori reads the game's achievements every minute
-when the game keeps them in its own files (`iroriFileAchievements`) and asks its store
-every three minutes otherwise, and each new unlock raises a notice, which the desktop
-shows as a notification over the game while Irori is in the background. The wheel and
-the touchpad move through the overlay's rows too (sideways only in Screenshots).
+their picture, when it opens (each once per run of Irori). The wheel and the touchpad
+move through the overlay's rows too (sideways only in Screenshots).
+
+### Unlocks over the game
+
+With "Announce new achievements" on (`iroriAchievementNotices`), unlocks show while the
+game runs, whether or not the in-game overlay is on. Irori follows the store's own
+report where it has one: GOG games tell the Galaxy service Irori hosts (comet) of each
+unlock, and Steam writes the game's stats file in `appcache/stats`, which Irori watches.
+Nothing is asked in between then. For other games it reads the game's own files every
+minute (`iroriFileAchievements`) or asks its store every three minutes, only while the
+game runs. On Windows, while GOG Galaxy's own communication service runs it holds port
+9977 and comet doesn't start, so GOG games are asked every three minutes.
+
+Each unlock shows as a card in the top right corner of the screen (Settings › General ›
+Library, "Show unlocks over the game", `iroriAchievementToast.overGame`), with the
+lines chosen there: the game's title, the description, how rare it is, the game's
+progress and the points. The overlay's corner notices use the same lines and the same
+queue, so an unlock shows once. The card never takes the game's focus: on Wayland
+desktops with layer-shell it is a layer surface without keyboard, on X11 an
+override-redirect window, on macOS a non-activating panel, on Windows a topmost tool
+window. GNOME (no layer-shell) and a game in exclusive fullscreen on Windows can't
+have anything above them, and while Irori's own window is in front the card isn't
+needed: unlocks are notices there, shown on the desktop while Irori is in the
+background.
 
 Shortcuts that work without opening it, also while the game has the window: Guide + RB
 (R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X

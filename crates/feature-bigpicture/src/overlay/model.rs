@@ -1,11 +1,11 @@
 //! What the in-game overlay shows and where its focus is, without drawing:
 //! the tabs and their rows, the question before quitting the game, what is
-//! next among a game's achievements and the queue of unlock notices. Pure
-//! logic, tested without a window.
+//! next among a game's achievements and the queue of unlock notices with
+//! the lines each shows. Pure logic, tested without a window.
 
 use std::collections::{HashSet, VecDeque};
 
-use irori_core::Achievement;
+use irori_core::{Achievement, AchievementToastPrefs};
 
 use crate::gamepad::GamepadInput;
 
@@ -247,9 +247,13 @@ pub fn progress(list: &[Achievement]) -> (usize, usize) {
 
 /// The locked achievements to aim for next, at most `count`: those with
 /// progress first (furthest along first), then the ones most players have.
-/// Hidden ones come last, since their names say nothing yet.
+/// Hidden ones come last, since their names say nothing yet. Those of a set
+/// the player can't earn (a DLC they don't own) aren't next.
 pub fn next_up(list: &[Achievement], count: usize) -> Vec<&Achievement> {
-    let mut locked: Vec<&Achievement> = list.iter().filter(|a| !a.is_unlocked()).collect();
+    let mut locked: Vec<&Achievement> = list
+        .iter()
+        .filter(|a| !a.is_unlocked() && !a.is_unearnable())
+        .collect();
     locked.sort_by(|a, b| {
         b.visible
             .cmp(&a.visible)
@@ -284,17 +288,78 @@ pub fn unlocked_since(list: &[Achievement], since: i64) -> Vec<&Achievement> {
     out.into_iter().map(|(_, a)| a).collect()
 }
 
-/// One unlock notice in the overlay's corner.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Toast {
-    pub name: String,
-    pub description: String,
-    /// The achievement's picture; empty for none.
-    pub image: String,
+/// A line under an unlocked achievement's name, as the user chose them
+/// (`iroriAchievementToast`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToastLine {
+    /// The game's title.
+    Game(String),
+    Description(String),
+    /// The share of players who have it, in percent, with the store's
+    /// word for it ("Rare"; may be empty).
+    Rarity {
+        percent: f32,
+        label: String,
+    },
+    /// The game's achievements unlocked now, of how many.
+    Progress {
+        unlocked: usize,
+        total: usize,
+    },
+    Points(u32),
 }
 
-/// Unlock notices waiting to be shown, one after another. Each unlock is
-/// shown once per run of Irori, however often the overlay opens.
+/// One unlock notice, in the overlay's corner or over the game.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Toast {
+    pub name: String,
+    /// The achievement's picture; empty for none.
+    pub image: String,
+    pub lines: Vec<ToastLine>,
+}
+
+impl Toast {
+    /// The notice for `a`, unlocked in `game`, whose achievements stand at
+    /// `progress` (unlocked, total), with the lines `prefs` asks for that
+    /// say something.
+    pub fn new(
+        a: &Achievement,
+        game: &str,
+        progress: Option<(usize, usize)>,
+        prefs: &AchievementToastPrefs,
+    ) -> Toast {
+        let mut lines = Vec::new();
+        if prefs.show_game && !game.is_empty() {
+            lines.push(ToastLine::Game(game.to_string()));
+        }
+        if prefs.show_description && !a.description.trim().is_empty() {
+            lines.push(ToastLine::Description(a.description.clone()));
+        }
+        if prefs.show_rarity && (a.rarity > 0.0 || !a.rarity_label.is_empty()) {
+            lines.push(ToastLine::Rarity {
+                percent: a.rarity,
+                label: a.rarity_label.clone(),
+            });
+        }
+        if prefs.show_progress
+            && let Some((unlocked, total)) = progress.filter(|(_, total)| *total > 0)
+        {
+            lines.push(ToastLine::Progress { unlocked, total });
+        }
+        if prefs.show_points && a.points > 0 {
+            lines.push(ToastLine::Points(a.points));
+        }
+        Toast {
+            name: a.name.clone(),
+            image: a.image_unlocked.clone(),
+            lines,
+        }
+    }
+}
+
+/// Unlock notices waiting to be shown, one after another, by the overlay
+/// or over the game. Each unlock is shown once per run of Irori, however
+/// often the overlay opens.
 #[derive(Debug, Default)]
 pub struct Toasts {
     queue: VecDeque<Toast>,
@@ -303,16 +368,30 @@ pub struct Toasts {
 
 impl Toasts {
     /// Queue the unlocks of `game` (its key) in `list` made at `since` or
-    /// later and not shown yet. Returns how many were queued.
-    pub fn offer(&mut self, game: &str, list: &[Achievement], since: i64) -> usize {
+    /// later and not shown yet, each as `make` puts it. Returns how many
+    /// were queued.
+    pub fn offer(
+        &mut self,
+        game: &str,
+        list: &[Achievement],
+        since: i64,
+        make: impl Fn(&Achievement) -> Toast,
+    ) -> usize {
+        self.offer_unlocks(game, unlocked_since(list, since), make)
+    }
+
+    /// Queue `unlocks` of `game` (its key) not shown yet, in that order.
+    /// Returns how many were queued.
+    pub fn offer_unlocks<'a>(
+        &mut self,
+        game: &str,
+        unlocks: impl IntoIterator<Item = &'a Achievement>,
+        make: impl Fn(&Achievement) -> Toast,
+    ) -> usize {
         let mut added = 0;
-        for a in unlocked_since(list, since) {
+        for a in unlocks {
             if self.seen.insert((game.to_string(), a.id.clone())) {
-                self.queue.push_back(Toast {
-                    name: a.name.clone(),
-                    description: a.description.clone(),
-                    image: a.image_unlocked.clone(),
-                });
+                self.queue.push_back(make(a));
                 added += 1;
             }
         }
@@ -492,10 +571,25 @@ mod tests {
         assert_eq!(ids, ["first", "second", "hard"]);
 
         let mut toasts = Toasts::default();
+        let prefs = AchievementToastPrefs::default();
+        let make = |a: &Achievement| Toast::new(a, "Hades", None, &prefs);
         assert_eq!(toasts.current(), None);
-        assert_eq!(toasts.offer("gog:1", &list, since), 3);
-        assert_eq!(toasts.offer("gog:1", &list, since), 0, "shown already");
-        assert_eq!(toasts.offer("epic:1", &list, since), 3, "another game");
+        assert_eq!(toasts.offer("gog:1", &list, since, make), 3);
+        assert_eq!(
+            toasts.offer("gog:1", &list, since, make),
+            0,
+            "shown already"
+        );
+        assert_eq!(
+            toasts.offer_unlocks("gog:1", &list[1..2], make),
+            0,
+            "told live already"
+        );
+        assert_eq!(
+            toasts.offer("epic:1", &list, since, make),
+            3,
+            "another game"
+        );
         assert_eq!(toasts.current().map(|t| t.name.as_str()), Some("FIRST"));
         assert_eq!(toasts.waiting(), 5);
         assert!(toasts.advance());
@@ -505,5 +599,63 @@ mod tests {
         }
         assert!(!toasts.advance());
         assert_eq!(toasts.current(), None);
+    }
+
+    #[test]
+    fn notices_show_the_lines_chosen_that_say_something() {
+        let mut a = achievement("a", Some("2026-05-01T12:00:00Z"), None, 4.5);
+        a.description = "Beat the boss".into();
+        a.rarity_label = "Rare".into();
+        a.points = 10;
+        let mut prefs = AchievementToastPrefs::default();
+        let toast = Toast::new(&a, "Hades", Some((3, 40)), &prefs);
+        assert_eq!(toast.name, "A");
+        assert_eq!(
+            toast.lines,
+            [
+                ToastLine::Description("Beat the boss".into()),
+                ToastLine::Rarity {
+                    percent: 4.5,
+                    label: "Rare".into()
+                },
+                ToastLine::Progress {
+                    unlocked: 3,
+                    total: 40
+                },
+            ]
+        );
+        prefs.show_game = true;
+        prefs.show_points = true;
+        prefs.show_description = false;
+        prefs.show_rarity = false;
+        let toast = Toast::new(&a, "Hades", None, &prefs);
+        assert_eq!(
+            toast.lines,
+            [ToastLine::Game("Hades".into()), ToastLine::Points(10)],
+            "no progress known, so none shown"
+        );
+        a.description.clear();
+        a.rarity = 0.0;
+        a.rarity_label.clear();
+        let all = AchievementToastPrefs {
+            show_game: true,
+            show_points: true,
+            ..AchievementToastPrefs::default()
+        };
+        let toast = Toast::new(&a, "", Some((0, 0)), &all);
+        assert_eq!(toast.lines, [ToastLine::Points(10)], "nothing else to say");
+    }
+
+    #[test]
+    fn a_dlc_the_player_lacks_is_never_next() {
+        let mut lacking = achievement("dlc", None, Some(0.9), 90.0);
+        lacking.group = Some(irori_core::AchievementGroup {
+            id: "2".into(),
+            achievable: Some(false),
+            ..Default::default()
+        });
+        let list = vec![lacking, achievement("base", None, None, 10.0)];
+        let ids: Vec<&str> = next_up(&list, 5).iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, ["base"]);
     }
 }

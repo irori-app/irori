@@ -248,6 +248,29 @@ pub fn mods_to_load(available: &[String], selected: &[String]) -> Vec<String> {
 pub(crate) struct Galaxy {
     service: Option<irori_gog_galaxy::Service>,
     sessions: HashSet<String>,
+    /// The app name of each Galaxy client id a running game signs in with,
+    /// to tell whose unlocks the service reports.
+    clients: HashMap<String, String>,
+}
+
+/// Achievements games unlocked through the Galaxy service this run, by app
+/// name and GOG achievement id, with the time each was unlocked. GOG's web
+/// API learns of them only when the service uploads them, so answers merge
+/// these in ([`merge_live_unlocks`]).
+pub(crate) type LiveUnlocks = HashMap<String, HashMap<String, Option<String>>>;
+
+/// Mark the achievements of `list` the game unlocked through the Galaxy
+/// service (`live`, by GOG id or key) as unlocked where the answer doesn't
+/// say so yet.
+pub(crate) fn merge_live_unlocks(
+    list: &mut [irori_core::Achievement],
+    live: &HashMap<String, Option<String>>,
+) {
+    for a in list.iter_mut().filter(|a| !a.is_unlocked()) {
+        if let Some(at) = live.get(&a.id).or_else(|| live.get(&a.key)) {
+            a.unlocked_at = Some(at.clone().unwrap_or_default());
+        }
+    }
 }
 
 impl GogStore {
@@ -452,13 +475,20 @@ impl GogStore {
     /// Start the Galaxy service for a game session (shared by all sessions).
     async fn acquire_galaxy(&self, app_name: &str) {
         let client_id = self.client_id(app_name).await;
-        let mut g = self.galaxy.lock().await;
+        let mut guard = self.galaxy.lock().await;
+        let g = &mut *guard;
         g.sessions.insert(app_name.to_string());
         if g.service.is_none() {
             g.service = self.start_galaxy(app_name).await;
+            if let Some(service) = &g.service {
+                self.follow_unlocks(service.unlocks());
+            }
         }
         match (&g.service, client_id) {
-            (Some(service), Some(client_id)) => service.allow_client(client_id).await,
+            (Some(service), Some(client_id)) => {
+                g.clients.insert(client_id.clone(), app_name.to_string());
+                service.allow_client(client_id).await
+            }
             (Some(_), None) => {
                 tracing::warn!("Galaxy service: no client id for {app_name}, it can't sign in");
             }
@@ -493,10 +523,53 @@ impl GogStore {
         }
     }
 
+    /// Record what games unlock through the Galaxy service and tell
+    /// services, which ask for the game's achievements again and announce
+    /// them while it runs. Ends with the service.
+    fn follow_unlocks(&self, mut unlocks: irori_gog_galaxy::Unlocks) {
+        let Some(me) = self.arc() else {
+            return;
+        };
+        tokio::spawn(async move {
+            while let Some(unlock) = unlocks.next().await {
+                let app = me
+                    .galaxy
+                    .lock()
+                    .await
+                    .clients
+                    .get(&unlock.client_id)
+                    .cloned();
+                let Some(app) = app else {
+                    continue;
+                };
+                tracing::debug!("Galaxy: {app} unlocked {}", unlock.key);
+                {
+                    let mut live = me.live_unlocks.lock();
+                    let game = live.entry(app.clone()).or_default();
+                    game.insert(unlock.id.clone(), unlock.unlocked_at.clone());
+                    if !unlock.key.is_empty() {
+                        game.insert(unlock.key.clone(), unlock.unlocked_at.clone());
+                    }
+                }
+                me.bus.emit(irori_core::Event::AchievementSignal(
+                    irori_core::GameId::new(irori_core::Runner::Gog, app),
+                ));
+            }
+        });
+    }
+
+    /// Whether the Galaxy service runs for `app_name`'s session, so its
+    /// unlocks are reported as they happen.
+    pub(crate) async fn galaxy_reports(&self, app_name: &str) -> bool {
+        let g = self.galaxy.lock().await;
+        g.service.is_some() && g.clients.values().any(|a| a == app_name)
+    }
+
     /// End a game session; the service stops with the last one.
     pub(crate) async fn release_galaxy(&self, app_name: &str) {
         let mut g = self.galaxy.lock().await;
         g.sessions.remove(app_name);
+        g.clients.retain(|_, app| app != app_name);
         if g.sessions.is_empty()
             && let Some(service) = g.service.take()
         {
@@ -510,6 +583,45 @@ impl GogStore {
 mod tests {
     use super::*;
     use irori_core::{WineKind, WineLaunch};
+
+    #[test]
+    fn galaxy_unlocks_count_before_gog_knows_them() {
+        let achievement = |id: &str, key: &str, at: Option<&str>| irori_core::Achievement {
+            id: id.into(),
+            key: key.into(),
+            unlocked_at: at.map(String::from),
+            ..Default::default()
+        };
+        let mut list = vec![
+            achievement("1", "first", None),
+            achievement("2", "second", None),
+            achievement("3", "third", Some("2024-01-01T00:00:00Z")),
+            achievement("4", "fourth", None),
+        ];
+        let live = HashMap::from([
+            (
+                "1".to_string(),
+                Some("2026-05-01T12:00:00+00:00".to_string()),
+            ),
+            ("second".to_string(), None),
+            (
+                "3".to_string(),
+                Some("2026-05-01T12:00:00+00:00".to_string()),
+            ),
+        ]);
+        merge_live_unlocks(&mut list, &live);
+        let at: Vec<Option<&str>> = list.iter().map(|a| a.unlocked_at.as_deref()).collect();
+        assert_eq!(
+            at,
+            [
+                Some("2026-05-01T12:00:00+00:00"),
+                Some(""),
+                Some("2024-01-01T00:00:00Z"),
+                None
+            ],
+            "by id or key; GOG's own answer stands"
+        );
+    }
 
     #[test]
     fn builds_task_commands() {

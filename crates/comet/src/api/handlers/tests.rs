@@ -326,6 +326,7 @@ async fn unlocking_an_achievement_saves_it_for_upload() {
     .execute(&context.db_connection().await)
     .await
     .unwrap();
+    let mut host = context.overlay_sender().subscribe();
 
     handle(&context, unlock(5), Connection::Game).await.unwrap();
 
@@ -334,6 +335,18 @@ async fn unlocking_an_achievement_saves_it_for_upload() {
         .unwrap();
     assert!(achievement.date_unlocked().is_some());
     assert!(context.updated_achievements().await);
+    // The host hears of it with the game's client id.
+    let mut told = None;
+    while let Ok((_, message)) = host.try_recv() {
+        if let OverlayPeerMessage::Unlocked {
+            client_id,
+            achievement,
+        } = message
+        {
+            told = Some((client_id, achievement.achievement_key().to_owned()));
+        }
+    }
+    assert_eq!(told, Some((GAME_CLIENT.to_string(), "k".to_string())));
 }
 
 #[tokio::test]

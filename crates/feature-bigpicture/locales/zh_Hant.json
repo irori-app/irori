@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "成就已解鎖",
   "bigpicture.overlay.more_unlocks_one": "還有 1 個",
   "bigpicture.overlay.more_unlocks_other": "還有 {count} 個",
+  "bigpicture.overlay.sets": "成就組",
+  "bigpicture.overlay.set_other": "其他成就",
+  "bigpicture.overlay.set_not_owned": "未擁有 DLC",
+  "bigpicture.overlay.set_complete": "已完成",
+  "bigpicture.overlay.notice.rarity": "{percent}% 的玩家",
+  "bigpicture.overlay.notice.points_one": "{points} 點",
+  "bigpicture.overlay.notice.points_other": "{points} 點",
   "bigpicture.overlay.select": "選擇",
   "bigpicture.overlay.close": "關閉"
 }

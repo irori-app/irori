@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Prestation upplåst",
   "bigpicture.overlay.more_unlocks_one": "1 till väntar",
   "bigpicture.overlay.more_unlocks_other": "{count} till väntar",
+  "bigpicture.overlay.sets": "Prestationsuppsättningar",
+  "bigpicture.overlay.set_other": "Övriga prestationer",
+  "bigpicture.overlay.set_not_owned": "DLC ägs inte",
+  "bigpicture.overlay.set_complete": "Klart",
+  "bigpicture.overlay.notice.rarity": "{percent} % av spelarna",
+  "bigpicture.overlay.notice.points_one": "{points} poäng",
+  "bigpicture.overlay.notice.points_other": "{points} poäng",
   "bigpicture.overlay.select": "Välj",
   "bigpicture.overlay.close": "Stäng"
 }

@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Erfolg freigeschaltet",
   "bigpicture.overlay.more_unlocks_one": "1 weiterer wartet",
   "bigpicture.overlay.more_unlocks_other": "{count} weitere warten",
+  "bigpicture.overlay.sets": "Erfolgssets",
+  "bigpicture.overlay.set_other": "Weitere Erfolge",
+  "bigpicture.overlay.set_not_owned": "DLC nicht im Besitz",
+  "bigpicture.overlay.set_complete": "Abgeschlossen",
+  "bigpicture.overlay.notice.rarity": "{percent} % der Spieler",
+  "bigpicture.overlay.notice.points_one": "{points} Punkt",
+  "bigpicture.overlay.notice.points_other": "{points} Punkte",
   "bigpicture.overlay.select": "Auswählen",
   "bigpicture.overlay.close": "Schließen"
 }

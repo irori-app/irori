@@ -188,6 +188,7 @@ pub fn hooks() -> Hooks {
             open: Arc::new(irori_manage::open_steam_library_dialog),
             dismiss: Arc::new(irori_manage::dismiss_steam_client_library_hint),
         }),
+        show_unlocks: Some(Arc::new(irori_bigpicture::overlay::show_unlocks)),
     }
 }
 

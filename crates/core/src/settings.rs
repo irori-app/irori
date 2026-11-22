@@ -857,6 +857,10 @@ pub struct AppSettings {
     /// Irori-only.
     #[serde(rename = "iroriAchievementNotices")]
     pub achievement_notices: bool,
+    /// How unlocks show while the game runs: over the game, and with which
+    /// lines. Irori-only.
+    #[serde(rename = "iroriAchievementToast")]
+    pub achievement_toast: AchievementToastPrefs,
     /// Read the achievements that Steam API emulators (Goldberg, gbe_fork,
     /// CODEX-style) keep in a game's own files, for games Irori starts from
     /// their own executable. Irori-only.
@@ -932,6 +936,7 @@ impl Default for AppSettings {
             check_for_app_updates: true,
             show_log_on_launch: false,
             achievement_notices: false,
+            achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
             launch_presets: Vec::new(),
@@ -1226,6 +1231,40 @@ pub enum SunshineGames {
     Installed,
     /// Installed favourites only.
     Favourites,
+}
+
+/// How unlocks show while a game runs (`iroriAchievementToast`), with
+/// `iroriAchievementNotices` on: a card in a corner above the game, with
+/// the achievement's name and the lines chosen here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AchievementToastPrefs {
+    /// Show the card above the game. Off, or where nothing can show above
+    /// it, unlocks are announced as a notice (on the desktop while Irori is
+    /// in the background).
+    pub over_game: bool,
+    /// The game's title.
+    pub show_game: bool,
+    pub show_description: bool,
+    /// The share of players who have it.
+    pub show_rarity: bool,
+    /// How many of the game's achievements are unlocked now.
+    pub show_progress: bool,
+    /// What it is worth, for stores whose achievements have points.
+    pub show_points: bool,
+}
+
+impl Default for AchievementToastPrefs {
+    fn default() -> Self {
+        Self {
+            over_game: true,
+            show_game: false,
+            show_description: true,
+            show_rarity: true,
+            show_progress: true,
+            show_points: false,
+        }
+    }
 }
 
 /// The in-game overlay (`iroriOverlay`): Guide over a game Irori started

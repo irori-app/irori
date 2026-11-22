@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "업적 달성",
   "bigpicture.overlay.more_unlocks_one": "1개 더 대기 중",
   "bigpicture.overlay.more_unlocks_other": "{count}개 더 대기 중",
+  "bigpicture.overlay.sets": "업적 세트",
+  "bigpicture.overlay.set_other": "기타 업적",
+  "bigpicture.overlay.set_not_owned": "DLC 미보유",
+  "bigpicture.overlay.set_complete": "완료",
+  "bigpicture.overlay.notice.rarity": "플레이어의 {percent}%",
+  "bigpicture.overlay.notice.points_one": "{points}점",
+  "bigpicture.overlay.notice.points_other": "{points}점",
   "bigpicture.overlay.select": "선택",
   "bigpicture.overlay.close": "닫기"
 }
