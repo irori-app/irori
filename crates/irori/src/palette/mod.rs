@@ -39,6 +39,8 @@ enum PaletteTarget {
     Play(GameId),
     /// Cancel the launch being prepared.
     CancelLaunch(GameId),
+    /// Bring the running game's window to the front.
+    BackToGame(GameId),
     Route(Route),
     Refresh,
     Random,
@@ -781,6 +783,28 @@ impl Palette {
             );
             targets.insert(0, PaletteTarget::CancelLaunch(id));
         }
+        // The games running, to go back to.
+        let playing: Vec<GameId> = models(cx)
+            .statuses
+            .read(cx)
+            .playing()
+            .filter(|id| !b.concealed(id))
+            .cloned()
+            .collect();
+        for id in playing {
+            let title = b
+                .game(&id)
+                .map(|g| g.title.clone())
+                .unwrap_or_else(|| id.app_name.to_string());
+            items.insert(
+                0,
+                CommandItem::new()
+                    .label(t_args("shell.palette.back_to_game", &[("title", &title)]))
+                    .keywords([t("shell.palette.back_to_game_keywords")])
+                    .icon(IconName::AppWindow),
+            );
+            targets.insert(0, PaletteTarget::BackToGame(id));
+        }
         let items = Rc::new(items);
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
@@ -849,6 +873,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::CancelLaunch(id) => {
             irori_ui::backend(cx).cancel_launch(&id);
         }
+        PaletteTarget::BackToGame(id) => back_to_game(id, window, cx),
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
@@ -949,6 +974,30 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
 }
 
 /// Tell how a command run in the background went.
+/// Bring the running game `id`'s window to the front; say so when the
+/// desktop can't, or the game has no window.
+fn back_to_game(id: GameId, window: &mut Window, cx: &mut App) {
+    use irori_services::game_window::Raised;
+    let b = irori_ui::backend(cx);
+    let task = irori_ui::run(cx, async move { b.focus_game_window(&id).await });
+    window
+        .spawn(cx, async move |cx| {
+            let note = match task.await {
+                Ok(Raised::Raised) => return,
+                Ok(Raised::NoWindow) => {
+                    Notification::info(t("shell.palette.back_to_game_no_window"))
+                }
+                Ok(Raised::Unsupported) => {
+                    Notification::info(t("shell.palette.back_to_game_unsupported"))
+                }
+                Err(e) => Notification::error(format!("{e:#}"))
+                    .title(t("shell.palette.back_to_game_failed")),
+            };
+            let _ = cx.update(|window, cx| window.push_notification(note, cx));
+        })
+        .detach();
+}
+
 fn report(
     task: gpui_kit::Task<anyhow::Result<()>>,
     done: &'static str,

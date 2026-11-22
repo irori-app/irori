@@ -191,11 +191,14 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
-    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
-    /// games of every kind while MangoHud is on; empty for none. Linux only;
-    /// Irori-only.
-    #[serde(rename = "iroriMangohudFpsLimit")]
-    pub mangohud_fps_limit: String,
+    /// MangoHud loads with the game without drawing, until the in-game
+    /// overlay shows it. Linux only; Irori-only.
+    #[serde(rename = "iroriMangohudHidden")]
+    pub mangohud_hidden: bool,
+    /// What applies the frame limit (`enableDXVKFpsLimit`, `DXVKFpsCap`):
+    /// see `irori_runtime::frame_limit`. Linux only; Irori-only.
+    #[serde(rename = "iroriFpsLimiter")]
+    pub fps_limiter: FpsLimiter,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -549,7 +552,8 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
-            mangohud_fps_limit: String::new(),
+            mangohud_hidden: false,
+            fps_limiter: FpsLimiter::Auto,
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
@@ -1340,10 +1344,93 @@ impl Default for AchievementToastPrefs {
 
 /// The in-game overlay (`iroriOverlay`): Guide over a game Irori started
 /// opens it instead of Big Picture. Off by default while it is in beta.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OverlayPrefs {
     pub enabled: bool,
+    /// Where the panel sits on the screen.
+    pub side: OverlaySide,
+    /// Guide + RB (R1) takes a screenshot.
+    pub screenshot_chord: bool,
+    /// Guide + Up/Down change the system's volume.
+    pub volume_chords: bool,
+    /// How far one press of a volume control moves a volume, in percent
+    /// (see [`Self::volume_step`]).
+    pub volume_step: u32,
+    /// After Guide + Up/Down the new level shows over the game for a moment.
+    pub level_notice: bool,
+    /// Back + Start (View + Menu) together open and close the overlay where
+    /// Guide can't be read while a game has the focus (Windows' XInput).
+    pub back_start: bool,
+}
+
+impl Default for OverlayPrefs {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            side: OverlaySide::Center,
+            screenshot_chord: true,
+            volume_chords: true,
+            volume_step: 5,
+            level_notice: true,
+            back_start: true,
+        }
+    }
+}
+
+impl OverlayPrefs {
+    /// [`Self::volume_step`] within the offered range, 1 to 25 percent.
+    pub fn volume_step(&self) -> i32 {
+        self.volume_step.clamp(1, 25) as i32
+    }
+}
+
+/// What applies a game's frame limit (`iroriFpsLimiter`). Values a newer
+/// Irori writes read as [`FpsLimiter::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FpsLimiter {
+    /// gamescope, else a shown MangoHud, else DXVK, else a hidden MangoHud.
+    #[default]
+    Auto,
+    Gamescope,
+    #[serde(rename = "mangohud")]
+    MangoHud,
+    Dxvk,
+}
+
+impl<'de> Deserialize<'de> for FpsLimiter {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "gamescope" => FpsLimiter::Gamescope,
+            "mangohud" => FpsLimiter::MangoHud,
+            "dxvk" => FpsLimiter::Dxvk,
+            _ => FpsLimiter::Auto,
+        })
+    }
+}
+
+/// Where the in-game overlay's panel sits. Values a newer Irori writes read
+/// as [`OverlaySide::Center`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OverlaySide {
+    #[default]
+    Center,
+    /// Along the left edge, the height of the screen.
+    Left,
+    /// Along the right edge, the height of the screen.
+    Right,
+}
+
+impl<'de> Deserialize<'de> for OverlaySide {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "left" => OverlaySide::Left,
+            "right" => OverlaySide::Right,
+            _ => OverlaySide::Center,
+        })
+    }
 }
 
 /// Irori's games in Sunshine (`iroriSunshine`). Sunshine's own login is
@@ -1934,6 +2021,56 @@ mod tests {
         assert_eq!(json["bigPictureHoldMs"], 1000);
         let back: UiPrefs = serde_json::from_value(json).unwrap();
         assert_eq!(back.big_picture_hold_button, HoldButton::Off);
+    }
+
+    #[test]
+    fn the_frame_limiter_reads_leniently() {
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriFpsLimiter":"mangohud","iroriMangohudHidden":true}"#)
+                .unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::MangoHud);
+        assert!(gs.mangohud_hidden);
+        let gs: GameSettings = serde_json::from_str(r#"{"iroriFpsLimiter":"vsync"}"#).unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::Auto, "unknown");
+        let json = serde_json::to_value(GameSettings::default()).unwrap();
+        assert_eq!(json["iroriFpsLimiter"], "auto");
+        let back = serde_json::to_value(GameSettings {
+            fps_limiter: FpsLimiter::MangoHud,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(back["iroriFpsLimiter"], "mangohud");
+    }
+
+    #[test]
+    fn overlay_options_default_on_and_read_leniently() {
+        // Settings written before the options existed keep the overlay as it
+        // was: on or off, chords and the notice on, a 5% step, centred.
+        let old: OverlayPrefs = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert_eq!(
+            old,
+            OverlayPrefs {
+                enabled: true,
+                ..OverlayPrefs::default()
+            }
+        );
+        assert!(old.screenshot_chord && old.volume_chords && old.level_notice && old.back_start);
+        assert_eq!(old.volume_step(), 5);
+        let set: OverlayPrefs = serde_json::from_str(
+            r#"{"side":"right","volumeStep":0,"volumeChords":false,"levelNotice":false}"#,
+        )
+        .unwrap();
+        assert_eq!(set.side, OverlaySide::Right);
+        assert_eq!(set.volume_step(), 1, "at least 1%");
+        assert!(!set.volume_chords && !set.level_notice);
+        let newer: OverlayPrefs =
+            serde_json::from_str(r#"{"side":"top","volumeStep":90}"#).unwrap();
+        assert_eq!(newer.side, OverlaySide::Center, "unknown side");
+        assert_eq!(newer.volume_step(), 25);
+        let json = serde_json::to_value(OverlayPrefs::default()).unwrap();
+        assert_eq!(json["side"], "center");
+        assert_eq!(json["volumeStep"], 5);
+        assert_eq!(json["backStart"], true);
     }
 
     #[test]

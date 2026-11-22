@@ -1358,13 +1358,31 @@ Microsoft's approval page (`irori_manage::login`).
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume. What differs per system is one table,
-  `overlay/support.rs`; macOS and Windows use GPUI's pop-up window (a non-activating
+  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
+  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`window::placement`). What differs per system is one table,
+  `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
+  reads too; macOS and Windows use GPUI's pop-up window (a non-activating
   panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
   `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
-  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay". Its Achievements tab
+  exclusive fullscreen. The microphone is `GameAudio::microphone`,
+  `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
+  turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
+  (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
+  `overlay/level.rs`, a surface that exists only while it shows. "Back to the game"
+  (overlay row, palette) is `Backend::focus_game_window` (`services/src/game_window/`:
+  Hyprland, sway, X11, Windows, macOS; `Raised::Unsupported` on GNOME/KDE Wayland,
+  where nothing is done). Home's rows come from `model::home_rows`. On Windows
+  Back + Start opens it while a game runs (`gamepad/xinput.rs`, XInput read only then;
+  `iroriOverlay.backStart`), and the panel takes the foreground and gives it back
+  (`window::Foreground`). MangoHud's rows (show/hide, frame limit) write the session's
+  MangoHud file (`irori_runtime::mangohud`, `Backend::mangohud`/`set_mangohud`), which
+  `prepare_launch` writes and `finish_session` removes; one frame limit
+  (`enableDXVKFpsLimit`/`DXVKFpsCap`) goes through one limiter
+  (`irori_runtime::frame_limit`, `iroriFpsLimiter`). `docs/PLATFORMS.md`,
+  "In-game overlay". Its Achievements tab
   lists the game's sets (`irori_core::achievement_sets`, as the game page counts them)
   and leaves a set the player can't earn out of "Next up".
 - **Unlocks over the game** (`overlay/notice.rs`, `iroriAchievementToast`): what

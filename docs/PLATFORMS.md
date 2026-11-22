@@ -568,9 +568,26 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   with Left/Right or A (Linux: `pactl set-default-sink`, the game's streams moved
   along; macOS: Core Audio's default output device; Windows: the default device for
   every role through the undocumented `IPolicyConfig` Windows' own sound settings use);
-  a screenshot; Back to Irori
+  with a microphone, its level (Left/Right) and mute (A), and the microphone in use,
+  switched the same way (Linux: `pactl`'s default source, the outputs' monitors left
+  out; macOS: Core Audio's default input device, muted through its mute switch, else
+  by its level; Windows: the default capture device, through `IPolicyConfig`);
+  a screenshot; saving a clip while the replay buffer records the session; the game's
+  play status (Left/Right or A step through them); Back to the game (closes the overlay
+  and brings the game's window to the front, see below); Back to Irori
   (the main window, reopened from the tray if it was closed); quitting the game, which
   asks first with Cancel focused and then stops it as the game page's Stop does.
+
+"Back to the game" (the overlay, and the command palette while a game runs) looks for a
+window owned by the session's processes (the process Irori started, what descends from
+it, on Linux its process group too): Hyprland's `hyprctl clients -j` and
+`dispatch focuswindow`, sway's `get_tree` and `[con_id=…] focus`, else X11's
+`_NET_CLIENT_LIST`/`_NET_WM_PID` and a pager's `_NET_ACTIVE_WINDOW` request (Xwayland
+games on other Wayland desktops too). GNOME and KDE Plasma on Wayland let no program
+raise another's native Wayland window: there the palette says so and the overlay only
+closes. Windows: `EnumWindows` and `SetForegroundWindow`, attached to the foreground
+window's input thread for that call when Windows refuses it. macOS: System Events makes
+the game's process frontmost.
 - **Screenshots**: what was taken during this session (the screenshot index, with the
   running session counted), shown large with A.
 - **Achievements**: unlocked out of total, the game's achievement sets (the base game,
@@ -579,6 +596,11 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   Opening the overlay asks the store afresh, at most once a minute per game.
 - **Journal**: today's note for the game, written or edited in the usual editor. Typing
   needs the keyboard, so click the overlay first.
+- **Controllers**: each connected controller, its family and battery. On Linux a
+  Bluetooth controller (its input device on the Bluetooth bus, the address in its
+  `uniq`) can be turned off with A pressed twice: BlueZ's `Device1.Disconnect` on the
+  system bus, which needs no extra rights. Windows and macOS leave that to their
+  Bluetooth settings.
 
 Unlocks the session made are announced one after another in the overlay's corner, with
 their picture, when it opens (each once per run of Irori). The wheel and the touchpad
@@ -608,8 +630,20 @@ needed: unlocks are notices there, shown on the desktop while Irori is in the
 background.
 
 Shortcuts that work without opening it, also while the game has the window: Guide + RB
-(R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
-still saves a clip of the replay buffer.
+(R1) takes a screenshot, Guide + Up/Down change the system's volume by one volume step (5%
+unless changed), and Guide + X
+still saves a clip of the replay buffer. After Guide + Up/Down the new level shows at the
+top of the screen for a second and a half (`iroriOverlay.levelNotice`): a small surface
+of its own, a layer surface that never takes the keyboard on Wayland with layer-shell
+(nothing shows on GNOME, where only a window that takes the focus could come above the
+game) and a pop-up window elsewhere; it exists only while it shows.
+
+Settings › General › In-game overlay also places the panel (centred, or at the left or
+right edge, `iroriOverlay.side`), turns the screenshot and volume chords off one by one
+(`screenshotChord`, `volumeChords`), sets how far one volume press goes (`volumeStep`,
+1–25%, for the panel and the chords), and says what the overlay can do on this computer:
+its surface on this desktop, whether the controllers connected are held from the game,
+whether a game's own volume can be changed, and its keyboard shortcut.
 
 The surface on Linux. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
 Hyprland, COSMIC, niri, labwc) the overlay is a layer surface on the overlay layer,
@@ -651,8 +685,8 @@ Per system (`irori_bigpicture::overlay::support` holds the same table):
 | --- | --- | --- | --- |
 | Surface | layer-shell surface, else a pop-up window | non-activating panel above fullscreen apps | topmost tool window, shown without activating |
 | Over a fullscreen game | yes (GNOME may keep it behind) | yes, in the game's fullscreen Space | borderless and windowed: yes; exclusive fullscreen: no, a notice says so |
-| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Ctrl+Shift+O |
-| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no: the game sees the presses too |
+| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Back + Start, Ctrl+Shift+O |
+| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no, but the overlay takes the foreground |
 | System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
 | Game volume | its streams | not available | its audio sessions (Core Audio) |
 | Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
@@ -680,14 +714,49 @@ notice asks to switch the game to borderless. Windows keeps the Xbox controller'
 button for the Xbox Game Bar and neither XInput nor Windows.Gaming.Input reports it to
 other programs, so with Xbox pads use Ctrl+Shift+O (`RegisterHotKey`, registered only
 while a game Irori started runs); PlayStation and other pads read as raw controllers may
-report their Guide button. There is no supported way to hold an XInput or
-Windows.Gaming.Input controller from a game, so the game sees the presses too. Volumes
+report their Guide button. Windows.Gaming.Input also says nothing to a program in the
+background, so while a game Irori started runs (and the overlay is on) a thread reads
+XInput, which answers whichever window is in front, for Back + Start (View + Menu)
+pressed together, which opens and closes the overlay (`iroriOverlay.backStart`); it
+reads every 50 ms while a controller is connected, every second while none is, and waits
+without reading when no game runs. There is no supported way to hold an XInput or
+Windows.Gaming.Input controller from a game, so the overlay takes the foreground from the
+game when it opens (`SetForegroundWindow`, attached to the game's input thread for that
+one call when Windows refuses) and gives it back when it closes, unless the user moved to
+another program meanwhile: SDL, Unity and Unreal games stop reading the controller in the
+background, so they don't see the presses made in the overlay; games that read XInput
+regardless still do. Volumes
 are Core Audio's: the system volume is the default output's endpoint volume, and the
 game's are its audio sessions (as in the volume mixer) on every active output, matched to
 the process Irori started and its descendants started since the session began (Windows
 reuses process ids and has no process groups). Screenshots copy the monitor of the
 foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
 the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
+
+### Frame rate limit and MangoHud
+
+A game's frame limit is Heroic's "Limit frame rate" and its value (`enableDXVKFpsLimit`,
+`DXVKFpsCap`), so a cap imported from Heroic stays. On Linux one limiter applies it per
+launch (`iroriFpsLimiter`, `irori_runtime::frame_limit`): Automatic picks gamescope when
+the game runs in it (its `-r`, unless gamescope's own limit is set), else MangoHud when it
+shows, else DXVK (`DXVK_FRAME_RATE`) for a Windows game, else MangoHud loaded hidden, the
+only limiter a native game has; a limiter chosen that can't apply falls back to
+Automatic. The other limiters stay off, so one limit never goes through two. On Windows
+and macOS DXVK is the only limiter.
+
+A game launched with MangoHud gets a configuration file of its own for the session,
+`<state>/mangohud/<runner>-<app>.conf`, named by `MANGOHUD_CONFIGFILE`: the user's own
+configuration (their `MANGOHUD_CONFIGFILE`, else `MangoHud/MangoHud.conf` in the
+configuration folder; per-program files aren't read) and then Irori's `fps_limit` and
+`no_display`. MangoHud watches that file, so the in-game overlay's "Show MangoHud" and
+"Frame rate limit" rows change it while the game runs; the file is rewritten in place
+(MangoHud watches the file itself) and removed when the session ends. "Start MangoHud
+hidden" (`iroriMangohudHidden`) loads it without drawing until the overlay shows it. The
+limit row shows only while MangoHud is the session's limiter or nothing limits it. A
+`MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then
+the limit and the hidden start go into that variable and can't change during play, and
+the overlay offers no MangoHud rows. In a sandboxed game the file's folder is bound
+read-only. Games Steam starts aren't covered: Irori doesn't start their MangoHud.
 
 ### Mods
 

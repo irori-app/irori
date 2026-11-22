@@ -68,6 +68,8 @@ mod hint;
 mod input;
 pub(crate) mod pointer;
 mod reader;
+#[cfg(windows)]
+mod xinput;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -87,9 +89,9 @@ use parking_lot::RwLock;
 
 pub use hint::HoldHintView;
 pub use input::{
-    Chord, ConnectWatch, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap, HoldRelease,
-    HoldTimer, InputSource, PadButton, PadIdentity, Repeater, SteamIgnoreList, StickAxis,
-    hold_button, is_ignored_device, keyboard_equivalent, map_button,
+    Chord, Chords, ConnectWatch, ControllerKind, Deduper, EchoFilter, GamepadInput, GuideTap,
+    HoldRelease, HoldTimer, InputSource, PadButton, PadIdentity, Repeater, SteamIgnoreList,
+    StickAxis, hold_button, is_ignored_device, keyboard_equivalent, map_button,
 };
 use reader::{HoldEvent, Message, SharedConfig};
 
@@ -171,6 +173,9 @@ pub struct ControllerInfo {
     /// USB ids, when the system reports them.
     pub vendor: Option<u16>,
     pub product: Option<u16>,
+    /// Its Bluetooth address when it is connected over Bluetooth and the
+    /// system lets Irori turn it off (`irori_services::bluetooth`).
+    pub bluetooth: Option<String>,
 }
 
 impl ControllerInfo {
@@ -293,7 +298,7 @@ pub fn install(cx: &mut App) {
                     overlay_shortcuts(app),
                 )
             })
-            .unwrap_or((false, 300, 50, false));
+            .unwrap_or((false, 300, 50, Chords::default()));
         let shared = SharedConfig::new(disabled, initial, repeat, overlay);
         if let Some(settings) = &settings {
             shared.set_hold(&settings.read(cx).app.ui);
@@ -340,9 +345,7 @@ pub fn install(cx: &mut App) {
             shared
                 .repeat_ms
                 .store(app.gamepad_repeat_delay, Ordering::Relaxed);
-            shared
-                .overlay
-                .store(overlay_shortcuts(app), Ordering::Relaxed);
+            shared.set_chords(overlay_shortcuts(app));
         })
         .detach();
     }
@@ -355,6 +358,8 @@ pub fn install(cx: &mut App) {
         tx: tx.clone(),
     });
 
+    #[cfg(windows)]
+    watch_back_start(tx.clone(), cx);
     let thread_shared = shared.clone();
     if let Err(e) = std::thread::Builder::new()
         .name("irori-gamepad".into())
@@ -391,6 +396,37 @@ pub fn install(cx: &mut App) {
     .detach();
 }
 
+/// Whether Back + Start should be read now (see `xinput`): the overlay and
+/// the chord are on, this system needs the chord, and a game runs.
+// Only Windows reads the chord; the rule is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn back_start_wanted(prefs: &irori_core::settings::OverlayPrefs, game_running: bool) -> bool {
+    let support = crate::overlay::support::Support::current();
+    support.available && support.back_start && prefs.enabled && prefs.back_start && game_running
+}
+
+/// Read Back + Start through XInput while it is wanted.
+#[cfg(windows)]
+fn watch_back_start(tx: futures::channel::mpsc::UnboundedSender<Message>, cx: &mut App) {
+    let Some(models) = cx.try_global::<irori_ui::Models>() else {
+        return;
+    };
+    let (statuses, settings) = (models.statuses.clone(), models.settings.clone());
+    let wanted = Arc::new(xinput::Wanted::default());
+    xinput::start(wanted.clone(), tx);
+    let update = {
+        let wanted = wanted.clone();
+        move |cx: &mut App| {
+            let prefs = crate::overlay::prefs(cx);
+            wanted.set(back_start_wanted(&prefs, game_running(cx)));
+        }
+    };
+    update(cx);
+    let again = update.clone();
+    cx.observe(&statuses, move |_, cx| again(cx)).detach();
+    cx.observe(&settings, move |_, cx| update(cx)).detach();
+}
+
 /// One of Irori's windows gained or lost the focus: the reader lets go of a
 /// held Guide, whose release another program may have taken.
 fn focus_changed(cx: &App) {
@@ -399,9 +435,12 @@ fn focus_changed(cx: &App) {
     }
 }
 
-/// Whether the overlay's controller shortcuts are on.
-fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> bool {
-    crate::overlay::support::Support::current().available && app.overlay.enabled
+/// The overlay's controller shortcuts that are on.
+fn overlay_shortcuts(app: &irori_core::settings::AppSettings) -> Chords {
+    Chords::from_prefs(
+        &app.overlay,
+        crate::overlay::support::Support::current().available,
+    )
 }
 
 /// Hold the controllers from the game while the overlay is open (see
@@ -473,6 +512,14 @@ fn on_message(
             }
         }
         Message::Chord(chord) => on_chord(chord, cx),
+        Message::BackStart if !disabled => {
+            if crate::overlay::is_open(cx) {
+                crate::overlay::close(cx);
+            } else if crate::overlay::wanted(cx) {
+                crate::overlay::open(cx);
+            }
+        }
+        Message::BackStart => {}
         Message::Hold(event) => on_hold(event, disabled, model, cx),
         Message::Input { input, kind } => {
             if disabled
@@ -543,8 +590,27 @@ fn on_chord(chord: Chord, cx: &mut App) {
                 .and_then(|m| m.statuses.read(cx).playing().next().cloned());
             backend.take_screenshot(game);
         }
-        Chord::VolumeUp => backend.step_system_volume(irori_services::audio::VOLUME_STEP),
-        Chord::VolumeDown => backend.step_system_volume(-irori_services::audio::VOLUME_STEP),
+        Chord::VolumeUp | Chord::VolumeDown => {
+            let prefs = crate::overlay::prefs(cx);
+            let step = match chord {
+                Chord::VolumeUp => prefs.volume_step(),
+                _ => -prefs.volume_step(),
+            };
+            // The open overlay shows the volume itself.
+            if !prefs.level_notice || crate::overlay::is_open(cx) {
+                backend.step_system_volume(step);
+                return;
+            }
+            let task = irori_ui::state::run_infallible(cx, async move {
+                backend.change_system_volume(step).await
+            });
+            cx.spawn(async move |cx| {
+                if let Some(Some(volume)) = task.await {
+                    cx.update(|cx| crate::overlay::level::show(volume, cx));
+                }
+            })
+            .detach();
+        }
     }
 }
 
@@ -819,7 +885,7 @@ mod tests {
             let (tx, _rx) = futures::channel::mpsc::unbounded();
             cx.set_global(GamepadGlobal {
                 model: model.clone(),
-                shared: Arc::new(SharedConfig::new(false, 300, 50, false)),
+                shared: Arc::new(SharedConfig::new(false, 300, 50, Chords::default())),
                 tx,
             });
             model
@@ -883,6 +949,24 @@ mod tests {
             .unwrap();
         cx.run_until_parked();
         assert!(changes(cx) > before, "the focus moved");
+    }
+
+    #[test]
+    fn back_and_start_are_read_only_while_a_game_runs_with_the_overlay_on() {
+        let on = irori_core::settings::OverlayPrefs {
+            enabled: true,
+            ..Default::default()
+        };
+        // Only Windows needs the chord: elsewhere Guide reaches Irori.
+        assert_eq!(back_start_wanted(&on, true), cfg!(windows));
+        assert!(!back_start_wanted(&on, false), "no game");
+        let off = irori_core::settings::OverlayPrefs {
+            back_start: false,
+            ..on.clone()
+        };
+        assert!(!back_start_wanted(&off, true), "chord turned off");
+        let disabled = irori_core::settings::OverlayPrefs::default();
+        assert!(!back_start_wanted(&disabled, true), "overlay off");
     }
 
     #[test]

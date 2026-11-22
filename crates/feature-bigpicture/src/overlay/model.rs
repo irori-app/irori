@@ -16,10 +16,18 @@ pub enum Tab {
     Screenshots,
     Achievements,
     Journal,
+    /// The connected controllers: battery, and turning a Bluetooth one off.
+    Controllers,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::Home, Tab::Screenshots, Tab::Achievements, Tab::Journal];
+    pub const ALL: [Tab; 5] = [
+        Tab::Home,
+        Tab::Screenshots,
+        Tab::Achievements,
+        Tab::Journal,
+        Tab::Controllers,
+    ];
 
     fn index(self) -> usize {
         Self::ALL.iter().position(|t| *t == self).unwrap_or(0)
@@ -32,39 +40,126 @@ impl Tab {
     }
 }
 
-/// The rows of the Home tab, top to bottom.
+/// The rows of the Home tab, in the order they can show (see
+/// [`home_rows`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeRow {
     SystemVolume,
     GameVolume,
     /// The sound output: Left and Right switch to the previous and next.
     Output,
+    /// The default microphone: A mutes it, Left and Right change its level.
+    Microphone,
+    /// The microphone in use: Left and Right switch to another.
+    Input,
+    /// Show or hide MangoHud (A).
+    MangoHud,
+    /// MangoHud's frame limit: Left and Right step through [`FRAME_LIMITS`].
+    FrameLimit,
     Screenshot,
+    /// Save a clip of the replay buffer recording this session.
+    SaveReplay,
+    /// The game's play status: Left and Right (or A) step through them.
+    PlayStatus,
+    /// Close the overlay and bring the game's window to the front.
+    BackToGame,
     BackToIrori,
     QuitGame,
 }
 
 impl HomeRow {
-    pub const ALL: [HomeRow; 6] = [
+    /// Every row, in their order.
+    pub const ALL: [HomeRow; 13] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
         HomeRow::Output,
+        HomeRow::Microphone,
+        HomeRow::Input,
+        HomeRow::MangoHud,
+        HomeRow::FrameLimit,
         HomeRow::Screenshot,
+        HomeRow::SaveReplay,
+        HomeRow::PlayStatus,
+        HomeRow::BackToGame,
         HomeRow::BackToIrori,
         HomeRow::QuitGame,
     ];
-
-    pub fn at(row: usize) -> Option<HomeRow> {
-        Self::ALL.get(row).copied()
-    }
 
     /// Whether Left and Right change this row's value.
     pub fn adjusts(self) -> bool {
         matches!(
             self,
-            HomeRow::SystemVolume | HomeRow::GameVolume | HomeRow::Output
+            HomeRow::SystemVolume
+                | HomeRow::GameVolume
+                | HomeRow::Output
+                | HomeRow::Microphone
+                | HomeRow::Input
+                | HomeRow::PlayStatus
+                | HomeRow::FrameLimit
         )
     }
+}
+
+/// What decides which Home rows show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HomeContext {
+    /// The computer has a microphone (one was read).
+    pub microphone: bool,
+    /// The replay buffer records this session.
+    pub replay: bool,
+    /// MangoHud runs with the game and Irori can change it.
+    pub mangohud: Option<irori_services::mangohud::MangoState>,
+}
+
+/// The Home tab's rows for `cx`: the microphone's only with one, saving a
+/// clip only while the replay buffer records.
+pub fn home_rows(cx: HomeContext) -> Vec<HomeRow> {
+    HomeRow::ALL
+        .into_iter()
+        .filter(|row| match row {
+            HomeRow::Microphone | HomeRow::Input => cx.microphone,
+            HomeRow::SaveReplay => cx.replay,
+            HomeRow::MangoHud => cx.mangohud.is_some(),
+            // Another limiter limits the session: changing MangoHud's would add one.
+            HomeRow::FrameLimit => cx.mangohud.is_some_and(|m| m.limits),
+            _ => true,
+        })
+        .collect()
+}
+
+/// The frame limits the overlay steps through, after "no limit".
+pub const FRAME_LIMITS: [u32; 10] = [30, 40, 45, 50, 60, 72, 90, 120, 144, 165];
+
+/// The limit one step from `current` (`None` is "no limit", before the
+/// lowest; one step down from it wraps to the highest, and up from the
+/// highest back to none). A limit not in [`FRAME_LIMITS`] moves to the
+/// nearest one that way.
+pub fn next_limit(current: Option<u32>, step: i32) -> Option<u32> {
+    match (current, step >= 0) {
+        (None, true) => FRAME_LIMITS.first().copied(),
+        (None, false) => FRAME_LIMITS.last().copied(),
+        (Some(now), true) => FRAME_LIMITS.iter().copied().find(|l| *l > now),
+        (Some(now), false) => FRAME_LIMITS.iter().rev().copied().find(|l| *l < now),
+    }
+}
+
+/// The play status `step` places from `current` (none counts as before
+/// the first), wrapping around.
+pub fn next_status(
+    current: Option<irori_services::PlayStatus>,
+    step: i32,
+) -> irori_services::PlayStatus {
+    use irori_services::PlayStatus;
+    let len = PlayStatus::ALL.len() as i32;
+    let now = current
+        .and_then(|s| PlayStatus::ALL.iter().position(|p| *p == s))
+        .map_or(-1, |ix| ix as i32);
+    let next = if now < 0 && step < 0 {
+        len - 1
+    } else {
+        (now + step).rem_euclid(len)
+    };
+    PlayStatus::ALL[next as usize]
 }
 
 /// The output `step` places from the current one in `outputs` (by
@@ -113,16 +208,19 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Nav {
     tab: Tab,
-    focus: [usize; 4],
+    focus: [usize; Tab::ALL.len()],
     confirm: Option<Choice>,
+    /// The Home tab's rows now (see [`home_rows`]).
+    home: Vec<HomeRow>,
 }
 
 impl Default for Nav {
     fn default() -> Self {
         Self {
             tab: Tab::Home,
-            focus: [0; 4],
+            focus: [0; Tab::ALL.len()],
             confirm: None,
+            home: HomeRow::ALL.to_vec(),
         }
     }
 }
@@ -135,6 +233,30 @@ impl Nav {
     /// The focused row of `tab`, within `rows` rows.
     pub fn focus(&self, tab: Tab, rows: usize) -> usize {
         self.focus[tab.index()].min(rows.saturating_sub(1))
+    }
+
+    /// The Home tab's rows.
+    pub fn home(&self) -> &[HomeRow] {
+        &self.home
+    }
+
+    /// The Home row at `ix`.
+    pub fn home_row(&self, ix: usize) -> Option<HomeRow> {
+        self.home.get(ix).copied()
+    }
+
+    /// Show `rows` on the Home tab, keeping the focus on the row it was on
+    /// when that row stays.
+    pub fn set_home(&mut self, rows: Vec<HomeRow>) {
+        if rows == self.home {
+            return;
+        }
+        let ix = Tab::Home.index();
+        let focused = self.home.get(self.focus[ix]).copied();
+        self.focus[ix] = focused
+            .and_then(|row| rows.iter().position(|r| *r == row))
+            .unwrap_or(0);
+        self.home = rows;
     }
 
     /// The question before quitting and its focused answer, when asked.
@@ -221,7 +343,7 @@ impl Nav {
             Left | Right => {
                 let step = if input == Left { -1 } else { 1 };
                 if self.tab == Tab::Home {
-                    match HomeRow::at(focus) {
+                    match self.home.get(focus).copied() {
                         Some(row) if row.adjusts() => Action::Adjust(row, step),
                         _ => Action::None,
                     }
@@ -428,7 +550,7 @@ mod tests {
         assert_eq!(nav.tab(), Tab::Screenshots);
         nav.input(PrevPage, 0);
         nav.input(PrevPage, 5);
-        assert_eq!(nav.tab(), Tab::Journal, "wraps around");
+        assert_eq!(nav.tab(), Tab::Controllers, "wraps around");
         nav.input(NextPage, 0);
         assert_eq!(nav.tab(), Tab::Home);
     }
@@ -450,14 +572,138 @@ mod tests {
         nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Output, 1));
         nav.input(Down, rows);
+        assert_eq!(
+            nav.input(Left, rows),
+            Action::Adjust(HomeRow::Microphone, -1)
+        );
+        nav.input(Down, rows);
+        assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Input, 1));
+        nav.input(Down, rows);
+        assert_eq!(nav.input(Right, rows), Action::None, "MangoHud: a switch");
+        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 5));
+        assert_eq!(nav.home_row(5), Some(HomeRow::MangoHud));
+        nav.input(Down, rows);
+        assert_eq!(
+            nav.input(Left, rows),
+            Action::Adjust(HomeRow::FrameLimit, -1)
+        );
+        nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::None, "not a value");
-        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 3));
+        assert_eq!(nav.home_row(7), Some(HomeRow::Screenshot));
         for _ in 0..10 {
             nav.input(Down, rows);
         }
         assert_eq!(nav.focus(Tab::Home, rows), rows - 1, "stops at the bottom");
         assert_eq!(nav.input(Back, rows), Action::Close);
         assert_eq!(nav.input(Guide, rows), Action::Close);
+    }
+
+    #[test]
+    fn the_microphone_rows_show_with_a_microphone_and_the_focus_stays_put() {
+        let without = home_rows(HomeContext::default());
+        assert!(!without.contains(&HomeRow::Microphone) && !without.contains(&HomeRow::Input));
+        assert!(!without.contains(&HomeRow::SaveReplay), "no replay buffer");
+        let with = home_rows(HomeContext {
+            microphone: true,
+            ..Default::default()
+        });
+        assert!(with.contains(&HomeRow::Microphone) && with.contains(&HomeRow::Input));
+        let all = home_rows(HomeContext {
+            microphone: true,
+            replay: true,
+            mangohud: Some(irori_services::mangohud::MangoState {
+                limits: true,
+                ..Default::default()
+            }),
+        });
+        assert_eq!(all, HomeRow::ALL);
+        assert!(all.contains(&HomeRow::BackToGame) && all.contains(&HomeRow::PlayStatus));
+
+        let mut nav = Nav::default();
+        nav.set_home(without.clone());
+        // Focus "Back to Irori", then a microphone appears above it.
+        let back = without
+            .iter()
+            .position(|r| *r == HomeRow::BackToIrori)
+            .unwrap();
+        nav.set_focus(back);
+        nav.set_home(with.clone());
+        let focus = nav.focus(Tab::Home, with.len());
+        assert_eq!(nav.home_row(focus), Some(HomeRow::BackToIrori));
+        // Focused on the microphone when it goes: back to the top.
+        let mic = with.iter().position(|r| *r == HomeRow::Microphone).unwrap();
+        nav.set_focus(mic);
+        nav.set_home(without);
+        assert_eq!(nav.focus(Tab::Home, 6), 0);
+    }
+
+    #[test]
+    fn frame_limits_step_through_the_presets_and_none() {
+        assert_eq!(next_limit(None, 1), Some(30));
+        assert_eq!(next_limit(Some(30), 1), Some(40));
+        assert_eq!(next_limit(Some(165), 1), None, "past the highest: none");
+        assert_eq!(next_limit(None, -1), Some(165));
+        assert_eq!(next_limit(Some(30), -1), None);
+        // A limit of the user's own moves to the nearest preset.
+        assert_eq!(next_limit(Some(100), 1), Some(120));
+        assert_eq!(next_limit(Some(100), -1), Some(90));
+
+        use irori_services::mangohud::MangoState;
+        let shown = |limits| HomeContext {
+            mangohud: Some(MangoState {
+                visible: true,
+                fps_limit: None,
+                limits,
+            }),
+            ..Default::default()
+        };
+        let rows = home_rows(shown(true));
+        assert!(rows.contains(&HomeRow::MangoHud) && rows.contains(&HomeRow::FrameLimit));
+        let rows = home_rows(shown(false));
+        assert!(rows.contains(&HomeRow::MangoHud) && !rows.contains(&HomeRow::FrameLimit));
+        let rows = home_rows(HomeContext::default());
+        assert!(!rows.contains(&HomeRow::MangoHud), "no MangoHud");
+    }
+
+    #[test]
+    fn play_statuses_step_around() {
+        use irori_services::PlayStatus;
+        assert_eq!(next_status(None, 1), PlayStatus::ALL[0]);
+        assert_eq!(next_status(None, -1), PlayStatus::Abandoned);
+        assert_eq!(
+            next_status(Some(PlayStatus::Playing), 1),
+            PlayStatus::OnHold
+        );
+        assert_eq!(
+            next_status(Some(PlayStatus::Abandoned), 1),
+            PlayStatus::NotPlayed,
+            "wraps"
+        );
+        assert_eq!(
+            next_status(Some(PlayStatus::NotPlayed), -1),
+            PlayStatus::Abandoned
+        );
+        let mut nav = Nav::default();
+        let rows = HomeRow::ALL.to_vec();
+        let at = rows.iter().position(|r| *r == HomeRow::PlayStatus).unwrap();
+        nav.set_home(rows.clone());
+        nav.set_focus(at);
+        assert_eq!(
+            nav.input(Right, rows.len()),
+            Action::Adjust(HomeRow::PlayStatus, 1)
+        );
+    }
+
+    #[test]
+    fn controllers_have_a_tab_after_the_journal() {
+        let mut nav = Nav::default();
+        nav.show(Tab::Journal);
+        nav.input(NextPage, 1);
+        assert_eq!(nav.tab(), Tab::Controllers);
+        assert_eq!(nav.input(Confirm, 2), Action::Activate(Tab::Controllers, 0));
+        assert_eq!(nav.input(Confirm, 0), Action::None, "no controller");
+        nav.input(NextPage, 2);
+        assert_eq!(nav.tab(), Tab::Home, "wraps around");
     }
 
     #[test]

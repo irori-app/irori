@@ -21,6 +21,7 @@
 
 #[cfg(any(target_os = "macos", windows))]
 mod hotkey;
+pub(crate) mod level;
 pub(crate) mod model;
 mod notice;
 pub mod support;
@@ -51,6 +52,9 @@ struct Open {
     view: Entity<OverlayView>,
     /// Dropped with the overlay, which lets go of the controllers.
     _grab: Option<Grab>,
+    /// The window in front before the overlay took the foreground (Windows),
+    /// given it back on close.
+    previous: window::Foreground,
 }
 
 /// What "Back to Irori" runs.
@@ -107,6 +111,19 @@ pub fn enabled(cx: &App) -> bool {
             .is_some_and(|m| m.settings.read(cx).app.overlay.enabled)
 }
 
+/// The overlay's settings (defaults before the models exist).
+pub(crate) fn prefs(cx: &App) -> irori_core::settings::OverlayPrefs {
+    cx.try_global::<irori_ui::Models>()
+        .map(|m| m.settings.read(cx).app.overlay.clone())
+        .unwrap_or_default()
+}
+
+/// How far one press of a volume control moves a volume, in percent
+/// (`iroriOverlay.volumeStep`).
+pub(crate) fn volume_step(cx: &App) -> i32 {
+    prefs(cx).volume_step()
+}
+
 /// The game the overlay is for: the one Irori started last that runs.
 fn running_game(cx: &App) -> Option<GameId> {
     let models = cx.try_global::<irori_ui::Models>()?;
@@ -158,17 +175,20 @@ pub fn open(cx: &mut App) {
         );
         return;
     }
+    let previous = window::Foreground::current();
     let opened = window::open(cx, |window, cx| {
         let game = game.clone();
         cx.new(|cx| OverlayView::new(game, window, cx))
     });
     match opened {
         Ok((window, view)) => {
+            window::take_foreground(window, cx);
             let grab = crate::gamepad::start_grab(cx);
             state(cx).open = Some(Open {
                 window,
                 view,
                 _grab: grab,
+                previous,
             });
             // The panel shows the notices in its own corner.
             if let Some(shown) = state(cx).notice.take() {
@@ -187,6 +207,7 @@ pub fn close(cx: &mut App) {
             window::close(open.window, cx);
             // Notices still waiting go on over the game.
             notice::resume(cx);
+            open.previous.give_back();
         }
     });
 }

@@ -37,6 +37,7 @@ mod igdb;
 mod launch_presets;
 mod launch_programs;
 mod logs;
+mod overlay;
 pub mod registry;
 mod renodx;
 mod replay;

@@ -878,6 +878,8 @@ impl Backend {
             log_file,
         } = end;
         crate::running::forget(&id);
+        // MangoHud's file for the session; the next launch writes another.
+        irori_runtime::mangohud::remove_session(&id);
         let seconds = started.elapsed().as_secs();
         let stopped = self.running.lock().remove(&id).is_some_and(|r| r.stopping);
         // A session followed again after a restart has no exit status to

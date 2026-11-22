@@ -240,6 +240,8 @@ pub enum CustomKind {
 pub enum PanelKind {
     /// Connected controllers with a refresh button.
     Controllers,
+    /// What the in-game overlay can do on this computer.
+    Overlay,
     /// Epic Online Services overlay: status, install, update, remove.
     EosOverlay,
     /// Link legendary with an Epic Games Launcher installation.
@@ -555,7 +557,7 @@ impl FieldSpec {
         // Windows' own graphics preference stands in for the card chooser
         // there, which only Linux can apply.
         match self.path {
-            "iroriWindowsGpu" => return host == HostPlatform::Windows,
+            "iroriWindowsGpu" | "iroriOverlay.backStart" => return host == HostPlatform::Windows,
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -581,7 +583,8 @@ impl FieldSpec {
                 self.path,
                 "useGameMode"
                     | "showMangohud"
-                    | "iroriMangohudFpsLimit"
+                    | "iroriMangohudHidden"
+                    | "iroriFpsLimiter"
                     | "nvidiaPrime"
                     | "enableFsync"
                     | "iroriNtsync"
@@ -1288,6 +1291,24 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     "settings.requires.fps_limit",
 )];
 const NEEDS_MANGOHUD: &[Condition] = &[when("showMangohud", true, "settings.requires.mangohud")];
+
+/// On Linux the frame limit goes through the limiter chosen below it
+/// (`irori_runtime::frame_limit`); elsewhere through DXVK.
+const FPS_LIMIT_HELP: &str = if cfg!(target_os = "linux") {
+    "settings.field.enable_dxvk_fps_limit.help_linux"
+} else {
+    "settings.field.enable_dxvk_fps_limit.help"
+};
+
+const FPS_LIMITER: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.fps_limiter.auto"),
+    ),
+    opt(ChoiceValue::Str("gamescope"), Verbatim("gamescope")),
+    opt(ChoiceValue::Str("mangohud"), Verbatim("MangoHud")),
+    opt(ChoiceValue::Str("dxvk"), Verbatim("DXVK")),
+];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
     true,
@@ -1373,6 +1394,27 @@ const OVERLAY_HELP: &str = if cfg!(windows) {
 } else {
     "settings.field.overlay.help"
 };
+
+const NEEDS_OVERLAY: &[Condition] = &[when(
+    "iroriOverlay.enabled",
+    true,
+    "settings.requires.overlay",
+)];
+
+const OVERLAY_SIDE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("center"),
+        Key("settings.option.overlay_side.center"),
+    ),
+    opt(
+        ChoiceValue::Str("left"),
+        Key("settings.option.overlay_side.left"),
+    ),
+    opt(
+        ChoiceValue::Str("right"),
+        Key("settings.option.overlay_side.right"),
+    ),
+];
 
 const NEEDS_CONTROLLER: &[Condition] = &[when(
     "disableController",
@@ -2178,7 +2220,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "iroriOverlay.enabled",
         "settings.field.overlay.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.overlay",
         Toggle,
     )
     .help(OVERLAY_HELP)
@@ -2241,6 +2283,83 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(IDLE_SCREEN),
     )
     .keywords(&["idle", "screensaver", "slideshow", "dim", "big picture"]),
+    app(
+        "panel.overlay",
+        "settings.field.panel_overlay.label",
+        Controller,
+        "settings.group.overlay",
+        Panel(PanelKind::Overlay),
+    )
+    .keywords(&["overlay", "in-game", "layer-shell", "wayland", "controller"]),
+    app(
+        "iroriOverlay.side",
+        "settings.field.overlay_side.label",
+        Controller,
+        "settings.group.overlay",
+        Choice(OVERLAY_SIDE),
+    )
+    .keywords(&["overlay", "position", "left", "right", "centre", "center"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.screenshotChord",
+        "settings.field.overlay_screenshot_chord.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_screenshot_chord.help")
+    .keywords(&["overlay", "guide", "rb", "r1", "screenshot", "shortcut"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.volumeChords",
+        "settings.field.overlay_volume_chords.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_volume_chords.help")
+    .keywords(&["overlay", "guide", "volume", "shortcut"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.volumeStep",
+        "settings.field.overlay_volume_step.label",
+        Controller,
+        "settings.group.overlay",
+        Text(TextKind::Number { min: 1, max: 25 }),
+    )
+    .help("settings.field.overlay_volume_step.help")
+    .keywords(&["overlay", "volume", "step", "percent"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.levelNotice",
+        "settings.field.overlay_level_notice.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_level_notice.help")
+    .keywords(&["overlay", "volume", "level", "osd", "notice"])
+    .requires(NEEDS_OVERLAY),
+    // Windows only (`supported_on_host`): Guide reaches Irori elsewhere.
+    app(
+        "iroriOverlay.backStart",
+        "settings.field.overlay_back_start.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_back_start.help")
+    .keywords(&[
+        "overlay",
+        "back",
+        "start",
+        "view",
+        "menu",
+        "select",
+        "xinput",
+        "controller",
+    ])
+    .requires(NEEDS_OVERLAY),
     // ---- Appearance ----
     app(
         "iroriUi.theme",
@@ -3060,15 +3179,14 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.show_mangohud.help")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
     game(
-        "iroriMangohudFpsLimit",
-        "settings.field.mangohud_fps_limit.label",
+        "iroriMangohudHidden",
+        "settings.field.mangohud_hidden.label",
         Performance,
         "settings.group.system",
-        Text(TextKind::Digits { max_len: 4 }),
+        Toggle,
     )
-    .help("settings.field.mangohud_fps_limit.help")
-    .placeholder(Verbatim("60"))
-    .keywords(&["mangohud", "fps", "limit", "cap", "frame rate", "fps_limit"])
+    .help("settings.field.mangohud_hidden.help")
+    .keywords(&["mangohud", "hidden", "overlay", "no_display", "hud"])
     .requires(NEEDS_MANGOHUD),
     game(
         "showFps",
@@ -3225,8 +3343,16 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.frame_rate",
         Toggle,
     )
-    .help("settings.field.enable_dxvk_fps_limit.help")
-    .keywords(&["fps", "limit", "cap", "dxvk", "frame rate"]),
+    .help(FPS_LIMIT_HELP)
+    .keywords(&[
+        "fps",
+        "limit",
+        "cap",
+        "dxvk",
+        "frame rate",
+        "mangohud",
+        "fps_limit",
+    ]),
     game(
         "DXVKFpsCap",
         "settings.field.dxvk_fps_cap.label",
@@ -3236,6 +3362,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .placeholder(Verbatim("60"))
     .keywords(&["fps", "limit", "cap"])
+    .requires(NEEDS_FPS_LIMIT),
+    // Linux only (`supported_on_host`): DXVK is the only limiter elsewhere.
+    game(
+        "iroriFpsLimiter",
+        "settings.field.fps_limiter.label",
+        Performance,
+        "settings.group.frame_rate",
+        Choice(FPS_LIMITER),
+    )
+    .help("settings.field.fps_limiter.help")
+    .keywords(&["fps", "limit", "limiter", "gamescope", "mangohud", "dxvk"])
     .requires(NEEDS_FPS_LIMIT),
     game(
         "gamescope.iroriEnabled",

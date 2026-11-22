@@ -57,18 +57,68 @@ async fn streams_of(game: u32) -> Result<Vec<SinkInput>> {
         .collect())
 }
 
-async fn system() -> Result<Volume> {
-    let volume = pactl(&["get-sink-volume", "@DEFAULT_SINK@"]).await?;
-    let mute = pactl(&["get-sink-mute", "@DEFAULT_SINK@"]).await?;
+/// The default output (`sink`) or microphone (`source`).
+#[derive(Clone, Copy)]
+enum Device {
+    Sink,
+    Source,
+}
+
+impl Device {
+    fn name(self) -> &'static str {
+        match self {
+            Device::Sink => "@DEFAULT_SINK@",
+            Device::Source => "@DEFAULT_SOURCE@",
+        }
+    }
+
+    /// `pactl`'s command for `action` (`get-…-volume`, `set-…-mute`).
+    fn command(self, action: &str, what: &str) -> String {
+        let kind = match self {
+            Device::Sink => "sink",
+            Device::Source => "source",
+        };
+        format!("{action}-{kind}-{what}")
+    }
+}
+
+async fn level(device: Device) -> Result<Volume> {
+    let volume = pactl(&[&device.command("get", "volume"), device.name()]).await?;
+    let mute = pactl(&[&device.command("get", "mute"), device.name()]).await?;
     Ok(Volume {
+        // The text format is the same for sinks and sources.
         percent: parse_sink_volume(&volume).context("Could not read the volume")?,
         muted: parse_mute(&mute).unwrap_or(false),
     })
 }
 
+async fn system() -> Result<Volume> {
+    level(Device::Sink).await
+}
+
+async fn change_level(device: Device, change: Change) -> Result<()> {
+    let name = device.name();
+    match change {
+        Change::Step(step) => {
+            let now = level(device).await?;
+            let next = format!("{}%", stepped(now.percent, step));
+            pactl(&[&device.command("set", "volume"), name, &next]).await?;
+            if now.muted {
+                pactl(&[&device.command("set", "mute"), name, "0"]).await?;
+            }
+        }
+        Change::ToggleMute => {
+            pactl(&[&device.command("set", "mute"), name, "toggle"]).await?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) async fn audio(game: Option<GameProcess>) -> Result<GameAudio> {
     let game = game.map(|g| g.pid);
     let system = system().await;
+    // No microphone is no error: many computers have none.
+    let microphone = level(Device::Source).await.ok();
     let streams = match game {
         Some(game) => streams_of(game).await.unwrap_or_default(),
         None => Vec::new(),
@@ -80,6 +130,7 @@ pub(super) async fn audio(game: Option<GameProcess>) -> Result<GameAudio> {
     Ok(GameAudio {
         system: system.ok(),
         game: combined(&refs),
+        microphone,
     })
 }
 
@@ -90,22 +141,8 @@ pub(super) async fn change(
 ) -> Result<()> {
     let game = game.map(|g| g.pid);
     match target {
-        VolumeTarget::System => {
-            let sink = "@DEFAULT_SINK@";
-            match change {
-                Change::Step(step) => {
-                    let now = system().await?;
-                    let next = format!("{}%", stepped(now.percent, step));
-                    pactl(&["set-sink-volume", sink, &next]).await?;
-                    if now.muted {
-                        pactl(&["set-sink-mute", sink, "0"]).await?;
-                    }
-                }
-                Change::ToggleMute => {
-                    pactl(&["set-sink-mute", sink, "toggle"]).await?;
-                }
-            }
-        }
+        VolumeTarget::System => change_level(Device::Sink, change).await?,
+        VolumeTarget::Microphone => change_level(Device::Source, change).await?,
         VolumeTarget::Game => {
             let game = game.context("The game isn't running")?;
             let streams = streams_of(game).await?;
@@ -159,5 +196,24 @@ pub(super) async fn set_output(game: Option<GameProcess>, id: String) -> Result<
             }
         }
     }
+    Ok(())
+}
+
+pub(super) async fn inputs() -> Result<Vec<AudioOutput>> {
+    let default = pactl(&["get-default-source"]).await.unwrap_or_default();
+    if let Ok(text) = pactl(&["-f", "json", "list", "sources"]).await
+        && let Some(inputs) = parse_sources_json(&text, &default)
+    {
+        return Ok(inputs);
+    }
+    Ok(parse_sources_short(
+        &pactl(&["list", "sources", "short"]).await?,
+        &default,
+    ))
+}
+
+pub(super) async fn set_input(id: String) -> Result<()> {
+    // Recording streams follow the default source unless they chose one.
+    pactl(&["set-default-source", &id]).await?;
     Ok(())
 }
