@@ -1207,6 +1207,12 @@ Microsoft's approval page (`irori_manage::login`).
   task sleeps until the screen is due and again for what is left after input, so input
   only stamps a time; the dimmed screen needs no timer. Any input, mouse movement or
   click wakes Big Picture and does nothing else.
+- **Shelf kinds** (`theme::ShelfKind`, built in `model::build_rows_on`, pure and
+  tested): Continue playing, Favourites, Installed, Recently added, Plan to play, one per
+  system, Playing, Most played, Installed and not played for 90 days, Pick of the day
+  (one installed game not beaten or abandoned, the same all day) and one per store. A
+  theme naming a kind an older Irori doesn't know is refused there, as any unknown
+  value is.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of

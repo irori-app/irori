@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Звуки: {sounds}",
   "bigpicture.sounds.off": "Вимк.",
   "bigpicture.sounds.soft": "М’які",
-  "bigpicture.sounds.classic": "Класичні"
+  "bigpicture.sounds.classic": "Класичні",
+  "bigpicture.shelf.playing": "Граю",
+  "bigpicture.shelf.most_played": "Найбільше грав",
+  "bigpicture.shelf.forgotten": "Встановлені, давно не запускалися",
+  "bigpicture.shelf.pick_of_the_day": "Вибір дня",
+  "bigpicture.shelf.stores": "По одній на крамницю"
 }

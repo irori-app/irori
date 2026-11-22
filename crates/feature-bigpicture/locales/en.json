@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Sounds: {sounds}",
   "bigpicture.sounds.off": "Off",
   "bigpicture.sounds.soft": "Soft",
-  "bigpicture.sounds.classic": "Classic"
+  "bigpicture.sounds.classic": "Classic",
+  "bigpicture.shelf.playing": "Playing",
+  "bigpicture.shelf.most_played": "Most played",
+  "bigpicture.shelf.forgotten": "Installed, not played lately",
+  "bigpicture.shelf.pick_of_the_day": "Pick of the day",
+  "bigpicture.shelf.stores": "One per store"
 }

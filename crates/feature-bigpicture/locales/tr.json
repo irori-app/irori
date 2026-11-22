@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Sesler: {sounds}",
   "bigpicture.sounds.off": "Kapalı",
   "bigpicture.sounds.soft": "Yumuşak",
-  "bigpicture.sounds.classic": "Klasik"
+  "bigpicture.sounds.classic": "Klasik",
+  "bigpicture.shelf.playing": "Oynanıyor",
+  "bigpicture.shelf.most_played": "En çok oynananlar",
+  "bigpicture.shelf.forgotten": "Yüklü, son zamanlarda oynanmamış",
+  "bigpicture.shelf.pick_of_the_day": "Günün seçimi",
+  "bigpicture.shelf.stores": "Her mağaza için bir"
 }

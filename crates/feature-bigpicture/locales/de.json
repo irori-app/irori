@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Töne: {sounds}",
   "bigpicture.sounds.off": "Aus",
   "bigpicture.sounds.soft": "Sanft",
-  "bigpicture.sounds.classic": "Klassisch"
+  "bigpicture.sounds.classic": "Klassisch",
+  "bigpicture.shelf.playing": "Spiele ich gerade",
+  "bigpicture.shelf.most_played": "Am meisten gespielt",
+  "bigpicture.shelf.forgotten": "Installiert, lange nicht gespielt",
+  "bigpicture.shelf.pick_of_the_day": "Tipp des Tages",
+  "bigpicture.shelf.stores": "Eins pro Store"
 }

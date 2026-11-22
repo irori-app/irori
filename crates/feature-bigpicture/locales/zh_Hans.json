@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "音效：{sounds}",
   "bigpicture.sounds.off": "关",
   "bigpicture.sounds.soft": "柔和",
-  "bigpicture.sounds.classic": "经典"
+  "bigpicture.sounds.classic": "经典",
+  "bigpicture.shelf.playing": "在玩",
+  "bigpicture.shelf.most_played": "最常玩",
+  "bigpicture.shelf.forgotten": "已安装但近期未玩",
+  "bigpicture.shelf.pick_of_the_day": "今日推荐",
+  "bigpicture.shelf.stores": "每个商店一行"
 }

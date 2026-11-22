@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Sunete: {sounds}",
   "bigpicture.sounds.off": "Oprite",
   "bigpicture.sounds.soft": "Blânde",
-  "bigpicture.sounds.classic": "Clasice"
+  "bigpicture.sounds.classic": "Clasice",
+  "bigpicture.shelf.playing": "În curs",
+  "bigpicture.shelf.most_played": "Cele mai jucate",
+  "bigpicture.shelf.forgotten": "Instalate, nejucate de mult",
+  "bigpicture.shelf.pick_of_the_day": "Recomandarea zilei",
+  "bigpicture.shelf.stores": "Câte unul pe magazin"
 }

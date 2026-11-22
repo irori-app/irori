@@ -293,5 +293,10 @@
   "bigpicture.menu.sounds": "Ljud: {sounds}",
   "bigpicture.sounds.off": "Av",
   "bigpicture.sounds.soft": "Mjuka",
-  "bigpicture.sounds.classic": "Klassiska"
+  "bigpicture.sounds.classic": "Klassiska",
+  "bigpicture.shelf.playing": "Spelar",
+  "bigpicture.shelf.most_played": "Mest spelade",
+  "bigpicture.shelf.forgotten": "Installerade, inte spelade på länge",
+  "bigpicture.shelf.pick_of_the_day": "Dagens val",
+  "bigpicture.shelf.stores": "En per butik"
 }
