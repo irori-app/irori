@@ -270,7 +270,9 @@ build Irori yourself, see [Building](#building).
 - **Wine manager** for GE-Proton, Proton-CachyOS, Wine-GE and Kron4ek on Linux, and
   Wine, CrossOver and Game Porting Toolkit on macOS, plus the system, Steam, Lutris and
   Bottles builds already on your computer.
-- **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the
+- **One switch** for gamescope (upscaling optional) and GameMode, plus **In-game stats**
+  for MangoHud on Linux (live preview, metrics, FPS limits, layout, shortcut and colors)
+  and Metal HUD on macOS (toggle and corner position), with per-game overrides. Pick the
   DXVK and VKD3D-Proton versions per Wine build, and turn on descriptor heap and
   Proton's DLSS, FSR and XeSS upgrades without looking up variables.
 - **Graphics tab per game (Linux):** pick which graphics card a game runs on when the

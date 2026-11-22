@@ -45,7 +45,10 @@ prefix; existing Whisky bottles are not imported automatically.
 macOS settings include Msync, Metal HUD, Rosetta AVX advertisement and Retina mode.
 Retina mode sets `HKCU\Software\Wine\Mac Driver\RetinaMode` in the prefix before
 launch, only when it differs from what `user.reg` already holds, so Wine, CrossOver
-and Game Porting Toolkit render at the display's full resolution. Linux
+and Game Porting Toolkit render at the display's full resolution. In-game stats
+sets `MTL_HUD_ENABLED` and `MTL_HUD_ALIGNMENT` on macOS for both native and Wine
+games, writes managed MangoHud configs under Irori's data directory on Linux without
+touching `~/.config/MangoHud/MangoHud.conf`, and is hidden on Windows. Linux
 wrappers, Fsync, GameMode, gamescope, MangoHud, Linux DXVK/VKD3D/NVAPI installation,
 umu, and Linux anticheat runtimes are not automatically applied on macOS or
 Windows, even when old settings enable them. Explicit custom environment variables
