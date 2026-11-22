@@ -5047,6 +5047,7 @@ dependencies = [
  "url",
  "uuid 1.28.0",
  "windows-registry 0.6.1",
+ "windows-sys 0.61.2",
  "winresource",
 ]
 

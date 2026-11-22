@@ -1102,7 +1102,9 @@ Other parts:
   gets a native menu.
 - `palette.rs` is the Ctrl/Cmd+K command palette.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
-  (`tray-icon`, kept on the main thread).
+  (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
+  Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
+  and later), following the theme as it changes.
 
 ### 4.6 Store sign-in
 
