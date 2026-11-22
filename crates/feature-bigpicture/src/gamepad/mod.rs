@@ -166,6 +166,9 @@ pub struct ControllerInfo {
     /// USB ids, when the system reports them.
     pub vendor: Option<u16>,
     pub product: Option<u16>,
+    /// Its Bluetooth address when it is connected over Bluetooth and the
+    /// system lets Irori turn it off (`irori_services::bluetooth`).
+    pub bluetooth: Option<String>,
 }
 
 impl ControllerInfo {
@@ -525,8 +528,27 @@ fn on_chord(chord: Chord, cx: &mut App) {
                 .and_then(|m| m.statuses.read(cx).playing().next().cloned());
             backend.take_screenshot(game);
         }
-        Chord::VolumeUp => backend.step_system_volume(irori_services::audio::VOLUME_STEP),
-        Chord::VolumeDown => backend.step_system_volume(-irori_services::audio::VOLUME_STEP),
+        Chord::VolumeUp | Chord::VolumeDown => {
+            let prefs = crate::overlay::prefs(cx);
+            let step = match chord {
+                Chord::VolumeUp => prefs.volume_step(),
+                _ => -prefs.volume_step(),
+            };
+            // The open overlay shows the volume itself.
+            if !prefs.level_notice || crate::overlay::is_open(cx) {
+                backend.step_system_volume(step);
+                return;
+            }
+            let task = irori_ui::state::run_infallible(cx, async move {
+                backend.change_system_volume(step).await
+            });
+            cx.spawn(async move |cx| {
+                if let Some(Some(volume)) = task.await {
+                    cx.update(|cx| crate::overlay::level::show(volume, cx));
+                }
+            })
+            .detach();
+        }
     }
 }
 

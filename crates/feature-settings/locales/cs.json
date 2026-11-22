@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Mění hlasitost systému, i když má okno hra, bez otevření překryvu.",
   "settings.field.overlay_volume_step.label": "Krok hlasitosti (%)",
   "settings.field.overlay_volume_step.help": "O kolik jedno stisknutí změní hlasitost v překryvu i pomocí Guide + nahoru nebo dolů.",
+  "settings.field.overlay_level_notice.label": "Zobrazit hlasitost nad hrou",
+  "settings.field.overlay_level_notice.help": "Po Guide + nahoru nebo dolů se nová úroveň na chvíli zobrazí nahoře na obrazovce.",
   "settings.requires.overlay": "Nejprve zapněte překryv ve hře",
   "settings.overlay.status.unavailable": "Překryv ve hře není v tomto systému k dispozici.",
   "settings.overlay.status.surface_wayland": "Otevírá se nad hrami jako vrstva na desktopech Wayland s layer-shell (KDE Plasma, sway, Hyprland, COSMIC); v GNOME jako okno, které může zůstat za hrou na celé obrazovce.",

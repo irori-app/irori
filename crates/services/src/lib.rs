@@ -14,6 +14,7 @@ pub mod art_cache;
 pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
+pub mod bluetooth;
 pub mod capture;
 pub mod copies;
 mod discord;

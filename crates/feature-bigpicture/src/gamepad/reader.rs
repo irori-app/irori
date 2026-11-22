@@ -147,6 +147,19 @@ struct Device {
     ignored: bool,
     stick_x: StickAxis,
     stick_y: StickAxis,
+    /// Its Bluetooth address, read once when it connects (Linux).
+    bluetooth: Option<String>,
+}
+
+/// The Bluetooth address of `pad`, for turning it off from the overlay.
+#[cfg(target_os = "linux")]
+fn bluetooth_address(pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    irori_services::bluetooth::address_of(pad.devpath())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn bluetooth_address(_pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    None
 }
 
 struct Reader {
@@ -307,6 +320,10 @@ impl Reader {
                         || self.steam_ignored.ignores(vendor, product),
                     stick_x: previous.as_ref().map(|d| d.stick_x).unwrap_or_default(),
                     stick_y: previous.as_ref().map(|d| d.stick_y).unwrap_or_default(),
+                    bluetooth: match previous {
+                        Some(previous) => previous.bluetooth,
+                        None => bluetooth_address(&pad),
+                    },
                 },
             );
         }
@@ -352,6 +369,7 @@ impl Reader {
                 battery: battery(pad.power_info()),
                 vendor: pad.vendor_id(),
                 product: pad.product_id(),
+                bluetooth: self.devices.get(&id).and_then(|d| d.bluetooth.clone()),
             })
             .collect();
         if controllers != self.controllers {

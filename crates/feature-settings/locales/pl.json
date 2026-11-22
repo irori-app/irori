@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Zmienia głośność systemu, gdy okno ma gra, bez otwierania nakładki.",
   "settings.field.overlay_volume_step.label": "Krok głośności (%)",
   "settings.field.overlay_volume_step.help": "O ile jedno naciśnięcie zmienia głośność, w nakładce i przez Guide + góra lub dół.",
+  "settings.field.overlay_level_notice.label": "Pokazuj głośność nad grą",
+  "settings.field.overlay_level_notice.help": "Po Guide + góra lub dół nowy poziom pojawia się na chwilę u góry ekranu.",
   "settings.requires.overlay": "Najpierw włącz nakładkę w grze",
   "settings.overlay.status.unavailable": "Nakładka w grze nie jest dostępna w tym systemie.",
   "settings.overlay.status.surface_wayland": "Otwiera się nad grami jako warstwa na pulpitach Wayland z layer-shell (KDE Plasma, sway, Hyprland, COSMIC); w GNOME jako okno, które może zostać za grą na pełnym ekranie.",

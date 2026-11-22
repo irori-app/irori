@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "オーバーレイを開かずに、ゲームの画面のままシステムの音量を変更します。",
   "settings.field.overlay_volume_step.label": "音量の変化量 (%)",
   "settings.field.overlay_volume_step.help": "オーバーレイと Guide + 上下で、1 回の操作で音量が変わる量です。",
+  "settings.field.overlay_level_notice.label": "ゲームの上に音量を表示",
+  "settings.field.overlay_level_notice.help": "Guide + 上下の後、新しい音量が画面上部に少しの間表示されます。",
   "settings.requires.overlay": "先にゲーム内オーバーレイをオンにしてください",
   "settings.overlay.status.unavailable": "このシステムではゲーム内オーバーレイを使えません。",
   "settings.overlay.status.surface_wayland": "layer-shell 対応の Wayland デスクトップ（KDE Plasma、sway、Hyprland、COSMIC）ではゲームの上にレイヤーとして開きます。GNOME ではウィンドウとして開き、全画面のゲームの後ろに隠れることがあります。",

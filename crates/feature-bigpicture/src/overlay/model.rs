@@ -16,10 +16,18 @@ pub enum Tab {
     Screenshots,
     Achievements,
     Journal,
+    /// The connected controllers: battery, and turning a Bluetooth one off.
+    Controllers,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::Home, Tab::Screenshots, Tab::Achievements, Tab::Journal];
+    pub const ALL: [Tab; 5] = [
+        Tab::Home,
+        Tab::Screenshots,
+        Tab::Achievements,
+        Tab::Journal,
+        Tab::Controllers,
+    ];
 
     fn index(self) -> usize {
         Self::ALL.iter().position(|t| *t == self).unwrap_or(0)
@@ -32,39 +40,65 @@ impl Tab {
     }
 }
 
-/// The rows of the Home tab, top to bottom.
+/// The rows of the Home tab, in the order they can show (see
+/// [`home_rows`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeRow {
     SystemVolume,
     GameVolume,
     /// The sound output: Left and Right switch to the previous and next.
     Output,
+    /// The default microphone: A mutes it, Left and Right change its level.
+    Microphone,
+    /// The microphone in use: Left and Right switch to another.
+    Input,
     Screenshot,
     BackToIrori,
     QuitGame,
 }
 
 impl HomeRow {
-    pub const ALL: [HomeRow; 6] = [
+    /// Every row, in their order.
+    pub const ALL: [HomeRow; 8] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
         HomeRow::Output,
+        HomeRow::Microphone,
+        HomeRow::Input,
         HomeRow::Screenshot,
         HomeRow::BackToIrori,
         HomeRow::QuitGame,
     ];
 
-    pub fn at(row: usize) -> Option<HomeRow> {
-        Self::ALL.get(row).copied()
-    }
-
     /// Whether Left and Right change this row's value.
     pub fn adjusts(self) -> bool {
         matches!(
             self,
-            HomeRow::SystemVolume | HomeRow::GameVolume | HomeRow::Output
+            HomeRow::SystemVolume
+                | HomeRow::GameVolume
+                | HomeRow::Output
+                | HomeRow::Microphone
+                | HomeRow::Input
         )
     }
+}
+
+/// What decides which Home rows show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HomeContext {
+    /// The computer has a microphone (one was read).
+    pub microphone: bool,
+}
+
+/// The Home tab's rows for `cx`: the microphone's only with one.
+pub fn home_rows(cx: HomeContext) -> Vec<HomeRow> {
+    HomeRow::ALL
+        .into_iter()
+        .filter(|row| match row {
+            HomeRow::Microphone | HomeRow::Input => cx.microphone,
+            _ => true,
+        })
+        .collect()
 }
 
 /// The output `step` places from the current one in `outputs` (by
@@ -113,16 +147,19 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Nav {
     tab: Tab,
-    focus: [usize; 4],
+    focus: [usize; Tab::ALL.len()],
     confirm: Option<Choice>,
+    /// The Home tab's rows now (see [`home_rows`]).
+    home: Vec<HomeRow>,
 }
 
 impl Default for Nav {
     fn default() -> Self {
         Self {
             tab: Tab::Home,
-            focus: [0; 4],
+            focus: [0; Tab::ALL.len()],
             confirm: None,
+            home: HomeRow::ALL.to_vec(),
         }
     }
 }
@@ -135,6 +172,30 @@ impl Nav {
     /// The focused row of `tab`, within `rows` rows.
     pub fn focus(&self, tab: Tab, rows: usize) -> usize {
         self.focus[tab.index()].min(rows.saturating_sub(1))
+    }
+
+    /// The Home tab's rows.
+    pub fn home(&self) -> &[HomeRow] {
+        &self.home
+    }
+
+    /// The Home row at `ix`.
+    pub fn home_row(&self, ix: usize) -> Option<HomeRow> {
+        self.home.get(ix).copied()
+    }
+
+    /// Show `rows` on the Home tab, keeping the focus on the row it was on
+    /// when that row stays.
+    pub fn set_home(&mut self, rows: Vec<HomeRow>) {
+        if rows == self.home {
+            return;
+        }
+        let ix = Tab::Home.index();
+        let focused = self.home.get(self.focus[ix]).copied();
+        self.focus[ix] = focused
+            .and_then(|row| rows.iter().position(|r| *r == row))
+            .unwrap_or(0);
+        self.home = rows;
     }
 
     /// The question before quitting and its focused answer, when asked.
@@ -221,7 +282,7 @@ impl Nav {
             Left | Right => {
                 let step = if input == Left { -1 } else { 1 };
                 if self.tab == Tab::Home {
-                    match HomeRow::at(focus) {
+                    match self.home.get(focus).copied() {
                         Some(row) if row.adjusts() => Action::Adjust(row, step),
                         _ => Action::None,
                     }
@@ -349,7 +410,7 @@ mod tests {
         assert_eq!(nav.tab(), Tab::Screenshots);
         nav.input(PrevPage, 0);
         nav.input(PrevPage, 5);
-        assert_eq!(nav.tab(), Tab::Journal, "wraps around");
+        assert_eq!(nav.tab(), Tab::Controllers, "wraps around");
         nav.input(NextPage, 0);
         assert_eq!(nav.tab(), Tab::Home);
     }
@@ -371,14 +432,59 @@ mod tests {
         nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Output, 1));
         nav.input(Down, rows);
+        assert_eq!(
+            nav.input(Left, rows),
+            Action::Adjust(HomeRow::Microphone, -1)
+        );
+        nav.input(Down, rows);
+        assert_eq!(nav.input(Right, rows), Action::Adjust(HomeRow::Input, 1));
+        nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::None, "not a value");
-        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 3));
+        assert_eq!(nav.input(Confirm, rows), Action::Activate(Tab::Home, 5));
+        assert_eq!(nav.home_row(5), Some(HomeRow::Screenshot));
         for _ in 0..10 {
             nav.input(Down, rows);
         }
         assert_eq!(nav.focus(Tab::Home, rows), rows - 1, "stops at the bottom");
         assert_eq!(nav.input(Back, rows), Action::Close);
         assert_eq!(nav.input(Guide, rows), Action::Close);
+    }
+
+    #[test]
+    fn the_microphone_rows_show_with_a_microphone_and_the_focus_stays_put() {
+        let without = home_rows(HomeContext { microphone: false });
+        assert!(!without.contains(&HomeRow::Microphone) && !without.contains(&HomeRow::Input));
+        let with = home_rows(HomeContext { microphone: true });
+        assert_eq!(with, HomeRow::ALL);
+
+        let mut nav = Nav::default();
+        nav.set_home(without.clone());
+        // Focus "Back to Irori", then a microphone appears above it.
+        let back = without
+            .iter()
+            .position(|r| *r == HomeRow::BackToIrori)
+            .unwrap();
+        nav.set_focus(back);
+        nav.set_home(with.clone());
+        let focus = nav.focus(Tab::Home, with.len());
+        assert_eq!(nav.home_row(focus), Some(HomeRow::BackToIrori));
+        // Focused on the microphone when it goes: back to the top.
+        let mic = with.iter().position(|r| *r == HomeRow::Microphone).unwrap();
+        nav.set_focus(mic);
+        nav.set_home(without);
+        assert_eq!(nav.focus(Tab::Home, 6), 0);
+    }
+
+    #[test]
+    fn controllers_have_a_tab_after_the_journal() {
+        let mut nav = Nav::default();
+        nav.show(Tab::Journal);
+        nav.input(NextPage, 1);
+        assert_eq!(nav.tab(), Tab::Controllers);
+        assert_eq!(nav.input(Confirm, 2), Action::Activate(Tab::Controllers, 0));
+        assert_eq!(nav.input(Confirm, 0), Action::None, "no controller");
+        nav.input(NextPage, 2);
+        assert_eq!(nav.tab(), Tab::Home, "wraps around");
     }
 
     #[test]

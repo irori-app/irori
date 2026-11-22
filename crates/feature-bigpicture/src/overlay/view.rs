@@ -27,11 +27,15 @@ use irori_ui::journal::shot_url;
 use irori_ui::models;
 
 use super::model::{
-    Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, next_output, next_up, progress, unlocked_since,
+    Action, Choice, HomeContext, HomeRow, Nav, SHOT_COLUMNS, Tab, home_rows, next_output, next_up,
+    progress, unlocked_since,
 };
-use crate::gamepad::{self, ControllerKind, GamepadInput};
+use crate::gamepad::{self, ControllerInfo, ControllerKind, GamepadInput};
 use crate::layout::home::Dir;
 use crate::layout::wheel::{WheelTravel, WheelView};
+
+mod controllers;
+mod home;
 
 /// How long one unlock notice stays in the corner.
 const TOAST_TIME: Duration = Duration::from_secs(4);
@@ -63,6 +67,15 @@ pub(super) struct OverlayView {
     audio_error: Option<SharedString>,
     /// The sound outputs, the one in use marked.
     outputs: Load<Vec<AudioOutput>>,
+    /// The microphones, the one in use marked.
+    inputs: Load<Vec<AudioOutput>>,
+    /// The connected controllers, as the reader last listed them.
+    controllers: Vec<ControllerInfo>,
+    /// The controller row whose "Turn off" was pressed once: a second press
+    /// turns it off.
+    armed: Option<usize>,
+    /// Why turning a controller off failed.
+    controller_error: Option<SharedString>,
     shots: Load<Vec<Screenshot>>,
     /// The screenshot shown large, by its place in `shots`.
     preview: Option<usize>,
@@ -90,7 +103,7 @@ impl OverlayView {
         let statuses = models(cx).statuses.clone();
         let settings = models(cx).settings.clone();
         let watched = game.clone();
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
             // The game exited, or the overlay was turned off: nothing to show.
             cx.observe(&statuses, move |_, statuses, cx| {
@@ -104,6 +117,17 @@ impl OverlayView {
                 }
             }),
         ];
+        if let Some(model) = gamepad::model(cx) {
+            subscriptions.push(cx.observe(&model, |this, _, cx| {
+                let now = gamepad::controllers();
+                if now != this.controllers {
+                    // A controller went away: what was armed is something else.
+                    this.armed = None;
+                    this.controllers = now;
+                    cx.notify();
+                }
+            }));
+        }
         let mut view = Self {
             game,
             title,
@@ -113,6 +137,10 @@ impl OverlayView {
             audio: Load::Loading,
             audio_error: None,
             outputs: Load::Loading,
+            inputs: Load::Loading,
+            controllers: gamepad::controllers(),
+            armed: None,
+            controller_error: None,
             shots: Load::Loading,
             preview: None,
             achievements: Load::Loading,
@@ -135,7 +163,7 @@ impl OverlayView {
         self._tasks.push(cx.spawn_in(window, async move |this, cx| {
             let result = audio.await;
             let _ = this.update(cx, |this, cx| {
-                this.audio = loaded(result);
+                this.set_audio(loaded(result));
                 cx.notify();
             });
         }));
@@ -146,6 +174,16 @@ impl OverlayView {
             let result = outputs.await;
             let _ = this.update(cx, |this, cx| {
                 this.outputs = loaded(result);
+                cx.notify();
+            });
+        }));
+
+        let b = backend.clone();
+        let inputs = irori_ui::run(cx, async move { b.audio_inputs().await });
+        self._tasks.push(cx.spawn_in(window, async move |this, cx| {
+            let result = inputs.await;
+            let _ = this.update(cx, |this, cx| {
+                this.inputs = loaded(result);
                 cx.notify();
             });
         }));
@@ -230,10 +268,18 @@ impl OverlayView {
             && !matches!(self.achievements, Load::Loading)
     }
 
+    /// Take the sound as read, and the Home rows it calls for.
+    fn set_audio(&mut self, audio: Load<GameAudio>) {
+        let microphone = matches!(&audio, Load::Ready(a) if a.microphone.is_some());
+        self.nav.set_home(home_rows(HomeContext { microphone }));
+        self.audio = audio;
+    }
+
     /// How many rows the shown tab has.
     fn rows(&self) -> usize {
         match self.nav.tab() {
-            Tab::Home => HomeRow::ALL.len(),
+            Tab::Home => self.nav.home().len(),
+            Tab::Controllers => self.controllers.len(),
             Tab::Screenshots => match &self.shots {
                 Load::Ready(shots) => shots.len(),
                 _ => 0,
@@ -275,7 +321,12 @@ impl OverlayView {
             return;
         }
         let rows = self.rows();
-        match self.nav.input(input, rows) {
+        let action = self.nav.input(input, rows);
+        if action != Action::None && !matches!(action, Action::Activate(Tab::Controllers, _)) {
+            // Turning a controller off takes two presses in a row.
+            self.armed = None;
+        }
+        match action {
             Action::None => return,
             Action::Moved => {}
             Action::Close => super::close(cx),
@@ -286,11 +337,12 @@ impl OverlayView {
                 return;
             }
             Action::Adjust(HomeRow::Output, step) => self.switch_output(step, window, cx),
+            Action::Adjust(HomeRow::Input, step) => self.switch_input(step, window, cx),
             Action::Adjust(row, step) => {
-                let target = if row == HomeRow::SystemVolume {
-                    VolumeTarget::System
-                } else {
-                    VolumeTarget::Game
+                let target = match row {
+                    HomeRow::SystemVolume => VolumeTarget::System,
+                    HomeRow::Microphone => VolumeTarget::Microphone,
+                    _ => VolumeTarget::Game,
                 };
                 self.change_audio(target, Some(step * super::volume_step(cx)), window, cx);
             }
@@ -301,7 +353,7 @@ impl OverlayView {
 
     fn activate(&mut self, tab: Tab, row: usize, window: &mut Window, cx: &mut Context<Self>) {
         match tab {
-            Tab::Home => match HomeRow::at(row) {
+            Tab::Home => match self.nav.home_row(row) {
                 Some(HomeRow::SystemVolume) => {
                     self.change_audio(VolumeTarget::System, None, window, cx)
                 }
@@ -310,6 +362,10 @@ impl OverlayView {
                 }
                 Some(HomeRow::GameVolume) => {}
                 Some(HomeRow::Output) => self.switch_output(1, window, cx),
+                Some(HomeRow::Microphone) => {
+                    self.change_audio(VolumeTarget::Microphone, None, window, cx)
+                }
+                Some(HomeRow::Input) => self.switch_input(1, window, cx),
                 Some(HomeRow::Screenshot) => {
                     let backend = irori_ui::backend(cx);
                     let id = self.game.clone();
@@ -330,6 +386,7 @@ impl OverlayView {
                 }
             }
             Tab::Achievements => {}
+            Tab::Controllers => self.controller_pressed(row, window, cx),
             Tab::Journal => {
                 let today = chrono::Local::now().date_naive();
                 let date = crate::text::relative_day(today, today);
@@ -397,7 +454,7 @@ impl OverlayView {
                     Ok((outputs, audio)) => {
                         this.outputs = Load::Ready(outputs);
                         if let Some(audio) = audio {
-                            this.audio = Load::Ready(audio);
+                            this.set_audio(Load::Ready(audio));
                         }
                         this.audio_error = None;
                     }
@@ -429,7 +486,7 @@ impl OverlayView {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(audio) => {
-                        this.audio = Load::Ready(audio);
+                        this.set_audio(Load::Ready(audio));
                         this.audio_error = None;
                     }
                     Err(e) => this.audio_error = Some(format!("{e:#}").into()),
@@ -474,6 +531,7 @@ impl Render for OverlayView {
             Tab::Screenshots => self.render_shots(window, cx),
             Tab::Achievements => self.render_achievements(window, cx),
             Tab::Journal => self.render_journal(cx),
+            Tab::Controllers => self.render_controllers(cx),
         };
         // While the journal editor is open its keys are its own: the panel
         // neither binds them nor handles the actions they stand for.
@@ -655,7 +713,7 @@ impl OverlayView {
         trailing: Option<AnyElement>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let danger = tab == Tab::Home && HomeRow::at(ix) == Some(HomeRow::QuitGame);
+        let danger = tab == Tab::Home && self.nav.home_row(ix) == Some(HomeRow::QuitGame);
         let focused = self.nav.tab() == tab && self.nav.focus(tab, self.rows()) == ix;
         let theme = cx.theme();
         let color = if danger {
@@ -704,149 +762,6 @@ impl OverlayView {
         gamepad::model(cx)
             .and_then(|m| m.read(cx).active_kind())
             .unwrap_or_default()
-    }
-
-    /// The output in use, between the arrows that switch it.
-    fn output_text(&self, cx: &mut Context<Self>) -> AnyElement {
-        let text: SharedString = match &self.outputs {
-            Load::Loading => t("bigpicture.overlay.loading"),
-            Load::Ready(outputs) => outputs
-                .iter()
-                .find(|o| o.current)
-                .map(|o| SharedString::from(o.name.clone()))
-                .unwrap_or_else(|| t("bigpicture.overlay.output_unavailable")),
-            Load::Failed(_) => t("bigpicture.overlay.output_unavailable"),
-        };
-        let several = matches!(&self.outputs, Load::Ready(o) if o.len() > 1);
-        h_flex()
-            .flex_shrink_1()
-            .min_w_0()
-            .max_w(rems(16.))
-            .gap_2()
-            .items_center()
-            .text_color(cx.theme().muted_foreground)
-            .when(several, |d| d.child(Icon::new(IconName::ChevronLeft)))
-            .child(div().min_w_0().truncate().child(text))
-            .when(several, |d| d.child(Icon::new(IconName::ChevronRight)))
-            .into_any_element()
-    }
-
-    fn render_home(&self, cx: &mut Context<Self>) -> AnyElement {
-        let kind = self.kind(cx);
-        let (system, game, error) = match &self.audio {
-            Load::Loading => (None, None, None),
-            Load::Ready(audio) => (audio.system, audio.game, None),
-            Load::Failed(e) => (None, None, Some(e.clone())),
-        };
-        let error = self.audio_error.clone().or(error);
-        let loading = matches!(self.audio, Load::Loading);
-        let volume = |v: Option<Volume>, empty: SharedString, cx: &mut Context<Self>| {
-            let theme = cx.theme();
-            let text: SharedString = match v {
-                Some(v) if v.muted => t("bigpicture.overlay.muted"),
-                Some(v) => format!("{}%", v.percent).into(),
-                None if loading => t("bigpicture.overlay.loading"),
-                None => empty,
-            };
-            h_flex()
-                .flex_shrink_0()
-                .gap_2()
-                .items_center()
-                .text_color(theme.muted_foreground)
-                .child(Icon::new(IconName::Minus))
-                .child(div().min_w(rems(4.)).text_center().child(text))
-                .child(Icon::new(IconName::Plus))
-                .into_any_element()
-        };
-        let muted_icon = |v: Option<Volume>| {
-            if v.is_some_and(|v| v.muted) {
-                IconName::VolumeX
-            } else {
-                IconName::Volume2
-            }
-        };
-        let system_text = volume(system, t("bigpicture.overlay.volume_unavailable"), cx);
-        // macOS has no per-program volume: say so rather than "no sound".
-        let game_volume = super::support::Support::current().game_volume;
-        let game_text = if game_volume {
-            volume(game, t("bigpicture.overlay.no_game_sound"), cx)
-        } else {
-            volume(None, t("bigpicture.overlay.game_volume_unsupported"), cx)
-        };
-        let rows = vec![
-            self.row(
-                Tab::Home,
-                0,
-                muted_icon(system),
-                t("bigpicture.overlay.system_volume"),
-                Some(system_text),
-                cx,
-            ),
-            self.row(
-                Tab::Home,
-                1,
-                muted_icon(game),
-                t("bigpicture.overlay.game_volume"),
-                Some(game_text),
-                cx,
-            ),
-            self.row(
-                Tab::Home,
-                2,
-                IconName::Speaker,
-                t("bigpicture.overlay.output"),
-                Some(self.output_text(cx)),
-                cx,
-            ),
-            self.row(
-                Tab::Home,
-                3,
-                IconName::Camera,
-                t("bigpicture.overlay.screenshot"),
-                None,
-                cx,
-            ),
-            self.row(
-                Tab::Home,
-                4,
-                IconName::House,
-                t("bigpicture.overlay.back_to_irori"),
-                None,
-                cx,
-            ),
-            self.row(
-                Tab::Home,
-                5,
-                IconName::Power,
-                t("bigpicture.overlay.quit"),
-                None,
-                cx,
-            ),
-        ];
-        let theme = cx.theme();
-        v_flex()
-            .id("overlay-home")
-            .size_full()
-            .gap_1()
-            .overflow_y_scroll()
-            .children(rows)
-            .child(
-                div()
-                    .pt_2()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child(t_args(
-                        "bigpicture.overlay.volume_hint",
-                        &[("button", kind.glyph(GamepadInput::Confirm))],
-                    )),
-            )
-            .when_some(error, |d, e| {
-                d.child(div().text_sm().text_color(theme.danger).child(t_args(
-                    "bigpicture.overlay.audio_failed",
-                    &[("error", e.as_ref())],
-                )))
-            })
-            .into_any_element()
     }
 
     fn empty(
@@ -1429,5 +1344,6 @@ fn tab_label(tab: Tab) -> SharedString {
         Tab::Screenshots => t("bigpicture.overlay.tab.screenshots"),
         Tab::Achievements => t("bigpicture.overlay.tab.achievements"),
         Tab::Journal => t("bigpicture.overlay.tab.journal"),
+        Tab::Controllers => t("bigpicture.overlay.tab.controllers"),
     }
 }

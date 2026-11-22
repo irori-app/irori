@@ -2025,6 +2025,16 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.overlay_volume_step.help")
     .keywords(&["overlay", "volume", "step", "percent"])
     .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.levelNotice",
+        "settings.field.overlay_level_notice.label",
+        General,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_level_notice.help")
+    .keywords(&["overlay", "volume", "level", "osd", "notice"])
+    .requires(NEEDS_OVERLAY),
     // ---- Appearance ----
     app(
         "iroriUi.theme",

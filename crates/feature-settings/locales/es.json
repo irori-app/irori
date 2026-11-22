@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Cambia el volumen del sistema mientras el juego tiene la ventana, sin abrir la superposición.",
   "settings.field.overlay_volume_step.label": "Paso de volumen (%)",
   "settings.field.overlay_volume_step.help": "Cuánto cambia el volumen una pulsación, en la superposición y con Guide + arriba o abajo.",
+  "settings.field.overlay_level_notice.label": "Mostrar el volumen sobre el juego",
+  "settings.field.overlay_level_notice.help": "Tras Guide + arriba o abajo, el nuevo nivel aparece un momento en la parte superior de la pantalla.",
   "settings.requires.overlay": "Activa primero la superposición en el juego",
   "settings.overlay.status.unavailable": "La superposición en el juego no está disponible en este sistema.",
   "settings.overlay.status.surface_wayland": "Se abre sobre los juegos como una capa en escritorios Wayland con layer-shell (KDE Plasma, sway, Hyprland, COSMIC); en GNOME como una ventana, que puede quedar detrás de un juego a pantalla completa.",

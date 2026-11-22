@@ -559,6 +559,10 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   with Left/Right or A (Linux: `pactl set-default-sink`, the game's streams moved
   along; macOS: Core Audio's default output device; Windows: the default device for
   every role through the undocumented `IPolicyConfig` Windows' own sound settings use);
+  with a microphone, its level (Left/Right) and mute (A), and the microphone in use,
+  switched the same way (Linux: `pactl`'s default source, the outputs' monitors left
+  out; macOS: Core Audio's default input device, muted through its mute switch, else
+  by its level; Windows: the default capture device, through `IPolicyConfig`);
   a screenshot; Back to Irori
   (the main window, reopened from the tray if it was closed); quitting the game, which
   asks first with Cancel focused and then stops it as the game page's Stop does.
@@ -569,6 +573,11 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   afresh, at most once a minute per game.
 - **Journal**: today's note for the game, written or edited in the usual editor. Typing
   needs the keyboard, so click the overlay first.
+- **Controllers**: each connected controller, its family and battery. On Linux a
+  Bluetooth controller (its input device on the Bluetooth bus, the address in its
+  `uniq`) can be turned off with A pressed twice: BlueZ's `Device1.Disconnect` on the
+  system bus, which needs no extra rights. Windows and macOS leave that to their
+  Bluetooth settings.
 
 Unlocks the session made are announced one after another in the overlay's corner, with
 their picture, when it opens (each once per run of Irori). With "Announce new
@@ -580,8 +589,13 @@ shows as a notification over the game while Irori is in the background. The whee
 the touchpad move through the overlay's rows too (sideways only in Screenshots).
 
 Shortcuts that work without opening it, also while the game has the window: Guide + RB
-(R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
-still saves a clip of the replay buffer.
+(R1) takes a screenshot, Guide + Up/Down change the system's volume by one volume step (5%
+unless changed), and Guide + X
+still saves a clip of the replay buffer. After Guide + Up/Down the new level shows at the
+top of the screen for a second and a half (`iroriOverlay.levelNotice`): a small surface
+of its own, a layer surface that never takes the keyboard on Wayland with layer-shell
+(nothing shows on GNOME, where only a window that takes the focus could come above the
+game) and a pop-up window elsewhere; it exists only while it shows.
 
 Settings › General › In-game overlay also places the panel (centred, or at the left or
 right edge, `iroriOverlay.side`), turns the screenshot and volume chords off one by one

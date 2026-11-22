@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Changes the system’s volume while the game has the window, without opening the overlay.",
   "settings.field.overlay_volume_step.label": "Volume step (%)",
   "settings.field.overlay_volume_step.help": "How far one press changes a volume, in the overlay and with Guide + Up or Down.",
+  "settings.field.overlay_level_notice.label": "Show the volume over the game",
+  "settings.field.overlay_level_notice.help": "After Guide + Up or Down, the new level shows at the top of the screen for a moment.",
   "settings.requires.overlay": "Turn the in-game overlay on first",
   "settings.overlay.status.unavailable": "The in-game overlay isn’t available on this system.",
   "settings.overlay.status.surface_wayland": "Opens above games as a layer on Wayland desktops with layer-shell (KDE Plasma, sway, Hyprland, COSMIC); on GNOME as a window, which may stay behind a fullscreen game.",

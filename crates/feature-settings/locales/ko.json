@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "오버레이를 열지 않고 게임 창에서 시스템 볼륨을 조절합니다.",
   "settings.field.overlay_volume_step.label": "볼륨 단계(%)",
   "settings.field.overlay_volume_step.help": "오버레이와 Guide + 위/아래에서 한 번 누를 때 바뀌는 볼륨입니다.",
+  "settings.field.overlay_level_notice.label": "게임 위에 볼륨 표시",
+  "settings.field.overlay_level_notice.help": "Guide + 위/아래 후 새 볼륨이 화면 위쪽에 잠시 표시됩니다.",
   "settings.requires.overlay": "먼저 게임 내 오버레이를 켜세요",
   "settings.overlay.status.unavailable": "이 시스템에서는 게임 내 오버레이를 사용할 수 없습니다.",
   "settings.overlay.status.surface_wayland": "layer-shell을 지원하는 Wayland 데스크톱(KDE Plasma, sway, Hyprland, COSMIC)에서는 게임 위에 레이어로 열립니다. GNOME에서는 창으로 열리며 전체 화면 게임 뒤에 가려질 수 있습니다.",

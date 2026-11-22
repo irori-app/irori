@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Schimbă volumul sistemului cât timp jocul are fereastra, fără a deschide suprapunerea.",
   "settings.field.overlay_volume_step.label": "Pasul volumului (%)",
   "settings.field.overlay_volume_step.help": "Cât schimbă o apăsare un volum, în suprapunere și cu Guide + sus sau jos.",
+  "settings.field.overlay_level_notice.label": "Arată volumul peste joc",
+  "settings.field.overlay_level_notice.help": "După Guide + sus sau jos, noul nivel apare pentru o clipă în partea de sus a ecranului.",
   "settings.requires.overlay": "Activează mai întâi suprapunerea în joc",
   "settings.overlay.status.unavailable": "Suprapunerea în joc nu este disponibilă pe acest sistem.",
   "settings.overlay.status.surface_wayland": "Se deschide peste jocuri ca un strat pe desktopurile Wayland cu layer-shell (KDE Plasma, sway, Hyprland, COSMIC); în GNOME ca fereastră, care poate rămâne în spatele unui joc pe tot ecranul.",

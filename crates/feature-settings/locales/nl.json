@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Past het systeemvolume aan terwijl de game het venster heeft, zonder de overlay te openen.",
   "settings.field.overlay_volume_step.label": "Volumestap (%)",
   "settings.field.overlay_volume_step.help": "Hoeveel één druk een volume verandert, in de overlay en met Guide + omhoog of omlaag.",
+  "settings.field.overlay_level_notice.label": "Volume boven de game tonen",
+  "settings.field.overlay_level_notice.help": "Na Guide + omhoog of omlaag verschijnt het nieuwe niveau even boven in het scherm.",
   "settings.requires.overlay": "Zet eerst de overlay in de game aan",
   "settings.overlay.status.unavailable": "De overlay in de game is niet beschikbaar op dit systeem.",
   "settings.overlay.status.surface_wayland": "Opent boven games als laag op Wayland-desktops met layer-shell (KDE Plasma, sway, Hyprland, COSMIC); op GNOME als venster, dat achter een game op volledig scherm kan blijven.",

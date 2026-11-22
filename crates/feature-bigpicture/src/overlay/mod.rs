@@ -20,6 +20,7 @@
 
 #[cfg(any(target_os = "macos", windows))]
 mod hotkey;
+pub(crate) mod level;
 pub(crate) mod model;
 pub mod support;
 mod view;

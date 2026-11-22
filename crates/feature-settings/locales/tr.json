@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Katmanı açmadan, pencere oyundayken sistem sesini değiştirir.",
   "settings.field.overlay_volume_step.label": "Ses adımı (%)",
   "settings.field.overlay_volume_step.help": "Bir basışın sesi ne kadar değiştireceği; katmanda ve Guide + yukarı veya aşağı ile.",
+  "settings.field.overlay_level_notice.label": "Ses düzeyini oyunun üzerinde göster",
+  "settings.field.overlay_level_notice.help": "Guide + yukarı veya aşağıdan sonra yeni düzey kısa bir süre ekranın üstünde görünür.",
   "settings.requires.overlay": "Önce oyun içi katmanı açın",
   "settings.overlay.status.unavailable": "Oyun içi katman bu sistemde kullanılamıyor.",
   "settings.overlay.status.surface_wayland": "layer-shell destekli Wayland masaüstlerinde (KDE Plasma, sway, Hyprland, COSMIC) oyunların üzerinde bir katman olarak açılır; GNOME’da ise tam ekran bir oyunun arkasında kalabilen bir pencere olarak.",

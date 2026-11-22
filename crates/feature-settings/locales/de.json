@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Ändert die Systemlautstärke, während das Spiel das Fenster hat, ohne das Overlay zu öffnen.",
   "settings.field.overlay_volume_step.label": "Lautstärkeschritt (%)",
   "settings.field.overlay_volume_step.help": "Wie weit ein Druck eine Lautstärke ändert, im Overlay und mit Guide + Oben oder Unten.",
+  "settings.field.overlay_level_notice.label": "Lautstärke über dem Spiel anzeigen",
+  "settings.field.overlay_level_notice.help": "Nach Guide + Oben oder Unten erscheint der neue Pegel kurz oben auf dem Bildschirm.",
   "settings.requires.overlay": "Zuerst das Overlay im Spiel einschalten",
   "settings.overlay.status.unavailable": "Das Overlay im Spiel ist auf diesem System nicht verfügbar.",
   "settings.overlay.status.surface_wayland": "Öffnet sich auf Wayland-Desktops mit layer-shell (KDE Plasma, sway, Hyprland, COSMIC) als Ebene über Spielen; unter GNOME als Fenster, das hinter einem Vollbildspiel bleiben kann.",

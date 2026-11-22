@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Меняет громкость системы, пока окно у игры, без открытия оверлея.",
   "settings.field.overlay_volume_step.label": "Шаг громкости (%)",
   "settings.field.overlay_volume_step.help": "Насколько одно нажатие меняет громкость — в оверлее и с Guide + вверх или вниз.",
+  "settings.field.overlay_level_notice.label": "Показывать громкость поверх игры",
+  "settings.field.overlay_level_notice.help": "После Guide + вверх или вниз новый уровень ненадолго появляется вверху экрана.",
   "settings.requires.overlay": "Сначала включите оверлей в игре",
   "settings.overlay.status.unavailable": "Оверлей в игре недоступен в этой системе.",
   "settings.overlay.status.surface_wayland": "Открывается поверх игр слоем на рабочих столах Wayland с layer-shell (KDE Plasma, sway, Hyprland, COSMIC); в GNOME — окном, которое может остаться за полноэкранной игрой.",

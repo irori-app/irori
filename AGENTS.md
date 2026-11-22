@@ -1255,7 +1255,12 @@ Microsoft's approval page (`irori_manage::login`).
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
   `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
-  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay".
+  exclusive fullscreen. The microphone is `GameAudio::microphone`,
+  `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
+  turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
+  (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
+  `overlay/level.rs`, a surface that exists only while it shows. `docs/PLATFORMS.md`,
+  "In-game overlay".
 
 ### 4.8 Engines (emulators)
 

@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "无需打开叠加层，在游戏窗口中调节系统音量。",
   "settings.field.overlay_volume_step.label": "音量步长（%）",
   "settings.field.overlay_volume_step.help": "在叠加层中及使用 Guide + 上或下时，每按一次音量变化的幅度。",
+  "settings.field.overlay_level_notice.label": "在游戏上方显示音量",
+  "settings.field.overlay_level_notice.help": "按 Guide + 上或下后，新的音量会在屏幕顶部短暂显示。",
   "settings.requires.overlay": "请先打开游戏内叠加层",
   "settings.overlay.status.unavailable": "此系统不支持游戏内叠加层。",
   "settings.overlay.status.surface_wayland": "在支持 layer-shell 的 Wayland 桌面（KDE Plasma、sway、Hyprland、COSMIC）上以图层形式显示在游戏上方；在 GNOME 上以窗口形式打开，可能会被全屏游戏挡住。",

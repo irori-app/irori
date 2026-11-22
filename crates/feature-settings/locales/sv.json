@@ -447,6 +447,8 @@
   "settings.field.overlay_volume_chords.help": "Ändrar systemets volym medan spelet har fönstret, utan att öppna överlägget.",
   "settings.field.overlay_volume_step.label": "Volymsteg (%)",
   "settings.field.overlay_volume_step.help": "Hur mycket ett tryck ändrar en volym, i överlägget och med Guide + upp eller ned.",
+  "settings.field.overlay_level_notice.label": "Visa volymen ovanpå spelet",
+  "settings.field.overlay_level_notice.help": "Efter Guide + upp eller ned visas den nya nivån en stund högst upp på skärmen.",
   "settings.requires.overlay": "Slå på överlägget i spelet först",
   "settings.overlay.status.unavailable": "Överlägget i spelet finns inte på det här systemet.",
   "settings.overlay.status.surface_wayland": "Öppnas ovanpå spel som ett lager på Wayland-skrivbord med layer-shell (KDE Plasma, sway, Hyprland, COSMIC); i GNOME som ett fönster, som kan hamna bakom ett spel i helskärm.",
