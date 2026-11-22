@@ -28,7 +28,6 @@
 
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use futures::StreamExt as _;
@@ -37,7 +36,6 @@ use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Task, Window, WindowAppearance, px};
 use irori_core::ThemeHudColors;
 use irori_core::settings::{ThemePreference, UiPrefs};
-use parking_lot::RwLock;
 use tokio::runtime::Runtime;
 
 use crate::desktop_accent::{Accent, ContrastColors, SystemColors};
@@ -937,7 +935,6 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     lift_modal_dim(cx);
     let hud_colors = theme_hud_colors(Theme::global(cx));
-    set_latest_theme_hud_colors(hud_colors.clone());
     if let Some(backend) = crate::state::try_backend(cx)
         && backend.settings.app().hud.cached_theme_colors.as_ref() != Some(&hud_colors)
     {
@@ -945,21 +942,6 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
             a.hud.cached_theme_colors = Some(hud_colors);
         });
     }
-}
-
-static LATEST_HUD_COLORS: OnceLock<RwLock<Option<ThemeHudColors>>> = OnceLock::new();
-
-fn hud_colors_cache() -> &'static RwLock<Option<ThemeHudColors>> {
-    LATEST_HUD_COLORS.get_or_init(|| RwLock::new(None))
-}
-
-fn set_latest_theme_hud_colors(colors: ThemeHudColors) {
-    *hud_colors_cache().write() = Some(colors);
-}
-
-/// Last [`ThemeHudColors`] snapshot extracted when [`apply`] updated the theme.
-pub fn latest_theme_hud_colors() -> Option<ThemeHudColors> {
-    hud_colors_cache().read().clone()
 }
 
 /// Convert a GPUI [`Hsla`] color into 6 uppercase RGB hex digits (`RRGGBB`)
@@ -2279,12 +2261,10 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn theme_hud_colors_and_cache_emit_six_digit_uppercase_hex(cx: &mut TestAppContext) {
+    fn theme_hud_colors_emit_six_digit_uppercase_hex(cx: &mut TestAppContext) {
         setup(cx);
         cx.update(|cx| apply(&prefs(ThemePreference::Dark, DEFAULT_DARK), None, cx));
         let colors = cx.read(|cx| theme_hud_colors(cx.theme()));
-        let cached = latest_theme_hud_colors().expect("apply populates HUD color cache");
-        assert_eq!(colors, cached);
 
         let all = [
             &colors.background_color,
