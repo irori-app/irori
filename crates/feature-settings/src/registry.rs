@@ -547,7 +547,7 @@ impl FieldSpec {
         // Windows' own graphics preference stands in for the card chooser
         // there, which only Linux can apply.
         match self.path {
-            "iroriWindowsGpu" => return host == HostPlatform::Windows,
+            "iroriWindowsGpu" | "iroriOverlay.backStart" => return host == HostPlatform::Windows,
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -2034,6 +2034,26 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.overlay_level_notice.help")
     .keywords(&["overlay", "volume", "level", "osd", "notice"])
+    .requires(NEEDS_OVERLAY),
+    // Windows only (`supported_on_host`): Guide reaches Irori elsewhere.
+    app(
+        "iroriOverlay.backStart",
+        "settings.field.overlay_back_start.label",
+        General,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_back_start.help")
+    .keywords(&[
+        "overlay",
+        "back",
+        "start",
+        "view",
+        "menu",
+        "select",
+        "xinput",
+        "controller",
+    ])
     .requires(NEEDS_OVERLAY),
     // ---- Appearance ----
     app(

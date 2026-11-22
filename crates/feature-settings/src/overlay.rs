@@ -81,6 +81,9 @@ pub(crate) fn status_lines(os: Os, session: Session, controllers: usize) -> Vec<
     } else {
         line(true, "settings.overlay.status.guide_only")
     });
+    if support.back_start {
+        lines.push(line(true, "settings.overlay.status.back_start"));
+    }
     lines
 }
 
@@ -181,6 +184,8 @@ mod tests {
         let windows = status_lines(Os::Windows, Session::Native, 1);
         assert_eq!(windows[0].key, "settings.overlay.status.surface_windows");
         assert_eq!(windows[3].args, [("keys", "Ctrl+Shift+O".to_string())]);
+        assert_eq!(windows[4].key, "settings.overlay.status.back_start");
+        assert_eq!(linux.len(), 4, "Guide reaches Irori on Linux");
 
         let other = status_lines(Os::Other, Session::Native, 3);
         assert_eq!(keys(&other), ["settings.overlay.status.unavailable"]);

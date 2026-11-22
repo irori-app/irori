@@ -5120,6 +5120,7 @@ dependencies = [
  "libc",
  "once_cell",
  "parking_lot",
+ "raw-window-handle",
  "regex",
  "serde",
  "serde_json",

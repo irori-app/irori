@@ -663,6 +663,37 @@ pub fn hold_button(setting: irori_core::settings::HoldButton) -> Option<PadButto
     }
 }
 
+/// XInput's bits for Back (View) and Start (Menu) in `wButtons`.
+// Only Windows reads XInput (`xinput`); the chord is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const XINPUT_BACK: u16 = 0x0020;
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const XINPUT_START: u16 = 0x0010;
+
+/// Back + Start pressed together on one of XInput's four controller slots
+/// (see `gamepad::xinput`): it counts once when the second of the two goes
+/// down, and again only after one of them was let go.
+#[derive(Debug, Default)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct BackStart {
+    held: [bool; 4],
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+impl BackStart {
+    /// The buttons `slot` holds now; whether that makes the chord.
+    pub fn update(&mut self, slot: usize, buttons: u16) -> bool {
+        let both = XINPUT_BACK | XINPUT_START;
+        let pressed = buttons & both == both;
+        let Some(held) = self.held.get_mut(slot) else {
+            return false;
+        };
+        let chord = pressed && !*held;
+        *held = pressed;
+        chord
+    }
+}
+
 /// What a button pressed with Guide held does without opening anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chord {
@@ -1040,6 +1071,23 @@ mod tests {
         // Guide works as before afterwards.
         tap.press(0, t0 + ms(100));
         assert!(tap.chord(0, t0 + ms(150)));
+    }
+
+    #[test]
+    fn back_and_start_together_count_once_per_press() {
+        let mut chord = BackStart::default();
+        assert!(!chord.update(0, XINPUT_BACK), "Back alone");
+        assert!(chord.update(0, XINPUT_BACK | XINPUT_START), "then Start");
+        assert!(
+            !chord.update(0, XINPUT_BACK | XINPUT_START | 0x1000),
+            "still held, A added"
+        );
+        assert!(!chord.update(0, XINPUT_START), "Back let go");
+        assert!(chord.update(0, XINPUT_BACK | XINPUT_START), "pressed again");
+        // Slots are apart: another controller makes its own chord.
+        assert!(chord.update(3, XINPUT_BACK | XINPUT_START));
+        assert!(!chord.update(1, XINPUT_START));
+        assert!(!chord.update(9, XINPUT_BACK | XINPUT_START), "no such slot");
     }
 
     #[test]

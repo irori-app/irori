@@ -16,6 +16,10 @@
 //!   one for the whole desktop without extra permissions: `RegisterHotKey`
 //!   on Windows, `RegisterEventHotKey` on macOS. Linux has the Guide button
 //!   only (a portal shortcut would ask the user to bind it first).
+//! - **Back + Start** stands in for Guide on Windows, whose
+//!   Windows.Gaming.Input says nothing to a program in the background and
+//!   whose XInput hides Guide; XInput is read for the chord while a game
+//!   runs (`gamepad::xinput`).
 
 /// A system Irori runs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +61,10 @@ pub struct Support {
     pub game_volume: bool,
     /// Ctrl+Shift+O opens it too.
     pub shortcut: bool,
+    /// Back + Start on the controller stands in for Guide, which the system
+    /// doesn't report to a program in the background (see
+    /// `gamepad::xinput`).
+    pub back_start: bool,
 }
 
 impl Support {
@@ -68,24 +76,28 @@ impl Support {
                 holds_controllers: true,
                 game_volume: true,
                 shortcut: false,
+                back_start: false,
             },
             Os::Windows => Support {
                 available: true,
                 holds_controllers: false,
                 game_volume: true,
                 shortcut: true,
+                back_start: true,
             },
             Os::MacOs => Support {
                 available: true,
                 holds_controllers: false,
                 game_volume: false,
                 shortcut: true,
+                back_start: false,
             },
             Os::Other => Support {
                 available: false,
                 holds_controllers: false,
                 game_volume: false,
                 shortcut: false,
+                back_start: false,
             },
         }
     }
@@ -128,5 +140,7 @@ mod tests {
         assert!(!linux.shortcut && windows.shortcut && mac.shortcut);
         assert_eq!(shortcut_label(Os::Windows), "Ctrl+Shift+O");
         assert_eq!(shortcut_label(Os::MacOs), "⌃⇧O");
+        // XInput hides Guide on Windows, so Back + Start stands in there.
+        assert!(windows.back_start && !linux.back_start && !mac.back_start);
     }
 }

@@ -63,6 +63,8 @@ pub(crate) mod grab;
 mod hint;
 mod input;
 mod reader;
+#[cfg(windows)]
+mod xinput;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -337,6 +339,8 @@ pub fn install(cx: &mut App) {
         tx: tx.clone(),
     });
 
+    #[cfg(windows)]
+    watch_back_start(tx.clone(), cx);
     let thread_shared = shared.clone();
     if let Err(e) = std::thread::Builder::new()
         .name("irori-gamepad".into())
@@ -371,6 +375,37 @@ pub fn install(cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// Whether Back + Start should be read now (see `xinput`): the overlay and
+/// the chord are on, this system needs the chord, and a game runs.
+// Only Windows reads the chord; the rule is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn back_start_wanted(prefs: &irori_core::settings::OverlayPrefs, game_running: bool) -> bool {
+    let support = crate::overlay::support::Support::current();
+    support.available && support.back_start && prefs.enabled && prefs.back_start && game_running
+}
+
+/// Read Back + Start through XInput while it is wanted.
+#[cfg(windows)]
+fn watch_back_start(tx: futures::channel::mpsc::UnboundedSender<Message>, cx: &mut App) {
+    let Some(models) = cx.try_global::<irori_ui::Models>() else {
+        return;
+    };
+    let (statuses, settings) = (models.statuses.clone(), models.settings.clone());
+    let wanted = Arc::new(xinput::Wanted::default());
+    xinput::start(wanted.clone(), tx);
+    let update = {
+        let wanted = wanted.clone();
+        move |cx: &mut App| {
+            let prefs = crate::overlay::prefs(cx);
+            wanted.set(back_start_wanted(&prefs, game_running(cx)));
+        }
+    };
+    update(cx);
+    let again = update.clone();
+    cx.observe(&statuses, move |_, cx| again(cx)).detach();
+    cx.observe(&settings, move |_, cx| update(cx)).detach();
 }
 
 /// One of Irori's windows gained or lost the focus: the reader lets go of a
@@ -458,6 +493,14 @@ fn on_message(
             }
         }
         Message::Chord(chord) => on_chord(chord, cx),
+        Message::BackStart if !disabled => {
+            if crate::overlay::is_open(cx) {
+                crate::overlay::close(cx);
+            } else if crate::overlay::wanted(cx) {
+                crate::overlay::open(cx);
+            }
+        }
+        Message::BackStart => {}
         Message::Hold(event) => on_hold(event, disabled, model, cx),
         Message::Input { input, kind } => {
             if disabled
@@ -876,6 +919,24 @@ mod tests {
             .unwrap();
         cx.run_until_parked();
         assert!(changes(cx) > before, "the focus moved");
+    }
+
+    #[test]
+    fn back_and_start_are_read_only_while_a_game_runs_with_the_overlay_on() {
+        let on = irori_core::settings::OverlayPrefs {
+            enabled: true,
+            ..Default::default()
+        };
+        // Only Windows needs the chord: elsewhere Guide reaches Irori.
+        assert_eq!(back_start_wanted(&on, true), cfg!(windows));
+        assert!(!back_start_wanted(&on, false), "no game");
+        let off = irori_core::settings::OverlayPrefs {
+            back_start: false,
+            ..on.clone()
+        };
+        assert!(!back_start_wanted(&off, true), "chord turned off");
+        let disabled = irori_core::settings::OverlayPrefs::default();
+        assert!(!back_start_wanted(&disabled, true), "overlay off");
     }
 
     #[test]

@@ -657,8 +657,8 @@ Per system (`irori_bigpicture::overlay::support` holds the same table):
 | --- | --- | --- | --- |
 | Surface | layer-shell surface, else a pop-up window | non-activating panel above fullscreen apps | topmost tool window, shown without activating |
 | Over a fullscreen game | yes (GNOME may keep it behind) | yes, in the game's fullscreen Space | borderless and windowed: yes; exclusive fullscreen: no, a notice says so |
-| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Ctrl+Shift+O |
-| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no: the game sees the presses too |
+| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Back + Start, Ctrl+Shift+O |
+| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no, but the overlay takes the foreground |
 | System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
 | Game volume | its streams | not available | its audio sessions (Core Audio) |
 | Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
@@ -686,8 +686,18 @@ notice asks to switch the game to borderless. Windows keeps the Xbox controller'
 button for the Xbox Game Bar and neither XInput nor Windows.Gaming.Input reports it to
 other programs, so with Xbox pads use Ctrl+Shift+O (`RegisterHotKey`, registered only
 while a game Irori started runs); PlayStation and other pads read as raw controllers may
-report their Guide button. There is no supported way to hold an XInput or
-Windows.Gaming.Input controller from a game, so the game sees the presses too. Volumes
+report their Guide button. Windows.Gaming.Input also says nothing to a program in the
+background, so while a game Irori started runs (and the overlay is on) a thread reads
+XInput, which answers whichever window is in front, for Back + Start (View + Menu)
+pressed together, which opens and closes the overlay (`iroriOverlay.backStart`); it
+reads every 50 ms while a controller is connected, every second while none is, and waits
+without reading when no game runs. There is no supported way to hold an XInput or
+Windows.Gaming.Input controller from a game, so the overlay takes the foreground from the
+game when it opens (`SetForegroundWindow`, attached to the game's input thread for that
+one call when Windows refuses) and gives it back when it closes, unless the user moved to
+another program meanwhile: SDL, Unity and Unreal games stop reading the controller in the
+background, so they don't see the presses made in the overlay; games that read XInput
+regardless still do. Volumes
 are Core Audio's: the system volume is the default output's endpoint volume, and the
 game's are its audio sessions (as in the volume mixer) on every active output, matched to
 the process Irori started and its descendants started since the session began (Windows

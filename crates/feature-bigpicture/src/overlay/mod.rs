@@ -48,6 +48,9 @@ struct Open {
     view: Entity<OverlayView>,
     /// Dropped with the overlay, which lets go of the controllers.
     _grab: Option<Grab>,
+    /// The window in front before the overlay took the foreground (Windows),
+    /// given it back on close.
+    previous: window::Foreground,
 }
 
 /// What "Back to Irori" runs.
@@ -160,17 +163,20 @@ pub fn open(cx: &mut App) {
         );
         return;
     }
+    let previous = window::Foreground::current();
     let opened = window::open(cx, |window, cx| {
         let game = game.clone();
         cx.new(|cx| OverlayView::new(game, window, cx))
     });
     match opened {
         Ok((window, view)) => {
+            window::take_foreground(window, cx);
             let grab = crate::gamepad::start_grab(cx);
             state(cx).open = Some(Open {
                 window,
                 view,
                 _grab: grab,
+                previous,
             });
         }
         Err(e) => tracing::warn!("opening the in-game overlay: {e:#}"),
@@ -183,6 +189,7 @@ pub fn close(cx: &mut App) {
     cx.defer(|cx| {
         if let Some(open) = state(cx).open.take() {
             window::close(open.window, cx);
+            open.previous.give_back();
         }
     });
 }

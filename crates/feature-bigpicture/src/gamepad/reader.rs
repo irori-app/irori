@@ -123,6 +123,11 @@ pub(crate) enum Message {
     Chord(Chord),
     /// Holding the button that opens Big Picture.
     Hold(HoldEvent),
+    /// Back + Start pressed together while a game has the focus (Windows,
+    /// `gamepad::xinput`): open or close the overlay.
+    // Only the Windows reader sends it.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    BackStart,
 }
 
 /// How holding the button that opens Big Picture goes.

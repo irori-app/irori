@@ -24,7 +24,9 @@
 //!   in exclusive fullscreen owns the display and can't be covered: Windows
 //!   then reports a Direct3D game in fullscreen
 //!   (`SHQueryUserNotificationState`), and the overlay doesn't open
-//!   ([`covered_by_exclusive_fullscreen`]).
+//!   ([`covered_by_exclusive_fullscreen`]). Once open it takes the
+//!   foreground from the game and gives it back on close ([`Foreground`]),
+//!   since nothing holds a controller from a game there.
 
 use anyhow::Result;
 use gpui_kit::{
@@ -140,6 +142,119 @@ pub(super) fn covered_by_exclusive_fullscreen() -> bool {
 #[cfg(not(windows))]
 pub(super) fn covered_by_exclusive_fullscreen() -> bool {
     false
+}
+
+/// The window in front before the overlay opened. On Windows the overlay
+/// takes the foreground from the game, so a game that reads the controller
+/// only while it is in front (SDL, Unity, Unreal) stops seeing the presses
+/// made in the overlay, and closing gives it back. Elsewhere nothing is
+/// kept: the overlay never takes the game's focus there.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Foreground {
+    #[cfg(windows)]
+    hwnd: isize,
+}
+
+#[cfg(windows)]
+mod foreground {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{
+        AttachThreadInput, GetCurrentProcessId, GetCurrentThreadId,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
+    };
+
+    pub(super) fn current() -> isize {
+        // SAFETY: reads which window is in front; no arguments.
+        unsafe { GetForegroundWindow() as isize }
+    }
+
+    /// Bring `hwnd` to the front. Windows refuses that to a program that
+    /// isn't in front unless it attaches to the input of the thread that
+    /// is, which it does for this one call: a controller press isn't input
+    /// Windows counts.
+    pub(super) fn take(hwnd: isize) -> bool {
+        let window = hwnd as HWND;
+        // SAFETY: window calls on handles that may have closed meanwhile,
+        // which only makes them fail; the threads are attached for this
+        // call only and detached right after.
+        unsafe {
+            if SetForegroundWindow(window) != 0 {
+                return true;
+            }
+            let front = GetForegroundWindow();
+            let theirs = GetWindowThreadProcessId(front, std::ptr::null_mut());
+            let ours = GetCurrentThreadId();
+            if theirs == 0 || theirs == ours {
+                return false;
+            }
+            AttachThreadInput(ours, theirs, 1);
+            let taken = SetForegroundWindow(window) != 0;
+            AttachThreadInput(ours, theirs, 0);
+            if !taken {
+                tracing::info!("Windows kept the game in front of the overlay");
+            }
+            taken
+        }
+    }
+
+    /// Give the foreground back to `hwnd`, unless the user moved to another
+    /// program meanwhile: only when Irori's own window (or none) is in front.
+    pub(super) fn give_back(hwnd: isize) {
+        let window = hwnd as HWND;
+        // SAFETY: as in `take`; `pid` is a local the call writes.
+        unsafe {
+            if hwnd == 0 || IsWindow(window) == 0 {
+                return;
+            }
+            let front = GetForegroundWindow();
+            let mut pid = 0u32;
+            if !front.is_null() {
+                GetWindowThreadProcessId(front, &mut pid);
+            }
+            if front.is_null() || pid == GetCurrentProcessId() {
+                take(hwnd);
+            }
+        }
+    }
+}
+
+impl Foreground {
+    /// The window in front now.
+    pub(super) fn current() -> Foreground {
+        Foreground {
+            #[cfg(windows)]
+            hwnd: foreground::current(),
+        }
+    }
+
+    /// Bring the window that was in front back, after the overlay closed.
+    pub(super) fn give_back(self) {
+        #[cfg(windows)]
+        foreground::give_back(self.hwnd);
+    }
+}
+
+/// Have the overlay's window take the foreground (Windows; see
+/// [`Foreground`]).
+pub(super) fn take_foreground(handle: AnyWindowHandle, cx: &mut App) {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+        let hwnd = handle.update(cx, |_, window, _| match window.window_handle() {
+            Ok(h) => match h.as_raw() {
+                RawWindowHandle::Win32(w) => Some(w.hwnd.get()),
+                _ => None,
+            },
+            Err(_) => None,
+        });
+        if let Ok(Some(hwnd)) = hwnd {
+            foreground::take(hwnd);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (handle, cx);
 }
 
 /// Take the overlay's surface away.
