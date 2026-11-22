@@ -473,7 +473,9 @@ commands without a window.
   `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
   counts, storage, backups and stats). Every per-game operation keeps the copy's own
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
-  `irori_ui::copies`.
+  `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
+  own title when the copies' folded titles differ, else a ROM's file or, for two copies
+  on one store, its folder.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank

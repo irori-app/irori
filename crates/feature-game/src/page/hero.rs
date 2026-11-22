@@ -149,26 +149,27 @@ impl GamePage {
     /// Play, Install and the rest act on that copy.
     pub(super) fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
         let ink = self.ink;
-        let copies = irori_ui::copies::of(&self.id, cx);
+        // Each copy says what tells it apart: its store, its own title, a
+        // ROM's emulator and file.
+        let copies = irori_ui::copies::labelled(&self.id, cx);
         if copies.len() < 2 {
             return super::caption(store.to_string(), ink.muted).into_any_element();
         }
         h_flex()
             .gap_1()
             .flex_wrap()
-            .children(copies.into_iter().map(|copy| {
+            .children(copies.into_iter().map(|(copy, label)| {
                 let id = copy.id();
                 let current = id == self.id;
+                let text = label.text();
                 Button::new(SharedString::from(format!("game-copy-{}", id.key())))
                     .xsmall()
                     .when(current, |b| b.outline())
                     .when(!current, |b| b.ghost())
                     .selected(current)
                     .when(copy.is_installed, |b| b.icon(IconName::HardDrive))
-                    .label(copy.runner().store_name())
-                    .when(!current, |b| {
-                        b.tooltip(irori_ui::copies::open_label(copy.runner().store_name()))
-                    })
+                    .label(text.clone())
+                    .when(!current, |b| b.tooltip(irori_ui::copies::open_label(&text)))
                     .on_click(move |_, _, cx| {
                         if !current {
                             irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx)
