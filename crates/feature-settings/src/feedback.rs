@@ -1,10 +1,12 @@
 //! Help and feedback (Settings → About and the command palette): report a
 //! problem on Irori's issue tracker with this computer's facts filled in,
-//! suggest an idea or ask a question in its discussions, and read the known
-//! issues.
+//! suggest an idea or ask a question there too, and read the known issues.
 //!
-//! A report opens GitHub's new-issue form in the browser; nothing is sent
-//! until the user submits it there. The facts it fills in are the version,
+//! Each opens GitHub's new-issue form in the browser with its label and a
+//! body to fill in; nothing is sent until the user submits it there. The
+//! repository has no discussions, and GitHub applies a label from the
+//! address only for people who may triage, so every body also says first
+//! what kind of issue it is. The facts it fills in are the version,
 //! how Irori was installed, the system, desktop and graphics: never a path,
 //! a user or account name or a log, which the user adds themselves.
 
@@ -16,7 +18,7 @@ use irori_runtime::sysinfo::{self, SystemInfo};
 use irori_services::app_update::InstallKind;
 use irori_ui::i18n::t;
 
-/// Irori's repository, where issues and discussions are.
+/// Irori's repository, whose issues take all three kinds of feedback.
 pub const REPOSITORY: &str = "https://github.com/irori-app/irori";
 
 /// The most of a report's body put in the address: browsers and GitHub
@@ -29,9 +31,9 @@ const BODY_LIMIT: usize = 1500;
 pub enum Feedback {
     /// A new issue with the system filled in.
     Report,
-    /// A new discussion among the ideas.
+    /// A new issue labelled as an enhancement.
     Idea,
-    /// A new discussion among the questions.
+    /// A new issue labelled as a question.
     Question,
     /// The open issues, to see whether a problem is known.
     KnownIssues,
@@ -74,15 +76,45 @@ impl Feedback {
         }
     }
 
-    /// The address, without the system (see [`report_url`]).
+    /// The repository's label for issues of this kind.
+    pub fn label(self) -> Option<&'static str> {
+        match self {
+            Feedback::Report => Some("bug"),
+            Feedback::Idea => Some("enhancement"),
+            Feedback::Question => Some("question"),
+            Feedback::KnownIssues => None,
+        }
+    }
+
+    /// The address; a report's without this computer's facts (see
+    /// [`report_url`]).
     pub fn url(self) -> String {
         match self {
-            Feedback::Report => format!("{REPOSITORY}/issues/new"),
-            Feedback::Idea => format!("{REPOSITORY}/discussions/new?category=ideas"),
-            Feedback::Question => format!("{REPOSITORY}/discussions/new?category=q-a"),
+            Feedback::Report => new_issue("bug", &report_template("")),
+            Feedback::Idea => new_issue("enhancement", IDEA_BODY),
+            Feedback::Question => new_issue("question", QUESTION_BODY),
             Feedback::KnownIssues => format!("{REPOSITORY}/issues"),
         }
     }
+}
+
+/// An idea's body; its first line says the kind, for when the label from
+/// the address isn't applied.
+const IDEA_BODY: &str = "Kind: idea (enhancement)\n\n### What Irori could do\n\n\n\n\
+                         ### Why it would help\n\n";
+
+/// A question's body, its first line as [`IDEA_BODY`]'s.
+const QUESTION_BODY: &str = "Kind: question\n\n### Your question\n\n\n\n\
+                             ### What you tried\n\n";
+
+/// The new-issue form with `label` and `body` filled in.
+fn new_issue(label: &str, body: &str) -> String {
+    let mut url =
+        url::Url::parse(&format!("{REPOSITORY}/issues/new")).expect("the issue address is valid");
+    url.query_pairs_mut()
+        .append_pair("labels", label)
+        .append_pair("body", body);
+    url.into()
 }
 
 /// What a report says about this computer.
@@ -199,30 +231,32 @@ pub fn report_body(facts: &ReportFacts) -> String {
             if vulkan { "available" } else { "not available" }
         ));
     }
-    let head = "### What happened\n\n\n\n### Steps to reproduce\n\n1. \n\n\
-                ### What you expected\n\n\n\n### System\n\n";
-    let foot = "\n\nLogs help: Settings → Logs shows them. Paste the part around \
-                the problem, after removing anything private.";
-    let mut body = head.to_string();
+    let mut lines = String::new();
     for line in system {
         // Leave out whole lines past the limit, never half of one.
-        if body.len() + line.len() + 1 + foot.len() > BODY_LIMIT {
+        if report_template(&lines).len() + line.len() + 1 > BODY_LIMIT {
             break;
         }
-        body.push_str(&line);
-        body.push('\n');
+        lines.push_str(&line);
+        lines.push('\n');
     }
-    body.push_str(foot);
-    body
+    report_template(&lines)
 }
 
-/// The new-issue address with the body filled in.
+/// A report's body around the lines of its System section. Its first line
+/// says the kind, for when the label from the address isn't applied.
+fn report_template(system: &str) -> String {
+    format!(
+        "Kind: problem report (bug)\n\n### What happened\n\n\n\n\
+         ### Steps to reproduce\n\n1. \n\n### What you expected\n\n\n\n\
+         ### System\n\n{system}\n\nLogs help: Settings → Logs shows them. Paste \
+         the part around the problem, after removing anything private."
+    )
+}
+
+/// The new-issue address with the report's body filled in.
 pub fn report_url(facts: &ReportFacts) -> String {
-    let mut url = url::Url::parse(&Feedback::Report.url()).expect("the issue address is valid");
-    url.query_pairs_mut()
-        .append_pair("labels", "bug")
-        .append_pair("body", &report_body(facts));
-    url.into()
+    new_issue("bug", &report_body(facts))
 }
 
 /// Open one of the ways to reach the project in the browser. A report
@@ -322,6 +356,40 @@ mod tests {
     fn every_way_has_an_address_on_the_repository() {
         for way in Feedback::ALL {
             assert!(way.url().starts_with(REPOSITORY), "{way:?}");
+            assert!(!way.url().contains("discussions"), "{way:?}");
         }
+    }
+
+    fn query(url: &str, key: &str) -> Option<String> {
+        url::Url::parse(url)
+            .unwrap()
+            .query_pairs()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+    }
+
+    #[test]
+    fn ideas_and_questions_are_labelled_issues_that_say_their_kind() {
+        for (way, label, kind) in [
+            (Feedback::Idea, "enhancement", "Kind: idea"),
+            (Feedback::Question, "question", "Kind: question"),
+            (Feedback::Report, "bug", "Kind: problem report"),
+        ] {
+            let url = way.url();
+            assert!(
+                url.starts_with(&format!("{REPOSITORY}/issues/new?")),
+                "{way:?}"
+            );
+            assert_eq!(query(&url, "labels").as_deref(), Some(label));
+            assert_eq!(way.label(), Some(label));
+            // The label applies only for triagers; the body says it anyway.
+            assert!(query(&url, "body").unwrap().starts_with(kind), "{way:?}");
+        }
+        let report = report_url(&facts());
+        assert_eq!(query(&report, "labels").as_deref(), Some("bug"));
+        let body = query(&report, "body").unwrap();
+        assert!(body.starts_with("Kind: problem report"));
+        assert!(body.contains("- Irori: 1.2.0 (Flatpak)"));
+        assert_eq!(Feedback::KnownIssues.label(), None);
     }
 }

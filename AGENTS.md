@@ -1123,8 +1123,11 @@ Other parts:
   desktop puts them, and redraws when the layout changes.
 - Help and feedback (`irori_settings::feedback`, Settings → About and the palette):
   report a problem opens GitHub's new-issue form with the version, install kind,
-  system, desktop and GPUs filled in (never paths, names or logs), plus ideas,
-  questions and known issues; nothing is sent until the user submits it there.
+  system, desktop and GPUs filled in (never paths, names or logs); ideas and questions
+  open the same form (the repository has no discussions). Each carries its label
+  (`bug`, `enhancement`, `question`) and, since GitHub applies it only for triagers, a
+  body whose first line names the kind. Known issues opens the issue list; nothing is
+  sent until the user submits the form.
 
 ### 4.6 Store sign-in
 
