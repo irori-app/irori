@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Skupienie",
   "library.drawer.close": "Zamknij panel",
   "library.drawer.resize": "Przeciągnij, aby zmienić rozmiar, lub użyj strzałek",
+  "library.focus.resize": "Przeciągnij, aby zmienić liczbę okładek w rzędzie, lub użyj strzałek",
   "library.focus.empty": "Wybierz grę, aby zobaczyć ją tutaj",
   "library.toolbar.group_by": "Grupuj według",
   "library.toolbar.group.none": "Nie grupuj",

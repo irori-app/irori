@@ -1404,6 +1404,9 @@ pub struct UiPrefs {
     /// The star on favourites' covers (`coverFavourite`, on unless turned
     /// off).
     pub cover_favourite: bool,
+    /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
+    /// 1 to 3); 0 fits as many as the window allows.
+    pub library_focus_columns: u32,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1602,6 +1605,7 @@ impl Default for UiPrefs {
             cover_caption: CoverCaption::Full,
             cover_hover: CoverHover::Lift,
             cover_favourite: true,
+            library_focus_columns: 0,
         }
     }
 }

@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Фокус",
   "library.drawer.close": "Закрыть панель",
   "library.drawer.resize": "Перетащите, чтобы изменить ширину, или используйте стрелки",
+  "library.focus.resize": "Перетащите, чтобы изменить число обложек в ряду, или используйте стрелки",
   "library.focus.empty": "Выберите игру, чтобы увидеть её здесь",
   "library.toolbar.group_by": "Группировать по",
   "library.toolbar.group.none": "Не группировать",

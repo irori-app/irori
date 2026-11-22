@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Focus",
   "library.drawer.close": "Chiudi il pannello",
   "library.drawer.resize": "Trascina per ridimensionare o usa le frecce",
+  "library.focus.resize": "Trascina per più o meno copertine per riga, oppure usa i tasti freccia",
   "library.focus.empty": "Seleziona un gioco per vederlo qui",
   "library.toolbar.group_by": "Raggruppa per",
   "library.toolbar.group.none": "Non raggruppare",

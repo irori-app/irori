@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Fokus",
   "library.drawer.close": "Stäng panelen",
   "library.drawer.resize": "Dra för att ändra storlek, eller använd piltangenterna",
+  "library.focus.resize": "Dra för fler eller färre omslag per rad, eller använd piltangenterna",
   "library.focus.empty": "Välj ett spel för att se det här",
   "library.toolbar.group_by": "Gruppera efter",
   "library.toolbar.group.none": "Gruppera inte",

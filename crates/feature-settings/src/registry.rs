@@ -859,6 +859,16 @@ const COVER_HOVER: &[ChoiceOption] = &[
     ),
 ];
 
+const FOCUS_COLUMNS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.focus_columns.auto"),
+    ),
+    opt(ChoiceValue::Num(1), Verbatim("1")),
+    opt(ChoiceValue::Num(2), Verbatim("2")),
+    opt(ChoiceValue::Num(3), Verbatim("3")),
+];
+
 const DENSITY: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("compact"),
@@ -2205,6 +2215,15 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(COVER_HOVER),
     )
     .keywords(&["cover", "hover", "lift", "pointer", "focus", "animation"]),
+    app(
+        "iroriUi.libraryFocusColumns",
+        "settings.field.ui_focus_columns.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COLUMNS),
+    )
+    .help("settings.field.ui_focus_columns.help")
+    .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
     app(
         "iroriUi.coverFavourite",
         "settings.field.ui_cover_favourite.label",

@@ -609,7 +609,10 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_rem = layouts::focus_column_rem(layouts::focus_columns(body_rem));
+        let focus_rem = layouts::focus_column_rem(layouts::focus_columns_for(
+            self.ui_prefs.library_focus_columns,
+            body_rem,
+        ));
         let list_rem = match self.layout {
             LibraryLayout::Grid if self.panels.drawer_open => {
                 body_rem - layouts::drawer_width(self.panels.drawer_rem, body_rem)
@@ -2118,7 +2121,10 @@ impl LibraryView {
             })
             .child(list)
             .vertical_scrollbar(&self.scroll)
-            .children(list_toolbar);
+            .children(list_toolbar)
+            .when(layout == LibraryLayout::Focus, |el| {
+                el.child(self.render_focus_handle(cx))
+            });
         let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
             .then(|| self.render_drawer(window, cx));
         let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));
@@ -2130,6 +2136,7 @@ impl LibraryView {
             .w_full()
             .items_start()
             .on_drag_move(cx.listener(Self::on_drawer_drag))
+            .on_drag_move(cx.listener(Self::on_focus_drag))
             .child(measure)
             .child(content)
             .children(focus_page)

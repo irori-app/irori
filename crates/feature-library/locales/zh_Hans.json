@@ -569,6 +569,7 @@
   "library.toolbar.focus": "聚焦",
   "library.drawer.close": "关闭面板",
   "library.drawer.resize": "拖动或使用方向键调整宽度",
+  "library.focus.resize": "拖动或使用方向键以调整每行的封面数量",
   "library.focus.empty": "选择一款游戏即可在此查看",
   "library.toolbar.group_by": "分组方式",
   "library.toolbar.group.none": "不分组",

@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Focus",
   "library.drawer.close": "Close the drawer",
   "library.drawer.resize": "Drag to resize, or use the arrow keys",
+  "library.focus.resize": "Drag for more or fewer covers to a row, or use the arrow keys",
   "library.focus.empty": "Select a game to see it here",
   "library.toolbar.group_by": "Group by",
   "library.toolbar.group.none": "Don’t group",

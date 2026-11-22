@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Фокус",
   "library.drawer.close": "Закрити панель",
   "library.drawer.resize": "Перетягніть, щоб змінити ширину, або скористайтеся стрілками",
+  "library.focus.resize": "Перетягніть, щоб змінити кількість обкладинок у ряду, або скористайтеся стрілками",
   "library.focus.empty": "Виберіть гру, щоб побачити її тут",
   "library.toolbar.group_by": "Групувати за",
   "library.toolbar.group.none": "Не групувати",

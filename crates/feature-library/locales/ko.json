@@ -569,6 +569,7 @@
   "library.toolbar.focus": "포커스",
   "library.drawer.close": "패널 닫기",
   "library.drawer.resize": "드래그하거나 화살표 키로 크기 조절",
+  "library.focus.resize": "끌거나 화살표 키로 한 줄의 커버 수를 바꿀 수 있습니다",
   "library.focus.empty": "게임을 선택하면 여기에 표시됩니다",
   "library.toolbar.group_by": "그룹 기준",
   "library.toolbar.group.none": "그룹화 안 함",

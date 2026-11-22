@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Detail",
   "library.drawer.close": "Zavřít panel",
   "library.drawer.resize": "Velikost změníte tažením nebo šipkami",
+  "library.focus.resize": "Přetažením změníte počet obalů v řádku, nebo použijte šipky",
   "library.focus.empty": "Vyberte hru a zobrazí se zde",
   "library.toolbar.group_by": "Seskupit podle",
   "library.toolbar.group.none": "Neseskupovat",

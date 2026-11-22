@@ -569,6 +569,7 @@
   "library.toolbar.focus": "フォーカス",
   "library.drawer.close": "パネルを閉じる",
   "library.drawer.resize": "ドラッグまたは矢印キーで幅を変更",
+  "library.focus.resize": "ドラッグするか矢印キーで、1 列のカバーの数を変えられます",
   "library.focus.empty": "ゲームを選ぶとここに表示されます",
   "library.toolbar.group_by": "グループ化",
   "library.toolbar.group.none": "グループ化しない",

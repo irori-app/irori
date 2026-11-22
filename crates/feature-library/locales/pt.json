@@ -569,6 +569,7 @@
   "library.toolbar.focus": "Foco",
   "library.drawer.close": "Fechar o painel",
   "library.drawer.resize": "Arraste para redimensionar ou utilize as setas",
+  "library.focus.resize": "Arraste para mais ou menos capas por linha, ou use as setas",
   "library.focus.empty": "Selecione um jogo para o ver aqui",
   "library.toolbar.group_by": "Agrupar por",
   "library.toolbar.group.none": "Não agrupar",
