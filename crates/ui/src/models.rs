@@ -399,6 +399,23 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
             Event::WineVersionsChanged | Event::EnginesChanged => settings = true,
             // The mods tab listens on the bus itself.
             Event::ModsChanged(_) => {}
+            // Services follow it; screens wait for what it unlocked.
+            Event::AchievementSignal(_) => {}
+            Event::AchievementsUnlocked(id) => {
+                let unlocks = b.take_live_unlocks(&id);
+                if !unlocks.is_empty()
+                    && !crate::hooks::show_unlocks(id.clone(), unlocks.clone(), cx)
+                {
+                    // Nothing can show over the game: a notice, on the
+                    // desktop while Irori is in the background.
+                    let title = b.game(&id).map(|g| g.title.clone()).unwrap_or_default();
+                    let fresh: Vec<&irori_core::Achievement> = unlocks.iter().collect();
+                    if let Some(n) = irori_services::unlock_notice(&id, &title, &fresh) {
+                        crate::system_notify::notice(&n, cx);
+                        m.notices.update(cx, |model, cx| model.push(n, cx));
+                    }
+                }
+            }
         }
     }
 

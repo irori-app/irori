@@ -27,14 +27,14 @@ use irori_ui::journal::shot_url;
 use irori_ui::models;
 
 use super::model::{
-    Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, next_output, next_up, progress, unlocked_since,
+    Action, Choice, HomeRow, Nav, SHOT_COLUMNS, Tab, Toast, next_output, next_up, progress,
+    unlocked_since,
 };
 use crate::gamepad::{self, ControllerKind, GamepadInput};
 use crate::layout::home::Dir;
 use crate::layout::wheel::{WheelTravel, WheelView};
+use irori_core::achievement_sets::{SetProgress, sets};
 
-/// How long one unlock notice stays in the corner.
-const TOAST_TIME: Duration = Duration::from_secs(4);
 /// How many locked achievements the Achievements tab suggests.
 const NEXT_UP: usize = 6;
 /// Thumbnail width of a screenshot, in rem.
@@ -68,7 +68,6 @@ pub(super) struct OverlayView {
     preview: Option<usize>,
     achievements: Load<Arc<Vec<Achievement>>>,
     image_cache: Entity<LruImageCache>,
-    _toast_timer: Option<Task<()>>,
     /// Wheel travel not yet turned into a row (as in Big Picture).
     wheel: WheelTravel,
     _tasks: Vec<Task<()>>,
@@ -117,7 +116,6 @@ impl OverlayView {
             preview: None,
             achievements: Load::Loading,
             image_cache: LruImageCache::new(24, cx),
-            _toast_timer: None,
             wheel: WheelTravel::default(),
             _tasks: Vec::new(),
             _subscriptions: subscriptions,
@@ -190,28 +188,14 @@ impl OverlayView {
             let _ = this.update(cx, |this, cx| {
                 if let Ok(list) = &result {
                     let key = this.game.key();
-                    let started = this.started;
-                    let queued = super::toasts(cx).offer(&key, list, started);
-                    if queued > 0 && this._toast_timer.is_none() {
-                        this.schedule_toast(cx);
-                    }
+                    let (started, title) = (this.started, this.title.to_string());
+                    let prefs = models(cx).settings.read(cx).app.achievement_toast.clone();
+                    let now = Some(progress(list));
+                    super::toasts(cx)
+                        .offer(&key, list, started, |a| Toast::new(a, &title, now, &prefs));
+                    cx.defer(super::start_toasts);
                 }
                 this.achievements = loaded(result);
-                cx.notify();
-            });
-        }));
-    }
-
-    /// Show the next unlock notice after the current one's time.
-    fn schedule_toast(&mut self, cx: &mut Context<Self>) {
-        self._toast_timer = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(TOAST_TIME).await;
-            let _ = this.update(cx, |this, cx| {
-                let more = super::toasts(cx).advance();
-                this._toast_timer = None;
-                if more {
-                    this.schedule_toast(cx);
-                }
                 cx.notify();
             });
         }));
@@ -1129,6 +1113,11 @@ impl OverlayView {
         let (unlocked, total) = progress(&list);
         let session = unlocked_since(&list, self.started);
         let next = next_up(&list, NEXT_UP);
+        let set_rows: Vec<AnyElement> = sets(&list)
+            .iter()
+            .enumerate()
+            .map(|(ix, set)| self.set_row(ix, set, cx))
+            .collect();
         let mut ix = 0;
         let mut session_rows = Vec::new();
         for a in &session {
@@ -1180,6 +1169,10 @@ impl OverlayView {
                             .bg(theme.primary),
                     ),
             )
+            .when(!set_rows.is_empty(), |d| {
+                d.child(heading(t("bigpicture.overlay.sets")))
+                    .children(set_rows)
+            })
             .when(!session_rows.is_empty(), |d| {
                 d.child(heading(t("bigpicture.overlay.this_session")))
                     .children(session_rows)
@@ -1188,6 +1181,77 @@ impl OverlayView {
                 d.child(heading(t("bigpicture.overlay.next_up")))
                     .children(next_rows)
             })
+            .into_any_element()
+    }
+
+    /// One set of the game's achievements (the base game's, a DLC's): its
+    /// name, how much of it is unlocked and whether the player can earn it.
+    /// Not a stop of the focus: it says, it doesn't do.
+    fn set_row(&self, ix: usize, set: &SetProgress, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let name: SharedString = match &set.group {
+            Some(g) if !g.name.trim().is_empty() => g.name.clone().into(),
+            _ => t("bigpicture.overlay.set_other"),
+        };
+        let status = if set.unearnable() {
+            t("bigpicture.overlay.set_not_owned")
+        } else if set.complete() {
+            t("bigpicture.overlay.set_complete")
+        } else {
+            t_args(
+                "bigpicture.overlay.achievements_progress",
+                &[
+                    ("unlocked", set.unlocked.to_string().as_str()),
+                    ("total", set.total.to_string().as_str()),
+                ],
+            )
+        };
+        let fraction = if set.total == 0 {
+            0.
+        } else {
+            set.unlocked as f32 / set.total as f32
+        };
+        let fill = if set.complete() {
+            theme.success
+        } else if set.unearnable() {
+            theme.muted_foreground
+        } else {
+            theme.primary
+        };
+        h_flex()
+            .id(("overlay-achievement-set", ix))
+            .role(Role::ListItem)
+            .aria_label(SharedString::from(format!("{name}: {status}")))
+            .w_full()
+            .px_2()
+            .py_1()
+            .gap_3()
+            .items_center()
+            .text_sm()
+            .child(div().flex_1().min_w_0().truncate().child(name))
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .max_w(rems(12.))
+                    .truncate()
+                    .text_color(theme.muted_foreground)
+                    .child(status),
+            )
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .w(rems(6.))
+                    .h(rems(0.375))
+                    .rounded(theme.radius)
+                    .bg(theme.muted)
+                    .child(
+                        div()
+                            .h_full()
+                            .w(gpui_kit::relative(fraction))
+                            .rounded(theme.radius)
+                            .bg(fill),
+                    ),
+            )
             .into_any_element()
     }
 
@@ -1332,68 +1396,12 @@ impl OverlayView {
     fn render_toast(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let toast = super::toasts(cx).current().cloned()?;
         let waiting = super::toasts(cx).waiting();
-        let px = irori_ui::components::physical_width(rems(ICON_REM), window);
-        let image = (!toast.image.is_empty())
-            .then(|| art_img(&toast.image, px, true, cx))
-            .flatten();
-        let theme = cx.theme();
         Some(
-            h_flex()
-                .id("overlay-toast")
-                .role(Role::Status)
-                .aria_label(t("bigpicture.overlay.unlocked"))
+            super::notice::card("overlay-toast", &toast, waiting, window, cx)
                 .absolute()
                 .top_4()
                 .right_4()
-                .max_w(rems(24.))
-                .p_3()
-                .gap_3()
-                .items_center()
-                .rounded(theme.radius_lg)
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.popover)
-                .shadow_lg()
-                .child(
-                    div()
-                        .size(rems(ICON_REM))
-                        .flex_shrink_0()
-                        .rounded(theme.radius)
-                        .overflow_hidden()
-                        .bg(theme.muted)
-                        .map(|d| match image {
-                            Some(img) => d.child(img.size_full().object_fit(ObjectFit::Cover)),
-                            None => d
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(Icon::new(IconName::Trophy)),
-                        }),
-                )
-                .child(
-                    v_flex()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .truncate()
-                                .child(t("bigpicture.overlay.unlocked")),
-                        )
-                        .child(div().font_semibold().truncate().child(toast.name))
-                        .when(waiting > 0, |d| {
-                            d.child(div().text_xs().text_color(theme.muted_foreground).child(
-                                if waiting == 1 {
-                                    t("bigpicture.overlay.more_unlocks_one")
-                                } else {
-                                    t_args(
-                                        "bigpicture.overlay.more_unlocks_other",
-                                        &[("count", waiting.to_string().as_str())],
-                                    )
-                                },
-                            ))
-                        }),
-                )
+                .w(rems(24.))
                 .into_any_element(),
         )
     }

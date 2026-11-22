@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Досягнення отримано",
   "bigpicture.overlay.more_unlocks_one": "Ще 1 в черзі",
   "bigpicture.overlay.more_unlocks_other": "Ще {count} в черзі",
+  "bigpicture.overlay.sets": "Набори досягнень",
+  "bigpicture.overlay.set_other": "Інші досягнення",
+  "bigpicture.overlay.set_not_owned": "DLC не придбано",
+  "bigpicture.overlay.set_complete": "Завершено",
+  "bigpicture.overlay.notice.rarity": "{percent}% гравців",
+  "bigpicture.overlay.notice.points_one": "Бали: {points}",
+  "bigpicture.overlay.notice.points_other": "Бали: {points}",
   "bigpicture.overlay.select": "Вибрати",
   "bigpicture.overlay.close": "Закрити"
 }

@@ -98,6 +98,21 @@ pub struct StoreAccount {
     pub expired: Option<String>,
 }
 
+/// How a store tells that a running game unlocked achievements, so
+/// services follow that rather than ask it every few minutes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum AchievementSignal {
+    /// It doesn't: services ask now and then while the game runs.
+    #[default]
+    None,
+    /// The store emits [`crate::Event::AchievementSignal`] for the game when
+    /// it unlocks one (GOG's Galaxy service, which the game reports to).
+    Events,
+    /// The store's own client writes these files when the game unlocks one
+    /// (Steam's stats file); services watch them. A file may not exist yet.
+    Files(Vec<PathBuf>),
+}
+
 /// How a user logs in to a store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoginFlow {
@@ -394,6 +409,12 @@ pub trait Store: Send + Sync + 'static {
     /// [`Store::achievements`] asks the store (after a session, when
     /// unlocks are likely).
     async fn forget_achievements(&self, _app_name: &str) {}
+
+    /// How the store tells that `app_name`, running now, unlocked
+    /// achievements. Asked once when a session starts.
+    async fn achievement_signal(&self, _app_name: &str) -> AchievementSignal {
+        AchievementSignal::None
+    }
 
     /// Whole minutes played per app name as the store itself recorded them
     /// (its own launcher's sessions included). Empty for stores that keep no

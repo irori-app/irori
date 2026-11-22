@@ -5790,6 +5790,7 @@ dependencies = [
  "irori-scripts",
  "irori-secrets",
  "irori-steam-api",
+ "notify",
  "once_cell",
  "parking_lot",
  "plist",

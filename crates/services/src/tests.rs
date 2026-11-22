@@ -1454,3 +1454,229 @@ fn missing_game_files_stop_the_launch_with_a_typed_error() {
         "1"
     )));
 }
+
+/// A store with one game whose achievements the test unlocks, reporting
+/// unlocks the way `signal` says.
+struct UnlockStore {
+    list: ListStore,
+    achievements: parking_lot::Mutex<Vec<irori_core::Achievement>>,
+    signal: irori_core::AchievementSignal,
+    /// How often the store was asked for the achievements.
+    asked: std::sync::atomic::AtomicUsize,
+}
+
+impl UnlockStore {
+    fn new(app: &str, signal: irori_core::AchievementSignal) -> Self {
+        let achievement = |id: &str, at: Option<&str>| irori_core::Achievement {
+            id: id.into(),
+            name: id.to_uppercase(),
+            visible: true,
+            unlocked_at: at.map(String::from),
+            ..Default::default()
+        };
+        Self {
+            list: ListStore {
+                runner: Runner::Sideload,
+                games: vec![Arc::new(
+                    GameInfo {
+                        runner: Some(Runner::Sideload),
+                        app_name: app.into(),
+                        title: "Live".into(),
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )],
+            },
+            achievements: parking_lot::Mutex::new(vec![
+                achievement("a", Some("2026-01-01T00:00:00Z")),
+                achievement("b", None),
+            ]),
+            signal,
+            asked: Default::default(),
+        }
+    }
+
+    fn unlock(&self, id: &str) {
+        for a in self.achievements.lock().iter_mut().filter(|a| a.id == id) {
+            a.unlocked_at = Some("2026-02-01T00:00:00Z".into());
+        }
+    }
+
+    fn asked(&self) -> usize {
+        self.asked.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait]
+impl Store for UnlockStore {
+    fn runner(&self) -> Runner {
+        self.list.runner()
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        self.list.user()
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.list.games()
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        self.list.game(app)
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+    async fn achievements(&self, _: &str, _: &str) -> Result<Vec<irori_core::Achievement>> {
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        Ok(self.achievements.lock().clone())
+    }
+    async fn achievement_signal(&self, _: &str) -> irori_core::AchievementSignal {
+        self.signal.clone()
+    }
+}
+
+/// Wait up to ten seconds for `done`.
+async fn soon(done: impl Fn() -> bool) -> bool {
+    for _ in 0..200 {
+        if done() {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// Whether an `AchievementsUnlocked` for `id` comes within ten seconds.
+async fn unlocked(
+    events: &mut tokio::sync::broadcast::Receiver<Event>,
+    id: &irori_core::GameId,
+) -> bool {
+    let wait = async {
+        loop {
+            match events.recv().await {
+                Ok(Event::AchievementsUnlocked(game)) if game == *id => return true,
+                Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(_) => return false,
+            }
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(10), wait)
+        .await
+        .unwrap_or(false)
+}
+
+/// A session's achievement watch over `store`'s game, with notices on.
+fn watch(
+    store: &Arc<UnlockStore>,
+    app: &str,
+) -> (
+    Backend,
+    irori_core::GameId,
+    tokio::sync::broadcast::Receiver<Event>,
+    tokio_util::sync::CancellationToken,
+) {
+    let shared: irori_core::DynStore = store.clone();
+    let b = Backend::start_headless(move |_, _| vec![shared.clone()]).unwrap();
+    b.settings.update_app(|a| a.achievement_notices = true);
+    let id = irori_core::GameId::new(Runner::Sideload, app);
+    let events = b.subscribe();
+    let stop = tokio_util::sync::CancellationToken::new();
+    let (watcher, game, until) = (b.clone(), id.clone(), stop.clone());
+    b.runtime().spawn(async move {
+        watcher
+            .watch_achievements_while_playing(game, "Live".into(), until)
+            .await
+    });
+    (b, id, events, stop)
+}
+
+#[test]
+fn unlocks_follow_the_stores_reports_while_playing() {
+    isolate_paths();
+    let app = "live-unlocks-events";
+    let store = Arc::new(UnlockStore::new(app, irori_core::AchievementSignal::Events));
+    let (b, id, mut events, stop) = watch(&store, app);
+    let rt = b.runtime();
+    // What is unlocked when the session starts is only noted.
+    assert!(rt.block_on(soon(|| store.asked() == 1)));
+    assert!(b.take_live_unlocks(&id).is_empty());
+
+    store.unlock("b");
+    b.bus.emit(Event::AchievementSignal(id.clone()));
+    assert!(rt.block_on(unlocked(&mut events, &id)));
+    let live: Vec<String> = b.take_live_unlocks(&id).into_iter().map(|a| a.id).collect();
+    assert_eq!(live, ["b"]);
+    assert!(b.take_live_unlocks(&id).is_empty(), "taken once");
+    // Nothing was asked in between: the store's reports are followed.
+    assert_eq!(store.asked(), 2);
+    stop.cancel();
+}
+
+#[test]
+fn unlocks_follow_the_stores_files_while_playing() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let stats = dir.path().join("UserGameStats_1_2.bin");
+    std::fs::write(&stats, b"before").unwrap();
+    let app = "live-unlocks-files";
+    let store = Arc::new(UnlockStore::new(
+        app,
+        irori_core::AchievementSignal::Files(vec![stats.clone()]),
+    ));
+    let (b, id, mut events, stop) = watch(&store, app);
+    let rt = b.runtime();
+    assert!(rt.block_on(soon(|| store.asked() == 1)));
+    // Let the watch begin before the store writes its file.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    store.unlock("b");
+    std::fs::write(&stats, b"after").unwrap();
+    assert!(rt.block_on(unlocked(&mut events, &id)));
+    let live: Vec<String> = b.take_live_unlocks(&id).into_iter().map(|a| a.id).collect();
+    assert_eq!(live, ["b"]);
+    stop.cancel();
+}

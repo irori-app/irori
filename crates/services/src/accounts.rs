@@ -861,6 +861,10 @@ impl<S: Store> Store for MultiAccountStore<S> {
         self.store_for(app_name).forget_achievements(app_name).await
     }
 
+    async fn achievement_signal(&self, app_name: &str) -> irori_core::AchievementSignal {
+        self.store_for(app_name).achievement_signal(app_name).await
+    }
+
     /// Each game's longest total across the accounts.
     async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
         let slots = self.signed_in();

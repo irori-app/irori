@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Obiettivo sbloccato",
   "bigpicture.overlay.more_unlocks_one": "Ancora 1 in attesa",
   "bigpicture.overlay.more_unlocks_other": "Ancora {count} in attesa",
+  "bigpicture.overlay.sets": "Serie di obiettivi",
+  "bigpicture.overlay.set_other": "Altri obiettivi",
+  "bigpicture.overlay.set_not_owned": "DLC non posseduto",
+  "bigpicture.overlay.set_complete": "Completato",
+  "bigpicture.overlay.notice.rarity": "{percent}% dei giocatori",
+  "bigpicture.overlay.notice.points_one": "{points} punto",
+  "bigpicture.overlay.notice.points_other": "{points} punti",
   "bigpicture.overlay.select": "Seleziona",
   "bigpicture.overlay.close": "Chiudi"
 }

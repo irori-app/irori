@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Úspěch odemčen",
   "bigpicture.overlay.more_unlocks_one": "Čeká ještě 1",
   "bigpicture.overlay.more_unlocks_other": "Čeká ještě {count}",
+  "bigpicture.overlay.sets": "Sady úspěchů",
+  "bigpicture.overlay.set_other": "Ostatní úspěchy",
+  "bigpicture.overlay.set_not_owned": "DLC nevlastníte",
+  "bigpicture.overlay.set_complete": "Dokončeno",
+  "bigpicture.overlay.notice.rarity": "{percent} % hráčů",
+  "bigpicture.overlay.notice.points_one": "Body: {points}",
+  "bigpicture.overlay.notice.points_other": "Body: {points}",
   "bigpicture.overlay.select": "Vybrat",
   "bigpicture.overlay.close": "Zavřít"
 }

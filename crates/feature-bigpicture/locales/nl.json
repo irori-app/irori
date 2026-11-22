@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Prestatie ontgrendeld",
   "bigpicture.overlay.more_unlocks_one": "Nog 1 wacht",
   "bigpicture.overlay.more_unlocks_other": "Nog {count} wachten",
+  "bigpicture.overlay.sets": "Prestatiesets",
+  "bigpicture.overlay.set_other": "Overige prestaties",
+  "bigpicture.overlay.set_not_owned": "DLC niet in bezit",
+  "bigpicture.overlay.set_complete": "Voltooid",
+  "bigpicture.overlay.notice.rarity": "{percent}% van de spelers",
+  "bigpicture.overlay.notice.points_one": "{points} punt",
+  "bigpicture.overlay.notice.points_other": "{points} punten",
   "bigpicture.overlay.select": "Kiezen",
   "bigpicture.overlay.close": "Sluiten"
 }

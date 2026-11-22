@@ -74,6 +74,7 @@ type GameSettingsFn = Arc<dyn Fn(GameId, CloseFn, &mut Window, &mut App) -> AnyV
 type LutrisFn = Arc<dyn Fn(&mut App) -> Task<Result<LutrisSummary>>>;
 type OpenFn = Arc<dyn Fn(&mut Window, &mut App)>;
 type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
+type UnlocksFn = Arc<dyn Fn(GameId, Vec<irori_core::Achievement>, &mut App) -> bool>;
 
 /// The library's suggestion to read the Steam library from the Steam client
 /// (the Steam store and its dialog live outside the UI layer).
@@ -109,6 +110,10 @@ pub struct Hooks {
     /// the management screens).
     pub open_store_page: Option<StorePageFn>,
     pub steam_library_hint: Option<SteamLibraryHint>,
+    /// Show what a running game just unlocked over it (the notice window
+    /// lives in Big Picture, beside the in-game overlay). Returns false when
+    /// it can't, so they become a notice instead.
+    pub show_unlocks: Option<UnlocksFn>,
 }
 
 impl Global for Hooks {}
@@ -240,6 +245,18 @@ pub fn game_settings(
         .try_global::<Hooks>()
         .and_then(|h| h.game_settings.clone())?;
     Some(hook(id, on_close, window, cx))
+}
+
+/// Show `unlocks` of the running game `id` over it; false without the hook
+/// or when nothing can show over the game.
+pub fn show_unlocks(id: GameId, unlocks: Vec<irori_core::Achievement>, cx: &mut App) -> bool {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.show_unlocks.clone())
+    {
+        Some(show) => show(id, unlocks, cx),
+        None => false,
+    }
 }
 
 /// Show `url`, a page of `runner`'s website, in the store window; without

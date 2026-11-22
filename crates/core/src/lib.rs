@@ -2,6 +2,7 @@
 //! No UI dependency; everything here is usable from tests and headless tools.
 
 pub mod achievement_cache;
+pub mod achievement_sets;
 pub mod age_rating;
 pub mod archive_guard;
 pub mod dll_override;
@@ -40,8 +41,8 @@ pub use runner::{GameId, InstallPlatform, Runner};
 pub use settings::*;
 pub use status::{GameStatus, StatusKind};
 pub use store::{
-    ClientAction, DynStore, InstallInfoQuery, LoginApproval, LoginFlow, MAIN_ACCOUNT, OpContext,
-    SessionExpired, SettingsFn, Store, StoreAccount,
+    AchievementSignal, ClientAction, DynStore, InstallInfoQuery, LoginApproval, LoginFlow,
+    MAIN_ACCOUNT, OpContext, SessionExpired, SettingsFn, Store, StoreAccount,
 };
 
 pub use anyhow;

@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Conquista desbloqueada",
   "bigpicture.overlay.more_unlocks_one": "Mais 1 aguardando",
   "bigpicture.overlay.more_unlocks_other": "Mais {count} aguardando",
+  "bigpicture.overlay.sets": "Conjuntos de conquistas",
+  "bigpicture.overlay.set_other": "Outras conquistas",
+  "bigpicture.overlay.set_not_owned": "DLC não adquirido",
+  "bigpicture.overlay.set_complete": "Concluído",
+  "bigpicture.overlay.notice.rarity": "{percent}% dos jogadores",
+  "bigpicture.overlay.notice.points_one": "{points} ponto",
+  "bigpicture.overlay.notice.points_other": "{points} pontos",
   "bigpicture.overlay.select": "Selecionar",
   "bigpicture.overlay.close": "Fechar"
 }

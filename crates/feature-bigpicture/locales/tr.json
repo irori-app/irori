@@ -288,6 +288,13 @@
   "bigpicture.overlay.unlocked": "Başarım açıldı",
   "bigpicture.overlay.more_unlocks_one": "1 tane daha bekliyor",
   "bigpicture.overlay.more_unlocks_other": "{count} tane daha bekliyor",
+  "bigpicture.overlay.sets": "Başarım setleri",
+  "bigpicture.overlay.set_other": "Diğer başarımlar",
+  "bigpicture.overlay.set_not_owned": "DLC sahip olunmadı",
+  "bigpicture.overlay.set_complete": "Tamamlandı",
+  "bigpicture.overlay.notice.rarity": "Oyuncuların %{percent} kadarı",
+  "bigpicture.overlay.notice.points_one": "{points} puan",
+  "bigpicture.overlay.notice.points_other": "{points} puan",
   "bigpicture.overlay.select": "Seç",
   "bigpicture.overlay.close": "Kapat"
 }
