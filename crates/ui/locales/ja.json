@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Microsoft のデバイス ページを開く",
   "ui.game_window.no_window": "ゲームには、まだ前面に出せるウィンドウがありません",
   "ui.game_window.unsupported": "このデスクトップでは Irori がゲームのウィンドウを前面に出せません。タスクバーから切り替えてください",
-  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした"
+  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした",
+  "ui.date.day": "{month}{day}日",
+  "ui.date.day_year": "{year}年{month}{day}日",
+  "ui.month.1": "1月",
+  "ui.month.2": "2月",
+  "ui.month.3": "3月",
+  "ui.month.4": "4月",
+  "ui.month.5": "5月",
+  "ui.month.6": "6月",
+  "ui.month.7": "7月",
+  "ui.month.8": "8月",
+  "ui.month.9": "9月",
+  "ui.month.10": "10月",
+  "ui.month.11": "11月",
+  "ui.month.12": "12月"
 }

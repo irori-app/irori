@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Abrir la página de dispositivos de Microsoft",
   "ui.game_window.no_window": "El juego aún no tiene una ventana que traer al frente",
   "ui.game_window.unsupported": "Este escritorio no deja que Irori traiga al frente la ventana del juego; cambia a ella desde la barra de tareas",
-  "ui.game_window.failed": "No se pudo traer al frente la ventana del juego"
+  "ui.game_window.failed": "No se pudo traer al frente la ventana del juego",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "ene",
+  "ui.month.2": "feb",
+  "ui.month.3": "mar",
+  "ui.month.4": "abr",
+  "ui.month.5": "may",
+  "ui.month.6": "jun",
+  "ui.month.7": "jul",
+  "ui.month.8": "ago",
+  "ui.month.9": "sept",
+  "ui.month.10": "oct",
+  "ui.month.11": "nov",
+  "ui.month.12": "dic"
 }

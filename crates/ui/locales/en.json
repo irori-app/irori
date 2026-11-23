@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Open Microsoft's device page",
   "ui.game_window.no_window": "The game has no window to bring to the front yet",
   "ui.game_window.unsupported": "This desktop doesn’t let Irori bring the game’s window to the front; switch to it from the taskbar",
-  "ui.game_window.failed": "The game’s window couldn’t be brought to the front"
+  "ui.game_window.failed": "The game’s window couldn’t be brought to the front",
+  "ui.date.day": "{month} {day}",
+  "ui.date.day_year": "{month} {day}, {year}",
+  "ui.month.1": "Jan",
+  "ui.month.2": "Feb",
+  "ui.month.3": "Mar",
+  "ui.month.4": "Apr",
+  "ui.month.5": "May",
+  "ui.month.6": "Jun",
+  "ui.month.7": "Jul",
+  "ui.month.8": "Aug",
+  "ui.month.9": "Sep",
+  "ui.month.10": "Oct",
+  "ui.month.11": "Nov",
+  "ui.month.12": "Dec"
 }

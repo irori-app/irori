@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Відкрити сторінку пристроїв Microsoft",
   "ui.game_window.no_window": "У гри ще немає вікна, яке можна вивести вперед",
   "ui.game_window.unsupported": "Це середовище не дозволяє Irori вивести вікно гри вперед; перемкніться на нього через панель завдань",
-  "ui.game_window.failed": "Не вдалося вивести вікно гри вперед"
+  "ui.game_window.failed": "Не вдалося вивести вікно гри вперед",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year} р.",
+  "ui.month.1": "січ.",
+  "ui.month.2": "лют.",
+  "ui.month.3": "бер.",
+  "ui.month.4": "квіт.",
+  "ui.month.5": "трав.",
+  "ui.month.6": "черв.",
+  "ui.month.7": "лип.",
+  "ui.month.8": "серп.",
+  "ui.month.9": "вер.",
+  "ui.month.10": "жовт.",
+  "ui.month.11": "лист.",
+  "ui.month.12": "груд."
 }

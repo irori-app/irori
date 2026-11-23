@@ -285,7 +285,7 @@ impl Render for BackupPanel {
                 ),
             Some((path, backup)) => {
                 let available = backup.parts();
-                let created = backup.created.chars().take(10).collect::<String>();
+                let created = irori_ui::dates::localized_day(&backup.created);
                 panel(cx)
                     .p_4()
                     .gap_3()

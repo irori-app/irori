@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft",
   "ui.game_window.no_window": "Jocul nu are încă o fereastră de adus în față",
   "ui.game_window.unsupported": "Acest desktop nu-i permite lui Irori să aducă fereastra jocului în față; comută la ea din bara de activități",
-  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față"
+  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "ian.",
+  "ui.month.2": "feb.",
+  "ui.month.3": "mar.",
+  "ui.month.4": "apr.",
+  "ui.month.5": "mai",
+  "ui.month.6": "iun.",
+  "ui.month.7": "iul.",
+  "ui.month.8": "aug.",
+  "ui.month.9": "sept.",
+  "ui.month.10": "oct.",
+  "ui.month.11": "nov.",
+  "ui.month.12": "dec."
 }

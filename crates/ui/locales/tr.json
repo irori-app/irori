@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç",
   "ui.game_window.no_window": "Oyunun öne getirilecek bir penceresi henüz yok",
   "ui.game_window.unsupported": "Bu masaüstü Irori’nin oyun penceresini öne getirmesine izin vermiyor; görev çubuğundan ona geçin",
-  "ui.game_window.failed": "Oyun penceresi öne getirilemedi"
+  "ui.game_window.failed": "Oyun penceresi öne getirilemedi",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "Oca",
+  "ui.month.2": "Şub",
+  "ui.month.3": "Mar",
+  "ui.month.4": "Nis",
+  "ui.month.5": "May",
+  "ui.month.6": "Haz",
+  "ui.month.7": "Tem",
+  "ui.month.8": "Ağu",
+  "ui.month.9": "Eyl",
+  "ui.month.10": "Eki",
+  "ui.month.11": "Kas",
+  "ui.month.12": "Ara"
 }

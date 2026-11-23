@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu",
   "ui.game_window.no_window": "Hra zatím nemá okno, které by šlo přenést do popředí",
   "ui.game_window.unsupported": "Toto prostředí nedovolí Irori přenést okno hry do popředí; přepněte se do něj z panelu úloh",
-  "ui.game_window.failed": "Okno hry nešlo přenést do popředí"
+  "ui.game_window.failed": "Okno hry nešlo přenést do popředí",
+  "ui.date.day": "{day}. {month}",
+  "ui.date.day_year": "{day}. {month} {year}",
+  "ui.month.1": "led",
+  "ui.month.2": "úno",
+  "ui.month.3": "bře",
+  "ui.month.4": "dub",
+  "ui.month.5": "kvě",
+  "ui.month.6": "čvn",
+  "ui.month.7": "čvc",
+  "ui.month.8": "srp",
+  "ui.month.9": "zář",
+  "ui.month.10": "říj",
+  "ui.month.11": "lis",
+  "ui.month.12": "pro"
 }

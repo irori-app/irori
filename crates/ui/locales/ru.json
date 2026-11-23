@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Открыть страницу устройств Microsoft",
   "ui.game_window.no_window": "У игры пока нет окна, которое можно вывести вперёд",
   "ui.game_window.unsupported": "Это окружение не позволяет Irori вывести окно игры вперёд; переключитесь на него через панель задач",
-  "ui.game_window.failed": "Не удалось вывести окно игры вперёд"
+  "ui.game_window.failed": "Не удалось вывести окно игры вперёд",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year} г.",
+  "ui.month.1": "янв.",
+  "ui.month.2": "февр.",
+  "ui.month.3": "мар.",
+  "ui.month.4": "апр.",
+  "ui.month.5": "мая",
+  "ui.month.6": "июн.",
+  "ui.month.7": "июл.",
+  "ui.month.8": "авг.",
+  "ui.month.9": "сент.",
+  "ui.month.10": "окт.",
+  "ui.month.11": "нояб.",
+  "ui.month.12": "дек."
 }

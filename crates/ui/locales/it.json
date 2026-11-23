@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Apri la pagina dei dispositivi di Microsoft",
   "ui.game_window.no_window": "Il gioco non ha ancora una finestra da portare in primo piano",
   "ui.game_window.unsupported": "Questo desktop non consente a Irori di portare in primo piano la finestra del gioco; passaci dalla barra delle applicazioni",
-  "ui.game_window.failed": "Non è stato possibile portare in primo piano la finestra del gioco"
+  "ui.game_window.failed": "Non è stato possibile portare in primo piano la finestra del gioco",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "gen",
+  "ui.month.2": "feb",
+  "ui.month.3": "mar",
+  "ui.month.4": "apr",
+  "ui.month.5": "mag",
+  "ui.month.6": "giu",
+  "ui.month.7": "lug",
+  "ui.month.8": "ago",
+  "ui.month.9": "set",
+  "ui.month.10": "ott",
+  "ui.month.11": "nov",
+  "ui.month.12": "dic"
 }

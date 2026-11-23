@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Microsofts Geräteseite öffnen",
   "ui.game_window.no_window": "Das Spiel hat noch kein Fenster, das nach vorne geholt werden kann",
   "ui.game_window.unsupported": "Dieser Desktop lässt Irori das Spielfenster nicht nach vorne holen; wechsle über die Taskleiste dorthin",
-  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden"
+  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden",
+  "ui.date.day": "{day}. {month}",
+  "ui.date.day_year": "{day}. {month} {year}",
+  "ui.month.1": "Jan.",
+  "ui.month.2": "Feb.",
+  "ui.month.3": "März",
+  "ui.month.4": "Apr.",
+  "ui.month.5": "Mai",
+  "ui.month.6": "Juni",
+  "ui.month.7": "Juli",
+  "ui.month.8": "Aug.",
+  "ui.month.9": "Sept.",
+  "ui.month.10": "Okt.",
+  "ui.month.11": "Nov.",
+  "ui.month.12": "Dez."
 }

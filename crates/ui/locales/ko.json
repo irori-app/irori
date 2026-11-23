@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Microsoft 장치 페이지 열기",
   "ui.game_window.no_window": "게임에 아직 앞으로 가져올 창이 없습니다",
   "ui.game_window.unsupported": "이 데스크톱에서는 Irori가 게임 창을 앞으로 가져올 수 없습니다. 작업 표시줄에서 전환하세요",
-  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다"
+  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다",
+  "ui.date.day": "{month} {day}일",
+  "ui.date.day_year": "{year}년 {month} {day}일",
+  "ui.month.1": "1월",
+  "ui.month.2": "2월",
+  "ui.month.3": "3월",
+  "ui.month.4": "4월",
+  "ui.month.5": "5월",
+  "ui.month.6": "6월",
+  "ui.month.7": "7월",
+  "ui.month.8": "8월",
+  "ui.month.9": "9월",
+  "ui.month.10": "10월",
+  "ui.month.11": "11월",
+  "ui.month.12": "12월"
 }

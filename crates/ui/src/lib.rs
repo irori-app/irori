@@ -11,6 +11,7 @@ pub mod categories;
 pub mod components;
 pub mod copies;
 mod cosmic;
+pub mod dates;
 mod desktop_accent;
 mod desktop_theme;
 mod engine_problem;

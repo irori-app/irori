@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "開啟 Microsoft 裝置頁面",
   "ui.game_window.no_window": "遊戲還沒有可置於前景的視窗",
   "ui.game_window.unsupported": "此桌面不允許 Irori 將遊戲視窗置於前景；請從工作列切換過去",
-  "ui.game_window.failed": "無法將遊戲視窗置於前景"
+  "ui.game_window.failed": "無法將遊戲視窗置於前景",
+  "ui.date.day": "{month}{day}日",
+  "ui.date.day_year": "{year}年{month}{day}日",
+  "ui.month.1": "1月",
+  "ui.month.2": "2月",
+  "ui.month.3": "3月",
+  "ui.month.4": "4月",
+  "ui.month.5": "5月",
+  "ui.month.6": "6月",
+  "ui.month.7": "7月",
+  "ui.month.8": "8月",
+  "ui.month.9": "9月",
+  "ui.month.10": "10月",
+  "ui.month.11": "11月",
+  "ui.month.12": "12月"
 }

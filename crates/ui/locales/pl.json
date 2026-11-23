@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Otwórz stronę urządzeń Microsoftu",
   "ui.game_window.no_window": "Gra nie ma jeszcze okna do przeniesienia na pierwszy plan",
   "ui.game_window.unsupported": "To środowisko nie pozwala Irori przenieść okna gry na pierwszy plan; przełącz się na nie z paska zadań",
-  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan"
+  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "sty",
+  "ui.month.2": "lut",
+  "ui.month.3": "mar",
+  "ui.month.4": "kwi",
+  "ui.month.5": "maj",
+  "ui.month.6": "cze",
+  "ui.month.7": "lip",
+  "ui.month.8": "sie",
+  "ui.month.9": "wrz",
+  "ui.month.10": "paź",
+  "ui.month.11": "lis",
+  "ui.month.12": "gru"
 }

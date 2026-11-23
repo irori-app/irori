@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft",
   "ui.game_window.no_window": "Le jeu n’a pas encore de fenêtre à mettre au premier plan",
   "ui.game_window.unsupported": "Ce bureau ne permet pas à Irori de mettre la fenêtre du jeu au premier plan ; passez-y depuis la barre des tâches",
-  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan"
+  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "janv.",
+  "ui.month.2": "févr.",
+  "ui.month.3": "mars",
+  "ui.month.4": "avr.",
+  "ui.month.5": "mai",
+  "ui.month.6": "juin",
+  "ui.month.7": "juil.",
+  "ui.month.8": "août",
+  "ui.month.9": "sept.",
+  "ui.month.10": "oct.",
+  "ui.month.11": "nov.",
+  "ui.month.12": "déc."
 }

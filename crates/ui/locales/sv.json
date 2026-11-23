@@ -349,5 +349,19 @@
   "ui.xbox.open_devices": "Öppna Microsofts enhetssida",
   "ui.game_window.no_window": "Spelet har inget fönster att ta fram ännu",
   "ui.game_window.unsupported": "Det här skrivbordet låter inte Irori ta fram spelets fönster; byt till det från aktivitetsfältet",
-  "ui.game_window.failed": "Spelets fönster kunde inte tas fram"
+  "ui.game_window.failed": "Spelets fönster kunde inte tas fram",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "jan.",
+  "ui.month.2": "feb.",
+  "ui.month.3": "mars",
+  "ui.month.4": "apr.",
+  "ui.month.5": "maj",
+  "ui.month.6": "juni",
+  "ui.month.7": "juli",
+  "ui.month.8": "aug.",
+  "ui.month.9": "sep.",
+  "ui.month.10": "okt.",
+  "ui.month.11": "nov.",
+  "ui.month.12": "dec."
 }
