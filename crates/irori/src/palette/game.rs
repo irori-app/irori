@@ -252,6 +252,15 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
     for (item, target) in rows(game, facts.status, &facts.actions) {
         push(item, target);
     }
+    if !matches!(game.runner(), Runner::Steam | Runner::Emulation) {
+        push(
+            Entry::new()
+                .label(t_args("shell.palette.steam_link", &[("title", title)]))
+                .keywords([t("shell.palette.steam_link_keywords")])
+                .icon(IconName::Link),
+            PaletteTarget::SteamLink(id.clone()),
+        );
+    }
     if facts.syncable {
         push(
             Entry::new()

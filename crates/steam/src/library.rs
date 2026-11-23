@@ -246,6 +246,18 @@ pub struct ReleaseDate {
     pub date: String,
 }
 
+impl ReleaseDate {
+    /// The year in the date: its four-digit number from 1950 on ("21 Aug,
+    /// 2012", "2012年8月21日"); `None` for "Coming soon" and the like.
+    pub fn year(&self) -> Option<u32> {
+        self.date
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|w| w.len() == 4)
+            .filter_map(|w| w.parse().ok())
+            .find(|y| (1950..=2200).contains(y))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Genre {
@@ -446,6 +458,21 @@ mod tests {
     use serde_json::json;
 
     const STEAMID: u64 = 76561197960265729;
+
+    #[test]
+    fn release_years_in_any_language() {
+        let year = |date: &str| {
+            ReleaseDate {
+                coming_soon: false,
+                date: date.into(),
+            }
+            .year()
+        };
+        assert_eq!(year("21 Aug, 2012"), Some(2012));
+        assert_eq!(year("2012年8月21日"), Some(2012));
+        assert_eq!(year("Coming soon"), None);
+        assert_eq!(year("Q4 0000"), None);
+    }
 
     fn client(server: &TestServer) -> Client {
         Client::with_endpoints(Endpoints {

@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "{name} を更新できませんでした",
   "shell.notice.component_updated": "{name} を {version} に更新しました",
   "shell.palette.edit_actions": "{title} のアクションを編集",
+  "shell.palette.steam_link": "{title} を Steam のアプリにリンク",
+  "shell.palette.steam_link_keywords": "steam アプリ id リンク 一致 タグ protondb",
   "shell.palette.storage": "ストレージとクリーンアップ",
   "shell.palette.storage_keywords": "ディスク ドライブ 容量 サイズ 空き 解放 クリーンアップ 削除 ストレージ storage",
   "shell.palette.feedback_keywords": "ヘルプ フィードバック バグ 不具合 報告 問題 アイデア 質問 github サポート",

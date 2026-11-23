@@ -56,6 +56,7 @@ pub mod settings;
 mod settings_migration;
 pub mod smart_categories;
 pub mod status;
+pub mod steam_link;
 mod steam_tags;
 pub mod storage;
 mod store_facts;
@@ -93,6 +94,7 @@ pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
+pub use irori_steam_api::StoreHit as SteamHit;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
@@ -110,6 +112,7 @@ pub use smart_categories::{
     CategoryIndex, CategoryLook, CategoryRef, Condition, HltbTimes, Match, Rule, SmartCategory,
 };
 pub use status::StatusRegistry;
+pub use steam_link::{STEAM_NONE, SteamLink, TitleLinkReport};
 pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
@@ -142,6 +145,7 @@ pub struct Inner {
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
     steam_tags: steam_tags::SteamTagsService,
+    steam_links: steam_link::SteamLinkService,
     hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
@@ -260,6 +264,7 @@ impl Backend {
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
             steam_tags: steam_tags::SteamTagsService::load(),
+            steam_links: steam_link::SteamLinkService::load(),
             hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
@@ -438,6 +443,7 @@ impl Backend {
                         while rx.try_recv().is_ok() {}
                         b.rebuild_library();
                     }
+                    Ok(Event::GameSettingsChanged(id)) => b.follow_steam_link_setting(&id),
                     Ok(Event::WineVersionsChanged) => {
                         let b = b.clone();
                         b.clone()

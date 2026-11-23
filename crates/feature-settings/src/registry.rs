@@ -2812,6 +2812,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "screenshots",
     ]),
     app(
+        "iroriSteamTitleMatch",
+        "settings.field.steam_title_match.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.steam_title_match.help")
+    .keywords(&[
+        "steam", "app id", "link", "match", "tags", "protondb", "metadata",
+    ]),
+    app(
         "panel.igdb",
         "settings.field.panel_igdb.label",
         Advanced,
@@ -3851,7 +3862,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.field.steam_app_id.label",
         Launch,
         "settings.group.achievements",
-        Text(TextKind::Digits { max_len: 10 }),
+        // An app id, or `none` for a game Steam doesn't sell.
+        Text(TextKind::Plain),
     )
     .help("settings.field.steam_app_id.help")
     .placeholder(Key("settings.field.steam_app_id.placeholder"))
@@ -3862,6 +3874,9 @@ pub static FIELDS: &[FieldSpec] = &[
         "appid",
         "goldberg",
         "gbe",
+        "link",
+        "tags",
+        "protondb",
     ]),
     game_only(
         "iroriInSunshine",

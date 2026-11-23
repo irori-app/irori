@@ -46,10 +46,20 @@ pub struct StoreIds {
     pub hltb_id: Option<String>,
     /// The release year, to tell remakes apart in HLTB's search.
     pub release_year: Option<u32>,
+    /// The Steam app the user linked the game to (`iroriSteamAppId`), or
+    /// [`STEAM_NONE`] for none: it replaces the one GamesDB or PCGamingWiki
+    /// give for ProtonDB and the Steam Deck. `None` uses theirs.
+    pub steam_link: Option<String>,
+    /// A Steam app found by the game's exact title, used only when neither
+    /// GamesDB nor PCGamingWiki names one.
+    pub steam_guess: Option<String>,
 }
 
 /// [`StoreIds::hltb_id`] for a game the user said HowLongToBeat doesn't have.
 pub const HLTB_NONE: &str = "none";
+
+/// [`StoreIds::steam_link`] for a game the user said Steam doesn't sell.
+pub const STEAM_NONE: &str = "none";
 
 impl StoreIds {
     pub fn of(game: &GameInfo) -> Self {
@@ -67,6 +77,8 @@ impl StoreIds {
                 .as_deref()
                 .and_then(|d| d.get(..4))
                 .and_then(|y| y.parse().ok()),
+            steam_link: None,
+            steam_guess: None,
         }
     }
 }
@@ -90,11 +102,26 @@ pub struct WikiInfo {
     pub gamesdb_steam_id: Option<String>,
     pub steam: Option<SteamCompat>,
     pub umu_id: Option<String>,
+    /// The Steam app the lookup used instead of the sources' (see
+    /// [`StoreIds::steam_link`]); [`STEAM_NONE`] for none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steam_link: Option<String>,
 }
 
 impl WikiInfo {
-    /// Steam app ID from GamesDB, else PCGamingWiki.
+    /// The game's Steam app ID: the one linked, else GamesDB's, else
+    /// PCGamingWiki's.
     pub fn steam_app_id(&self) -> Option<&str> {
+        match self.steam_link.as_deref().map(str::trim) {
+            Some(STEAM_NONE) => None,
+            Some(id) if !id.is_empty() => Some(id),
+            _ => self.found_steam_app_id(),
+        }
+    }
+
+    /// The Steam app ID GamesDB, else PCGamingWiki, give the game, whatever
+    /// was linked.
+    pub fn found_steam_app_id(&self) -> Option<&str> {
         self.gamesdb_steam_id
             .as_deref()
             .filter(|s| !s.is_empty())
@@ -119,16 +146,34 @@ pub fn clean_title(title: &str) -> String {
 fn cache_file(ids: &StoreIds) -> PathBuf {
     // The user's HLTB choice is part of the name, so changing it reads the
     // game again instead of the answer cached for the old one.
-    let choice = ids
-        .hltb_id
-        .as_deref()
-        .map(|id| format!("-hltb{}", irori_core::paths::sanitize(id)))
-        .unwrap_or_default();
+    let part = |tag: &str, value: &Option<String>| {
+        value
+            .as_deref()
+            .map(|v| format!("-{tag}{}", irori_core::paths::sanitize(v)))
+            .unwrap_or_default()
+    };
+    let choice = format!(
+        "{}{}{}",
+        part("hltb", &ids.hltb_id),
+        part("steam", &ids.steam_link),
+        part("guess", &ids.steam_guess)
+    );
     util::cache_dir("wiki").join(format!(
         "{}-{}{choice}.json",
         ids.runner.id(),
         irori_core::paths::sanitize(&ids.app_name)
     ))
+}
+
+/// Forget the cached info for a store entry (and the user's choices in
+/// `ids`), so the next lookup asks every source again.
+pub async fn forget(ids: &StoreIds) {
+    match tokio::fs::remove_file(cache_file(ids)).await {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            tracing::warn!("forgetting game information: {e}");
+        }
+        _ => {}
+    }
 }
 
 /// Cached info for a store entry, without network access.
@@ -170,7 +215,14 @@ pub async fn game_info(title: &str, ids: &StoreIds) -> Result<Arc<WikiInfo>> {
         gamesdb_steam_id,
         steam: None,
         umu_id,
+        steam_link: None,
     };
+    info.steam_link = ids.steam_link.clone().or_else(|| {
+        info.found_steam_app_id()
+            .is_none()
+            .then(|| ids.steam_guess.clone())
+            .flatten()
+    });
     if let Some(steam_id) = info.steam_app_id().map(str::to_string) {
         let (proton, deck) =
             futures::join!(sources::protondb(&steam_id), sources::steam_deck(&steam_id));
@@ -313,6 +365,12 @@ mod tests {
         assert_eq!(info.steam_app_id(), Some("1"));
         info.gamesdb_steam_id = Some(String::new());
         assert_eq!(info.steam_app_id(), Some("2"));
+        // The user's link wins, and "none" means none.
+        info.steam_link = Some("620".into());
+        assert_eq!(info.steam_app_id(), Some("620"));
+        assert_eq!(info.found_steam_app_id(), Some("2"));
+        info.steam_link = Some(STEAM_NONE.into());
+        assert_eq!(info.steam_app_id(), None);
     }
 
     #[test]
@@ -345,5 +403,16 @@ mod tests {
         let ids = StoreIds::of(&game);
         assert_eq!(ids.store_url.as_deref(), Some("https://www.gog.com/game/x"));
         assert!(cache_file(&ids).ends_with("wiki/gog-1.json"));
+        // Each choice reads its own answer.
+        let linked = StoreIds {
+            steam_link: Some("620".into()),
+            ..ids.clone()
+        };
+        assert!(cache_file(&linked).ends_with("wiki/gog-1-steam620.json"));
+        let guessed = StoreIds {
+            steam_guess: Some("400".into()),
+            ..ids
+        };
+        assert!(cache_file(&guessed).ends_with("wiki/gog-1-guess400.json"));
     }
 }

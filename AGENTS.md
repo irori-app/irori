@@ -575,8 +575,24 @@ commands without a window.
   notes, and a restore keeps the later-written note of each day. Screens edit them
   through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
   Journal tab).
-- **Steam tags** (`steam_tags.rs`): Steam games' user tags (`GameInfo::store_tags`,
-  strongest first, named in the interface language) from the keyless
+- **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
+  store details (a store page's gaps: screenshots, trailers, description, genres, date;
+  cached a week in `<cache>/steam-details/`), ProtonDB and the Steam Deck rating follow. It
+  never changes how a game starts. Order: a Steam game is its own app; the user's
+  choice (per-game `iroriSteamAppId`, `none` for none; "Link to Steam app…" in the
+  game menu, the details panel's Steam row and the palette,
+  `irori_game::open_steam_link_dialog`, which searches the store or takes a pasted id or
+  store address); the app GamesDB or PCGamingWiki name (learned in
+  `Backend::wiki_info`); with `iroriSteamTitleMatch` (off by default), the app of
+  the game's exact title (`title_candidates`:
+  edition names aside, never a similar title; a known release year within one), asked
+  25 games a round, 1.5 s apart, kept a month (a week when nothing matched).
+  `<cache>/steam-links.json` holds what was found and a copy of the user's choices
+  (followed through `GameSettingsChanged`), so a library rebuild reads no game's
+  settings file.
+- **Steam tags** (`steam_tags.rs`): the user tags (`GameInfo::store_tags`,
+  strongest first, named in the interface language) of Steam games and games linked
+  to a Steam app (see Steam link) from the keyless
   `IStoreBrowseService/GetItems` and `IStoreService/GetTagList`
   (`irori_steam_api::tags`), kept in `<cache>/steam-tags.json` (a month per app, a week
   per language) and asked after a library rebuild only for apps without an answer.
@@ -615,11 +631,12 @@ commands without a window.
   shows its size, SteamGridDB's from its API, the others' read from their first bytes
   (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
   off; the Modify dialog's title and art overrides win over everything.
-- **Store media for other stores' games** (`media/steam.rs`): after the IGDB fill,
-  `Backend::extra_info` gives a non-Steam game whose `iroriSteamAppId` names a Steam
-  app that app's store-page screenshots (keyless `appdetails`, kept in memory for the
-  run), only when its own page has none. Amazon's library entries carry their own
-  screenshots (`Details::screenshots`).
+- **Store media for other stores' games**: `Backend::extra_info` fills a non-Steam
+  game's page from the store page of its Steam link (see Steam link; one `appdetails`
+  fetch per linked app, cached a week, `Backend::fill_from_steam`) before IGDB: its
+  screenshots and trailers (`media/steam.rs` reads them from the page) and its
+  description, genres and date, each only where the game's own page has none. Amazon's
+  library entries carry their own screenshots (`Details::screenshots`).
 - **Trailers** (`ExtraInfo::videos`, from Steam `appdetails` `movies`, also for games
   linked to a Steam app): `media/trailer.rs` plays one through the user's ffmpeg
   (`media/ffmpeg.rs`; never bundled) at its own pace (`-re`), only network protocols

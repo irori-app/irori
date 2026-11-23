@@ -345,9 +345,12 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
-    /// The game's Steam app id for its achievements read from game files,
-    /// when the user chose one; empty finds it in the game's files and
-    /// variables. Per game only. Irori-only.
+    /// The Steam app the game is linked to, when the user chose one, or
+    /// `none` for none: Steam's tags, store details, ProtonDB and the
+    /// achievements read from game files follow it, and umu names the game
+    /// by it. Empty finds it (wikis, the exact title; the game's files for
+    /// achievements). It never changes how the game itself starts. Per game
+    /// only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
     /// The umu database id (`GAMEID`) the game runs with under umu, when the
@@ -909,6 +912,12 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Link games of other stores to the Steam app of their exact title
+    /// (edition words aside, and a release year apart at most), for
+    /// Steam's tags, ProtonDB and screenshots, when no source names their
+    /// Steam app. Off by default. Irori-only.
+    #[serde(rename = "iroriSteamTitleMatch")]
+    pub steam_title_match: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -976,6 +985,7 @@ impl Default for AppSettings {
             achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
+            steam_title_match: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

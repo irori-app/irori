@@ -188,15 +188,16 @@ impl StoreFactsService {
 
 impl Backend {
     /// A game's store-page details. Age ratings and game modes in them are
-    /// kept, so the library knows them from then on. Media the page lacks
-    /// come from the Steam app the game is linked to.
+    /// kept, so the library knows them from then on. What the page lacks
+    /// comes from the Steam app the game is linked to (`steam_link`), then
+    /// from IGDB.
     pub async fn extra_info(&self, id: &GameId) -> Result<irori_core::ExtraInfo> {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner.store_name()))?;
         let mut info = store.extra_info(&id.app_name).await?;
-        self.fill_from_igdb(id, &mut info).await;
         self.fill_from_steam(id, &mut info).await;
+        self.fill_from_igdb(id, &mut info).await;
         if self
             .store_facts
             .learn_store_page(id.key(), &info.age_ratings, &info.game_modes)
@@ -207,13 +208,15 @@ impl Backend {
     }
 
     /// What PCGamingWiki, HowLongToBeat, ProtonDB and the others say about a
-    /// game ([`irori_extras::wiki::game_info`], cached for a month). The
-    /// wiki's game modes are kept, for games whose store names none.
+    /// game ([`irori_extras::wiki::game_info`], cached for a month), with
+    /// ProtonDB and the Steam Deck read for its Steam link. The wiki's game
+    /// modes are kept, for games whose store names none, and the Steam app
+    /// it names becomes the game's Steam link unless the user chose one.
     pub async fn wiki_info(&self, game: &GameInfo) -> Result<Arc<WikiInfo>> {
-        let mut ids = StoreIds::of(game);
-        let chosen = self.settings.game(&game.id()).hltb_id;
-        ids.hltb_id = Some(chosen.trim().to_owned()).filter(|c| !c.is_empty());
+        let ids = self.wiki_ids(game);
+        let chosen = ids.hltb_id.clone().unwrap_or_default();
         let info = wiki::game_info(&game.title, &ids).await?;
+        self.note_wiki_steam_app(game, info.found_steam_app_id());
         let modes = info
             .pcgamingwiki
             .as_ref()
@@ -229,6 +232,20 @@ impl Backend {
             self.rebuild_library();
         }
         Ok(info)
+    }
+
+    /// Which entry the wikis look up for `game`, with the user's choices.
+    pub(crate) fn wiki_ids(&self, game: &GameInfo) -> StoreIds {
+        let mut ids = StoreIds::of(game);
+        let settings = self.settings.game(&game.id());
+        ids.hltb_id = Some(settings.hltb_id.trim().to_owned()).filter(|c| !c.is_empty());
+        match self.steam_link(game) {
+            crate::SteamLink::Chosen(app) => ids.steam_link = Some(app.to_string()),
+            crate::SteamLink::NoneChosen => ids.steam_link = Some(wiki::STEAM_NONE.into()),
+            crate::SteamLink::Title(app) => ids.steam_guess = Some(app.to_string()),
+            _ => {}
+        }
+        ids
     }
 
     /// HowLongToBeat main-story times known so far, for smart categories.

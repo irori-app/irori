@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "无法更新 {name}",
   "shell.notice.component_updated": "{name} 已更新到 {version}",
   "shell.palette.edit_actions": "编辑 {title} 的操作",
+  "shell.palette.steam_link": "将 {title} 关联到 Steam 应用",
+  "shell.palette.steam_link_keywords": "steam 应用 id 关联 匹配 标签 protondb",
   "shell.palette.storage": "存储空间和清理",
   "shell.palette.storage_keywords": "磁盘 硬盘 空间 大小 可用 释放 清理 删除 存储 storage",
   "shell.palette.feedback_keywords": "帮助 反馈 错误 漏洞 报告 问题 建议 提问 github 支持",

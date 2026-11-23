@@ -1216,7 +1216,7 @@ fn a_linked_steam_app_lends_its_screenshots() {
             Resp::status(404)
         }
     });
-    crate::media::steam::set_endpoints(irori_steam_api::Endpoints {
+    b.set_steam_link_endpoints(irori_steam_api::Endpoints {
         api: server.base(),
         store: server.base(),
         assets: server.base(),
@@ -1240,6 +1240,97 @@ fn a_linked_steam_app_lends_its_screenshots() {
     // Kept for the run: the page is asked once.
     rt.block_on(b.extra_info(&id)).unwrap();
     assert_eq!(server.requests().len(), 1);
+}
+
+#[test]
+fn games_link_to_steam_by_exact_title_or_the_users_choice() {
+    use crate::SteamLink;
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    use irori_steam_api::Endpoints;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Gog,
+            &[
+                ("steam-link-hades", "Hades - Deluxe Edition"),
+                ("steam-link-other", "Nothing Alike"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        if req.path.starts_with("/api/storesearch/?") {
+            if req.path.contains("Hades") {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Hades II", "id": 1145350},
+                    {"type": "app", "name": "Hades", "id": 1145360}
+                ]}))
+            } else {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Nothing Alike 2", "id": 9}
+                ]}))
+            }
+        } else if req.path.starts_with("/api/appdetails?appids=1145360") {
+            Resp::json(serde_json::json!({"1145360": {"success": true, "data": {
+                "name": "Hades", "short_description": "Defy the god of the dead.",
+                "genres": [{"description": "Action"}],
+                "release_date": {"coming_soon": false, "date": "17 Sep, 2020"},
+                "screenshots": [{"path_thumbnail": "https://cdn.example/t.jpg",
+                                 "path_full": "https://cdn.example/1.jpg"}]
+            }}}))
+        } else if req.path.starts_with("/api/appdetails?appids=620") {
+            Resp::json(serde_json::json!({"620": {"success": true, "data": {"name": "Portal 2"}}}))
+        } else {
+            Resp::status(404)
+        }
+    });
+    b.set_steam_link_endpoints(Endpoints {
+        api: server.base(),
+        store: server.base(),
+        assets: server.base(),
+    });
+    b.rebuild_library();
+    let hades = GameId::new(Runner::Gog, "steam-link-hades");
+    let other = GameId::new(Runner::Gog, "steam-link-other");
+    let game = |id: &GameId| b.library().get(id).cloned().unwrap();
+    let rt = b.runtime();
+
+    let report = rt.block_on(b.link_by_title(&[hades.clone(), other.clone()]));
+    assert_eq!((report.linked, report.not_found), (1, 1), "{report:?}");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+    assert_eq!(b.steam_link(&game(&other)), SteamLink::Unknown);
+
+    // The linked app's store page fills what the store's lacks.
+    let info = rt.block_on(b.extra_info(&hades)).unwrap();
+    assert_eq!(info.screenshots, ["https://cdn.example/1.jpg"]);
+    assert_eq!(info.genres, ["Action"]);
+    assert_eq!(info.details_from.as_deref(), Some("Steam"));
+
+    // The user's choice wins, is kept in the game's settings, and "none"
+    // takes the link away.
+    b.set_steam_link(
+        &hades,
+        Some("https://store.steampowered.com/app/620/".into()),
+    );
+    assert_eq!(b.settings.game(&hades).steam_app_id, "620");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Chosen(620));
+    b.set_steam_link(&hades, Some(crate::STEAM_NONE.into()));
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::NoneChosen);
+    assert_eq!(
+        rt.block_on(b.link_by_title(std::slice::from_ref(&hades)))
+            .skipped,
+        1,
+        "the user's choice stays"
+    );
+    b.set_steam_link(&hades, None);
+    assert_eq!(b.settings.game(&hades).steam_app_id, "");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+
+    // A pasted id or store address names its app.
+    let found = rt.block_on(b.search_steam("steam://store/620")).unwrap();
+    assert_eq!((found[0].id, found[0].name.as_str()), (620, "Portal 2"));
 }
 
 #[cfg(unix)]

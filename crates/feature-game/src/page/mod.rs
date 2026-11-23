@@ -145,6 +145,9 @@ pub struct GamePage {
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
     compat: Load<CompatibilityInfo>,
+    /// The game's Steam app as of the last library change; when it changes
+    /// the store details and compatibility data are read again.
+    steam_link: irori_services::SteamLink,
     /// EOS overlay controls (Epic Windows installs with a store handle).
     overlay: Option<Entity<EosOverlayPanel>>,
     /// What the game's settings change, from the settings feature (an
@@ -275,6 +278,11 @@ impl GamePage {
             window.focus(&focus, cx);
         }
         let was_installed = game.as_ref().is_some_and(|g| g.is_installed);
+        let steam_link = game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
         let mut this = Self {
             id,
             panel,
@@ -292,6 +300,7 @@ impl GamePage {
             launch_select,
             selected_option: None,
             compat: Load::Idle,
+            steam_link,
             overlay: None,
             setup: None,
             mods: None,
@@ -519,12 +528,13 @@ impl GamePage {
             return;
         };
         // PC compatibility data (ProtonDB, Steam Deck) says nothing about
-        // emulated games, and a title match would be another game.
-        if matches!(
-            game.runner(),
-            irori_core::Runner::Sideload | irori_core::Runner::Emulation
-        ) {
-            return;
+        // emulated games, and for an added game a title match would be
+        // another game, unless the user linked it to its Steam app.
+        let linked = matches!(self.steam_link, irori_services::SteamLink::Chosen(_));
+        match game.runner() {
+            irori_core::Runner::Emulation => return,
+            irori_core::Runner::Sideload if !linked => return,
+            _ => {}
         }
         let Some(task) = hooks::fetch_compatibility(game, cx) else {
             return;
@@ -554,10 +564,24 @@ impl GamePage {
             _ => false,
         };
         self.game = next;
+        let link = self
+            .game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
+        let relinked = std::mem::replace(&mut self.steam_link, link) != link;
         if first {
             self.load_all(window, cx);
-        } else if title_changed && let Some(t) = self.title() {
-            cx.emit(GamePageEvent::TitleChanged(t));
+        } else {
+            if title_changed && let Some(t) = self.title() {
+                cx.emit(GamePageEvent::TitleChanged(t));
+            }
+            // Steam's details and ProtonDB follow the game's Steam app.
+            if relinked {
+                self.load_extra(window, cx);
+                self.reload_compat(window, cx);
+            }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);
         if installed != self.was_installed {

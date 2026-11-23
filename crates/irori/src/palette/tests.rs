@@ -430,3 +430,22 @@ mod ui {
         }
     }
 }
+
+#[test]
+fn games_of_other_stores_offer_a_steam_link_in_their_level() {
+    let offers = |runner: Runner| {
+        let g = GameInfo {
+            runner: Some(runner),
+            app_name: "1".into(),
+            title: "Hades".into(),
+            ..Default::default()
+        };
+        game::level_rows(&g, &game::GameFacts::default())
+            .into_iter()
+            .any(|(_, target)| matches!(target, PaletteTarget::SteamLink(_)))
+    };
+    assert!(offers(Runner::Gog));
+    assert!(offers(Runner::Sideload));
+    assert!(!offers(Runner::Steam), "a Steam game is its own app");
+    assert!(!offers(Runner::Emulation));
+}

@@ -130,6 +130,8 @@ pub(crate) enum PaletteTarget {
     EditActions(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
+    /// Link a game of another store to its Steam app.
+    SteamLink(GameId),
     /// Turn a ROM library entry into an added PC game.
     PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
@@ -843,6 +845,10 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::SteamLink(id) => window.defer(cx, move |window, cx| {
+            irori_game::open_steam_link_dialog(id, window, cx)
+        }),
         PaletteTarget::PlayAsPcGame(id) => {
             irori_library::open_play_as_pc_game_dialog(&id, window, cx)
         }

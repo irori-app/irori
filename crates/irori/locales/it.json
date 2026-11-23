@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "Impossibile aggiornare {name}",
   "shell.notice.component_updated": "{name} aggiornato a {version}",
   "shell.palette.edit_actions": "Modifica le azioni di {title}",
+  "shell.palette.steam_link": "Collega {title} a un’app di Steam",
+  "shell.palette.steam_link_keywords": "steam app id collegare corrispondenza tag protondb",
   "shell.palette.storage": "Spazio di archiviazione e pulizia",
   "shell.palette.storage_keywords": "disco unità spazio dimensione libero libera pulisci pulizia elimina",
   "shell.palette.feedback_keywords": "aiuto feedback bug errore segnalazione problema idea domanda github supporto",

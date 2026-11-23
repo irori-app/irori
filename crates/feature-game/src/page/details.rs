@@ -140,7 +140,59 @@ impl GamePage {
             .children(group(play, cx))
             .children(group(install, cx))
             .children(group(compat, cx))
+            .children(group(self.steam_rows(muted), cx))
             .into_any_element()
+    }
+
+    /// The Steam app a game of another store is linked to, with "Link to
+    /// Steam" to change it.
+    fn steam_rows(&self, muted: Hsla) -> Vec<AnyElement> {
+        if matches!(
+            self.id.runner,
+            irori_core::Runner::Steam | irori_core::Runner::Emulation
+        ) {
+            return Vec::new();
+        }
+        let link = self.steam_link;
+        let value: AnyElement = match link.app_id() {
+            Some(app) => {
+                let label = t_args("game.steam_link.app", &[("id", &app.to_string())]);
+                match irori_ui::web_url(&format!("https://store.steampowered.com/app/{app}/")) {
+                    Some(url) => gpui_kit::component::link::Link::new("details-steam-app")
+                        .href(url)
+                        .child(label)
+                        .into_any_element(),
+                    None => text(label),
+                }
+            }
+            None if link == irori_services::SteamLink::NoneChosen => {
+                text(t("game.steam_link.none"))
+            }
+            None => text(t("game.steam_link.not_linked")),
+        };
+        let id = self.id.clone();
+        let change = Button::new("details-steam-link")
+            .ghost()
+            .xsmall()
+            .label(if link.app_id().is_some() {
+                t("game.steam_link.change")
+            } else {
+                t("game.steam_link.link")
+            })
+            .tooltip(crate::steam_match::describe(link))
+            .on_click(move |_, window, cx| {
+                crate::steam_match::open_steam_link_dialog(id.clone(), window, cx)
+            });
+        vec![row(
+            "Steam",
+            h_flex()
+                .w_full()
+                .gap_2()
+                .justify_between()
+                .child(div().min_w_0().truncate().child(value))
+                .child(change),
+            muted,
+        )]
     }
 
     /// Developer, publisher and release date.
