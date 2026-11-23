@@ -16,7 +16,7 @@ pub use brand::BrandMark;
 pub use clip::{clip_length, clip_mark, is_clip};
 pub use cover::{
     ArtImage, GameCover, art_arrival, art_image, art_img, art_is_fresh, art_loading, art_missing,
-    cover_radius, missing_art_fill, physical_width,
+    cover_art_for, cover_radius, missing_art_fill, physical_width,
 };
 pub use empty::EmptyState;
 pub use page::{PageHeader, SectionTitle};

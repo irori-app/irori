@@ -1197,6 +1197,41 @@ pub enum CoverFit {
     Whole,
 }
 
+/// The shape of the library grid's covers (`coverShape`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverShape {
+    /// Square art: the store's square capsule, else the box art cropped.
+    Square,
+    /// A wide banner of the game's hero art, 16:9.
+    Banner,
+    /// Box art, 2:3. Last, so a shape a newer Irori writes reads as this.
+    #[default]
+    #[serde(other)]
+    Portrait,
+}
+
+impl CoverShape {
+    /// Height over width.
+    pub fn ratio(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.5,
+            CoverShape::Square => 1.0,
+            CoverShape::Banner => 9.0 / 16.0,
+        }
+    }
+
+    /// How much wider than a box a cover of this shape is drawn at one
+    /// cover size, so the size slider keeps covers of about one weight.
+    pub fn width_scale(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.0,
+            CoverShape::Square => 1.2,
+            CoverShape::Banner => 1.75,
+        }
+    }
+}
+
 /// How large the covers in the Focus view's column are
 /// (`libraryFocusCoverSize`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1620,6 +1655,8 @@ pub struct UiPrefs {
     pub cover_caption: CoverCaption,
     pub cover_hover: CoverHover,
     pub cover_fit: CoverFit,
+    /// The shape of the grid's covers (`coverShape`).
+    pub cover_shape: CoverShape,
     /// The star on favourites' covers (`coverFavourite`, on unless turned
     /// off).
     pub cover_favourite: bool,
@@ -1843,6 +1880,7 @@ impl Default for UiPrefs {
             cover_caption: CoverCaption::Full,
             cover_hover: CoverHover::Lift,
             cover_fit: CoverFit::Crop,
+            cover_shape: CoverShape::Portrait,
             cover_favourite: true,
             library_focus_columns: 0,
             library_focus_cover_size: FocusCoverSize::Medium,
@@ -2089,6 +2127,18 @@ mod tests {
         assert!(!UiPrefs::default().library_auto_layout);
         let ui: UiPrefs = serde_json::from_str(r#"{"libraryAutoLayout":true}"#).unwrap();
         assert!(ui.library_auto_layout);
+    }
+
+    #[test]
+    fn covers_are_boxes_unless_another_shape_is_chosen() {
+        assert_eq!(UiPrefs::default().cover_shape, CoverShape::Portrait);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverShape":"banner"}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Banner);
+        assert!(CoverShape::Banner.ratio() < 1.0 && CoverShape::Square.ratio() == 1.0);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"coverShape":"hexagon","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Portrait);
+        assert_eq!(ui.tile_size, 9.0);
     }
 
     #[test]

@@ -18,8 +18,8 @@ use gpui_kit::{
 };
 use irori_core::Runner;
 use irori_core::settings::{
-    CoverCaption, CoverCorners, CoverFit, CoverHover, FocusCoverSize, LibraryBackground,
-    LibraryLayout, UiPrefs,
+    CoverCaption, CoverCorners, CoverFit, CoverHover, CoverShape, FocusCoverSize,
+    LibraryBackground, LibraryLayout, UiPrefs,
 };
 use irori_services::StoreFilter;
 use irori_ui::i18n::{t, t_args};
@@ -531,6 +531,21 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
     ];
     for (value, key, f) in captions {
         menu = menu.item(set(t(key), ui.cover_caption == value, f));
+    }
+    menu = menu.separator().label(t("library.look.shape"));
+    let shapes: [LookRow<CoverShape>; 3] = [
+        (CoverShape::Portrait, "library.look.shape_portrait", |u| {
+            u.cover_shape = CoverShape::Portrait
+        }),
+        (CoverShape::Square, "library.look.shape_square", |u| {
+            u.cover_shape = CoverShape::Square
+        }),
+        (CoverShape::Banner, "library.look.shape_banner", |u| {
+            u.cover_shape = CoverShape::Banner
+        }),
+    ];
+    for (value, key, f) in shapes {
+        menu = menu.item(set(t(key), ui.cover_shape == value, f));
     }
     menu = menu.separator().label(t("library.look.fit"));
     let fits: [LookRow<CoverFit>; 2] = [

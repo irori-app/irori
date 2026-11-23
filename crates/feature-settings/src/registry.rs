@@ -889,6 +889,21 @@ const COVER_FIT: &[ChoiceOption] = &[
     ),
 ];
 
+const COVER_SHAPE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("portrait"),
+        Key("settings.option.cover_shape.portrait"),
+    ),
+    opt(
+        ChoiceValue::Str("square"),
+        Key("settings.option.cover_shape.square"),
+    ),
+    opt(
+        ChoiceValue::Str("banner"),
+        Key("settings.option.cover_shape.banner"),
+    ),
+];
+
 const COVER_CAPTION: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("full"),
@@ -2641,6 +2656,17 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_cover_fit.help")
     .keywords(&[
         "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
+    ]),
+    app(
+        "iroriUi.coverShape",
+        "settings.field.ui_cover_shape.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_SHAPE),
+    )
+    .help("settings.field.ui_cover_shape.help")
+    .keywords(&[
+        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
     ]),
     app(
         "iroriUi.coverCaption",

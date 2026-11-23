@@ -36,7 +36,8 @@ use gpui_kit::{
     linear_gradient, point, px, rems, size,
 };
 use irori_core::settings::{
-    CoverCaption, CoverFit, CoverHover, Density, LibraryBackground, LibraryLayout, UiPrefs,
+    CoverCaption, CoverFit, CoverHover, CoverShape, Density, LibraryBackground, LibraryLayout,
+    UiPrefs,
 };
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
@@ -86,6 +87,15 @@ const FAVOURITE_REM: f32 = 8.0;
 const IMAGE_CACHE_CAPACITY: usize = 96;
 /// How long a checked shortcut state is trusted before it is checked again.
 const SHORTCUT_TTL: Duration = Duration::from_secs(30);
+
+/// How a tile draws its cover: its width, its shape, and with art drawn
+/// whole, the picture's own size in rem inside its cell.
+#[derive(Debug, Clone, Copy)]
+struct TileLook {
+    width: Rems,
+    cover: CoverShape,
+    whole: Option<(f32, f32)>,
+}
 
 /// One entry of the virtual list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -674,7 +684,13 @@ impl LibraryView {
         let caption = self.ui_prefs.cover_caption;
         let metrics = match self.layout {
             LibraryLayout::Focus => grid::focus_metrics(available, focus_tile, caption),
-            _ => grid::grid_metrics_for(available, self.tile_rem, self.density, caption),
+            _ => grid::grid_metrics_shaped(
+                available,
+                self.tile_rem,
+                self.density,
+                caption,
+                self.ui_prefs.cover_shape,
+            ),
         };
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
@@ -2436,7 +2452,15 @@ impl LibraryView {
         let metrics = self.frame.metrics;
         let end = range.end.min(self.frame.games.len());
         let games: Vec<_> = self.frame.games[range.start.min(end)..end].to_vec();
-        let shapes = self.whole_shapes(&games, metrics.tile_rem, cx);
+        // Focus keeps its column of boxes; the grid takes the chosen shape,
+        // and only boxes can be drawn whole in their cells.
+        let cover = match self.layout {
+            LibraryLayout::Grid => self.ui_prefs.cover_shape,
+            _ => CoverShape::Portrait,
+        };
+        let shapes = (cover == CoverShape::Portrait)
+            .then(|| self.whole_shapes(&games, metrics.tile_rem, cx))
+            .flatten();
         h_flex()
             .items_start()
             .h(rems(metrics.row_rem))
@@ -2445,7 +2469,12 @@ impl LibraryView {
             .gap(rems(metrics.gap_rem))
             .children(games.iter().enumerate().map(|(ix, g)| {
                 let shape = shapes.as_ref().and_then(|s| s.get(ix).copied());
-                self.render_tile(g, rems(metrics.tile_rem), shape, false, window, cx)
+                let look = TileLook {
+                    width: rems(metrics.tile_rem),
+                    cover,
+                    whole: shape,
+                };
+                self.render_tile(g, look, false, window, cx)
             }))
             .into_any_element()
     }
@@ -2474,12 +2503,16 @@ impl LibraryView {
     fn render_tile(
         &mut self,
         game: &Arc<GameInfo>,
-        width: Rems,
-        shape: Option<(f32, f32)>,
+        look: TileLook,
         in_recent: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let TileLook {
+            width,
+            cover: cover_shape,
+            whole: shape,
+        } = look;
         let id = game.id();
         let key = id.key();
         let state = self.state_for(game, in_recent, cx);
@@ -2669,7 +2702,9 @@ impl LibraryView {
             .when(active && lifts, |el| el.shadow_lg())
             .when(keyboard, |el| el.focus_ring_style(window, cx))
             .child(div().when(dim, |el| el.opacity(0.45)).child({
-                let cover = GameCover::new(game.clone()).radius(radius);
+                let cover = GameCover::new(game.clone())
+                    .shape(cover_shape)
+                    .radius(radius);
                 match shape {
                     Some((w, h)) => cover.width(rems(w)).height(rems(h)),
                     None => cover.width(width),
@@ -2717,7 +2752,8 @@ impl LibraryView {
             .when(actions.is_none() && status_overlay.is_none(), |el| {
                 el.children(categories.map(|names| {
                     // A cover Irori draws itself has the title at its foot.
-                    category_chips(names, game.cover_art().is_some(), scrim)
+                    let has_art = irori_ui::components::cover_art_for(game, cover_shape).is_some();
+                    category_chips(names, has_art, scrim)
                 }))
             })
             .when(actions.is_none(), |el| el.children(status_overlay))
@@ -2898,7 +2934,12 @@ impl LibraryView {
                     let shape = self
                         .whole_shapes(std::slice::from_ref(g), FAVOURITE_REM, cx)
                         .and_then(|s| s.first().copied());
-                    self.render_tile(g, rems(FAVOURITE_REM), shape, false, window, cx)
+                    let look = TileLook {
+                        width: rems(FAVOURITE_REM),
+                        cover: CoverShape::Portrait,
+                        whole: shape,
+                    };
+                    self.render_tile(g, look, false, window, cx)
                 })
                 .collect(),
         };
