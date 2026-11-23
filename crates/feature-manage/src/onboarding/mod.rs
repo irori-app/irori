@@ -477,7 +477,7 @@ impl OnboardingView {
                 h_flex()
                     .gap_3()
                     .py_2()
-                    .child(Icon::new(store_icon(runner)).text_color(muted))
+                    .child(store_icon(runner).text_color(muted))
                     .child(
                         v_flex()
                             .flex_1()

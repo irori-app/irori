@@ -78,6 +78,21 @@ fn main() -> Result<()> {
     if args.first().map(String::as_str) == Some(irori_sign_in::SIGN_IN_FLAG) {
         std::process::exit(i32::from(irori_sign_in::main(args.into_iter().skip(1))));
     }
+    // Started as administrator to hide a graphics card from a game
+    // (`irori_services::gpu_hide`): it does that and nothing else.
+    #[cfg(target_os = "windows")]
+    if args.first().map(String::as_str) == Some(irori_services::gpu_hide::HELPER_FLAG) {
+        std::process::exit(irori_services::gpu_hide::helper_main(
+            args.into_iter().skip(1),
+        ));
+    }
+    // Started by "Restart to update" to put the downloaded update in once
+    // the Irori that started it has quit (`irori_services::self_update`).
+    if args.first().map(String::as_str) == Some(irori_services::self_update::HELPER_FLAG) {
+        std::process::exit(irori_services::self_update::helper_main(
+            args.into_iter().skip(1),
+        ));
+    }
     irori_secrets::use_os_keyring();
     // A renamed Mac account leaves the old home's paths in saved files.
     irori_core::home_rename::enable();

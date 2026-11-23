@@ -23,6 +23,7 @@ struct UpdatedNote;
 impl Announced {
     pub(crate) fn show(&mut self, window: &mut Window, cx: &mut App) {
         let status = models(cx).app_update.read(cx).status.clone();
+        let installable = irori_settings::app_update::can_install(&status);
         if status.updated && !self.updated {
             self.updated = true;
             let url = release_page(&status.current);
@@ -82,6 +83,16 @@ impl Announced {
                             .label(t("shell.app_update.copy_command"))
                             .on_click(cx.listener(move |note, _, window, cx| {
                                 cx.write_to_clipboard(ClipboardItem::new_string(command.into()));
+                                note.dismiss(window, cx);
+                            }))
+                    }
+                    // Installed here, its progress shown in Settings › About.
+                    None if installable => {
+                        button
+                            .label(t("shell.app_update.install"))
+                            .on_click(cx.listener(move |note, _, window, cx| {
+                                irori_settings::app_update::install_update(cx);
+                                irori_ui::navigate(irori_ui::Route::Settings("about".into()), cx);
                                 note.dismiss(window, cx);
                             }))
                     }

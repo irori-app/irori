@@ -7,7 +7,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::v_flex;
+use gpui_kit::component::{Icon, v_flex};
 use gpui_kit::{
     AnyElement, App, IntoElement, ParentElement as _, SharedString, Styled as _, Task, div,
 };
@@ -47,6 +47,16 @@ impl Launcher {
             Launcher::Bottles => "bottles",
             Launcher::Faugus => "faugus",
             Launcher::Playnite => "playnite",
+        }
+    }
+
+    /// Its mark where Irori has one, else the import icon.
+    pub fn icon(self) -> Icon {
+        match self {
+            Launcher::Lutris => irori_ui::components::StoreLogo::Lutris.icon(),
+            Launcher::Bottles | Launcher::Faugus | Launcher::Playnite => {
+                Icon::new(IconName::Import)
+            }
         }
     }
 

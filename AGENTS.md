@@ -139,6 +139,11 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   Irori registers no such scheme; the user points one at it (`xdg-mime default`).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
+- `--gpu-helper` is internal too: on Windows, started elevated, it hides a graphics card
+  from a game for its session (`irori_services::gpu_hide`) and does nothing else.
+- `--apply-update <pid> <record>` is internal: started by "Restart to update", it waits
+  for that Irori to quit, puts the staged update in and starts it
+  (`irori_services::self_update`).
 
 Environment variables:
 
@@ -1099,6 +1104,16 @@ commands without a window.
   user changed in Windows meanwhile is theirs. The registry sits behind
   `GpuPreferenceRegistry`, so the rules are tested on every system. The settings show
   it in place of `iroriGpu`, which stays Linux only.
+- **Hiding a graphics card** (`gpu_hide/`, per-game `iroriHideGpu`, a PnP instance id,
+  Windows only): the card is disabled for the session by an elevated copy of Irori
+  (`irori --gpu-helper`, handled first in `main.rs`, started through `ShellExecuteExW`
+  `runas`, so Windows' own prompt asks) that enables it again when Irori sets its
+  release event or Irori's process ends. `gpu_hide::plan` refuses a card showing a
+  display, one whose displays Windows doesn't name, the last enabled card and a card
+  the user disabled. `HiddenGpu` enables it at the session's end and whenever a launch
+  path drops it; `state/gpu-hidden.json` is written before the card is touched and
+  `recover_hidden_gpus` enables what is left at the next start. The devices sit behind
+  `GpuDevices`, so the rules and the recovery are tested on every system.
 - **Power** (`power/`, Big Picture's quick menu): `Backend::power_actions` lists what
   the system allows (logind's `Can*` answers on Linux, `IsPwrSuspendAllowed` for sleep
   on Windows, everything on macOS) and `Backend::power` takes one: logind on the system
@@ -1359,7 +1374,11 @@ cx.spawn_in(window, async move |this, cx| {
 - The available backdrops differ per platform; see the table in `docs/PLATFORMS.md`.
 
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
-`SectionTitle`, `ProgressSummary`, `StoreBadge`. Style helpers are in `style.rs`
+`SectionTitle`, `ProgressSummary`, `StoreBadge`, `StoreLogo`. Stores, launchers and
+emulators with a mark in `assets/brand/stores` (Simple Icons, CC0; sources and the
+rule for adding one in its `NOTICE.md`) are drawn with it, whole and in the text
+colour (`StoreLogo::icon`), in badges, store and account cards and the launcher cards;
+the rest keep their name in text. Style helpers are in `style.rs`
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
 in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
 (through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
@@ -2580,6 +2599,15 @@ building and the release checklist.
   variable is `true`; `release.yml` checks each on pull requests (`packaging/copr/build.sh`,
   `packaging/arch/build.sh`). Installs from a channel are updated by its package manager
   (`irori-services::app_update`), never by Irori.
+- The installs no channel updates (AppImage, tarball, macOS zip, Windows zip, portable
+  zip and setup) can install their update (`irori-services::self_update`): the
+  package is checked against the release's `SHA256SUMS` (and GitHub's own asset
+  digest; on macOS also the signature and its team), unpacked into `.irori-update`
+  beside the install and swapped in by `irori --apply-update` after Irori quits, the
+  replaced files kept as `*.irori-old`; a new version that doesn't start is rolled back.
+  The Windows setup runs silently instead. So every release must keep publishing
+  `SHA256SUMS` over all its packages under `package.py`'s names; a test in
+  `self_update.rs` reads `release.yml` for it.
 
 **Desktop behaviour to keep working**
 

@@ -181,6 +181,10 @@ pub(crate) enum PaletteTarget {
     /// Report a problem, suggest an idea, ask a question or read the
     /// known issues, in the browser.
     Feedback(irori_settings::feedback::Feedback),
+    /// Download Irori's update, or restart into it once it is ready.
+    AppUpdate {
+        ready: bool,
+    },
 }
 
 /// The library's state that its palette commands change.
@@ -826,6 +830,28 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::SyncSaves(game.id()));
     }
+    let update = models(cx).app_update.read(cx).status.clone();
+    if irori_settings::app_update::can_install(&update)
+        && let Some(release) = &update.available
+    {
+        let ready = matches!(update.install, irori_services::SelfInstall::Ready { .. });
+        let label = if ready {
+            "shell.palette.restart_update"
+        } else {
+            "shell.palette.install_update"
+        };
+        items.push(
+            Entry::new()
+                .label(t_args(label, &[("version", &release.version)]))
+                .keywords([t("shell.palette.install_update_keywords")])
+                .icon(if ready {
+                    IconName::RotateCw
+                } else {
+                    IconName::Download
+                }),
+        );
+        targets.push(PaletteTarget::AppUpdate { ready });
+    }
     if let Some(game) = with_trailer {
         items.push(
             Entry::new()
@@ -1002,6 +1028,13 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Downloads(command) => irori_manage::run_download_command(command, cx),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
+        PaletteTarget::AppUpdate { ready: true } => {
+            irori_settings::app_update::restart_into_update(window, cx)
+        }
+        PaletteTarget::AppUpdate { ready: false } => {
+            irori_settings::app_update::install_update(cx);
+            irori_ui::navigate(Route::Settings("about".into()), cx);
+        }
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         // After the palette's own dialog has closed.
         PaletteTarget::SteamLink(id) => window.defer(cx, move |window, cx| {

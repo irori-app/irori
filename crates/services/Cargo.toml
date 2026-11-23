@@ -49,8 +49,11 @@ sha2.workspace = true
 # handshake. ring, as reqwest's rustls already uses, so no second provider.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 hex.workspace = true
-# The ffmpeg build downloaded on Windows comes as a zip.
+# The ffmpeg build downloaded on Windows comes as a zip, as do Irori's own
+# Windows and macOS packages; the Linux one is a tarball (`self_update`).
 zip.workspace = true
+flate2.workspace = true
+tar.workspace = true
 uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
@@ -65,6 +68,8 @@ x11rb = { version = "0.13.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
+    # Hiding a graphics card from a game (`gpu_hide`): Configuration Manager.
+    "Win32_Devices_DeviceAndDriverInstallation",
     # The displays, their modes and HDR (`displays`).
     "Win32_Devices_Display",
     "Win32_Foundation",
@@ -73,6 +78,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WinSock",
     "Win32_System_LibraryLoader",
     "Win32_System_Power",
+    # `SHELLEXECUTEINFOW`, which starts `gpu_hide`'s elevated helper.
+    "Win32_System_Registry",
     # Big Picture's power menu: the shutdown privilege and `ExitWindowsEx`.
     "Win32_Security",
     "Win32_System_Shutdown",

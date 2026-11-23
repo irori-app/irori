@@ -2,9 +2,13 @@
 //! GitHub at most once a day whether a newer release is out, and remembers
 //! the version the user dismissed and the version that ran last.
 //!
-//! Irori never installs an update itself: it points at the release page, or
-//! at the package manager's command. Installs that update with the system
-//! (Flatpak, distribution packages, Nix) are never checked. Packagers who
+//! Package managers' installs are updated by their package manager: Irori
+//! points at its command. The installs nothing else updates (the AppImage,
+//! the tarball, the macOS app, the Windows zips and setup) can download and
+//! check the new release and put it in at the next restart
+//! ([`crate::self_update`]); the release page stays offered too. Installs
+//! that update with the system (Flatpak, distribution packages, Nix) are
+//! never checked. Packagers who
 //! build Irori themselves turn the check off by setting
 //! `IRORI_UPDATE_EXPLANATION` when building (or in the environment); its text
 //! is shown instead of checking.
@@ -162,6 +166,30 @@ pub struct Release {
     pub url: String,
 }
 
+/// Where installing an update by Irori itself stands.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum SelfInstall {
+    /// This install is updated another way, or no package is built for it.
+    #[default]
+    Unavailable,
+    /// Irori can install the update.
+    Idle,
+    Downloading {
+        percent: Option<u8>,
+    },
+    /// Checked and unpacked: it goes in at the next restart.
+    Ready {
+        version: String,
+    },
+    Failed {
+        error: String,
+    },
+    /// The update to `version` didn't start, so this version came back.
+    RolledBack {
+        version: String,
+    },
+}
+
 /// What the UI shows about Irori's own updates.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppUpdateStatus {
@@ -180,6 +208,8 @@ pub struct AppUpdateStatus {
     pub checking: bool,
     /// When the last check answered, in Unix seconds.
     pub checked_at: Option<u64>,
+    /// Installing `available` from Irori.
+    pub install: SelfInstall,
 }
 
 /// Saved in `state/app-update.json`.
@@ -200,19 +230,30 @@ pub(crate) struct AppUpdater {
     saved: RwLock<Saved>,
     updated: bool,
     checking: AtomicBool,
+    /// How this install is laid out, when Irori can update it itself.
+    layout: Option<crate::self_update::Layout>,
+    install: RwLock<SelfInstall>,
+    /// The staged update's record (`state/app-update-staged.json`).
+    staged: PathBuf,
 }
 
 impl AppUpdater {
     /// `app` is true for the app window: only it records the version that
     /// ran, so a command without a window doesn't swallow the "updated" note.
     pub(crate) fn load(app: bool) -> Self {
-        Self::with(
+        let kind = InstallKind::detect();
+        let layout = (kind == InstallKind::Manual)
+            .then(crate::self_update::detect)
+            .flatten();
+        let mut updater = Self::with(
             RELEASES_API,
             irori_core::Paths::get().state_dir().join("app-update.json"),
             env!("CARGO_PKG_VERSION"),
-            InstallKind::detect(),
+            kind,
             app,
-        )
+        );
+        updater.layout = layout;
+        updater
     }
 
     /// Read the saved state, and with `record_run` record this version as
@@ -239,6 +280,14 @@ impl AppUpdater {
                 tracing::warn!("saving the update state: {e:#}");
             }
         }
+        let staged = file.with_file_name("app-update-staged.json");
+        // Only the app settles what the restart left: a command without a
+        // window may run beside it.
+        let install = if record_run {
+            settle_staged(&staged, current)
+        } else {
+            SelfInstall::Idle
+        };
         Self {
             endpoint: endpoint.to_string(),
             file,
@@ -247,7 +296,30 @@ impl AppUpdater {
             saved: RwLock::new(saved),
             updated,
             checking: AtomicBool::new(false),
+            layout: None,
+            install: RwLock::new(install),
+            staged,
         }
+    }
+
+    pub(crate) fn layout(&self) -> Option<&crate::self_update::Layout> {
+        self.layout.as_ref()
+    }
+
+    pub(crate) fn staged_record(&self) -> &Path {
+        &self.staged
+    }
+
+    pub(crate) fn current(&self) -> &str {
+        &self.current
+    }
+
+    pub(crate) fn install_state(&self) -> SelfInstall {
+        self.install.read().clone()
+    }
+
+    pub(crate) fn set_install(&self, state: SelfInstall) {
+        *self.install.write() = state;
     }
 
     pub(crate) fn kind(&self) -> &InstallKind {
@@ -272,6 +344,11 @@ impl AppUpdater {
             updated: self.updated,
             checking: self.checking.load(Ordering::Relaxed),
             checked_at: (saved.checked_at > 0).then_some(saved.checked_at),
+            install: if self.layout.is_some() {
+                self.install.read().clone()
+            } else {
+                SelfInstall::Unavailable
+            },
         }
     }
 
@@ -358,6 +435,37 @@ fn parse(release: GhRelease) -> Option<Release> {
             .filter(|u| u.starts_with("https://github.com/"))
             .unwrap_or_else(|| release_page(version)),
     })
+}
+
+/// What the last restart left of a staged update: the update is in (its
+/// leftovers go), it didn't start and this version came back, or it still
+/// waits for a restart.
+fn settle_staged(record: &Path, current: &str) -> SelfInstall {
+    let Some(staged) = std::fs::read(record)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<crate::self_update::Staged>(&b).ok())
+    else {
+        return SelfInstall::Idle;
+    };
+    let waiting = !staged.rolled_back
+        && newer(&staged.version, current)
+        && staged.swaps.iter().all(|s| s.new.exists())
+        && staged.installer.as_ref().is_none_or(|i| i.exists())
+        && (staged.installer.is_some() || !staged.swaps.is_empty());
+    if waiting {
+        return SelfInstall::Ready {
+            version: staged.version,
+        };
+    }
+    crate::self_update::discard_stage(&staged.stage);
+    let _ = std::fs::remove_file(record);
+    if staged.rolled_back {
+        SelfInstall::RolledBack {
+            version: staged.version,
+        }
+    } else {
+        SelfInstall::Idle
+    }
 }
 
 /// The release page of `version`, with its notes.

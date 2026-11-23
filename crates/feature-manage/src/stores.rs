@@ -124,7 +124,7 @@ impl StoresView {
                 .child(
                     h_flex()
                         .gap_2()
-                        .child(Icon::new(store_icon(runner)).text_color(theme.muted_foreground))
+                        .child(store_icon(runner).text_color(theme.muted_foreground))
                         .child(div().font_semibold().child(runner.store_name())),
                 )
                 // Takes the card's spare height, so the login row sits at the

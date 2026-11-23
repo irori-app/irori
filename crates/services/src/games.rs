@@ -729,6 +729,20 @@ impl Backend {
         {
             append_log(&log_file, &note);
         }
+        // A graphics card hidden from the game (Windows): enabled again when
+        // the session ends, or as soon as this launch fails or is cancelled,
+        // since every early return drops it.
+        let mut hidden_gpu = None;
+        if !settings.hide_gpu.trim().is_empty()
+            && plan.watch.is_none()
+            && target.platform != InstallPlatform::Browser
+            && let Some(hidden) = self.hide_gpu_for_launch(id, &settings.hide_gpu).await
+        {
+            if let Some(note) = &hidden.note {
+                append_log(&log_file, note);
+            }
+            hidden_gpu = hidden.held;
+        }
 
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
@@ -892,6 +906,13 @@ impl Backend {
                     status
                 }
             };
+            if let Some(hidden) = hidden_gpu {
+                let ended = tokio::task::spawn_blocking(move || hidden.end()).await;
+                if let Ok(Err(e)) = ended {
+                    tracing::warn!("hidden graphics card: {e:#}");
+                    append_log(&log_file, &format!("\n{e:#}; Irori tries again at its next start.\n"));
+                }
+            }
             if let Some(bound) = bound {
                 bound.abort();
                 let _ = log_cap::cut_back(&log_file, header, log_cap::GAME_LOG_CAP);

@@ -20,7 +20,7 @@
 //! (`update_app` / `set_game_value`). Text fields commit on blur or Enter,
 //! never per keystroke.
 
-mod app_update;
+pub mod app_update;
 mod appearance;
 mod artwork;
 mod backup;
