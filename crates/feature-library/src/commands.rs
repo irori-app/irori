@@ -52,11 +52,13 @@ pub struct GameState {
     pub sideload: bool,
     /// A web app: no settings, logs or files.
     pub browser: bool,
-    /// Another launcher (Steam) installs and runs it: Play, page, library
-    /// and folder commands only.
+    /// Another launcher installs and runs it: Play, page, library and folder
+    /// commands only (plus settings, verify and uninstall when [`Self::client`]
+    /// is set).
     pub external: bool,
     /// That launcher's client takes install, verify and uninstall requests
-    /// (Steam), so those commands are handed to it.
+    /// (Steam) and has Irori game settings (Steam Play, launch options,
+    /// backups and art).
     pub client: bool,
     pub status: Option<StatusKind>,
     pub has_update: bool,
@@ -131,10 +133,15 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if state.is_queued() {
         main.push(RemoveFromQueue);
     }
+    let managed = !state.external || state.client;
     main.push(OpenPage);
-    if state.installed && !state.browser && !state.external {
-        main.push(Settings);
-        main.push(Logs);
+    if state.installed && !state.browser {
+        if managed {
+            main.push(Settings);
+        }
+        if !state.external {
+            main.push(Logs);
+        }
     }
 
     let mut library = vec![ToggleFavourite, ToggleHidden, Edit];
@@ -159,7 +166,6 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if state.installed && state.has_install_path && !state.browser {
         files.push(OpenFolder);
     }
-    let managed = !state.external || state.client;
     if state.installed && !state.sideload && managed && !busy && !playing {
         files.push(Verify);
     }
@@ -343,11 +349,12 @@ mod tests {
             assert!(!steam.contains(&gone), "{gone:?}");
         }
         assert!(steam.contains(&OpenFolder));
-        // Steam itself verifies and removes its games.
+        // Steam itself verifies and removes its games, and Irori applies game
+        // settings (Steam Play, launch options, save backups and art) to them.
         s.client = true;
         let steam = flat(&s);
-        assert!(steam.contains(&Verify) && steam.contains(&Uninstall));
-        assert!(!steam.contains(&Settings) && !steam.contains(&AddToSteam));
+        assert!(steam.contains(&Settings) && steam.contains(&Verify) && steam.contains(&Uninstall));
+        assert!(!steam.contains(&Logs) && !steam.contains(&AddToSteam));
         s.client = false;
         s.status = Some(StatusKind::Playing);
         s.status = Some(StatusKind::Repairing);

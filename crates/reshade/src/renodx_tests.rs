@@ -451,6 +451,7 @@ fn reshade_manifest(dir: &Path) -> Manifest {
         created_dirs: Vec::new(),
         addon: true,
         source: None,
+        optiscaler: None,
     }
 }
 
