@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} konnte nicht deinstalliert werden",
   "game.uninstall.prefix_help": "Löscht {path}, einschließlich dort gespeicherter, nicht synchronisierter Spielstände.",
   "game.uninstall.prefix_shared_help": "{path} ist das gemeinsame Standardpräfix und wird behalten. Löschen Sie es manuell, wenn kein Spiel es verwendet.",
+  "game.uninstall.prefix_used_help": "{path} ist auch das Präfix von {games} und bleibt deshalb erhalten.",
   "game.uninstall.remove_settings": "Einstellungen und Protokolle entfernen",
   "game.uninstall.remove_settings_help": "Vergisst die Einstellungsänderungen dieses Spiels und löscht seine Protokolle.",
   "game.uninstall.running": "{title} läuft. Schließen Sie das Spiel, um es zu deinstallieren.",

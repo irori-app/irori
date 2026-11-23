@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title}을(를) 제거할 수 없습니다",
   "game.uninstall.prefix_help": "{path}을(를) 삭제합니다. 여기에 저장된 동기화되지 않은 저장 파일도 함께 삭제됩니다.",
   "game.uninstall.prefix_shared_help": "{path}은(는) 공유 기본 프리픽스이므로 유지됩니다. 사용하는 게임이 없으면 직접 삭제하세요.",
+  "game.uninstall.prefix_used_help": "{path}은(는) {games}의 프리픽스이기도 하므로 유지됩니다.",
   "game.uninstall.remove_settings": "설정 및 로그 제거",
   "game.uninstall.remove_settings_help": "이 게임의 개별 설정을 지우고 로그를 삭제합니다.",
   "game.uninstall.running": "{title}이(가) 실행 중입니다. 제거하려면 게임을 종료하세요.",

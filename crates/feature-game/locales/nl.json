@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} kon niet worden verwijderd",
   "game.uninstall.prefix_help": "Verwijdert {path}, inclusief daar opgeslagen spellen die niet zijn gesynchroniseerd.",
   "game.uninstall.prefix_shared_help": "{path} is de gedeelde standaardprefix en blijft behouden. Verwijder hem handmatig als geen enkele game hem gebruikt.",
+  "game.uninstall.prefix_used_help": "{path} is ook de prefix van {games} en blijft daarom bewaard.",
   "game.uninstall.remove_settings": "Instellingen en logboeken verwijderen",
   "game.uninstall.remove_settings_help": "Vergeet de aangepaste instellingen van deze game en verwijdert de logboeken.",
   "game.uninstall.running": "{title} is actief. Sluit de game om hem te verwijderen.",

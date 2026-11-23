@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} をアンインストールできませんでした",
   "game.uninstall.prefix_help": "{path} を削除します。そこに保存されている未同期のセーブデータも削除されます。",
   "game.uninstall.prefix_shared_help": "{path} は共有のデフォルトプレフィックスのため保持されます。使用するゲームがなければ手動で削除してください。",
+  "game.uninstall.prefix_used_help": "{path} は {games} のプレフィックスでもあるため、残されます。",
   "game.uninstall.remove_settings": "設定とログを削除",
   "game.uninstall.remove_settings_help": "このゲームの個別設定を破棄し、ログを削除します。",
   "game.uninstall.running": "{title} は実行中です。アンインストールするにはゲームを終了してください。",

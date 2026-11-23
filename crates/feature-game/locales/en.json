@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Couldn't uninstall {title}",
   "game.uninstall.prefix_help": "Deletes {path}, including saves stored there that aren't synced.",
   "game.uninstall.prefix_shared_help": "{path} is the shared default prefix and is kept. Delete it manually if no game uses it.",
+  "game.uninstall.prefix_used_help": "{path} is also the prefix of {games}, so it is kept.",
   "game.uninstall.remove_settings": "Remove settings and logs",
   "game.uninstall.remove_settings_help": "Forgets this game's settings overrides and deletes its logs.",
   "game.uninstall.running": "{title} is running. Close the game to uninstall it.",

@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Det gick inte att avinstallera {title}",
   "game.uninstall.prefix_help": "Tar bort {path}, inklusive sparningar som lagras där och inte är synkroniserade.",
   "game.uninstall.prefix_shared_help": "{path} är det delade standardprefixet och behålls. Ta bort det manuellt om inget spel använder det.",
+  "game.uninstall.prefix_used_help": "{path} är också prefixet för {games} och behålls därför.",
   "game.uninstall.remove_settings": "Ta bort inställningar och loggar",
   "game.uninstall.remove_settings_help": "Glömmer spelets anpassade inställningar och tar bort dess loggar.",
   "game.uninstall.running": "{title} körs. Stäng spelet för att avinstallera det.",

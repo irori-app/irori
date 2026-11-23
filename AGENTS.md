@@ -1013,7 +1013,9 @@ commands without a window.
   installed games running in it (a launcher's game counts for the prefix holding its
   folder); games uninstalled since are only "was the prefix of". Steam's, native and
   browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
-  deleting stays with Storage's unused-prefix cleanup.
+  deleting stays with Storage's unused-prefix cleanup. Uninstalling never deletes a
+  prefix another installed game plays in (`Backend::games_sharing_prefix`): the dialog
+  names those games and keeps it, and `uninstall` refuses it too.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never

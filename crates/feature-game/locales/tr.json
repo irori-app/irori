@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} kaldırılamadı",
   "game.uninstall.prefix_help": "{path} silinir; orada saklanan ve eşitlenmemiş kayıtlar da dahildir.",
   "game.uninstall.prefix_shared_help": "{path} paylaşılan varsayılan prefix’tir ve korunur. Hiçbir oyun kullanmıyorsa elle silin.",
+  "game.uninstall.prefix_used_help": "{path} aynı zamanda {games} için de önektir, bu yüzden korunur.",
   "game.uninstall.remove_settings": "Ayarları ve günlükleri kaldır",
   "game.uninstall.remove_settings_help": "Bu oyunun özel ayarlarını unutur ve günlüklerini siler.",
   "game.uninstall.running": "{title} çalışıyor. Kaldırmak için oyunu kapatın.",

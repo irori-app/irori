@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} nu a putut fi dezinstalat",
   "game.uninstall.prefix_help": "Șterge {path}, inclusiv salvările nesincronizate stocate acolo.",
   "game.uninstall.prefix_shared_help": "{path} este prefixul implicit partajat și se păstrează. Șterge-l manual dacă niciun joc nu îl folosește.",
+  "game.uninstall.prefix_used_help": "{path} este și prefixul pentru {games}, așa că este păstrat.",
   "game.uninstall.remove_settings": "Elimină setările și jurnalele",
   "game.uninstall.remove_settings_help": "Uită setările personalizate ale acestui joc și îi șterge jurnalele.",
   "game.uninstall.running": "{title} rulează. Închide jocul pentru a-l dezinstala.",

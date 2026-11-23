@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Не вдалося видалити {title}",
   "game.uninstall.prefix_help": "Видаляє {path}, разом зі збереженнями, що зберігаються там і не синхронізовані.",
   "game.uninstall.prefix_shared_help": "{path} — спільний типовий префікс, його буде збережено. Видаліть його вручну, якщо жодна гра його не використовує.",
+  "game.uninstall.prefix_used_help": "{path} — також префікс {games}, тому його збережено.",
   "game.uninstall.remove_settings": "Видалити налаштування й журнали",
   "game.uninstall.remove_settings_help": "Скидає змінені налаштування цієї гри й видаляє її журнали.",
   "game.uninstall.running": "{title} запущена. Закрийте гру, щоб видалити її.",

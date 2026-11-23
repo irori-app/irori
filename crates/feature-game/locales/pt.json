@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Não foi possível desinstalar {title}",
   "game.uninstall.prefix_help": "Elimina {path}, incluindo as gravações aí guardadas que não estejam sincronizadas.",
   "game.uninstall.prefix_shared_help": "{path} é o prefixo predefinido partilhado e é mantido. Elimine-o manualmente se nenhum jogo o usar.",
+  "game.uninstall.prefix_used_help": "{path} é também o prefixo de {games}, por isso é mantido.",
   "game.uninstall.remove_settings": "Remover definições e registos",
   "game.uninstall.remove_settings_help": "Esquece as definições personalizadas deste jogo e elimina os seus registos.",
   "game.uninstall.running": "{title} está em execução. Feche o jogo para o desinstalar.",

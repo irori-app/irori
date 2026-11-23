@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Impossible de désinstaller {title}",
   "game.uninstall.prefix_help": "Supprime {path}, y compris les sauvegardes non synchronisées qui s’y trouvent.",
   "game.uninstall.prefix_shared_help": "{path} est le préfixe par défaut partagé et est conservé. Supprimez-le manuellement si aucun jeu ne l’utilise.",
+  "game.uninstall.prefix_used_help": "{path} est aussi le préfixe de {games} ; il est donc conservé.",
   "game.uninstall.remove_settings": "Supprimer les paramètres et les journaux",
   "game.uninstall.remove_settings_help": "Oublie les paramètres personnalisés de ce jeu et supprime ses journaux.",
   "game.uninstall.running": "{title} est en cours d’exécution. Fermez le jeu pour le désinstaller.",

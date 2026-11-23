@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Nie udało się odinstalować {title}",
   "game.uninstall.prefix_help": "Usuwa {path}, w tym przechowywane tam niezsynchronizowane zapisy.",
   "game.uninstall.prefix_shared_help": "{path} to współdzielony prefiks domyślny i zostanie zachowany. Usuń go ręcznie, jeśli żadna gra go nie używa.",
+  "game.uninstall.prefix_used_help": "{path} jest też prefiksem gier {games}, więc zostaje zachowany.",
   "game.uninstall.remove_settings": "Usuń ustawienia i dzienniki",
   "game.uninstall.remove_settings_help": "Zapomina zmienione ustawienia tej gry i usuwa jej dzienniki.",
   "game.uninstall.running": "{title} jest uruchomiona. Zamknij grę, aby ją odinstalować.",

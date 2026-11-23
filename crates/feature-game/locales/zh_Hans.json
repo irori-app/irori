@@ -780,6 +780,7 @@
   "game.uninstall.failed": "无法卸载 {title}",
   "game.uninstall.prefix_help": "删除 {path}，包括其中未同步的存档。",
   "game.uninstall.prefix_shared_help": "{path} 是共享的默认前缀，将被保留。如果没有游戏使用它，请手动删除。",
+  "game.uninstall.prefix_used_help": "{path} 也是 {games} 的前缀，因此会保留。",
   "game.uninstall.remove_settings": "移除设置和日志",
   "game.uninstall.remove_settings_help": "清除此游戏的自定义设置并删除其日志。",
   "game.uninstall.running": "{title} 正在运行。请关闭游戏后再卸载。",

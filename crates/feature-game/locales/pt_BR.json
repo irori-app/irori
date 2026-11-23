@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Não foi possível desinstalar {title}",
   "game.uninstall.prefix_help": "Exclui {path}, incluindo os saves guardados nele que não estão sincronizados.",
   "game.uninstall.prefix_shared_help": "{path} é o prefixo padrão compartilhado e será mantido. Exclua-o manualmente se nenhum jogo o usar.",
+  "game.uninstall.prefix_used_help": "{path} também é o prefixo de {games}, então é mantido.",
   "game.uninstall.remove_settings": "Remover configurações e logs",
   "game.uninstall.remove_settings_help": "Esquece as configurações personalizadas deste jogo e exclui os logs dele.",
   "game.uninstall.running": "{title} está em execução. Feche o jogo para desinstalá-lo.",

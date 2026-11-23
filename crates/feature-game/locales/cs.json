@@ -780,6 +780,7 @@
   "game.uninstall.failed": "{title} se nepodařilo odinstalovat",
   "game.uninstall.prefix_help": "Smaže {path} včetně v něm uložených her, které nejsou synchronizované.",
   "game.uninstall.prefix_shared_help": "{path} je sdílený výchozí prefix a zůstane zachován. Smažte ho ručně, pokud ho žádná hra nepoužívá.",
+  "game.uninstall.prefix_used_help": "{path} je také prefixem her {games}, proto zůstane zachován.",
   "game.uninstall.remove_settings": "Odstranit nastavení a protokoly",
   "game.uninstall.remove_settings_help": "Zapomene vlastní nastavení této hry a smaže její protokoly.",
   "game.uninstall.running": "{title} je spuštěna. Ukončete hru, abyste ji mohli odinstalovat.",

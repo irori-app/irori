@@ -780,6 +780,7 @@
   "game.uninstall.failed": "Impossibile disinstallare {title}",
   "game.uninstall.prefix_help": "Elimina {path}, inclusi i salvataggi non sincronizzati che vi si trovano.",
   "game.uninstall.prefix_shared_help": "{path} è il prefisso predefinito condiviso e viene mantenuto. Eliminalo manualmente se nessun gioco lo usa.",
+  "game.uninstall.prefix_used_help": "{path} è anche il prefisso di {games}, quindi viene mantenuto.",
   "game.uninstall.remove_settings": "Rimuovi impostazioni e log",
   "game.uninstall.remove_settings_help": "Dimentica le impostazioni personalizzate di questo gioco ed elimina i suoi log.",
   "game.uninstall.running": "{title} è in esecuzione. Chiudi il gioco per disinstallarlo.",

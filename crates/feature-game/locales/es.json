@@ -780,6 +780,7 @@
   "game.uninstall.failed": "No se pudo desinstalar {title}",
   "game.uninstall.prefix_help": "Elimina {path}, incluidas las partidas guardadas allí que no estén sincronizadas.",
   "game.uninstall.prefix_shared_help": "{path} es el prefijo predeterminado compartido y se conserva. Elimínalo manualmente si ningún juego lo usa.",
+  "game.uninstall.prefix_used_help": "{path} también es el prefijo de {games}, así que se conserva.",
   "game.uninstall.remove_settings": "Quitar ajustes y registros",
   "game.uninstall.remove_settings_help": "Olvida los ajustes personalizados de este juego y elimina sus registros.",
   "game.uninstall.running": "{title} se está ejecutando. Cierra el juego para desinstalarlo.",
