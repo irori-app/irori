@@ -31,13 +31,13 @@ fn folds(title: &str) -> (String, String) {
         if matches!(c, '\'' | '’' | '`') {
             continue;
         }
-        for lower in c.to_lowercase() {
-            match unaccent(lower) {
-                Some(plain) => word.push_str(plain),
-                None if lower.is_alphanumeric() => word.push(lower),
-                None => flush(&mut word, &mut words),
+        irori_core::text::fold_char(c, |f| {
+            if f.is_alphanumeric() {
+                word.push(f);
+            } else {
+                flush(&mut word, &mut words);
             }
-        }
+        });
     }
     flush(&mut word, &mut words);
     if words.len() > 1 && words[0] == "the" {
@@ -61,30 +61,6 @@ fn roman(word: &str) -> Option<String> {
     ];
     let n = ROMAN.iter().position(|r| *r == word)?;
     (n >= 2 && word.len() > 1).then(|| n.to_string())
-}
-
-fn unaccent(c: char) -> Option<&'static str> {
-    Some(match c {
-        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => "a",
-        'æ' => "ae",
-        'ç' | 'ć' | 'č' => "c",
-        'ď' | 'đ' => "d",
-        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ė' | 'ę' | 'ě' => "e",
-        'ğ' => "g",
-        'ì' | 'í' | 'î' | 'ï' | 'ī' | 'ı' => "i",
-        'ł' | 'ľ' => "l",
-        'ñ' | 'ń' | 'ň' => "n",
-        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ő' => "o",
-        'œ' => "oe",
-        'ř' => "r",
-        'ś' | 'š' | 'ş' | 'ș' => "s",
-        'ß' => "ss",
-        'ť' | 'ţ' | 'ț' => "t",
-        'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ů' | 'ű' => "u",
-        'ý' | 'ÿ' => "y",
-        'ź' | 'ż' | 'ž' => "z",
-        _ => return None,
-    })
 }
 
 /// A system's games by folded title, built once per system and pass.

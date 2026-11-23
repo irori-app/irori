@@ -398,13 +398,15 @@ struct SearchHit {
     title: String,
 }
 
-/// Page ID from a search response: the exact (case-insensitive) title match,
-/// else the first hit.
+/// Page ID from a search response: the hit whose title folds to the same
+/// key (case, punctuation, accents and trademark signs aside), else the
+/// first hit.
 pub fn pick_search_result(json: &serde_json::Value, title: &str) -> Option<u64> {
     let resp: SearchResponse = serde_json::from_value(json.clone()).ok()?;
     let hits = resp.query?.search;
+    let wanted = irori_core::text::title_key(title);
     hits.iter()
-        .find(|h| h.title.to_lowercase() == title.to_lowercase())
+        .find(|h| !wanted.is_empty() && irori_core::text::title_key(&h.title) == wanted)
         .or(hits.first())
         .map(|h| h.pageid)
 }
@@ -640,6 +642,12 @@ mod tests {
             None
         );
         assert_eq!(search_hits(&json), [1, 2]);
+        let accents = serde_json::json!({"query": {"search": [
+            {"pageid": 1, "title": "Pokémon Ranger"}, {"pageid": 2, "title": "Pokémon Mystery Dungeon"}]}});
+        assert_eq!(
+            pick_search_result(&accents, "Pokemon™ Mystery Dungeon"),
+            Some(2)
+        );
     }
 
     #[test]

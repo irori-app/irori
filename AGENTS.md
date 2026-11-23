@@ -512,6 +512,9 @@ commands without a window.
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
   exact, prefix, word, then fuzzy (a typo or two, letters in order), titles before
   people. `related.rs` finds a game's series, studio and genre neighbours the same way.
+  Letters fold through `irori_core::text` (Latin and Greek accents dropped, other
+  scripts kept, ™ and variation selectors ignored), which every metadata matcher
+  (HowLongToBeat, IGDB, PCGamingWiki, anticheat, SteamGridDB, LaunchBox) shares.
   Besides `mode:` and `tag:`, `ParsedQuery` takes `category:` (manual categories, any
   copy of an entry) and `smart:` terms (smart categories, through the `CategoryIndex`
   in `irori-library`'s `apply_in`), names folded like tags, a name's start enough when

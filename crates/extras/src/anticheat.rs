@@ -221,11 +221,10 @@ pub struct AntiCheatDb {
     pub entries: Vec<AntiCheatInfo>,
 }
 
+/// Titles compare as the other metadata matchers fold them, so "Pokémon"
+/// finds the entry spelt "Pokemon".
 fn normalize_title(s: &str) -> String {
-    s.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
+    irori_core::text::title_key(s)
 }
 
 impl AntiCheatDb {
@@ -403,6 +402,12 @@ mod tests {
             ..Default::default()
         };
         assert!(db.lookup(&q).is_some());
+        // Accents and trademark signs don't hide an entry.
+        let q = AntiCheatQuery {
+            title: "Hálo™: The Master Chief Collection",
+            ..Default::default()
+        };
+        assert_eq!(db.lookup(&q).unwrap().slug, "halo-mcc");
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub mod runner;
 pub mod settings;
 pub mod status;
 pub mod store;
+pub mod text;
 pub mod user_actions;
 pub mod util;
 
