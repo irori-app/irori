@@ -595,6 +595,14 @@ impl SettingsForm {
             if f.native_only && matches!(self.target, FormTarget::Game(_)) && !self.native {
                 return false;
             }
+            // A game started without Wine has no use for the Wine fields.
+            if matches!(self.target, FormTarget::Game(_))
+                && f.section == FieldSection::Wine
+                && f.path != "iroriNoWine"
+                && self.bool_value("iroriNoWine")
+            {
+                return false;
+            }
             if matches!(&self.target, FormTarget::Game(id) if id.runner == Runner::Steam)
                 && !f.applies_to_steam()
             {

@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "Ne pas synchroniser le temps de jeu",
   "settings.field.disable_umu.help": "Lance Proton directement au lieu de passer par umu.",
   "settings.field.disable_umu.label": "Ne pas utiliser umu-launcher",
+  "settings.field.no_wine.label": "Ne pas utiliser Wine",
+  "settings.field.no_wine.help": "Démarre directement le programme du jeu, sans Wine ni Proton : pour un remplaçant natif comme OpenJK ou fallout2-ce choisi comme son programme. Les programmes de ce système sont de toute façon reconnus et démarrés ainsi ; un programme Windows, jamais.",
   "settings.field.discord_client_id.help": "Laissez vide pour afficher la présence au nom d’Irori. Pour l’afficher sous votre propre application, créez-en une sur discord.com/developers et collez ici son ID d’application.",
   "settings.field.discord_client_id.label": "ID de votre propre application Discord",
   "settings.field.discord_client_id.placeholder": "Identifiant d’application",

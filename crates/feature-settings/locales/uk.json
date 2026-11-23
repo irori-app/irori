@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "Не синхронізувати час гри",
   "settings.field.disable_umu.help": "Запускати Proton напряму, а не через umu.",
   "settings.field.disable_umu.label": "Не використовувати umu-launcher",
+  "settings.field.no_wine.label": "Не використовувати Wine",
+  "settings.field.no_wine.help": "Запускати програму гри напряму, без Wine чи Proton: для нативної заміни, як-от OpenJK або fallout2-ce, вибраної як її програма. Програми цієї системи й так розпізнаються та запускаються напряму; програма для Windows — ніколи.",
   "settings.field.discord_client_id.help": "Залиште порожнім, щоб статус показувався як Irori. Щоб показувати його від власного застосунку, створіть його на discord.com/developers і вставте сюди його ID.",
   "settings.field.discord_client_id.label": "ID власного застосунку Discord",
   "settings.field.discord_client_id.placeholder": "ID застосунку",

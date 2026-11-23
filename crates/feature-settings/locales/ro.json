@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "Nu sincroniza timpul de joc",
   "settings.field.disable_umu.help": "Rulează Proton direct, nu prin umu.",
   "settings.field.disable_umu.label": "Nu folosi umu-launcher",
+  "settings.field.no_wine.label": "Nu folosi Wine",
+  "settings.field.no_wine.help": "Pornește programul jocului direct, fără Wine sau Proton: pentru un înlocuitor nativ precum OpenJK sau fallout2-ce ales ca program al lui. Programele acestui sistem sunt oricum recunoscute și pornite așa; un program Windows, niciodată.",
   "settings.field.discord_client_id.help": "Lasă gol pentru a afișa prezența ca Irori. Pentru a o afișa sub o aplicație proprie, creează una pe discord.com/developers și lipește aici ID-ul aplicației.",
   "settings.field.discord_client_id.label": "ID-ul propriei aplicații Discord",
   "settings.field.discord_client_id.placeholder": "ID-ul aplicației",

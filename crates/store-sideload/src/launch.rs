@@ -241,7 +241,8 @@ pub(crate) fn resolve_executable(app: &SideloadApp, target_exe: &str) -> Option<
 /// arguments setting, the chosen launch option, then extra arguments. A
 /// Windows app's are split with Windows rules, Wine or not.
 pub(crate) fn launch_args(app: &SideloadApp, request: &LaunchRequest) -> Vec<String> {
-    let windows = app.platform.install_platform() == InstallPlatform::Windows;
+    let windows = app.platform.install_platform() == InstallPlatform::Windows
+        && !request.environment.without_wine;
     let split = |line: &str| split_program_args(windows, line);
     let mut args = split(&app.launcher_args);
     args.extend(split(&request.settings.launcher_args));

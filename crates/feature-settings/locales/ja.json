@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "プレイ時間を同期しない",
   "settings.field.disable_umu.help": "umuを経由せずにProtonを直接実行します。",
   "settings.field.disable_umu.label": "umu-launcherを使用しない",
+  "settings.field.no_wine.label": "Wineを使わない",
+  "settings.field.no_wine.help": "ゲームのプログラムをWineやProtonを使わずに直接起動します。OpenJKやfallout2-ceなど、プログラムとして選んだネイティブの代替版向けです。このシステムのプログラムはいずれにせよ認識されてこの方法で起動されます。Windowsのプログラムは決してこの方法では起動されません。",
   "settings.field.discord_client_id.help": "空欄のままにすると Irori として表示されます。自分のアプリケーションで表示するには、discord.com/developers でアプリケーションを作成し、そのアプリケーション ID をここに貼り付けてください。",
   "settings.field.discord_client_id.label": "自分の Discord アプリケーション ID",
   "settings.field.discord_client_id.placeholder": "アプリケーションID",

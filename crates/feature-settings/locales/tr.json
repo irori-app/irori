@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "Oynama süresi eşitlemesini kapat",
   "settings.field.disable_umu.help": "Proton'u umu yerine doğrudan çalıştır.",
   "settings.field.disable_umu.label": "umu-launcher'ı kullanma",
+  "settings.field.no_wine.label": "Wine kullanma",
+  "settings.field.no_wine.help": "Oyunun programını Wine veya Proton olmadan doğrudan başlatır: programı olarak seçilen OpenJK veya fallout2-ce gibi yerel bir yedek için. Bu sistemin programları zaten tanınır ve böyle başlatılır; bir Windows programı asla.",
   "settings.field.discord_client_id.help": "Durumun Irori olarak görünmesi için boş bırak. Kendi uygulamanla göstermek için discord.com/developers adresinde bir uygulama oluştur ve uygulama kimliğini buraya yapıştır.",
   "settings.field.discord_client_id.label": "Kendi Discord uygulama kimliğin",
   "settings.field.discord_client_id.placeholder": "Uygulama kimliği",

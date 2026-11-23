@@ -3188,6 +3188,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.action_reset_settings.help")
     .keywords(&["reset", "defaults", "factory"]),
     // ---- Wine & Proton ----
+    game_only(
+        "iroriNoWine",
+        "settings.field.no_wine.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .help("settings.field.no_wine.help")
+    .keywords(&["wine", "proton", "native", "openjk", "port", "replacement"]),
     game(
         "wineVersion",
         "settings.field.wine_version.label",

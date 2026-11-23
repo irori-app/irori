@@ -50,6 +50,11 @@ pub struct LaunchEnvironment {
     pub env: BTreeMap<String, String>,
     pub wrappers: Vec<Vec<String>>,
     pub wine: Option<WineLaunch>,
+    /// The game's Windows build starts a program of this system (a native
+    /// replacement such as OpenJK), or its settings say not to use Wine
+    /// (`iroriNoWine`): stores start the program directly, and `wine` is
+    /// `None`.
+    pub without_wine: bool,
 }
 
 impl LaunchEnvironment {

@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "Nesynchronizovat herní čas",
   "settings.field.disable_umu.help": "Spouštět Proton přímo, ne přes umu.",
   "settings.field.disable_umu.label": "Nepoužívat umu-launcher",
+  "settings.field.no_wine.label": "Nepoužívat Wine",
+  "settings.field.no_wine.help": "Spouštět program hry přímo, bez Wine nebo Protonu: pro nativní náhradu, například OpenJK nebo fallout2-ce, zvolenou jako její program. Programy tohoto systému se rozpoznají a takto spouštějí i tak; program pro Windows nikdy.",
   "settings.field.discord_client_id.help": "Nechte prázdné, aby se stav zobrazoval jako Irori. Chcete-li jej zobrazit pod vlastní aplikací, vytvořte ji na discord.com/developers a vložte sem její ID aplikace.",
   "settings.field.discord_client_id.label": "Vlastní ID aplikace Discord",
   "settings.field.discord_client_id.placeholder": "ID aplikace",

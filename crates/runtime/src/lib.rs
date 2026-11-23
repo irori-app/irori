@@ -28,6 +28,7 @@ pub mod umu;
 pub mod vdf;
 pub mod windows_file;
 pub mod windows_uri;
+pub mod without_wine;
 pub mod wrappers;
 pub mod xbox;
 
@@ -383,6 +384,19 @@ pub async fn prepare_launch(
         });
     }
 
+    // A Windows build whose program is one of this system's (a native
+    // replacement) starts without Wine, as a native build does.
+    let without_wine = target.platform.needs_wine()
+        && without_wine::runs_without_wine(settings, target.game).await?;
+    let target = if without_wine {
+        Target {
+            platform: irori_core::HostPlatform::current().native(),
+            ..target
+        }
+    } else {
+        target
+    };
+
     let deck = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
     let (adjusted, limit, mangohud) = frame_limits(settings, target.platform, deck);
     let settings = &adjusted;
@@ -414,11 +428,28 @@ pub async fn prepare_launch(
         if mangohud {
             mangohud_env(target.id, settings, limit, &mut vars, &host).await;
         }
+        // The game's own variables decide when they set it.
+        let program = without_wine::launch_program(settings, target.game);
+        if !vars.contains_key("APPIMAGE_EXTRACT_AND_RUN")
+            && program.as_deref().is_some_and(|p| {
+                irori_core::program_kind::is_appimage(
+                    &p.file_name().unwrap_or_default().to_string_lossy(),
+                )
+            })
+        {
+            let fuse = tokio::task::spawn_blocking(without_wine::fuse_usable)
+                .await
+                .unwrap_or(false);
+            if let Some((key, value)) = without_wine::appimage_env(program.as_deref(), fuse) {
+                vars.insert(key, value);
+            }
+        }
         parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
         return Ok(LaunchEnvironment {
             env: vars,
             wrappers: wrappers::setup_wrappers(settings, &parts),
             wine: None,
+            without_wine,
         });
     }
 
@@ -512,6 +543,7 @@ pub async fn prepare_launch(
     parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
 
     Ok(LaunchEnvironment {
+        without_wine: false,
         env: vars,
         wrappers: wrappers::setup_wrappers(settings, &parts),
         wine: Some(WineLaunch {

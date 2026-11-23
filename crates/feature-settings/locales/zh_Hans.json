@@ -367,6 +367,8 @@
   "settings.field.disable_playtime_sync.label": "不同步游戏时长",
   "settings.field.disable_umu.help": "直接运行 Proton，而不是通过 umu。",
   "settings.field.disable_umu.label": "不使用 umu-launcher",
+  "settings.field.no_wine.label": "不使用 Wine",
+  "settings.field.no_wine.help": "直接启动游戏的程序，不经过 Wine 或 Proton：适用于选作其程序的原生替代品，例如 OpenJK 或 fallout2-ce。本系统的程序无论如何都会被识别并以这种方式启动；Windows 程序则永远不会。",
   "settings.field.discord_client_id.help": "留空则以 Irori 的名义显示。若要以你自己的应用显示，请在 discord.com/developers 创建一个应用，并把它的应用 ID 粘贴到这里。",
   "settings.field.discord_client_id.label": "你自己的 Discord 应用 ID",
   "settings.field.discord_client_id.placeholder": "应用 ID",

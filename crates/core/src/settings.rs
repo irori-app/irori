@@ -230,6 +230,13 @@ pub struct GameSettings {
     pub after_launch_script_path: String,
     #[serde(rename = "disableUMU")]
     pub disable_umu: bool,
+    /// Start the game's program directly, without Wine or Proton, though
+    /// its build is Windows': for a native replacement (OpenJK,
+    /// fallout2-ce) set as its program that Irori can't recognise as one.
+    /// Programs of this system run without Wine anyway. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriNoWine")]
+    pub no_wine: bool,
     pub verbose_logs: bool,
     pub advertise_avx_for_rosetta: bool,
     pub enable_quick_saves_menu: bool,
@@ -578,6 +585,7 @@ impl Default for GameSettings {
             before_launch_script_alongside: false,
             after_launch_script_path: String::new(),
             disable_umu: false,
+            no_wine: false,
             verbose_logs: true,
             advertise_avx_for_rosetta: false,
             dxvk_version: String::new(),
