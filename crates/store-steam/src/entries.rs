@@ -235,7 +235,14 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
         age_ratings: age_ratings(details),
         game_modes: game_modes(details.categories.iter().map(|c| c.id)),
         details_from: None,
+        score: metacritic(details),
     }
+}
+
+/// The Metacritic score the store page shows.
+pub(crate) fn metacritic(details: &AppDetails) -> Option<irori_core::CriticScore> {
+    let score = details.metacritic.as_ref()?.score;
+    irori_core::CriticScore::new("Metacritic", f64::from(score))
 }
 
 /// The store page's trailers that have something to play, the store's

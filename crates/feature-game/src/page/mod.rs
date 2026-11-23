@@ -23,6 +23,7 @@ mod journal;
 mod left_off;
 mod menu;
 mod overlay;
+mod reception;
 mod related;
 mod sandbox;
 mod screenshots;
@@ -152,6 +153,9 @@ pub struct GamePage {
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
     compat: Load<CompatibilityInfo>,
+    /// How the game's Steam app is received (reviews, players now);
+    /// `Ready(None)` for a game Steam doesn't sell.
+    reception: Load<Option<irori_services::steam_reception::SteamReception>>,
     /// The game's Steam app as of the last library change; when it changes
     /// the store details and compatibility data are read again.
     steam_link: irori_services::SteamLink,
@@ -324,6 +328,7 @@ impl GamePage {
             launch_select,
             selected_option: None,
             compat: Load::Idle,
+            reception: Load::Idle,
             steam_link,
             overlay: None,
             setup: None,
@@ -396,6 +401,7 @@ impl GamePage {
         self.load_extra(window, cx);
         self.load_achievements(window, cx);
         self.load_compat(window, cx);
+        self.load_reception(window, cx);
         self.load_install_state(window, cx);
         self.load_timeline(window, cx);
     }
@@ -619,6 +625,7 @@ impl GamePage {
             if relinked {
                 self.load_extra(window, cx);
                 self.reload_compat(window, cx);
+                self.load_reception(window, cx);
             }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);

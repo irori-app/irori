@@ -64,7 +64,8 @@ pub struct GameInfo {
     pub is_dlc: bool,
     pub genres: Vec<String>,
     pub release_date: Option<String>,
-    /// Aggregated review score, 0–100 (from GOG's GamesDB).
+    /// Aggregated review score, 0–100: GOG's GamesDB, else a critics'
+    /// score learned from the store page (Steam's Metacritic, IGDB).
     pub rating: Option<u8>,
     /// Age ratings the store's library data carries (Amazon, Epic), plus
     /// those services learned from the game's store page.
@@ -373,6 +374,30 @@ pub struct ExtraInfo {
     /// on the game page; `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_from: Option<String>,
+    /// A critics' score the store page or a source filling it gives
+    /// (Steam's Metacritic, IGDB's critics' rating).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<CriticScore>,
+}
+
+/// A critics' score, 0–100, and who gives it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CriticScore {
+    /// Shown as it is (`"Metacritic"`, `"IGDB"`); never translated.
+    pub source: String,
+    pub score: u8,
+}
+
+impl CriticScore {
+    /// A score of `source`, when `score` is one (1–100).
+    pub fn new(source: &str, score: f64) -> Option<Self> {
+        let score = score.round();
+        (score >= 1.0 && score <= 100.0).then(|| Self {
+            source: source.to_string(),
+            score: score as u8,
+        })
+    }
 }
 
 /// A trailer on a store page.

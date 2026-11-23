@@ -261,6 +261,8 @@ impl GogStore {
             game_modes: v2.as_ref().map(game_modes_from_v2).unwrap_or_default(),
             videos: Vec::new(),
             details_from: None,
+            // GOG's own score is the library entry's (`GameInfo::rating`).
+            score: None,
         };
         if v2.is_some() || product.is_some() {
             cache.insert(

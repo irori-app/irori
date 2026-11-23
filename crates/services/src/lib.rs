@@ -70,6 +70,7 @@ pub mod smart_categories;
 pub mod status;
 pub mod steam_link;
 pub mod steam_overlay;
+pub mod steam_reception;
 mod steam_shortcuts;
 mod steam_tags;
 pub mod storage;

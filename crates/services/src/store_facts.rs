@@ -41,6 +41,10 @@ pub struct Learned {
     /// HowLongToBeat's main-story time in hours, for smart categories.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hltb_main_hours: Option<u32>,
+    /// A critics' score, 0–100, from the store page or what filled it
+    /// (Steam's Metacritic, IGDB), for games whose store gives none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<u8>,
 }
 
 pub struct StoreFactsService {
@@ -103,14 +107,17 @@ impl StoreFactsService {
     }
 
     /// Add what was learned to a library entry: ratings of boards its own
-    /// data doesn't name, and game modes when its data has none (the store
-    /// page's, else the wiki's).
+    /// data doesn't name, game modes when its data has none (the store
+    /// page's, else the wiki's), and a critics' score when it has none.
     pub fn complete(&self, game: &mut GameInfo) {
         let known = self.known.read();
         let Some(learned) = known.get(&game.id().key()) else {
             return;
         };
         age_rating::merge(&mut game.age_ratings, &learned.age_ratings);
+        if game.rating.is_none() {
+            game.rating = learned.score;
+        }
         if game.game_modes.is_empty() {
             game.game_modes = if learned.game_modes.is_empty() {
                 learned.wiki_modes.clone()
@@ -150,8 +157,10 @@ impl StoreFactsService {
 
     /// Remember what a store page says. An empty part keeps what was
     /// known: a page that couldn't be read says nothing about the game.
-    fn learn_store_page(&self, key: String, ratings: &[AgeRating], modes: &[GameMode]) -> bool {
-        if ratings.is_empty() && modes.is_empty() {
+    fn learn_store_page(&self, key: String, info: &irori_core::ExtraInfo) -> bool {
+        let (ratings, modes) = (&info.age_ratings, &info.game_modes);
+        let score = info.score.as_ref().map(|s| s.score);
+        if ratings.is_empty() && modes.is_empty() && score.is_none() {
             return false;
         }
         self.learn(key, |l| {
@@ -160,6 +169,9 @@ impl StoreFactsService {
             }
             if !modes.is_empty() {
                 l.game_modes = game_mode::normalized(modes.to_vec());
+            }
+            if score.is_some() {
+                l.score = score;
             }
         })
     }
@@ -214,10 +226,7 @@ impl Backend {
         let mut info = store.extra_info(&id.app_name).await?;
         self.fill_from_steam(id, &mut info).await;
         self.fill_from_igdb(id, &mut info).await;
-        if self
-            .store_facts
-            .learn_store_page(id.key(), &info.age_ratings, &info.game_modes)
-        {
+        if self.store_facts.learn_store_page(id.key(), &info) {
             self.rebuild_library();
         }
         Ok(info)
@@ -379,13 +388,49 @@ mod tests {
         assert!(times.hours.is_empty());
     }
 
+    fn page(ratings: &[AgeRating], modes: &[GameMode]) -> irori_core::ExtraInfo {
+        irori_core::ExtraInfo {
+            age_ratings: ratings.to_vec(),
+            game_modes: modes.to_vec(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_critics_score_fills_games_without_one() {
+        let service = service();
+        let key = "sideload:x".to_string();
+        let scored = irori_core::ExtraInfo {
+            score: irori_core::CriticScore::new("Metacritic", 87.0),
+            ..Default::default()
+        };
+        assert!(service.learn_store_page(key.clone(), &scored));
+        // A page without a score keeps the one known.
+        assert!(!service.learn_store_page(key.clone(), &page(&[], &[])));
+        let game = || GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "x".into(),
+            ..Default::default()
+        };
+        let mut g = game();
+        service.complete(&mut g);
+        assert_eq!(g.rating, Some(87));
+        // GamesDB's (or the store's own) score wins.
+        let mut g = GameInfo {
+            rating: Some(70),
+            ..game()
+        };
+        service.complete(&mut g);
+        assert_eq!(g.rating, Some(70));
+    }
+
     #[test]
     fn learned_ratings_fill_in_boards_the_store_data_lacks() {
         let service = service();
         let pegi = AgeRating::new(RatingSystem::Pegi, "16", Vec::new(), None).unwrap();
         let esrb = AgeRating::new(RatingSystem::Esrb, "t", Vec::new(), None).unwrap();
         let key = "steam:220".to_string();
-        assert!(!service.learn_store_page(key.clone(), &[], &[]));
+        assert!(!service.learn_store_page(key.clone(), &page(&[], &[])));
         service.known.write().insert(
             key.clone(),
             Learned {
@@ -393,7 +438,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert!(!service.learn_store_page(key.clone(), &[pegi.clone(), esrb.clone()], &[]));
+        assert!(!service.learn_store_page(key.clone(), &page(&[pegi.clone(), esrb.clone()], &[])));
 
         let mut game = GameInfo {
             runner: Some(Runner::Steam),
@@ -430,8 +475,8 @@ mod tests {
         assert_eq!(g.game_modes, [GameMode::Single, GameMode::Online]);
 
         // The store page's modes win, and an unreadable page keeps them.
-        assert!(service.learn_store_page(key.clone(), &[], &[GameMode::Coop]));
-        assert!(!service.learn_store_page(key.clone(), &[], &[]));
+        assert!(service.learn_store_page(key.clone(), &page(&[], &[GameMode::Coop])));
+        assert!(!service.learn_store_page(key.clone(), &page(&[], &[])));
         let mut g = game();
         service.complete(&mut g);
         assert_eq!(g.game_modes, [GameMode::Coop]);
