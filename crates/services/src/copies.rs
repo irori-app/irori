@@ -12,6 +12,11 @@
 //! the user picked (`GameOverrides::default_copy`), then the one played last,
 //! then the first store in Irori's order. Every copy keeps its own
 //! [`GameId`], playtime and achievements; only the list shows them as one.
+//!
+//! Games Irori leaves apart that are linked to the same Steam app (another
+//! edition, a remaster sold under the same app) are offered as *possible
+//! copies* ([`possible`]); the user links them or keeps them apart, which
+//! stands like a separation.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -172,6 +177,46 @@ pub fn group(games: Vec<Arc<GameInfo>>, user: &UserData, enabled: bool) -> Group
     out
 }
 
+/// One game that might be another copy of an entry: the game, the Steam
+/// app it is linked to, and whether the user keeps it apart.
+pub struct Candidate {
+    pub game: Arc<GameInfo>,
+    pub steam_app: Option<u32>,
+    pub kept_apart: bool,
+}
+
+/// The games among `candidates` that may be copies of the entry whose
+/// copies are `group` and whose Steam apps are `apps`: linked to one of
+/// those apps, not DLC, not in the entry already and not kept apart by the
+/// user. Each other entry is offered once, by the first of its copies
+/// (`entry_of` names a game's entry).
+pub fn possible(
+    group: &[GameId],
+    apps: &[u32],
+    candidates: impl IntoIterator<Item = Candidate>,
+    entry_of: impl Fn(&GameId) -> GameId,
+) -> Vec<Arc<GameInfo>> {
+    let mut seen: Vec<GameId> = Vec::new();
+    let mut out = Vec::new();
+    for c in candidates {
+        let id = c.game.id();
+        if c.game.is_dlc
+            || c.kept_apart
+            || group.contains(&id)
+            || !c.steam_app.is_some_and(|app| apps.contains(&app))
+        {
+            continue;
+        }
+        let entry = entry_of(&id);
+        if seen.contains(&entry) || group.contains(&entry) {
+            continue;
+        }
+        seen.push(entry);
+        out.push(c.game);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use irori_core::game::GameOverrides;
@@ -292,6 +337,49 @@ mod tests {
             group(uninstalled, &user, true).entries[0].id().key(),
             "legendary:3"
         );
+    }
+
+    #[test]
+    fn games_of_one_steam_app_are_possible_copies() {
+        let deluxe = game(Runner::Gog, "2", "Hades: Deluxe Edition");
+        let other = game(Runner::Legendary, "3", "Hades");
+        let candidates = || {
+            vec![
+                Candidate {
+                    game: deluxe.clone(),
+                    steam_app: Some(1145360),
+                    kept_apart: false,
+                },
+                Candidate {
+                    game: other.clone(),
+                    steam_app: Some(1145360),
+                    kept_apart: false,
+                },
+                Candidate {
+                    game: game(Runner::Gog, "4", "Celeste"),
+                    steam_app: Some(504230),
+                    kept_apart: false,
+                },
+                Candidate {
+                    game: game(Runner::Itch, "5", "Hades fan game"),
+                    steam_app: Some(1145360),
+                    kept_apart: true,
+                },
+            ]
+        };
+        let group = [GameId::new(Runner::Steam, "1145360")];
+        // gog:2 and legendary:3 are one entry: offered once.
+        let entry = |id: &GameId| match id.app_name.as_ref() {
+            "3" => GameId::new(Runner::Gog, "2"),
+            _ => id.clone(),
+        };
+        let found = possible(&group, &[1145360], candidates(), entry);
+        let keys: Vec<String> = found.iter().map(|g| g.id().key()).collect();
+        assert_eq!(keys, ["gog:2"]);
+        // Already in the entry, or without a Steam app: nothing.
+        let group = [group[0].clone(), deluxe.id(), other.id()];
+        assert!(possible(&group, &[1145360], candidates(), |id| id.clone()).is_empty());
+        assert!(possible(&group, &[], candidates(), |id| id.clone()).is_empty());
     }
 
     #[test]

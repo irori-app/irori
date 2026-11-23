@@ -503,6 +503,10 @@ commands without a window.
   copy's favourite or hidden flag, the latest status, the default copy's rating), so
   any default copy shows the same. Categories, playtime, notes and overrides stay per
   copy.
+  Games left apart that are linked to the same Steam app as one of an entry's copies
+  (editions, remasters) are *possible copies* (`copies::possible`,
+  `Backend::possible_copies`, memory only): the game page offers Link (combine) or
+  Keep apart, which stands like a separation.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank

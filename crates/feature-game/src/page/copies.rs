@@ -17,7 +17,7 @@ use gpui_kit::{
 };
 use irori_core::{GameId, GameInfo};
 use irori_ui::copies::{CopyAction, CopyLabel};
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 
 use super::GamePage;
@@ -174,6 +174,92 @@ impl GamePage {
                                 .child(playtime_label(total, total > 0)),
                         ),
                 )
+                .into_any_element(),
+        )
+    }
+}
+
+impl GamePage {
+    /// Games that may be other copies of this one (linked to the same Steam
+    /// app, left apart), each with Link and Keep apart.
+    pub(super) fn render_possible_copies(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.possible_copies.is_empty() {
+            return None;
+        }
+        let ink = self.ink;
+        let theme = cx.theme();
+        let mut group: Vec<GameId> = irori_ui::copies::of(&self.id, cx)
+            .iter()
+            .map(|c| c.id())
+            .collect();
+        if group.is_empty() {
+            group.push(self.id.clone());
+        }
+        let rows = self.possible_copies.iter().enumerate().map(|(i, game)| {
+            let id = game.id();
+            let label: SharedString =
+                format!("{} · {}", game.runner().store_name(), game.title).into();
+            let link = {
+                let mut ids = group.clone();
+                ids.push(id.clone());
+                Button::new(("possible-copy-link", i))
+                    .xsmall()
+                    .outline()
+                    .icon(IconName::Link)
+                    .label(t("game.copies.link"))
+                    .tooltip(t_args("game.copies.link_tooltip", &[("copy", &label)]))
+                    .on_click(move |_, _, cx| irori_ui::copies::combine(ids.clone(), cx))
+            };
+            let apart = {
+                let id = id.clone();
+                Button::new(("possible-copy-apart", i))
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::X)
+                    .tooltip(t("game.copies.keep_apart"))
+                    .on_click(move |_, _, cx| {
+                        irori_ui::copies::separate(id.clone(), vec![id.clone()], cx)
+                    })
+            };
+            let open = {
+                let id = id.clone();
+                Button::new(("possible-copy-open", i))
+                    .ghost()
+                    .xsmall()
+                    .label(label.clone())
+                    .tooltip(irori_ui::copies::open_label(&label))
+                    .on_click(move |_, _, cx| {
+                        irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx)
+                    })
+            };
+            h_flex()
+                .w_full()
+                .gap_1()
+                .child(div().flex_1().min_w_0().child(open))
+                .child(link)
+                .child(apart)
+        });
+        Some(
+            v_flex()
+                .id("game-possible-copies")
+                .w_full()
+                .px_4()
+                .pt_3()
+                .pb_2()
+                .gap_1()
+                .rounded(theme.radius_lg)
+                .bg(ink.panel)
+                .border_1()
+                .border_color(theme.border)
+                .child(super::section_title(t("game.copies.possible"), ink.text))
+                .child(
+                    div()
+                        .pb_1()
+                        .text_xs()
+                        .text_color(ink.panel_muted)
+                        .child(t("game.copies.possible_help")),
+                )
+                .children(rows)
                 .into_any_element(),
         )
     }

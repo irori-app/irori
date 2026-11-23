@@ -543,6 +543,41 @@ impl Backend {
         }
     }
 
+    /// Games that may be other copies of `id`'s entry: linked to the same
+    /// Steam app as one of its copies, yet left apart ([`crate::copies::possible`]).
+    /// Reads memory only.
+    pub fn possible_copies(&self, id: &GameId) -> Vec<Arc<GameInfo>> {
+        let library = self.library();
+        let mut group: Vec<GameId> = library.copies_of(id).to_vec();
+        if group.is_empty() {
+            group.push(id.clone());
+        }
+        let apps: Vec<u32> = group
+            .iter()
+            .filter_map(|copy| library.get(copy))
+            .filter_map(|g| self.steam_links.linked(g).app_id())
+            .collect();
+        if apps.is_empty() {
+            return Vec::new();
+        }
+        let user = self.userdata.snapshot();
+        let candidates = library.all_games().map(|g| crate::copies::Candidate {
+            steam_app: self.steam_links.linked(g).app_id(),
+            kept_apart: user
+                .overrides
+                .get(&g.id().key())
+                .is_some_and(|o| o.copy_of.as_deref() == Some("")),
+            game: g.clone(),
+        });
+        crate::copies::possible(&group, &apps, candidates, |copy| {
+            library
+                .copies_of(copy)
+                .first()
+                .cloned()
+                .unwrap_or_else(|| copy.clone())
+        })
+    }
+
     /// Follow a change of `id`'s settings (the settings form edits the
     /// choice too).
     pub(crate) fn follow_steam_link_setting(&self, id: &GameId) {

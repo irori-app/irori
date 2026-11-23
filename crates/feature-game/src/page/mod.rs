@@ -167,6 +167,9 @@ pub struct GamePage {
     /// The install folder's size measured on disk, for a game whose store
     /// gives none.
     measured_size: Option<u64>,
+    /// Games that may be other copies of this one, as of the last library
+    /// change.
+    possible_copies: Vec<Arc<GameInfo>>,
     tab: InfoTab,
     launch_pending: bool,
     /// Commands in flight, keyed by command name (for loading states).
@@ -278,6 +281,7 @@ impl GamePage {
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&m.settings, |this, _, cx| {
                 this.sandbox = sandbox::configured(&this.id, cx);
+                this.possible_copies = backend(cx).possible_copies(&this.id);
                 cx.notify()
             }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
@@ -327,6 +331,7 @@ impl GamePage {
             files_available: true,
             shortcuts_exist: None,
             measured_size: None,
+            possible_copies: Vec::new(),
             tab: InfoTab::About,
             launch_pending: false,
             pending: HashSet::new(),
@@ -603,6 +608,7 @@ impl GamePage {
                 backend(cx).steam_link(g)
             });
         let relinked = std::mem::replace(&mut self.steam_link, link) != link;
+        self.possible_copies = backend(cx).possible_copies(&self.id);
         if first {
             self.load_all(window, cx);
         } else {
