@@ -1684,6 +1684,13 @@ pub struct UiPrefs {
     /// (`storeBadgesOneStore`, off unless turned on), where they all say the
     /// same.
     pub store_badges_one_store: bool,
+    /// Game pages show the age-rating card (`showAgeRatings`, on unless
+    /// turned off). The library's age filter works either way.
+    pub show_age_ratings: bool,
+    /// The board whose rating shows first (`ageRatingBoard`): its name
+    /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
+    /// the board of the user's region.
+    pub age_rating_board: String,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1892,6 +1899,8 @@ impl Default for UiPrefs {
             library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
+            show_age_ratings: true,
+            age_rating_board: String::new(),
         }
     }
 }

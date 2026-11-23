@@ -746,7 +746,9 @@ commands without a window.
   request is made for ratings alone. The game page shows the board of the user's region
   (`irori_ui::age_rating`: interface language, then the system locale's region) as a
   text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
-  goes by the strictest board.
+  goes by the strictest board. `iroriUi.ageRatingBoard` names the board shown first
+  instead (`age_rating::lead_with`), and `iroriUi.showAgeRatings` off leaves the card
+  off game pages (the filter still works).
 - **Game modes** (`irori_core::game_mode`, `store_facts.rs`): `GameMode` is single,
   co-op, local (split screen, couch), online (LAN included) or MMO; `GameInfo::game_modes`
   holds a normalized list. Sources, none of them asked in the background: Steam's
