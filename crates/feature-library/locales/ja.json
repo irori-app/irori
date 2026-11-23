@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "最終プレイ",
   "library.stats.sheet.status_changes": "ステータスの変更",
   "library.stats.sheet.status_cleared": "ステータスを解除",
-  "library.stats.sheet.open_game": "ゲームページを開く"
+  "library.stats.sheet.open_game": "ゲームページを開く",
+  "library.stats.backlog.queue.title": "次に遊ぶ",
+  "library.stats.backlog.queue.pace": "プレイ予定のゲームをあなたのペースで順番に：最近は週 {hours} 時間。",
+  "library.stats.backlog.queue.hours": "クリアまで {hours} 時間",
+  "library.stats.backlog.queue.guessed": "ほかのゲームと同じく約 {hours} 時間",
+  "library.stats.backlog.queue.done": "{date} 頃に完了",
+  "library.stats.backlog.shelf.title": "棚上げ中",
+  "library.stats.backlog.shelf.help": "プレイ中または保留中で、30 日間セッションなし。",
+  "library.stats.backlog.shelf.idle": "{days} 日プレイなし",
+  "library.stats.backlog.shelf.never": "未プレイ",
+  "library.stats.backlog.pile.title": "積みゲー",
+  "library.stats.backlog.pile.added": "追加",
+  "library.stats.backlog.pile.started": "開始",
+  "library.stats.backlog.pile.beaten": "クリア",
+  "library.stats.backlog.hltb.title": "あなたのプレイ時間と How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} 時間 · How Long To Beat {hltb} 時間"
 }

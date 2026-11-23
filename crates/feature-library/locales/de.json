@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Zuletzt gespielt",
   "library.stats.sheet.status_changes": "Statusänderungen",
   "library.stats.sheet.status_cleared": "Status entfernt",
-  "library.stats.sheet.open_game": "Spielseite öffnen"
+  "library.stats.sheet.open_game": "Spielseite öffnen",
+  "library.stats.backlog.queue.title": "Als Nächstes",
+  "library.stats.backlog.queue.pace": "Deine „Geplant“-Spiele nacheinander in deinem Tempo: zuletzt {hours} h pro Woche.",
+  "library.stats.backlog.queue.hours": "{hours} h bis zum Ende",
+  "library.stats.backlog.queue.guessed": "etwa {hours} h, wie deine anderen Spiele",
+  "library.stats.backlog.queue.done": "fertig um den {date}",
+  "library.stats.backlog.shelf.title": "Im Regal",
+  "library.stats.backlog.shelf.help": "Wird gespielt oder pausiert, seit 30 Tagen ohne Sitzung.",
+  "library.stats.backlog.shelf.idle": "{days} Tage nicht gespielt",
+  "library.stats.backlog.shelf.never": "Noch nicht gespielt",
+  "library.stats.backlog.pile.title": "Der Stapel",
+  "library.stats.backlog.pile.added": "Hinzugefügt",
+  "library.stats.backlog.pile.started": "Begonnen",
+  "library.stats.backlog.pile.beaten": "Durchgespielt",
+  "library.stats.backlog.hltb.title": "Deine Stunden und How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} h · How Long To Beat {hltb} h"
 }

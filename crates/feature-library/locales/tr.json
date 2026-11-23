@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Son oynama",
   "library.stats.sheet.status_changes": "Durum değişiklikleri",
   "library.stats.sheet.status_cleared": "Durum kaldırıldı",
-  "library.stats.sheet.open_game": "Oyun sayfasını aç"
+  "library.stats.sheet.open_game": "Oyun sayfasını aç",
+  "library.stats.backlog.queue.title": "Sırada",
+  "library.stats.backlog.queue.pace": "Oynamayı planladığınız oyunlar, kendi hızınızda sırayla: son zamanlarda haftada {hours} sa.",
+  "library.stats.backlog.queue.hours": "Bitirmek için {hours} sa",
+  "library.stats.backlog.queue.guessed": "diğer oyunlarınız gibi yaklaşık {hours} sa",
+  "library.stats.backlog.queue.done": "{date} civarında biter",
+  "library.stats.backlog.shelf.title": "Rafta",
+  "library.stats.backlog.shelf.help": "Oynanıyor veya beklemede, 30 gündür oturum yok.",
+  "library.stats.backlog.shelf.idle": "{days} gündür oynanmadı",
+  "library.stats.backlog.shelf.never": "Henüz oynanmadı",
+  "library.stats.backlog.pile.title": "Yığın",
+  "library.stats.backlog.pile.added": "Eklenen",
+  "library.stats.backlog.pile.started": "Başlanan",
+  "library.stats.backlog.pile.beaten": "Bitirilen",
+  "library.stats.backlog.hltb.title": "Saatleriniz ve How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} sa · How Long To Beat {hltb} sa"
 }

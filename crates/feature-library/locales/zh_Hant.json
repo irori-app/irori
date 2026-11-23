@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "上次遊玩",
   "library.stats.sheet.status_changes": "狀態變更",
   "library.stats.sheet.status_cleared": "已清除狀態",
-  "library.stats.sheet.open_game": "開啟遊戲頁面"
+  "library.stats.sheet.open_game": "開啟遊戲頁面",
+  "library.stats.backlog.queue.title": "接下來",
+  "library.stats.backlog.queue.pace": "依你的節奏依序玩計畫中的遊戲：最近每週 {hours} 小時。",
+  "library.stats.backlog.queue.hours": "通關需 {hours} 小時",
+  "library.stats.backlog.queue.guessed": "約 {hours} 小時，依你的其他遊戲估算",
+  "library.stats.backlog.queue.done": "約 {date} 完成",
+  "library.stats.backlog.shelf.title": "擱置中",
+  "library.stats.backlog.shelf.help": "正在玩或已暫停，30 天沒有遊玩。",
+  "library.stats.backlog.shelf.idle": "{days} 天未玩",
+  "library.stats.backlog.shelf.never": "尚未遊玩",
+  "library.stats.backlog.pile.title": "遊戲堆",
+  "library.stats.backlog.pile.added": "新增",
+  "library.stats.backlog.pile.started": "開始",
+  "library.stats.backlog.pile.beaten": "通關",
+  "library.stats.backlog.hltb.title": "你的時長與 How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} 小時 · How Long To Beat {hltb} 小時"
 }

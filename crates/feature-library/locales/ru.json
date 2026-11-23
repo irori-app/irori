@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Последний раз",
   "library.stats.sheet.status_changes": "Смены статуса",
   "library.stats.sheet.status_cleared": "Статус снят",
-  "library.stats.sheet.open_game": "Открыть страницу игры"
+  "library.stats.sheet.open_game": "Открыть страницу игры",
+  "library.stats.backlog.queue.title": "Дальше",
+  "library.stats.backlog.queue.pace": "Игры из планов, одна за другой в вашем темпе: в последнее время {hours} ч в неделю.",
+  "library.stats.backlog.queue.hours": "{hours} ч до прохождения",
+  "library.stats.backlog.queue.guessed": "около {hours} ч, как ваши другие игры",
+  "library.stats.backlog.queue.done": "к {date}",
+  "library.stats.backlog.shelf.title": "На полке",
+  "library.stats.backlog.shelf.help": "В процессе или на паузе, без сеансов 30 дней.",
+  "library.stats.backlog.shelf.idle": "{days} дн. без игры",
+  "library.stats.backlog.shelf.never": "Ещё не запускалась",
+  "library.stats.backlog.pile.title": "Стопка",
+  "library.stats.backlog.pile.added": "Добавлено",
+  "library.stats.backlog.pile.started": "Начато",
+  "library.stats.backlog.pile.beaten": "Пройдено",
+  "library.stats.backlog.hltb.title": "Ваши часы и How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} ч · How Long To Beat {hltb} ч"
 }

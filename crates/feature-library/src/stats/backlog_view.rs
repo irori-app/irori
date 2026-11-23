@@ -62,6 +62,7 @@ impl StatsView {
             .child(hero)
             .child(self.render_year(&b, &library, cx))
             .child(self.render_library_bar(&b, cx))
+            .children(self.render_backlog_extras(cx))
             .into_any_element()
     }
 

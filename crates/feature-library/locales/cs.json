@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Naposledy hráno",
   "library.stats.sheet.status_changes": "Změny stavu",
   "library.stats.sheet.status_cleared": "Stav zrušen",
-  "library.stats.sheet.open_game": "Otevřít stránku hry"
+  "library.stats.sheet.open_game": "Otevřít stránku hry",
+  "library.stats.backlog.queue.title": "Na řadě",
+  "library.stats.backlog.queue.pace": "Hry s plánem hrát, jedna po druhé vaším tempem: poslední dobou {hours} h týdně.",
+  "library.stats.backlog.queue.hours": "{hours} h do dohrání",
+  "library.stats.backlog.queue.guessed": "asi {hours} h, jako vaše jiné hry",
+  "library.stats.backlog.queue.done": "hotovo kolem {date}",
+  "library.stats.backlog.shelf.title": "Odloženo",
+  "library.stats.backlog.shelf.help": "Hrané nebo pozastavené, bez relace 30 dní.",
+  "library.stats.backlog.shelf.idle": "{days} dní bez hraní",
+  "library.stats.backlog.shelf.never": "Zatím nehráno",
+  "library.stats.backlog.pile.title": "Hromádka",
+  "library.stats.backlog.pile.added": "Přidané",
+  "library.stats.backlog.pile.started": "Rozehrané",
+  "library.stats.backlog.pile.beaten": "Dohrané",
+  "library.stats.backlog.hltb.title": "Vaše hodiny a How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} h · How Long To Beat {hltb} h"
 }

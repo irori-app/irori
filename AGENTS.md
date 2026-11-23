@@ -915,6 +915,12 @@ commands without a window.
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats backlog extras** (`irori-library::stats::backlog::extras`,
+  `backlog_extras_view`): the queue (Plan to play, oldest first, each with How Long To
+  Beat's main story from `Backend::hltb_times`, else the median of the user's beaten
+  games, and when it would be done at the last twelve weeks' pace), the shelf (Playing
+  or On hold, no session for 30 days), the pile (added from `first_seen`, started,
+  beaten per month) and the year's beaten games against How Long To Beat.
 - **Stats game sheet** (`irori-library::stats::sheet`, `sheet_view`): every game on the
   stats page (top games, insights, the backlog's covers, Journeys' lanes,
   Discoveries) opens a sheet with its numbers over the period shown: time in the

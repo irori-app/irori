@@ -28,6 +28,7 @@ mod achievements_view;
 pub(crate) mod album;
 mod album_view;
 pub(crate) mod backlog;
+mod backlog_extras_view;
 mod backlog_view;
 mod hero;
 pub(crate) mod journal;
@@ -95,6 +96,8 @@ pub struct StatsView {
     history: Option<Arc<History>>,
     overview: Option<Overview>,
     backlog: Option<Backlog>,
+    /// The backlog's queue, shelf, pile and How Long To Beat cards.
+    backlog_extras: Option<backlog::Extras>,
     /// The user's screenshots; `None` until first read.
     screenshots: Option<Arc<ScreenshotIndex>>,
     album: Option<Album>,
@@ -165,6 +168,7 @@ impl StatsView {
             history: None,
             overview: None,
             backlog: None,
+            backlog_extras: None,
             screenshots: None,
             album: None,
             album_game: None,
@@ -281,6 +285,16 @@ impl StatsView {
             &history,
             &user,
             keys.iter().map(String::as_str),
+            self.year(),
+            today,
+        ));
+        // Main-story hours learned with games' wiki info, kept in memory.
+        let hltb = backend(cx).hltb_times();
+        self.backlog_extras = Some(backlog::extras(
+            &history,
+            &user,
+            keys.iter().map(String::as_str),
+            &hltb.hours,
             self.year(),
             today,
         ));

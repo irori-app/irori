@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Ultima dată",
   "library.stats.sheet.status_changes": "Schimbări de stare",
   "library.stats.sheet.status_cleared": "Stare ștearsă",
-  "library.stats.sheet.open_game": "Deschide pagina jocului"
+  "library.stats.sheet.open_game": "Deschide pagina jocului",
+  "library.stats.backlog.queue.title": "Urmează",
+  "library.stats.backlog.queue.pace": "Jocurile planificate, unul după altul în ritmul tău: {hours} h pe săptămână în ultima vreme.",
+  "library.stats.backlog.queue.hours": "{hours} h până la final",
+  "library.stats.backlog.queue.guessed": "cam {hours} h, ca celelalte jocuri",
+  "library.stats.backlog.queue.done": "gata pe la {date}",
+  "library.stats.backlog.shelf.title": "Pe raft",
+  "library.stats.backlog.shelf.help": "În joc sau în pauză, fără sesiuni de 30 de zile.",
+  "library.stats.backlog.shelf.idle": "{days} zile fără joc",
+  "library.stats.backlog.shelf.never": "Încă nejucat",
+  "library.stats.backlog.pile.title": "Grămada",
+  "library.stats.backlog.pile.added": "Adăugate",
+  "library.stats.backlog.pile.started": "Începute",
+  "library.stats.backlog.pile.beaten": "Terminate",
+  "library.stats.backlog.hltb.title": "Orele tale și How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} h · How Long To Beat {hltb} h"
 }

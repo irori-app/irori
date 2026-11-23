@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Senast spelat",
   "library.stats.sheet.status_changes": "Statusändringar",
   "library.stats.sheet.status_cleared": "Status borttagen",
-  "library.stats.sheet.open_game": "Öppna spelsidan"
+  "library.stats.sheet.open_game": "Öppna spelsidan",
+  "library.stats.backlog.queue.title": "Näst på tur",
+  "library.stats.backlog.queue.pace": "Dina planerade spel, ett i taget i din takt: {hours} h i veckan på sistone.",
+  "library.stats.backlog.queue.hours": "{hours} h att klara",
+  "library.stats.backlog.queue.guessed": "cirka {hours} h, som dina andra spel",
+  "library.stats.backlog.queue.done": "klart runt {date}",
+  "library.stats.backlog.shelf.title": "På hyllan",
+  "library.stats.backlog.shelf.help": "Spelas eller pausat, ingen session på 30 dagar.",
+  "library.stats.backlog.shelf.idle": "{days} dagar utan spel",
+  "library.stats.backlog.shelf.never": "Inte spelat än",
+  "library.stats.backlog.pile.title": "Högen",
+  "library.stats.backlog.pile.added": "Tillagda",
+  "library.stats.backlog.pile.started": "Påbörjade",
+  "library.stats.backlog.pile.beaten": "Klarade",
+  "library.stats.backlog.hltb.title": "Dina timmar och How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} h · How Long To Beat {hltb} h"
 }

@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Laatst gespeeld",
   "library.stats.sheet.status_changes": "Statuswijzigingen",
   "library.stats.sheet.status_cleared": "Status gewist",
-  "library.stats.sheet.open_game": "Gamepagina openen"
+  "library.stats.sheet.open_game": "Gamepagina openen",
+  "library.stats.backlog.queue.title": "Hierna",
+  "library.stats.backlog.queue.pace": "Je geplande games na elkaar in jouw tempo: de laatste tijd {hours} u per week.",
+  "library.stats.backlog.queue.hours": "{hours} u om uit te spelen",
+  "library.stats.backlog.queue.guessed": "zo’n {hours} u, zoals je andere games",
+  "library.stats.backlog.queue.done": "klaar rond {date}",
+  "library.stats.backlog.shelf.title": "Op de plank",
+  "library.stats.backlog.shelf.help": "Bezig of gepauzeerd, 30 dagen zonder sessie.",
+  "library.stats.backlog.shelf.idle": "{days} dagen niet gespeeld",
+  "library.stats.backlog.shelf.never": "Nog niet gespeeld",
+  "library.stats.backlog.pile.title": "De stapel",
+  "library.stats.backlog.pile.added": "Toegevoegd",
+  "library.stats.backlog.pile.started": "Begonnen",
+  "library.stats.backlog.pile.beaten": "Uitgespeeld",
+  "library.stats.backlog.hltb.title": "Jouw uren en How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} u · How Long To Beat {hltb} u"
 }

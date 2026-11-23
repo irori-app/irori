@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "Востаннє",
   "library.stats.sheet.status_changes": "Зміни статусу",
   "library.stats.sheet.status_cleared": "Статус знято",
-  "library.stats.sheet.open_game": "Відкрити сторінку гри"
+  "library.stats.sheet.open_game": "Відкрити сторінку гри",
+  "library.stats.backlog.queue.title": "Далі",
+  "library.stats.backlog.queue.pace": "Ігри із планів, одна за одною у вашому темпі: останнім часом {hours} год на тиждень.",
+  "library.stats.backlog.queue.hours": "{hours} год до проходження",
+  "library.stats.backlog.queue.guessed": "близько {hours} год, як ваші інші ігри",
+  "library.stats.backlog.queue.done": "приблизно {date}",
+  "library.stats.backlog.shelf.title": "На полиці",
+  "library.stats.backlog.shelf.help": "У процесі або на паузі, без сеансів 30 днів.",
+  "library.stats.backlog.shelf.idle": "{days} дн. без гри",
+  "library.stats.backlog.shelf.never": "Ще не запускалася",
+  "library.stats.backlog.pile.title": "Стос",
+  "library.stats.backlog.pile.added": "Додано",
+  "library.stats.backlog.pile.started": "Розпочато",
+  "library.stats.backlog.pile.beaten": "Пройдено",
+  "library.stats.backlog.hltb.title": "Ваші години й How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} год · How Long To Beat {hltb} год"
 }

@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "마지막 플레이",
   "library.stats.sheet.status_changes": "상태 변경",
   "library.stats.sheet.status_cleared": "상태 지움",
-  "library.stats.sheet.open_game": "게임 페이지 열기"
+  "library.stats.sheet.open_game": "게임 페이지 열기",
+  "library.stats.backlog.queue.title": "다음 차례",
+  "library.stats.backlog.queue.pace": "플레이 예정 게임을 내 속도로 차례대로: 최근 주당 {hours}시간.",
+  "library.stats.backlog.queue.hours": "완료까지 {hours}시간",
+  "library.stats.backlog.queue.guessed": "다른 게임처럼 약 {hours}시간",
+  "library.stats.backlog.queue.done": "{date}쯤 완료",
+  "library.stats.backlog.shelf.title": "보류 중",
+  "library.stats.backlog.shelf.help": "플레이 중이거나 보류 중이며 30일 동안 세션 없음.",
+  "library.stats.backlog.shelf.idle": "{days}일 동안 플레이 안 함",
+  "library.stats.backlog.shelf.never": "아직 플레이 안 함",
+  "library.stats.backlog.pile.title": "쌓인 게임",
+  "library.stats.backlog.pile.added": "추가",
+  "library.stats.backlog.pile.started": "시작",
+  "library.stats.backlog.pile.beaten": "완료",
+  "library.stats.backlog.hltb.title": "내 플레이 시간과 How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours}시간 · How Long To Beat {hltb}시간"
 }

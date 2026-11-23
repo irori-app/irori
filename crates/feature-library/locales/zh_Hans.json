@@ -957,5 +957,20 @@
   "library.stats.sheet.last": "上次游玩",
   "library.stats.sheet.status_changes": "状态变更",
   "library.stats.sheet.status_cleared": "已清除状态",
-  "library.stats.sheet.open_game": "打开游戏页面"
+  "library.stats.sheet.open_game": "打开游戏页面",
+  "library.stats.backlog.queue.title": "接下来",
+  "library.stats.backlog.queue.pace": "按你的节奏依次玩计划中的游戏：最近每周 {hours} 小时。",
+  "library.stats.backlog.queue.hours": "通关需 {hours} 小时",
+  "library.stats.backlog.queue.guessed": "约 {hours} 小时，按你的其他游戏估算",
+  "library.stats.backlog.queue.done": "约 {date} 完成",
+  "library.stats.backlog.shelf.title": "搁置中",
+  "library.stats.backlog.shelf.help": "正在玩或已暂停，30 天没有游玩。",
+  "library.stats.backlog.shelf.idle": "{days} 天未玩",
+  "library.stats.backlog.shelf.never": "尚未游玩",
+  "library.stats.backlog.pile.title": "游戏堆",
+  "library.stats.backlog.pile.added": "新增",
+  "library.stats.backlog.pile.started": "开始",
+  "library.stats.backlog.pile.beaten": "通关",
+  "library.stats.backlog.hltb.title": "你的时长与 How Long To Beat",
+  "library.stats.backlog.hltb.row": "{hours} 小时 · How Long To Beat {hltb} 小时"
 }
