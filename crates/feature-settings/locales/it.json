@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Assegna questo comando a un tasto nelle impostazioni della tastiera del desktop:",
   "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:",
   "settings.field.shortcut_icon_from_exe.label": "Icone dal programma del gioco",
-  "settings.field.shortcut_icon_from_exe.help": "I collegamenti dei giochi Windows usano l’icona contenuta nel .exe del gioco, prima delle immagini dello store."
+  "settings.field.shortcut_icon_from_exe.help": "I collegamenti dei giochi Windows usano l’icona contenuta nel .exe del gioco, prima delle immagini dello store.",
+  "settings.field.launcher_sync_lutris.label": "Mantieni sincronizzati i giochi di Lutris",
+  "settings.field.launcher_sync_bottles.label": "Mantieni sincronizzati i programmi di Bottles",
+  "settings.field.launcher_sync_faugus.label": "Mantieni sincronizzati i giochi di Faugus Launcher",
+  "settings.field.launcher_sync.help": "Irori rilegge il launcher all’avvio e ogni 15 minuti e aggiunge i giochi che non ha ancora visto. I giochi rimossi da Irori non tornano, e i file del launcher vengono solo letti."
 }

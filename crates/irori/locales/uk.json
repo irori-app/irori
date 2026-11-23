@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Відкрити {launcher}",
   "shell.palette.launcher_shortcut": "Додати ярлик, що відкриває {launcher}",
   "shell.palette.launcher_shortcut_keywords": "ярлик робочий стіл меню лаунчер значок",
-  "shell.notice.launcher_open_failed": "{launcher} не відкрився"
+  "shell.notice.launcher_open_failed": "{launcher} не відкрився",
+  "shell.notice.launcher_sync_added": "Нові ігри з {launcher}",
+  "shell.notice.launcher_sync_added_message": "Додано до бібліотеки: {count}"
 }

@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Deschide {launcher}",
   "shell.palette.launcher_shortcut": "Adaugă o comandă rapidă care deschide {launcher}",
   "shell.palette.launcher_shortcut_keywords": "comandă rapidă desktop meniu lansator pictogramă",
-  "shell.notice.launcher_open_failed": "{launcher} nu s-a deschis"
+  "shell.notice.launcher_open_failed": "{launcher} nu s-a deschis",
+  "shell.notice.launcher_sync_added": "Jocuri noi din {launcher}",
+  "shell.notice.launcher_sync_added_message": "Adăugate în bibliotecă: {count}"
 }

@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Otwórz {launcher}",
   "shell.palette.launcher_shortcut": "Dodaj skrót otwierający {launcher}",
   "shell.palette.launcher_shortcut_keywords": "skrót pulpit menu launcher ikona",
-  "shell.notice.launcher_open_failed": "{launcher} się nie otworzył"
+  "shell.notice.launcher_open_failed": "{launcher} się nie otworzył",
+  "shell.notice.launcher_sync_added": "Nowe gry z {launcher}",
+  "shell.notice.launcher_sync_added_message": "Dodano do biblioteki: {count}"
 }

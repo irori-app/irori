@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Bind this command to a key in your desktop’s keyboard settings:",
   "settings.quick_launch.off": "This command opens the quick launcher too; bind it to a key in your desktop’s keyboard settings if you like:",
   "settings.field.shortcut_icon_from_exe.label": "Icons from the game’s program",
-  "settings.field.shortcut_icon_from_exe.help": "Shortcuts of Windows games use the icon inside the game’s .exe, before the store’s art."
+  "settings.field.shortcut_icon_from_exe.help": "Shortcuts of Windows games use the icon inside the game’s .exe, before the store’s art.",
+  "settings.field.launcher_sync_lutris.label": "Keep Lutris games in sync",
+  "settings.field.launcher_sync_bottles.label": "Keep Bottles programs in sync",
+  "settings.field.launcher_sync_faugus.label": "Keep Faugus Launcher games in sync",
+  "settings.field.launcher_sync.help": "Irori reads the launcher again at start and every 15 minutes and adds the games it hasn’t seen. Games you removed from Irori stay out, and the launcher’s files are only read."
 }

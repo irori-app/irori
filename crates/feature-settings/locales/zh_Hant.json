@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "請在桌面的鍵盤設定中將此指令綁定到按鍵：",
   "settings.quick_launch.off": "此指令也能開啟快速啟動器；如有需要，可在桌面的鍵盤設定中將其綁定到按鍵：",
   "settings.field.shortcut_icon_from_exe.label": "使用遊戲程式的圖示",
-  "settings.field.shortcut_icon_from_exe.help": "Windows 遊戲的捷徑優先使用遊戲 .exe 中的圖示，而不是商店的圖片。"
+  "settings.field.shortcut_icon_from_exe.help": "Windows 遊戲的捷徑優先使用遊戲 .exe 中的圖示，而不是商店的圖片。",
+  "settings.field.launcher_sync_lutris.label": "保持 Lutris 遊戲同步",
+  "settings.field.launcher_sync_bottles.label": "保持 Bottles 程式同步",
+  "settings.field.launcher_sync_faugus.label": "保持 Faugus Launcher 遊戲同步",
+  "settings.field.launcher_sync.help": "Irori 會在啟動時以及每 15 分鐘重新讀取該啟動器，並加入先前未見過的遊戲。你從 Irori 移除的遊戲不會再加回來，啟動器的檔案只會被讀取。"
 }

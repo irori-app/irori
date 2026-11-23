@@ -10,6 +10,7 @@ mod export;
 mod headless;
 mod import;
 mod instance;
+mod launcher_sync;
 mod lutris;
 #[cfg(not(target_os = "linux"))]
 mod menu_theme;
@@ -193,6 +194,7 @@ fn main() -> Result<()> {
         let prefs = backend.settings.app().ui.clone();
         irori_ui::theme::apply(&prefs, None, cx);
 
+        launcher_sync::start(backend.clone());
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
         {

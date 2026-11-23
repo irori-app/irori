@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "{launcher} öffnen",
   "shell.palette.launcher_shortcut": "Verknüpfung zum Öffnen von {launcher} anlegen",
   "shell.palette.launcher_shortcut_keywords": "Verknüpfung Desktop Menü Launcher Symbol",
-  "shell.notice.launcher_open_failed": "{launcher} wurde nicht geöffnet"
+  "shell.notice.launcher_open_failed": "{launcher} wurde nicht geöffnet",
+  "shell.notice.launcher_sync_added": "Neue Spiele aus {launcher}",
+  "shell.notice.launcher_sync_added_message": "Zur Bibliothek hinzugefügt: {count}"
 }

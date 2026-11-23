@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "이 명령을 데스크톱의 키보드 설정에서 키에 지정하세요:",
   "settings.quick_launch.off": "이 명령으로도 빠른 실행을 열 수 있습니다. 원하면 데스크톱의 키보드 설정에서 키에 지정하세요:",
   "settings.field.shortcut_icon_from_exe.label": "게임 프로그램의 아이콘",
-  "settings.field.shortcut_icon_from_exe.help": "Windows 게임 바로 가기에 스토어 이미지보다 게임 .exe 안의 아이콘을 먼저 사용합니다."
+  "settings.field.shortcut_icon_from_exe.help": "Windows 게임 바로 가기에 스토어 이미지보다 게임 .exe 안의 아이콘을 먼저 사용합니다.",
+  "settings.field.launcher_sync_lutris.label": "Lutris 게임 동기화",
+  "settings.field.launcher_sync_bottles.label": "Bottles 프로그램 동기화",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher 게임 동기화",
+  "settings.field.launcher_sync.help": "Irori는 시작할 때와 15분마다 런처를 다시 읽고 아직 보지 못한 게임을 추가합니다. Irori에서 제거한 게임은 다시 추가되지 않으며 런처의 파일은 읽기만 합니다."
 }

@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Bind det här kommandot till en tangent i skrivbordets tangentbordsinställningar:",
   "settings.quick_launch.off": "Det här kommandot öppnar också snabbstartaren; bind det till en tangent i skrivbordets tangentbordsinställningar om du vill:",
   "settings.field.shortcut_icon_from_exe.label": "Ikoner från spelets program",
-  "settings.field.shortcut_icon_from_exe.help": "Genvägar till Windows-spel använder ikonen i spelets .exe före butikens bilder."
+  "settings.field.shortcut_icon_from_exe.help": "Genvägar till Windows-spel använder ikonen i spelets .exe före butikens bilder.",
+  "settings.field.launcher_sync_lutris.label": "Håll Lutris-spel synkroniserade",
+  "settings.field.launcher_sync_bottles.label": "Håll Bottles-program synkroniserade",
+  "settings.field.launcher_sync_faugus.label": "Håll Faugus Launcher-spel synkroniserade",
+  "settings.field.launcher_sync.help": "Irori läser startprogrammet igen vid start och var 15:e minut och lägger till spel som det inte sett. Spel du tagit bort ur Irori förblir borta, och startprogrammets filer läses bara."
 }

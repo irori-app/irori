@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "{launcher} 열기",
   "shell.palette.launcher_shortcut": "{launcher}을(를) 여는 바로 가기 추가",
   "shell.palette.launcher_shortcut_keywords": "바로 가기 바탕 화면 메뉴 런처 아이콘",
-  "shell.notice.launcher_open_failed": "{launcher}이(가) 열리지 않았습니다"
+  "shell.notice.launcher_open_failed": "{launcher}이(가) 열리지 않았습니다",
+  "shell.notice.launcher_sync_added": "{launcher}의 새 게임",
+  "shell.notice.launcher_sync_added_message": "라이브러리에 추가됨: {count}"
 }

@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Назначьте эту команду на клавишу в настройках клавиатуры рабочего стола:",
   "settings.quick_launch.off": "Быстрый запуск открывает и эта команда; при желании назначьте её на клавишу в настройках клавиатуры рабочего стола:",
   "settings.field.shortcut_icon_from_exe.label": "Значки из программы игры",
-  "settings.field.shortcut_icon_from_exe.help": "Ярлыки игр для Windows используют значок из .exe игры, а не изображения магазина."
+  "settings.field.shortcut_icon_from_exe.help": "Ярлыки игр для Windows используют значок из .exe игры, а не изображения магазина.",
+  "settings.field.launcher_sync_lutris.label": "Синхронизировать игры Lutris",
+  "settings.field.launcher_sync_bottles.label": "Синхронизировать программы Bottles",
+  "settings.field.launcher_sync_faugus.label": "Синхронизировать игры Faugus Launcher",
+  "settings.field.launcher_sync.help": "Irori заново читает лаунчер при запуске и каждые 15 минут и добавляет игры, которых ещё не видел. Удалённые из Irori игры не возвращаются, а файлы лаунчера только читаются."
 }

@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "開啟 {launcher}",
   "shell.palette.launcher_shortcut": "新增開啟 {launcher} 的捷徑",
   "shell.palette.launcher_shortcut_keywords": "捷徑 桌面 選單 啟動器 圖示",
-  "shell.notice.launcher_open_failed": "{launcher} 未能開啟"
+  "shell.notice.launcher_open_failed": "{launcher} 未能開啟",
+  "shell.notice.launcher_sync_added": "來自 {launcher} 的新遊戲",
+  "shell.notice.launcher_sync_added_message": "已加入遊戲庫：{count}"
 }

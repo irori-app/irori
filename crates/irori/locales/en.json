@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Open {launcher}",
   "shell.palette.launcher_shortcut": "Add a shortcut that opens {launcher}",
   "shell.palette.launcher_shortcut_keywords": "shortcut desktop menu launcher icon",
-  "shell.notice.launcher_open_failed": "{launcher} didn’t open"
+  "shell.notice.launcher_open_failed": "{launcher} didn’t open",
+  "shell.notice.launcher_sync_added": "New games from {launcher}",
+  "shell.notice.launcher_sync_added_message": "Added to the library: {count}"
 }

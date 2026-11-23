@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "{launcher} openen",
   "shell.palette.launcher_shortcut": "Snelkoppeling toevoegen die {launcher} opent",
   "shell.palette.launcher_shortcut_keywords": "snelkoppeling bureaublad menu launcher pictogram",
-  "shell.notice.launcher_open_failed": "{launcher} is niet geopend"
+  "shell.notice.launcher_open_failed": "{launcher} is niet geopend",
+  "shell.notice.launcher_sync_added": "Nieuwe games uit {launcher}",
+  "shell.notice.launcher_sync_added_message": "Aan de bibliotheek toegevoegd: {count}"
 }

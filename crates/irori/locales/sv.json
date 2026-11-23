@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Öppna {launcher}",
   "shell.palette.launcher_shortcut": "Lägg till en genväg som öppnar {launcher}",
   "shell.palette.launcher_shortcut_keywords": "genväg skrivbord meny startprogram ikon",
-  "shell.notice.launcher_open_failed": "{launcher} öppnades inte"
+  "shell.notice.launcher_open_failed": "{launcher} öppnades inte",
+  "shell.notice.launcher_sync_added": "Nya spel från {launcher}",
+  "shell.notice.launcher_sync_added_message": "Tillagda i biblioteket: {count}"
 }

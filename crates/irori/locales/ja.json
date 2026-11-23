@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "{launcher} を開く",
   "shell.palette.launcher_shortcut": "{launcher} を開くショートカットを追加",
   "shell.palette.launcher_shortcut_keywords": "ショートカット デスクトップ メニュー ランチャー アイコン",
-  "shell.notice.launcher_open_failed": "{launcher} を開けませんでした"
+  "shell.notice.launcher_open_failed": "{launcher} を開けませんでした",
+  "shell.notice.launcher_sync_added": "{launcher} の新しいゲーム",
+  "shell.notice.launcher_sync_added_message": "ライブラリに追加: {count}"
 }

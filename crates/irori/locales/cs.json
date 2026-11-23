@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Otevřít {launcher}",
   "shell.palette.launcher_shortcut": "Přidat zástupce, který otevře {launcher}",
   "shell.palette.launcher_shortcut_keywords": "zástupce plocha nabídka spouštěč ikona",
-  "shell.notice.launcher_open_failed": "{launcher} se neotevřel"
+  "shell.notice.launcher_open_failed": "{launcher} se neotevřel",
+  "shell.notice.launcher_sync_added": "Nové hry z {launcher}",
+  "shell.notice.launcher_sync_added_message": "Přidáno do knihovny: {count}"
 }

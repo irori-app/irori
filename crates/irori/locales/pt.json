@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Abrir {launcher}",
   "shell.palette.launcher_shortcut": "Adicionar um atalho que abre o {launcher}",
   "shell.palette.launcher_shortcut_keywords": "atalho ambiente de trabalho menu iniciador ícone",
-  "shell.notice.launcher_open_failed": "O {launcher} não abriu"
+  "shell.notice.launcher_open_failed": "O {launcher} não abriu",
+  "shell.notice.launcher_sync_added": "Jogos novos do {launcher}",
+  "shell.notice.launcher_sync_added_message": "Adicionados à biblioteca: {count}"
 }

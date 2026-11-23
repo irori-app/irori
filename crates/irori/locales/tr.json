@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "{launcher} uygulamasını aç",
   "shell.palette.launcher_shortcut": "{launcher} uygulamasını açan bir kısayol ekle",
   "shell.palette.launcher_shortcut_keywords": "kısayol masaüstü menü başlatıcı simge",
-  "shell.notice.launcher_open_failed": "{launcher} açılmadı"
+  "shell.notice.launcher_open_failed": "{launcher} açılmadı",
+  "shell.notice.launcher_sync_added": "{launcher} uygulamasından yeni oyunlar",
+  "shell.notice.launcher_sync_added_message": "Kitaplığa eklenen: {count}"
 }

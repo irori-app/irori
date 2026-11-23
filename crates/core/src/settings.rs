@@ -748,6 +748,23 @@ pub enum LibraryTopSection {
     Favourites,
 }
 
+/// Other launchers Irori keeps in sync with (`iroriLauncherImports`): read
+/// again at start and every quarter of an hour, and only the games not seen
+/// before are imported. Their own files are only read.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LauncherImports {
+    pub lutris: bool,
+    pub bottles: bool,
+    pub faugus: bool,
+}
+
+impl LauncherImports {
+    pub fn any(&self) -> bool {
+        self.lutris || self.bottles || self.faugus
+    }
+}
+
 /// Application-wide settings. Heroic stores these next to the default game
 /// settings in one object; `game` is flattened to keep that shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -952,6 +969,9 @@ pub struct AppSettings {
     /// 0 = no cap. Irori-only.
     #[serde(rename = "iroriArtCacheLimit")]
     pub art_cache_limit: u32,
+    /// Other launchers whose new games Irori keeps importing. Irori-only.
+    #[serde(rename = "iroriLauncherImports")]
+    pub launcher_imports: LauncherImports,
     /// Shortcuts of a Windows program take the program's own icon, before
     /// the store's art. Irori-only.
     #[serde(rename = "iroriShortcutIconFromExe")]
@@ -1016,6 +1036,7 @@ impl Default for AppSettings {
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
             add_steam_shortcuts: false,
+            launcher_imports: LauncherImports::default(),
             shortcut_icon_from_exe: false,
             auto_update_games: false,
             check_for_updates_on_startup: true,

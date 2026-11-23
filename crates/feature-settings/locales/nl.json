@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Koppel deze opdracht aan een toets in de toetsenbordinstellingen van je desktop:",
   "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:",
   "settings.field.shortcut_icon_from_exe.label": "Pictogrammen uit het programma van de game",
-  "settings.field.shortcut_icon_from_exe.help": "Snelkoppelingen van Windows-games gebruiken het pictogram in de .exe van de game, vóór de afbeeldingen van de winkel."
+  "settings.field.shortcut_icon_from_exe.help": "Snelkoppelingen van Windows-games gebruiken het pictogram in de .exe van de game, vóór de afbeeldingen van de winkel.",
+  "settings.field.launcher_sync_lutris.label": "Lutris-games synchroon houden",
+  "settings.field.launcher_sync_bottles.label": "Bottles-programma’s synchroon houden",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher-games synchroon houden",
+  "settings.field.launcher_sync.help": "Irori leest de launcher opnieuw bij het starten en elke 15 minuten en voegt games toe die het nog niet kende. Games die je uit Irori hebt verwijderd blijven weg, en de bestanden van de launcher worden alleen gelezen."
 }

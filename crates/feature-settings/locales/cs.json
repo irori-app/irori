@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Přiřaďte tento příkaz klávese v nastavení klávesnice desktopu:",
   "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:",
   "settings.field.shortcut_icon_from_exe.label": "Ikony z programu hry",
-  "settings.field.shortcut_icon_from_exe.help": "Zástupci her pro Windows použijí ikonu uvnitř souboru .exe hry, ještě před obrázky obchodu."
+  "settings.field.shortcut_icon_from_exe.help": "Zástupci her pro Windows použijí ikonu uvnitř souboru .exe hry, ještě před obrázky obchodu.",
+  "settings.field.launcher_sync_lutris.label": "Udržovat hry z Lutrisu synchronizované",
+  "settings.field.launcher_sync_bottles.label": "Udržovat programy z Bottles synchronizované",
+  "settings.field.launcher_sync_faugus.label": "Udržovat hry z Faugus Launcheru synchronizované",
+  "settings.field.launcher_sync.help": "Irori při spuštění a každých 15 minut znovu načte spouštěč a přidá hry, které ještě neviděl. Hry, které jste z Irori odebrali, se nevrátí a soubory spouštěče se jen čtou."
 }

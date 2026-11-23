@@ -3135,6 +3135,33 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.action_import_faugus.help")
     .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
     app(
+        "iroriLauncherImports.lutris",
+        "settings.field.launcher_sync_lutris.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["lutris", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.bottles",
+        "settings.field.launcher_sync_bottles.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["bottles", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.faugus",
+        "settings.field.launcher_sync_faugus.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["faugus", "sync", "import", "keep"]),
+    app(
         "action.import-playnite",
         "settings.field.action_import_playnite.label",
         Advanced,

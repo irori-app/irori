@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "このコマンドをデスクトップのキーボード設定でキーに割り当ててください:",
   "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:",
   "settings.field.shortcut_icon_from_exe.label": "ゲームのプログラムのアイコン",
-  "settings.field.shortcut_icon_from_exe.help": "Windows ゲームのショートカットに、ストアの画像より先にゲームの .exe 内のアイコンを使います。"
+  "settings.field.shortcut_icon_from_exe.help": "Windows ゲームのショートカットに、ストアの画像より先にゲームの .exe 内のアイコンを使います。",
+  "settings.field.launcher_sync_lutris.label": "Lutris のゲームを同期する",
+  "settings.field.launcher_sync_bottles.label": "Bottles のプログラムを同期する",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher のゲームを同期する",
+  "settings.field.launcher_sync.help": "Irori は起動時と 15 分ごとにランチャーを読み直し、まだ見ていないゲームを追加します。Irori から削除したゲームは戻らず、ランチャーのファイルは読み取るだけです。"
 }

@@ -1815,6 +1815,15 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
   test; `rusqlite` is built with `bundled` on every OS.
+- **Keeping launchers in sync** (`crates/irori/src/launcher_sync.rs`,
+  `iroriLauncherImports.{lutris,bottles,faugus}`, off by default, offered where the
+  launcher is found): the launcher is read again 30 s after start, every 15 minutes and
+  when its switch is turned on, and only games no import or sync has seen
+  (`state/launcher-imports.json`, by row id and slug; skipped games aren't noted, so a
+  later read imports them) are imported, so settings changed in Irori are never
+  overwritten and a game the user removed stays out. A game the launcher uninstalled
+  shows as not installed by itself, its playtime kept. A sync refreshes only the added
+  games' and ROM libraries, and only when it added something.
 - **Playnite import** (Windows; `irori-extras::playnite` reads, `crates/irori/src/playnite.rs`
   applies, its summary is the Lutris one). Playnite is found through the program its
   `playnite://` link opens (`HKCU\Software\Classes\Playnite\shell\open\command`), a

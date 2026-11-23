@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Asigna este comando a una tecla en los ajustes de teclado de tu escritorio:",
   "settings.quick_launch.off": "Este comando también abre el lanzador rápido; si quieres, asígnalo a una tecla en los ajustes de teclado del escritorio:",
   "settings.field.shortcut_icon_from_exe.label": "Iconos del programa del juego",
-  "settings.field.shortcut_icon_from_exe.help": "Los accesos directos de juegos de Windows usan el icono del .exe del juego antes que las imágenes de la tienda."
+  "settings.field.shortcut_icon_from_exe.help": "Los accesos directos de juegos de Windows usan el icono del .exe del juego antes que las imágenes de la tienda.",
+  "settings.field.launcher_sync_lutris.label": "Mantener sincronizados los juegos de Lutris",
+  "settings.field.launcher_sync_bottles.label": "Mantener sincronizados los programas de Bottles",
+  "settings.field.launcher_sync_faugus.label": "Mantener sincronizados los juegos de Faugus Launcher",
+  "settings.field.launcher_sync.help": "Irori vuelve a leer el lanzador al iniciar y cada 15 minutos y añade los juegos que no había visto. Los juegos que quitaste de Irori no vuelven, y los archivos del lanzador solo se leen."
 }

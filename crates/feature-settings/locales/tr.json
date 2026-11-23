@@ -1678,5 +1678,9 @@
   "settings.quick_launch.command": "Bu komutu masaüstünüzün klavye ayarlarında bir tuşa atayın:",
   "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:",
   "settings.field.shortcut_icon_from_exe.label": "Oyunun programındaki simgeler",
-  "settings.field.shortcut_icon_from_exe.help": "Windows oyunlarının kısayolları, mağaza görsellerinden önce oyunun .exe dosyasındaki simgeyi kullanır."
+  "settings.field.shortcut_icon_from_exe.help": "Windows oyunlarının kısayolları, mağaza görsellerinden önce oyunun .exe dosyasındaki simgeyi kullanır.",
+  "settings.field.launcher_sync_lutris.label": "Lutris oyunlarını eşitle",
+  "settings.field.launcher_sync_bottles.label": "Bottles programlarını eşitle",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher oyunlarını eşitle",
+  "settings.field.launcher_sync.help": "Irori, başlatıcıyı açılışta ve her 15 dakikada bir yeniden okur ve görmediği oyunları ekler. Irori'den kaldırdığınız oyunlar geri gelmez; başlatıcının dosyaları yalnızca okunur."
 }

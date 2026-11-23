@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "打开 {launcher}",
   "shell.palette.launcher_shortcut": "添加打开 {launcher} 的快捷方式",
   "shell.palette.launcher_shortcut_keywords": "快捷方式 桌面 菜单 启动器 图标",
-  "shell.notice.launcher_open_failed": "{launcher} 未能打开"
+  "shell.notice.launcher_open_failed": "{launcher} 未能打开",
+  "shell.notice.launcher_sync_added": "来自 {launcher} 的新游戏",
+  "shell.notice.launcher_sync_added_message": "已添加到游戏库：{count}"
 }

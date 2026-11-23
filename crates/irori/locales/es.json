@@ -256,5 +256,7 @@
   "shell.palette.open_launcher": "Abrir {launcher}",
   "shell.palette.launcher_shortcut": "Añadir un acceso directo que abra {launcher}",
   "shell.palette.launcher_shortcut_keywords": "acceso directo escritorio menú lanzador icono",
-  "shell.notice.launcher_open_failed": "{launcher} no se abrió"
+  "shell.notice.launcher_open_failed": "{launcher} no se abrió",
+  "shell.notice.launcher_sync_added": "Juegos nuevos de {launcher}",
+  "shell.notice.launcher_sync_added_message": "Añadidos a la biblioteca: {count}"
 }
