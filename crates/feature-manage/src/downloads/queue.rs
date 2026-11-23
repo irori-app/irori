@@ -209,6 +209,61 @@ impl QueuePresentation {
     }
 }
 
+/// When the waiting downloads start and the queue is done, in seconds from
+/// now, at the rate the current download has averaged.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Estimates {
+    /// Seconds the current download still needs.
+    pub current: Option<u64>,
+    /// Per waiting row, in order: when it starts, while the size of every
+    /// download before it is known.
+    pub starts: Vec<Option<u64>>,
+    /// When everything is done, when every size is known.
+    pub done: Option<u64>,
+}
+
+/// Seconds the running download still needs at `rate` (bytes per second):
+/// from the bytes left when the store tells them, else the store's own
+/// estimate.
+pub(crate) fn current_left(
+    progress: Option<irori_core::InstallProgress>,
+    rate: Option<u64>,
+) -> Option<u64> {
+    let p = progress?;
+    let by_bytes = match (p.bytes_total, p.bytes_done, rate.filter(|r| *r > 0)) {
+        (Some(total), Some(done), Some(rate)) if total > 0 => {
+            Some(total.saturating_sub(done).div_ceil(rate))
+        }
+        _ => None,
+    };
+    by_bytes.or(p.eta_secs)
+}
+
+/// Chain the estimates: each waiting download starts when the one before it
+/// is done, and needs its size over `rate`. An update's size is told only
+/// once it runs (`0` here), so from the first unknown size on nothing more is
+/// promised.
+pub(crate) fn estimate(current: Option<u64>, waiting: &[u64], rate: Option<u64>) -> Estimates {
+    let rate = rate.filter(|r| *r > 0);
+    let mut at = current;
+    let starts = waiting
+        .iter()
+        .map(|size| {
+            let start = at;
+            at = match (at, rate) {
+                (Some(at), Some(rate)) if *size > 0 => Some(at + size.div_ceil(rate)),
+                _ => None,
+            };
+            start
+        })
+        .collect();
+    Estimates {
+        current,
+        starts,
+        done: at,
+    }
+}
+
 /// "Install" / "Update".
 pub(crate) fn kind_label(kind: &DownloadKind) -> SharedString {
     match kind {
@@ -389,6 +444,36 @@ pub(crate) mod tests {
         assert_eq!(kind_label(&p.history[1].item.kind), "Update");
         assert_eq!(store_label(Runner::Sideload), "Other");
         assert_eq!(store_label(Runner::Nile), "Amazon Games");
+    }
+
+    #[test]
+    fn estimates_chain_through_known_sizes() {
+        // 100 bytes a second; the current download has 50 s left.
+        let e = estimate(Some(50), &[1_000, 2_000, 0, 500], Some(100));
+        assert_eq!(e.current, Some(50));
+        assert_eq!(e.starts, vec![Some(50), Some(60), Some(80), None]);
+        assert_eq!(e.done, None, "an update of unknown size hides the end");
+        let e = estimate(Some(50), &[1_000], Some(100));
+        assert_eq!(e.done, Some(60));
+        // Without a rate only the current download's own estimate stands.
+        let e = estimate(Some(50), &[1_000, 1_000], None);
+        assert_eq!(e.starts, vec![Some(50), None]);
+        assert_eq!(e.done, None);
+        assert_eq!(estimate(None, &[], Some(100)).done, None);
+    }
+
+    #[test]
+    fn current_download_left_from_bytes_or_store() {
+        use irori_core::InstallProgress;
+        let bytes = InstallProgress {
+            bytes_total: Some(1_000),
+            bytes_done: Some(250),
+            eta_secs: Some(9),
+            ..Default::default()
+        };
+        assert_eq!(current_left(Some(bytes), Some(100)), Some(8));
+        assert_eq!(current_left(Some(bytes), None), Some(9));
+        assert_eq!(current_left(None, Some(100)), None);
     }
 
     #[test]

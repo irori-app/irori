@@ -1,5 +1,6 @@
 //! Text formatting shared by the management screens.
 
+use chrono::{NaiveDateTime, Timelike as _};
 use gpui_kit::SharedString;
 use irori_core::util::{format_bytes, format_duration};
 use irori_ui::i18n::{t, t_args};
@@ -61,9 +62,72 @@ pub(crate) fn size(bytes: u64) -> Option<String> {
     (bytes > 0).then(|| format_bytes(bytes))
 }
 
+/// A time of day the way `language` usually writes it (the CLDR short time
+/// format): a 12-hour clock with its day period in English, Korean and
+/// Traditional Chinese, 24 hours elsewhere, without a leading zero in Czech,
+/// Spanish and Japanese.
+pub(crate) fn clock(hour: u32, minute: u32, language: &str) -> String {
+    let h12 = match hour % 12 {
+        0 => 12,
+        h => h,
+    };
+    let pm = hour >= 12;
+    match language {
+        "en" => format!("{h12}:{minute:02} {}", if pm { "PM" } else { "AM" }),
+        "ko" => format!("{} {h12}:{minute:02}", if pm { "오후" } else { "오전" }),
+        "zh_Hant" => format!("{}{h12}:{minute:02}", if pm { "下午" } else { "上午" }),
+        "cs" | "es" | "ja" => format!("{hour}:{minute:02}"),
+        _ => format!("{hour:02}:{minute:02}"),
+    }
+}
+
+/// When something `secs` from `now` (local time) is done, phrased to fit a
+/// sentence: "around 9:39 PM", "tomorrow around 8:10 AM", "in about 3 days".
+pub(crate) fn finish_when(now: NaiveDateTime, secs: u64, language: &str) -> SharedString {
+    let at = now + chrono::Duration::seconds(i64::try_from(secs).unwrap_or(i64::MAX / 2));
+    let time = clock(at.hour(), at.minute(), language);
+    match (at.date() - now.date()).num_days() {
+        0 => t_args("manage.downloads.eta.today", &[("time", &time)]),
+        1 => t_args("manage.downloads.eta.tomorrow", &[("time", &time)]),
+        days => t_args("manage.downloads.eta.days", &[("count", &days.to_string())]),
+    }
+}
+
+/// [`finish_when`] from this moment, in the interface language.
+pub(crate) fn finish_from_now(secs: u64) -> SharedString {
+    finish_when(
+        chrono::Local::now().naive_local(),
+        secs,
+        &irori_ui::i18n::language(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clocks_per_language() {
+        assert_eq!(clock(21, 9, "en"), "9:09 PM");
+        assert_eq!(clock(0, 5, "en"), "12:05 AM");
+        assert_eq!(clock(12, 0, "ko"), "오후 12:00");
+        assert_eq!(clock(9, 30, "zh_Hant"), "上午9:30");
+        assert_eq!(clock(9, 30, "es"), "9:30");
+        assert_eq!(clock(9, 30, "de"), "09:30");
+        assert_eq!(clock(21, 30, "fr"), "21:30");
+    }
+
+    #[test]
+    fn finish_today_tomorrow_or_later() {
+        crate::i18n::register();
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 11, 3)
+            .unwrap()
+            .and_hms_opt(20, 0, 0)
+            .unwrap();
+        assert_eq!(finish_when(now, 95 * 60, "en"), "around 9:35 PM");
+        assert_eq!(finish_when(now, 5 * 3600, "en"), "tomorrow around 1:00 AM");
+        assert_eq!(finish_when(now, 3 * 86_400, "en"), "in about 3 days");
+    }
 
     #[test]
     fn relative_times() {

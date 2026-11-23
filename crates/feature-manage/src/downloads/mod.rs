@@ -29,7 +29,7 @@ use irori_ui::{Route, backend, models, navigate};
 
 use crate::common::{backend_op, card, notify_error};
 use crate::format;
-pub(crate) use queue::{HistoryFilter, QueuePresentation, Step};
+pub(crate) use queue::{Estimates, HistoryFilter, QueuePresentation, Step};
 use speed::{SPEED_SAMPLES, SpeedHistory};
 
 /// History rows rendered per "Show more" step.
@@ -49,6 +49,8 @@ pub struct DownloadsView {
     history_shown: usize,
     /// Which finished downloads the history lists.
     history_filter: HistoryFilter,
+    /// When the queue's downloads start and finish.
+    estimates: Estimates,
     images: Entity<LruImageCache>,
     _subscriptions: Vec<Subscription>,
 }
@@ -81,6 +83,7 @@ impl DownloadsView {
             queuing_updates: false,
             history_shown: HISTORY_PAGE,
             history_filter: HistoryFilter::All,
+            estimates: Estimates::default(),
             images: LruImageCache::new(48, cx),
             _subscriptions: subscriptions,
         };
@@ -116,7 +119,22 @@ impl DownloadsView {
             .as_ref()
             .and_then(|id| models(cx).statuses.read(cx).get(id))
             .and_then(|s| s.progress);
-        self.speeds.record(id.as_ref(), progress)
+        let changed = self.speeds.record(id.as_ref(), progress);
+        // From the averaged rate, not the latest reading, so the times
+        // shown hold still while the speed wobbles.
+        self.estimates = if id.is_some() && !self.queue.paused {
+            let rate = self.speeds.average_download();
+            let sizes: Vec<u64> = self
+                .queue
+                .waiting
+                .iter()
+                .map(|r| r.item.download_size)
+                .collect();
+            queue::estimate(queue::current_left(progress, rate), &sizes, rate)
+        } else {
+            Estimates::default()
+        };
+        changed
     }
 
     fn toggle_pause(&mut self, cx: &mut Context<Self>) {
@@ -342,6 +360,12 @@ impl DownloadsView {
                     &[("count", &count)],
                 )
             });
+        }
+        if let Some(secs) = self.estimates.done {
+            parts.push(t_args(
+                "manage.downloads.summary.finish",
+                &[("when", &format::finish_from_now(secs))],
+            ));
         }
         if self.pending_updates > 0 {
             let count = self.pending_updates.to_string();
@@ -578,6 +602,13 @@ impl DownloadsView {
                 format::eta(progress.eta_secs),
             ))
             .child(stat(
+                t("manage.downloads.stat.finishes"),
+                self.estimates
+                    .current
+                    .map(|secs| format::finish_from_now(secs).to_string())
+                    .unwrap_or_else(|| "—".to_string()),
+            ))
+            .child(stat(
                 t("manage.downloads.stat.limit"),
                 format::bottleneck(progress.bottleneck).to_string(),
             ))
@@ -589,10 +620,24 @@ impl DownloadsView {
             let theme = cx.theme();
             let id = row.item.id.clone();
             let key = id.key();
+            let starts = self
+                .estimates
+                .starts
+                .get(row.waiting_ix)
+                .copied()
+                .flatten()
+                .map(|secs| {
+                    t_args(
+                        "manage.downloads.queue.starts",
+                        &[("when", &format::finish_from_now(secs))],
+                    )
+                    .to_string()
+                });
             let meta = [
                 Some(queue::kind_label(&row.item.kind).to_string()),
                 Some(queue::store_label(id.runner).to_string()),
                 format::size(row.item.download_size),
+                starts,
                 Some(
                     t_args(
                         "manage.downloads.queue.added",
