@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Зірочка на обкладинках улюблених",
   "settings.field.ui_group_copies.label": "Показувати копії з кількох крамниць як одну гру",
   "settings.field.ui_group_copies.help": "Гра, придбана у Steam, Epic Games і GOG, показується один раз і запускає встановлену копію. На її сторінці можна перемикатися між копіями; кожна зберігає власний час гри й досягнення.",
+  "settings.field.ui_trailer_autoplay.label": "Відтворювати трейлер гри під час відкриття її сторінки",
+  "settings.field.ui_trailer_autoplay.help": "Перший трейлер запускається без звуку й повторюється. Трейлери відтворюються через ffmpeg на цьому комп’ютері; у Windows Irori може його завантажити.",
   "settings.field.umu_id.label": "ID гри в umu",
   "settings.field.umu_id.help": "umu застосовує виправлення, опубліковані для цього ID, коли запускає гру через Proton. Залиште порожнім, щоб знайти його за магазином, ID застосунку Steam або назвою.",
   "settings.field.xbox.label": "Крамниця Xbox",

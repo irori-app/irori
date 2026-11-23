@@ -72,6 +72,8 @@
   "shell.palette.remove_picked_keywords": "smazat zapomenout přidané hry romy výběr",
   "shell.palette.sync_saves": "Synchronizovat uložené pozice hry {title}",
   "shell.palette.sync_saves_keywords": "cloud uložené pozice nahrát stáhnout",
+  "shell.palette.trailer": "Přehrát nebo pozastavit upoutávku hry {title}",
+  "shell.palette.trailer_keywords": "upoutávka video film sledovat",
   "shell.palette.back_up_saves": "Zálohovat uložené pozice hry {title}",
   "shell.palette.save_backups": "Zálohy uložených pozic hry {title}",
   "shell.palette.troubleshoot": "Řešit potíže se spuštěním hry {title}",

@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 clip",
   "library.stats.album.clips_other": "{count} clips",
   "library.stats.album.clip_date": "Clip · {date}",
+  "library.stats.album.clip_length_date": "Clip · {length} · {date}",
   "library.stats.achievements.title": "Prestaties",
   "library.stats.achievements.scan": "Gespeelde games controleren",
   "library.stats.achievements.scanned_one": "Prestaties gevonden in {count} game",

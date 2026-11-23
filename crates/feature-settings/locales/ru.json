@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Звёздочка на обложках избранного",
   "settings.field.ui_group_copies.label": "Показывать копии из нескольких магазинов как одну игру",
   "settings.field.ui_group_copies.help": "Игра, купленная в Steam, Epic Games и GOG, показывается один раз и запускает установленную копию. На её странице можно переключаться между копиями; у каждой своё время в игре и свои достижения.",
+  "settings.field.ui_trailer_autoplay.label": "Воспроизводить трейлер игры при открытии её страницы",
+  "settings.field.ui_trailer_autoplay.help": "Первый трейлер запускается без звука и повторяется. Трейлеры воспроизводятся через ffmpeg на этом компьютере; в Windows Irori может его загрузить.",
   "settings.field.umu_id.label": "ID игры в umu",
   "settings.field.umu_id.help": "umu применяет исправления, опубликованные для этого ID, когда запускает игру через Proton. Оставьте пустым, чтобы найти его по магазину, ID приложения Steam или названию.",
   "settings.field.xbox.label": "Магазин Xbox",

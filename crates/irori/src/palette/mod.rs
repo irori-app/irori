@@ -112,6 +112,8 @@ pub(crate) enum PaletteTarget {
     LibraryView(LibraryLayout),
     /// Sync a game's cloud saves now.
     SyncSaves(GameId),
+    /// Play or pause the trailer on a game's page.
+    Trailer(GameId),
     /// Remove the games picked in the library from it, after asking.
     RemovePicked,
     /// Back up a game's saves with Ludusavi now.
@@ -709,6 +711,11 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         .as_ref()
         .map(|(game, _, _)| game.clone())
         .filter(|game| irori_game::offers_sync(game, cx));
+    // The shown game's trailer, when its page has one.
+    let with_trailer = open
+        .as_ref()
+        .map(|(game, _, _)| game.clone())
+        .filter(|game| irori_ui::trailer::has_trailer(&game.id(), cx));
     let mut targets = Vec::new();
     let mut items = Palette::items(
         replay.as_deref(),
@@ -733,6 +740,15 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
                 .icon(IconName::RefreshCw),
         );
         targets.push(PaletteTarget::SyncSaves(game.id()));
+    }
+    if let Some(game) = with_trailer {
+        items.push(
+            Entry::new()
+                .label(t_args("shell.palette.trailer", &[("title", &game.title)]))
+                .keywords([t("shell.palette.trailer_keywords")])
+                .icon(IconName::Clapperboard),
+        );
+        targets.push(PaletteTarget::Trailer(game.id()));
     }
     if let Some(count) = irori_library::removable_picks(cx) {
         items.push(
@@ -812,6 +828,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
             window.defer(cx, irori_library::open_save_view_dialog);
         }
         PaletteTarget::SyncSaves(id) => irori_game::sync_saves_now(&id, window, cx),
+        PaletteTarget::Trailer(id) => irori_ui::trailer::toggle_trailer(&id, cx),
         // After the palette's own dialog has closed.
         PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),

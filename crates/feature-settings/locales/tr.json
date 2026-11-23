@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Favorilerin kapağında yıldız",
   "settings.field.ui_group_copies.label": "Birden çok mağazadaki kopyaları tek oyun olarak göster",
   "settings.field.ui_group_copies.help": "Steam, Epic Games ve GOG’da sahip olunan bir oyun bir kez görünür ve kurulu kopyayı başlatır. Sayfası kopyalar arasında geçiş yapar; her biri kendi oynama süresini ve başarımlarını korur.",
+  "settings.field.ui_trailer_autoplay.label": "Oyunun sayfası açıldığında fragmanını oynat",
+  "settings.field.ui_trailer_autoplay.help": "İlk fragman sessiz başlar ve tekrar eder. Fragmanlar bu bilgisayardaki ffmpeg ile oynatılır; Windows’ta Irori onu indirebilir.",
   "settings.field.umu_id.label": "umu oyun kimliği",
   "settings.field.umu_id.help": "umu, oyunu Proton ile çalıştırırken bu kimlik için yayımlanan düzeltmeleri uygular. Mağazadan, Steam uygulama kimliğinden ya da başlıktan bulunması için boş bırakın.",
   "settings.field.xbox.label": "Xbox mağazası",

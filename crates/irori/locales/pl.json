@@ -72,6 +72,8 @@
   "shell.palette.remove_picked_keywords": "usuń zapomnij dodane gry romy zaznaczenie",
   "shell.palette.sync_saves": "Synchronizuj zapisy gry {title}",
   "shell.palette.sync_saves_keywords": "chmura zapisy wyślij pobierz",
+  "shell.palette.trailer": "Odtwórz lub wstrzymaj zwiastun gry {title}",
+  "shell.palette.trailer_keywords": "zwiastun wideo film oglądaj",
   "shell.palette.back_up_saves": "Skopiuj zapisy gry {title}",
   "shell.palette.save_backups": "Kopie zapisów gry {title}",
   "shell.palette.troubleshoot": "Rozwiąż problemy z uruchomieniem gry {title}",

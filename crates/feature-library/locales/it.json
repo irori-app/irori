@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 clip",
   "library.stats.album.clips_other": "{count} clip",
   "library.stats.album.clip_date": "Clip · {date}",
+  "library.stats.album.clip_length_date": "Clip · {length} · {date}",
   "library.stats.achievements.title": "Obiettivi",
   "library.stats.achievements.scan": "Controlla i giochi giocati",
   "library.stats.achievements.scanned_one": "Obiettivi trovati in {count} gioco",

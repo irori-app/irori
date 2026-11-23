@@ -5815,6 +5815,7 @@ dependencies = [
  "windows-registry 0.6.1",
  "windows-sys 0.61.2",
  "x11rb",
+ "zip",
 ]
 
 [[package]]

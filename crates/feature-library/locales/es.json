@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 clip",
   "library.stats.album.clips_other": "{count} clips",
   "library.stats.album.clip_date": "Clip · {date}",
+  "library.stats.album.clip_length_date": "Clip · {length} · {date}",
   "library.stats.achievements.title": "Logros",
   "library.stats.achievements.scan": "Revisar juegos jugados",
   "library.stats.achievements.scanned_one": "Se encontraron logros en {count} juego",

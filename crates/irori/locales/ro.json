@@ -72,6 +72,8 @@
   "shell.palette.remove_picked_keywords": "șterge uită jocuri adăugate rom-uri selecție",
   "shell.palette.sync_saves": "Sincronizează salvările pentru {title}",
   "shell.palette.sync_saves_keywords": "cloud salvări încarcă descarcă",
+  "shell.palette.trailer": "Redă sau pune pe pauză trailerul pentru {title}",
+  "shell.palette.trailer_keywords": "trailer video film vizionează",
   "shell.palette.back_up_saves": "Fă copie salvărilor {title}",
   "shell.palette.save_backups": "Copiile salvărilor {title}",
   "shell.palette.troubleshoot": "Depanează pornirea pentru {title}",

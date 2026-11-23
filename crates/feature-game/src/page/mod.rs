@@ -25,6 +25,7 @@ mod related;
 mod sandbox;
 mod screenshots;
 mod timeline;
+mod trailer;
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -57,7 +58,7 @@ use crate::load::Load;
 use crate::state::{ActionInputs, PrimaryAction};
 use crate::{
     BackToGame, CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction,
-    ToggleFavourite, TroubleshootLaunch, ops,
+    ToggleFavourite, ToggleTrailer, TroubleshootLaunch, ops,
 };
 
 pub use achievements::AchievementFilter;
@@ -171,6 +172,8 @@ pub struct GamePage {
     sticky: bool,
     /// The whole changelog is shown, not just its latest entries.
     changelog_expanded: bool,
+    /// The trailer player, made once the store page names trailers.
+    trailer: Option<Entity<irori_ui::trailer::TrailerPlayer>>,
     /// Index of the screenshot open in the viewer.
     viewer: Option<usize>,
     viewer_focus: FocusHandle,
@@ -306,6 +309,7 @@ impl GamePage {
             sticky: false,
             changelog_expanded: false,
             viewer: None,
+            trailer: None,
             viewer_focus: cx.focus_handle(),
             viewer_strip: ScrollHandle::new(),
             timeline: timeline::TimelineView::default(),
@@ -450,11 +454,8 @@ impl GamePage {
     }
 
     pub(super) fn load_extra(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // An added game's page has only what the user wrote, unless IGDB
-        // may fill it in.
-        if self.id.runner == irori_core::Runner::Sideload && !backend(cx).settings.app().igdb {
-            return;
-        }
+        // An added game's page is asked too: what the user wrote, filled in
+        // by IGDB when it is on and by the Steam app the game is linked to.
         self.extra = Load::Loading;
         let b = backend(cx);
         let id = self.id.clone();
@@ -468,6 +469,7 @@ impl GamePage {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.extra = Load::from_result(result);
+                this.sync_trailer(cx);
                 cx.notify();
             });
         })
@@ -743,6 +745,14 @@ impl GamePage {
         }
         cx.propagate();
     }
+
+    fn on_toggle_trailer(&mut self, _: &ToggleTrailer, _: &mut Window, cx: &mut Context<Self>) {
+        if self.has_trailer(cx) {
+            self.toggle_trailer(cx);
+        } else {
+            cx.propagate();
+        }
+    }
 }
 
 impl Render for GamePage {
@@ -758,6 +768,7 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_troubleshoot))
             .on_action(cx.listener(Self::on_back_to_game))
             .on_action(cx.listener(Self::on_cancel_launch))
+            .on_action(cx.listener(Self::on_toggle_trailer))
             .size_full()
             .when(self.panel.is_none(), |d| d.bg(cx.theme().background))
             .text_color(cx.theme().foreground);

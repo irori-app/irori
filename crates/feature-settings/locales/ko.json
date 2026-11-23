@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "즐겨찾기 커버에 별 표시",
   "settings.field.ui_group_copies.label": "여러 스토어의 사본을 하나의 게임으로 표시",
   "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다.",
+  "settings.field.ui_trailer_autoplay.label": "게임 페이지를 열 때 트레일러 재생",
+  "settings.field.ui_trailer_autoplay.help": "첫 번째 트레일러는 음소거 상태로 시작해 반복 재생됩니다. 트레일러는 이 컴퓨터의 ffmpeg로 재생되며, Windows에서는 Irori가 ffmpeg를 내려받을 수 있습니다.",
   "settings.field.umu_id.label": "umu 게임 ID",
   "settings.field.umu_id.help": "umu는 Proton으로 게임을 실행할 때 이 ID에 공개된 수정 사항을 적용합니다. 비워 두면 스토어, Steam 앱 ID 또는 제목으로 찾습니다.",
   "settings.field.xbox.label": "Xbox 스토어",

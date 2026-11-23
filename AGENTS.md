@@ -615,6 +615,22 @@ commands without a window.
   shows its size, SteamGridDB's from its API, the others' read from their first bytes
   (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
   off; the Modify dialog's title and art overrides win over everything.
+- **Store media for other stores' games** (`media/steam.rs`): after the IGDB fill,
+  `Backend::extra_info` gives a non-Steam game whose `iroriSteamAppId` names a Steam
+  app that app's store-page screenshots (keyless `appdetails`, kept in memory for the
+  run), only when its own page has none. Amazon's library entries carry their own
+  screenshots (`Details::screenshots`).
+- **Trailers** (`ExtraInfo::videos`, from Steam `appdetails` `movies`, also for games
+  linked to a Steam app): `media/trailer.rs` plays one through the user's ffmpeg
+  (`media/ffmpeg.rs`; never bundled) at its own pace (`-re`), only network protocols
+  allowed, as raw BGRA frames on a pipe (`process::spawn_piped`), with sound through
+  ffmpeg's `pulse`/`alsa`/`audiotoolbox` output where it has one (none on Windows).
+  `irori_ui::trailer::TrailerPlayer` draws it on the game page (`page/trailer.rs`):
+  muted at first, looping, ffmpeg ended whenever it pauses or its stage isn't drawn on
+  screen, two frames in the GPU atlas at most. `iroriUi.trailerAutoplay` starts the
+  first one (not with reduced motion). On Windows `media/ffmpeg_download.rs` offers,
+  after asking, BtbN's LGPL build named on ffmpeg.org, checked against the release's
+  `checksums.sha256`, into `<data>/tools/ffmpeg`.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -834,7 +850,11 @@ commands without a window.
   folder's modified time; matching is redone each build. The stats page's Album tab
   and its insight card show them, and journal notes link them. Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
-  read the same way.
+  read the same way. A clip's `file://` address in the art store is its poster
+  (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one
+  decoder thread, keyframes from two thirds in through `thumbnail`), cached in
+  `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
+  modified time; `irori_ui::components::clip_mark` draws the play chip and length.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure

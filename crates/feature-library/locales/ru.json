@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 клип",
   "library.stats.album.clips_other": "Клипов: {count}",
   "library.stats.album.clip_date": "Клип · {date}",
+  "library.stats.album.clip_length_date": "Клип · {length} · {date}",
   "library.stats.achievements.title": "Достижения",
   "library.stats.achievements.scan": "Проверить сыгранные игры",
   "library.stats.achievements.scanned_one": "Достижения найдены в играх: {count}",

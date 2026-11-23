@@ -72,6 +72,8 @@
   "shell.palette.remove_picked_keywords": "eliminare dimenticare giochi aggiunti rom selezione",
   "shell.palette.sync_saves": "Sincronizza i salvataggi di {title}",
   "shell.palette.sync_saves_keywords": "cloud salvataggi caricare scaricare",
+  "shell.palette.trailer": "Riproduci o metti in pausa il trailer di {title}",
+  "shell.palette.trailer_keywords": "trailer video filmato guarda",
   "shell.palette.back_up_saves": "Fai il backup dei salvataggi di {title}",
   "shell.palette.save_backups": "Backup dei salvataggi di {title}",
   "shell.palette.troubleshoot": "Risolvi problemi di avvio di {title}",

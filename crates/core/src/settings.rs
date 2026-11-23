@@ -1516,6 +1516,9 @@ pub struct UiPrefs {
     /// Copies of one game from several stores are one library entry
     /// (`groupCopies`, on unless turned off).
     pub group_copies: bool,
+    /// A game page's first trailer starts on its own, muted
+    /// (`trailerAutoplay`, off unless turned on).
+    pub trailer_autoplay: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1761,6 +1764,7 @@ impl Default for UiPrefs {
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
+            trailer_autoplay: false,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,

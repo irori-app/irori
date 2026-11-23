@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Gwiazdka na okładkach ulubionych",
   "settings.field.ui_group_copies.label": "Pokazuj kopie z kilku sklepów jako jedną grę",
   "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia.",
+  "settings.field.ui_trailer_autoplay.label": "Odtwarzaj zwiastun gry po otwarciu jej strony",
+  "settings.field.ui_trailer_autoplay.help": "Pierwszy zwiastun startuje wyciszony i odtwarza się w pętli. Zwiastuny są odtwarzane przez ffmpeg na tym komputerze; w systemie Windows Irori może go pobrać.",
   "settings.field.umu_id.label": "Identyfikator gry w umu",
   "settings.field.umu_id.help": "umu stosuje poprawki opublikowane dla tego identyfikatora, gdy uruchamia grę przez Proton. Zostaw puste, aby znaleźć go po sklepie, identyfikatorze aplikacji Steam lub tytule.",
   "settings.field.xbox.label": "Sklep Xbox",

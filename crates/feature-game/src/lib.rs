@@ -90,6 +90,8 @@ gpui_kit::actions!(
         CancelLaunch,
         /// Bring the running game's window to the front.
         BackToGame,
+        /// Play or pause the game's trailer.
+        ToggleTrailer,
     ]
 );
 
@@ -106,5 +108,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
         KeyBinding::new("escape", CancelLaunch, ctx),
         KeyBinding::new("ctrl-shift-enter", BackToGame, ctx),
+        KeyBinding::new("ctrl-alt-p", ToggleTrailer, ctx),
     ]);
 }

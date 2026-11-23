@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 klipp",
   "library.stats.album.clips_other": "{count} klipp",
   "library.stats.album.clip_date": "Klipp · {date}",
+  "library.stats.album.clip_length_date": "Klipp · {length} · {date}",
   "library.stats.achievements.title": "Prestationer",
   "library.stats.achievements.scan": "Kontrollera spelade spel",
   "library.stats.achievements.scanned_one": "Prestationer hittades i {count} spel",

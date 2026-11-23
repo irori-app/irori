@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Star favourites’ covers",
   "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
   "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements.",
+  "settings.field.ui_trailer_autoplay.label": "Play a game’s trailer when its page opens",
+  "settings.field.ui_trailer_autoplay.help": "The first trailer starts muted and loops. Trailers play through ffmpeg on this computer; on Windows, Irori can download it.",
   "settings.field.umu_id.label": "umu game id",
   "settings.field.umu_id.help": "umu applies the fixes published for this id when it runs the game with Proton. Leave it empty to find it from the store, the Steam app id or the title.",
   "settings.field.xbox.label": "Xbox store",

@@ -72,6 +72,8 @@
   "shell.palette.remove_picked_keywords": "sil unut eklenen oyunlar romlar seçim",
   "shell.palette.sync_saves": "{title} kayıtlarını eşitle",
   "shell.palette.sync_saves_keywords": "bulut kayıtlar yükle indir",
+  "shell.palette.trailer": "{title} fragmanını oynat veya duraklat",
+  "shell.palette.trailer_keywords": "fragman video film izle",
   "shell.palette.back_up_saves": "{title} kayıtlarını yedekle",
   "shell.palette.save_backups": "{title} kayıt yedekleri",
   "shell.palette.troubleshoot": "{title} başlatma sorunlarını gider",

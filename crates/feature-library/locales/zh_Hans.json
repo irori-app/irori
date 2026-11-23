@@ -466,6 +466,7 @@
   "library.stats.album.clips_one": "1 个片段",
   "library.stats.album.clips_other": "{count} 个片段",
   "library.stats.album.clip_date": "片段 · {date}",
+  "library.stats.album.clip_length_date": "片段 · {length} · {date}",
   "library.stats.achievements.title": "成就",
   "library.stats.achievements.scan": "检查玩过的游戏",
   "library.stats.achievements.scanned_one": "在 {count} 个游戏中找到成就",

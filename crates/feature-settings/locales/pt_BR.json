@@ -1538,6 +1538,8 @@
   "settings.field.ui_cover_favourite.label": "Estrela nas capas dos favoritos",
   "settings.field.ui_group_copies.label": "Mostrar cópias de várias lojas como um único jogo",
   "settings.field.ui_group_copies.help": "Um jogo que você tem na Steam, na Epic Games e na GOG aparece uma vez e abre a cópia instalada. A página dele alterna entre as cópias; cada uma mantém seu próprio tempo de jogo e suas conquistas.",
+  "settings.field.ui_trailer_autoplay.label": "Reproduzir o trailer de um jogo ao abrir a página dele",
+  "settings.field.ui_trailer_autoplay.help": "O primeiro trailer começa sem som e em repetição. Os trailers são reproduzidos com o ffmpeg deste computador; no Windows, o Irori pode baixá-lo.",
   "settings.field.umu_id.label": "ID do jogo no umu",
   "settings.field.umu_id.help": "O umu aplica as correções publicadas para este ID quando executa o jogo com o Proton. Deixe vazio para encontrá-lo pela loja, pelo ID do app na Steam ou pelo título.",
   "settings.field.xbox.label": "Loja Xbox",
