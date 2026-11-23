@@ -1,6 +1,10 @@
 {
   "library.art.attribution": "Afbeeldingen van SteamGridDB",
   "library.art.attribution_igdb": "Afbeeldingen van IGDB",
+  "library.art.attribution_both": "Afbeeldingen van SteamGridDB en IGDB",
+  "library.art.source_all": "Alle bronnen",
+  "library.art.source_count": "{source} ({count})",
+  "library.art.size": "{width} × {height}",
   "library.art.back_to_form": "Terug naar formulier",
   "library.art.back_to_games": "Terug naar gevonden games",
   "library.art.choose_game": "Kies de game",

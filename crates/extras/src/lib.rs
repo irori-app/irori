@@ -15,6 +15,7 @@ pub mod anticheat;
 pub mod discounts;
 pub mod heroic_import;
 pub mod igdb;
+pub mod image_size;
 pub mod known_fixes;
 pub mod logs;
 pub mod lutris_import;

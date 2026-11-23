@@ -1,6 +1,10 @@
 {
   "library.art.attribution": "Изображения с SteamGridDB",
   "library.art.attribution_igdb": "Изображения из IGDB",
+  "library.art.attribution_both": "Изображения с SteamGridDB и IGDB",
+  "library.art.source_all": "Все источники",
+  "library.art.source_count": "{source} ({count})",
+  "library.art.size": "{width} × {height}",
   "library.art.back_to_form": "Вернуться к форме",
   "library.art.back_to_games": "Назад к найденным играм",
   "library.art.choose_game": "Выберите игру",

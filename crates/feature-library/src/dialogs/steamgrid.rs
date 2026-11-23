@@ -7,6 +7,13 @@
 //! it. Nothing is searched until the user opens the picker (Heroic looked up
 //! art on a third-party server whenever the title field lost focus). IGDB
 //! has covers, artworks and screenshots but no square art or logos.
+//!
+//! With both sources on, one search asks both, each taking the game its
+//! search means, and pills show one source's pictures. Every picture says
+//! its size: SteamGridDB gives it, the others' is read from their first
+//! bytes ([`irori_extras::image_size`]).
+
+use std::collections::HashMap;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -36,6 +43,8 @@ use irori_ui::{Route, backend, models, navigate};
 const API_KEY_PAGE: &str = "https://www.steamgriddb.com/profile/preferences/api";
 /// Images shown per game; the rest are rarely useful and cost downloads.
 const MAX_IMAGES: usize = 60;
+/// Pictures whose size is read at once.
+const SIZE_READS: usize = 4;
 
 /// Which artwork to pick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,8 +108,61 @@ impl ArtKind {
 /// Where the picker searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtSource {
+    /// Every source that can be searched, each taking its best match.
+    All,
     SteamGridDb,
     Igdb,
+}
+
+impl ArtSource {
+    /// The source's name, which is never translated.
+    fn name(self) -> SharedString {
+        match self {
+            ArtSource::All => t("library.art.source_all"),
+            ArtSource::SteamGridDb => "SteamGridDB".into(),
+            ArtSource::Igdb => "IGDB".into(),
+        }
+    }
+}
+
+/// A picture found, with where it came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Found {
+    pub source: ArtSource,
+    pub image: SgdbImage,
+}
+
+/// The game a search result means without asking: the one named like the
+/// search once folded, else the first.
+pub fn pick_game<'a>(games: &'a [SgdbGame], query: &str) -> Option<&'a SgdbGame> {
+    let wanted = irori_services::search::fold(query);
+    games
+        .iter()
+        .find(|g| irori_services::search::fold(&g.name) == wanted)
+        .or(games.first())
+}
+
+/// How many of `found` each source holds, in the order they first appear;
+/// empty when they all come from one, where filtering would show nothing new.
+pub fn source_counts(found: &[Found]) -> Vec<(ArtSource, usize)> {
+    let mut counts: Vec<(ArtSource, usize)> = Vec::new();
+    for f in found {
+        match counts.iter_mut().find(|(s, _)| *s == f.source) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((f.source, 1)),
+        }
+    }
+    if counts.len() < 2 {
+        counts.clear();
+    }
+    counts
+}
+
+/// The pictures of `found` the source filter shows (`None` for all).
+pub fn shown(found: &[Found], filter: Option<ArtSource>) -> impl Iterator<Item = &Found> {
+    found
+        .iter()
+        .filter(move |f| filter.is_none_or(|s| s == f.source))
 }
 
 /// IGDB's images of `game` for `kind`: its cover, or its artworks then
@@ -111,6 +173,8 @@ pub fn igdb_images(kind: ArtKind, game: &IgdbGame) -> Vec<SgdbImage> {
             id: game.id,
             url: image_url(id, full)?,
             thumb: image_url(id, thumb)?,
+            width: None,
+            height: None,
         })
     };
     match kind {
@@ -161,7 +225,7 @@ enum Phase {
     Searching,
     Games,
     Loading(SharedString),
-    Images(SharedString, Vec<SgdbImage>),
+    Images(SharedString, Vec<Found>),
     Message(SharedString),
 }
 
@@ -178,6 +242,12 @@ pub struct ArtPicker {
     /// IGDB's records of `games`, which already hold their images.
     igdb_found: Vec<IgdbGame>,
     _task: Option<Task<()>>,
+    /// The one source whose pictures show, when several found some.
+    filter: Option<ArtSource>,
+    /// Pictures' sizes by full-size address, from their source or read
+    /// from their first bytes.
+    sizes: HashMap<String, (u32, u32)>,
+    _sizes_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -201,10 +271,11 @@ impl ArtPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let source = if key.is_none() && igdb_on {
-            ArtSource::Igdb
-        } else {
-            ArtSource::SteamGridDb
+        // Both sources at once when both can be searched.
+        let source = match (key.is_some(), igdb_on) {
+            (true, true) => ArtSource::All,
+            (false, true) => ArtSource::Igdb,
+            _ => ArtSource::SteamGridDb,
         };
         let query = cx.new(|cx| {
             InputState::new(window, cx)
@@ -234,6 +305,9 @@ impl ArtPicker {
             games: Vec::new(),
             igdb_found: Vec::new(),
             _task: None,
+            filter: None,
+            sizes: HashMap::new(),
+            _sizes_task: None,
             _subscriptions: subscriptions,
         };
         if !title.trim().is_empty() {
@@ -264,9 +338,11 @@ impl ArtPicker {
         }
         self.source = source;
         self._task = None;
+        self._sizes_task = None;
+        self.filter = None;
         self.games.clear();
         self.igdb_found.clear();
-        if source == ArtSource::SteamGridDb && self.key.is_none() {
+        if source != ArtSource::Igdb && self.key.is_none() {
             self.phase = Phase::NoKey;
             cx.notify();
         } else {
@@ -277,6 +353,7 @@ impl ArtPicker {
 
     fn search(&mut self, cx: &mut Context<Self>) {
         let key = match self.source {
+            ArtSource::All => return self.search_all(cx),
             ArtSource::SteamGridDb => match self.key.clone() {
                 Some(key) => Some(key),
                 None => return,
@@ -287,6 +364,7 @@ impl ArtPicker {
         if query.is_empty() {
             return;
         }
+        self.filter = None;
         self.phase = Phase::Searching;
         cx.notify();
         let b = backend(cx);
@@ -334,20 +412,168 @@ impl ArtPicker {
         }));
     }
 
+    /// Search every source at once: each takes the game its search means
+    /// ([`pick_game`]), and their pictures show together. A source that
+    /// fails leaves the other's pictures; only both failing says why.
+    fn search_all(&mut self, cx: &mut Context<Self>) {
+        let (Some(key), true) = (self.key.clone(), self.igdb_on) else {
+            return;
+        };
+        let query = self.query.read(cx).value().trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        self.filter = None;
+        self.games.clear();
+        self.igdb_found.clear();
+        self.phase = Phase::Searching;
+        cx.notify();
+        let (b, kind) = (backend(cx), self.kind);
+        let task = irori_ui::run(cx, async move {
+            let sgdb = async {
+                let games = steamgrid::search_games(&key, &query).await?;
+                let Some(game) = pick_game(&games, &query).cloned() else {
+                    return anyhow::Ok(None);
+                };
+                let filter = kind.filter();
+                let images = match kind {
+                    ArtKind::Background => steamgrid::heroes(&key, game.id, &filter).await?,
+                    ArtKind::Logo => steamgrid::logos(&key, game.id, &filter).await?,
+                    ArtKind::Cover | ArtKind::Square => {
+                        steamgrid::grids(&key, game.id, &filter).await?
+                    }
+                };
+                Ok(Some((game.name, images)))
+            };
+            let igdb = async {
+                let found = b.search_igdb(&query).await?;
+                let games: Vec<SgdbGame> = found
+                    .iter()
+                    .map(|g| SgdbGame {
+                        id: g.id,
+                        name: g.name.clone(),
+                    })
+                    .collect();
+                let Some(game) = pick_game(&games, &query) else {
+                    return anyhow::Ok(None);
+                };
+                let record = found.iter().find(|g| g.id == game.id);
+                Ok(record.map(|g| (g.name.clone(), igdb_images(kind, g))))
+            };
+            let (sgdb, igdb) = futures::join!(sgdb, igdb);
+            Ok((
+                sgdb.map_err(|e| format!("{e:#}")),
+                igdb.map_err(|e| format!("{e:#}")),
+            ))
+        });
+        let query: SharedString = self.query.read(cx).value().trim().to_string().into();
+        self._task = Some(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |this, cx| {
+                this.phase = match result {
+                    Ok((sgdb, igdb)) => {
+                        let mut found = Vec::new();
+                        let mut name = None;
+                        let mut errors = Vec::new();
+                        for (source, answer) in
+                            [(ArtSource::SteamGridDb, sgdb), (ArtSource::Igdb, igdb)]
+                        {
+                            match answer {
+                                Ok(Some((game, images))) => {
+                                    name.get_or_insert(game);
+                                    found.extend(
+                                        images
+                                            .into_iter()
+                                            .take(MAX_IMAGES)
+                                            .map(|image| Found { source, image }),
+                                    );
+                                }
+                                Ok(None) => {}
+                                Err(e) => errors.push(e),
+                            }
+                        }
+                        if !found.is_empty() {
+                            Phase::Images(name.map(Into::into).unwrap_or(query), found)
+                        } else if errors.len() == 2 {
+                            Phase::Message(errors.join("\n").into())
+                        } else {
+                            Phase::Message(kind.none_found(&query))
+                        }
+                    }
+                    Err(e) => Phase::Message(format!("{e:#}").into()),
+                };
+                this.read_sizes(cx);
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// Note the sizes the shown pictures' sources gave, and read the others'
+    /// from their first bytes, a few at a time, off the UI thread.
+    fn read_sizes(&mut self, cx: &mut Context<Self>) {
+        let Phase::Images(_, found) = &self.phase else {
+            return;
+        };
+        let mut unknown = Vec::new();
+        for f in found {
+            match f.image.size() {
+                Some(size) => {
+                    self.sizes.insert(f.image.url.clone(), size);
+                }
+                None if !self.sizes.contains_key(&f.image.url) => unknown.push(f.image.url.clone()),
+                None => {}
+            }
+        }
+        if unknown.is_empty() {
+            return;
+        }
+        let task = irori_ui::run(cx, async move {
+            use futures::StreamExt as _;
+            let sizes: Vec<(String, (u32, u32))> = futures::stream::iter(unknown)
+                .map(|url| async move {
+                    let size = irori_extras::image_size::fetch(&url).await;
+                    size.ok().flatten().map(|s| (url, s))
+                })
+                .buffer_unordered(SIZE_READS)
+                .filter_map(|s| async move { s })
+                .collect()
+                .await;
+            Ok(sizes)
+        });
+        self._sizes_task = Some(cx.spawn(async move |this, cx| {
+            let Ok(sizes) = task.await else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                this.sizes.extend(sizes);
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
     fn load_images(&mut self, game: SgdbGame, cx: &mut Context<Self>) {
         let name: SharedString = game.name.clone().into();
         if self.source == ArtSource::Igdb {
-            let images = self
+            let images: Vec<Found> = self
                 .igdb_found
                 .iter()
                 .find(|g| g.id == game.id)
                 .map(|g| igdb_images(self.kind, g))
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into_iter()
+                .map(|image| Found {
+                    source: ArtSource::Igdb,
+                    image,
+                })
+                .collect();
             self.phase = if images.is_empty() {
                 Phase::Message(self.kind.none_found(&name))
             } else {
                 Phase::Images(name, images)
             };
+            self.read_sizes(cx);
             cx.notify();
             return;
         }
@@ -372,10 +598,18 @@ impl ArtPicker {
                     Ok(images) if images.is_empty() => Phase::Message(kind.none_found(&name)),
                     Ok(mut images) => {
                         images.truncate(MAX_IMAGES);
-                        Phase::Images(name, images)
+                        let found = images
+                            .into_iter()
+                            .map(|image| Found {
+                                source: ArtSource::SteamGridDb,
+                                image,
+                            })
+                            .collect();
+                        Phase::Images(name, found)
                     }
                     Err(e) => Phase::Message(format!("{e:#}").into()),
                 };
+                this.read_sizes(cx);
                 cx.notify();
             })
             .ok();
@@ -446,9 +680,48 @@ impl ArtPicker {
             .into_any_element()
     }
 
+    /// Pills that show one source's pictures, with counts, when several
+    /// sources found some.
+    fn render_source_filter(&self, found: &[Found], cx: &mut Context<Self>) -> Option<AnyElement> {
+        let counts = source_counts(found);
+        if counts.is_empty() {
+            return None;
+        }
+        let pill = |id: &'static str, filter: Option<ArtSource>, label: SharedString| {
+            Button::new(id)
+                .xsmall()
+                .ghost()
+                .label(label)
+                .selected(self.filter == filter)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.filter = filter;
+                    cx.notify();
+                }))
+        };
+        let count = |name: SharedString, n: usize| {
+            t_args(
+                "library.art.source_count",
+                &[("source", &name), ("count", &n.to_string())],
+            )
+        };
+        let mut row = h_flex().gap_1().flex_wrap().child(pill(
+            "art-filter-all",
+            None,
+            count(ArtSource::All.name(), found.len()),
+        ));
+        for (source, n) in counts {
+            let id = match source {
+                ArtSource::Igdb => "art-filter-igdb",
+                _ => "art-filter-sgdb",
+            };
+            row = row.child(pill(id, Some(source), count(source.name(), n)));
+        }
+        Some(row.into_any_element())
+    }
+
     fn render_images(
         &self,
-        images: &[SgdbImage],
+        found: &[Found],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -457,8 +730,15 @@ impl ArtPicker {
         let pixels = physical_width(width, window);
         let theme = cx.theme();
         let (radius, muted_bg, muted) = (theme.radius, theme.muted, theme.muted_foreground);
-        let mut tiles = Vec::with_capacity(images.len());
-        for (ix, image) in images.iter().enumerate() {
+        let mut tiles = Vec::with_capacity(found.len());
+        for (ix, f) in shown(found, self.filter).enumerate() {
+            let image = &f.image;
+            let size = self.sizes.get(&image.url).map(|(w, h)| {
+                t_args(
+                    "library.art.size",
+                    &[("width", &w.to_string()), ("height", &h.to_string())],
+                )
+            });
             // Logos keep their transparency and are shown whole.
             let logo = self.kind == ArtKind::Logo;
             let thumb = art_img(&image.thumb, pixels, logo, cx);
@@ -493,7 +773,22 @@ impl ArtPicker {
                         "library.art.image_label",
                         &[("number", &(ix + 1).to_string())],
                     ))
-                    .child(frame)
+                    .child(
+                        v_flex()
+                            .w(width)
+                            .gap_0p5()
+                            .child(frame)
+                            // The line keeps its height before the size is known,
+                            // so the grid doesn't shift when it arrives.
+                            .child(
+                                div()
+                                    .h(rems(1.))
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .truncate()
+                                    .children(size),
+                            ),
+                    )
                     .on_click(
                         cx.listener(move |_, _, _, cx| {
                             cx.emit(ArtPickerEvent::Picked(url.clone()))
@@ -538,8 +833,8 @@ impl Render for ArtPicker {
                 })
                 .into_any_element(),
             Phase::Games => self.render_games(cx),
-            Phase::Images(name, images) => {
-                let images = images.clone();
+            Phase::Images(name, found) => {
+                let found = found.clone();
                 let name = name.clone();
                 v_flex()
                     .gap_2()
@@ -549,7 +844,8 @@ impl Render for ArtPicker {
                             .text_color(muted)
                             .child(t_args("library.art.choose_image", &[("name", &name)])),
                     )
-                    .child(self.render_images(&images, window, cx))
+                    .children(self.render_source_filter(&found, cx))
+                    .child(self.render_images(&found, window, cx))
                     .into_any_element()
             }
             Phase::Message(text) => div()
@@ -566,6 +862,19 @@ impl Render for ArtPicker {
                 el.child(
                     h_flex()
                         .gap_1()
+                        // Both together only when both can be searched.
+                        .when(self.key.is_some(), |el| {
+                            el.child(
+                                Button::new("art-source-all")
+                                    .ghost()
+                                    .small()
+                                    .label(ArtSource::All.name())
+                                    .selected(source == ArtSource::All)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_source(ArtSource::All, cx)
+                                    })),
+                            )
+                        })
                         .child(
                             Button::new("art-source-sgdb")
                                 .ghost()
@@ -631,6 +940,7 @@ impl Render for ArtPicker {
                             .min_w_0()
                             .when(has_key, |el| {
                                 el.child(match source {
+                                    ArtSource::All => t("library.art.attribution_both"),
                                     ArtSource::SteamGridDb => t("library.art.attribution"),
                                     ArtSource::Igdb => t("library.art.attribution_igdb"),
                                 })
@@ -726,6 +1036,46 @@ mod tests {
         assert!(backgrounds[0].ends_with("/t_1080p/ar1.jpg"));
         assert!(igdb_images(ArtKind::Logo, &game).is_empty());
         assert!(igdb_images(ArtKind::Square, &game).is_empty());
+    }
+
+    fn found(source: ArtSource, id: u64) -> Found {
+        Found {
+            source,
+            image: SgdbImage {
+                id,
+                url: format!("https://x/{id}.png"),
+                thumb: String::new(),
+                width: None,
+                height: None,
+            },
+        }
+    }
+
+    #[test]
+    fn a_merged_search_takes_the_game_named_like_it() {
+        let games = [game(1, "Hades II"), game(2, "HADES"), game(3, "Hades")];
+        assert_eq!(pick_game(&games, "hades").map(|g| g.id), Some(2));
+        // Nothing named so: the source's own first answer.
+        assert_eq!(pick_game(&games, "hades 2").map(|g| g.id), Some(1));
+        assert_eq!(pick_game(&[], "hades"), None);
+    }
+
+    #[test]
+    fn source_pills_count_each_source_and_filter_to_it() {
+        let one = [found(ArtSource::Igdb, 1), found(ArtSource::Igdb, 2)];
+        assert!(source_counts(&one).is_empty());
+        let both = [
+            found(ArtSource::SteamGridDb, 1),
+            found(ArtSource::SteamGridDb, 2),
+            found(ArtSource::Igdb, 3),
+        ];
+        assert_eq!(
+            source_counts(&both),
+            vec![(ArtSource::SteamGridDb, 2), (ArtSource::Igdb, 1)]
+        );
+        let ids = |filter| shown(&both, filter).map(|f| f.image.id).collect::<Vec<_>>();
+        assert_eq!(ids(None), vec![1, 2, 3]);
+        assert_eq!(ids(Some(ArtSource::Igdb)), vec![3]);
     }
 
     #[test]

@@ -597,9 +597,12 @@ commands without a window.
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
   genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
-  art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
-  asked while the setting is off; the Modify dialog's title and art overrides win
-  over everything.
+  art picker offers IGDB's covers and artworks (no square art or logos). With a
+  SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
+  game named like the search, `pick_game`) and pills filter by source; every picture
+  shows its size, SteamGridDB's from its API, the others' read from their first bytes
+  (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
+  off; the Modify dialog's title and art overrides win over everything.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with

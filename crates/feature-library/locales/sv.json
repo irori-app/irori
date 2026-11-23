@@ -1,6 +1,10 @@
 {
   "library.art.attribution": "Bilder från SteamGridDB",
   "library.art.attribution_igdb": "Bilder från IGDB",
+  "library.art.attribution_both": "Bilder från SteamGridDB och IGDB",
+  "library.art.source_all": "Alla källor",
+  "library.art.source_count": "{source} ({count})",
+  "library.art.size": "{width} × {height}",
   "library.art.back_to_form": "Tillbaka till formuläret",
   "library.art.back_to_games": "Tillbaka till hittade spel",
   "library.art.choose_game": "Välj spelet",

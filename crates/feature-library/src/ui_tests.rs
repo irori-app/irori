@@ -1213,4 +1213,20 @@ fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+    // Both at once needs SteamGridDB's key too.
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::All, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::All, true));
+
+    // On with a key: both sources together from the start.
+    let both = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                let key = irori_extras::steamgrid::ApiKey::new("key");
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", key, true, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1;
+    cx.run_until_parked();
+    assert_eq!(source(&both, cx), (ArtSource::All, false));
 }

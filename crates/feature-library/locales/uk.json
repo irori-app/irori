@@ -1,6 +1,10 @@
 {
   "library.art.attribution": "Зображення з SteamGridDB",
   "library.art.attribution_igdb": "Зображення з IGDB",
+  "library.art.attribution_both": "Зображення з SteamGridDB та IGDB",
+  "library.art.source_all": "Усі джерела",
+  "library.art.source_count": "{source} ({count})",
+  "library.art.size": "{width} × {height}",
   "library.art.back_to_form": "Повернутися до форми",
   "library.art.back_to_games": "Назад до знайдених ігор",
   "library.art.choose_game": "Виберіть гру",
