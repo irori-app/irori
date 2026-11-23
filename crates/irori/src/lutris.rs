@@ -80,7 +80,9 @@ pub(crate) async fn import_lutris(
         folders.push(dirs.data_dir.join("runners"));
         let plan = lutris_import::plan_async(dirs).await?;
         folders.extend(plan.folders());
-        let plan = crate::launcher_sync::take_unseen(LUTRIS, plan, only_new).await;
+        let known = InLibrary::read(backend, sideload.as_deref(), emulation.as_deref());
+        let plan =
+            crate::launcher_sync::take_unseen(LUTRIS, plan, only_new, &|g| known.has(g)).await;
         apply_plan(
             backend,
             sideload.as_deref(),
@@ -176,7 +178,9 @@ pub(crate) async fn import_bottles_with(
         .context("reading Bottles stopped")??;
         folders.extend(bottles.into_iter().map(|b| b.path));
         folders.extend(plan.folders());
-        let plan = crate::launcher_sync::take_unseen(BOTTLES, plan, only_new).await;
+        let known = InLibrary::read(backend, sideload.as_deref(), None);
+        let plan =
+            crate::launcher_sync::take_unseen(BOTTLES, plan, only_new, &|g| known.has(g)).await;
         apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
     }
     note_found(BOTTLES, folders).await;
@@ -215,7 +219,9 @@ pub(crate) async fn import_faugus_with(
             .await
             .context("reading Faugus Launcher stopped")??;
         folders.extend(plan.folders());
-        let plan = crate::launcher_sync::take_unseen(FAUGUS, plan, only_new).await;
+        let known = InLibrary::read(backend, sideload.as_deref(), None);
+        let plan =
+            crate::launcher_sync::take_unseen(FAUGUS, plan, only_new, &|g| known.has(g)).await;
         apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
     }
     note_found(FAUGUS, folders).await;
@@ -538,6 +544,59 @@ async fn apply_game(
     apply_user_data(backend, &id, &game, summary);
 }
 
+/// What of a launcher's games Irori already has, matched the way an import
+/// finds them: an added game by its program, a ROM library entry by its
+/// file, a Steam or store game by its id. A sync never applies these
+/// again, so what the user changed about them in Irori stays.
+struct InLibrary {
+    programs: std::collections::HashSet<String>,
+    roms: std::collections::HashSet<String>,
+    games: std::collections::HashSet<String>,
+}
+
+impl InLibrary {
+    fn read(
+        backend: &Backend,
+        sideload: Option<&SideloadStore>,
+        emulation: Option<&irori_emulation::EmulationStore>,
+    ) -> Self {
+        let executables = |games: Vec<Arc<irori_core::GameInfo>>| {
+            games
+                .into_iter()
+                .filter_map(|g| g.install.as_ref().map(|i| i.executable.clone()))
+                .filter(|e| !e.is_empty())
+                .collect()
+        };
+        Self {
+            programs: sideload.map(|s| executables(s.games())).unwrap_or_default(),
+            roms: emulation
+                .map(|e| executables(e.games()))
+                .unwrap_or_default(),
+            games: backend
+                .library()
+                .all_games()
+                .map(|g| g.id().key())
+                .collect(),
+        }
+    }
+
+    fn has(&self, game: &PlannedGame) -> bool {
+        let id = |runner: Runner, app: &str| self.games.contains(&GameId::new(runner, app).key());
+        match &game.kind {
+            ImportKind::Windows { exe, .. } | ImportKind::Native { exe, .. } => {
+                self.programs.contains(&exe.display().to_string())
+            }
+            ImportKind::Emulated { rom, .. } => self.roms.contains(&rom.display().to_string()),
+            ImportKind::Steam { app_id, .. } => id(Runner::Steam, app_id),
+            ImportKind::StoreGame {
+                service,
+                service_id,
+            } => service_runner(service).is_some_and(|r| id(r, service_id)),
+            ImportKind::Skipped { .. } => false,
+        }
+    }
+}
+
 /// Add an app, or find the one already added for `exe`.
 async fn add_app(
     store: &SideloadStore,
@@ -736,6 +795,51 @@ mod tests {
             ["-name", "a b", "-dx11", "c\"d"]
         );
         assert_eq!(app_args(SideloadPlatform::Linux, "-a 'b c'"), "-a 'b c'");
+    }
+
+    #[test]
+    fn games_irori_has_are_found_the_way_an_import_finds_them() {
+        let known = InLibrary {
+            programs: ["/g/hades.exe".to_string()].into(),
+            roms: ["/roms/mario.sfc".to_string()].into(),
+            games: [GameId::new(Runner::Gog, "123").key()].into(),
+        };
+        let game = |kind| PlannedGame {
+            lutris_id: 1,
+            name: "x".into(),
+            slug: "x".into(),
+            runner: "wine".into(),
+            kind,
+            favourite: false,
+            hidden: false,
+            categories: Vec::new(),
+            playtime_minutes: 0,
+            last_played: None,
+            cover: None,
+            commands: Default::default(),
+        };
+        let native = |exe: &str| ImportKind::Native {
+            exe: exe.into(),
+            args: None,
+            working_dir: None,
+            env: Default::default(),
+        };
+        assert!(known.has(&game(native("/g/hades.exe"))));
+        assert!(!known.has(&game(native("/g/celeste.exe"))));
+        assert!(known.has(&game(ImportKind::Emulated {
+            system: "snes".into(),
+            engine: "snes9x".into(),
+            rom: "/roms/mario.sfc".into(),
+            game_id: None,
+        })));
+        assert!(known.has(&game(ImportKind::StoreGame {
+            service: "gog".into(),
+            service_id: "123".into(),
+        })));
+        assert!(!known.has(&game(ImportKind::Steam {
+            app_id: "620".into(),
+            args: None,
+        })));
     }
 
     #[test]

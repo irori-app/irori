@@ -1930,8 +1930,10 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   launcher is found): the launcher is read again 30 s after start, every 15 minutes and
   when its switch is turned on, and only games no import or sync has seen
   (`state/launcher-imports.json`, by row id and slug; skipped games aren't noted, so a
-  later read imports them) are imported, so settings changed in Irori are never
-  overwritten and a game the user removed stays out. A game the launcher uninstalled
+  later read imports them) and not already in Irori's library (matched as an import finds
+  them: an added game's program, a ROM's file, a Steam or store game's id; such games are
+  noted as seen) are imported, so games imported before syncs were recorded and settings
+  changed in Irori are never touched again, and a game the user removed stays out. A game the launcher uninstalled
   shows as not installed by itself, its playtime kept. A sync refreshes only the added
   games' and ROM libraries, and only when it added something.
 - **Playnite import** (Windows; `irori-extras::playnite` reads, `crates/irori/src/playnite.rs`
