@@ -175,12 +175,11 @@ pub fn canonical(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // CrossOver is a macOS program, with Unix paths.
     #[cfg(unix)]
     #[test]
     fn reads_crossovers_own_bottles_folder() {
+        use super::*;
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path();
         let prefs = home.join("CrossOver.plist");
