@@ -422,6 +422,25 @@ impl LaunchersStore {
             };
             let wc = wine_context(setup, umu);
             irori_runtime::prefix::verify_prefix(&app, &settings, &wc, ctx).await?;
+            // Before the installer starts the launcher for the first time,
+            // so it reads them from the start.
+            let drive = irori_launchers_data::drive_c(&windows_root(setup));
+            match tokio::task::spawn_blocking(move || {
+                irori_launchers_data::wine_config::prepare(launcher, &drive)
+            })
+            .await
+            {
+                Ok(Ok(files)) => {
+                    for file in files {
+                        tracing::info!("Wine-friendly settings in {}", file.display());
+                    }
+                }
+                Ok(Err(e)) => tracing::warn!(
+                    "could not write {}'s Wine settings: {e}",
+                    launcher.display_name()
+                ),
+                Err(e) => tracing::warn!("writing launcher settings stopped: {e}"),
+            }
             let mut cmd =
                 irori_runtime::prefix::WineCommand::new([installer.display().to_string()]);
             cmd.skip_prefix_check = true;

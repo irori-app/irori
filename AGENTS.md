@@ -1886,6 +1886,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   started from its folder); "Remove from Irori" forgets it and leaves the prefix and
   games on disk. The user signs in and installs games inside the launcher. A Proton
   prefix keeps `drive_c` in `pfx/`; read the launcher's files there.
+- **Wine-friendly settings at setup** (`irori_launchers_data::wine_config`, before the
+  installer first starts the launcher in a new prefix; never on Windows or for an adopted
+  prefix): Battle.net with `Client.HardwareAcceleration` off in `Battle.net.config`,
+  Ubisoft Connect with `overlay.enabled: false` in `settings.yaml`, for every user of the
+  prefix. Only those keys change; the rest of a file stays as written.
 - Games are read from the launcher's local data (`irori-launchers-data`) and listed as
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the
