@@ -391,6 +391,34 @@ mod ui {
             cx.read(|cx| view.read(cx).level().clone()),
             Level::Picked(pool, id.clone())
         );
+
+        // The quick launcher plays from the game row itself, and goes back
+        // to the game while it runs.
+        let launcher =
+            cx.update(|window, cx| cx.new(|cx| PaletteView::new(Host::Window, window, cx)));
+        launcher.update(cx, |v, cx| v.set_query("deliberatly", cx));
+        let game_target = |cx: &mut VisualTestContext| {
+            cx.read(|cx| {
+                launcher
+                    .read(cx)
+                    .shown_rows()
+                    .iter()
+                    .filter(|r| r.game.is_some())
+                    .map(|r| match &r.target {
+                        PaletteTarget::Play(_) => "play",
+                        PaletteTarget::BackToGame(_) => "back",
+                        PaletteTarget::Open(_) => "open",
+                        _ => "other",
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(game_target(cx), ["play"], "and no separate Play rows");
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        assert_eq!(game_target(cx), ["back"]);
+        backend.statuses.clear(&id);
+        wait_for_status(cx, &id, false);
     }
 
     /// Whether two rows do the same thing, for the targets this test uses.

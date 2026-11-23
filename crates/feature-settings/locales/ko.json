@@ -1617,5 +1617,15 @@
   "settings.field.idle_minutes.help": "Big Picture가 대기 화면을 표시하기까지 입력이 없는 시간(분)입니다. 0이면 표시하지 않습니다. 버튼, 키, 마우스 움직임으로 Big Picture로 돌아옵니다.",
   "settings.field.idle_screen.label": "대기 화면",
   "settings.option.idle_screen.slideshow": "게임 아트를 차례로 표시",
-  "settings.option.idle_screen.dim": "어둡게, 시계 표시"
+  "settings.option.idle_screen.dim": "어둡게, 시계 표시",
+  "settings.field.quick_launch_shortcut.label": "단축키로 빠른 실행 열기",
+  "settings.field.quick_launch_shortcut.help": "빠른 실행은 별도의 작은 창에서 여는 명령 팔레트입니다. Irori를 앞으로 가져오지 않고 게임을 찾아 플레이하거나 게임으로 돌아갈 수 있습니다. Irori는 데스크톱에 Ctrl+Alt+K를 요청하며, 불가능한 경우 아래 명령을 직접 키에 지정하세요.",
+  "settings.field.panel_quick_launch.label": "빠른 실행 단축키",
+  "settings.quick_launch.asking": "데스크톱에 단축키를 요청하는 중…",
+  "settings.quick_launch.keys": "{keys} 키로 어디서든 빠른 실행을 엽니다.",
+  "settings.quick_launch.ready": "빠른 실행 단축키는 데스크톱이 관리합니다. 키는 데스크톱의 단축키 설정에서 바꾸세요.",
+  "settings.quick_launch.unassigned": "데스크톱에 아직 빠른 실행 키가 없습니다. 데스크톱의 단축키 설정에서 지정하세요.",
+  "settings.quick_launch.commands_file": "{desktop}에서는 프로그램이 다른 창에서 누른 키를 받을 수 없습니다. 이 내용을 {file}에 추가한 뒤 설정을 다시 불러오세요:",
+  "settings.quick_launch.command": "이 명령을 데스크톱의 키보드 설정에서 키에 지정하세요:",
+  "settings.quick_launch.off": "이 명령으로도 빠른 실행을 열 수 있습니다. 원하면 데스크톱의 키보드 설정에서 키에 지정하세요:"
 }

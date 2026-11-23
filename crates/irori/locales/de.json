@@ -215,5 +215,7 @@
   "shell.palette.picked_placeholder": "Ausgewählt: {title}",
   "shell.palette.pick_another": "Ein anderes wählen",
   "shell.palette.pick_other_games": "Aus anderen Spielen wählen",
-  "shell.palette.random_empty": "Hier gibt es keine Spiele zur Auswahl"
+  "shell.palette.random_empty": "Hier gibt es keine Spiele zur Auswahl",
+  "shell.palette.preview_enter_play": "Eingabe startet es oder kehrt zu ihm zurück, während es läuft; Umschalt+Eingabe zeigt es in Irori; → zeigt seine Aktionen",
+  "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden"
 }

@@ -1617,5 +1617,15 @@
   "settings.field.idle_minutes.help": "Big Picture がアイドル画面を表示するまでの無操作の分数。0 で表示しません。ボタン、キー、マウスの動きで Big Picture に戻ります。",
   "settings.field.idle_screen.label": "アイドル画面",
   "settings.option.idle_screen.slideshow": "ゲームのアートを順番に表示",
-  "settings.option.idle_screen.dim": "暗くして時計を表示"
+  "settings.option.idle_screen.dim": "暗くして時計を表示",
+  "settings.field.quick_launch_shortcut.label": "ショートカットでクイックランチャーを開く",
+  "settings.field.quick_launch_shortcut.help": "クイックランチャーは、専用の小さなウィンドウで開くコマンドパレットです。Irori を前面に出さずにゲームを探して遊んだり、ゲームに戻ったりできます。Irori はデスクトップに Ctrl+Alt+K を要求します。できない場合は、下のコマンドをご自身でキーに割り当ててください。",
+  "settings.field.panel_quick_launch.label": "クイックランチャーのショートカット",
+  "settings.quick_launch.asking": "デスクトップにショートカットを要求しています…",
+  "settings.quick_launch.keys": "{keys} でどこからでもクイックランチャーを開けます。",
+  "settings.quick_launch.ready": "クイックランチャーのショートカットはデスクトップが管理しています。キーはデスクトップのショートカット設定で変更できます。",
+  "settings.quick_launch.unassigned": "デスクトップにはまだクイックランチャー用のキーがありません。デスクトップのショートカット設定で割り当ててください。",
+  "settings.quick_launch.commands_file": "{desktop} では、ほかのウィンドウで押されたキーをプログラムが受け取れません。これを {file} に追加し、設定を再読み込みしてください:",
+  "settings.quick_launch.command": "このコマンドをデスクトップのキーボード設定でキーに割り当ててください:",
+  "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:"
 }

@@ -1617,5 +1617,15 @@
   "settings.field.idle_minutes.help": "Хвилини без введення до показу екрана очікування в Big Picture; 0 — ніколи. Будь-яка кнопка, клавіша чи рух миші повертає Big Picture.",
   "settings.field.idle_screen.label": "Екран очікування",
   "settings.option.idle_screen.slideshow": "Зображення ваших ігор по черзі",
-  "settings.option.idle_screen.dim": "Затемнений, з годинником"
+  "settings.option.idle_screen.dim": "Затемнений, з годинником",
+  "settings.field.quick_launch_shortcut.label": "Відкривати швидкий запуск сполученням клавіш",
+  "settings.field.quick_launch_shortcut.help": "Швидкий запуск — це палітра команд в окремому маленькому вікні: знайдіть гру й запустіть її або поверніться до неї, не виводячи Irori на передній план. Irori просить у робочого столу Ctrl+Alt+K; де це неможливо, призначте команду нижче на клавішу самі.",
+  "settings.field.panel_quick_launch.label": "Сполучення для швидкого запуску",
+  "settings.quick_launch.asking": "Запитуємо сполучення в робочого столу…",
+  "settings.quick_launch.keys": "{keys} відкриває швидкий запуск звідусіль.",
+  "settings.quick_launch.ready": "Сполучення швидкого запуску зберігає робочий стіл; клавіші змінюються в його налаштуваннях сполучень.",
+  "settings.quick_launch.unassigned": "Робочий стіл ще не має клавіш для швидкого запуску; призначте їх у його налаштуваннях сполучень.",
+  "settings.quick_launch.commands_file": "{desktop} не дає програмам слухати клавіші, натиснуті в інших вікнах. Додайте це до {file} і перезавантажте конфігурацію:",
+  "settings.quick_launch.command": "Призначте цю команду на клавішу в налаштуваннях клавіатури робочого столу:",
+  "settings.quick_launch.off": "Швидкий запуск відкриває й ця команда; за бажання призначте її на клавішу в налаштуваннях клавіатури робочого столу:"
 }

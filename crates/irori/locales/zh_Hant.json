@@ -215,5 +215,7 @@
   "shell.palette.picked_placeholder": "已選中：{title}",
   "shell.palette.pick_another": "換一個",
   "shell.palette.pick_other_games": "從其他遊戲中挑選",
-  "shell.palette.random_empty": "這裡沒有可挑選的遊戲"
+  "shell.palette.random_empty": "這裡沒有可挑選的遊戲",
+  "shell.palette.preview_enter_play": "按 Enter 開始遊玩，執行中則返回遊戲；按 Shift+Enter 在 Irori 中顯示；按 → 列出其動作",
+  "shell.quick_launch.failed": "無法開啟快速啟動器"
 }

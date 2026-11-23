@@ -1617,5 +1617,15 @@
   "settings.field.idle_minutes.help": "Minuten zonder invoer voordat Big Picture het rustscherm toont; 0 toont het nooit. Elke knop, toets of muisbeweging brengt Big Picture terug.",
   "settings.field.idle_screen.label": "Rustscherm",
   "settings.option.idle_screen.slideshow": "Afbeeldingen van je spellen, een voor een",
-  "settings.option.idle_screen.dim": "Verduisterd, met de klok"
+  "settings.option.idle_screen.dim": "Verduisterd, met de klok",
+  "settings.field.quick_launch_shortcut.label": "De snelstarter openen met een sneltoets",
+  "settings.field.quick_launch_shortcut.help": "De snelstarter is het opdrachtenpalet in een eigen klein venster: zoek een game en speel hem, of ga ernaar terug, zonder Irori naar voren te halen. Irori vraagt je desktop om Ctrl+Alt+K; waar dat niet kan, koppel je de opdracht hieronder zelf aan een toets.",
+  "settings.field.panel_quick_launch.label": "Sneltoets van de snelstarter",
+  "settings.quick_launch.asking": "Je desktop wordt om de sneltoets gevraagd…",
+  "settings.quick_launch.keys": "{keys} opent de snelstarter overal vandaan.",
+  "settings.quick_launch.ready": "Je desktop beheert de sneltoets van de snelstarter; wijzig de toetsen in de sneltoetsinstellingen van de desktop.",
+  "settings.quick_launch.unassigned": "Je desktop heeft nog geen toetsen voor de snelstarter; stel ze in bij de sneltoetsinstellingen van de desktop.",
+  "settings.quick_launch.commands_file": "{desktop} laat programma’s niet luisteren naar toetsen die in andere vensters worden ingedrukt. Voeg dit toe aan {file} en laad de configuratie opnieuw:",
+  "settings.quick_launch.command": "Koppel deze opdracht aan een toets in de toetsenbordinstellingen van je desktop:",
+  "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:"
 }

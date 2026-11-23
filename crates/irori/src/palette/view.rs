@@ -13,7 +13,7 @@ use std::sync::Arc;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::actions::Cancel;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
-use gpui_kit::component::input::{Escape as InputEscape, MoveLeft, MoveRight};
+use gpui_kit::component::input::{Enter as InputEnter, Escape as InputEscape, MoveLeft, MoveRight};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -37,6 +37,8 @@ use super::{PaletteTarget, run_target};
 pub(crate) enum Host {
     /// A dialog of the main window (Ctrl+K).
     Dialog,
+    /// The quick launcher's own window (`crate::quick_launch`): Enter plays.
+    Window,
 }
 
 /// One row: what it says, what confirming it does, and the game it is
@@ -334,6 +336,19 @@ impl PaletteView {
                 }
             }),
         ];
+        let mut subscriptions = subscriptions;
+        if host == Host::Window {
+            // Only once it had the focus: some desktops report the new
+            // window inactive before they hand it the keyboard.
+            let mut had_focus = false;
+            subscriptions.push(cx.observe_window_activation(window, move |_, window, _| {
+                if window.is_window_active() {
+                    had_focus = true;
+                } else if had_focus {
+                    window.remove_window();
+                }
+            }));
+        }
         let mut view = Self {
             state: cx.new(|cx| CommandState::new(window, cx)),
             preview: {
@@ -382,13 +397,25 @@ impl PaletteView {
         });
     }
 
+    /// Escape: back to the first level; there, with nothing typed, the
+    /// launcher closes (the dialog closes on its own).
+    fn escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.level != Level::Root {
+            cx.stop_propagation();
+            self.set_level(Level::Root, window, cx);
+        } else if self.host == Host::Window && self.query.is_empty() {
+            cx.stop_propagation();
+            window.remove_window();
+        }
+    }
+
     /// The highlighted row.
     fn selected(&self, cx: &App) -> Option<&Row> {
         let ix = self.state.read(cx).selected_index()?;
         self.shown.get(ix.row)
     }
 
-    fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
+    pub(super) fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
         if self.query != query {
             self.query = query.to_owned();
             self.rebuild(cx);
@@ -469,7 +496,8 @@ impl PaletteView {
         });
         let statuses = models(cx).statuses.read(cx);
         let mut rows = Vec::with_capacity(games.len() + MAX_PLAY_ROWS);
-        if !query.is_empty() {
+        // The launcher plays from the game rows themselves.
+        if !query.is_empty() && self.host == Host::Dialog {
             for g in games.iter().filter(|g| g.is_installed).take(MAX_PLAY_ROWS) {
                 rows.push(Row::command(
                     Entry::new()
@@ -482,17 +510,22 @@ impl PaletteView {
         }
         for g in games {
             let id = g.id();
-            let detail = format!(
-                "{} · {}",
-                g.runner().short_name(),
-                state_label(&g, statuses.kind(&id))
-            );
+            let kind = statuses.kind(&id);
+            let detail = format!("{} · {}", g.runner().short_name(), state_label(&g, kind));
+            let target = match (self.host, kind) {
+                (Host::Dialog, _) => PaletteTarget::Open(id),
+                (Host::Window, Some(StatusKind::Playing)) => PaletteTarget::BackToGame(id),
+                (Host::Window, Some(StatusKind::Launching)) => PaletteTarget::CancelLaunch(id),
+                (Host::Window, Some(kind)) if kind.is_busy() => PaletteTarget::Open(id),
+                (Host::Window, _) if g.is_installed => PaletteTarget::Play(id),
+                (Host::Window, _) => PaletteTarget::Open(id),
+            };
             rows.push(Row {
                 entry: Entry::new()
                     .label(g.title.clone())
                     .keywords([g.runner().short_name(), g.runner().store_name()])
                     .icon(IconName::Gamepad2),
-                target: PaletteTarget::Open(id),
+                target,
                 game: Some(g),
                 about: None,
                 detail: Some(detail.into()),
@@ -548,6 +581,7 @@ impl PaletteView {
                 window.close_dialog(cx);
                 run_target(row.target, window, cx);
             }
+            Host::Window => crate::quick_launch::run(row.target, cx),
         }
     }
 }
@@ -609,10 +643,20 @@ impl Render for PaletteView {
             .on_query(on_query)
             .on_select(on_select)
             .on_confirm(on_confirm);
+        let launcher = self.host == Host::Window;
+        let theme = cx.theme();
+        let (surface, border) = (theme.popover, theme.border);
         h_flex()
             .image_cache(self.images.clone())
             .w_full()
             .items_stretch()
+            .when(launcher, |root| {
+                root.size_full()
+                    .items_start()
+                    .bg(surface)
+                    .border_1()
+                    .border_color(border)
+            })
             // In the capture phase, before the search field takes the keys
             // for its cursor and the dialog takes Escape.
             .capture_action(cx.listener(|this, _: &MoveRight, window, cx| {
@@ -632,16 +676,22 @@ impl Render for PaletteView {
                     this.set_level(Level::Root, window, cx);
                 }
             }))
-            .capture_action(cx.listener(|this, _: &InputEscape, window, cx| {
-                if this.level != Level::Root {
+            .capture_action(
+                cx.listener(|this, _: &InputEscape, window, cx| this.escape(window, cx)),
+            )
+            .capture_action(cx.listener(|this, _: &Cancel, window, cx| this.escape(window, cx)))
+            .capture_action(cx.listener(|this, enter: &InputEnter, _, cx| {
+                // Shift+Enter shows the launcher's game in Irori.
+                if this.host == Host::Window
+                    && enter.shift
+                    && let Some(id) = this
+                        .selected(cx)
+                        .and_then(|r| r.game.as_ref())
+                        .map(|g| g.id())
+                {
                     cx.stop_propagation();
-                    this.set_level(Level::Root, window, cx);
-                }
-            }))
-            .capture_action(cx.listener(|this, _: &Cancel, window, cx| {
-                if this.level != Level::Root {
-                    cx.stop_propagation();
-                    this.set_level(Level::Root, window, cx);
+                    crate::quick_launch::close(cx);
+                    crate::quick_launch::show_in_main(PaletteTarget::Open(id), cx);
                 }
             }))
             .child(div().flex_1().min_w_0().child(list))

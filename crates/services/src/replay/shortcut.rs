@@ -1,5 +1,7 @@
 //! Keyboard shortcuts that save a clip and take a screenshot while the game
-//! has the keyboard. Only the desktop sees keys pressed in another program's
+//! has the keyboard, and the one that opens the quick launcher (the command
+//! palette in a window of its own) from anywhere; one session asks for all
+//! three. Only the desktop sees keys pressed in another program's
 //! window, so Irori tries, in order ([`bindings::sources`]):
 //!
 //! 1. the desktop portal's GlobalShortcuts interface (KDE Plasma 6, GNOME 48,
@@ -22,6 +24,24 @@ use parking_lot::Mutex;
 
 use super::bindings::{self, Binding, Program, Source};
 use crate::Backend;
+
+/// Whether the quick launcher's shortcut works, and how.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum QuickLaunchShortcut {
+    /// Not asked for yet.
+    #[default]
+    Off,
+    /// The desktop (its portal, or the X server Irori grabbed it from)
+    /// holds it: its keys as described, `None` while the desktop has none
+    /// for it.
+    Keys(Option<String>),
+    /// The user binds `irori --quick-launch` in their compositor, with
+    /// these lines.
+    Commands(Binding),
+    /// No global shortcut from here (macOS and Windows register theirs in
+    /// the interface).
+    Unavailable,
+}
 
 /// Whether the clip and screenshot shortcuts work, and how.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -49,6 +69,9 @@ pub enum ShortcutState {
 #[derive(Default)]
 pub(crate) struct Shortcut {
     state: Mutex<ShortcutState>,
+    quick: Mutex<QuickLaunchShortcut>,
+    /// What a press of the quick launcher's shortcut runs.
+    on_quick_launch: Mutex<Option<std::sync::Arc<dyn Fn() + Send + Sync>>>,
     listening: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
@@ -57,13 +80,18 @@ pub(crate) struct Shortcut {
 const CLIP_ID: &str = "save-clip";
 #[cfg(target_os = "linux")]
 const SCREENSHOT_ID: &str = "screenshot";
+#[cfg(target_os = "linux")]
+const QUICK_LAUNCH_ID: &str = "quick-launch";
 
 /// What answered, and what to listen to.
 enum Listener {
     #[cfg(target_os = "linux")]
-    Portal(PortalSession, ShortcutState),
+    Portal(PortalSession, ShortcutState, QuickLaunchShortcut),
     #[cfg(target_os = "linux")]
-    X11(tokio::sync::mpsc::UnboundedReceiver<super::x11::Action>),
+    X11(
+        tokio::sync::mpsc::UnboundedReceiver<super::x11::Action>,
+        bool,
+    ),
     Commands(Binding),
 }
 
@@ -88,6 +116,31 @@ impl Backend {
     /// work, and how.
     pub fn clip_shortcut(&self) -> ShortcutState {
         self.replay.shortcut.state.lock().clone()
+    }
+
+    /// Whether the quick launcher's shortcut works, and how.
+    pub fn quick_launch_shortcut(&self) -> QuickLaunchShortcut {
+        self.replay.shortcut.quick.lock().clone()
+    }
+
+    /// Say how the quick launcher's shortcut works where the interface
+    /// registers it itself (macOS, Windows).
+    pub fn set_quick_launch_shortcut(&self, state: QuickLaunchShortcut) {
+        *self.replay.shortcut.quick.lock() = state;
+    }
+
+    /// Run `open` each time the quick launcher's shortcut is pressed.
+    pub fn on_quick_launch_shortcut(&self, open: impl Fn() + Send + Sync + 'static) {
+        *self.replay.shortcut.on_quick_launch.lock() = Some(std::sync::Arc::new(open));
+    }
+
+    /// The quick launcher's shortcut was pressed.
+    #[cfg(target_os = "linux")]
+    fn quick_launch_pressed(&self) {
+        let open = self.replay.shortcut.on_quick_launch.lock().clone();
+        if let Some(open) = open {
+            open();
+        }
     }
 
     /// Set up the clip and screenshot shortcuts, once per run, and act each
@@ -128,25 +181,46 @@ impl Backend {
         let session = bindings::Session::detect(|name| std::env::var(name).ok());
         let sources = bindings::sources(cfg!(target_os = "linux"), &session);
         let found = first_working(&sources, |source| self.open_source(source, &session)).await;
+        let commands = || {
+            QuickLaunchShortcut::Commands(Binding::quick_launch(
+                session.compositor,
+                &Program::current(),
+            ))
+        };
+        let quick = |state: QuickLaunchShortcut| {
+            *self.replay.shortcut.quick.lock() = state;
+        };
         match found {
             None => {
+                quick(QuickLaunchShortcut::Unavailable);
                 let _ = ready.send(ShortcutState::Unavailable);
             }
             Some(Listener::Commands(binding)) => {
+                quick(commands());
                 let _ = ready.send(ShortcutState::Commands(binding));
             }
             #[cfg(target_os = "linux")]
-            Some(Listener::X11(mut keys)) => {
+            Some(Listener::X11(mut keys, quick_grabbed)) => {
+                quick(if quick_grabbed {
+                    QuickLaunchShortcut::Keys(Some(bindings::QUICK_LAUNCH_KEYS.into()))
+                } else {
+                    commands()
+                });
                 let _ = ready.send(ShortcutState::Grabbed {
                     clip: bindings::CLIP_KEYS.into(),
                     screenshot: bindings::SCREENSHOT_KEYS.into(),
                 });
                 while let Some(action) = keys.recv().await {
-                    self.shortcut_pressed(action == super::x11::Action::Screenshot);
+                    match action {
+                        super::x11::Action::Clip => self.shortcut_pressed(false),
+                        super::x11::Action::Screenshot => self.shortcut_pressed(true),
+                        super::x11::Action::QuickLaunch => self.quick_launch_pressed(),
+                    }
                 }
             }
             #[cfg(target_os = "linux")]
-            Some(Listener::Portal(portal, state)) => {
+            Some(Listener::Portal(portal, state, launcher)) => {
+                quick(launcher);
                 let _ = ready.send(state);
                 self.portal_loop(portal).await;
             }
@@ -165,13 +239,13 @@ impl Backend {
             ))),
             #[cfg(target_os = "linux")]
             Source::Portal => {
-                let (portal, state) = bind_portal().await?;
-                Ok(Listener::Portal(portal, state))
+                let (portal, state, quick) = bind_portal().await?;
+                Ok(Listener::Portal(portal, state, quick))
             }
             #[cfg(target_os = "linux")]
             Source::X11Grab => {
-                let keys = self.spawn_blocking(super::x11::grab).await??;
-                Ok(Listener::X11(keys))
+                let (keys, quick) = self.spawn_blocking(super::x11::grab).await??;
+                Ok(Listener::X11(keys, quick))
             }
             #[cfg(not(target_os = "linux"))]
             Source::Portal | Source::X11Grab => anyhow::bail!("not on this system"),
@@ -194,10 +268,12 @@ impl Backend {
                 Some(event) = activated.next() => match event.shortcut_id() {
                     CLIP_ID => self.shortcut_pressed(false),
                     SCREENSHOT_ID => self.shortcut_pressed(true),
+                    QUICK_LAUNCH_ID => self.quick_launch_pressed(),
                     _ => {}
                 },
                 Some(event) = changed.next() => {
                     *self.replay.shortcut.state.lock() = portal_state(event.shortcuts());
+                    *self.replay.shortcut.quick.lock() = portal_quick(event.shortcuts());
                 }
                 else => break,
             }
@@ -229,9 +305,20 @@ fn portal_state(shortcuts: &[ashpd::desktop::global_shortcuts::Shortcut]) -> Sho
     }
 }
 
-/// Ask the portal for both shortcuts.
+/// The quick launcher's keys in the portal's list of shortcuts.
 #[cfg(target_os = "linux")]
-async fn bind_portal() -> anyhow::Result<(PortalSession, ShortcutState)> {
+fn portal_quick(shortcuts: &[ashpd::desktop::global_shortcuts::Shortcut]) -> QuickLaunchShortcut {
+    QuickLaunchShortcut::Keys(
+        shortcuts
+            .iter()
+            .find(|s| s.id() == QUICK_LAUNCH_ID)
+            .map(|s| s.trigger_description().to_owned()),
+    )
+}
+
+/// Ask the portal for every shortcut.
+#[cfg(target_os = "linux")]
+async fn bind_portal() -> anyhow::Result<(PortalSession, ShortcutState, QuickLaunchShortcut)> {
     use ashpd::desktop::global_shortcuts::NewShortcut;
 
     let (portal, session) = connect().await?;
@@ -240,13 +327,16 @@ async fn bind_portal() -> anyhow::Result<(PortalSession, ShortcutState)> {
             .preferred_trigger("ALT+F10"),
         NewShortcut::new(SCREENSHOT_ID, "Take a screenshot of the game")
             .preferred_trigger("ALT+F12"),
+        NewShortcut::new(QUICK_LAUNCH_ID, "Open Irori's quick launcher")
+            .preferred_trigger("CTRL+ALT+K"),
     ];
     let response = portal
         .bind_shortcuts(&session, &shortcuts, None, Default::default())
         .await?
         .response()?;
     let state = portal_state(response.shortcuts());
-    Ok((PortalSession { portal, session }, state))
+    let quick = portal_quick(response.shortcuts());
+    Ok((PortalSession { portal, session }, state, quick))
 }
 
 /// A portal session on a connection of its own, registered as Irori

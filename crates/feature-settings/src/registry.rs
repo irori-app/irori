@@ -273,6 +273,8 @@ pub enum PanelKind {
     /// What each controller button does, drawn on the controller, with the
     /// buttons' jobs changeable.
     ButtonMap,
+    /// The quick launcher's shortcut: its keys, or the lines to bind.
+    QuickLaunch,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -1726,6 +1728,30 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.big_picture_on_controller.help")
     .keywords(&["controller", "gamepad", "console", "big picture", "connect"]),
+    app(
+        "iroriUi.quickLaunchShortcut",
+        "settings.field.quick_launch_shortcut.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.quick_launch_shortcut.help")
+    .keywords(&[
+        "quick launch",
+        "launcher",
+        "palette",
+        "shortcut",
+        "hotkey",
+        "keyboard",
+    ]),
+    app(
+        "panel.quick_launch",
+        "settings.field.panel_quick_launch.label",
+        General,
+        "settings.group.tray_and_window",
+        Panel(PanelKind::QuickLaunch),
+    )
+    .keywords(&["quick launch", "launcher", "shortcut", "hotkey", "command"]),
     app(
         "iroriUi.bigPictureFullscreen",
         "settings.field.big_picture_fullscreen.label",

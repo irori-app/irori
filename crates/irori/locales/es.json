@@ -215,5 +215,7 @@
   "shell.palette.picked_placeholder": "Elegido: {title}",
   "shell.palette.pick_another": "Elegir otro",
   "shell.palette.pick_other_games": "Elegir entre otros juegos",
-  "shell.palette.random_empty": "Aquí no hay juegos entre los que elegir"
+  "shell.palette.random_empty": "Aquí no hay juegos entre los que elegir",
+  "shell.palette.preview_enter_play": "Intro lo juega, o vuelve a él mientras se ejecuta; Mayús+Intro lo muestra en Irori; → muestra sus acciones",
+  "shell.quick_launch.failed": "No se pudo abrir el lanzador rápido"
 }

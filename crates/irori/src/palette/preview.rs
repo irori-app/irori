@@ -51,6 +51,7 @@ fn shortcut(target: &PaletteTarget) -> Option<Box<dyn Action>> {
 fn game_hint(host: Host) -> SharedString {
     match host {
         Host::Dialog => t("shell.palette.preview_enter_open"),
+        Host::Window => t("shell.palette.preview_enter_play"),
     }
 }
 

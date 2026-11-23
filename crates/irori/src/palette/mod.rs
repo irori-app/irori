@@ -26,7 +26,8 @@ use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
 use entry::Entry;
-use view::{Host, PaletteView, Row};
+use view::Row;
+pub(crate) use view::{Host, PaletteView};
 
 /// The game whose page is open: the game, its play status and its own
 /// actions with their place.
@@ -38,7 +39,7 @@ type OpenGame = (
 
 /// What confirming a palette row does.
 #[derive(Clone)]
-enum PaletteTarget {
+pub(crate) enum PaletteTarget {
     Open(GameId),
     Play(GameId),
     /// Cancel the launch being prepared.
@@ -770,7 +771,7 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         .collect()
 }
 
-fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
+pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
     match target {
         PaletteTarget::Open(id) => irori_ui::navigate(Route::Game(id), cx),
         PaletteTarget::Route(r) => irori_ui::navigate(r, cx),

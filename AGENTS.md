@@ -94,7 +94,7 @@ irori displays [--json]                          the displays: modes, HDR and VR
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
-  `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+  `--save-clip`, `--screenshot`, `--quick-launch`, `-V/--version` and `-h/--help`.
 - `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
   without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
   fails then brings the window up to say why.
@@ -102,12 +102,24 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
   (`instance::forward`; see `docs/PLATFORMS.md`, "Clip and screenshot keys").
+- `--quick-launch` and `irori://quick-launch` open the quick launcher
+  (`crates/irori/src/quick_launch.rs`: the palette in a window of its own, a layer
+  surface with the keyboard on Wayland, a pop-up on macOS and Windows, a plain window on
+  X11), or close it when it is open; started that way Irori keeps its main window hidden
+  while a tray can bring it back. Enter plays a game (or goes back to it), Shift+Enter
+  shows it in Irori, → lists its actions; Escape, running something or losing the focus
+  closes it, and closing it never quits Irori. With `iroriUi.quickLaunchShortcut` the
+  desktop is asked for Ctrl+Alt+K: on Linux through the replay buffer's shortcut session
+  (portal, X11 grab, else compositor lines; `Backend::quick_launch_shortcut`), on macOS
+  and Windows through the overlay's hot key registration
+  (`irori_bigpicture::overlay::register_quick_launch`). General → Tray and window shows
+  its state and the command to bind.
 - `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
   invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
   the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
   Irori first when none runs, in a process group of its own and, on Windows, outside the
   caller's job, so Irori outlives a stream. Sunshine's applications use it.
-- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture`,
+- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture|quick-launch`,
   `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
@@ -854,7 +866,7 @@ commands without a window.
   what `--info` says (version, codecs, monitors). Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
-  one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
+  one takes a screenshot, a third opens the quick launcher) come from the XDG GlobalShortcuts portal, else on X11 from
   `XGrabKey` (`replay/x11.rs`), else the settings show the lines that bind
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
