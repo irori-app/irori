@@ -546,6 +546,38 @@ impl FiltersPanel {
             .into_any_element()
     }
 
+    /// Controller support: any or full; a second click shows every game.
+    fn render_controller(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        use irori_core::ControllerSupport;
+        v_flex()
+            .gap_2()
+            .child(section(t("library.filters.section.controller")))
+            .child(
+                h_flex().flex_wrap().gap_1().children(
+                    [ControllerSupport::Partial, ControllerSupport::Full]
+                        .into_iter()
+                        .map(|level| {
+                            Button::new(SharedString::from(format!("controller-{level:?}")))
+                                .xsmall()
+                                .outline()
+                                .icon(Icon::new(IconName::Gamepad2))
+                                .label(crate::filter::controller_label(level))
+                                .selected(f.controller == Some(level))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.set(
+                                        move |f| {
+                                            f.controller =
+                                                (f.controller != Some(level)).then_some(level)
+                                        },
+                                        cx,
+                                    )
+                                }))
+                        }),
+                ),
+            )
+            .into_any_element()
+    }
+
     /// Game modes: games with any of the chosen ones are shown.
     fn render_modes(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
@@ -1054,6 +1086,7 @@ impl Render for FiltersPanel {
             )
             .child(self.render_hidden(&f, hidden, hidden_values, cx))
             .child(self.render_modes(&f, cx))
+            .child(self.render_controller(&f, cx))
             .when_some(genres, |el, genres| el.child(genres))
             .when_some(tags, |el, tags| el.child(tags))
             .when_some(developers, |el, d| el.child(d))

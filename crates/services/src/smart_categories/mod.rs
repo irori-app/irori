@@ -236,6 +236,12 @@ pub enum Rule {
     Publisher { names: Vec<String> },
     /// Owned on more than one store (copies shown as one entry).
     Copies {},
+    /// Plays with a controller: any support, or with `full` only full
+    /// support. Games no source says anything of don't match.
+    Controller {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        full: bool,
+    },
 }
 
 impl Rule {
@@ -268,6 +274,7 @@ impl Rule {
             Rule::FirstPlayed { .. } => "firstPlayed",
             Rule::HltbProgress { .. } => "hltbProgress",
             Rule::Hidden {} => "hidden",
+            Rule::Controller { .. } => "controller",
             Rule::Notes {} => "notes",
             Rule::Developer { .. } => "developer",
             Rule::Publisher { .. } => "publisher",

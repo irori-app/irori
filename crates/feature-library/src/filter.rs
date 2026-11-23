@@ -580,6 +580,14 @@ pub struct ViewFilter {
     pub max_age: Option<u8>,
     /// With an age limit, also show games no board rated.
     pub include_unrated: bool,
+    /// Games a controller plays at least this well; `None` shows every
+    /// game.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "irori_core::controller_support::lenient"
+    )]
+    pub controller: Option<irori_core::ControllerSupport>,
     /// Games with any of these modes; empty shows every game.
     #[serde(deserialize_with = "deserialize_modes")]
     pub modes: BTreeSet<GameMode>,
@@ -670,6 +678,7 @@ impl ViewFilter {
             !self.statuses.is_empty(),
             self.max_age.is_some(),
             !self.modes.is_empty(),
+            self.controller.is_some(),
             !self.genres.is_empty(),
             !self.tags.is_empty(),
             !self.developers.is_empty(),
@@ -823,6 +832,9 @@ impl ViewFilter {
             _ => out.push(
                 t_args("library.filter.describe.categories", &[("names", &heading)]).to_string(),
             ),
+        }
+        if let Some(level) = self.controller {
+            out.push(controller_label(level).to_string());
         }
         let left_out = self.excluded_names(user);
         if !left_out.is_empty() {
@@ -1117,6 +1129,14 @@ pub fn present_systems(library: &LibrarySnapshot) -> Vec<String> {
     present
 }
 
+/// What a controller filter or fact is called.
+pub fn controller_label(level: irori_core::ControllerSupport) -> gpui_kit::SharedString {
+    t(match level {
+        irori_core::ControllerSupport::Partial => "library.controller.any",
+        irori_core::ControllerSupport::Full => "library.controller.full",
+    })
+}
+
 /// The age limits the Filters popover offers, after "Any": PEGI's steps,
 /// which ESRB's, USK's and the others' ages fall between.
 pub const AGE_LIMITS: [u8; 4] = [3, 7, 12, 16];
@@ -1233,6 +1253,9 @@ pub fn apply_in(
     }
     if !filter.modes.is_empty() {
         games.retain(|g| g.game_modes.iter().any(|m| filter.modes.contains(m)));
+    }
+    if let Some(level) = filter.controller {
+        games.retain(|g| g.controller_support.is_some_and(|c| c.meets(level)));
     }
     if !filter.genres.is_empty() {
         let wanted: HashSet<String> = filter.genres.iter().map(|g| genre_key(g)).collect();
@@ -1996,6 +2019,29 @@ pub(crate) mod tests {
         // Nothing left out writes no key.
         let text = serde_json::to_string(&ViewFilter::default()).unwrap();
         assert!(!text.contains("excluded"));
+    }
+
+    #[test]
+    fn the_controller_filter_keeps_games_a_controller_plays() {
+        use irori_core::ControllerSupport;
+        let mut lib = sample();
+        let mut games: Vec<GameInfo> = lib.games.iter().map(|g| (**g).clone()).collect();
+        games[0].controller_support = Some(ControllerSupport::Full);
+        games[2].controller_support = Some(ControllerSupport::Partial);
+        lib.games = games.into_iter().map(Arc::new).collect();
+        let (user, none, stores) = (UserData::default(), HashSet::new(), Runner::ALL.to_vec());
+        let mut f = ViewFilter {
+            controller: Some(ControllerSupport::Partial),
+            ..Default::default()
+        };
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 2);
+        f.controller = Some(ControllerSupport::Full);
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 1);
+        assert_eq!(f.active_count(), 1);
+        let back: ViewFilter = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!(back.controller, Some(ControllerSupport::Full));
+        let unknown: ViewFilter = serde_json::from_str(r#"{"controller": "gyro"}"#).unwrap();
+        assert_eq!(unknown.controller, None);
     }
 
     #[test]

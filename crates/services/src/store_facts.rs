@@ -12,7 +12,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
-use irori_core::{AgeRating, GameId, GameInfo, GameMode, Paths, age_rating, game_mode, json_store};
+use irori_core::{
+    AgeRating, ControllerSupport, GameId, GameInfo, GameMode, Paths, age_rating, game_mode,
+    json_store,
+};
 use irori_extras::wiki::{self, StoreIds, WikiInfo};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -45,6 +48,21 @@ pub struct Learned {
     /// (Steam's Metacritic, IGDB), for games whose store gives none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<u8>,
+    /// How a controller plays it, from the store page.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "irori_core::controller_support::lenient"
+    )]
+    pub controller: Option<ControllerSupport>,
+    /// How a controller plays it, from PCGamingWiki, used when the store
+    /// says nothing.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "irori_core::controller_support::lenient"
+    )]
+    pub wiki_controller: Option<ControllerSupport>,
 }
 
 pub struct StoreFactsService {
@@ -118,6 +136,9 @@ impl StoreFactsService {
         if game.rating.is_none() {
             game.rating = learned.score;
         }
+        if game.controller_support.is_none() {
+            game.controller_support = learned.controller.or(learned.wiki_controller);
+        }
         if game.game_modes.is_empty() {
             game.game_modes = if learned.game_modes.is_empty() {
                 learned.wiki_modes.clone()
@@ -160,7 +181,8 @@ impl StoreFactsService {
     fn learn_store_page(&self, key: String, info: &irori_core::ExtraInfo) -> bool {
         let (ratings, modes) = (&info.age_ratings, &info.game_modes);
         let score = info.score.as_ref().map(|s| s.score);
-        if ratings.is_empty() && modes.is_empty() && score.is_none() {
+        let controller = info.controller_support;
+        if ratings.is_empty() && modes.is_empty() && score.is_none() && controller.is_none() {
             return false;
         }
         self.learn(key, |l| {
@@ -172,6 +194,9 @@ impl StoreFactsService {
             }
             if score.is_some() {
                 l.score = score;
+            }
+            if controller.is_some() {
+                l.controller = controller;
             }
         })
     }
@@ -187,13 +212,23 @@ impl StoreFactsService {
         self.learn(key, |l| l.hltb_main_hours = hours)
     }
 
-    /// Remember the game modes PCGamingWiki names.
-    fn learn_wiki(&self, key: String, modes: &[GameMode]) -> bool {
-        if modes.is_empty() {
+    /// Remember the game modes and controller support PCGamingWiki names.
+    fn learn_wiki(
+        &self,
+        key: String,
+        modes: &[GameMode],
+        controller: Option<ControllerSupport>,
+    ) -> bool {
+        if modes.is_empty() && controller.is_none() {
             return false;
         }
         self.learn(key, |l| {
-            l.wiki_modes = game_mode::normalized(modes.to_vec())
+            if !modes.is_empty() {
+                l.wiki_modes = game_mode::normalized(modes.to_vec());
+            }
+            if controller.is_some() {
+                l.wiki_controller = controller;
+            }
         })
     }
 }
@@ -247,7 +282,15 @@ impl Backend {
             .as_ref()
             .map(|p| p.game_modes.as_slice())
             .unwrap_or_default();
-        let learned_modes = self.store_facts.learn_wiki(game.id().key(), modes);
+        let controller = info.pcgamingwiki.as_ref().and_then(|p| {
+            p.pc.controller.map(|support| match support {
+                wiki::pcgamingwiki::Support::Full => ControllerSupport::Full,
+                _ => ControllerSupport::Partial,
+            })
+        });
+        let learned_modes = self
+            .store_facts
+            .learn_wiki(game.id().key(), modes, controller);
         let main_story = info.howlongtobeat.as_ref().map(|h| h.main_story);
         let no_match = chosen.trim() == "none";
         let learned_hltb = self
@@ -379,7 +422,7 @@ mod tests {
         assert!(!service.learn_hltb(key.clone(), Some(12), false));
         assert_eq!(service.hltb_times().revision, 1);
         // Other facts leave the times' revision alone.
-        assert!(service.learn_wiki(key.clone(), &[GameMode::Single]));
+        assert!(service.learn_wiki(key.clone(), &[GameMode::Single], None));
         assert_eq!(service.hltb_times().revision, 1);
         // Choosing no match forgets the time.
         assert!(service.learn_hltb(key.clone(), None, true));
@@ -394,6 +437,31 @@ mod tests {
             game_modes: modes.to_vec(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn controller_support_comes_from_the_store_then_the_wiki() {
+        let service = service();
+        let key = "gog:7".to_string();
+        let game = || GameInfo {
+            runner: Some(Runner::Gog),
+            app_name: "7".into(),
+            ..Default::default()
+        };
+        assert!(service.learn_wiki(key.clone(), &[], Some(ControllerSupport::Partial)));
+        let mut g = game();
+        service.complete(&mut g);
+        assert_eq!(g.controller_support, Some(ControllerSupport::Partial));
+        let page = irori_core::ExtraInfo {
+            controller_support: Some(ControllerSupport::Full),
+            ..Default::default()
+        };
+        assert!(service.learn_store_page(key.clone(), &page));
+        let mut g = game();
+        service.complete(&mut g);
+        assert_eq!(g.controller_support, Some(ControllerSupport::Full));
+        // A page that doesn't say keeps what was known.
+        assert!(!service.learn_store_page(key.clone(), &irori_core::ExtraInfo::default()));
     }
 
     #[test]
@@ -468,8 +536,8 @@ mod tests {
             app_name: "1".into(),
             ..Default::default()
         };
-        assert!(service.learn_wiki(key.clone(), &[GameMode::Online, GameMode::Single]));
-        assert!(!service.learn_wiki(key.clone(), &[GameMode::Single, GameMode::Online]));
+        assert!(service.learn_wiki(key.clone(), &[GameMode::Online, GameMode::Single], None));
+        assert!(!service.learn_wiki(key.clone(), &[GameMode::Single, GameMode::Online], None));
         let mut g = game();
         service.complete(&mut g);
         assert_eq!(g.game_modes, [GameMode::Single, GameMode::Online]);

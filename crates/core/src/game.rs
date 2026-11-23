@@ -79,6 +79,13 @@ pub struct GameInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// How a controller plays it, when a source says ([`crate::controller_support`]).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::controller_support::lenient"
+    )]
+    pub controller_support: Option<crate::ControllerSupport>,
     /// When the account got the game, as RFC 3339, when the store says.
     pub date_added: Option<String>,
     /// The user hid the game on the store's own website.
@@ -370,6 +377,13 @@ pub struct ExtraInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// How a controller plays it, when a source says ([`crate::controller_support`]).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::controller_support::lenient"
+    )]
+    pub controller_support: Option<crate::ControllerSupport>,
     /// The source that filled what the store page lacked (`"IGDB"`), named
     /// on the game page; `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]

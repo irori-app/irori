@@ -300,6 +300,7 @@ enum Test<'a> {
     Status(&'a BTreeSet<EffectiveStatus>),
     Age(u8, bool),
     Installed(bool),
+    Controller(bool),
     Playtime(Option<u64>, Option<u64>),
     LastPlayed(Option<u32>, Option<u32>),
     Hltb(Option<u32>, Option<u32>),
@@ -358,6 +359,7 @@ impl<'a> Test<'a> {
                 include_unrated,
             } => Test::Age(*max_age, *include_unrated),
             Rule::Installed { installed } => Test::Installed(*installed),
+            Rule::Controller { full } => Test::Controller(*full),
             Rule::Playtime {
                 min_minutes,
                 max_minutes,
@@ -428,6 +430,13 @@ impl<'a> Test<'a> {
                 }
             }
             Test::Installed(installed) => game.is_installed == *installed,
+            Test::Controller(full) => game.controller_support.is_some_and(|c| {
+                c.meets(if *full {
+                    irori_core::ControllerSupport::Full
+                } else {
+                    irori_core::ControllerSupport::Partial
+                })
+            }),
             Test::Playtime(min, max) => {
                 let minutes = f.user.playtime.get(&key()).map_or(0, |r| r.total_minutes);
                 within(minutes, *min, *max)

@@ -7,6 +7,7 @@ pub mod age_rating;
 pub mod archive_guard;
 pub mod big_picture_prefs;
 pub mod controller_prefs;
+pub mod controller_support;
 pub mod dll_override;
 pub mod events;
 pub mod fs_guard;
@@ -36,6 +37,7 @@ pub mod user_actions;
 pub mod util;
 
 pub use age_rating::{AgeRating, RatingSystem};
+pub use controller_support::ControllerSupport;
 pub use dll_override::{DllMode, DllOverride};
 pub use events::{Event, EventBus, Notice, NoticeLevel};
 pub use game::*;

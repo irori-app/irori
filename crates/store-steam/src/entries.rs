@@ -236,6 +236,10 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
         game_modes: game_modes(details.categories.iter().map(|c| c.id)),
         details_from: None,
         score: metacritic(details),
+        controller_support: details
+            .controller_support
+            .as_deref()
+            .and_then(irori_core::ControllerSupport::from_steam),
     }
 }
 

@@ -91,6 +91,24 @@ fn three_games() -> (LibrarySnapshot, UserData) {
 }
 
 #[test]
+fn controller_rules_go_by_the_known_support() {
+    use irori_core::ControllerSupport;
+    let user = UserData::default();
+    let mut a = game(Runner::Gog, "1", "Alpha");
+    a.controller_support = Some(ControllerSupport::Full);
+    let mut b = game(Runner::Legendary, "2", "Bravo");
+    b.controller_support = Some(ControllerSupport::Partial);
+    let c = game(Runner::Steam, "3", "Charlie");
+    let lib = library(vec![a, b, c], &user);
+    let any = category(Match::All, vec![Rule::Controller { full: false }], vec![]);
+    assert_eq!(members(any, &lib, &user), ["gog:1", "legendary:2"]);
+    let full = category(Match::All, vec![Rule::Controller { full: true }], vec![]);
+    assert_eq!(members(full, &lib, &user), ["gog:1"]);
+    let text = serde_json::to_string(&Rule::Controller { full: false }).unwrap();
+    assert!(!text.contains("full"));
+}
+
+#[test]
 fn not_keeps_an_unknown_answer_unknown() {
     assert_eq!(Truth::Unknown.not(), Truth::Unknown);
     assert_eq!(Truth::Yes.not(), Truth::No);
