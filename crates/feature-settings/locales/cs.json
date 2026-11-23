@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Odtud Irori načítá nainstalované hry ze Steamu a sestavení Proton ze Steamu a sem přidává hry do Steamu.",
   "settings.field.default_steam_path.label": "Složka Steamu",
   "settings.field.crossover_bottles_path.label": "Složka lahví CrossOver",
-  "settings.field.crossover_bottles_path.help": "Nastavte, pokud jste v předvolbách CrossOver přesunuli lahve jinam, například na externí disk.",
+  "settings.field.crossover_bottles_path.help": "Irori používá složku uvedenou v předvolbách CrossOveru. Nastavte ji jen tehdy, chcete-li použít jinou složku, například na externím disku.",
   "settings.field.compat_tools_path.label": "Složka pro stažené Wine a Proton",
   "settings.field.compat_tools_path.help": "Nová sestavení Wine a Protonu se ukládají do složek „wine“ a „proton“ v této složce. Necháte-li pole prázdné, použije se datová složka Irori. Již nainstalovaná sestavení zůstanou, kde jsou.",
   "settings.field.default_wine_prefix_dir.help": "Každá hra pro Windows dostane v této složce vlastní prefix.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Změny platí v Big Picture, překryvu i na všech ostatních obrazovkách. Guide, křížový ovladač a páčky si své funkce ponechají.",
   "settings.controller_map.reset": "Obnovit tlačítka",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Nativní Mac",
   "settings.option.nav_sounds.off": "Vypnuto",
   "settings.option.nav_sounds.soft": "Jemné",
   "settings.option.nav_sounds.classic": "Klasické",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "Desktop zatím pro rychlý spouštěč nemá žádné klávesy; přiřaďte je v jeho nastavení zkratek.",
   "settings.quick_launch.commands_file": "{desktop} nedovoluje programům naslouchat klávesám stisknutým v jiných oknech. Přidejte toto do {file} a znovu načtěte konfiguraci:",
   "settings.quick_launch.command": "Přiřaďte tento příkaz klávese v nastavení klávesnice desktopu:",
-  "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:"
+  "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:",
+  "settings.field.rosetta.label": "Spouštět přes Rosettu",
+  "settings.field.rosetta.help": "Spustí verzi hry pro Intel, i když má hra i verzi pro Apple silicon – pro hry, jejichž verze pro Apple silicon nefunguje správně. Hry jen pro Macy s Intelem běží přes Rosettu vždy.",
+  "settings.field.metal_fx_dlss.label": "DLSS přes MetalFX",
+  "settings.field.metal_fx_dlss.help": "Umožní hrám, které používají NVIDIA DLSS, zvětšovat obraz pomocí MetalFX od Applu. Umí to jen sestavení Wine, která to obsahují: Game Porting Toolkit 3, novější CrossOver nebo sestavení s DXMT. U ostatních zůstane vypnuto a záznam hry uvede proč."
 }

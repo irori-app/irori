@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Otwórz stronę urządzeń Microsoftu",
   "ui.game_window.no_window": "Gra nie ma jeszcze okna do przeniesienia na pierwszy plan",
   "ui.game_window.unsupported": "To środowisko nie pozwala Irori przenieść okna gry na pierwszy plan; przełącz się na nie z paska zadań",
-  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan"
+  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan",
+  "ui.rosetta.missing_title": "Potrzebna jest Rosetta",
+  "ui.rosetta.missing": "„{what}” jest przeznaczona dla Maców z procesorem Intel. Na tym Macu działa przez Rosettę 2, która nie jest zainstalowana. Irori może ją zainstalować przez Uaktualnienia oprogramowania Apple, a potem uruchomić grę.",
+  "ui.rosetta.licence": "Instalując Rosettę, akceptujesz jej umowę licencyjną oprogramowania Apple.",
+  "ui.rosetta.install_and_play": "Zainstaluj i graj",
+  "ui.rosetta.cancel": "Anuluj",
+  "ui.rosetta.installing": "Instalowanie Rosetty",
+  "ui.rosetta.installing_detail": "Uaktualnienia oprogramowania Apple instalują Rosettę 2. Gra uruchomi się po zakończeniu.",
+  "ui.rosetta.install_failed": "Nie udało się zainstalować Rosetty"
 }

@@ -16,7 +16,13 @@ different native OS is rejected before launch.
 
 The GPTK tab is shown on macOS, but its builds are compatible only with Apple
 silicon on macOS 14 or later. Intel Wine on Apple silicon requires Rosetta 2;
-Irori checks it before initializing a prefix and reports a missing prerequisite.
+Irori checks it before initializing a prefix. Native Mac games built only for
+Intel (their program's Mach-O header has no arm64 slice) start through
+`arch -x86_64`, since an Intel-only program spawned from Irori's arm64 process
+hangs; a game's Launch › "Run with Rosetta" does the same for a universal
+program. When Rosetta is missing, the launch asks to install it and, after the
+user agrees (which accepts Apple's licence for it), runs
+`softwareupdate --install-rosetta --agree-to-license` and starts the game.
 Runtime availability does not guarantee game compatibility. DRM, anticheat,
 graphics APIs, CPU instructions, and the selected runtime still matter.
 
@@ -31,16 +37,47 @@ The manager downloads the same three macOS source families used by Heroic:
 Wine-Crossover is a downloadable Wine distribution. It is distinct from the
 commercial CrossOver application and does not create CrossOver bottles.
 
-Discovery includes Irori/Heroic downloads, Wine app bundles, Homebrew paths,
-CrossOver and CrossOver Preview in `/Applications` and `~/Applications`, and
-Whisky's Wine installation. Custom paths may point to a runtime executable.
+Discovery includes Irori/Heroic downloads, Wine app bundles, Homebrew paths
+(Apple silicon's `/opt/homebrew` and Intel's `/usr/local`, named apart),
+CrossOver and CrossOver Preview in `/Applications` and `~/Applications`,
+Whisky's Wine installation, and the engines of Sikarugir, Kegworks and Wineskin
+wrappers in `~/Applications/<maker>` and `/Applications/<maker>` (listed as
+`<wrapper> (<maker>)`; `SharedSupport/wine`, else the older
+`Frameworks/wswine.bundle`, `wine64` or only `wine`). A wrapper's own prefix
+stays its own. A `…-latest` build from the manager shows the version its bundle
+holds (`Wine-Crossover-latest (23.7.1)`). Custom paths may point to a runtime
+executable.
 CrossOver uses the bottle named in a game's Wine settings ("CrossOver bottle"),
-located under `~/Library/Application Support/CrossOver/Bottles` unless General ›
-Folders › "CrossOver bottles folder" points elsewhere (for bottles moved to another
-drive in CrossOver's preferences). Create the bottle in CrossOver first. Irori uses
+located in the folder CrossOver's own preferences name (`BottleDir` in
+`~/Library/Preferences/com.codeweavers.CrossOver.plist`), else
+`~/Library/Application Support/CrossOver/Bottles`, unless General › Folders ›
+"CrossOver bottles folder" points elsewhere. Create the bottle in CrossOver first. Irori uses
 `CX_BOTTLE` and `CX_BOTTLE_PATH`, including for setup and wineserver commands, and
 does not initialize an external bottle. Uninstall refuses to delete a shared CrossOver bottle; keep the prefix and manage it in CrossOver. Whisky uses its runtime with an Irori
 prefix; existing Whisky bottles are not imported automatically.
+
+Winetricks runs with the Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`) and
+MacPorts (`/opt/local/bin`) folders added to `PATH`, which an app started from
+Finder doesn't get; Homebrew's 7-Zip is `7zz`, so a `7z` link to it is made in
+`<data>/tools/winetricks-bin` when no `7z` is there.
+
+After a Mac account is renamed, saved paths under the old `/Users/<old>` home
+(settings, install records, library data: whatever Irori reads through its JSON
+store) read as the current home when that old home no longer exists, and the
+next save keeps them. Other users' homes, `/Users/Shared` and other disks are
+left alone (`irori_core::home_rename`, turned on by `main.rs` only).
+
+DLSS through MetalFX (a game's Wine › Display, `iroriMetalFxDlss`) works with
+builds that ship the translation: D3DMetal 3's `nvngx-on-metalfx.dll` (Game
+Porting Toolkit 3, recent CrossOver) or DXMT's `nvngx.dll` beside
+`winemetal.dll`. Before launch Irori copies the build's NGX DLL (as `nvngx.dll`
+and `_nvngx.dll`) and `nvapi64.dll` into the prefix's `system32` (a file there
+before is set aside), sets `HKLM\Software\NVIDIA Corporation\Global\NGXCore\FullPath`,
+prefers those copies in `WINEDLLOVERRIDES` and sets `D3DM_ENABLE_METALFX=1` or
+`DXMT_ENABLE_NVEXT=1`. What it wrote is recorded in the prefix
+(`.irori-metalfx.json`); turning the setting off, or a build without the
+translation (which the game's log and status then name), takes exactly that
+back out. The build itself is never changed.
 
 macOS settings include Msync, Metal HUD, Rosetta AVX advertisement and Retina mode.
 Retina mode sets `HKCU\Software\Wine\Mac Driver\RetinaMode` in the prefix before
@@ -54,6 +91,13 @@ and wrappers remain user overrides.
 Native `.app` launches read `CFBundleExecutable` from XML or binary Info.plist
 and spawn that executable with the game's arguments and environment. This keeps
 the process attached for exit status, logs, cancellation, and playtime.
+
+ZOOM Platform's Mac builds install on a Mac: a disk image is mounted read-only
+with `hdiutil attach -nobrowse -readonly -noautoopen` (a disk image that asks to
+accept a licence isn't agreed to, so it fails), its apps (else its visible
+folders) are copied out with `ditto`, and it is always detached again; zips and
+tarballs are extracted. Installer packages (`.pkg`) are refused. The game is the
+shallowest `.app` that isn't an installer, the one named like the game first.
 
 ## Build and package
 

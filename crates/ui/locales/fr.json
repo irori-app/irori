@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft",
   "ui.game_window.no_window": "Le jeu n’a pas encore de fenêtre à mettre au premier plan",
   "ui.game_window.unsupported": "Ce bureau ne permet pas à Irori de mettre la fenêtre du jeu au premier plan ; passez-y depuis la barre des tâches",
-  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan"
+  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan",
+  "ui.rosetta.missing_title": "Rosetta est nécessaire",
+  "ui.rosetta.missing": "« {what} » est conçu pour les Mac Intel. Sur ce Mac, il passe par Rosetta 2, qui n’est pas installé. Irori peut l’installer avec la Mise à jour de logiciels d’Apple, puis lancer le jeu.",
+  "ui.rosetta.licence": "Installer Rosetta vaut acceptation du contrat de licence logicielle d’Apple qui le concerne.",
+  "ui.rosetta.install_and_play": "Installer et jouer",
+  "ui.rosetta.cancel": "Annuler",
+  "ui.rosetta.installing": "Installation de Rosetta",
+  "ui.rosetta.installing_detail": "La Mise à jour de logiciels d’Apple installe Rosetta 2. Le jeu se lance dès qu’elle a terminé.",
+  "ui.rosetta.install_failed": "Impossible d’installer Rosetta"
 }

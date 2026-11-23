@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Microsoft のデバイス ページを開く",
   "ui.game_window.no_window": "ゲームには、まだ前面に出せるウィンドウがありません",
   "ui.game_window.unsupported": "このデスクトップでは Irori がゲームのウィンドウを前面に出せません。タスクバーから切り替えてください",
-  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした"
+  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした",
+  "ui.rosetta.missing_title": "Rosetta が必要です",
+  "ui.rosetta.missing": "「{what}」は Intel Mac 向けに作られています。この Mac では Rosetta 2 を使って動きますが、インストールされていません。Irori が Apple のソフトウェアアップデートでインストールし、そのあとゲームを起動できます。",
+  "ui.rosetta.licence": "Rosetta をインストールすると、Rosetta に関する Apple のソフトウェア使用許諾契約に同意したことになります。",
+  "ui.rosetta.install_and_play": "インストールしてプレイ",
+  "ui.rosetta.cancel": "キャンセル",
+  "ui.rosetta.installing": "Rosetta をインストール中",
+  "ui.rosetta.installing_detail": "Apple のソフトウェアアップデートが Rosetta 2 をインストールしています。完了するとゲームが起動します。",
+  "ui.rosetta.install_failed": "Rosetta をインストールできませんでした"
 }

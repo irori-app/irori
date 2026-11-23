@@ -32,6 +32,7 @@ sha2.workspace = true
 hex.workspace = true
 async-trait.workspace = true
 open.workspace = true
+plist.workspace = true
 
 [dev-dependencies]
 url.workspace = true

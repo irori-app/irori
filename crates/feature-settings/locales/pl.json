@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Stąd Irori odczytuje zainstalowane gry ze Steama i wersje Protona ze Steama oraz dodaje gry do Steama.",
   "settings.field.default_steam_path.label": "Folder Steama",
   "settings.field.crossover_bottles_path.label": "Folder butelek CrossOver",
-  "settings.field.crossover_bottles_path.help": "Ustaw, jeśli w preferencjach CrossOver przeniesiono butelki, na przykład na dysk zewnętrzny.",
+  "settings.field.crossover_bottles_path.help": "Irori używa folderu wskazanego w preferencjach CrossOvera. Ustaw go tylko wtedy, gdy chcesz użyć innego folderu, na przykład na dysku zewnętrznym.",
   "settings.field.compat_tools_path.label": "Folder na pobrane Wine i Proton",
   "settings.field.compat_tools_path.help": "Nowe wersje Wine i Protona trafiają tu do folderów „wine” i „proton”. Zostaw puste, aby używać folderu danych Irori. Już zainstalowane wersje zostają na miejscu.",
   "settings.field.default_wine_prefix_dir.help": "Każda gra dla Windows otrzymuje w tym folderze własny prefiks.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Zmiany działają w Big Picture, nakładce i na każdym innym ekranie. Guide, krzyżak i drążki zachowują swoje funkcje.",
   "settings.controller_map.reset": "Przywróć przyciski",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Natywny Mac",
   "settings.option.nav_sounds.off": "Wyłączone",
   "settings.option.nav_sounds.soft": "Łagodne",
   "settings.option.nav_sounds.classic": "Klasyczne",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "Pulpit nie ma jeszcze klawiszy dla szybkiego programu uruchamiającego; przypisz je w jego ustawieniach skrótów.",
   "settings.quick_launch.commands_file": "{desktop} nie pozwala programom nasłuchiwać klawiszy naciskanych w innych oknach. Dodaj to do {file}, a potem wczytaj ponownie konfigurację:",
   "settings.quick_launch.command": "Przypisz to polecenie do klawisza w ustawieniach klawiatury pulpitu:",
-  "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:"
+  "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:",
+  "settings.field.rosetta.label": "Uruchamiaj przez Rosettę",
+  "settings.field.rosetta.help": "Uruchamia wersję gry dla procesorów Intel, nawet jeśli ma też wersję dla Apple silicon – dla gier, których wersja na Apple silicon źle działa. Gry tylko dla Maców z Intelem zawsze działają przez Rosettę.",
+  "settings.field.metal_fx_dlss.label": "DLSS przez MetalFX",
+  "settings.field.metal_fx_dlss.help": "Pozwala grom korzystającym z NVIDIA DLSS skalować obraz przez MetalFX od Apple. Potrafią to tylko kompilacje Wine, które to zawierają: Game Porting Toolkit 3, nowszy CrossOver lub kompilacja z DXMT. Przy innych pozostaje wyłączone, a dziennik gry podaje powód."
 }

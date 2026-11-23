@@ -376,6 +376,9 @@ and `launch.rs` before changing anything below the UI.
   sibling and rename it, so a crash never leaves a half-written file.
 - `read` returns `Ok(None)` for a missing file; `read_or_default` logs and falls back
   for a corrupt one.
+- On a Mac whose account was renamed, `read` points paths under the old
+  `/Users/<old>` home (gone) at the current one (`home_rename.rs`, enabled only by
+  `main.rs`, so tests read their fixtures as written).
 
 **Secrets** (`irori-secrets`):
 
@@ -1163,7 +1166,14 @@ commands without a window.
      starts at once and runs alongside the game as a program of the session
      (`programs::script_alongside`), stopped when the session ends or the launch
      fails.
-  5. `store.launch` builds the `LaunchPlan`.
+  5. `store.launch` builds the `LaunchPlan`. On Apple silicon a native Mac game's
+     program without arm64 code (or with `iroriRosetta`) goes through
+     `arch -x86_64` (`irori_runtime::rosetta::for_launch`); without Rosetta the
+     launch fails with the typed `RosettaMissing`, and `irori_ui` asks before
+     `Backend::install_rosetta` runs Apple's `softwareupdate`. Wine on Apple
+     silicon fails with it too. `iroriMetalFxDlss` (macOS) is set up in the
+     prefix by `irori_runtime::metalfx` only for builds that ship the
+     translation, and taken back out from its record otherwise.
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);

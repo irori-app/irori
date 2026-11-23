@@ -93,15 +93,41 @@ pub fn flatpak_home() -> PathBuf {
     home()
 }
 
-/// CrossOver's bottles folder: the configured one (`~` expanded), else
-/// CrossOver's default.
+/// CrossOver's bottles folder: the configured one (`~` expanded), else the
+/// one CrossOver's own preferences name, else CrossOver's default.
 pub fn crossover_bottles_dir(app: &AppSettings) -> PathBuf {
     let configured = app.crossover_bottles_path.trim();
-    if configured.is_empty() {
-        home().join("Library/Application Support/CrossOver/Bottles")
-    } else {
-        irori_core::paths::expand_home(configured)
+    if !configured.is_empty() {
+        return irori_core::paths::expand_home(configured);
     }
+    let home = home();
+    crossover_preferred_bottles(&home.join(CROSSOVER_PREFERENCES), &home)
+        .unwrap_or_else(|| home.join("Library/Application Support/CrossOver/Bottles"))
+}
+
+/// CrossOver's preferences, where its Bottles setting writes `BottleDir`.
+const CROSSOVER_PREFERENCES: &str = "Library/Preferences/com.codeweavers.CrossOver.plist";
+
+/// The bottles folder CrossOver's preferences file `prefs` names
+/// (`BottleDir`, `~` meaning `home`), when it names one.
+pub fn crossover_preferred_bottles(prefs: &Path, home: &Path) -> Option<PathBuf> {
+    let value = plist::Value::from_file(prefs).ok()?;
+    let dir = value
+        .as_dictionary()?
+        .get("BottleDir")?
+        .as_string()?
+        .trim()
+        .trim_end_matches('/');
+    if dir.is_empty() {
+        return None;
+    }
+    let path = match dir.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => {
+            home.join(rest.trim_start_matches('/'))
+        }
+        _ => PathBuf::from(dir),
+    };
+    path.is_absolute().then_some(path)
 }
 
 /// The Steam installation: the configured path (quotes removed, `~`
@@ -149,6 +175,40 @@ pub fn canonical(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_crossovers_own_bottles_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let prefs = home.join("CrossOver.plist");
+        let write = |value: &str| {
+            let mut d = plist::Dictionary::new();
+            d.insert("BottleDir".into(), plist::Value::String(value.into()));
+            d.insert("Other".into(), plist::Value::Boolean(true));
+            plist::Value::Dictionary(d).to_file_binary(&prefs).unwrap();
+        };
+        write("/Volumes/Games/Bottles/");
+        assert_eq!(
+            crossover_preferred_bottles(&prefs, home),
+            Some(PathBuf::from("/Volumes/Games/Bottles"))
+        );
+        write("~/Games/CrossOver");
+        assert_eq!(
+            crossover_preferred_bottles(&prefs, home),
+            Some(home.join("Games/CrossOver"))
+        );
+        // Unset, relative or another user's `~name` are not a folder to use.
+        for value in ["", "Bottles", "~other/Bottles"] {
+            write(value);
+            assert_eq!(crossover_preferred_bottles(&prefs, home), None, "{value}");
+        }
+        assert_eq!(
+            crossover_preferred_bottles(&home.join("missing.plist"), home),
+            None
+        );
+    }
+
     #[test]
     fn finds_steam_installed_as_a_snap() {
         let home = tempfile::tempdir().unwrap();

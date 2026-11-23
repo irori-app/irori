@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "É daqui que o Irori lê os jogos instalados do Steam e as versões do Proton do Steam, e adiciona jogos ao Steam.",
   "settings.field.default_steam_path.label": "Pasta do Steam",
   "settings.field.crossover_bottles_path.label": "Pasta de garrafas do CrossOver",
-  "settings.field.crossover_bottles_path.help": "Defina-a se moveu as garrafas nas preferências do CrossOver, por exemplo para um disco externo.",
+  "settings.field.crossover_bottles_path.help": "O Irori usa a pasta indicada nas preferências do CrossOver. Defina isto só para usar outra pasta, por exemplo num disco externo.",
   "settings.field.compat_tools_path.label": "Pasta para o Wine e o Proton transferidos",
   "settings.field.compat_tools_path.help": "As novas versões do Wine e do Proton ficam aqui, nas pastas «wine» e «proton». Deixe vazio para usar a pasta de dados do Irori. As versões já instaladas ficam onde estão.",
   "settings.field.default_wine_prefix_dir.help": "Cada jogo Windows recebe o seu próprio prefixo dentro desta pasta.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "As alterações aplicam-se no Big Picture, na sobreposição e em todos os outros ecrãs. Guide, o direcional e os manípulos mantêm as suas funções.",
   "settings.controller_map.reset": "Repor botões",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Mac nativo",
   "settings.option.nav_sounds.off": "Desligados",
   "settings.option.nav_sounds.soft": "Suaves",
   "settings.option.nav_sounds.classic": "Clássicos",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "O ambiente de trabalho ainda não tem teclas para o lançador rápido; atribua-as nas definições de atalhos.",
   "settings.quick_launch.commands_file": "{desktop} não deixa os programas ouvir as teclas premidas noutras janelas. Adicione isto a {file} e recarregue a configuração:",
   "settings.quick_launch.command": "Atribua este comando a uma tecla nas definições de teclado do ambiente de trabalho:",
-  "settings.quick_launch.off": "Este comando também abre o lançador rápido; se quiser, atribua-o a uma tecla nas definições de teclado:"
+  "settings.quick_launch.off": "Este comando também abre o lançador rápido; se quiser, atribua-o a uma tecla nas definições de teclado:",
+  "settings.field.rosetta.label": "Executar com o Rosetta",
+  "settings.field.rosetta.help": "Inicia a versão Intel do jogo mesmo quando também tem uma para Apple silicon, para jogos cuja versão Apple silicon dá problemas. Os jogos só para Macs Intel funcionam sempre com o Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS através do MetalFX",
+  "settings.field.metal_fx_dlss.help": "Permite que os jogos que usam NVIDIA DLSS façam upscaling com o MetalFX da Apple. Só as versões do Wine que o incluem o conseguem: Game Porting Toolkit 3, um CrossOver recente ou uma versão com DXMT. Com as outras fica desligado e o registo do jogo diz porquê."
 }

@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Irori 從這裡讀取已安裝的 Steam 遊戲和 Steam 的 Proton 版本，並將遊戲加入 Steam。",
   "settings.field.default_steam_path.label": "Steam 資料夾",
   "settings.field.crossover_bottles_path.label": "CrossOver 容器資料夾",
-  "settings.field.crossover_bottles_path.help": "如果你在 CrossOver 偏好設定中移動了容器（例如移到外接硬碟），請設定此項。",
+  "settings.field.crossover_bottles_path.help": "Irori 使用 CrossOver 自己的偏好設定中指定的資料夾。只有要使用其他資料夾（例如外接磁碟上的）時才需設定。",
   "settings.field.compat_tools_path.label": "下載的 Wine 和 Proton 存放資料夾",
   "settings.field.compat_tools_path.help": "新的 Wine 和 Proton 版本會放在此處的「wine」和「proton」資料夾中。留空則使用 Irori 的資料資料夾。已安裝的版本保留在原處。",
   "settings.field.default_wine_prefix_dir.help": "每個 Windows 遊戲都會在此資料夾中擁有自己的 Prefix。",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "變更會套用到 Big Picture、覆蓋層和其他所有畫面。Guide、十字鍵和搖桿的功能維持不變。",
   "settings.controller_map.reset": "重設按鍵",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "原生 Mac",
   "settings.option.nav_sounds.off": "關",
   "settings.option.nav_sounds.soft": "柔和",
   "settings.option.nav_sounds.classic": "經典",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "桌面尚未為快速啟動器指定按鍵；請在桌面的快速鍵設定中指定。",
   "settings.quick_launch.commands_file": "{desktop} 不允許程式監聽在其他視窗中按下的按鍵。請將以下內容加入 {file}，然後重新載入其設定：",
   "settings.quick_launch.command": "請在桌面的鍵盤設定中將此指令綁定到按鍵：",
-  "settings.quick_launch.off": "此指令也能開啟快速啟動器；如有需要，可在桌面的鍵盤設定中將其綁定到按鍵："
+  "settings.quick_launch.off": "此指令也能開啟快速啟動器；如有需要，可在桌面的鍵盤設定中將其綁定到按鍵：",
+  "settings.field.rosetta.label": "透過 Rosetta 執行",
+  "settings.field.rosetta.help": "即使遊戲也有 Apple 晶片版本，仍啟動它的 Intel 版本，適用於 Apple 晶片版本執行不正常的遊戲。只為 Intel Mac 製作的遊戲總是透過 Rosetta 執行。",
+  "settings.field.metal_fx_dlss.label": "透過 MetalFX 使用 DLSS",
+  "settings.field.metal_fx_dlss.help": "讓使用 NVIDIA DLSS 的遊戲透過 Apple 的 MetalFX 進行超解析度縮放。只有內建此功能的 Wine 版本可以：Game Porting Toolkit 3、較新的 CrossOver 或含 DXMT 的版本。其他版本下保持關閉，遊戲記錄會說明原因。"
 }

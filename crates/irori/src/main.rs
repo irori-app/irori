@@ -79,6 +79,8 @@ fn main() -> Result<()> {
         std::process::exit(i32::from(irori_sign_in::main(args.into_iter().skip(1))));
     }
     irori_secrets::use_os_keyring();
+    // A renamed Mac account leaves the old home's paths in saved files.
+    irori_core::home_rename::enable();
     let args = match std::env::current_dir() {
         Ok(cwd) => cli::absolute_file_args(args, &cwd),
         Err(_) => args,

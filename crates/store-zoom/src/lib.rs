@@ -18,6 +18,7 @@ mod extract;
 mod heroic;
 mod install;
 mod launch;
+mod mac;
 mod mapping;
 mod records;
 #[cfg(test)]
@@ -510,9 +511,7 @@ impl Store for ZoomStore {
         let game = self
             .game(app_name)
             .with_context(|| format!("{app_name} is not in your ZOOM Platform library"))?;
-        if !matches!(platform, InstallPlatform::Windows | InstallPlatform::Linux) {
-            bail!("ZOOM Platform only offers Windows and Linux builds");
-        }
+        crate::ensure_installable(platform)?;
         let api = self.api()?;
         let files = api.files(app_name).await.inspect_err(|e| {
             self.expire_session_if_unauthorized(e);
@@ -752,6 +751,23 @@ impl Store for ZoomStore {
         };
         launch::build_plan(&rec, &title, request, dosbox.as_deref())
     }
+}
+
+/// Refuse a build this system can't install: ZOOM Platform's Windows and
+/// Linux builds, and its Mac builds on a Mac.
+pub(crate) fn ensure_installable(platform: InstallPlatform) -> Result<()> {
+    let offered = match platform {
+        InstallPlatform::Windows | InstallPlatform::Linux => true,
+        InstallPlatform::Mac => cfg!(target_os = "macos"),
+        InstallPlatform::Browser => false,
+    };
+    if !offered {
+        bail!(
+            "ZOOM Platform's {} builds can't be installed here",
+            platform.label()
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

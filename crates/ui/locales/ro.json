@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft",
   "ui.game_window.no_window": "Jocul nu are încă o fereastră de adus în față",
   "ui.game_window.unsupported": "Acest desktop nu-i permite lui Irori să aducă fereastra jocului în față; comută la ea din bara de activități",
-  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față"
+  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față",
+  "ui.rosetta.missing_title": "Este nevoie de Rosetta",
+  "ui.rosetta.missing": "„{what}” este făcut pentru Mac-uri cu Intel. Pe acest Mac rulează prin Rosetta 2, care nu este instalat. Irori îl poate instala cu Actualizarea software de la Apple, apoi pornește jocul.",
+  "ui.rosetta.licence": "Instalarea Rosetta înseamnă acceptarea acordului de licență software Apple pentru aceasta.",
+  "ui.rosetta.install_and_play": "Instalează și joacă",
+  "ui.rosetta.cancel": "Anulează",
+  "ui.rosetta.installing": "Se instalează Rosetta",
+  "ui.rosetta.installing_detail": "Actualizarea software de la Apple instalează Rosetta 2. Jocul pornește când se termină.",
+  "ui.rosetta.install_failed": "Rosetta nu a putut fi instalat"
 }

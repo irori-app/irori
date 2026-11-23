@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Abrir la página de dispositivos de Microsoft",
   "ui.game_window.no_window": "El juego aún no tiene una ventana que traer al frente",
   "ui.game_window.unsupported": "Este escritorio no deja que Irori traiga al frente la ventana del juego; cambia a ella desde la barra de tareas",
-  "ui.game_window.failed": "No se pudo traer al frente la ventana del juego"
+  "ui.game_window.failed": "No se pudo traer al frente la ventana del juego",
+  "ui.rosetta.missing_title": "Se necesita Rosetta",
+  "ui.rosetta.missing": "«{what}» está hecho para Mac con Intel. En este Mac funciona mediante Rosetta 2, que no está instalado. Irori puede instalarlo con Actualización de software de Apple y después iniciar el juego.",
+  "ui.rosetta.licence": "Instalar Rosetta supone aceptar el contrato de licencia de software de Apple para Rosetta.",
+  "ui.rosetta.install_and_play": "Instalar y jugar",
+  "ui.rosetta.cancel": "Cancelar",
+  "ui.rosetta.installing": "Instalando Rosetta",
+  "ui.rosetta.installing_detail": "Actualización de software de Apple está instalando Rosetta 2. El juego se iniciará cuando termine.",
+  "ui.rosetta.install_failed": "No se pudo instalar Rosetta"
 }

@@ -129,7 +129,8 @@ pub fn platform_files(files: &FilesResponse, platform: InstallPlatform) -> &[Zoo
     match platform {
         InstallPlatform::Windows => &files.windows,
         InstallPlatform::Linux => &files.linux,
-        InstallPlatform::Mac | InstallPlatform::Browser => &[],
+        InstallPlatform::Mac => &files.mac,
+        InstallPlatform::Browser => &[],
     }
 }
 
@@ -306,6 +307,26 @@ mod tests {
         let lin = platform_files(&files, InstallPlatform::Linux);
         assert!(install_info(&game, lin, InstallPlatform::Linux, true).is_native);
         assert!(platform_files(&files, InstallPlatform::Mac).is_empty());
+    }
+
+    #[test]
+    fn mac_builds_read_under_any_of_their_names() {
+        for key in ["mac", "osx", "macos"] {
+            let json = format!(
+                r#"{{"windows": [], "linux": null, "{key}": [{{"id": 7, "name": "Game.dmg", "size": "1 GB"}}]}}"#
+            );
+            let files: FilesResponse = serde_json::from_str(&json).unwrap();
+            let mac = platform_files(&files, InstallPlatform::Mac);
+            assert_eq!(mac.len(), 1, "{key}");
+            assert_eq!(disk_name(&mac[0]), "Game.dmg");
+        }
+        // Installing them is a Mac's job.
+        assert_eq!(
+            crate::ensure_installable(InstallPlatform::Mac).is_ok(),
+            cfg!(target_os = "macos")
+        );
+        assert!(crate::ensure_installable(InstallPlatform::Windows).is_ok());
+        assert!(crate::ensure_installable(InstallPlatform::Browser).is_err());
     }
 
     #[test]

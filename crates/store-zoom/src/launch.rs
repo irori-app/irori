@@ -1,6 +1,7 @@
 //! Building the launch command of an installed ZOOM game.
 //!
 //! * Native Linux builds run directly (`start.sh` or the game binary).
+//! * Mac builds run their app bundle's executable.
 //! * DOSBox games run with the system DOSBox and the game's `.conf` files,
 //!   from the directory holding those files; without a system DOSBox the
 //!   bundled `dosbox.exe` runs through Wine.
@@ -67,7 +68,13 @@ pub fn build_plan(
                 )
             })?,
         };
-        if !exe.is_file() {
+        // A Mac build is its app bundle, which starts as the bundle's own
+        // executable (see `CommandSpec`).
+        let bundle = exe
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("app"))
+            && exe.is_dir();
+        if !exe.is_file() && !bundle {
             bail!(
                 "The executable of {title} was not found at {}",
                 exe.display()
@@ -77,6 +84,8 @@ pub fn build_plan(
         let windows_exe = is_windows_program(&exe);
         if record.platform.needs_wine() || (windows_exe && !cfg!(windows)) {
             wine_command(request, title, &exe, &cwd, args)?
+        } else if bundle {
+            CommandSpec::new(&exe).args(args).cwd(cwd)
         } else {
             ensure_executable(&exe);
             CommandSpec::new(&exe).args(args).cwd(cwd)
@@ -264,6 +273,23 @@ mod tests {
         assert_eq!(plan.command.env["STORE"], "zoomplatform");
         assert_eq!(plan.command.env["WINEPREFIX"], "/pfx");
         assert!(!plan.track_wineserver);
+    }
+
+    #[test]
+    fn a_mac_build_launches_its_app_bundle() {
+        let (d, mut rec) = install(&["Hero Quest.app/Contents/MacOS/hero"]);
+        rec.executable = "Hero Quest.app".into();
+        rec.platform = InstallPlatform::Mac;
+        let mut req = request(None);
+        req.environment.wrappers.clear();
+        let plan = build_plan(&rec, "Hero Quest", &req, None).unwrap();
+        assert_eq!(plan.command.program, d.path().join("Hero Quest.app"));
+        assert_eq!(args(&plan.command), ["-fullscreen", "-name x", "--extra"]);
+        assert_eq!(plan.command.cwd.as_deref(), Some(d.path()));
+        assert!(!plan.track_wineserver);
+        // A bundle that is gone is reported like any missing program.
+        rec.executable = "Gone.app".into();
+        assert!(build_plan(&rec, "Hero Quest", &req, None).is_err());
     }
 
     #[test]

@@ -5709,6 +5709,7 @@ dependencies = [
  "once_cell",
  "open",
  "parking_lot",
+ "plist",
  "regex",
  "reqwest",
  "serde",

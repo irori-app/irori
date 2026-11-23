@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Apparatenpagina van Microsoft openen",
   "ui.game_window.no_window": "De game heeft nog geen venster om naar voren te halen",
   "ui.game_window.unsupported": "Deze desktop laat Irori het gamevenster niet naar voren halen; wissel ernaar via de taakbalk",
-  "ui.game_window.failed": "Het gamevenster kon niet naar voren worden gehaald"
+  "ui.game_window.failed": "Het gamevenster kon niet naar voren worden gehaald",
+  "ui.rosetta.missing_title": "Rosetta is nodig",
+  "ui.rosetta.missing": "‘{what}’ is gemaakt voor Intel-Macs. Op deze Mac draait het via Rosetta 2, dat niet geïnstalleerd is. Irori kan het installeren met Software-update van Apple en daarna het spel starten.",
+  "ui.rosetta.licence": "Met het installeren van Rosetta ga je akkoord met de softwarelicentieovereenkomst van Apple ervoor.",
+  "ui.rosetta.install_and_play": "Installeren en spelen",
+  "ui.rosetta.cancel": "Annuleren",
+  "ui.rosetta.installing": "Rosetta installeren",
+  "ui.rosetta.installing_detail": "Software-update van Apple installeert Rosetta 2. Het spel start zodra dat klaar is.",
+  "ui.rosetta.install_failed": "Kan Rosetta niet installeren"
 }

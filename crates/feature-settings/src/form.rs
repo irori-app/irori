@@ -25,7 +25,7 @@ use gpui_kit::{
     SharedString, Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::settings::{AppSettings, GameSettings, UiPrefs, WineInstallation};
-use irori_core::{GameId, InstallPlatform, Paths, Runner};
+use irori_core::{GameId, Paths, Runner};
 use irori_runtime::discovery::WineSource;
 use irori_runtime::graphics::HostGraphics;
 use irori_ui::i18n::{t, t_args};
@@ -62,6 +62,12 @@ use crate::value::{
 use crate::widgets::{
     RowState, field_row, group_heading, group_panel, muted, panel, section_heading,
 };
+
+/// Whether `game` is installed as this system's own build: native Linux
+/// on Linux, a Mac build on macOS.
+fn is_native(game: Option<&irori_core::GameInfo>) -> bool {
+    game.and_then(|g| g.installed_platform()) == Some(irori_core::HostPlatform::current().native())
+}
 
 /// What a form edits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,7 +219,7 @@ pub struct SettingsForm {
     playnite_detected: bool,
     /// Self-contained panels (controllers, EOS overlay, EGL sync, save sync).
     panels: HashMap<&'static str, AnyView>,
-    /// Game target: the game is installed as a native Linux build.
+    /// Game target: the game is installed as this system's own build.
     native: bool,
     /// The shell installed the Epic store handle.
     epic_available: bool,
@@ -307,8 +313,7 @@ impl SettingsForm {
             let library = models(cx).library.clone();
             this._subscriptions
                 .push(cx.observe(&library, move |this, _, cx| {
-                    let native = backend(cx).game(&id).and_then(|g| g.installed_platform())
-                        == Some(InstallPlatform::Linux);
+                    let native = is_native(backend(cx).game(&id).as_deref());
                     if native != this.native {
                         this.native = native;
                         cx.notify();
@@ -616,8 +621,7 @@ impl SettingsForm {
                 self.snapshot = serde_json::to_value(&*app).unwrap_or_default();
             }
             FormTarget::Game(id) => {
-                self.native =
-                    b.game(id).and_then(|g| g.installed_platform()) == Some(InstallPlatform::Linux);
+                self.native = is_native(b.game(id).as_deref());
                 let overrides = b.settings.overrides(id);
                 self.defaults = app.game.clone();
                 self.defaults_json = serde_json::to_value(&self.defaults).unwrap_or_default();

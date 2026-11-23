@@ -650,7 +650,7 @@ impl Backend {
         // brings (a script extender's loader as the game's program) must be
         // there when the store checks it.
         let mods = self.apply_mods(id, &game, &log_file).await?;
-        let plan = match crate::downloads::stop_within(
+        let mut plan = match crate::downloads::stop_within(
             store.launch(&id.app_name, &request, ctx),
             &cancel,
             LAUNCH_CANCEL_GRACE,
@@ -670,6 +670,26 @@ impl Backend {
                     .await);
             }
         };
+        // An Intel Mac build started from Irori's arm64 process would hang:
+        // it goes through Rosetta, which the UI offers to install if needed.
+        if target.platform == InstallPlatform::Mac && plan.watch.is_none() {
+            let folder = game.install_path();
+            let command = std::mem::replace(&mut plan.command, process::CommandSpec::new(""));
+            match irori_runtime::rosetta::for_launch(command, folder, settings.rosetta, &game.title)
+                .await
+            {
+                Ok(command) => plan.command = command,
+                Err(e) => {
+                    if mods {
+                        self.restore_mods(id, &game.title).await;
+                    }
+                    if let Err(e) = store.after_exit(&id.app_name, 0).await {
+                        tracing::warn!("after a refused launch of {id}: {e:#}");
+                    }
+                    return Err(e);
+                }
+            }
+        }
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
         if id.runner.manages_installs()
@@ -1434,6 +1454,13 @@ impl Backend {
         };
         let ctx = self.op_context(id, CancellationToken::new());
         irori_runtime::run_in_prefix(&app, &settings, target, argv, false, ctx).await
+    }
+
+    /// Install Rosetta 2 ([`irori_core::RosettaMissing`], from a launch) with
+    /// Apple's `softwareupdate`, which accepts Apple's licence for it. Only
+    /// after the user agreed in the dialog that says so.
+    pub async fn install_rosetta(&self) -> Result<()> {
+        irori_runtime::rosetta::install().await
     }
 
     /// Install the launcher a game starts through ([`irori_core::LauncherMissing`],

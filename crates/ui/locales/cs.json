@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu",
   "ui.game_window.no_window": "Hra zatím nemá okno, které by šlo přenést do popředí",
   "ui.game_window.unsupported": "Toto prostředí nedovolí Irori přenést okno hry do popředí; přepněte se do něj z panelu úloh",
-  "ui.game_window.failed": "Okno hry nešlo přenést do popředí"
+  "ui.game_window.failed": "Okno hry nešlo přenést do popředí",
+  "ui.rosetta.missing_title": "Je potřeba Rosetta",
+  "ui.rosetta.missing": "„{what}“ je určeno pro Macy s procesorem Intel. Na tomto Macu běží přes Rosettu 2, která není nainstalovaná. Irori ji může nainstalovat přes Aktualizaci softwaru od Applu a pak hru spustit.",
+  "ui.rosetta.licence": "Instalací Rosetty přijímáte její licenční smlouvu se společností Apple.",
+  "ui.rosetta.install_and_play": "Nainstalovat a hrát",
+  "ui.rosetta.cancel": "Zrušit",
+  "ui.rosetta.installing": "Instaluje se Rosetta",
+  "ui.rosetta.installing_detail": "Aktualizace softwaru od Applu instaluje Rosettu 2. Hra se spustí, až bude hotovo.",
+  "ui.rosetta.install_failed": "Rosettu se nepodařilo nainstalovat"
 }

@@ -119,6 +119,24 @@ impl GameFilesMissing {
     }
 }
 
+/// The game, or the Wine build it runs in, is built for Intel Macs and this
+/// Apple silicon Mac doesn't have Rosetta 2. Irori never installs it on its
+/// own: the UI asks, then runs Apple's `softwareupdate --install-rosetta`
+/// (`Backend::install_rosetta`) and starts the game again.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{what} is built for Intel Macs and needs Rosetta 2, which isn't installed.")]
+pub struct RosettaMissing {
+    /// What needs it: the game's title or the Wine build's name.
+    pub what: String,
+}
+
+impl RosettaMissing {
+    /// The missing Rosetta behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&RosettaMissing> {
+        error.downcast_ref()
+    }
+}
+
 /// Why a game set to run sandboxed could not be: Irori refuses to start it
 /// rather than run it without the sandbox the user asked for. The UI turns
 /// it into an explanation with the way out.

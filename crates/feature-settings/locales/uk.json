@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Звідси Irori читає встановлені ігри Steam і збірки Proton зі Steam та додає ігри до Steam.",
   "settings.field.default_steam_path.label": "Тека Steam",
   "settings.field.crossover_bottles_path.label": "Тека пляшок CrossOver",
-  "settings.field.crossover_bottles_path.help": "Укажіть, якщо ви перенесли пляшки в налаштуваннях CrossOver, наприклад на зовнішній диск.",
+  "settings.field.crossover_bottles_path.help": "Irori використовує теку, вказану в налаштуваннях CrossOver. Задайте її, лише щоб використовувати іншу теку, наприклад на зовнішньому диску.",
   "settings.field.compat_tools_path.label": "Тека для завантажених Wine і Proton",
   "settings.field.compat_tools_path.help": "Нові збірки Wine і Proton потрапляють сюди, у теки «wine» і «proton». Залиште порожнім, щоб використовувати теку даних Irori. Уже встановлені збірки залишаються на місці.",
   "settings.field.default_wine_prefix_dir.help": "Кожна гра для Windows отримує власний префікс у цій теці.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Зміни діють у Big Picture, оверлеї та на всіх інших екранах. Guide, хрестовина й стики зберігають свої функції.",
   "settings.controller_map.reset": "Скинути кнопки",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Нативний Mac",
   "settings.option.nav_sounds.off": "Вимк.",
   "settings.option.nav_sounds.soft": "М’які",
   "settings.option.nav_sounds.classic": "Класичні",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "Робочий стіл ще не має клавіш для швидкого запуску; призначте їх у його налаштуваннях сполучень.",
   "settings.quick_launch.commands_file": "{desktop} не дає програмам слухати клавіші, натиснуті в інших вікнах. Додайте це до {file} і перезавантажте конфігурацію:",
   "settings.quick_launch.command": "Призначте цю команду на клавішу в налаштуваннях клавіатури робочого столу:",
-  "settings.quick_launch.off": "Швидкий запуск відкриває й ця команда; за бажання призначте її на клавішу в налаштуваннях клавіатури робочого столу:"
+  "settings.quick_launch.off": "Швидкий запуск відкриває й ця команда; за бажання призначте її на клавішу в налаштуваннях клавіатури робочого столу:",
+  "settings.field.rosetta.label": "Запускати через Rosetta",
+  "settings.field.rosetta.help": "Запускає Intel-версію гри, навіть якщо є версія для Apple silicon, — для ігор, у яких версія для Apple silicon працює погано. Ігри лише для Mac з Intel завжди запускаються через Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS через MetalFX",
+  "settings.field.metal_fx_dlss.help": "Дає змогу іграм з NVIDIA DLSS масштабувати зображення через MetalFX від Apple. Це вміють лише збірки Wine, які це містять: Game Porting Toolkit 3, свіжий CrossOver або збірка з DXMT. З іншими параметр лишається вимкненим, а журнал гри пояснює чому."
 }

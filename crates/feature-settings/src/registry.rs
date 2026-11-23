@@ -353,7 +353,7 @@ pub struct NeedContext<'a> {
     pub graphics: Option<&'a irori_runtime::graphics::HostGraphics>,
     /// A graphics card is chosen for the game.
     pub chosen_gpu: bool,
-    /// One game's settings, installed as a native Linux build.
+    /// One game's settings, installed as this system's own build.
     pub native_game: bool,
 }
 
@@ -428,7 +428,8 @@ pub struct FieldSpec {
     pub requires: &'static [Condition],
     /// What the computer or game must have; checked before `requires`.
     pub needs: &'static [Need],
-    /// Only shown in the settings of a game installed as a native Linux build.
+    /// Only shown in the settings of a game installed as this system's own
+    /// build (Linux on Linux, Mac on macOS).
     pub native_only: bool,
 }
 
@@ -554,6 +555,8 @@ impl FieldSpec {
                 | "advertiseAvxForRosetta"
                 | "iroriRetinaMode"
                 | "iroriCrossoverBottlesPath"
+                | "iroriRosetta"
+                | "iroriMetalFxDlss"
         );
         if mac_only && host != HostPlatform::Mac {
             return false;
@@ -3291,6 +3294,27 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.retina_mode.help")
     .keywords(&["retina", "hidpi", "resolution", "scaling", "mac"]),
     game(
+        "iroriMetalFxDlss",
+        "settings.field.metal_fx_dlss.label",
+        Wine,
+        "settings.group.display",
+        Toggle,
+    )
+    .tag(Verbatim("macOS"))
+    .help("settings.field.metal_fx_dlss.help")
+    .keywords(&[
+        "dlss",
+        "metalfx",
+        "upscaling",
+        "nvidia",
+        "d3dmetal",
+        "dxmt",
+        "game porting toolkit",
+        "gptk",
+        "crossover",
+        "mac",
+    ]),
+    game(
         "enableWineWayland",
         "settings.field.enable_wine_wayland.label",
         Wine,
@@ -4094,6 +4118,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "steam",
     ])
     .native_only(),
+    game_only(
+        "iroriRosetta",
+        "settings.field.rosetta.label",
+        Launch,
+        "settings.group.native_mac",
+        Toggle,
+    )
+    .tag(Verbatim("macOS"))
+    .help("settings.field.rosetta.help")
+    .keywords(&["rosetta", "intel", "x86", "apple silicon", "arch", "mac"])
+    .native_only(),
     game(
         "wrapperOptions",
         "settings.field.wrapper_options.label",
@@ -4700,14 +4735,21 @@ mod tests {
     }
 
     #[test]
-    fn steam_runtime_is_a_native_per_game_choice() {
+    fn native_build_choices_are_per_game() {
         let natives: Vec<_> = FIELDS.iter().filter(|f| f.native_only).collect();
-        assert_eq!(natives.len(), 1);
-        let rt = natives[0];
-        assert_eq!(rt.path, "steamRuntime");
-        assert!(rt.applies_to_game(true));
-        assert!(!rt.applies_to_game(false));
-        assert_ne!(rt.section, FieldSection::Wine);
+        let paths: Vec<_> = natives.iter().map(|f| f.path).collect();
+        assert_eq!(paths, ["steamRuntime", "iroriRosetta"]);
+        for field in natives {
+            assert!(field.applies_to_game(true));
+            assert!(!field.applies_to_game(false));
+            assert_ne!(field.section, FieldSection::Wine);
+        }
+        // Rosetta is a Mac's, the Steam runtime Linux's.
+        let rosetta = FIELDS.iter().find(|f| f.path == "iroriRosetta").unwrap();
+        assert_eq!(
+            rosetta.supported_on_host(),
+            irori_core::HostPlatform::current() == irori_core::HostPlatform::Mac
+        );
     }
 
     #[test]

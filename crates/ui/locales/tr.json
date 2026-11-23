@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç",
   "ui.game_window.no_window": "Oyunun öne getirilecek bir penceresi henüz yok",
   "ui.game_window.unsupported": "Bu masaüstü Irori’nin oyun penceresini öne getirmesine izin vermiyor; görev çubuğundan ona geçin",
-  "ui.game_window.failed": "Oyun penceresi öne getirilemedi"
+  "ui.game_window.failed": "Oyun penceresi öne getirilemedi",
+  "ui.rosetta.missing_title": "Rosetta gerekiyor",
+  "ui.rosetta.missing": "“{what}” Intel Mac’ler için yapılmış. Bu Mac’te yüklü olmayan Rosetta 2 ile çalışır. Irori onu Apple’ın Yazılım Güncelleme’siyle yükleyip ardından oyunu başlatabilir.",
+  "ui.rosetta.licence": "Rosetta’yı yüklemek, Apple’ın onun için yazılım lisans sözleşmesini kabul etmek demektir.",
+  "ui.rosetta.install_and_play": "Yükle ve oyna",
+  "ui.rosetta.cancel": "İptal",
+  "ui.rosetta.installing": "Rosetta yükleniyor",
+  "ui.rosetta.installing_detail": "Apple’ın Yazılım Güncelleme’si Rosetta 2’yi yüklüyor. Bitince oyun başlar.",
+  "ui.rosetta.install_failed": "Rosetta yüklenemedi"
 }

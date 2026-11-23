@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Irori, yüklü Steam oyunlarınızı ve Steam’in Proton sürümlerini buradan okur; oyunları Steam’e de buradan ekler.",
   "settings.field.default_steam_path.label": "Steam klasörü",
   "settings.field.crossover_bottles_path.label": "CrossOver şişe klasörü",
-  "settings.field.crossover_bottles_path.help": "Şişelerinizi CrossOver tercihlerinden başka bir yere, örneğin harici bir sürücüye taşıdıysanız bunu ayarlayın.",
+  "settings.field.crossover_bottles_path.help": "Irori, CrossOver’ın kendi tercihlerinde belirtilen klasörü kullanır. Bunu yalnızca başka bir klasör, örneğin harici bir sürücüdeki bir klasörü kullanmak için ayarlayın.",
   "settings.field.compat_tools_path.label": "İndirilen Wine ve Proton klasörü",
   "settings.field.compat_tools_path.help": "Yeni Wine ve Proton sürümleri buradaki “wine” ve “proton” klasörlerine gider. Irori’nin veri klasörünü kullanmak için boş bırakın. Önceden kurulan sürümler oldukları yerde kalır.",
   "settings.field.default_wine_prefix_dir.help": "Her Windows oyunu bu klasörün içinde kendi prefix'ini alır.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Değişiklikler Big Picture'da, katmanda ve diğer tüm ekranlarda geçerlidir. Guide, yön tuşları ve çubuklar görevlerini korur.",
   "settings.controller_map.reset": "Düğmeleri sıfırla",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Yerel Mac",
   "settings.option.nav_sounds.off": "Kapalı",
   "settings.option.nav_sounds.soft": "Yumuşak",
   "settings.option.nav_sounds.classic": "Klasik",
@@ -1676,5 +1677,9 @@
   "settings.quick_launch.unassigned": "Masaüstünüzde hızlı başlatıcı için henüz tuş yok; masaüstünün kısayol ayarlarından atayın.",
   "settings.quick_launch.commands_file": "{desktop}, programların başka pencerelerde basılan tuşları dinlemesine izin vermez. Bunu {file} dosyasına ekleyin, ardından yapılandırmayı yeniden yükleyin:",
   "settings.quick_launch.command": "Bu komutu masaüstünüzün klavye ayarlarında bir tuşa atayın:",
-  "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:"
+  "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:",
+  "settings.field.rosetta.label": "Rosetta ile çalıştır",
+  "settings.field.rosetta.help": "Apple silicon sürümü de olsa oyunun Intel sürümünü başlatır; Apple silicon sürümü sorun çıkaran oyunlar içindir. Yalnızca Intel Mac’ler için yapılan oyunlar her zaman Rosetta ile çalışır.",
+  "settings.field.metal_fx_dlss.label": "MetalFX ile DLSS",
+  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS kullanan oyunların Apple’ın MetalFX’iyle ölçeklemesini sağlar. Bunu yalnızca onu içeren Wine sürümleri yapabilir: Game Porting Toolkit 3, yeni bir CrossOver veya DXMT içeren bir sürüm. Diğerlerinde kapalı kalır ve oyun günlüğü nedenini söyler."
 }
