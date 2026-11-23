@@ -460,9 +460,6 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
         if gs.enable_msync {
             env.insert("WINEMSYNC".into(), "1".into());
         }
-        if gs.show_fps {
-            env.insert("MTL_HUD_ENABLED".into(), "1".into());
-        }
         if gs.advertise_avx_for_rosetta {
             env.insert("ROSETTA_ADVERTISE_AVX".into(), "1".into());
         }
@@ -832,7 +829,8 @@ mod tests {
             } else {
                 assert_eq!(vars["WINEPREFIX"], "/pfx");
                 assert_eq!(vars["WINEMSYNC"], "1");
-                assert_eq!(vars["MTL_HUD_ENABLED"], "1");
+                // Metal HUD is now wired uniformly in `prepare_launch`.
+                assert!(!vars.contains_key("MTL_HUD_ENABLED"));
             }
         }
         wine.kind = WineKind::Crossover;

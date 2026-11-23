@@ -48,6 +48,7 @@ impl WineLaunch {
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnvironment {
     pub env: BTreeMap<String, String>,
+    pub env_remove: Vec<String>,
     pub wrappers: Vec<Vec<String>>,
     pub wine: Option<WineLaunch>,
 }

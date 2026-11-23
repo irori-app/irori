@@ -182,5 +182,7 @@
   "shell.palette.group_by_category": "Групувати бібліотеку за категорією",
   "shell.palette.ungroup_by_category": "Не групувати бібліотеку за категорією",
   "shell.palette.category_keywords": "категорія розумна мітка група колекція",
-  "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер"
+  "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер",
+  "shell.palette.performance_hud": "Статистика в грі",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime лічильник продуктивність статистика в грі in-game stats"
 }

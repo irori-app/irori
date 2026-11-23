@@ -11,6 +11,7 @@ pub mod download;
 pub mod env;
 pub mod graphics;
 pub mod hooks;
+pub mod hud;
 pub mod locations;
 pub mod mac_driver;
 pub mod manager;
@@ -226,25 +227,21 @@ fn find_on_path(name: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Resolve MangoHud, GameMode and gamescope (Heroic's `prepareLaunch` steps
-/// 7–9). A missing program fails the launch: Heroic only logs a missing
-/// gamescope, which leaves the game running without what was asked for.
-async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
+/// Resolve GameMode, MAKO, gamescope and optional native OpenGL MangoHud
+/// wrapper (Heroic's `prepareLaunch` steps 7–9). A missing `gamemoderun` or
+/// `gamescope` fails the launch; Vulkan-layer MangoHud and gamescope
+/// `--mangoapp` never require the `mangohud` wrapper binary.
+async fn wrapper_parts(
+    settings: &GameSettings,
+    hud_plan: &hud::launch_env::HudLaunchPlan,
+) -> Result<WrapperParts> {
     if !cfg!(target_os = "linux") {
         return Ok(WrapperParts::default());
     }
     let deck_game_mode = locations::is_steam_deck_game_mode();
-    let flatpak_hint = if locations::is_flatpak() {
-        ". Make sure to install the MangoHud Flatpak extension matching Irori's runtime and restart Irori."
-    } else {
-        ""
-    };
     let mut parts = WrapperParts::default();
-    if settings.show_mangohud && !deck_game_mode {
-        let bin = find_on_path("mangohud").ok_or_else(|| {
-            anyhow!("Mangohud is enabled, but `mangohud` executable could not be found on $PATH{flatpak_hint}")
-        })?;
-        parts.mangohud = vec![bin, "--dlsym".into()];
+    if let Some(wrapper) = &hud_plan.opengl_wrapper {
+        parts.mangohud = wrapper.clone();
     }
     if settings.use_game_mode {
         let bin = find_on_path("gamemoderun").ok_or_else(|| {
@@ -273,12 +270,160 @@ async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
         let mut cmd = vec![bin.to_string_lossy().into_owned()];
         cmd.extend(wrappers::gamescope_args(
             &settings.gamescope,
-            settings.show_mangohud,
+            hud_plan.use_mangoapp,
             new_cli,
         ));
         parts.gamescope = cmd;
     }
     Ok(parts)
+}
+
+/// Resolve the effective HUD configuration for an optional `game_id`, write any
+/// Irori-managed `MangoHud.conf` under `paths`, and return the launch mutations.
+pub async fn prepare_hud_plan_for_paths(
+    paths: &irori_core::Paths,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+    gamescope_enabled: bool,
+) -> Result<hud::launch_env::HudLaunchPlan> {
+    let backend = irori_core::HudBackend::current();
+    let resolved = irori_core::hud::resolve_effective_hud(
+        &app.hud,
+        &settings.game_hud,
+        settings.show_mangohud,
+        settings.show_fps,
+        backend,
+    );
+    let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let gamescope_enabled = gamescope_enabled && !deck_game_mode;
+    let is_native_linux_game = cfg!(target_os = "linux") && platform == InstallPlatform::Linux;
+
+    let mut config_file: Option<PathBuf> = None;
+    let mut mangohud_dir: Option<PathBuf> = None;
+    let mut mangohud_bin_path: Option<PathBuf> = None;
+
+    if backend == irori_core::HudBackend::MangoHud
+        && !deck_game_mode
+        && matches!(resolved, irori_core::ResolvedHud::MangoHudProfile(_))
+    {
+        let linux_env = tokio::task::spawn_blocking(hud::hardware_linux::detect_linux_hud_env)
+            .await
+            .unwrap_or_else(|_| hud::hardware_linux::detect_linux_hud_env());
+        mangohud_bin_path = linux_env.mangohud_bin_path.clone();
+
+        if let irori_core::ResolvedHud::MangoHudProfile(ref profile) = resolved {
+            let dir = paths.mangohud_dir();
+            let conf_name = if settings.game_hud.mode == irori_core::GameHudMode::Custom
+                && let Some(id) = game_id
+            {
+                format!("{}_{}", id.runner.id(), id.app_name)
+            } else {
+                "global".to_string()
+            };
+            let file = paths.mangohud_config_file(&conf_name);
+            let ctx = hud::mangohud_conf::ConfRenderContext {
+                detected_gpu_label: hud::hardware_linux::default_gpu_short_label(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                detected_cpu_label: linux_env.cpu_label.clone(),
+                gpu_vendor: hud::hardware_linux::default_gpu_vendor(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                cpu_vendor: linux_env.cpu_vendor,
+                pci_dev: hud::hardware_linux::resolve_pci_dev(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                theme_colors: app.hud.cached_theme_colors.clone(),
+            };
+            let rendered = hud::mangohud_conf::render_mangohud_conf(profile, &ctx);
+            hud::write_config_live(&file, &rendered).await?;
+            config_file = Some(file);
+            mangohud_dir = Some(dir);
+        }
+    }
+
+    Ok(hud::launch_env::build_hud_launch_plan(
+        &hud::launch_env::HudLaunchInput {
+            backend,
+            resolved: &resolved,
+            config_file: config_file.as_deref(),
+            mangohud_dir: mangohud_dir.as_deref(),
+            mangohud_bin_path: mangohud_bin_path.as_deref(),
+            is_native_linux_game,
+            gamescope_enabled,
+            deck_game_mode,
+        },
+    ))
+}
+
+/// Write any managed HUD configuration under `paths` and apply the resulting
+/// environment variables to `spec`.
+pub async fn apply_hud_to_command_with_paths(
+    spec: &mut CommandSpec,
+    paths: &irori_core::Paths,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    let plan = prepare_hud_plan_for_paths(paths, app, settings, game_id, platform, false).await?;
+    hud::launch_env::apply_hud_plan_to_spec(spec, &plan);
+    Ok(())
+}
+
+/// Write any managed HUD configuration under the active [`Paths`] and apply
+/// the resulting environment variables to `spec`.
+pub async fn apply_hud_to_command(
+    spec: &mut CommandSpec,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    apply_hud_to_command_with_paths(
+        spec,
+        irori_core::Paths::get(),
+        app,
+        settings,
+        game_id,
+        platform,
+    )
+    .await
+}
+
+/// Resolve the effective Performance HUD for `target`, write any Irori-managed
+/// `MangoHud.conf` atomically, and return the launch mutations.
+async fn prepare_hud_plan(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+) -> Result<hud::launch_env::HudLaunchPlan> {
+    let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let gamescope_enabled = cfg!(target_os = "linux")
+        && wrappers::gamescope_enabled(&settings.gamescope)
+        && !deck_game_mode;
+    prepare_hud_plan_for_paths(
+        irori_core::Paths::get(),
+        app,
+        settings,
+        Some(target.id),
+        target.platform,
+        gamescope_enabled,
+    )
+    .await
+}
+
+/// Apply HUD environment removals and overrides on top of assembled launch vars.
+fn apply_hud_env(vars: &mut env::EnvMap, hud_plan: &hud::launch_env::HudLaunchPlan) {
+    for key in &hud_plan.env_remove {
+        vars.remove(key);
+    }
+    env::layer(vars, hud_plan.env_set.clone());
 }
 
 /// [`graphics::graphics_env`] for a launch, probing the host on a blocking
@@ -330,7 +475,8 @@ pub async fn prepare_launch(
         });
     }
 
-    let mut parts = wrapper_parts(settings).await?;
+    let hud_plan = prepare_hud_plan(app, settings, target).await?;
+    let mut parts = wrapper_parts(settings, &hud_plan).await?;
     let fixes = if cfg!(target_os = "linux") {
         hooks::hooks().known_fixes_env(target.id).await
     } else {
@@ -355,9 +501,20 @@ pub async fn prepare_launch(
         );
         env::layer(&mut vars, graphics_env(app, settings, &host).await);
         env::layer(&mut vars, fixes);
-        parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
+        apply_hud_env(&mut vars, &hud_plan);
+        parts.sandbox = sandbox_wrapper(
+            app,
+            settings,
+            target,
+            None,
+            &parts,
+            &vars,
+            &hud_plan.sandbox_ro_binds,
+        )
+        .await?;
         return Ok(LaunchEnvironment {
             env: vars,
+            env_remove: hud_plan.env_remove,
             wrappers: wrappers::setup_wrappers(settings, &parts),
             wine: None,
         });
@@ -447,10 +604,21 @@ pub async fn prepare_launch(
     {
         vars.insert("GAMEID".into(), found.id);
     }
-    parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
+    apply_hud_env(&mut vars, &hud_plan);
+    parts.sandbox = sandbox_wrapper(
+        app,
+        settings,
+        target,
+        Some(&wc),
+        &parts,
+        &vars,
+        &hud_plan.sandbox_ro_binds,
+    )
+    .await?;
 
     Ok(LaunchEnvironment {
         env: vars,
+        env_remove: hud_plan.env_remove,
         wrappers: wrappers::setup_wrappers(settings, &parts),
         wine: Some(WineLaunch {
             bin: wc.runner_bin(),
@@ -474,6 +642,7 @@ async fn sandbox_wrapper(
     wc: Option<&WineContext>,
     parts: &WrapperParts,
     vars: &env::EnvMap,
+    hud_ro_binds: &[PathBuf],
 ) -> Result<Vec<String>> {
     if !settings.sandbox.is_enabled() {
         return Ok(Vec::new());
@@ -487,7 +656,7 @@ async fn sandbox_wrapper(
     if exe.is_absolute() {
         game_dirs.extend(exe.parent().map(Path::to_path_buf));
     }
-    let mut tool_dirs: Vec<PathBuf> = Vec::new();
+    let mut tool_dirs: Vec<PathBuf> = hud_ro_binds.to_vec();
     let mut overlay_dirs: Vec<PathBuf> = Vec::new();
     let uses_umu = !parts.steam_runtime.is_empty() || wc.is_some_and(|w| w.uses_umu);
     let kind = match wc {
@@ -1099,7 +1268,9 @@ mod tests {
             use_game_mode: true,
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default())
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("gamemoderun"));
     }
 
@@ -1116,8 +1287,40 @@ mod tests {
             },
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default())
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("gamescope"));
+    }
+
+    #[tokio::test]
+    async fn native_launch_applies_disabled_hud_env_and_removals() {
+        let id = GameId::new(Runner::Gog, "app");
+        let g = game();
+        let mut gs = GameSettings::default();
+        gs.game_hud.mode = irori_core::GameHudMode::Disabled;
+        gs.environment_options.push(irori_core::EnvVar {
+            key: "MANGOHUD_CONFIG".into(),
+            value: "fps".into(),
+        });
+        let target = Target {
+            id: &id,
+            game: &g,
+            platform: irori_core::HostPlatform::current().native(),
+        };
+        let le = prepare_launch(&AppSettings::default(), &gs, target, &OpContext::detached())
+            .await
+            .unwrap();
+        if cfg!(target_os = "linux") {
+            assert_eq!(le.env["DISABLE_MANGOHUD"], "1");
+            assert_eq!(le.env["MANGOHUD"], "0");
+            assert!(!le.env.contains_key("MANGOHUD_CONFIG"));
+            assert!(le.env_remove.contains(&"MANGOHUD_CONFIG".into()));
+            assert!(le.env_remove.contains(&"MANGOHUD_CONFIGFILE".into()));
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(le.env["MTL_HUD_ENABLED"], "0");
+            assert!(le.env_remove.contains(&"MTL_HUD_ALIGNMENT".into()));
+        }
     }
 
     #[test]

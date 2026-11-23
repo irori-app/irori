@@ -108,6 +108,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
             // `run` joins the session the game started.
             let mut argv = vec![wine.bin.to_string_lossy().into_owned()];
             let mut env = input.environment.env.clone();
+            irori_runtime::hud::launch_env::strip_hud_env_vars(&mut env);
             if wine.uses_umu {
                 env.insert("PROTON_VERB".into(), "run".into());
             } else if wine.kind == WineKind::Proton {
@@ -382,6 +383,7 @@ mod tests {
     fn wine(kind: WineKind, uses_umu: bool) -> LaunchEnvironment {
         LaunchEnvironment {
             env: [("WINEPREFIX".to_string(), "/p".to_string())].into(),
+            env_remove: Vec::new(),
             wrappers: vec![vec!["gamescope".into(), "--".into()]],
             wine: Some(WineLaunch {
                 bin: PathBuf::from(if uses_umu { "/umu-run" } else { "/proton" }),
@@ -474,6 +476,39 @@ mod tests {
                 r"C:\Users\me\trainer.ini"
             ]
         );
+    }
+
+    #[test]
+    fn in_prefix_companion_programs_strip_hud_env_vars() {
+        let mut p = program("/games/Trainer.exe");
+        p.in_prefix = true;
+        let mut env = wine(WineKind::Proton, false);
+        for (k, v) in [
+            ("MANGOHUD", "1"),
+            ("MANGOHUD_CONFIGFILE", "/tmp/irori/mangohud/global.conf"),
+            ("DISABLE_MANGOHUD", "1"),
+            ("MTL_HUD_ENABLED", "1"),
+            ("MTL_HUD_ALIGNMENT", "top-right"),
+            ("CUSTOM_KEEP", "yes"),
+        ] {
+            env.env.insert(k.to_string(), v.to_string());
+        }
+
+        let started = &plan(&input(std::slice::from_ref(&p), &env)).start[0];
+        for stripped in [
+            "MANGOHUD",
+            "MANGOHUD_CONFIGFILE",
+            "DISABLE_MANGOHUD",
+            "MTL_HUD_ENABLED",
+            "MTL_HUD_ALIGNMENT",
+        ] {
+            assert!(
+                !started.spec.env.contains_key(stripped),
+                "{stripped} must be stripped from in-prefix companion programs"
+            );
+        }
+        assert_eq!(started.spec.env["WINEPREFIX"], "/p");
+        assert_eq!(started.spec.env["CUSTOM_KEEP"], "yes");
     }
 
     #[test]

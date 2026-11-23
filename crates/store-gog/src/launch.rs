@@ -573,6 +573,7 @@ mod tests {
         };
         let env = LaunchEnvironment {
             env: BTreeMap::new(),
+            env_remove: Vec::new(),
             wrappers: vec![vec!["gamemoderun".into()]],
             wine: Some(WineLaunch {
                 bin: "/p/GE-Proton9-20/proton".into(),

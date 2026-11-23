@@ -986,6 +986,41 @@ mod tests {
     }
 
     #[test]
+    fn mangohud_config_file_is_ro_bound_even_with_no_home() {
+        let mut p = plan(true, true, SandboxKind::Native);
+        p.tool_dirs
+            .push("/home/u/.local/share/irori/mangohud".into());
+        p.tool_dirs
+            .push("/home/u/.local/share/irori/mangohud/global.conf".into());
+        let a = args(&host(), &p);
+        let home = pos(
+            &a,
+            &[
+                "--bind",
+                "/home/u/.local/share/irori/sandbox/gog/hades",
+                "/home/u",
+            ],
+        );
+        let dir = pos(
+            &a,
+            &[
+                "--ro-bind",
+                "/home/u/.local/share/irori/mangohud",
+                "/home/u/.local/share/irori/mangohud",
+            ],
+        );
+        let file = pos(
+            &a,
+            &[
+                "--ro-bind",
+                "/home/u/.local/share/irori/mangohud/global.conf",
+                "/home/u/.local/share/irori/mangohud/global.conf",
+            ],
+        );
+        assert!(home < dir && dir < file);
+    }
+
+    #[test]
     fn gamescope_gets_its_socket() {
         let mut p = plan(true, true, SandboxKind::Native);
         p.gamescope = true;

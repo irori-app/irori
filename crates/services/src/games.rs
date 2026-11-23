@@ -131,6 +131,19 @@ async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool)
     let _ = (handoff, force);
 }
 
+/// Propagate environment variable removals from a prepared launch environment
+/// onto a store's [`CommandSpec`], preserving order and avoiding duplicates.
+pub(crate) fn propagate_env_remove(
+    command: &mut irori_core::process::CommandSpec,
+    env_remove: &[String],
+) {
+    for key in env_remove {
+        if !command.env_remove.iter().any(|existing| existing == key) {
+            command.env_remove.push(key.clone());
+        }
+    }
+}
+
 /// Sessions shorter than this that end in an error count as failed starts.
 const FAILED_START_SECONDS: u64 = 10;
 
@@ -605,7 +618,7 @@ impl Backend {
         // brings (a script extender's loader as the game's program) must be
         // there when the store checks it.
         let mods = self.apply_mods(id, &game, &log_file).await?;
-        let plan = match crate::downloads::stop_within(
+        let mut plan = match crate::downloads::stop_within(
             store.launch(&id.app_name, &request, ctx),
             &cancel,
             LAUNCH_CANCEL_GRACE,
@@ -625,6 +638,7 @@ impl Backend {
                     .await);
             }
         };
+        propagate_env_remove(&mut plan.command, &request.environment.env_remove);
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
         if id.runner.manages_installs()
@@ -1849,7 +1863,8 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox};
+    use super::{failed_start, launch_sandbox, propagate_env_remove};
+    use irori_core::process::CommandSpec;
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
 
@@ -1903,5 +1918,23 @@ mod tests {
         );
         assert!(!failed_start(Some(exit(1)), 2, true), "the user stopped it");
         assert!(!failed_start(None, 2, true));
+    }
+
+    #[test]
+    fn propagate_env_remove_appends_unique_keys_in_order() {
+        let mut cmd = CommandSpec::new("/usr/bin/game").env_remove("MANGOHUD_CONFIG");
+        propagate_env_remove(
+            &mut cmd,
+            &[
+                "MANGOHUD_CONFIG".to_string(),
+                "DISABLE_MANGOHUD".to_string(),
+                "MTL_HUD_ALIGNMENT".to_string(),
+                "DISABLE_MANGOHUD".to_string(),
+            ],
+        );
+        assert_eq!(
+            cmd.env_remove,
+            vec!["MANGOHUD_CONFIG", "DISABLE_MANGOHUD", "MTL_HUD_ALIGNMENT"]
+        );
     }
 }

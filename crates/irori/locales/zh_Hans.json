@@ -182,5 +182,7 @@
   "shell.palette.group_by_category": "按分类对游戏库分组",
   "shell.palette.ungroup_by_category": "停止按分类对游戏库分组",
   "shell.palette.category_keywords": "分类 智能 标签 分组 收藏",
-  "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击"
+  "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击",
+  "shell.palette.performance_hud": "游戏内统计",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆盖层 overlay fps 帧时间 计数器 性能 游戏内统计 统计 in-game stats"
 }

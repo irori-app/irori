@@ -75,7 +75,7 @@ pub fn gamescope_args(gs: &GamescopeSettings, show_mangohud: bool, new_cli: bool
 pub struct WrapperParts {
     /// `[gamescope, args…, --]`; empty when gamescope is off or missing.
     pub gamescope: Vec<String>,
-    /// `[mangohud, --dlsym]` when MangoHud is enabled.
+    /// Optional `[mangohud]` wrapper for legacy native OpenGL Linux games.
     pub mangohud: Vec<String>,
     /// `gamemoderun` when GameMode is enabled.
     pub gamemode: Option<String>,

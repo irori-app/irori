@@ -141,6 +141,20 @@ impl CommandSpec {
         self
     }
 
+    pub fn env_remove(mut self, key: impl Into<String>) -> Self {
+        self.env_remove.push(key.into());
+        self
+    }
+
+    pub fn env_removes<I, K>(mut self, keys: I) -> Self
+    where
+        I: IntoIterator<Item = K>,
+        K: Into<String>,
+    {
+        self.env_remove.extend(keys.into_iter().map(Into::into));
+        self
+    }
+
     pub fn cwd(mut self, dir: impl Into<PathBuf>) -> Self {
         self.cwd = Some(dir.into());
         self
@@ -170,6 +184,7 @@ impl CommandSpec {
     }
 
     /// The arguments as they run: the first [`LAUNCH_ENV`] becomes
+    /// `--unsetenv NAME` for each removed variable followed by
     /// `--setenv NAME VALUE` for each of the command's variables.
     pub fn expanded_args(&self) -> Vec<OsString> {
         let mut out = Vec::with_capacity(self.args.len());
@@ -177,6 +192,9 @@ impl CommandSpec {
         for a in &self.args {
             if !expanded && a == LAUNCH_ENV {
                 expanded = true;
+                for k in &self.env_remove {
+                    out.extend(["--unsetenv".into(), k.into()]);
+                }
                 for (k, v) in &self.env {
                     out.extend(["--setenv".into(), k.into(), v.into()]);
                 }
@@ -1118,6 +1136,125 @@ mod tests {
             ]
         );
         assert_eq!(CommandSpec::new("x").arg("y").expanded_args(), ["y"]);
+    }
+
+    #[test]
+    fn launch_env_emits_unsetenv_before_setenv() {
+        let spec = CommandSpec::new("bwrap")
+            .args(["--clearenv", LAUNCH_ENV, "--", "game"])
+            .env_removes(["MANGOHUD_CONFIG", "DISABLE_MANGOHUD"])
+            .env("MANGOHUD", "1")
+            .env("MANGOHUD_CONFIGFILE", "/data/mangohud/global.conf");
+        let args: Vec<String> = spec
+            .expanded_args()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "--clearenv",
+                "--unsetenv",
+                "MANGOHUD_CONFIG",
+                "--unsetenv",
+                "DISABLE_MANGOHUD",
+                "--setenv",
+                "MANGOHUD",
+                "1",
+                "--setenv",
+                "MANGOHUD_CONFIGFILE",
+                "/data/mangohud/global.conf",
+                "--",
+                "game",
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_json_deserializes_app_and_game_settings_with_hud_defaults() {
+        let app: crate::AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.hud.mode, crate::GlobalHudMode::Off);
+        assert_eq!(app.hud.mangohud.toggle_hud, crate::hud::DEFAULT_TOGGLE_HUD);
+        assert_eq!(app.hud.metal.alignment, crate::MetalHudAlignment::TopRight);
+
+        let game: crate::GameSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(game.game_hud.mode, crate::GameHudMode::InheritGlobal);
+        assert!(game.game_hud.custom_mangohud.is_none());
+        assert!(game.game_hud.custom_metal.is_none());
+    }
+
+    #[test]
+    fn resolve_effective_hud_covers_inheritance_cloning_and_legacy_fallbacks() {
+        use crate::hud::resolve_effective_hud;
+        use crate::{
+            GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, HudBackend,
+            MetalHudAlignment, MetalHudSettings, ResolvedHud,
+        };
+
+        let mut global = GlobalHudSettings {
+            mode: GlobalHudMode::IroriProfile,
+            ..Default::default()
+        };
+        global.mangohud.fps_limit = Some(90);
+        global.metal.alignment = MetalHudAlignment::BottomRight;
+
+        // Inherit global profile on Linux & macOS
+        let inherit = GameHudSettings::default();
+        match resolve_effective_hud(&global, &inherit, false, false, HudBackend::MangoHud) {
+            ResolvedHud::MangoHudProfile(p) => assert_eq!(p.fps_limit, Some(90)),
+            other => panic!("expected profile, got {other:?}"),
+        }
+        assert_eq!(
+            resolve_effective_hud(&global, &inherit, false, false, HudBackend::MetalHud),
+            ResolvedHud::MetalHud(MetalHudSettings {
+                alignment: MetalHudAlignment::BottomRight
+            })
+        );
+
+        // Disabled overrides global active profile
+        let disabled = GameHudSettings {
+            mode: GameHudMode::Disabled,
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_effective_hud(&global, &disabled, true, true, HudBackend::MangoHud),
+            ResolvedHud::Disabled
+        );
+        assert_eq!(
+            resolve_effective_hud(&global, &disabled, true, true, HudBackend::MetalHud),
+            ResolvedHud::Disabled
+        );
+
+        // Custom mode clones global when custom profiles are None
+        let mut custom = GameHudSettings {
+            mode: GameHudMode::Custom,
+            ..Default::default()
+        };
+        custom.ensure_custom_from(&global);
+        assert_eq!(custom.custom_mangohud.as_ref().unwrap().fps_limit, Some(90));
+        assert_eq!(
+            custom.custom_metal.as_ref().unwrap().alignment,
+            MetalHudAlignment::BottomRight
+        );
+
+        // Legacy fallbacks when global mode is Off and game inherits global
+        let off_global = GlobalHudSettings::default();
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, true, false, HudBackend::MangoHud),
+            ResolvedHud::MangoHudProfile(Box::new(off_global.mangohud.clone()))
+        );
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, false, true, HudBackend::MetalHud),
+            ResolvedHud::MetalHud(MetalHudSettings::default())
+        );
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, false, false, HudBackend::MangoHud),
+            ResolvedHud::Off
+        );
+        assert_eq!(
+            resolve_effective_hud(&global, &inherit, true, true, HudBackend::Unsupported),
+            ResolvedHud::Off
+        );
     }
 
     #[test]

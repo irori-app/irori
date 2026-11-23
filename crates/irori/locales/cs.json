@@ -182,5 +182,7 @@
   "shell.palette.group_by_category": "Seskupit knihovnu podle kategorie",
   "shell.palette.ungroup_by_category": "Přestat seskupovat knihovnu podle kategorie",
   "shell.palette.category_keywords": "kategorie chytrá štítek skupina sbírka",
-  "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka"
+  "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka",
+  "shell.palette.performance_hud": "Statistiky ve hře",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats"
 }

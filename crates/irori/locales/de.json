@@ -182,5 +182,7 @@
   "shell.palette.group_by_category": "Bibliothek nach Kategorie gruppieren",
   "shell.palette.ungroup_by_category": "Bibliothek nicht mehr nach Kategorie gruppieren",
   "shell.palette.category_keywords": "Kategorie intelligent Schlagwort Gruppe Sammlung",
-  "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter"
+  "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter",
+  "shell.palette.performance_hud": "Statistiken im Spiel",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime zähler leistung statistiken im spiel in-game stats"
 }

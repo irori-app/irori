@@ -38,6 +38,7 @@ use crate::appearance::{AccentPicker, FontPicker};
 use crate::artwork::ArtworkPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
+use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::LanguageStamp;
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
@@ -776,6 +777,29 @@ impl SettingsForm {
                 };
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
+            PanelKind::PerformanceHud => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    let is_native_linux = self.native;
+                    let is_steam = id.runner == Runner::Steam;
+                    Some(
+                        cx.new(|cx| {
+                            HudPanel::new(
+                                HudPanelScope::PerGame {
+                                    id,
+                                    is_native_linux,
+                                    is_steam,
+                                },
+                                None,
+                                window,
+                                cx,
+                            )
+                        })
+                        .into(),
+                    )
+                }
+                _ => None,
+            },
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
             PanelKind::SteamLaunchOptions => match &self.target {
@@ -2418,6 +2442,15 @@ impl Render for SettingsForm {
                 }
                 section = Some(spec.section);
                 group = "";
+            }
+            if matches!(spec.kind, FieldKind::Panel(PanelKind::PerformanceHud)) {
+                body = body.children(rows.take());
+                body = body.child(section_heading(spec.group_text()));
+                if let Some(view) = self.panels.get(spec.path) {
+                    body = body.child(div().id("row-panel.performance-hud").child(view.clone()));
+                }
+                group = spec.group;
+                continue;
             }
             if group != spec.group {
                 body = body.children(rows.take());
