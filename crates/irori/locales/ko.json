@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "삭제 추가한 게임 롬 선택",
   "shell.palette.sync_saves": "{title}의 저장 파일 동기화",
   "shell.palette.sync_saves_keywords": "클라우드 저장 업로드 다운로드",
+  "shell.palette.trailer": "{title} 트레일러 재생 또는 일시 정지",
+  "shell.palette.trailer_keywords": "트레일러 동영상 비디오 보기",
   "shell.palette.back_up_saves": "{title}의 세이브 백업",
   "shell.palette.save_backups": "{title}의 세이브 백업 목록",
   "shell.palette.troubleshoot": "{title} 실행 문제 해결",

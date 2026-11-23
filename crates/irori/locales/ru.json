@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "удалить забыть добавленные игры ромы выбор",
   "shell.palette.sync_saves": "Синхронизировать сохранения {title}",
   "shell.palette.sync_saves_keywords": "облако сохранения загрузить скачать",
+  "shell.palette.trailer": "Воспроизвести или приостановить трейлер {title}",
+  "shell.palette.trailer_keywords": "трейлер видео ролик смотреть",
   "shell.palette.back_up_saves": "Скопировать сохранения {title}",
   "shell.palette.save_backups": "Копии сохранений {title}",
   "shell.palette.troubleshoot": "Устранить проблемы запуска {title}",

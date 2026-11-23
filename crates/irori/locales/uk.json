@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "видалити забути додані ігри роми вибір",
   "shell.palette.sync_saves": "Синхронізувати збереження {title}",
   "shell.palette.sync_saves_keywords": "хмара збереження вивантажити завантажити",
+  "shell.palette.trailer": "Відтворити або призупинити трейлер {title}",
+  "shell.palette.trailer_keywords": "трейлер відео ролик дивитися",
   "shell.palette.back_up_saves": "Скопіювати збереження {title}",
   "shell.palette.save_backups": "Копії збережень {title}",
   "shell.palette.troubleshoot": "Усунути проблеми запуску {title}",

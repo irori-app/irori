@@ -1529,6 +1529,8 @@
   "settings.field.ui_cover_favourite.label": "Hvězdička na obalech oblíbených",
   "settings.field.ui_group_copies.label": "Zobrazovat kopie z více obchodů jako jednu hru",
   "settings.field.ui_group_copies.help": "Hra vlastněná na Steamu, v Epic Games a na GOG se zobrazí jednou a spouští nainstalovanou kopii. Na její stránce lze přepínat mezi kopiemi; každá si ponechává vlastní herní čas i úspěchy.",
+  "settings.field.ui_trailer_autoplay.label": "Přehrát upoutávku hry při otevření její stránky",
+  "settings.field.ui_trailer_autoplay.help": "První upoutávka se spustí ztlumená a opakuje se. Upoutávky se přehrávají přes ffmpeg v tomto počítači; ve Windows ho Irori umí stáhnout.",
   "settings.field.umu_id.label": "ID hry v umu",
   "settings.field.umu_id.help": "umu při spuštění hry přes Proton použije opravy zveřejněné pro toto ID. Ponechte prázdné, aby se našlo podle obchodu, ID aplikace Steam nebo názvu.",
   "settings.field.xbox.label": "Obchod Xbox",

@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "刪除 移除 新增的遊戲 ROM 選擇",
   "shell.palette.sync_saves": "同步 {title} 的存檔",
   "shell.palette.sync_saves_keywords": "雲端 存檔 上傳 下載",
+  "shell.palette.trailer": "播放或暫停 {title} 的預告片",
+  "shell.palette.trailer_keywords": "預告片 影片 視訊 觀看",
   "shell.palette.back_up_saves": "備份 {title} 的存檔",
   "shell.palette.save_backups": "{title} 的存檔備份",
   "shell.palette.troubleshoot": "疑難排解 {title} 的啟動問題",

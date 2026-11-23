@@ -1,17 +1,20 @@
-//! Finding ffmpeg, which makes clip posters. Irori never bundles it: the
-//! user's own is used, from `PATH` (and, on macOS, the folders Homebrew and
-//! MacPorts install to, which a program started from the Finder doesn't
-//! have on its `PATH`), else, inside Irori's Flatpak, the host's.
+//! Finding ffmpeg, which makes clip posters and plays trailers. Irori never
+//! bundles it: the user's own is used, from `PATH` (and, on macOS, the
+//! folders Homebrew and MacPorts install to, which a program started from
+//! the Finder doesn't have on its `PATH`), else, inside Irori's Flatpak, the
+//! host's. On Windows, where few people have one, the user may have Irori
+//! download one ([`super::ffmpeg_download`]) into `<data>/tools/ffmpeg`,
+//! which is looked in first.
 //!
-//! The answer is kept for the run; [`find_again`] looks once more after the
-//! user installed it.
+//! The answer, with the sound output it can play through, is kept for the
+//! run; [`find_again`] looks once more after the user installed one.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use irori_core::host;
-use irori_core::process::CommandSpec;
+use irori_core::process::{self, CommandSpec, RunOptions};
+use irori_core::{Paths, host};
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 
@@ -21,6 +24,10 @@ pub struct Ffmpeg {
     pub program: PathBuf,
     /// Runs on the Flatpak's host, through `flatpak-spawn --host`.
     pub host: bool,
+    /// The output device ffmpeg plays sound through here (`pulse`, `alsa`,
+    /// `audiotoolbox`), when it was built with one. ffmpeg has none for
+    /// Windows, where trailers stay muted.
+    pub audio_output: Option<String>,
 }
 
 impl Ffmpeg {
@@ -54,6 +61,45 @@ fn extra_dirs() -> Vec<PathBuf> {
     }
 }
 
+/// Where a downloaded ffmpeg is kept.
+pub fn managed_dir() -> PathBuf {
+    Paths::get().tools_dir().join("ffmpeg")
+}
+
+/// The output devices of `ffmpeg -devices` that play sound, by preference
+/// on this system: PulseAudio (PipeWire answers it too), then ALSA, on
+/// Linux; AudioToolbox on macOS.
+pub fn audio_output(devices: &str) -> Option<String> {
+    let muxers: Vec<&str> = devices
+        .lines()
+        .skip_while(|l| l.trim() != "---")
+        .skip(1)
+        .filter_map(|l| {
+            let mut parts = l.split_whitespace();
+            let flags = parts.next()?;
+            let name = parts.next()?;
+            // `DE`, ` E`: the second column is muxing (output).
+            let output = if flags.len() == 2 {
+                flags.ends_with('E')
+            } else {
+                flags == "E"
+            };
+            output.then_some(name)
+        })
+        .collect();
+    let wanted: &[&str] = if cfg!(target_os = "macos") {
+        &["audiotoolbox"]
+    } else if cfg!(target_os = "linux") {
+        &["pulse", "alsa"]
+    } else {
+        &[]
+    };
+    wanted
+        .iter()
+        .find(|w| muxers.contains(w))
+        .map(|w| w.to_string())
+}
+
 /// The program's file name on this system.
 fn program_name() -> &'static str {
     if cfg!(windows) {
@@ -82,23 +128,27 @@ fn is_program(path: &Path) -> bool {
 }
 
 async fn locate() -> Option<Ffmpeg> {
-    let local = which::which("ffmpeg")
-        .ok()
+    let local = in_dirs(&[managed_dir()], program_name())
+        .or_else(|| which::which("ffmpeg").ok())
         .or_else(|| in_dirs(&extra_dirs(), program_name()));
-    if let Some(program) = local {
-        return Some(Ffmpeg {
+    let mut found = match local {
+        Some(program) => Ffmpeg {
             program,
             host: false,
-        });
-    }
-    if host::is_flatpak() {
-        let program = host::find_program("ffmpeg").await?;
-        return Some(Ffmpeg {
-            program,
+            audio_output: None,
+        },
+        None if host::is_flatpak() => Ffmpeg {
+            program: host::find_program("ffmpeg").await?,
             host: true,
-        });
+            audio_output: None,
+        },
+        None => return None,
+    };
+    let devices = found.command(["-hide_banner", "-devices"]);
+    if let Ok(run) = process::run(&devices, RunOptions::default()).await {
+        found.audio_output = audio_output(&format!("{}\n{}", run.stdout, run.stderr));
     }
-    None
+    Some(found)
 }
 
 /// This computer's ffmpeg, looked for once per run.
@@ -109,7 +159,12 @@ pub async fn find() -> Option<Arc<Ffmpeg>> {
     }
     let located = locate().await.map(Arc::new);
     match &located {
-        Some(f) => tracing::info!(program = %f.program.display(), host = f.host, "ffmpeg found"),
+        Some(f) => tracing::info!(
+            program = %f.program.display(),
+            host = f.host,
+            sound = f.audio_output.as_deref().unwrap_or("none"),
+            "ffmpeg found"
+        ),
         None => tracing::info!("no ffmpeg found"),
     }
     *found = Some(located.clone());
@@ -148,10 +203,32 @@ mod tests {
     }
 
     #[test]
+    fn picks_this_systems_sound_output() {
+        let devices = "Devices:\n D. = Demuxing supported\n .E = Muxing supported\n ---\n \
+                       DE alsa            ALSA audio output\n  E audiotoolbox    \
+                       AudioToolbox output device\n D  avfoundation    AVFoundation input\n \
+                       DE pulse           Pulse audio output\n  E sdl,sdl2        SDL2 output\n";
+        let picked = audio_output(devices);
+        if cfg!(target_os = "macos") {
+            assert_eq!(picked.as_deref(), Some("audiotoolbox"));
+        } else if cfg!(target_os = "linux") {
+            assert_eq!(picked.as_deref(), Some("pulse"));
+            let alsa_only = devices.replace("pulse", "other");
+            assert_eq!(audio_output(&alsa_only).as_deref(), Some("alsa"));
+        } else {
+            assert_eq!(picked, None);
+        }
+        // Input devices don't count, nor does anything before the rule.
+        assert_eq!(audio_output(" DE pulse\n D  pulse\n"), None);
+        assert_eq!(audio_output("---\n D  pulse  input\n D  alsa\n"), None);
+    }
+
+    #[test]
     fn a_host_program_runs_through_flatpak_spawn() {
         let host = Ffmpeg {
             program: "/usr/bin/ffmpeg".into(),
             host: true,
+            audio_output: None,
         };
         let local = Ffmpeg {
             host: false,

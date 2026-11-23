@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use irori_core::settings::GameSettings;
-use irori_core::{ExtraInfo, GameId, Runner};
+use irori_core::{ExtraInfo, GameId, Runner, Video};
 use irori_steam_api::Client;
 use irori_steam_api::library::AppDetails;
 use once_cell::sync::Lazy;
@@ -72,11 +72,27 @@ pub(crate) fn fill(info: &mut ExtraInfo, details: &AppDetails) {
             .filter(|p| p.starts_with("https://"))
             .collect();
     }
+    if info.videos.is_empty() {
+        let mut videos: Vec<(bool, Video)> = details
+            .movies
+            .iter()
+            .filter_map(|m| {
+                let video = Video {
+                    name: m.name.trim().to_string(),
+                    thumbnail: m.thumbnail_url(),
+                    url: m.stream_url()?,
+                };
+                Some((m.highlight, video))
+            })
+            .collect();
+        videos.sort_by_key(|(highlight, _)| !highlight);
+        info.videos = videos.into_iter().map(|(_, v)| v).collect();
+    }
 }
 
 /// Whether `info` still lacks something Steam's page could give.
 fn lacks_media(info: &ExtraInfo) -> bool {
-    info.screenshots.is_empty()
+    info.screenshots.is_empty() || info.videos.is_empty()
 }
 
 /// Steam's store page of `appid` in `language`, from memory when known.
@@ -145,17 +161,24 @@ mod tests {
                 {"path_thumbnail": "https://cdn/t1.jpg", "path_full": "https://cdn/1.jpg"},
                 {"path_full": ""},
                 {"path_full": "file:///etc/passwd"}
+            ],
+            "movies": [
+                {"name": "Gameplay", "mp4": {"480": "https://cdn/g.mp4"}},
+                {"name": "Launch", "highlight": true, "hls_h264": "https://cdn/l.m3u8"}
             ]
         }))
         .unwrap();
         let mut empty = ExtraInfo::default();
         fill(&mut empty, &details);
         assert_eq!(empty.screenshots, ["https://cdn/1.jpg"]);
+        let names: Vec<&str> = empty.videos.iter().map(|v| v.name.as_str()).collect();
+        assert_eq!(names, ["Launch", "Gameplay"]);
         let mut own = ExtraInfo {
             screenshots: vec!["https://gog/1.jpg".into()],
             ..Default::default()
         };
         fill(&mut own, &details);
         assert_eq!(own.screenshots, ["https://gog/1.jpg"]);
+        assert_eq!(own.videos.len(), 2);
     }
 }

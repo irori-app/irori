@@ -603,6 +603,17 @@ commands without a window.
   app that app's store-page screenshots (keyless `appdetails`, kept in memory for the
   run), only when its own page has none. Amazon's library entries carry their own
   screenshots (`Details::screenshots`).
+- **Trailers** (`ExtraInfo::videos`, from Steam `appdetails` `movies`, also for games
+  linked to a Steam app): `media/trailer.rs` plays one through the user's ffmpeg
+  (`media/ffmpeg.rs`; never bundled) at its own pace (`-re`), only network protocols
+  allowed, as raw BGRA frames on a pipe (`process::spawn_piped`), with sound through
+  ffmpeg's `pulse`/`alsa`/`audiotoolbox` output where it has one (none on Windows).
+  `irori_ui::trailer::TrailerPlayer` draws it on the game page (`page/trailer.rs`):
+  muted at first, looping, ffmpeg ended whenever it pauses or its stage isn't drawn on
+  screen, two frames in the GPU atlas at most. `iroriUi.trailerAutoplay` starts the
+  first one (not with reduced motion). On Windows `media/ffmpeg_download.rs` offers,
+  after asking, BtbN's LGPL build named on ffmpeg.org, checked against the release's
+  `checksums.sha256`, into `<data>/tools/ffmpeg`.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with

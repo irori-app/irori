@@ -1529,6 +1529,8 @@
   "settings.field.ui_cover_favourite.label": "Étoile sur les jaquettes des favoris",
   "settings.field.ui_group_copies.label": "Afficher les copies de plusieurs boutiques comme un seul jeu",
   "settings.field.ui_group_copies.help": "Un jeu possédé sur Steam, Epic Games et GOG n’apparaît qu’une fois et lance la copie installée. Sa page passe d’une copie à l’autre ; chacune garde son temps de jeu et ses succès.",
+  "settings.field.ui_trailer_autoplay.label": "Lire la bande-annonce d’un jeu à l’ouverture de sa page",
+  "settings.field.ui_trailer_autoplay.help": "La première bande-annonce démarre sans le son et en boucle. Les bandes-annonces sont lues avec ffmpeg sur cet ordinateur ; sous Windows, Irori peut le télécharger.",
   "settings.field.umu_id.label": "Identifiant de jeu umu",
   "settings.field.umu_id.help": "umu applique les correctifs publiés pour cet identifiant quand il lance le jeu avec Proton. Laissez vide pour le trouver d’après la boutique, l’identifiant d’application Steam ou le titre.",
   "settings.field.xbox.label": "Boutique Xbox",

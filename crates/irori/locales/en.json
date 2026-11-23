@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "delete forget added games roms selection",
   "shell.palette.sync_saves": "Sync saves of {title}",
   "shell.palette.sync_saves_keywords": "cloud saves upload download",
+  "shell.palette.trailer": "Play or pause the trailer of {title}",
+  "shell.palette.trailer_keywords": "trailer video movie watch",
   "shell.palette.back_up_saves": "Back up saves of {title}",
   "shell.palette.save_backups": "Save backups of {title}",
   "shell.palette.troubleshoot": "Troubleshoot launch of {title}",

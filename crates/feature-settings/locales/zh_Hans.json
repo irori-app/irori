@@ -1529,6 +1529,8 @@
   "settings.field.ui_cover_favourite.label": "在收藏游戏的封面上显示星标",
   "settings.field.ui_group_copies.label": "将多个商店的副本显示为一个游戏",
   "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都拥有的游戏只显示一次，并启动已安装的副本。其页面可在各副本之间切换；每个副本保留各自的游戏时间和成就。",
+  "settings.field.ui_trailer_autoplay.label": "打开游戏页面时播放其预告片",
+  "settings.field.ui_trailer_autoplay.help": "第一个预告片会静音开始并循环播放。预告片通过本机的 ffmpeg 播放；在 Windows 上，Irori 可以下载它。",
   "settings.field.umu_id.label": "umu 游戏 ID",
   "settings.field.umu_id.help": "umu 用 Proton 运行游戏时会应用为此 ID 发布的修复。留空则根据商店、Steam 应用 ID 或标题查找。",
   "settings.field.xbox.label": "Xbox 商店",

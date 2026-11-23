@@ -1529,6 +1529,8 @@
   "settings.field.ui_cover_favourite.label": "Stjärna på favoriternas omslag",
   "settings.field.ui_group_copies.label": "Visa kopior från flera butiker som ett spel",
   "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer.",
+  "settings.field.ui_trailer_autoplay.label": "Spela upp ett spels trailer när dess sida öppnas",
+  "settings.field.ui_trailer_autoplay.help": "Den första trailern startar utan ljud och upprepas. Trailrar spelas upp med ffmpeg på den här datorn; i Windows kan Irori ladda ned det.",
   "settings.field.umu_id.label": "umu-spel-id",
   "settings.field.umu_id.help": "umu tillämpar de korrigeringar som publicerats för detta id när det kör spelet med Proton. Lämna tomt för att hitta det via butiken, Steam-app-id:t eller titeln.",
   "settings.field.xbox.label": "Xbox-butiken",

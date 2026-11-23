@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "削除 追加したゲーム ROM 選択",
   "shell.palette.sync_saves": "{title} のセーブデータを同期",
   "shell.palette.sync_saves_keywords": "クラウド セーブ アップロード ダウンロード",
+  "shell.palette.trailer": "{title} のトレーラーを再生または一時停止",
+  "shell.palette.trailer_keywords": "トレーラー 動画 ビデオ 見る",
   "shell.palette.back_up_saves": "{title} のセーブデータをバックアップ",
   "shell.palette.save_backups": "{title} のセーブデータのバックアップ",
   "shell.palette.troubleshoot": "{title} の起動トラブルシューティング",

@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "löschen vergessen hinzugefügte Spiele ROMs Auswahl",
   "shell.palette.sync_saves": "Spielstände von {title} synchronisieren",
   "shell.palette.sync_saves_keywords": "Cloud Spielstände hochladen herunterladen",
+  "shell.palette.trailer": "Trailer von {title} abspielen oder pausieren",
+  "shell.palette.trailer_keywords": "Trailer Video Film ansehen",
   "shell.palette.back_up_saves": "Spielstände von {title} sichern",
   "shell.palette.save_backups": "Spielstand-Sicherungen von {title}",
   "shell.palette.troubleshoot": "Startprobleme von {title} beheben",

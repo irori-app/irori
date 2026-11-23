@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "verwijderen vergeten toegevoegde games roms selectie",
   "shell.palette.sync_saves": "Opslagbestanden van {title} synchroniseren",
   "shell.palette.sync_saves_keywords": "cloud opslag uploaden downloaden",
+  "shell.palette.trailer": "Trailer van {title} afspelen of pauzeren",
+  "shell.palette.trailer_keywords": "trailer video film bekijken",
   "shell.palette.back_up_saves": "Back-up maken van de saves van {title}",
   "shell.palette.save_backups": "Save-back-ups van {title}",
   "shell.palette.troubleshoot": "Startproblemen van {title} oplossen",

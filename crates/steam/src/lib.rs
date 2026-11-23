@@ -37,6 +37,6 @@ pub use auth::{
 pub use error::SteamError;
 pub use friends::PlayerSummary;
 pub use library::{
-    AppDetails, Category, Genre, Metacritic, OwnedGame, Platforms, ReleaseDate, Requirements,
-    Screenshot, SharedApp, StoreRating,
+    AppDetails, Category, Genre, Metacritic, Movie, OwnedGame, Platforms, ReleaseDate,
+    Requirements, Screenshot, SharedApp, StoreRating,
 };

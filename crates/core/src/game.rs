@@ -231,6 +231,9 @@ pub struct ExtraInfo {
     pub genres: Vec<String>,
     /// Full-size screenshot URLs from the store page.
     pub screenshots: Vec<String>,
+    /// Trailers from the store page (Steam), the store's pick first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub videos: Vec<Video>,
     /// Age ratings from the store page (Steam, GOG).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub age_ratings: Vec<crate::AgeRating>,
@@ -244,6 +247,18 @@ pub struct ExtraInfo {
     /// on the game page; `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_from: Option<String>,
+}
+
+/// A trailer on a store page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Video {
+    pub name: String,
+    /// A still of it, shown before it plays.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
+    /// What plays: an `https` file or stream address.
+    pub url: String,
 }
 
 /// One row of system requirements.

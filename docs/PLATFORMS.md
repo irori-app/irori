@@ -452,6 +452,19 @@ the host's inside the Flatpak; never bundled) a clip shows a poster frame from a
 two thirds in and its length, in the Album and in journal notes; without it, its
 game's art.
 
+### Trailers
+
+A game page shows its Steam trailers (also for games of other stores linked to a Steam
+app) above the screenshots, played through the computer's ffmpeg, found as for clip
+posters. Sound plays through ffmpeg's PulseAudio output (PipeWire answers it too), else
+ALSA, on Linux and AudioToolbox on macOS, when the ffmpeg was built with them; ffmpeg has
+no sound output for Windows, where trailers stay muted. Without ffmpeg the page says so:
+on Linux and macOS install it from the system's packages (`ffmpeg`; Homebrew's or
+MacPorts' on macOS) and choose "Look again"; on Windows Irori offers to download the LGPL
+build from github.com/BtbN/FFmpeg-Builds (linked from ffmpeg.org), asks first, and uses it
+only when it matches the release's published SHA-256. Inside the Flatpak the host's
+ffmpeg is used when the sandbox has none.
+
 ### Replay buffer
 
 Linux only. With Settings › Performance › Replay buffer turned on (for every game or

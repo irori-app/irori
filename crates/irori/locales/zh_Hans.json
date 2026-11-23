@@ -75,6 +75,8 @@
   "shell.palette.remove_picked_keywords": "删除 移除 添加的游戏 ROM 选择",
   "shell.palette.sync_saves": "同步 {title} 的存档",
   "shell.palette.sync_saves_keywords": "云 存档 上传 下载",
+  "shell.palette.trailer": "播放或暂停 {title} 的预告片",
+  "shell.palette.trailer_keywords": "预告片 视频 影片 观看",
   "shell.palette.back_up_saves": "备份 {title} 的存档",
   "shell.palette.save_backups": "{title} 的存档备份",
   "shell.palette.troubleshoot": "排查 {title} 的启动问题",

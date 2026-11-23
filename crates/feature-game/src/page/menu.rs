@@ -444,6 +444,20 @@ pub(super) fn build_menu(
             move |_, window, cx| irori_ui::hooks::open_store_page(runner, url.clone(), window, cx),
         ));
     }
+    if let Some(page) = page
+        .as_ref()
+        .and_then(|p| p.upgrade())
+        .filter(|p| p.read(cx).has_trailer(cx))
+    {
+        let page = page.downgrade();
+        menu = menu.item(
+            PopupMenuItem::new(t("game.menu.play_trailer"))
+                .icon(IconName::Clapperboard)
+                .on_click(move |_, _, cx| {
+                    let _ = page.update(cx, |p, cx| p.toggle_trailer(cx));
+                }),
+        );
+    }
     if game.is_installed && client {
         menu = menu.separator();
         let i = id.clone();
