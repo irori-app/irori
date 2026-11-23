@@ -360,6 +360,7 @@ impl Backend {
         // Wine loads its own DLL unless told to prefer the game folder's.
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;
+            self.optiscaler_launch_env(id, &mut environment.env).await;
         }
         // prepare_launch refuses rather than leaving the sandbox out, so a
         // game set to run sandboxed that got this far is in one.
