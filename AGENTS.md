@@ -1150,7 +1150,9 @@ commands without a window.
      upload after the session too). A failed download stops the launch with
      `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
      again or play anyway (`LaunchParams::skip_save_download`); a failed upload
-     raises a notice.
+     raises a notice. A save folder Irori worked out itself is stored with the
+     prefix it was found in (`iroriSavesPathFound`) and found again when the
+     prefix or its Wine/Proton layout changes; one the user chose stays.
   3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton

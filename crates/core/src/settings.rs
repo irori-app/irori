@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::Runner;
-use crate::game::{CloudSaveLocation, LaunchOption};
+use crate::game::{CloudSaveLocation, LaunchOption, SavesPathFound};
 use crate::merged_lists;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -213,6 +213,13 @@ pub struct GameSettings {
     pub wine_version: WineInstallation,
     pub wrapper_options: Vec<Wrapper>,
     pub saves_path: String,
+    /// What Irori found `saves_path` for when it worked the folder out
+    /// itself; `None` when the user chose it. Per game; Irori-only.
+    #[serde(
+        rename = "iroriSavesPathFound",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub saves_path_found: Option<SavesPathFound>,
     pub gog_saves: Vec<CloudSaveLocation>,
     pub before_launch_script_path: String,
     /// Start the game without waiting for the before-launch script, which
@@ -565,6 +572,7 @@ impl Default for GameSettings {
             wine_version: WineInstallation::default(),
             wrapper_options: Vec::new(),
             saves_path: String::new(),
+            saves_path_found: None,
             gog_saves: Vec::new(),
             before_launch_script_path: String::new(),
             before_launch_script_alongside: false,

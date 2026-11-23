@@ -410,8 +410,12 @@ impl Store for PlayStore {
     fn supports_cloud_saves(&self) -> bool {
         self.saves_fail
     }
-    async fn default_save_path(&self, _: &str, _: Option<&Path>) -> Result<String> {
-        Ok("/saves".into())
+    async fn default_save_path(&self, _: &str, prefix: Option<&Path>) -> Result<String> {
+        // Inside the prefix, as Windows games' saves are.
+        Ok(prefix.map_or_else(
+            || "/saves".into(),
+            |p| p.join("saves").display().to_string(),
+        ))
     }
     async fn sync_saves(
         &self,
@@ -589,6 +593,56 @@ fn knows_when_a_forced_upload_deletes_cloud_saves() {
     assert!(deletes());
     std::fs::write(saves.join("slot1.sav"), "x").unwrap();
     assert!(!deletes());
+}
+
+/// Heroic #6081: a save folder Irori worked out inside the game's prefix
+/// follows the prefix when it changes; one the user chose stays.
+#[cfg(unix)]
+#[test]
+fn a_found_save_folder_follows_the_prefix() {
+    let (b, id) = play_with("saves-follow-prefix", "exit 0", true);
+    let dir = tempfile::tempdir().unwrap();
+    let prefix = |name: &str| dir.path().join(name);
+    let set_prefix = |name: &str| {
+        b.settings.set_game_value(
+            &id,
+            "winePrefix",
+            Some(serde_json::Value::String(
+                prefix(name).display().to_string(),
+            )),
+        );
+    };
+    let saves = || b.settings.game(&id).saves_path;
+    let resolve = || {
+        b.runtime()
+            .block_on(b.forced_upload_deletes_cloud_saves(&id))
+            .unwrap();
+    };
+
+    set_prefix("first");
+    resolve();
+    assert_eq!(saves(), prefix("first").join("saves").display().to_string());
+    // Nothing changed: the found folder stays.
+    assert!(!b.forget_stale_save_path(&id));
+
+    set_prefix("second");
+    resolve();
+    assert_eq!(
+        saves(),
+        prefix("second").join("saves").display().to_string()
+    );
+
+    // A folder the user typed over the found one is theirs from then on.
+    let own = dir.path().join("my saves").display().to_string();
+    b.settings.set_game_value(
+        &id,
+        "savesPath",
+        Some(serde_json::Value::String(own.clone())),
+    );
+    set_prefix("third");
+    resolve();
+    assert_eq!(saves(), own);
+    assert!(b.settings.game(&id).saves_path_found.is_none());
 }
 
 /// Wait up to `limit` for `id`'s session to end; how long that took.
