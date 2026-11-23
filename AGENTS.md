@@ -2535,8 +2535,11 @@ building and the release checklist.
   architecture suffix (they predate arm64 packages), arm64 ones add `-arm64`.
 - Linux: a tarball with the desktop entry and icon. `--appimage` adds an
   AppImage for the binaries' architecture (appimagetool, zsync update
-  information) that bundles no libraries and refuses an `irori` linking
-  WebKitGTK.
+  information) that refuses an `irori` linking WebKitGTK. It sets no
+  `LD_LIBRARY_PATH`; the few libraries `irori` links beyond AppImage's
+  excludelist (xkbcommon, xkbcommon-x11, xcb-xkb, udev: `APPIMAGE_BUNDLED`) go
+  into `usr/lib` behind a patchelf `RUNPATH`, and any other library fails the
+  build.
 - macOS: `Irori.app` with the `irori://` scheme.
   - Rejects any dylib outside the system paths.
   - Signs the helper before the bundle (`IRORI_SIGN_IDENTITY`, ad-hoc by default).

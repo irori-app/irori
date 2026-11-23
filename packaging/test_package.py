@@ -68,17 +68,38 @@ class LinuxPackagingTests(unittest.TestCase):
         self.tool.write_text("")
         self.runtime = self.root / "runtime-x86_64"
         self.runtime.write_text("")
-        environment = patch.dict(os.environ, {"IRORI_APPIMAGETOOL": str(self.tool), "IRORI_APPIMAGE_RUNTIME": str(self.runtime)})
+        self.patchelf = self.root / "patchelf"
+        self.patchelf.write_text("")
+        environment = patch.dict(os.environ, {"IRORI_APPIMAGETOOL": str(self.tool),
+                                              "IRORI_APPIMAGE_RUNTIME": str(self.runtime),
+                                              "IRORI_PATCHELF": str(self.patchelf)})
         environment.start()
         self.addCleanup(environment.stop)
+        # The build system's libraries, as Ubuntu lays them out.
+        self.system = self.root / "system"
+        lib = self.system / "usr/lib/x86_64-linux-gnu"
+        write_elf(lib / "libxkbcommon.so.0.0.0", ["libc.so.6"])
+        if os.name != "nt":
+            (lib / "libxkbcommon.so.0").symlink_to("libxkbcommon.so.0.0.0")
+        write_elf(lib / "libxkbcommon-x11.so.0", ["libxcb.so.1", "libxcb-xkb.so.1", "libxkbcommon.so.0", "libc.so.6"])
+        write_elf(self.system / "lib/x86_64-linux-gnu/libxcb-xkb.so.1", ["libxcb.so.1", "libc.so.6"])
+        write_elf(lib / "libudev.so.1", ["libc.so.6"])
+        write_elf(self.system / "usr/lib/aarch64-linux-gnu/libxkbcommon.so.0", ["libc.so.6"],
+                  machine=package.ELF_AARCH64)
+        system_root = patch.object(package, "SYSTEM_ROOT", self.system)
+        system_root.start()
+        self.addCleanup(system_root.stop)
         self.zsync = True
 
     def build_appimage(self):
         """Package with a stand-in appimagetool; returns the AppImage, the
         command and what the AppDir held when the tool ran."""
-        seen = {}
+        seen = {"patchelf": []}
 
-        def appimagetool(command, check, env, cwd):
+        def appimagetool(command, check, env=None, cwd=None):
+            if command[0] == str(self.patchelf):
+                seen["patchelf"].append(command[1:])
+                return subprocess.CompletedProcess(command, 0)
             appdir, appimage = Path(command[-2]), Path(command[-1])
             seen["command"], seen["env"] = command, env
             seen["files"] = {str(p.relative_to(appdir)): p for p in appdir.rglob("*")}
@@ -134,7 +155,48 @@ class LinuxPackagingTests(unittest.TestCase):
         self.assertTrue(run.startswith("#!/bin/sh\n") and 'exec "$here/usr/bin/irori" "$@"' in run)
         self.assertTrue(mode & 0o111)
         self.assertNotIn("LD_LIBRARY_PATH", run)
-        self.assertFalse(any(name.endswith(".so") or ".so." in name for name in seen["files"]))
+        # Only what irori links beyond the excludelist, as a file under its soname.
+        self.assertEqual({name for name in seen["files"] if ".so" in name}, {"usr/lib/libxkbcommon.so.0"})
+        self.assertFalse(seen["files"]["usr/lib/libxkbcommon.so.0"].is_symlink())
+
+    @needs_posix_links
+    def test_appimage_finds_its_libraries_through_runpath_not_the_environment(self):
+        _, seen = self.build_appimage()
+        appdir = Path(seen["command"][-2])
+        self.assertEqual(seen["patchelf"], [
+            ["--set-rpath", "$ORIGIN", str(appdir / "usr/lib/libxkbcommon.so.0")],
+            ["--set-rpath", "$ORIGIN/../lib", str(appdir / "usr/bin/irori")],
+        ])
+        self.assertNotIn("LD_LIBRARY_PATH", seen["run"][0])
+
+    @needs_posix_links
+    def test_appimage_bundles_what_bundled_libraries_link_but_not_the_excludelist(self):
+        write_elf(self.binaries / "irori", ["libxkbcommon-x11.so.0", "libudev.so.1", "libxcb.so.1",
+                                            "libfontconfig.so.1", "libgcc_s.so.1", "libc.so.6"])
+        libraries = package.appimage_libraries(self.binaries / "irori", "x86_64")
+        self.assertEqual(set(libraries), {"libxkbcommon-x11.so.0", "libxcb-xkb.so.1", "libxkbcommon.so.0",
+                                          "libudev.so.1"})
+        self.assertEqual(libraries["libxcb-xkb.so.1"], self.system / "lib/x86_64-linux-gnu/libxcb-xkb.so.1")
+
+    def test_appimage_refuses_a_library_on_neither_list(self):
+        write_elf(self.binaries / "irori", ["libxkbcommon.so.0", "libsomething.so.3", "libc.so.6"])
+        with self.assertRaisesRegex(RuntimeError, r"without libsomething\.so\.3 \(linked by irori\)"):
+            package.appimage_libraries(self.binaries / "irori", "x86_64")
+        write_elf(self.system / "usr/lib/x86_64-linux-gnu/libudev.so.1", ["libsystemd-shared.so", "libc.so.6"])
+        write_elf(self.binaries / "irori", ["libudev.so.1"])
+        with self.assertRaisesRegex(RuntimeError, r"libsystemd-shared\.so \(linked by libudev\.so\.1\)"):
+            package.appimage_libraries(self.binaries / "irori", "x86_64")
+
+    def test_appimage_library_missing_on_the_build_system_is_explained(self):
+        write_elf(self.binaries / "irori", ["libudev.so.1", "libc.so.6"], machine=package.ELF_AARCH64)
+        with self.assertRaisesRegex(FileNotFoundError, r"bundles libudev\.so\.1, but this system has none"):
+            package.appimage_libraries(self.binaries / "irori", "aarch64")
+
+    @needs_posix_links
+    def test_missing_patchelf_is_explained(self):
+        with patch.dict(os.environ, {"IRORI_PATCHELF": "", "PATH": str(self.root / "absent")}):
+            with self.assertRaisesRegex(FileNotFoundError, "patchelf"):
+                self.build_appimage()
 
     @needs_posix_links
     def test_appimage_carries_update_information_and_the_pinned_runtime(self):

@@ -74,7 +74,8 @@ Both binaries are required, so a package never silently omits store sign-in.
   sign-in. `packaging/install.sh` retains the per-user Linux installation flow.
   `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` (`-aarch64` on arm64) and its `.zsync` (see
   [AppImage](#appimage)). It needs [appimagetool](https://github.com/AppImage/appimagetool)
-  (`IRORI_APPIMAGETOOL`, else on `PATH`) and `zsyncmake`; `IRORI_APPIMAGE_RUNTIME`
+  (`IRORI_APPIMAGETOOL`, else on `PATH`), `zsyncmake` and patchelf (`IRORI_PATCHELF`,
+  else on `PATH`); `IRORI_APPIMAGE_RUNTIME`
   names the AppImage runtime to use instead of the one appimagetool downloads.
 - macOS needs Xcode Command Line Tools. The package includes an `.app` with the
   helper and `irori://` URL declaration. XZ support links statically; packaging rejects
@@ -972,13 +973,25 @@ program called `portable`.
 ### AppImage
 
 `Irori-X.Y.Z-x86_64.AppImage` (and `Irori-X.Y.Z-aarch64.AppImage` for arm64) holds `irori`, `irori-sign-in`, the desktop entry, the icon
-and the AppStream metainfo, and nothing else: no libraries. It is built on Ubuntu 22.04
-from the same binaries as the tarball and the `.deb`, so it runs where they run (glibc
-2.35 or newer) and uses the system's graphics, Vulkan, Wayland, X11 and font libraries.
-Bundling none keeps the download small (about 32 MB for Irori 0.3.0, against 34 MB for
-the tarball) and keeps `LD_LIBRARY_PATH` out of the Wine, Proton and native games Irori
-starts. It is compressed with zstd in 128 KiB blocks, appimagetool's default: its xz
-setting came out larger (34 MB), and larger blocks start slower.
+and the AppStream metainfo. It is built on Ubuntu 22.04 from the same binaries as the
+tarball and the `.deb`, so it runs where they run (glibc 2.35 or newer) and uses the
+system's graphics, Vulkan, Wayland, X11 and font libraries. It sets no `LD_LIBRARY_PATH`,
+so nothing of it reaches the Wine, Proton and native games Irori starts. It is compressed
+with zstd in 128 KiB blocks, appimagetool's default: its xz setting came out larger
+(34 MB), and larger blocks start slower.
+
+- **Libraries.** `irori` links a few libraries that AppImage's
+  [excludelist](https://github.com/AppImageCommunity/pkg2appimage/blob/master/excludelist)
+  doesn't expect on every system: libxkbcommon, libxkbcommon-x11 (and its libxcb-xkb)
+  and libudev. A minimal system without one (a Wayland-only install, a container, an
+  immutable image) would stop Irori in the dynamic loader, before it can say anything, so
+  the AppImage carries those in `usr/lib` and finds them through `irori`'s `RUNPATH`
+  (`$ORIGIN/../lib`, set with patchelf), which the programs Irori starts don't inherit.
+  `package.py` follows what `irori` and those libraries link and fails the build on a
+  library on neither list (`APPIMAGE_BUNDLED`, `APPIMAGE_EXCLUDED`), so a new native
+  dependency is a decision. The release's container test runs the AppImage with only the
+  excludelist's libraries installed. Building it needs `patchelf` (`IRORI_PATCHELF`, else
+  on `PATH`).
 
 - **Sign-in.** `irori-sign-in` uses the system's WebKitGTK 4.1 and GTK 3. Where they are
   missing the window can't start, and Irori opens the store's page in the browser instead
