@@ -527,6 +527,8 @@ impl Backend {
             });
         }
         let mut grouped = crate::copies::group(games, &user, self.settings.app().ui.group_copies);
+        // Edits of a favourite, status or rating reach every copy.
+        self.userdata.set_copy_groups(&grouped.groups);
         grouped.entries.sort_by(|a, b| {
             a.sort_title
                 .cmp(&b.sort_title)

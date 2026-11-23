@@ -2,8 +2,16 @@
 //! played, custom categories (manual and smart, with their pins and
 //! colours), playtime, play statuses, backlog goals, title/art overrides and
 //! the play journal.
+//!
+//! A game owned on several stores is one library entry, but each copy keeps
+//! its own values. Favourite, hidden, play status and rating describe the
+//! game rather than the copy, so setting one writes every copy of the entry
+//! ([`UserDataService::set_copy_groups`]), and combining copies shares the
+//! values they had ([`UserData::share_between`]): whichever copy is the
+//! default shows the same. Categories, playtime, journal notes and
+//! overrides stay per copy.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -217,6 +225,33 @@ impl UserData {
         self.legacy_journal = journal::mirror(&self.journal);
     }
 
+    /// Give every copy in `keys` (the copies of one entry, the default
+    /// first) the same favourite, hidden flag, play status and rating: any
+    /// copy's favourite or hidden flag, the status set last, the first
+    /// rating.
+    pub fn share_between(&mut self, keys: &[String]) {
+        for set in [&mut self.favourites, &mut self.hidden] {
+            if keys.iter().any(|k| set.contains(k)) {
+                set.extend(keys.iter().cloned());
+            }
+        }
+        let latest = keys
+            .iter()
+            .filter_map(|k| self.play_status.get(k))
+            .max_by_key(|r| util::parse_rfc3339(&r.since).unwrap_or(i64::MIN))
+            .cloned();
+        if let Some(record) = latest {
+            for key in keys {
+                self.play_status.insert(key.clone(), record.clone());
+            }
+        }
+        if let Some(stars) = keys.iter().find_map(|k| self.ratings.get(k).copied()) {
+            for key in keys {
+                self.ratings.insert(key.clone(), stars);
+            }
+        }
+    }
+
     /// The time Irori counted for a game (sessions, store totals, other
     /// computers'), without the user's own edit.
     pub fn counted_seconds(&self, key: &str) -> u64 {
@@ -330,7 +365,11 @@ impl UserData {
 impl UserData {
     /// What `ids` are now, for [`UserData::restore`].
     pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
-        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        self.capture_keys(ids.iter().map(GameId::key).collect())
+    }
+
+    /// [`UserData::capture`] of games by key.
+    fn capture_keys(&self, keys: Vec<String>) -> BulkSnapshot {
         let pick = |set: &BTreeSet<String>| -> BTreeSet<String> {
             keys.iter().filter(|k| set.contains(*k)).cloned().collect()
         };
@@ -553,6 +592,17 @@ fn set_look(d: &mut UserData, category: &CategoryRef, look: CategoryLook) -> boo
     }
 }
 
+/// Put `keys` in `set` (`on`) or take them out.
+fn toggle(set: &mut BTreeSet<String>, keys: &[String], on: bool) {
+    for key in keys {
+        if on {
+            set.insert(key.clone());
+        } else {
+            set.remove(key);
+        }
+    }
+}
+
 fn rate(d: &mut UserData, key: String, stars: Option<u8>) {
     match stars.filter(|s| *s > 0) {
         Some(s) => {
@@ -621,6 +671,27 @@ impl LibrarySync {
 pub struct UserDataService {
     data: RwLock<Arc<UserData>>,
     bus: EventBus,
+    /// Each copy's key → the keys of every copy of its entry, as the
+    /// library last grouped them.
+    copies: RwLock<Arc<HashMap<String, Arc<[String]>>>>,
+}
+
+/// `keys` with every other copy of their entries (`groups`), each once,
+/// in order.
+fn with_copies(
+    groups: &HashMap<String, Arc<[String]>>,
+    keys: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for key in keys {
+        let group = groups.get(&key).map(|g| g.to_vec());
+        for k in group.unwrap_or_else(|| vec![key]) {
+            if !out.contains(&k) {
+                out.push(k);
+            }
+        }
+    }
+    out
 }
 
 fn file() -> PathBuf {
@@ -636,7 +707,27 @@ impl UserDataService {
                 data
             })),
             bus,
+            copies: RwLock::default(),
         }
+    }
+
+    /// Follow how the library groups copies (each group the copies of one
+    /// entry), so a favourite, hidden flag, play status or rating set on
+    /// one copy is set on all of them.
+    pub fn set_copy_groups(&self, groups: &[Arc<[GameId]>]) {
+        let mut map = HashMap::new();
+        for group in groups {
+            let keys: Arc<[String]> = group.iter().map(GameId::key).collect();
+            for key in keys.iter() {
+                map.insert(key.clone(), keys.clone());
+            }
+        }
+        *self.copies.write() = Arc::new(map);
+    }
+
+    /// The keys of `ids` and of every other copy of their entries.
+    fn keys_with_copies(&self, ids: &[GameId]) -> Vec<String> {
+        with_copies(&self.copies.read(), ids.iter().map(GameId::key))
     }
 
     pub fn snapshot(&self) -> Arc<UserData> {
@@ -674,40 +765,22 @@ impl UserDataService {
         }
     }
 
+    /// Mark or unmark a game (every copy of its entry) as a favourite.
     pub fn set_favourite(&self, id: &GameId, on: bool) {
-        self.update(Some(id), |d| {
-            if on {
-                d.favourites.insert(id.key());
-            } else {
-                d.favourites.remove(&id.key());
-            }
-        });
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| toggle(&mut d.favourites, &keys, on));
     }
 
     /// Mark or unmark several games as favourites in one change.
     pub fn set_favourites(&self, ids: &[GameId], on: bool) {
-        self.update(None, |d| {
-            for id in ids {
-                if on {
-                    d.favourites.insert(id.key());
-                } else {
-                    d.favourites.remove(&id.key());
-                }
-            }
-        });
+        let keys = self.keys_with_copies(ids);
+        self.update(None, |d| toggle(&mut d.favourites, &keys, on));
     }
 
     /// Hide or unhide several games in one change.
     pub fn set_hidden_many(&self, ids: &[GameId], on: bool) {
-        self.update(None, |d| {
-            for id in ids {
-                if on {
-                    d.hidden.insert(id.key());
-                } else {
-                    d.hidden.remove(&id.key());
-                }
-            }
-        });
+        let keys = self.keys_with_copies(ids);
+        self.update(None, |d| toggle(&mut d.hidden, &keys, on));
     }
 
     /// Add several games to `category`, or take them out, in one change.
@@ -727,17 +800,18 @@ impl UserDataService {
     /// Rate a game from 1 to [`MAX_RATING`] stars, or clear its rating with
     /// `None` (or 0). Larger values count as the most stars.
     pub fn set_rating(&self, id: &GameId, stars: Option<u8>) {
-        self.update(Some(id), |d| rate(d, id.key(), stars));
-    }
-
-    pub fn set_hidden(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
         self.update(Some(id), |d| {
-            if on {
-                d.hidden.insert(id.key());
-            } else {
-                d.hidden.remove(&id.key());
+            for key in keys {
+                rate(d, key, stars);
             }
         });
+    }
+
+    /// Hide or unhide a game (every copy of its entry).
+    pub fn set_hidden(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| toggle(&mut d.hidden, &keys, on));
     }
 
     pub fn set_category(&self, id: &GameId, category: &str, on: bool) {
@@ -799,15 +873,14 @@ impl UserDataService {
     /// Set a game's play status, or clear it with `None`.
     pub fn set_play_status(&self, id: &GameId, status: Option<PlayStatus>) {
         let now = util::now_rfc3339();
-        self.update(Some(id), |d| {
-            apply_play_status(d, &[id.key()], status, &now)
-        });
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| apply_play_status(d, &keys, status, &now));
     }
 
     /// Set or clear the play status of several games in one change.
     pub fn set_play_status_many(&self, ids: &[GameId], status: Option<PlayStatus>) {
         let now = util::now_rfc3339();
-        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        let keys = self.keys_with_copies(ids);
         self.update(None, |d| apply_play_status(d, &keys, status, &now));
     }
 
@@ -826,7 +899,7 @@ impl UserDataService {
 
     /// The current values of `ids`, to undo a bulk edit with [`Self::restore`].
     pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
-        self.snapshot().capture(ids)
+        self.snapshot().capture_keys(self.keys_with_copies(ids))
     }
 
     /// Put games back as [`Self::capture`] saw them.
@@ -949,8 +1022,10 @@ impl UserDataService {
         let Some((first, rest)) = ids.split_first() else {
             return;
         };
+        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
         // A game's event, so the library is rebuilt with the new entry.
         self.update(Some(first), |d| {
+            d.share_between(&keys);
             let target = first.key();
             edit_overrides(d, &target, |o| {
                 if o.copy_of.as_deref() == Some("") {
@@ -1358,6 +1433,48 @@ mod tests {
         ]);
         let grown = grown_totals(&data, Runner::Legendary, &totals);
         assert_eq!(grown, [("legendary:Sugar".to_string(), 600)]);
+    }
+
+    #[test]
+    fn edits_and_combining_reach_every_copy() {
+        let groups = HashMap::from([
+            (
+                "steam:1".to_string(),
+                Arc::from(["steam:1".to_string(), "gog:2".to_string()]),
+            ),
+            (
+                "gog:2".to_string(),
+                Arc::from(["steam:1".to_string(), "gog:2".to_string()]),
+            ),
+        ]);
+        assert_eq!(
+            with_copies(&groups, ["gog:2".to_string(), "epic:3".to_string()]),
+            ["steam:1", "gog:2", "epic:3"]
+        );
+
+        let mut d = UserData::default();
+        d.favourites.insert("gog:2".into());
+        d.ratings.insert("steam:1".into(), 4);
+        d.ratings.insert("gog:2".into(), 2);
+        d.play_status.insert(
+            "steam:1".into(),
+            PlayStatusRecord {
+                status: PlayStatus::Playing,
+                since: "2026-01-01T00:00:00Z".into(),
+            },
+        );
+        d.play_status.insert(
+            "gog:2".into(),
+            PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "2026-03-01T00:00:00Z".into(),
+            },
+        );
+        d.share_between(&["steam:1".to_string(), "gog:2".to_string()]);
+        assert!(d.favourites.contains("steam:1"));
+        assert!(!d.hidden.contains("steam:1"));
+        assert_eq!(d.play_status("steam:1"), Some(PlayStatus::Beaten));
+        assert_eq!(d.ratings["gog:2"], 4, "the default copy's rating");
     }
 
     #[test]

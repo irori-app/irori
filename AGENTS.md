@@ -497,6 +497,12 @@ commands without a window.
   `irori_ui::hooks::play_game`/`install_game`, the game page's own flows). The game
   page's Copies card lists every copy with its own time played, Play or Install, the
   default star, and the copies' time added up (`irori_game` `page/copies.rs`).
+  Favourite, hidden, play status and rating describe the game, not the copy: setting
+  one writes every copy of the entry (`UserDataService::set_copy_groups`, kept by the
+  library rebuild), and combining copies shares them (`UserData::share_between`: any
+  copy's favourite or hidden flag, the latest status, the default copy's rating), so
+  any default copy shows the same. Categories, playtime, notes and overrides stay per
+  copy.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
