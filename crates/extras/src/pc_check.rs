@@ -214,15 +214,14 @@ fn is_system(title: &str) -> bool {
     .any(|s| t == *s || t.starts_with(&format!("{s} ")))
 }
 
+/// A part and what the page asks of it at the minimum and recommended
+/// levels.
+type Need = (PartKind, Option<String>, Option<String>);
+
 /// Each part's need at the minimum and the recommended level, from the
 /// rows of one system (the first, which is this computer's when the page
-/// has several) or from per-part rows.
-fn needs(
-    rows: &[Requirement],
-) -> (
-    Option<String>,
-    Vec<(PartKind, Option<String>, Option<String>)>,
-) {
+/// has several) or from per-part rows; with that system's name.
+fn needs(rows: &[Requirement]) -> (Option<String>, Vec<Need>) {
     let (system, rows): (Option<String>, &[Requirement]) = match rows.first() {
         Some(first) if is_system(&first.title) => (
             Some(first.title.trim().to_string()),
@@ -230,7 +229,7 @@ fn needs(
         ),
         _ => (None, rows),
     };
-    let mut out: Vec<(PartKind, Option<String>, Option<String>)> = Vec::new();
+    let mut out: Vec<Need> = Vec::new();
     for row in rows {
         for (level, text) in [(0, &row.minimum), (1, &row.recommended)] {
             for (label, value) in fields(&row.title, text) {
@@ -603,7 +602,7 @@ pub fn check(rows: &[Requirement], pc: &ThisPc) -> Option<PcCheck> {
         .map(|(kind, minimum, recommended)| {
             let (have, at_minimum, at_recommended) = match kind {
                 PartKind::Memory => {
-                    let have = (pc.memory_bytes > 0).then(|| pc.memory_bytes / (1024 * 1024));
+                    let have = (pc.memory_bytes > 0).then_some(pc.memory_bytes / (1024 * 1024));
                     // A computer sold with 8 GB reports a little less.
                     let level = |need: Option<&String>| match need {
                         None => Fit::NotGiven,

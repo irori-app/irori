@@ -407,7 +407,7 @@ impl CriticScore {
     /// A score of `source`, when `score` is one (1–100).
     pub fn new(source: &str, score: f64) -> Option<Self> {
         let score = score.round();
-        (score >= 1.0 && score <= 100.0).then(|| Self {
+        (1.0..=100.0).contains(&score).then(|| Self {
             source: source.to_string(),
             score: score as u8,
         })

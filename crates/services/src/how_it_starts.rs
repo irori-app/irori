@@ -50,7 +50,12 @@ impl HowItStarts {
         let mut words: Vec<String> = self
             .env
             .iter()
-            .map(|(k, v)| format!("{k}={}", irori_runtime::wrappers::shell_join(&[v.clone()])))
+            .map(|(k, v)| {
+                format!(
+                    "{k}={}",
+                    irori_runtime::wrappers::shell_join(std::slice::from_ref(v))
+                )
+            })
             .collect();
         words.push(irori_runtime::wrappers::shell_join(&self.command));
         words.join(" ")
