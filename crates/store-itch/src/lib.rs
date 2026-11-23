@@ -19,6 +19,7 @@ mod install;
 mod launch;
 mod receipt;
 mod records;
+mod setup;
 #[cfg(test)]
 mod tests;
 

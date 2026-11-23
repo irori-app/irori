@@ -185,7 +185,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-gog` | `irori-gog` | GOG `Store` |
 | `crates/store-amazon` | `irori-amazon` | Amazon `Store` (`Runner::Nile`) |
 | `crates/store-zoom` | `irori-zoom` | ZOOM Platform `Store`, opt-in through a setting |
-| `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo` |
+| `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo`: zip, tar, 7-Zip and RAR uploads, macOS disk images, Windows setup programs (Inno Setup, NSIS, MSI) run silently into the install folder, and the itch app's install receipts on import |
 | `crates/msstore` | `irori-msstore-api` | Microsoft Store and Xbox Live protocol (port of Xodus): device registration, RST2 with XML-DSig, CLEP and SPLicense secrets, SISU and XSTS, the display catalog and Store browsing, package plans, content licences and offline leases, entitlements, Game Pass, offline PC |
 | `crates/msixvc` | `irori-msixvc` | MSIXVC packages (port of Xodus): XVD and its NTFS volume, AES-XTS, hash tree, streaming downloads with resume checkpoints |
 | `crates/store-xbox` | `irori-xbox` | Xbox `Store` (`Runner::Xbox`, Linux), opt-in through `iroriXbox`: Microsoft Store and PC Game Pass installs, licensed launches through a decrypted launch view, the in-game account service |
@@ -243,7 +243,8 @@ irori-core                        (depends on nothing internal)
   │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api,
   │                   irori-msstore-api, irori-msixvc
   │                   (depot and secrets only, not core)
-  ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
+  ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch (+ runtime
+  │                   for setup programs, mods for 7-Zip and RAR uploads),
   │                   irori-steam, irori-sideload, irori-xbox (+ runtime, irori-msstore-api,
   │                   irori-msixvc, irori-xbox-api), irori-emulation (+ engines,
   │                   irori-retroachievements-api, extras for LaunchBox's box art),

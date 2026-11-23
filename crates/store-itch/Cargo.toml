@@ -11,6 +11,10 @@ publish.workspace = true
 irori-core.workspace = true
 irori-depot.workspace = true
 irori-itch-api.workspace = true
+# 7-Zip and RAR uploads unpack as mod archives do.
+irori-mods.workspace = true
+# Windows setup programs run in the game's Wine prefix.
+irori-runtime.workspace = true
 irori-secrets.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
