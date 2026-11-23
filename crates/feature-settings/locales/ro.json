@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Desktopul nu are încă taste pentru lansatorul rapid; atribuie-i în setările de scurtături ale desktopului.",
   "settings.quick_launch.commands_file": "{desktop} nu lasă programele să asculte tastele apăsate în alte ferestre. Adaugă asta în {file}, apoi reîncarcă configurația:",
   "settings.quick_launch.command": "Atribuie această comandă unei taste în setările de tastatură ale desktopului:",
-  "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:"
+  "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:",
+  "settings.field.shortcut_icon_from_exe.label": "Pictograme din programul jocului",
+  "settings.field.shortcut_icon_from_exe.help": "Comenzile rapide ale jocurilor Windows folosesc pictograma din fișierul .exe al jocului, înaintea imaginilor magazinului."
 }

@@ -952,6 +952,10 @@ pub struct AppSettings {
     /// 0 = no cap. Irori-only.
     #[serde(rename = "iroriArtCacheLimit")]
     pub art_cache_limit: u32,
+    /// Shortcuts of a Windows program take the program's own icon, before
+    /// the store's art. Irori-only.
+    #[serde(rename = "iroriShortcutIconFromExe")]
+    pub shortcut_icon_from_exe: bool,
     /// Scheduled backups. Irori-only; stays on this computer (backups and
     /// restores leave it alone).
     #[serde(rename = "iroriBackups")]
@@ -1012,6 +1016,7 @@ impl Default for AppSettings {
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
             add_steam_shortcuts: false,
+            shortcut_icon_from_exe: false,
             auto_update_games: false,
             check_for_updates_on_startup: true,
             check_updates_interval: 10,

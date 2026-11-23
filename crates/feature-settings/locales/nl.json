@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Je desktop heeft nog geen toetsen voor de snelstarter; stel ze in bij de sneltoetsinstellingen van de desktop.",
   "settings.quick_launch.commands_file": "{desktop} laat programma’s niet luisteren naar toetsen die in andere vensters worden ingedrukt. Voeg dit toe aan {file} en laad de configuratie opnieuw:",
   "settings.quick_launch.command": "Koppel deze opdracht aan een toets in de toetsenbordinstellingen van je desktop:",
-  "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:"
+  "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:",
+  "settings.field.shortcut_icon_from_exe.label": "Pictogrammen uit het programma van de game",
+  "settings.field.shortcut_icon_from_exe.help": "Snelkoppelingen van Windows-games gebruiken het pictogram in de .exe van de game, vóór de afbeeldingen van de winkel."
 }

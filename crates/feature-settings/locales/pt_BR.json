@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Seu ambiente de trabalho ainda não tem teclas para o iniciador rápido; atribua nas configurações de atalhos dele.",
   "settings.quick_launch.commands_file": "{desktop} não deixa programas ouvirem teclas pressionadas em outras janelas. Adicione isto a {file} e recarregue a configuração:",
   "settings.quick_launch.command": "Associe este comando a uma tecla nas configurações de teclado do seu ambiente de trabalho:",
-  "settings.quick_launch.off": "Este comando também abre o iniciador rápido; se quiser, associe-o a uma tecla nas configurações de teclado:"
+  "settings.quick_launch.off": "Este comando também abre o iniciador rápido; se quiser, associe-o a uma tecla nas configurações de teclado:",
+  "settings.field.shortcut_icon_from_exe.label": "Ícones do programa do jogo",
+  "settings.field.shortcut_icon_from_exe.help": "Os atalhos de jogos para Windows usam o ícone do .exe do jogo, antes das imagens da loja."
 }

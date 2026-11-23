@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Pulpit nie ma jeszcze klawiszy dla szybkiego programu uruchamiającego; przypisz je w jego ustawieniach skrótów.",
   "settings.quick_launch.commands_file": "{desktop} nie pozwala programom nasłuchiwać klawiszy naciskanych w innych oknach. Dodaj to do {file}, a potem wczytaj ponownie konfigurację:",
   "settings.quick_launch.command": "Przypisz to polecenie do klawisza w ustawieniach klawiatury pulpitu:",
-  "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:"
+  "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:",
+  "settings.field.shortcut_icon_from_exe.label": "Ikony z programu gry",
+  "settings.field.shortcut_icon_from_exe.help": "Skróty gier na Windows używają ikony z pliku .exe gry, przed grafikami sklepu."
 }

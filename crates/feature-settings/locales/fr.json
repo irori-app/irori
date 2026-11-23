@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Votre bureau n’a encore aucune touche pour le lanceur rapide ; attribuez-en dans les réglages de raccourcis du bureau.",
   "settings.quick_launch.commands_file": "{desktop} ne laisse pas les programmes écouter les touches pressées dans d’autres fenêtres. Ajoutez ceci à {file}, puis rechargez sa configuration :",
   "settings.quick_launch.command": "Associez cette commande à une touche dans les réglages clavier de votre bureau :",
-  "settings.quick_launch.off": "Cette commande ouvre aussi le lanceur rapide ; associez-la à une touche dans les réglages clavier du bureau si vous le souhaitez :"
+  "settings.quick_launch.off": "Cette commande ouvre aussi le lanceur rapide ; associez-la à une touche dans les réglages clavier du bureau si vous le souhaitez :",
+  "settings.field.shortcut_icon_from_exe.label": "Icônes du programme du jeu",
+  "settings.field.shortcut_icon_from_exe.help": "Les raccourcis des jeux Windows utilisent l’icône contenue dans le .exe du jeu, avant les illustrations de la boutique."
 }

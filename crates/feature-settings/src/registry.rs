@@ -1858,6 +1858,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.add_steam_shortcuts.help")
     .keywords(&["steam", "shortcut", "deck"]),
     app(
+        "iroriShortcutIconFromExe",
+        "settings.field.shortcut_icon_from_exe.label",
+        General,
+        "settings.group.new_installs",
+        Toggle,
+    )
+    .help("settings.field.shortcut_icon_from_exe.help")
+    .keywords(&["shortcut", "icon", "exe", "program"]),
+    app(
         "libraryTopSection",
         "settings.field.library_top_section.label",
         General,

@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "桌面尚未为快速启动器分配按键；请在桌面的快捷键设置中分配。",
   "settings.quick_launch.commands_file": "{desktop} 不允许程序监听在其他窗口中按下的按键。请将以下内容添加到 {file}，然后重新载入其配置：",
   "settings.quick_launch.command": "请在桌面的键盘设置中将此命令绑定到按键：",
-  "settings.quick_launch.off": "此命令也能打开快速启动器；如有需要，可在桌面的键盘设置中将其绑定到按键："
+  "settings.quick_launch.off": "此命令也能打开快速启动器；如有需要，可在桌面的键盘设置中将其绑定到按键：",
+  "settings.field.shortcut_icon_from_exe.label": "使用游戏程序的图标",
+  "settings.field.shortcut_icon_from_exe.help": "Windows 游戏的快捷方式优先使用游戏 .exe 中的图标，而不是商店的图片。"
 }

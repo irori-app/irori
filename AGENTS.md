@@ -983,6 +983,13 @@ commands without a window.
   adds or updates every installed game (not Steam's own, DLCs, or hidden games while
   locked) and removes Irori's entries of games that left the library, except games of a
   signed-out store; with games named, only those; `--remove` takes them out.
+- **Shortcut icons** (`irori-extras::shortcuts::icon`): a square PNG per game under
+  `<data>/icons`, from the store's art; with `iroriShortcutIconFromExe` a Windows game's
+  own program icon comes first (`shortcuts::pe_icon`, a bounded PE resource reader under
+  `#![forbid(unsafe_code)]`: the first `RT_GROUP_ICON`, its largest `RT_ICON`), kept as
+  `<runner>-<app>-exe.png` so the setting takes effect at the next shortcut. App bundles
+  get it as `Contents/Resources/icon.icns`, Windows links as an `.ico`
+  `IconLocation`; the freedesktop entries use the PNG.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of

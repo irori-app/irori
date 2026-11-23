@@ -13,6 +13,7 @@ pub mod desktop;
 #[path = "desktop_native.rs"]
 pub mod desktop;
 pub mod icon;
+pub mod pe_icon;
 pub mod steam;
 
 use std::collections::HashSet;
@@ -180,7 +181,7 @@ pub async fn add_with_report(
                 .errors
                 .push(format!("registering irori:// links: {e:#}"));
         }
-        match icon::ensure_icon(game).await {
+        match icon::ensure_icon(game, app.shortcut_icon_from_exe).await {
             Ok(p) => report.icon = p,
             Err(e) => report
                 .errors

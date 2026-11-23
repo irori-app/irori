@@ -197,7 +197,7 @@ async fn apply_queue(
             steam_app_id: id.as_deref(),
         })
         .collect();
-    apply_for_users(&users, queue.removals(), &list).await
+    apply_for_users(&users, queue.removals(), &list, app.shortcut_icon_from_exe).await
 }
 
 /// The removals, then the additions, for the given users, with Steam known
@@ -206,6 +206,7 @@ async fn apply_for_users(
     users: &[SteamUser],
     removals: Option<HashSet<GameId>>,
     games: &[SteamGame<'_>],
+    from_exe: bool,
 ) -> Result<SyncReport> {
     let mut report = SyncReport::default();
     if removals.as_ref().is_none_or(|r| !r.is_empty()) {
@@ -215,7 +216,7 @@ async fn apply_for_users(
         report.errors = removed.errors;
     }
     if !games.is_empty() {
-        let prepared = super::prepare(games, &LauncherCommand::detect()).await;
+        let prepared = super::prepare(games, &LauncherCommand::detect(), from_exe).await;
         let synced = super::sync_users(users, &prepared, None).await?;
         report.added = synced.added;
         report.updated = synced.updated;
@@ -280,14 +281,16 @@ mod tests {
                 steam_app_id: None,
             })
             .collect();
-        let added = apply_for_users(&users, Some(HashSet::new()), &steam)
+        let added = apply_for_users(&users, Some(HashSet::new()), &steam, false)
             .await
             .unwrap();
         assert_eq!((added.added, added.removed), (2, 0));
 
         let mut q = Queue::default();
         q.remove(Some(&HashSet::from([a.id()])));
-        let report = apply_for_users(&users, q.removals(), &[]).await.unwrap();
+        let report = apply_for_users(&users, q.removals(), &[], false)
+            .await
+            .unwrap();
         assert_eq!(report.removed, 1);
         let file = super::super::read_file(&users[0].shortcuts_file())
             .await

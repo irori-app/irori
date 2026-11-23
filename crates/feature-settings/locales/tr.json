@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Masaüstünüzde hızlı başlatıcı için henüz tuş yok; masaüstünün kısayol ayarlarından atayın.",
   "settings.quick_launch.commands_file": "{desktop}, programların başka pencerelerde basılan tuşları dinlemesine izin vermez. Bunu {file} dosyasına ekleyin, ardından yapılandırmayı yeniden yükleyin:",
   "settings.quick_launch.command": "Bu komutu masaüstünüzün klavye ayarlarında bir tuşa atayın:",
-  "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:"
+  "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:",
+  "settings.field.shortcut_icon_from_exe.label": "Oyunun programındaki simgeler",
+  "settings.field.shortcut_icon_from_exe.help": "Windows oyunlarının kısayolları, mağaza görsellerinden önce oyunun .exe dosyasındaki simgeyi kullanır."
 }

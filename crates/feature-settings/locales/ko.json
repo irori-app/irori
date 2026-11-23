@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "데스크톱에 아직 빠른 실행 키가 없습니다. 데스크톱의 단축키 설정에서 지정하세요.",
   "settings.quick_launch.commands_file": "{desktop}에서는 프로그램이 다른 창에서 누른 키를 받을 수 없습니다. 이 내용을 {file}에 추가한 뒤 설정을 다시 불러오세요:",
   "settings.quick_launch.command": "이 명령을 데스크톱의 키보드 설정에서 키에 지정하세요:",
-  "settings.quick_launch.off": "이 명령으로도 빠른 실행을 열 수 있습니다. 원하면 데스크톱의 키보드 설정에서 키에 지정하세요:"
+  "settings.quick_launch.off": "이 명령으로도 빠른 실행을 열 수 있습니다. 원하면 데스크톱의 키보드 설정에서 키에 지정하세요:",
+  "settings.field.shortcut_icon_from_exe.label": "게임 프로그램의 아이콘",
+  "settings.field.shortcut_icon_from_exe.help": "Windows 게임 바로 가기에 스토어 이미지보다 게임 .exe 안의 아이콘을 먼저 사용합니다."
 }

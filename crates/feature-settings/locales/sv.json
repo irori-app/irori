@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Skrivbordet har ännu inga tangenter för snabbstartaren; ge den några i skrivbordets kortkommandoinställningar.",
   "settings.quick_launch.commands_file": "{desktop} låter inte program lyssna efter tangenter som trycks i andra fönster. Lägg till detta i {file} och läs sedan in konfigurationen igen:",
   "settings.quick_launch.command": "Bind det här kommandot till en tangent i skrivbordets tangentbordsinställningar:",
-  "settings.quick_launch.off": "Det här kommandot öppnar också snabbstartaren; bind det till en tangent i skrivbordets tangentbordsinställningar om du vill:"
+  "settings.quick_launch.off": "Det här kommandot öppnar också snabbstartaren; bind det till en tangent i skrivbordets tangentbordsinställningar om du vill:",
+  "settings.field.shortcut_icon_from_exe.label": "Ikoner från spelets program",
+  "settings.field.shortcut_icon_from_exe.help": "Genvägar till Windows-spel använder ikonen i spelets .exe före butikens bilder."
 }

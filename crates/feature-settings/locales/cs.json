@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Desktop zatím pro rychlý spouštěč nemá žádné klávesy; přiřaďte je v jeho nastavení zkratek.",
   "settings.quick_launch.commands_file": "{desktop} nedovoluje programům naslouchat klávesám stisknutým v jiných oknech. Přidejte toto do {file} a znovu načtěte konfiguraci:",
   "settings.quick_launch.command": "Přiřaďte tento příkaz klávese v nastavení klávesnice desktopu:",
-  "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:"
+  "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:",
+  "settings.field.shortcut_icon_from_exe.label": "Ikony z programu hry",
+  "settings.field.shortcut_icon_from_exe.help": "Zástupci her pro Windows použijí ikonu uvnitř souboru .exe hry, ještě před obrázky obchodu."
 }

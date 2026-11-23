@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "デスクトップにはまだクイックランチャー用のキーがありません。デスクトップのショートカット設定で割り当ててください。",
   "settings.quick_launch.commands_file": "{desktop} では、ほかのウィンドウで押されたキーをプログラムが受け取れません。これを {file} に追加し、設定を再読み込みしてください:",
   "settings.quick_launch.command": "このコマンドをデスクトップのキーボード設定でキーに割り当ててください:",
-  "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:"
+  "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:",
+  "settings.field.shortcut_icon_from_exe.label": "ゲームのプログラムのアイコン",
+  "settings.field.shortcut_icon_from_exe.help": "Windows ゲームのショートカットに、ストアの画像より先にゲームの .exe 内のアイコンを使います。"
 }

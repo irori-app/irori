@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Il desktop non ha ancora tasti per l’avvio rapido; assegnali nelle impostazioni delle scorciatoie del desktop.",
   "settings.quick_launch.commands_file": "{desktop} non permette ai programmi di ascoltare i tasti premuti in altre finestre. Aggiungi questo a {file}, poi ricarica la configurazione:",
   "settings.quick_launch.command": "Assegna questo comando a un tasto nelle impostazioni della tastiera del desktop:",
-  "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:"
+  "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:",
+  "settings.field.shortcut_icon_from_exe.label": "Icone dal programma del gioco",
+  "settings.field.shortcut_icon_from_exe.help": "I collegamenti dei giochi Windows usano l’icona contenuta nel .exe del gioco, prima delle immagini dello store."
 }

@@ -281,7 +281,11 @@ struct Prepared<'a> {
 }
 
 /// The entries for `games`, with their icons from Irori's art store.
-async fn prepare<'a>(games: &[SteamGame<'a>], launcher: &LauncherCommand) -> Vec<Prepared<'a>> {
+async fn prepare<'a>(
+    games: &[SteamGame<'a>],
+    launcher: &LauncherCommand,
+    from_exe: bool,
+) -> Vec<Prepared<'a>> {
     let mut prepared = Vec::with_capacity(games.len());
     let mut seen = HashSet::new();
     for g in games {
@@ -291,7 +295,7 @@ async fn prepare<'a>(games: &[SteamGame<'a>], launcher: &LauncherCommand) -> Vec
             continue;
         }
         let cmd = EntryCommand::new(launcher, &id);
-        let icon = match icon::ensure_icon(game).await {
+        let icon = match icon::ensure_icon(game, from_exe).await {
             Ok(p) => p.map(|p| p.to_string_lossy().into_owned()),
             Err(e) => {
                 tracing::warn!("no icon for the Steam shortcut of {}: {e:#}", game.title);
@@ -353,7 +357,12 @@ pub async fn sync(
             ..Default::default()
         });
     }
-    let prepared = prepare(games, &LauncherCommand::detect()).await;
+    let prepared = prepare(
+        games,
+        &LauncherCommand::detect(),
+        app.shortcut_icon_from_exe,
+    )
+    .await;
     sync_users(&users, &prepared, gone).await
 }
 

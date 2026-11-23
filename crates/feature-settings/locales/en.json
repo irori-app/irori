@@ -1676,5 +1676,7 @@
   "settings.quick_launch.unassigned": "Your desktop has no keys for the quick launcher yet; give it some in the desktop’s shortcut settings.",
   "settings.quick_launch.commands_file": "{desktop} doesn’t let programs listen for keys pressed in other windows. Add this to {file}, then reload its configuration:",
   "settings.quick_launch.command": "Bind this command to a key in your desktop’s keyboard settings:",
-  "settings.quick_launch.off": "This command opens the quick launcher too; bind it to a key in your desktop’s keyboard settings if you like:"
+  "settings.quick_launch.off": "This command opens the quick launcher too; bind it to a key in your desktop’s keyboard settings if you like:",
+  "settings.field.shortcut_icon_from_exe.label": "Icons from the game’s program",
+  "settings.field.shortcut_icon_from_exe.help": "Shortcuts of Windows games use the icon inside the game’s .exe, before the store’s art."
 }
