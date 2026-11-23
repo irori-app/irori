@@ -945,5 +945,17 @@
   "library.random.pool_favourites": "Favorilerden",
   "library.random.pool_all": "Tüm kütüphaneden",
   "library.random.pool_category": "“{name}” içinden",
-  "library.command.back_to_game": "Oyuna dön"
+  "library.command.back_to_game": "Oyuna dön",
+  "library.stats.sheet.all_time": "Toplam {time}",
+  "library.stats.sheet.sessions": "Oturumlar",
+  "library.stats.sheet.days": "Oynanan günler",
+  "library.stats.sheet.average": "Ortalama oturum",
+  "library.stats.sheet.longest": "En uzun oturum",
+  "library.stats.sheet.usual_hour": "Genelde başlar",
+  "library.stats.sheet.weekends": "Hafta sonları",
+  "library.stats.sheet.first": "İlk oynama",
+  "library.stats.sheet.last": "Son oynama",
+  "library.stats.sheet.status_changes": "Durum değişiklikleri",
+  "library.stats.sheet.status_cleared": "Durum kaldırıldı",
+  "library.stats.sheet.open_game": "Oyun sayfasını aç"
 }

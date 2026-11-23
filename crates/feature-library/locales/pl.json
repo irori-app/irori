@@ -945,5 +945,17 @@
   "library.random.pool_favourites": "Spośród ulubionych",
   "library.random.pool_all": "Z całej biblioteki",
   "library.random.pool_category": "Z kategorii „{name}”",
-  "library.command.back_to_game": "Wróć do gry"
+  "library.command.back_to_game": "Wróć do gry",
+  "library.stats.sheet.all_time": "Łącznie {time}",
+  "library.stats.sheet.sessions": "Sesje",
+  "library.stats.sheet.days": "Dni gry",
+  "library.stats.sheet.average": "Średnia sesja",
+  "library.stats.sheet.longest": "Najdłuższa sesja",
+  "library.stats.sheet.usual_hour": "Zwykle zaczyna",
+  "library.stats.sheet.weekends": "W weekendy",
+  "library.stats.sheet.first": "Pierwsza gra",
+  "library.stats.sheet.last": "Ostatnia gra",
+  "library.stats.sheet.status_changes": "Zmiany stanu",
+  "library.stats.sheet.status_cleared": "Usunięto stan",
+  "library.stats.sheet.open_game": "Otwórz stronę gry"
 }

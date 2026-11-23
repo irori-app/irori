@@ -915,6 +915,12 @@ commands without a window.
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats game sheet** (`irori-library::stats::sheet`, `sheet_view`): every game on the
+  stats page (top games, insights, the backlog's covers, Journeys' lanes,
+  Discoveries) opens a sheet with its numbers over the period shown: time in the
+  period and in all, a bar per day (week, month), week (year) or month (all time),
+  sessions, average and longest, the usual start hour (`Played::hour`), the weekend
+  share, first and last play and its status changes; "Open game page" leaves.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure

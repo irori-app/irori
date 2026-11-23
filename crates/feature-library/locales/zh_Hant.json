@@ -945,5 +945,17 @@
   "library.random.pool_favourites": "從最愛中",
   "library.random.pool_all": "從整個遊戲庫中",
   "library.random.pool_category": "從「{name}」中",
-  "library.command.back_to_game": "返回遊戲"
+  "library.command.back_to_game": "返回遊戲",
+  "library.stats.sheet.all_time": "總計 {time}",
+  "library.stats.sheet.sessions": "次數",
+  "library.stats.sheet.days": "遊玩天數",
+  "library.stats.sheet.average": "平均時長",
+  "library.stats.sheet.longest": "最長一次",
+  "library.stats.sheet.usual_hour": "常在此時開始",
+  "library.stats.sheet.weekends": "週末",
+  "library.stats.sheet.first": "首次遊玩",
+  "library.stats.sheet.last": "上次遊玩",
+  "library.stats.sheet.status_changes": "狀態變更",
+  "library.stats.sheet.status_cleared": "已清除狀態",
+  "library.stats.sheet.open_game": "開啟遊戲頁面"
 }

@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use chrono::{DateTime, Local, NaiveDate};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Timelike as _};
 use irori_core::game::PlaytimeRecord;
 use irori_core::{GameId, Runner};
 use irori_services::Session;
@@ -20,6 +20,8 @@ pub const PLAYED_DAY_SECONDS: u64 = 60;
 pub struct Played {
     /// Local calendar day it started on.
     pub day: NaiveDate,
+    /// Local hour (0–23) it started in.
+    pub hour: u8,
     pub game: GameId,
     pub seconds: u64,
 }
@@ -35,21 +37,26 @@ pub struct History {
 }
 
 impl History {
-    /// Build from raw sessions; `day_of` turns a start time into a local
-    /// day (sessions whose time does not parse are left out).
-    pub fn new(sessions: Vec<Session>, day_of: impl Fn(&Session) -> Option<NaiveDate>) -> Self {
+    /// Build from raw sessions; `start_of` turns a start time into a local
+    /// time (sessions whose time does not parse are left out).
+    pub fn new(
+        sessions: Vec<Session>,
+        start_of: impl Fn(&Session) -> Option<NaiveDateTime>,
+    ) -> Self {
         let mut list: Vec<Played> = sessions
             .into_iter()
             .filter(|s| !s.crashed)
             .filter_map(|s| {
+                let start = start_of(&s)?;
                 Some(Played {
-                    day: day_of(&s)?,
+                    day: start.date(),
+                    hour: start.hour() as u8,
                     game: game_id(&s.game)?,
                     seconds: s.seconds,
                 })
             })
             .collect();
-        list.sort_by_key(|p| p.day);
+        list.sort_by_key(|p| (p.day, p.hour));
         let mut first_session = HashMap::new();
         let mut day_seconds: BTreeMap<NaiveDate, u64> = BTreeMap::new();
         for p in &list {
@@ -99,9 +106,11 @@ impl History {
     }
 }
 
-/// A session's start as a local calendar day.
-pub fn local_day(session: &Session) -> Option<NaiveDate> {
-    rfc3339_day(&session.started)
+/// A session's start in local time.
+pub fn local_start(session: &Session) -> Option<NaiveDateTime> {
+    DateTime::parse_from_rfc3339(&session.started)
+        .ok()
+        .map(|t| t.with_timezone(&Local).naive_local())
 }
 
 /// An RFC 3339 time as a local calendar day.
@@ -171,9 +180,19 @@ pub(crate) mod tests {
         }
     }
 
-    /// A history whose days are the dates written in the sessions.
+    /// A session of `minutes` starting at `hour` on `d`.
+    pub(crate) fn session_at(game: &str, d: &str, hour: u32, minutes: u64) -> Session {
+        Session {
+            started: format!("{d}T{hour:02}:00:00Z"),
+            ..session(game, d, minutes)
+        }
+    }
+
+    /// A history whose times are the ones written in the sessions.
     pub(crate) fn history(sessions: Vec<Session>) -> History {
-        History::new(sessions, |s| s.started.get(..10).map(day))
+        History::new(sessions, |s| {
+            NaiveDateTime::parse_from_str(s.started.get(..19)?, "%Y-%m-%dT%H:%M:%S").ok()
+        })
     }
 
     #[test]

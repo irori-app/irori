@@ -945,5 +945,17 @@
   "library.random.pool_favourites": "Из избранного",
   "library.random.pool_all": "Из всей библиотеки",
   "library.random.pool_category": "Из «{name}»",
-  "library.command.back_to_game": "Вернуться в игру"
+  "library.command.back_to_game": "Вернуться в игру",
+  "library.stats.sheet.all_time": "Всего {time}",
+  "library.stats.sheet.sessions": "Сеансы",
+  "library.stats.sheet.days": "Игровые дни",
+  "library.stats.sheet.average": "Средний сеанс",
+  "library.stats.sheet.longest": "Самый долгий сеанс",
+  "library.stats.sheet.usual_hour": "Обычно начало",
+  "library.stats.sheet.weekends": "В выходные",
+  "library.stats.sheet.first": "Впервые",
+  "library.stats.sheet.last": "Последний раз",
+  "library.stats.sheet.status_changes": "Смены статуса",
+  "library.stats.sheet.status_cleared": "Статус снят",
+  "library.stats.sheet.open_game": "Открыть страницу игры"
 }

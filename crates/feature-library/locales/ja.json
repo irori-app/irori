@@ -945,5 +945,17 @@
   "library.random.pool_favourites": "お気に入りから",
   "library.random.pool_all": "ライブラリ全体から",
   "library.random.pool_category": "「{name}」から",
-  "library.command.back_to_game": "ゲームに戻る"
+  "library.command.back_to_game": "ゲームに戻る",
+  "library.stats.sheet.all_time": "合計 {time}",
+  "library.stats.sheet.sessions": "セッション",
+  "library.stats.sheet.days": "プレイした日数",
+  "library.stats.sheet.average": "平均セッション",
+  "library.stats.sheet.longest": "最長セッション",
+  "library.stats.sheet.usual_hour": "よく始める時刻",
+  "library.stats.sheet.weekends": "週末",
+  "library.stats.sheet.first": "初プレイ",
+  "library.stats.sheet.last": "最終プレイ",
+  "library.stats.sheet.status_changes": "ステータスの変更",
+  "library.stats.sheet.status_cleared": "ステータスを解除",
+  "library.stats.sheet.open_game": "ゲームページを開く"
 }

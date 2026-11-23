@@ -17,6 +17,9 @@
 //!
 //! Below both, the storage section shows the installed games by drive.
 //!
+//! Any game on the page (top games, insights, the backlog's covers) opens
+//! its sheet: its numbers over the period shown (`sheet`, `sheet_view`).
+//!
 //! The session history and the screenshots are read off the UI thread when a
 //! session ends; the numbers are derived from them when they, the library or
 //! the chosen period change, never while drawing.
@@ -33,6 +36,8 @@ pub(crate) mod model;
 pub(crate) mod overview;
 mod overview_view;
 pub(crate) mod period;
+pub(crate) mod sheet;
+mod sheet_view;
 pub(crate) mod storage;
 mod storage_view;
 mod text;
@@ -227,7 +232,7 @@ impl StatsView {
         })
         .detach();
         let task = irori_ui::state::run_infallible(cx, async move {
-            Arc::new(History::new(b.visible_sessions(), model::local_day))
+            Arc::new(History::new(b.visible_sessions(), model::local_start))
         });
         cx.spawn(async move |this, cx| {
             if let Some(history) = task.await {
