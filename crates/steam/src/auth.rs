@@ -1,261 +1,95 @@
-//! Sign-in through Steam's `IAuthenticationService`: a QR code approved in
-//! the Steam mobile app, or account name and password (RSA-encrypted)
-//! followed by Steam Guard. Both end by polling the session until Steam
-//! hands out a refresh token, which later buys access tokens.
+//! Steam authentication helpers:
 //!
-//! Sessions are of the mobile app's platform type
-//! ([`proto::PLATFORM_MOBILE_APP`]): it is the only type whose refresh token
-//! `GenerateAccessTokenForApp` renews over the Web API. A Steam client
-//! session's refresh token is refused there (`AccessDenied`) unless sent
-//! over a signed-in connection to Steam's servers, which Irori doesn't
-//! keep, so such a sign-in stopped working once its first access token
-//! (about a day) ran out.
+//! * [`SteamAuth`]: either a web session `access_token` obtained from Valve's
+//!   official login page (`store.steampowered.com/login/`), or a personal
+//!   Steam Web API key from `steamcommunity.com/dev/apikey`.
+//! * [`TokenClaims`]: JWT payload inspection (expiration and SteamID64).
+//! * [`Client::refresh_web_session`]: renews an expiring browser
+//!   `steamLoginSecure` access token using the `steamRefresh_steam` cookie
+//!   through `GET https://login.steampowered.com/jwt/refresh?redir=...`,
+//!   matching the redirect chain a real browser follows instead of calling
+//!   `IAuthenticationService` as `PLATFORM_MOBILE_APP`.
 //!
-//! Tokens, passwords, guard data and Steam Guard codes never reach a log or
-//! a `Debug` string.
+//! Tokens, cookies, and Web API keys never appear in logs or `Debug` output.
 
 use std::fmt;
-use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow};
 use base64::Engine as _;
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use rsa::{BigUint, Pkcs1v15Encrypt, RsaPublicKey};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use reqwest::Url;
+use reqwest::header::{COOKIE, LOCATION, REFERER, SET_COOKIE, USER_AGENT};
 use serde::Deserialize;
 
-use crate::api::{Client, Verb};
+use crate::api::Client;
 use crate::error::SteamError;
-use crate::proto;
 
-/// The `website_id` of mobile app sign-ins.
-const WEBSITE_ID: &str = "Mobile";
+/// Maximum redirects followed during a web JWT refresh (`jwt/refresh -> settoken`).
+const MAX_REFRESH_HOPS: usize = 5;
 
-/// Poll interval when Steam doesn't name a usable one.
-const DEFAULT_INTERVAL: Duration = Duration::from_secs(5);
+/// Standard desktop browser user agent used for the web cookie refresh flow.
+const WEB_REFRESH_USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
 
-/// `EOSType` sent with a sign-in: `k_EOSTypeAndroidUnknown` (-500), the
-/// type that goes with the mobile app platform. The account's device list
-/// shows the device by its friendly name.
-pub const OS_TYPE: i32 = -500;
+/// Trusted Steam hosts allowed while following web refresh redirects.
+const TRUSTED_REFRESH_HOSTS: &[&str] = &[
+    "login.steampowered.com",
+    "store.steampowered.com",
+    "steamcommunity.com",
+];
 
-/// The computer signing in, as the account's device list will show it.
-#[derive(Clone, PartialEq, Eq)]
-pub struct DeviceInfo {
-    /// Name shown in the device list and the mobile app's approval prompt.
-    pub friendly_name: String,
-    /// Stable bytes identifying this installation. Steam ties guard data to
-    /// it, so keep it the same across sign-ins.
-    pub machine_id: Vec<u8>,
+/// How an authenticated Steam Web API call proves identity.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SteamAuth<'a> {
+    /// Browser `access_token` JWT from `steamLoginSecure`.
+    WebSession(&'a str),
+    /// User-provided Steam Web API key (`steamcommunity.com/dev/apikey`).
+    ApiKey(&'a str),
 }
 
-impl fmt::Debug for DeviceInfo {
+impl fmt::Debug for SteamAuth<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DeviceInfo")
-            .field("friendly_name", &self.friendly_name)
-            .finish_non_exhaustive()
-    }
-}
-
-impl DeviceInfo {
-    fn details(&self) -> proto::DeviceDetails {
-        proto::DeviceDetails {
-            device_friendly_name: self.friendly_name.clone(),
-            platform_type: proto::PLATFORM_MOBILE_APP,
-            os_type: OS_TYPE,
-            gaming_device_type: proto::GAMING_DEVICE_PHONE,
-            client_count: 0,
-            machine_id: self.machine_id.clone(),
-        }
-    }
-}
-
-/// A Steam Guard confirmation kind (`EAuthSessionGuardType`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GuardKind {
-    /// No confirmation needed (1).
-    None,
-    /// A code sent by email (2).
-    EmailCode,
-    /// A code from the Steam mobile app's authenticator (3).
-    DeviceCode,
-    /// An approval tapped in the Steam mobile app (4).
-    DeviceConfirmation,
-    /// A link clicked in an email (5).
-    EmailConfirmation,
-    /// The guard data from an earlier sign-in on this machine (6).
-    MachineToken,
-    /// A kind this crate doesn't know.
-    Unknown(i32),
-}
-
-impl GuardKind {
-    pub fn from_code(code: i32) -> Self {
-        match code {
-            1 => Self::None,
-            2 => Self::EmailCode,
-            3 => Self::DeviceCode,
-            4 => Self::DeviceConfirmation,
-            5 => Self::EmailConfirmation,
-            6 => Self::MachineToken,
-            other => Self::Unknown(other),
-        }
-    }
-
-    pub fn code(self) -> i32 {
         match self {
-            Self::None => 1,
-            Self::EmailCode => 2,
-            Self::DeviceCode => 3,
-            Self::DeviceConfirmation => 4,
-            Self::EmailConfirmation => 5,
-            Self::MachineToken => 6,
-            Self::Unknown(code) => code,
-        }
-    }
-
-    /// Whether the user types a code for this kind.
-    pub fn takes_code(self) -> bool {
-        matches!(self, Self::EmailCode | Self::DeviceCode)
-    }
-}
-
-/// One way Steam accepts to confirm a sign-in.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Confirmation {
-    pub kind: GuardKind,
-    /// Steam's hint for it, such as the email domain the code went to.
-    pub message: Option<String>,
-}
-
-impl From<proto::AllowedConfirmation> for Confirmation {
-    fn from(c: proto::AllowedConfirmation) -> Self {
-        Self {
-            kind: GuardKind::from_code(c.confirmation_type),
-            message: non_empty(c.associated_message),
+            Self::WebSession(_) => f.write_str("SteamAuth::WebSession(<redacted>)"),
+            Self::ApiKey(_) => f.write_str("SteamAuth::ApiKey(<redacted>)"),
         }
     }
 }
 
-/// A QR sign-in in progress: show `challenge_url` as a QR code and
-/// [`Client::poll`] every `interval`.
-#[derive(Clone)]
-pub struct QrSession {
-    pub client_id: u64,
-    pub request_id: Vec<u8>,
-    pub challenge_url: String,
-    pub interval: Duration,
-}
-
-impl fmt::Debug for QrSession {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("QrSession")
-            .field("client_id", &self.client_id)
-            .field("interval", &self.interval)
-            .finish_non_exhaustive()
+impl<'a> SteamAuth<'a> {
+    /// Query parameter name and value for endpoints that accept both
+    /// `access_token` and `key` (such as `IPlayerService/GetOwnedGames`).
+    pub(crate) fn query_param(self) -> (&'static str, String) {
+        match self {
+            Self::WebSession(token) => ("access_token", token.to_string()),
+            Self::ApiKey(key) => ("key", key.to_string()),
+        }
     }
 }
 
-/// A password sign-in waiting for its Steam Guard confirmation. Submit a
-/// code with [`Client::submit_guard_code`] if `confirmations` asks for one,
-/// then [`Client::poll`] every `interval`.
-#[derive(Clone)]
-pub struct CredentialsSession {
-    pub client_id: u64,
-    pub request_id: Vec<u8>,
-    pub steamid: u64,
-    pub interval: Duration,
-    /// The confirmations Steam accepts, in its order of preference.
-    pub confirmations: Vec<Confirmation>,
-}
-
-impl fmt::Debug for CredentialsSession {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CredentialsSession")
-            .field("client_id", &self.client_id)
-            .field("steamid", &self.steamid)
-            .field("interval", &self.interval)
-            .field("confirmations", &self.confirmations)
-            .finish_non_exhaustive()
-    }
-}
-
-/// A signed-in account's tokens.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Tokens {
-    pub account_name: String,
-    pub steamid: u64,
-    /// Long-lived (about 200 days); buys access tokens.
-    pub refresh_token: String,
-    /// Short-lived (about a day); authenticates Web API calls.
-    pub access_token: String,
-    /// Steam Guard data for this machine: passing it to the next
-    /// [`Client::begin_credentials`] skips the email code.
-    pub guard_data: Option<String>,
-}
-
-impl fmt::Debug for Tokens {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Tokens")
-            .field("account_name", &self.account_name)
-            .field("steamid", &self.steamid)
-            .finish_non_exhaustive()
-    }
-}
-
-/// What renewing a sign-in gave: a new access token and, when Steam
-/// replaced it, a new refresh token.
+/// Result of renewing a browser session via `/jwt/refresh`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Renewed {
     pub access_token: String,
-    pub refresh_token: Option<String>,
+    /// Updated `steamRefresh_steam` cookie value when Steam rotated it.
+    pub refresh_cookie: Option<String>,
 }
 
 impl fmt::Debug for Renewed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Renewed")
-            .field("new_refresh_token", &self.refresh_token.is_some())
+            .field("new_refresh_cookie", &self.refresh_cookie.is_some())
             .finish_non_exhaustive()
     }
 }
 
-/// Where a sign-in stands.
-#[derive(Clone, PartialEq, Eq)]
-pub enum Poll {
-    /// Not confirmed yet. A QR code Steam renewed has a new challenge URL
-    /// (show it instead) and sometimes a new client id (poll with it).
-    Pending {
-        new_challenge_url: Option<String>,
-        new_client_id: Option<u64>,
-    },
-    /// Signed in.
-    Done(Tokens),
-}
-
-impl fmt::Debug for Poll {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Pending {
-                new_challenge_url,
-                new_client_id,
-            } => f
-                .debug_struct("Pending")
-                .field("new_challenge_url", &new_challenge_url.is_some())
-                .field("new_client_id", new_client_id)
-                .finish(),
-            Self::Done(tokens) => f.debug_tuple("Done").field(tokens).finish(),
-        }
-    }
-}
-
-/// What a Steam token (a JWT) says about itself. Read without checking the
-/// signature: only Steam can judge the token, this only tells when to renew
-/// it.
+/// What a Steam JWT says about itself. Read without checking the signature:
+/// only Steam judges the token; this only tells when to renew it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenClaims {
     pub steamid: u64,
     /// Unix time the token expires.
     pub expires_at: u64,
-    /// Where the token is valid (`web`, `client`, `renew`, `derive`…).
+    /// Where the token is valid (`web`, `client`, `renew`, `derive`...).
     pub audience: Vec<String>,
 }
 
@@ -298,651 +132,287 @@ impl TokenClaims {
         })
     }
 
-    /// Whether the token expires within `margin_secs` of `now` (Unix
-    /// seconds).
+    /// Whether the token expires within `margin_secs` of `now` (Unix seconds).
     pub fn is_expiring(&self, now: u64, margin_secs: u64) -> bool {
         now.saturating_add(margin_secs) >= self.expires_at
     }
 }
 
+/// Split a `steamLoginSecure` or `steamRefresh_steam` cookie value
+/// (`<steamid64>%7C%7C<jwt>` or `<steamid64>||<jwt>`) into `(steamid, jwt)`.
+pub fn parse_steam_cookie(raw: &str) -> Option<(u64, String)> {
+    let trimmed = raw.trim();
+    let (id_str, token) = trimmed
+        .split_once("%7C%7C")
+        .or_else(|| trimmed.split_once("%7c%7c"))
+        .or_else(|| trimmed.split_once("||"))?;
+    let steamid: u64 = id_str.parse().ok().filter(|&id| id > 0)?;
+    if token.split('.').count() != 3 || token.split('.').any(str::is_empty) {
+        return None;
+    }
+    Some((steamid, token.to_string()))
+}
+
+fn extract_set_cookie<'a>(header_value: &'a str, name: &str) -> Option<&'a str> {
+    let pair = header_value.split(';').next()?.trim();
+    let (cookie_name, cookie_value) = pair.split_once('=')?;
+    (cookie_name.trim() == name).then_some(cookie_value.trim())
+}
+
+fn host_port(url: &Url) -> Option<(String, Option<u16>)> {
+    Some((
+        url.host_str()?.to_ascii_lowercase(),
+        url.port_or_known_default(),
+    ))
+}
+
+fn is_allowed_redirect(target: &Url, allowed_test_origins: &[(String, Option<u16>)]) -> bool {
+    let Some(target_hp) = host_port(target) else {
+        return false;
+    };
+    if target.scheme() == "https" && TRUSTED_REFRESH_HOSTS.contains(&target_hp.0.as_str()) {
+        return true;
+    }
+    allowed_test_origins.iter().any(|hp| hp == &target_hp)
+}
+
 impl Client {
-    /// Start a QR sign-in.
-    pub async fn begin_qr(&self, device: &DeviceInfo) -> Result<QrSession> {
-        let req = proto::BeginAuthSessionViaQrRequest {
-            device_friendly_name: device.friendly_name.clone(),
-            platform_type: proto::PLATFORM_MOBILE_APP,
-            device_details: Some(device.details()),
-            website_id: WEBSITE_ID.into(),
-        };
-        let resp: proto::BeginAuthSessionViaQrResponse = self
-            .auth_call(Verb::Post, "BeginAuthSessionViaQR", &req)
-            .await?;
-        if resp.challenge_url.is_empty() || resp.request_id.is_empty() {
-            return Err(anyhow!("Steam did not start the QR sign-in. Try again."));
+    /// Renew an expiring browser `access_token` using the `steamRefresh_steam`
+    /// cookie via `GET {login}/jwt/refresh?redir={store}/`.
+    ///
+    /// Follows only trusted Steam redirects (or the configured test endpoints)
+    /// and extracts the fresh `steamLoginSecure` (and any rotated
+    /// `steamRefresh_steam`) from `Set-Cookie` headers.
+    pub async fn refresh_web_session(&self, refresh_cookie: &str) -> Result<Renewed> {
+        let (expected_steamid, _) =
+            parse_steam_cookie(refresh_cookie).ok_or(SteamError::SessionRejected)?;
+
+        let store_redir = format!("{}/", self.endpoints().store);
+        let mut current = Url::parse(&format!("{}/jwt/refresh", self.endpoints().login))
+            .context("invalid Steam login endpoint")?;
+        current.query_pairs_mut().append_pair("redir", &store_redir);
+
+        let mut allowed_test_origins = Vec::new();
+        for base in [&self.endpoints().login, &self.endpoints().store] {
+            if let Ok(u) = Url::parse(base)
+                && let Some(hp) = host_port(&u)
+            {
+                allowed_test_origins.push(hp);
+            }
         }
-        Ok(QrSession {
-            client_id: resp.client_id,
-            request_id: resp.request_id,
-            challenge_url: resp.challenge_url,
-            interval: interval(resp.interval),
-        })
-    }
+        let login_origin = Url::parse(&self.endpoints().login)
+            .ok()
+            .and_then(|u| host_port(&u));
 
-    /// Start a sign-in with account name and password. `guard_data` is
-    /// [`Tokens::guard_data`] from an earlier sign-in on this machine.
-    pub async fn begin_credentials(
-        &self,
-        account_name: &str,
-        password: &str,
-        device: &DeviceInfo,
-        guard_data: Option<&str>,
-    ) -> Result<CredentialsSession> {
-        let account_name = account_name.trim();
-        let key_req = proto::GetPasswordRsaPublicKeyRequest {
-            account_name: account_name.into(),
-        };
-        let key: proto::GetPasswordRsaPublicKeyResponse = self
-            .auth_call(Verb::Get, "GetPasswordRSAPublicKey", &key_req)
-            .await?;
-        let encrypted_password =
-            encrypt_password(&key.publickey_mod, &key.publickey_exp, password)?;
-        let req = proto::BeginAuthSessionViaCredentialsRequest {
-            device_friendly_name: device.friendly_name.clone(),
-            account_name: account_name.into(),
-            encrypted_password,
-            encryption_timestamp: key.timestamp,
-            remember_login: true,
-            platform_type: proto::PLATFORM_MOBILE_APP,
-            persistence: proto::PERSISTENCE_PERSISTENT,
-            website_id: WEBSITE_ID.into(),
-            device_details: Some(device.details()),
-            guard_data: guard_data.unwrap_or_default().into(),
-            language: 0,
-            qos_level: 0,
-        };
-        let resp: proto::BeginAuthSessionViaCredentialsResponse = self
-            .auth_call(Verb::Post, "BeginAuthSessionViaCredentials", &req)
-            .await?;
-        if resp.request_id.is_empty() {
-            return Err(anyhow!("Steam did not start the sign-in. Try again."));
+        let mut new_access_token: Option<String> = None;
+        let mut rotated_refresh: Option<String> = None;
+
+        for hop in 0..=MAX_REFRESH_HOPS {
+            let mut req = self
+                .no_redirect_http()
+                .get(current.clone())
+                .header(USER_AGENT, WEB_REFRESH_USER_AGENT)
+                .header(REFERER, &store_redir);
+            // Only send `steamRefresh_steam` to the login host.
+            if host_port(&current) == login_origin {
+                req = req.header(COOKIE, format!("steamRefresh_steam={refresh_cookie}"));
+            }
+            let resp = req
+                .send()
+                .await
+                .map_err(reqwest::Error::without_url)
+                .context("Could not reach Steam to renew the session")?;
+            let status = resp.status();
+            tracing::debug!(hop, status = status.as_u16(), "steam web refresh hop");
+
+            for val in resp.headers().get_all(SET_COOKIE) {
+                let Ok(text) = val.to_str() else { continue };
+                if let Some(raw) = extract_set_cookie(text, "steamLoginSecure")
+                    && let Some((id, jwt)) = parse_steam_cookie(raw)
+                    && id == expected_steamid
+                    && TokenClaims::parse(&jwt)
+                        .is_ok_and(|claims| claims.steamid == expected_steamid)
+                {
+                    new_access_token = Some(jwt);
+                }
+                if let Some(raw) = extract_set_cookie(text, "steamRefresh_steam")
+                    && parse_steam_cookie(raw).is_some_and(|(id, _)| id == expected_steamid)
+                {
+                    rotated_refresh = Some(raw.to_string());
+                }
+            }
+
+            if let Some(access_token) = new_access_token {
+                return Ok(Renewed {
+                    access_token,
+                    refresh_cookie: rotated_refresh,
+                });
+            }
+
+            if status.is_redirection() {
+                let Some(loc) = resp.headers().get(LOCATION).and_then(|v| v.to_str().ok()) else {
+                    break;
+                };
+                let next = current.join(loc).map_err(|_| SteamError::SessionRejected)?;
+                if !is_allowed_redirect(&next, &allowed_test_origins) {
+                    return Err(SteamError::SessionRejected.into());
+                }
+                // Redirecting back to Steam's login form means the refresh cookie expired.
+                if next.path().starts_with("/login") && !next.path().contains("settoken") {
+                    return Err(SteamError::SessionRejected.into());
+                }
+                current = next;
+                continue;
+            }
+
+            if let Some(e) = SteamError::from_http_status(status.as_u16()) {
+                return Err(e.into());
+            }
+            break;
         }
-        Ok(CredentialsSession {
-            client_id: resp.client_id,
-            request_id: resp.request_id,
-            steamid: resp.steamid,
-            interval: interval(resp.interval),
-            confirmations: resp
-                .allowed_confirmations
-                .into_iter()
-                .map(Confirmation::from)
-                .collect(),
-        })
+
+        Err(SteamError::SessionRejected.into())
     }
-
-    /// Send the Steam Guard code the user typed (`kind` is
-    /// [`GuardKind::EmailCode`] or [`GuardKind::DeviceCode`]).
-    pub async fn submit_guard_code(
-        &self,
-        client_id: u64,
-        steamid: u64,
-        code: &str,
-        kind: GuardKind,
-    ) -> Result<()> {
-        let req = proto::UpdateAuthSessionWithSteamGuardCodeRequest {
-            client_id,
-            steamid,
-            code: code.trim().to_ascii_uppercase(),
-            code_type: kind.code(),
-        };
-        let _: proto::UpdateAuthSessionWithSteamGuardCodeResponse = self
-            .auth_call(Verb::Post, "UpdateAuthSessionWithSteamGuardCode", &req)
-            .await?;
-        Ok(())
-    }
-
-    /// Ask whether the sign-in has been confirmed. When it has, the account
-    /// id comes from the refresh token (the answer has no field for it), and
-    /// a missing access token is fetched with the refresh token.
-    pub async fn poll(&self, client_id: u64, request_id: &[u8]) -> Result<Poll> {
-        let req = proto::PollAuthSessionStatusRequest {
-            client_id,
-            request_id: request_id.to_vec(),
-            token_to_revoke: 0,
-        };
-        let resp: proto::PollAuthSessionStatusResponse = self
-            .auth_call(Verb::Post, "PollAuthSessionStatus", &req)
-            .await
-            .map_err(poll_error)?;
-        if resp.refresh_token.is_empty() {
-            return Ok(Poll::Pending {
-                new_challenge_url: non_empty(resp.new_challenge_url),
-                new_client_id: (resp.new_client_id != 0).then_some(resp.new_client_id),
-            });
-        }
-        let steamid = TokenClaims::parse(&resp.refresh_token)?.steamid;
-        let access_token = if resp.access_token.is_empty() {
-            self.refresh_access_token(&resp.refresh_token, steamid)
-                .await?
-        } else {
-            resp.access_token
-        };
-        Ok(Poll::Done(Tokens {
-            account_name: resp.account_name,
-            steamid,
-            refresh_token: resp.refresh_token,
-            access_token,
-            guard_data: non_empty(resp.new_guard_data),
-        }))
-    }
-
-    /// A new access token for a refresh token. [`SteamError::SessionRejected`]
-    /// means the refresh token no longer works and the user must sign in
-    /// again.
-    pub async fn refresh_access_token(&self, refresh_token: &str, steamid: u64) -> Result<String> {
-        Ok(self
-            .renew_tokens(refresh_token, steamid)
-            .await?
-            .access_token)
-    }
-
-    /// [`Self::refresh_access_token`], with the new refresh token Steam
-    /// sends when it replaces the old one. The old one stops working then,
-    /// so the caller must keep the new one.
-    pub async fn renew_tokens(&self, refresh_token: &str, steamid: u64) -> Result<Renewed> {
-        let req = proto::GenerateAccessTokenForAppRequest {
-            refresh_token: refresh_token.into(),
-            steamid,
-            renewal_type: 0,
-        };
-        let resp: proto::GenerateAccessTokenForAppResponse = self
-            .auth_call(Verb::Post, "GenerateAccessTokenForApp", &req)
-            .await?;
-        if resp.access_token.is_empty() {
-            return Err(SteamError::SessionRejected.into());
-        }
-        Ok(Renewed {
-            access_token: resp.access_token,
-            refresh_token: non_empty(resp.refresh_token),
-        })
-    }
-
-    /// Ask Steam to end a saved sign-in, so a copy of its refresh token stops
-    /// working. The token goes in the form body, not the address.
-    pub async fn revoke_refresh_token(
-        &self,
-        refresh_token: &str,
-        access_token: &str,
-    ) -> Result<()> {
-        let req = proto::RevokeTokenRequest {
-            token: refresh_token.into(),
-            revoke_action: proto::REVOKE_PERMANENT,
-        };
-        let _: () = self
-            .auth_call_as(Verb::Post, "RevokeToken", &req, Some(access_token))
-            .await?;
-        Ok(())
-    }
-}
-
-/// While polling, "expired", "access denied" and "not found" mean the
-/// sign-in attempt itself is over, not a saved sign-in.
-fn poll_error(e: anyhow::Error) -> anyhow::Error {
-    match e.downcast_ref::<SteamError>() {
-        Some(SteamError::SessionRejected | SteamError::Other(9)) => SteamError::LoginExpired.into(),
-        _ => e,
-    }
-}
-
-/// Encrypt a password with the account's RSA key (hexadecimal modulus and
-/// exponent), PKCS#1 v1.5, as base64.
-fn encrypt_password(modulus_hex: &str, exponent_hex: &str, password: &str) -> Result<String> {
-    let invalid = || anyhow!("Steam sent an invalid sign-in key. Try again.");
-    let n = BigUint::parse_bytes(modulus_hex.trim().as_bytes(), 16).ok_or_else(invalid)?;
-    let e = BigUint::parse_bytes(exponent_hex.trim().as_bytes(), 16).ok_or_else(invalid)?;
-    let key = RsaPublicKey::new(n, e).map_err(|_| invalid())?;
-    let encrypted = key
-        .encrypt(
-            &mut rsa::rand_core::OsRng,
-            Pkcs1v15Encrypt,
-            password.as_bytes(),
-        )
-        .context("Could not encrypt the password for Steam")?;
-    Ok(STANDARD.encode(encrypted))
-}
-
-fn interval(seconds: f32) -> Duration {
-    if seconds.is_finite() && seconds > 0.0 {
-        Duration::from_secs_f32(seconds.clamp(1.0, 60.0))
-    } else {
-        DEFAULT_INTERVAL
-    }
-}
-
-fn non_empty(s: String) -> Option<String> {
-    (!s.is_empty()).then_some(s)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use irori_depot::test_server::{Req, Resp, TestServer};
-    use rsa::RsaPrivateKey;
-    use rsa::pkcs1::DecodeRsaPrivateKey as _;
-    use rsa::traits::PublicKeyParts as _;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
     use crate::api::Endpoints;
+    use irori_depot::test_server::{Resp, TestServer};
 
-    /// A throwaway 1024-bit key made for these tests.
-    const TEST_KEY: &str = "-----BEGIN RSA PRIVATE KEY-----
-MIICXQIBAAKBgQDFwhjYWJHKE5DoyU8v8+9gYdyMBOsG76I8XPDs3SQxbhZC5MIU
-gK0BAKfC/CzHnGLSYj9rXR1I3luWNu4fsGP/I+W48MuOLW0hj88jJA/VqEcZQnrY
-2VJVBelQ8l6wGLnROajjqdow6drCLAsOWcra/VShPP3vvqSdzaTikOphzQIDAQAB
-AoGBAIunMzZs7Z+fy6CosRQzFqOg2EfFHVhLl+060STkUi/aBzx8IZaq/AGOPeqT
-fOgFxz+9A/5Exm50IIdnCSg1v5bq0n0lMgr1TnbuwSf4GapZApff6BGfj0rVWXTD
-1gb0DGKInGicoLkaMADMBOvLtnWhNCIz6PVA9sYn2IHtxkpdAkEA7AcCWxm5k+SS
-3yu+pKWB73JpPzSgHHsZJ6TINeg2K0yNUwgEi356HKxf/6tRowzw8D6eJIIyyIxl
-Vz6jlnglGwJBANZ+EuaGPIcd8X27Zoa9sE8PJlxGeSAiyROVYukhVnQ4Ze4lW+yK
-VZ1jmff+L5kbzBsXxj0W5jh8+Y+rN/fqyzcCQDLSz48OWwedkIK9yK9rdC87U65o
-hpGbcC85LGNvPTrVoRjgARqIgYLrG0DSgyG5B6iz0xnJb2X/1VKUCmW8OUECQQCW
-aq1IeiSiQI5ktPHOVeH5X09wcH9q2NoX4LAPezCMqixZGFvhgpVNnVaRQfERNxwo
-d8CugIuMW6ALb2/9bOt7AkAv9Ar5zc5ASqAuHTWIe20lFwpqIpe4XmXUZvuZYkht
-oJ5AuFG/mkhc6SJBeyPKP/c87cxXhRNAlivwKivIUvqY
------END RSA PRIVATE KEY-----";
+    const STEAMID: u64 = 76_561_197_960_265_730;
 
-    const STEAMID: u64 = 76561197960265729;
-
-    /// An unsigned JWT with the given claims (enough for [`TokenClaims`]).
-    fn jwt(claims: serde_json::Value) -> String {
-        format!(
-            "{}.{}.sig",
-            URL_SAFE_NO_PAD.encode(br#"{"typ":"JWT","alg":"EdDSA"}"#),
-            URL_SAFE_NO_PAD.encode(claims.to_string())
-        )
-    }
-
-    fn device() -> DeviceInfo {
-        DeviceInfo {
-            friendly_name: "Irori test".into(),
-            machine_id: vec![1, 2, 3],
-        }
-    }
-
-    fn proto_resp(msg: &impl prost::Message) -> Resp {
-        Resp {
-            status: 200,
-            headers: vec![("x-eresult".into(), "1".into())],
-            body: msg.encode_to_vec(),
-            ..Default::default()
-        }
-    }
-
-    fn eresult(code: i32) -> Resp {
-        Resp {
-            status: 200,
-            headers: vec![("x-eresult".into(), code.to_string())],
-            ..Default::default()
-        }
+    fn fake_jwt(steamid: u64, exp: u64, aud: &[&str]) -> String {
+        let header = URL_SAFE_NO_PAD.encode(r#"{"typ":"JWT","alg":"EdDSA"}"#);
+        let payload = URL_SAFE_NO_PAD.encode(
+            serde_json::json!({
+                "sub": steamid.to_string(),
+                "exp": exp,
+                "aud": aud,
+            })
+            .to_string(),
+        );
+        format!("{header}.{payload}.sig")
     }
 
     fn client(server: &TestServer) -> Client {
         Client::with_endpoints(Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         })
         .unwrap()
     }
 
-    /// The request message a GET carried in its query.
-    fn query_message<M: prost::Message + Default>(req: &Req) -> M {
-        let query = req.path.split_once('?').unwrap().1;
-        let (_, value) = url::form_urlencoded::parse(query.as_bytes())
-            .find(|(k, _)| k == "input_protobuf_encoded")
-            .unwrap();
-        M::decode(&STANDARD.decode(value.as_bytes()).unwrap()[..]).unwrap()
-    }
-
     #[test]
-    fn encrypts_passwords_for_the_account_key() {
-        let private = RsaPrivateKey::from_pkcs1_pem(TEST_KEY).unwrap();
-        let modulus = private.n().to_str_radix(16);
-        let exponent = private.e().to_str_radix(16);
-        let encrypted = encrypt_password(&modulus, &exponent, "hunter2").unwrap();
-        let bytes = STANDARD.decode(encrypted).unwrap();
-        assert_eq!(bytes.len(), 128);
-        assert_eq!(
-            private.decrypt(Pkcs1v15Encrypt, &bytes).unwrap(),
-            b"hunter2"
-        );
-        let e = encrypt_password("not hex", "10001", "x").unwrap_err();
-        assert!(e.to_string().contains("invalid sign-in key"), "{e}");
-    }
-
-    #[test]
-    fn reads_token_claims() {
-        let token = jwt(serde_json::json!({
-            "iss": "steam",
-            "sub": STEAMID.to_string(),
-            "aud": ["client", "web", "renew", "derive"],
-            "exp": 1_800_000_000u64,
-        }));
-        let claims = TokenClaims::parse(&token).unwrap();
+    fn parses_jwt_claims_and_expiry() {
+        let jwt = fake_jwt(STEAMID, 2_000_000_000, &["web", "renew"]);
+        let claims = TokenClaims::parse(&jwt).unwrap();
         assert_eq!(claims.steamid, STEAMID);
-        assert_eq!(claims.expires_at, 1_800_000_000);
-        assert_eq!(claims.audience, ["client", "web", "renew", "derive"]);
-        assert!(!claims.is_expiring(1_799_000_000, 300));
-        assert!(claims.is_expiring(1_799_999_800, 300));
-        assert!(claims.is_expiring(1_800_000_001, 0));
-
-        let one = jwt(serde_json::json!({"sub": STEAMID, "aud": "web", "exp": 5}));
-        assert_eq!(TokenClaims::parse(&one).unwrap().audience, ["web"]);
-        assert!(TokenClaims::parse("garbage").is_err());
-        assert!(TokenClaims::parse("a.b.c").is_err());
-        assert!(TokenClaims::parse(&jwt(serde_json::json!({"sub": "x"}))).is_err());
+        assert_eq!(claims.expires_at, 2_000_000_000);
+        assert_eq!(claims.audience, vec!["web", "renew"]);
+        assert!(!claims.is_expiring(1_999_999_000, 600));
+        assert!(claims.is_expiring(1_999_999_500, 600));
     }
 
     #[test]
-    fn debug_output_hides_secrets() {
-        let tokens = Tokens {
-            account_name: "player".into(),
-            steamid: STEAMID,
-            refresh_token: "secret-refresh".into(),
-            access_token: "secret-access".into(),
-            guard_data: Some("secret-guard".into()),
-        };
-        let dbg = format!("{:?}", Poll::Done(tokens));
-        assert!(dbg.contains("player") && !dbg.contains("secret"), "{dbg}");
-        let qr = QrSession {
-            client_id: 1,
-            request_id: vec![1],
-            challenge_url: "https://s.team/q/secret".into(),
-            interval: DEFAULT_INTERVAL,
-        };
-        assert!(!format!("{qr:?}").contains("secret"));
-        let pending = Poll::Pending {
-            new_challenge_url: Some("https://s.team/q/secret".into()),
-            new_client_id: None,
-        };
-        assert!(!format!("{pending:?}").contains("secret"));
-    }
-
-    #[test]
-    fn maps_guard_kinds_and_intervals() {
-        for code in 1..=6 {
-            assert_eq!(GuardKind::from_code(code).code(), code);
-        }
-        assert_eq!(GuardKind::from_code(9), GuardKind::Unknown(9));
-        assert!(GuardKind::EmailCode.takes_code() && !GuardKind::DeviceConfirmation.takes_code());
-        assert_eq!(interval(5.0), Duration::from_secs(5));
-        assert_eq!(interval(0.1), Duration::from_secs(1));
-        assert_eq!(interval(0.0), DEFAULT_INTERVAL);
-        assert_eq!(interval(f32::NAN), DEFAULT_INTERVAL);
-    }
-
-    #[tokio::test]
-    async fn begins_a_qr_sign_in() {
-        let server = TestServer::start(|req| {
-            if req.path == "/IAuthenticationService/BeginAuthSessionViaQR/v1" {
-                proto_resp(&proto::BeginAuthSessionViaQrResponse {
-                    client_id: 77,
-                    challenge_url: "https://s.team/q/1/77".into(),
-                    request_id: vec![4, 5],
-                    interval: 5.0,
-                    allowed_confirmations: vec![proto::AllowedConfirmation {
-                        confirmation_type: 4,
-                        associated_message: String::new(),
-                    }],
-                    version: 1,
-                })
-            } else {
-                Resp::status(404)
-            }
-        });
-        let qr = client(&server).begin_qr(&device()).await.unwrap();
-        assert_eq!(qr.client_id, 77);
-        assert_eq!(qr.challenge_url, "https://s.team/q/1/77");
-        assert_eq!(qr.request_id, [4, 5]);
-        assert_eq!(qr.interval, Duration::from_secs(5));
-        let req = &server.requests()[0];
+    fn parses_steam_cookie_formats_and_redacts_debug() {
+        let jwt = fake_jwt(STEAMID, 2_000_000_000, &["web"]);
         assert_eq!(
-            req.header("content-type"),
-            Some("application/x-www-form-urlencoded")
+            parse_steam_cookie(&format!("{STEAMID}%7C%7C{jwt}")),
+            Some((STEAMID, jwt.clone()))
         );
-        // A mobile app session: the only kind the Web API renews (#165).
-        let (_, value) = url::form_urlencoded::parse(&req.body)
-            .find(|(k, _)| k == "input_protobuf_encoded")
-            .unwrap();
-        let sent = <proto::BeginAuthSessionViaQrRequest as prost::Message>::decode(
-            &STANDARD.decode(value.as_bytes()).unwrap()[..],
-        )
-        .unwrap();
-        assert_eq!(sent.platform_type, proto::PLATFORM_MOBILE_APP);
-        assert_eq!(sent.website_id, "Mobile");
-        let details = sent.device_details.unwrap();
-        assert_eq!(details.platform_type, proto::PLATFORM_MOBILE_APP);
-        assert_eq!(details.gaming_device_type, proto::GAMING_DEVICE_PHONE);
+        assert_eq!(
+            parse_steam_cookie(&format!("{STEAMID}||{jwt}")),
+            Some((STEAMID, jwt.clone()))
+        );
+        assert_eq!(parse_steam_cookie("bad"), None);
+
+        let web = SteamAuth::WebSession("super-secret-jwt");
+        let key = SteamAuth::ApiKey("super-secret-key");
+        assert!(!format!("{web:?}").contains("super-secret"));
+        assert!(!format!("{key:?}").contains("super-secret"));
     }
 
     #[tokio::test]
-    async fn begins_a_password_sign_in() {
-        let private = RsaPrivateKey::from_pkcs1_pem(TEST_KEY).unwrap();
-        let key = proto::GetPasswordRsaPublicKeyResponse {
-            publickey_mod: private.n().to_str_radix(16),
-            publickey_exp: private.e().to_str_radix(16),
-            timestamp: 123,
-        };
+    async fn refresh_web_session_follows_settoken_and_captures_cookies() {
+        let old_refresh_jwt = fake_jwt(STEAMID, 2_100_000_000, &["web", "renew"]);
+        let new_refresh_jwt = fake_jwt(STEAMID, 2_200_000_000, &["web", "renew"]);
+        let new_access_jwt = fake_jwt(STEAMID, 2_000_000_000, &["web"]);
+        let old_cookie = format!("{STEAMID}%7C%7C{old_refresh_jwt}");
+        let rotated_cookie = format!("{STEAMID}%7C%7C{new_refresh_jwt}");
+        let secure_cookie = format!("{STEAMID}%7C%7C{new_access_jwt}");
+
+        let rotated_for_srv = rotated_cookie.clone();
+        let secure_for_srv = secure_cookie.clone();
         let server = TestServer::start(move |req| {
-            if req
-                .path
-                .starts_with("/IAuthenticationService/GetPasswordRSAPublicKey/v1?")
-            {
-                proto_resp(&key)
-            } else if req.path == "/IAuthenticationService/BeginAuthSessionViaCredentials/v1" {
-                proto_resp(&proto::BeginAuthSessionViaCredentialsResponse {
-                    client_id: 8,
-                    request_id: vec![9],
-                    interval: 0.1,
-                    allowed_confirmations: vec![proto::AllowedConfirmation {
-                        confirmation_type: 2,
-                        associated_message: "example.com".into(),
-                    }],
-                    steamid: STEAMID,
+            if req.path.starts_with("/jwt/refresh?") {
+                assert!(
+                    req.header("cookie")
+                        .is_some_and(|c| c.contains("steamRefresh_steam="))
+                );
+                assert!(
+                    req.header("user-agent")
+                        .is_some_and(|ua| !ua.contains("Irori/"))
+                );
+                Resp {
+                    status: 302,
+                    headers: vec![
+                        ("Location".into(), "/login/settoken?nonce=abc".into()),
+                        (
+                            "Set-Cookie".into(),
+                            format!(
+                                "steamRefresh_steam={rotated_for_srv}; Path=/; HttpOnly; Secure"
+                            ),
+                        ),
+                    ],
                     ..Default::default()
-                })
+                }
+            } else if req.path.starts_with("/login/settoken?") {
+                Resp {
+                    status: 302,
+                    headers: vec![
+                        ("Location".into(), "/".into()),
+                        (
+                            "Set-Cookie".into(),
+                            format!("steamLoginSecure={secure_for_srv}; Path=/; HttpOnly; Secure"),
+                        ),
+                    ],
+                    ..Default::default()
+                }
             } else {
-                Resp::status(404)
+                Resp::status(200)
             }
         });
-        let session = client(&server)
-            .begin_credentials(" player ", "hunter2", &device(), None)
+
+        let renewed = client(&server)
+            .refresh_web_session(&old_cookie)
             .await
             .unwrap();
-        assert_eq!((session.client_id, session.steamid), (8, STEAMID));
-        assert_eq!(session.interval, Duration::from_secs(1));
-        assert_eq!(
-            session.confirmations,
-            [Confirmation {
-                kind: GuardKind::EmailCode,
-                message: Some("example.com".into()),
-            }]
-        );
-        let sent: proto::GetPasswordRsaPublicKeyRequest = query_message(&server.requests()[0]);
-        assert_eq!(sent.account_name, "player");
+        assert_eq!(renewed.access_token, new_access_jwt);
+        assert_eq!(renewed.refresh_cookie, Some(rotated_cookie));
+        assert!(!format!("{renewed:?}").contains(&new_access_jwt));
     }
 
     #[tokio::test]
-    async fn reports_a_wrong_password_and_code() {
-        let server = TestServer::start(|req| {
-            if req.path.contains("GetPasswordRSAPublicKey") {
-                eresult(5)
-            } else if req.path.contains("UpdateAuthSessionWithSteamGuardCode") {
-                eresult(88)
-            } else {
-                eresult(84)
-            }
+    async fn refresh_web_session_rejects_expired_cookie_or_login_redirect() {
+        let old_refresh_jwt = fake_jwt(STEAMID, 2_100_000_000, &["web", "renew"]);
+        let old_cookie = format!("{STEAMID}%7C%7C{old_refresh_jwt}");
+
+        let server = TestServer::start(|_| Resp {
+            status: 302,
+            headers: vec![("Location".into(), "/login/?redir=/".into())],
+            ..Default::default()
         });
-        let api = client(&server);
-        let e = api
-            .begin_credentials("player", "hunter2", &device(), Some("gd"))
+        let err = client(&server)
+            .refresh_web_session(&old_cookie)
             .await
             .unwrap_err();
-        assert_eq!(e.downcast_ref(), Some(&SteamError::InvalidPassword));
-        assert!(!format!("{e:#}").contains("hunter2"));
-        let e = api
-            .submit_guard_code(1, STEAMID, "abcde", GuardKind::DeviceCode)
-            .await
-            .unwrap_err();
-        assert_eq!(e.downcast_ref(), Some(&SteamError::InvalidCode));
-        let e = api.begin_qr(&device()).await.unwrap_err();
-        assert_eq!(e.downcast_ref(), Some(&SteamError::RateLimited));
-    }
-
-    #[tokio::test]
-    async fn polls_until_done() {
-        let refresh = jwt(serde_json::json!({
-            "sub": STEAMID.to_string(),
-            "aud": ["client", "web", "renew", "derive"],
-            "exp": 1_900_000_000u64,
-        }));
-        let calls = AtomicUsize::new(0);
-        let token = refresh.clone();
-        let server = TestServer::start(move |req| {
-            match req.path.as_str() {
-                "/IAuthenticationService/PollAuthSessionStatus/v1" => {
-                    match calls.fetch_add(1, Ordering::SeqCst) {
-                        0 => proto_resp(&proto::PollAuthSessionStatusResponse {
-                            new_challenge_url: "https://s.team/q/1/78".into(),
-                            new_client_id: 78,
-                            ..Default::default()
-                        }),
-                        1 => proto_resp(&proto::PollAuthSessionStatusResponse::default()),
-                        2 => proto_resp(&proto::PollAuthSessionStatusResponse {
-                            refresh_token: token.clone(),
-                            access_token: "access-1".into(),
-                            account_name: "player".into(),
-                            new_guard_data: "guard".into(),
-                            ..Default::default()
-                        }),
-                        // Steam leaves the access token out for some platforms.
-                        3 => proto_resp(&proto::PollAuthSessionStatusResponse {
-                            refresh_token: token.clone(),
-                            account_name: "player".into(),
-                            ..Default::default()
-                        }),
-                        _ => eresult(9),
-                    }
-                }
-                "/IAuthenticationService/GenerateAccessTokenForApp/v1" => {
-                    proto_resp(&proto::GenerateAccessTokenForAppResponse {
-                        access_token: "access-2".into(),
-                        refresh_token: String::new(),
-                    })
-                }
-                _ => Resp::status(404),
-            }
-        });
-        let api = client(&server);
         assert_eq!(
-            api.poll(77, &[4, 5]).await.unwrap(),
-            Poll::Pending {
-                new_challenge_url: Some("https://s.team/q/1/78".into()),
-                new_client_id: Some(78),
-            }
+            err.downcast_ref::<SteamError>(),
+            Some(&SteamError::SessionRejected)
         );
-        assert_eq!(
-            api.poll(78, &[4, 5]).await.unwrap(),
-            Poll::Pending {
-                new_challenge_url: None,
-                new_client_id: None,
-            }
-        );
-        let Poll::Done(tokens) = api.poll(78, &[4, 5]).await.unwrap() else {
-            panic!("expected tokens");
-        };
-        assert_eq!(
-            tokens,
-            Tokens {
-                account_name: "player".into(),
-                steamid: STEAMID,
-                refresh_token: refresh.clone(),
-                access_token: "access-1".into(),
-                guard_data: Some("guard".into()),
-            }
-        );
-        let Poll::Done(tokens) = api.poll(78, &[4, 5]).await.unwrap() else {
-            panic!("expected tokens");
-        };
-        assert_eq!(tokens.access_token, "access-2");
-        assert_eq!(tokens.guard_data, None);
-        let e = api.poll(78, &[4, 5]).await.unwrap_err();
-        assert_eq!(e.downcast_ref(), Some(&SteamError::LoginExpired));
-    }
-
-    #[tokio::test]
-    async fn revokes_a_sign_in_without_putting_it_in_the_address() {
-        let server = TestServer::start(|req| {
-            assert_eq!(req.path, "/IAuthenticationService/RevokeToken/v1");
-            eresult(1)
-        });
-        client(&server)
-            .revoke_refresh_token("REFRESH", "ACCESS")
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn renewing_hands_back_a_replaced_refresh_token() {
-        let server = TestServer::start(|_| {
-            proto_resp(&proto::GenerateAccessTokenForAppResponse {
-                access_token: "fresh".into(),
-                refresh_token: "rotated".into(),
-            })
-        });
-        let renewed = client(&server).renew_tokens("rt", STEAMID).await.unwrap();
-        assert_eq!(
-            renewed,
-            Renewed {
-                access_token: "fresh".into(),
-                refresh_token: Some("rotated".into()),
-            }
-        );
-        assert!(!format!("{renewed:?}").contains("rotated"));
-    }
-
-    #[tokio::test]
-    async fn refresh_rejections_ask_to_sign_in_again() {
-        let calls = AtomicUsize::new(0);
-        let server = TestServer::start(move |req| {
-            if !req.path.contains("GenerateAccessTokenForApp") {
-                return Resp::status(404);
-            }
-            match calls.fetch_add(1, Ordering::SeqCst) {
-                0 => proto_resp(&proto::GenerateAccessTokenForAppResponse {
-                    access_token: "fresh".into(),
-                    refresh_token: String::new(),
-                }),
-                1 => eresult(27),
-                2 => eresult(15),
-                3 => Resp::status(401),
-                4 => Resp::status(403),
-                _ => eresult(42),
-            }
-        });
-        let api = client(&server);
-        assert_eq!(
-            api.refresh_access_token("rt", STEAMID).await.unwrap(),
-            "fresh"
-        );
-        for expected in [
-            SteamError::SessionRejected,
-            SteamError::SessionRejected,
-            SteamError::SessionRejected,
-            SteamError::SessionRejected,
-            SteamError::Other(42),
-        ] {
-            let e = api.refresh_access_token("rt", STEAMID).await.unwrap_err();
-            assert_eq!(e.downcast_ref(), Some(&expected));
-        }
     }
 }

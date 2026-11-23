@@ -28,7 +28,6 @@ tokio.workspace = true
 which.workspace = true
 futures.workspace = true
 tracing.workspace = true
-qrcode = { version = "0.14.1", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]

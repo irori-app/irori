@@ -153,7 +153,7 @@ fn open(volume: Volume, cx: &mut App) -> Result<(AnyWindowHandle, Entity<LevelVi
             keyboard_interactivity: KeyboardInteractivity::None,
             ..LayerShellOptions::default()
         });
-        if let Ok(opened) = gpui_kit::open_window(options(layer, cx), cx, &build) {
+        if let Ok(opened) = gpui_kit::open_window(options(layer, cx), cx, build) {
             return Ok(opened);
         }
         // Without layer-shell a window would take the focus from the game

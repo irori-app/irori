@@ -14,7 +14,7 @@
 //! approval page and its result goes to the store's login once more.
 
 mod capture;
-mod steam;
+pub(crate) mod steam;
 pub(crate) mod window;
 
 use std::time::Duration;
@@ -94,7 +94,7 @@ pub fn open_account_login_dialog(
     let dialog = cx.new(|cx| LoginDialog::new(runner, slot, adding, window, cx));
     let focus = dialog.read(cx).input.focus_handle(cx);
     focus.focus(window, cx);
-    let width = window.rem_size() * 34.;
+    let width = window.rem_size() * if runner == Runner::Steam { 36. } else { 34. };
     let title = if adding {
         t_args("manage.login.add_title", &[("store", login_name(runner))])
     } else {
@@ -105,7 +105,7 @@ pub fn open_account_login_dialog(
         d.title(title.clone())
             .width(width)
             .child(dialog.clone())
-            .on_close(move |_, _, cx| on_close.update(cx, |d, _| d.close()))
+            .on_close(move |_, _, cx| on_close.update(cx, |d, cx| d.close(cx)))
     });
 }
 
@@ -426,8 +426,11 @@ impl LoginDialog {
 
     /// The dialog closed: close the sign-in window, stop watching the
     /// clipboard and drop a Microsoft sign-in's session.
-    pub(crate) fn close(&mut self) {
+    pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
         self.close_window();
+        if let FlowState::InApp(view) = &self.flow {
+            view.update(cx, |v, _| v.close_window());
+        }
         self.stop_watching();
         if matches!(self.flow, FlowState::Microsoft { .. }) {
             let profile = microsoft_profile();
@@ -500,7 +503,7 @@ impl LoginDialog {
                 this.submitting = false;
                 match result {
                     Ok(user) => {
-                        this.close();
+                        this.close(cx);
                         window.close_dialog(cx);
                         irori_ui::backend(cx).forget_expired_login(runner);
                         let name = user.display_name.trim();

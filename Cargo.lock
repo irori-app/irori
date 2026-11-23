@@ -5556,7 +5556,6 @@ dependencies = [
  "irori-steam-api",
  "irori-ui",
  "irori-xbox",
- "qrcode",
  "regex",
  "serde",
  "serde_json",
@@ -5899,7 +5898,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "futures",
- "hex",
  "irori-core",
  "irori-depot",
  "irori-runtime",
@@ -5909,14 +5907,12 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
- "sha1 0.10.7",
  "sysinfo 0.39.6",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
  "tracing",
  "url",
- "uuid 1.28.0",
 ]
 
 [[package]]
@@ -5926,9 +5922,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "irori-depot",
- "prost",
  "reqwest",
- "rsa",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -8744,12 +8738,6 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
-
-[[package]]
-name = "qrcode"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-error"
