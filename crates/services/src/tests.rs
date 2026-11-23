@@ -2036,12 +2036,14 @@ fn unlocks_follow_the_stores_files_while_playing() {
 }
 
 /// A ZOOM-like store listing one game that isn't installed, and taking an
-/// import of it.
+/// import of it. Only the Unix backup test uses it.
+#[cfg(unix)]
 struct ImportStore {
     game: Arc<GameInfo>,
     imported: parking_lot::Mutex<Vec<(String, std::path::PathBuf)>>,
 }
 
+#[cfg(unix)]
 #[async_trait]
 impl Store for ImportStore {
     fn runner(&self) -> Runner {
