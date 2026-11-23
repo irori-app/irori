@@ -46,9 +46,7 @@ pub fn smart_from_view(name: &str, view: &ViewFilter) -> (SmartCategory, ViewFil
     let mut rest = ViewFilter {
         platform: view.platform,
         hidden: view.hidden,
-        offline_only: view.offline_only,
         hide_third_party: view.hide_third_party,
-        updates_only: view.updates_only,
         hide_unavailable: view.hide_unavailable,
         released: view.released,
         smart_categories: view.smart_categories.clone(),
@@ -66,6 +64,12 @@ pub fn smart_from_view(name: &str, view: &ViewFilter) -> (SmartCategory, ViewFil
     }
     if view.favourites_only {
         rules.push(Rule::Favourite {});
+    }
+    if view.updates_only {
+        rules.push(Rule::Update {});
+    }
+    if view.offline_only {
+        rules.push(Rule::Offline {});
     }
     // "Uncategorized" has no rule; the categories picked with it are its
     // alternatives, so none of the choice can come along without it.
@@ -168,7 +172,7 @@ mod tests {
             IndexKey::default(),
             library,
             user,
-            &HashMap::new(),
+            &irori_services::smart_categories::Inputs::default(),
             &chrono::Local,
         ))
     }
@@ -341,6 +345,8 @@ mod tests {
             max_age: Some(12),
             released: ReleaseWindow::ThisYear,
             hidden: HiddenMode::Show,
+            updates_only: true,
+            offline_only: true,
             ..Default::default()
         };
         let (smart, rest) = smart_from_view(" Co-op now ", &view);
@@ -357,6 +363,8 @@ mod tests {
                 "store",
                 "installed",
                 "favourite",
+                "update",
+                "offline",
                 "category",
                 "status",
                 "ageRating",
@@ -365,7 +373,7 @@ mod tests {
         );
         assert_eq!(rest.released, ReleaseWindow::ThisYear);
         assert_eq!(rest.hidden, HiddenMode::Show);
-        assert!(rest.categories.is_empty());
+        assert!(rest.categories.is_empty() && !rest.offline_only && !rest.updates_only);
         crate::i18n::register();
         assert_eq!(rest.describe(&UserData::default()).len(), 2);
 

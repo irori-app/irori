@@ -535,8 +535,13 @@ commands without a window.
     renames) are filled from rules: store, tags, game mode, play status, age
     rating, installed, playtime range, last played (local calendar days ago),
     HowLongToBeat main story, system, manual category, search text, favourite,
-    genre. Rows combine with All or Any, plus "Leave out" rows; an empty All
-    or Any takes every game. An entry is in one when any of its copies is.
+    genre, date added, release year, the user's rating, review score, size on
+    disk, update waiting, runs offline, times played, average session, first
+    played, HowLongToBeat progress, hidden, journal notes, developer,
+    publisher, owned on several stores. Rows combine with All or Any, plus
+    "Leave out" rows; an empty All or Any takes every game. An entry is in one
+    when any of its copies is. A new rule kind is a new `Rule` variant with
+    `#[serde(default)]` fields: an older Irori keeps it as a row it can't read.
   - Both kinds can be pinned and coloured (`CategoryLook`: in the smart
     category, else `UserData::category_looks` by name) and are named by a
     `CategoryRef`. `UserData::categories_in_order` lists both, pinned first.
@@ -548,9 +553,11 @@ commands without a window.
     unknown, and a game whose answer is unknown isn't shown. `CategoryIndex`
     holds every category's games and counts (hidden games not counted), built
     once per library revision, user-data change, HowLongToBeat change and day
-    (`IndexKey`), never per frame. HowLongToBeat rules read
-    `Backend::hltb_times` (main-story hours learned with a game's wiki info,
-    kept in `store-facts.json`), never a wiki entry.
+    (`IndexKey`), never per frame. Besides the library and user data it reads
+    `Inputs` (`Backend::category_inputs`): `Backend::hltb_times` (main-story
+    hours learned with a game's wiki info, kept in `store-facts.json`, never a
+    wiki entry), `sessions::stats()` (play counts; unknown until the history
+    is read) and the waiting updates, each a part of `IndexKey`.
   - Smart categories are read the way they were written: unknown keys stay on
     the category and on every row (`extra`), unknown rules stay as rows, and an
     entry that can't be read at all is kept whole. Backups carry both kinds and
@@ -568,7 +575,9 @@ commands without a window.
     saved views, then the pinned categories of both kinds
     (`irori_library::show_category`). The category manager creates, pins,
     colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
-    (`open_smart_category_editor`), also opened from Manage views to turn a
+    (`open_smart_category_editor`; kinds picked from a searchable list in
+    sections, and a line naming the manual categories its rules name that
+    this computer lacks), also opened from Manage views to turn a
     view into a smart category (`categories::smart_from_view`, which says
     which criteria no rule holds). The palette shows any category and groups by
     category. Big Picture adds a shelf per pinned category after the theme's

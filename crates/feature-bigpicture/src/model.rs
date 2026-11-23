@@ -1042,7 +1042,7 @@ mod tests {
             Default::default(),
             &lib,
             &user,
-            &HashMap::new(),
+            &irori_services::smart_categories::Inputs::default(),
             &chrono::Local,
         );
         (lib, user, index)
