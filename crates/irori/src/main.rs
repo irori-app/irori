@@ -317,12 +317,14 @@ fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
     let existing = app.lock().window;
     if let Some(handle) = existing
         && handle
-            .update(cx, |_, window, _| {
+            .update(cx, |_, window, cx| {
                 // Windows activates by simulating an Alt press, which an
                 // active window takes as a press of its own: it waits in menu
                 // mode and stops painting until the next input.
                 if !window.is_window_active() {
                     window.activate_window();
+                    irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                        .detach();
                 }
             })
             .is_ok()

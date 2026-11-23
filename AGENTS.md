@@ -1447,9 +1447,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `iroriThirdPartyLaunchers` is on, so games installed in a launcher show up on their
   own. It reads only local files, so it runs offline too.
 - **Sessions follow the game, not the launcher** (`crates/services/src/follow.rs`):
-  while such a game runs, services look every 3 s for processes running from its
-  install folder; the session ends when they are gone, or when the launcher exits
-  without starting the game. Nothing polls when no launcher game runs. Every other
+  while such a game runs, services wait on the game's process file descriptors on
+  Linux when the store watch supports `GameWatch::wait_for_exit` (`pidfd_open(2)`
+  with `poll(2)`), or look every 3 s for processes running from its install folder;
+  the session ends when they are gone, or when the launcher exits without starting
+  the game. Nothing polls when no launcher game runs. Every other
   game whose started program hands over and exits is followed through its process
   group or descendants instead (see Launching, step 7).
 - **Rockstar** (`irori_launchers_data::rockstar`): `TITLES` names every Rockstar PC
@@ -1582,8 +1584,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   for; `client::Opener`), so a Steam it starts never depends on Irori, and a link the
   system's opener refuses goes to Steam's own program (`client::link_commands`). The
   launch plan's command then only exits. A `SteamGameWatch` follows the reaper (Linux),
-  the game folder's processes and the manifest's launch flags, re-checking known PIDs
-  before a full scan.
+  the game folder's processes and the manifest's launch flags until a direct program in
+  the game folder starts, then narrows to those direct programs (waiting on their kernel
+  process file descriptors on Linux) and re-checks known PIDs before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
   Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as

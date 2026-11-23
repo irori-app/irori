@@ -772,23 +772,31 @@ impl Backend {
 
         // A third-party launcher's games are followed by their own processes;
         // a store whose client starts the game says how to follow it.
-        let probe: Option<crate::follow::Probe> = match &plan.watch {
-            Some(watch) => {
-                let watch = watch.clone();
-                Some(Arc::new(move || watch.running()))
-            }
-            None => (id.runner == irori_core::Runner::Launchers)
-                .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
-                .flatten()
-                .filter(|p| !p.is_empty())
-                .map(crate::follow::folder_probe),
-        };
+        let (probe, wait): (Option<crate::follow::Probe>, Option<crate::follow::WaitFn>) =
+            match &plan.watch {
+                Some(watch) => {
+                    let w1 = watch.clone();
+                    let w2 = watch.clone();
+                    (
+                        Some(Arc::new(move || w1.running())),
+                        Some(Arc::new(move |timeout| w2.wait_for_exit(timeout))),
+                    )
+                }
+                None => (
+                    (id.runner == irori_core::Runner::Launchers)
+                        .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
+                        .flatten()
+                        .filter(|p| !p.is_empty())
+                        .map(crate::follow::folder_probe),
+                    None,
+                ),
+            };
         let b = self.clone();
         let id = id.clone();
         self.spawn(async move {
             let _open = open;
             let status = match probe {
-                Some(probe) => crate::follow::follow(&mut child, probe).await,
+                Some(probe) => crate::follow::follow(&mut child, probe, wait).await,
                 None => {
                     let status = child.wait().await.ok();
                     // A launcher that handed over: the game it started is

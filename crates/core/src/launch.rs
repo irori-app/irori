@@ -97,6 +97,14 @@ pub trait GameWatch: Send + Sync {
 
     /// Ask the game to quit, never the program that started it.
     fn stop(&self, force: bool);
+
+    /// Block until the tracked game processes exit when the OS provides kernel
+    /// exit notifications (`pidfd_open` on Linux). Returns `true` when it
+    /// waited (or saw a tracked PID already gone) and `false` when the caller
+    /// should sleep for its poll interval instead.
+    fn wait_for_exit(&self, _timeout: std::time::Duration) -> bool {
+        false
+    }
 }
 
 /// An installed game's files weren't there when it was started: a drive not
