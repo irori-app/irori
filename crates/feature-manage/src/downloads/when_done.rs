@@ -44,7 +44,7 @@ pub(crate) fn power_choices(cx: &mut App) -> Vec<PowerAction> {
         let task = irori_ui::run(cx, async move { Ok(b.power_actions().await) });
         cx.spawn(async move |cx| {
             let offered = task.await.unwrap_or_default();
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let choices = cx.default_global::<PowerChoices>();
                 choices.actions = Some(finish_actions(&offered));
                 choices.asking = false;
