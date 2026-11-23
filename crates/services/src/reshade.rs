@@ -52,16 +52,23 @@ fn version_key(v: &str) -> Vec<u32> {
     v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
 }
 
-/// Whether Irori can put ReShade, RenoDX or OptiScaler into the game: an installed Windows build
-/// whose files Irori manages, or a Steam game's Windows build (natively on
-/// Windows; through Proton on Linux, which Steam's entry says by not being
-/// Linux-native). Steam starts its games itself, so under Proton the DLL
-/// overrides go into Steam's launch options rather than Irori's launch.
+/// Whether Irori can put ReShade, RenoDX or OptiScaler into the game: an
+/// installed Windows build whose files Irori manages, or a Steam game's
+/// Windows build, natively on Windows and through Proton on Linux (Steam's
+/// entry says so by its platform, or by not being Linux-native). Steam on
+/// macOS runs only Mac builds. Steam starts its games itself, so under
+/// Proton the DLL overrides go into Steam's launch options rather than
+/// Irori's launch.
 pub fn supports_reshade(game: &GameInfo) -> bool {
     let windows_build = match game.runner() {
         Runner::Steam => match irori_core::HostPlatform::current() {
-            irori_core::HostPlatform::Windows => true,
-            irori_core::HostPlatform::Linux => !game.is_linux_native,
+            irori_core::HostPlatform::Windows => {
+                game.installed_platform() != Some(InstallPlatform::Linux)
+            }
+            irori_core::HostPlatform::Linux => {
+                game.installed_platform() == Some(InstallPlatform::Windows)
+                    || !game.is_linux_native
+            }
             irori_core::HostPlatform::Mac => false,
         },
         runner => {
