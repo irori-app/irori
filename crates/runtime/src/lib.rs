@@ -276,12 +276,15 @@ async fn wrapper_parts(
     Ok(parts)
 }
 
-/// Resolve the effective Performance HUD for `target`, write any Irori-managed
-/// `MangoHud.conf` atomically, and return the launch mutations.
-async fn prepare_hud_plan(
+/// Resolve the effective HUD configuration for an optional `game_id`, write any
+/// Irori-managed `MangoHud.conf` under `paths`, and return the launch mutations.
+pub async fn prepare_hud_plan_for_paths(
+    paths: &irori_core::Paths,
     app: &AppSettings,
     settings: &GameSettings,
-    target: Target<'_>,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+    gamescope_enabled: bool,
 ) -> Result<hud::launch_env::HudLaunchPlan> {
     let backend = irori_core::HudBackend::current();
     let resolved = irori_core::hud::resolve_effective_hud(
@@ -292,11 +295,8 @@ async fn prepare_hud_plan(
         backend,
     );
     let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
-    let gamescope_enabled = cfg!(target_os = "linux")
-        && wrappers::gamescope_enabled(&settings.gamescope)
-        && !deck_game_mode;
-    let is_native_linux_game =
-        cfg!(target_os = "linux") && target.platform == InstallPlatform::Linux;
+    let gamescope_enabled = gamescope_enabled && !deck_game_mode;
+    let is_native_linux_game = cfg!(target_os = "linux") && platform == InstallPlatform::Linux;
 
     let mut config_file: Option<PathBuf> = None;
     let mut mangohud_dir: Option<PathBuf> = None;
@@ -312,10 +312,11 @@ async fn prepare_hud_plan(
         mangohud_bin_path = linux_env.mangohud_bin_path.clone();
 
         if let irori_core::ResolvedHud::MangoHudProfile(ref profile) = resolved {
-            let paths = irori_core::Paths::get();
             let dir = paths.mangohud_dir();
-            let conf_name = if settings.game_hud.mode == irori_core::GameHudMode::Custom {
-                format!("{}_{}", target.id.runner.id(), target.id.app_name)
+            let conf_name = if settings.game_hud.mode == irori_core::GameHudMode::Custom
+                && let Some(id) = game_id
+            {
+                format!("{}_{}", id.runner.id(), id.app_name)
             } else {
                 "global".to_string()
             };
@@ -356,6 +357,63 @@ async fn prepare_hud_plan(
             deck_game_mode,
         },
     ))
+}
+
+/// Write any managed HUD configuration under `paths` and apply the resulting
+/// environment variables to `spec`.
+pub async fn apply_hud_to_command_with_paths(
+    spec: &mut CommandSpec,
+    paths: &irori_core::Paths,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    let plan = prepare_hud_plan_for_paths(paths, app, settings, game_id, platform, false).await?;
+    hud::launch_env::apply_hud_plan_to_spec(spec, &plan);
+    Ok(())
+}
+
+/// Write any managed HUD configuration under the active [`Paths`] and apply
+/// the resulting environment variables to `spec`.
+pub async fn apply_hud_to_command(
+    spec: &mut CommandSpec,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    apply_hud_to_command_with_paths(
+        spec,
+        irori_core::Paths::get(),
+        app,
+        settings,
+        game_id,
+        platform,
+    )
+    .await
+}
+
+/// Resolve the effective Performance HUD for `target`, write any Irori-managed
+/// `MangoHud.conf` atomically, and return the launch mutations.
+async fn prepare_hud_plan(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+) -> Result<hud::launch_env::HudLaunchPlan> {
+    let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let gamescope_enabled = cfg!(target_os = "linux")
+        && wrappers::gamescope_enabled(&settings.gamescope)
+        && !deck_game_mode;
+    prepare_hud_plan_for_paths(
+        irori_core::Paths::get(),
+        app,
+        settings,
+        Some(target.id),
+        target.platform,
+        gamescope_enabled,
+    )
+    .await
 }
 
 /// Apply HUD environment removals and overrides on top of assembled launch vars.

@@ -1454,5 +1454,7 @@
   "settings.page.performance_hud_description_mangohud": "Показує FPS, температури та навантаження обладнання поверх ігор за допомогою MangoHud.",
   "settings.page.performance_hud_description_metal": "Показує FPS, температури та навантаження обладнання поверх ігор за допомогою Metal HUD.",
   "settings.group.performance_hud": "Статистика в грі",
-  "settings.field.panel_performance_hud.label": "Статистика в грі"
+  "settings.field.panel_performance_hud.label": "Статистика в грі",
+  "settings.hud.global_stores_notice": "Застосовується автоматично до ігор та сторонніх лаунчерів, запущених через Irori. Для ігор Steam скопіюйте параметри запуску в налаштуваннях статистики в грі.",
+  "settings.hud.launcher_restart_notice": "Оверлей застосовується під час запуску цього лаунчера через Irori. Якщо він уже працює у фоні, закрийте й відкрийте його знову, щоб зміни режиму набули чинності."
 }

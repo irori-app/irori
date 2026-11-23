@@ -35,11 +35,11 @@ use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
 use irori_core::process::{self, CommandSpec};
 use irori_core::{
-    Achievement, ClientAction, Event, EventBus, ExtraInfo, GameInfo, GameSettings, GameWatch,
-    InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan,
-    LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome, Paths, RemoveArgs, Runner,
-    SessionExpired, SettingsFn, Store, StoreAccount, UpdateRequest, UserInfo, WineInstallation,
-    WineKind, json_store, util,
+    Achievement, ClientAction, Event, EventBus, ExtraInfo, GameId, GameInfo, GameSettings,
+    GameWatch, InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo,
+    LaunchPlan, LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome, Paths,
+    RemoveArgs, Runner, SessionExpired, SettingsFn, Store, StoreAccount, UpdateRequest, UserInfo,
+    WineInstallation, WineKind, json_store, util,
 };
 use irori_launchers_data::xbox::{self, XboxGame};
 use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
@@ -484,7 +484,9 @@ impl LaunchersStore {
         let program = launcher_program(launcher, setup.as_ref())
             .filter(|p| p.exists())
             .with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
-        let spec = self.command(launcher, setup.as_ref(), &program, Vec::new())?;
+        let mut spec = self.command(launcher, setup.as_ref(), &program, Vec::new())?;
+        self.apply_hud_with_paths(&mut spec, Paths::get(), None)
+            .await?;
         process::spawn(&spec, None)?;
         Ok(())
     }
@@ -582,6 +584,36 @@ impl LaunchersStore {
             &cmd,
             &irori_runtime::env::HostEnv::current(),
         ))
+    }
+
+    /// Write any managed HUD config under `paths` and apply HUD environment
+    /// variables to `spec` for either a specific game or the global profile.
+    async fn apply_hud_with_paths(
+        &self,
+        spec: &mut CommandSpec,
+        paths: &Paths,
+        game: Option<(&str, &GameSettings)>,
+    ) -> Result<()> {
+        if cfg!(windows) {
+            return Ok(());
+        }
+        let app = (self.settings)();
+        let default_settings = GameSettings::default();
+        let (game_id, settings) = match game {
+            Some((app_name, settings)) => {
+                (Some(GameId::new(Runner::Launchers, app_name)), settings)
+            }
+            None => (None, &default_settings),
+        };
+        irori_runtime::apply_hud_to_command_with_paths(
+            spec,
+            paths,
+            &app,
+            settings,
+            game_id.as_ref(),
+            InstallPlatform::Windows,
+        )
+        .await
     }
 
     /// Read every set-up launcher's local data again.
@@ -1328,7 +1360,13 @@ impl Store for LaunchersStore {
             })?;
         let mut args = game.launch.launcher_args();
         args.extend(request.extra_args.iter().cloned());
-        let command = self.command(game.launcher, setup.as_ref(), &program, args)?;
+        let mut command = self.command(game.launcher, setup.as_ref(), &program, args)?;
+        self.apply_hud_with_paths(
+            &mut command,
+            Paths::get(),
+            Some((app_name, &request.settings)),
+        )
+        .await?;
         Ok(LaunchPlan {
             command,
             track_wineserver: false,
@@ -1893,5 +1931,154 @@ fi
         launchers.logout().await.unwrap();
         assert!(launchers.game(&app_name).is_none());
         assert!(launchers.accounts().is_empty());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn apply_hud_respects_global_custom_disabled_and_off_modes() {
+        use irori_core::{GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings};
+
+        let dir = tempfile::tempdir().unwrap();
+        let make_store = |mode: GlobalHudMode| {
+            let mut app = AppSettings {
+                third_party_launchers: true,
+                default_wine_prefix_dir: dir.path().join("prefixes").display().to_string(),
+                ..Default::default()
+            };
+            app.hud = GlobalHudSettings {
+                mode,
+                ..Default::default()
+            };
+            let app = Arc::new(app);
+            LaunchersStore::with_dirs(
+                EventBus::new(),
+                Arc::new(move || app.clone()),
+                dir.path().join("config"),
+                dir.path().join("cache"),
+            )
+        };
+        let setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net"),
+            wine: fake_wine(dir.path(), false),
+            set_up_at: String::new(),
+        };
+        let exe = Launcher::BattleNet.exe_in_prefix(&windows_root(&setup));
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"").unwrap();
+        let paths = Paths::under(dir.path());
+
+        // Global Off + InheritGlobal injects nothing and writes no config file.
+        let off_store = make_store(GlobalHudMode::Off);
+        let mut off_spec = off_store
+            .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
+            .unwrap();
+        off_store
+            .apply_hud_with_paths(
+                &mut off_spec,
+                &paths,
+                Some(("battlenet:fenris", &GameSettings::default())),
+            )
+            .await
+            .unwrap();
+        assert!(!off_spec.env.contains_key("MANGOHUD"));
+        assert!(!off_spec.env.contains_key("DISABLE_MANGOHUD"));
+        assert!(!off_spec.env.contains_key("MANGOHUD_CONFIGFILE"));
+        assert!(!paths.mangohud_config_file("global").exists());
+
+        // Global On + InheritGlobal (and direct `open` with None) uses global.conf.
+        let on_store = make_store(GlobalHudMode::IroriProfile);
+        let mut open_spec = on_store
+            .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
+            .unwrap();
+        on_store
+            .apply_hud_with_paths(&mut open_spec, &paths, None)
+            .await
+            .unwrap();
+        let expected_global = paths.mangohud_config_file("global");
+        assert!(expected_global.is_file());
+        assert_eq!(open_spec.env.get("MANGOHUD").map(String::as_str), Some("1"));
+        assert_eq!(
+            open_spec.env.get("MANGOHUD_CONFIGFILE").map(PathBuf::from),
+            Some(expected_global)
+        );
+        assert!(open_spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIG"));
+        assert!(open_spec.env_remove.iter().any(|k| k == "DISABLE_MANGOHUD"));
+
+        // Per-game Custom writes sanitized launchers_battlenet_fenris.conf.
+        let mut custom_spec = on_store
+            .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
+            .unwrap();
+        let custom_settings = GameSettings {
+            game_hud: GameHudSettings {
+                mode: GameHudMode::Custom,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        on_store
+            .apply_hud_with_paths(
+                &mut custom_spec,
+                &paths,
+                Some(("battlenet:fenris", &custom_settings)),
+            )
+            .await
+            .unwrap();
+        let expected_custom = paths.mangohud_config_file("launchers_battlenet:fenris");
+        assert_eq!(
+            expected_custom.file_name().and_then(|n| n.to_str()),
+            Some("launchers_battlenet_fenris.conf")
+        );
+        assert!(expected_custom.is_file());
+        assert_eq!(
+            custom_spec
+                .env
+                .get("MANGOHUD_CONFIGFILE")
+                .map(PathBuf::from),
+            Some(expected_custom)
+        );
+
+        // Per-game Disabled forces MangoHud off even when global HUD is enabled.
+        let mut disabled_spec = on_store
+            .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
+            .unwrap();
+        let disabled_settings = GameSettings {
+            game_hud: GameHudSettings {
+                mode: GameHudMode::Disabled,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        on_store
+            .apply_hud_with_paths(
+                &mut disabled_spec,
+                &paths,
+                Some(("battlenet:fenris", &disabled_settings)),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            disabled_spec
+                .env
+                .get("DISABLE_MANGOHUD")
+                .map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(
+            disabled_spec.env.get("MANGOHUD").map(String::as_str),
+            Some("0")
+        );
+        assert!(!disabled_spec.env.contains_key("MANGOHUD_CONFIGFILE"));
+        assert!(
+            disabled_spec
+                .env_remove
+                .iter()
+                .any(|k| k == "MANGOHUD_CONFIGFILE")
+        );
+        assert!(
+            disabled_spec
+                .env_remove
+                .iter()
+                .any(|k| k == "MANGOHUD_CONFIG")
+        );
     }
 }

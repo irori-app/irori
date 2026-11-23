@@ -210,6 +210,9 @@ struct HudLabels {
     missing_title: SharedString,
     missing_description: SharedString,
 
+    global_stores_notice: SharedString,
+    launcher_restart_notice: SharedString,
+
     steam_title: SharedString,
     steam_description: SharedString,
     steam_snippet_label: SharedString,
@@ -377,6 +380,9 @@ impl HudLabels {
 
             missing_title: t("settings.hud.missing.title"),
             missing_description: t("settings.hud.missing.description"),
+
+            global_stores_notice: t("settings.hud.global_stores_notice"),
+            launcher_restart_notice: t("settings.hud.launcher_restart_notice"),
 
             steam_title: t("settings.hud.steam.title"),
             steam_description: t("settings.hud.steam.description"),
@@ -1032,6 +1038,27 @@ impl HudPanel {
         matches!(self.scope, HudPanelScope::PerGame { is_steam: true, .. })
     }
 
+    fn is_third_party_launcher(&self) -> bool {
+        matches!(
+            self.scope,
+            HudPanelScope::PerGame { ref id, .. } if id.runner == irori_core::Runner::Launchers
+        )
+    }
+
+    fn scope_notice(&self) -> Option<(&'static str, &SharedString)> {
+        match self.scope {
+            HudPanelScope::Global => Some((
+                "hud-global-stores-notice",
+                &self.labels.global_stores_notice,
+            )),
+            HudPanelScope::PerGame { .. } if self.is_third_party_launcher() => Some((
+                "hud-launcher-restart-notice",
+                &self.labels.launcher_restart_notice,
+            )),
+            HudPanelScope::PerGame { .. } => None,
+        }
+    }
+
     fn show_opengl_legacy(&self) -> bool {
         self.backend == HudBackend::MangoHud
             && matches!(
@@ -1442,6 +1469,16 @@ impl HudPanel {
                     )
                     .title(self.labels.missing_title.clone()),
                 )
+                .into_any_element(),
+        )
+    }
+
+    fn render_scope_notice(&self) -> Option<AnyElement> {
+        let (id, text) = self.scope_notice()?;
+        Some(
+            div()
+                .pb_1()
+                .child(Alert::info(id, text.clone()))
                 .into_any_element(),
         )
     }
@@ -2868,6 +2905,7 @@ impl Render for HudPanel {
                 .w_full()
                 .gap_2()
                 .children(self.render_missing_mangohud())
+                .children(self.render_scope_notice())
                 .children(self.render_steam_section(cx))
                 .when(!editing, |v| {
                     v.child(self.render_mode_section(cx))
@@ -2894,6 +2932,7 @@ impl Render for HudPanel {
             HudBackend::MetalHud => v_flex()
                 .w_full()
                 .gap_2()
+                .children(self.render_scope_notice())
                 .children(self.render_steam_section(cx))
                 .child(self.render_mode_section(cx))
                 .child(self.render_metal_section(cx))
@@ -3586,5 +3625,62 @@ mod tests {
             let _ = window.draw(cx);
         })
         .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn scope_notice_matches_global_and_third_party_launchers(cx: &mut TestAppContext) {
+        let (g_handle, g_panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+        cx.update_window(g_handle, |_, window, cx| {
+            g_panel.update(cx, |p, _| {
+                assert_eq!(
+                    p.scope_notice().map(|(id, _)| id),
+                    Some("hud-global-stores-notice")
+                );
+            });
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+
+        let (l_handle, l_panel) = open_hud(
+            cx,
+            HudPanelScope::PerGame {
+                id: GameId::new(Runner::Launchers, "battlenet:fenris"),
+                is_native_linux: false,
+                is_steam: false,
+            },
+            Some(HudBackend::MangoHud),
+        );
+        cx.update_window(l_handle, |_, window, cx| {
+            l_panel.update(cx, |p, _| {
+                assert_eq!(
+                    p.scope_notice().map(|(id, _)| id),
+                    Some("hud-launcher-restart-notice")
+                );
+            });
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+
+        for (id, is_steam) in [
+            (GameId::new(Runner::Gog, "1207658924"), false),
+            (GameId::new(Runner::Steam, "620"), true),
+        ] {
+            let (h, p) = open_hud(
+                cx,
+                HudPanelScope::PerGame {
+                    id,
+                    is_native_linux: false,
+                    is_steam,
+                },
+                Some(HudBackend::MangoHud),
+            );
+            cx.update_window(h, |_, window, cx| {
+                p.update(cx, |panel, _| {
+                    assert!(panel.scope_notice().is_none());
+                });
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+        }
     }
 }

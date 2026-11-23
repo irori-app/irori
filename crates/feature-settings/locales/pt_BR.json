@@ -1454,5 +1454,7 @@
   "settings.page.performance_hud_description_mangohud": "Mostra FPS, temperaturas e uso de hardware por cima do jogo, via MangoHud.",
   "settings.page.performance_hud_description_metal": "Mostra FPS, temperaturas e uso de hardware por cima do jogo, via Metal HUD.",
   "settings.group.performance_hud": "Estatísticas no jogo",
-  "settings.field.panel_performance_hud.label": "Estatísticas no jogo"
+  "settings.field.panel_performance_hud.label": "Estatísticas no jogo",
+  "settings.hud.global_stores_notice": "Aplica automaticamente aos jogos e launchers iniciados pelo Irori. Para jogos do Steam, copie as opções de inicialização nas configurações de Estatísticas no jogo.",
+  "settings.hud.launcher_restart_notice": "A sobreposição é aplicada quando o Irori abre este launcher. Se ele já estiver rodando em segundo plano, feche e abra novamente para aplicar trocas de modo."
 }

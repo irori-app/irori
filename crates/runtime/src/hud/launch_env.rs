@@ -211,6 +211,21 @@ pub fn strip_hud_env_vars(env: &mut BTreeMap<String, String>) {
     });
 }
 
+/// Apply HUD environment removals and overrides on top of an arbitrary
+/// [`CommandSpec`], reconciling any pre-existing variables and removals.
+pub fn apply_hud_plan_to_spec(spec: &mut CommandSpec, plan: &HudLaunchPlan) {
+    for key in &plan.env_remove {
+        spec.env.remove(key);
+        if !spec.env_remove.iter().any(|existing| existing == key) {
+            spec.env_remove.push(key.clone());
+        }
+    }
+    for (key, value) in &plan.env_set {
+        spec.env.insert(key.clone(), value.clone());
+        spec.env_remove.retain(|existing| existing != key);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use irori_core::{MangoHudProfile, MetalHudAlignment, MetalHudSettings};
@@ -489,5 +504,109 @@ mod tests {
         assert_eq!(env.len(), 2);
         assert_eq!(env["WINEPREFIX"], "/pfx");
         assert_eq!(env["MTL_CAPTURE_ENABLED"], "1");
+    }
+
+    #[test]
+    fn apply_hud_plan_to_spec_reconciles_set_and_remove_keys() {
+        let conf = Path::new("/data/mangohud/global.conf");
+        let active_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &ResolvedHud::MangoHudProfile(Box::default()),
+            config_file: Some(conf),
+            mangohud_dir: conf.parent(),
+            mangohud_bin_path: None,
+            is_native_linux_game: false,
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+
+        let mut spec = CommandSpec::new("/usr/bin/wine")
+            .env("MANGOHUD_CONFIG", "fps_only=1")
+            .env("DISABLE_MANGOHUD", "1")
+            .env_removes(["MANGOHUD", "MANGOHUD_CONFIG"]);
+        apply_hud_plan_to_spec(&mut spec, &active_plan);
+
+        assert_eq!(spec.env.get("MANGOHUD").map(String::as_str), Some("1"));
+        assert_eq!(
+            spec.env.get("MANGOHUD_CONFIGFILE").map(String::as_str),
+            Some("/data/mangohud/global.conf")
+        );
+        assert!(!spec.env.contains_key("MANGOHUD_CONFIG"));
+        assert!(!spec.env.contains_key("DISABLE_MANGOHUD"));
+        assert!(!spec.env_remove.iter().any(|k| k == "MANGOHUD"));
+        assert_eq!(
+            spec.env_remove
+                .iter()
+                .filter(|k| *k == "MANGOHUD_CONFIG")
+                .count(),
+            1
+        );
+        assert!(spec.env_remove.iter().any(|k| k == "DISABLE_MANGOHUD"));
+
+        let disabled_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &ResolvedHud::Disabled,
+            config_file: None,
+            mangohud_dir: None,
+            mangohud_bin_path: None,
+            is_native_linux_game: false,
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        apply_hud_plan_to_spec(&mut spec, &disabled_plan);
+        assert_eq!(
+            spec.env.get("DISABLE_MANGOHUD").map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(spec.env.get("MANGOHUD").map(String::as_str), Some("0"));
+        assert!(!spec.env.contains_key("MANGOHUD_CONFIGFILE"));
+        assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIGFILE"));
+        assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIG"));
+    }
+
+    #[test]
+    fn apply_hud_plan_to_spec_handles_metal_hud() {
+        let active_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MetalHud,
+            resolved: &ResolvedHud::MetalHud(MetalHudSettings {
+                alignment: MetalHudAlignment::BottomLeft,
+            }),
+            config_file: None,
+            mangohud_dir: None,
+            mangohud_bin_path: None,
+            is_native_linux_game: false,
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        let mut spec = CommandSpec::new("/Applications/Game.app/Contents/MacOS/Game")
+            .env_removes(["MTL_HUD_ENABLED", "MTL_HUD_ALIGNMENT"]);
+        apply_hud_plan_to_spec(&mut spec, &active_plan);
+        assert_eq!(
+            spec.env.get("MTL_HUD_ENABLED").map(String::as_str),
+            Some("1")
+        );
+        assert_eq!(
+            spec.env.get("MTL_HUD_ALIGNMENT").map(String::as_str),
+            Some("bottomleft")
+        );
+        assert!(spec.env_remove.is_empty());
+
+        let disabled_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MetalHud,
+            resolved: &ResolvedHud::Disabled,
+            config_file: None,
+            mangohud_dir: None,
+            mangohud_bin_path: None,
+            is_native_linux_game: false,
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        apply_hud_plan_to_spec(&mut spec, &disabled_plan);
+        assert_eq!(
+            spec.env.get("MTL_HUD_ENABLED").map(String::as_str),
+            Some("0")
+        );
+        assert!(!spec.env.contains_key("MTL_HUD_ALIGNMENT"));
+        assert!(spec.env_remove.iter().any(|k| k == "MTL_HUD_ALIGNMENT"));
     }
 }

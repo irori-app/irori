@@ -1454,5 +1454,7 @@
   "settings.page.performance_hud_description_mangohud": "Zobrazuje FPS, teploty a využití hardwaru přes vaše hry, pomocí MangoHud.",
   "settings.page.performance_hud_description_metal": "Zobrazuje FPS, teploty a využití hardwaru přes vaše hry, pomocí Metal HUD.",
   "settings.group.performance_hud": "Statistiky ve hře",
-  "settings.field.panel_performance_hud.label": "Statistiky ve hře"
+  "settings.field.panel_performance_hud.label": "Statistiky ve hře",
+  "settings.hud.global_stores_notice": "Použije se automaticky na hry a spouštěče třetích stran spuštěné z Irori. U her ze služby Steam zkopírujte možnosti spuštění v nastavení statistik ve hře.",
+  "settings.hud.launcher_restart_notice": "Překrytí se použije při spuštění tohoto spouštěče přes Irori. Pokud už běží na pozadí, zavřete ho a znovu otevřete, aby se změny režimu projevily."
 }

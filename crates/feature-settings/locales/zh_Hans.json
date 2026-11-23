@@ -1454,5 +1454,7 @@
   "settings.page.performance_hud_description_mangohud": "通过 MangoHud 在游戏画面上显示 FPS、温度和硬件占用。",
   "settings.page.performance_hud_description_metal": "通过 Metal HUD 在游戏画面上显示 FPS、温度和硬件占用。",
   "settings.group.performance_hud": "游戏内统计",
-  "settings.field.panel_performance_hud.label": "游戏内统计"
+  "settings.field.panel_performance_hud.label": "游戏内统计",
+  "settings.hud.global_stores_notice": "会自动应用于由 Irori 启动的游戏和第三方启动器。对于 Steam 游戏，请在对应游戏的“游戏内统计”设置中复制启动选项。",
+  "settings.hud.launcher_restart_notice": "Irori 启动此启动器时会应用叠加层。如果它已在后台运行，请关闭并重新打开以使模式更改生效。"
 }

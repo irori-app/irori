@@ -1454,5 +1454,7 @@
   "settings.page.performance_hud_description_mangohud": "MangoHud aracılığıyla oyunlarınızın üzerinde FPS, sıcaklıklar ve donanım kullanımını gösterir.",
   "settings.page.performance_hud_description_metal": "Metal HUD aracılığıyla oyunlarınızın üzerinde FPS, sıcaklıklar ve donanım kullanımını gösterir.",
   "settings.group.performance_hud": "Oyun içi istatistikler",
-  "settings.field.panel_performance_hud.label": "Oyun içi istatistikler"
+  "settings.field.panel_performance_hud.label": "Oyun içi istatistikler",
+  "settings.hud.global_stores_notice": "Irori tarafından başlatılan oyunlara ve üçüncü taraf başlatıcılara otomatik olarak uygulanır. Steam oyunları için oyunun Oyun içi istatistikler ayarlarından başlatma seçeneklerini kopyalayın.",
+  "settings.hud.launcher_restart_notice": "Katman, Irori bu başlatıcıyı açtığında uygulanır. Arka planda zaten çalışıyorsa mod değişikliklerinin geçerli olması için kapatıp yeniden açın."
 }
