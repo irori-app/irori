@@ -1500,14 +1500,11 @@ fn health_lines(health: Option<&EngineHealth>, cx: &App) -> Vec<AnyElement> {
             div()
                 .text_sm()
                 .text_color(theme.muted_foreground)
-                .child(t_args(
-                    if health.games == 1 {
-                        "manage.emulators.health.games_one"
-                    } else {
-                        "manage.emulators.health.games_other"
-                    },
-                    &[("count", &count)],
-                ))
+                .child(if health.games == 1 {
+                    t_args("manage.emulators.health.games_one", &[("count", &count)])
+                } else {
+                    t_args("manage.emulators.health.games_other", &[("count", &count)])
+                })
                 .into_any_element(),
         );
     }
