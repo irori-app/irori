@@ -211,9 +211,29 @@ pub struct Release {
     /// The build this one replaced in place, kept so it can come back.
     #[serde(rename = "previousDir", skip_serializing_if = "Option::is_none")]
     pub previous_dir: Option<String>,
+    /// The build for x86-64-v3 processors (AVX2 and the rest of that level),
+    /// where the source publishes one beside `download` (Proton-CachyOS,
+    /// Proton-Wineland). Irori-only.
+    #[serde(rename = "iroriDownloadV3", skip_serializing_if = "Option::is_none")]
+    pub download_v3: Option<String>,
+    /// The checksum file of `download_v3`.
+    #[serde(rename = "iroriChecksumV3", skip_serializing_if = "Option::is_none")]
+    pub checksum_v3: Option<String>,
 }
 
 impl Release {
+    /// The archive and checksum to install: the x86-64-v3 build when one is
+    /// published and `v3` asks for it, else the baseline build.
+    pub fn asset(&self, v3: bool) -> (&str, &str) {
+        match (&self.download_v3, v3) {
+            (Some(download), true) if !download.is_empty() => (
+                download.as_str(),
+                self.checksum_v3.as_deref().unwrap_or_default(),
+            ),
+            _ => (self.download.as_str(), self.checksum.as_str()),
+        }
+    }
+
     pub fn release_kind(&self) -> Option<ReleaseKind> {
         ReleaseKind::from_type(&self.kind)
     }
@@ -360,6 +380,53 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
     }
 }
 
+/// The x86-64-v3 build published beside `baseline` (`…-x86_64.tar.xz` and
+/// `…-x86_64_v3.tar.xz`), for the sources that publish one.
+fn v3_asset<'a>(kind: ReleaseKind, baseline: &str, assets: &'a [GhAsset]) -> Option<&'a GhAsset> {
+    if !matches!(
+        kind,
+        ReleaseKind::ProtonCachyOs | ReleaseKind::ProtonWineland
+    ) {
+        return None;
+    }
+    let wanted = format!(
+        "{}-x86_64_v3.tar.xz",
+        baseline.strip_suffix("-x86_64.tar.xz")?
+    );
+    assets.iter().find(|a| a.name == wanted)
+}
+
+/// Whether this processor runs x86-64-v3 code: AVX, AVX2, BMI1, BMI2, F16C,
+/// FMA, LZCNT, MOVBE and XSAVE, with the system saving AVX state.
+pub fn cpu_supports_x86_64_v3() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::arch::is_x86_feature_detected!("avx")
+            && std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("bmi1")
+            && std::arch::is_x86_feature_detected!("bmi2")
+            && std::arch::is_x86_feature_detected!("f16c")
+            && std::arch::is_x86_feature_detected!("fma")
+            && std::arch::is_x86_feature_detected!("lzcnt")
+            && std::arch::is_x86_feature_detected!("movbe")
+            && std::arch::is_x86_feature_detected!("xsave")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
+/// Whether to install x86-64-v3 builds: as the setting says, or, left on
+/// automatic, when this processor runs them.
+pub fn wants_x86_64_v3(level: irori_core::ProtonCpuLevel) -> bool {
+    match level {
+        irori_core::ProtonCpuLevel::Auto => cpu_supports_x86_64_v3(),
+        irori_core::ProtonCpuLevel::Baseline => false,
+        irori_core::ProtonCpuLevel::V3 => true,
+    }
+}
+
 fn is_tarball(name: &str) -> bool {
     name.ends_with(".tar.gz")
         || name.ends_with(".tar.xz")
@@ -457,12 +524,18 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
         .filter(|r| !r.draft)
         .filter_map(|r| {
             let asset = select_asset(kind, &r.assets, arch)?;
-            let checksum = checksum_names(&asset.name)
-                .iter()
-                .find_map(|wanted| r.assets.iter().find(|a| &a.name == wanted))
-                .map(|a| a.browser_download_url.clone())
-                .unwrap_or_default();
+            let checksum_of = |name: &str| {
+                checksum_names(name)
+                    .iter()
+                    .find_map(|wanted| r.assets.iter().find(|a| &a.name == wanted))
+                    .map(|a| a.browser_download_url.clone())
+                    .unwrap_or_default()
+            };
+            let checksum = checksum_of(&asset.name);
+            let v3 = v3_asset(kind, &asset.name, &r.assets);
             Some(Release {
+                download_v3: v3.map(|a| a.browser_download_url.clone()),
+                checksum_v3: v3.map(|a| checksum_of(&a.name)),
                 version: version_of(kind, &r.tag_name),
                 kind: kind.type_str().into(),
                 date: r
@@ -917,13 +990,14 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
         return record_installed(release, &target, size).await;
     }
 
-    let file_name = file_name_of(&release.download);
-    let digest_kind = download::DigestKind::of_checksum_file(&release.checksum).unwrap_or_default();
-    let expected = if release.checksum.is_empty() {
+    let (url, checksum) = release.asset(wants_x86_64_v3(app.proton_cpu_level));
+    let file_name = file_name_of(url);
+    let digest_kind = download::DigestKind::of_checksum_file(checksum).unwrap_or_default();
+    let expected = if checksum.is_empty() {
         tracing::warn!("{} has no published checksum", release.version);
         None
     } else {
-        let text = download::get_text(&release.checksum)
+        let text = download::get_text(checksum)
             .await
             .context("could not fetch the checksum")?;
         Some(
@@ -935,14 +1009,8 @@ pub async fn install(release: &Release, app: &AppSettings, ctx: &OpContext) -> R
     (ctx.step)(&format!("Downloading {}", release.version));
     let archive = base.join(&file_name);
     let _ = tokio::fs::remove_file(&archive).await;
-    let downloaded = download::download_hashed(
-        &release.download,
-        &archive,
-        &ctx.progress,
-        &ctx.cancel,
-        digest_kind,
-    )
-    .await?;
+    let downloaded =
+        download::download_hashed(url, &archive, &ctx.progress, &ctx.cancel, digest_kind).await?;
     if let Some(expected) = &expected
         && !download::checksum_matches(expected, &downloaded.digest)
     {
@@ -1445,6 +1513,45 @@ mod tests {
         assert_eq!(rel[1].version, "cachyos-11.0-20261015-slr");
         assert!(rel[1].download.ends_with("-slr-x86_64.tar.xz"));
         assert!(rel[1].checksum.ends_with("-slr-x86_64.sha512sum"));
+        // Heroic #5854: the x86-64-v3 build is kept beside it, also for
+        // the -latest entry, and chosen only when asked for.
+        for r in &rel[..2] {
+            assert!(
+                r.download_v3
+                    .as_deref()
+                    .is_some_and(|d| d.ends_with("-slr-x86_64_v3.tar.xz"))
+            );
+        }
+        // That build publishes no checksum file of its own.
+        assert_eq!(rel[1].checksum_v3.as_deref(), Some(""));
+        assert!(rel[1].asset(true).0.ends_with("_v3.tar.xz"));
+        assert!(rel[1].asset(false).0.ends_with("-slr-x86_64.tar.xz"));
+        assert_eq!(rel[1].asset(false).1, rel[1].checksum);
+        // ARM builds have no such variant.
+        let arm = releases_from_github(
+            ReleaseKind::ProtonCachyOs,
+            parse(serde_json::json!([gh(
+                "cachyos-11.0-20261015-slr",
+                "2026-10-20",
+                &["proton-cachyos-11.0-20261015-slr-arm64.tar.xz"]
+            )])),
+            "aarch64",
+        );
+        assert!(arm[1].download_v3.is_none());
+        assert_eq!(arm[1].asset(true).0, arm[1].download);
+    }
+
+    #[test]
+    fn the_cpu_level_setting_picks_the_build() {
+        use irori_core::ProtonCpuLevel;
+        assert!(!wants_x86_64_v3(ProtonCpuLevel::Baseline));
+        assert!(wants_x86_64_v3(ProtonCpuLevel::V3));
+        assert_eq!(
+            wants_x86_64_v3(ProtonCpuLevel::Auto),
+            cpu_supports_x86_64_v3()
+        );
+        let level: ProtonCpuLevel = serde_json::from_str("\"newer\"").unwrap();
+        assert_eq!(level, ProtonCpuLevel::Auto);
     }
 
     #[test]

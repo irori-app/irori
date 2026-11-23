@@ -616,6 +616,7 @@ impl FieldSpec {
                     | "iroriFsr4Upgrade"
                     | "iroriXessUpgrade"
                     | "downloadProtonToSteam"
+                    | "iroriProtonCpuLevel"
                     | "showValveProton"
                     | "iroriShaderCacheSize"
                     | "iroriSandbox.noNetwork"
@@ -1381,6 +1382,20 @@ const FPS_LIMITER: &[ChoiceOption] = &[
     opt(ChoiceValue::Str("gamescope"), Verbatim("gamescope")),
     opt(ChoiceValue::Str("mangohud"), Verbatim("MangoHud")),
     opt(ChoiceValue::Str("dxvk"), Verbatim("DXVK")),
+];
+const PROTON_CPU_LEVEL: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.proton_cpu_level.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("baseline"),
+        Key("settings.option.proton_cpu_level.baseline"),
+    ),
+    opt(
+        ChoiceValue::Str("v3"),
+        Key("settings.option.proton_cpu_level.v3"),
+    ),
 ];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
@@ -3064,6 +3079,24 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["proton", "steam", "compatibilitytools"]),
+    app(
+        "iroriProtonCpuLevel",
+        "settings.field.proton_cpu_level.label",
+        Advanced,
+        "settings.group.wine",
+        Choice(PROTON_CPU_LEVEL),
+    )
+    .help("settings.field.proton_cpu_level.help")
+    .keywords(&[
+        "proton",
+        "cachyos",
+        "wineland",
+        "v3",
+        "avx2",
+        "x86-64",
+        "cpu",
+        "processor",
+    ]),
     app(
         "allowInstallationBrokenAnticheat",
         "settings.field.allow_installation_broken_anticheat.label",

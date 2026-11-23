@@ -798,6 +798,10 @@ pub struct AppSettings {
     pub disable_gog_presence: bool,
     pub download_no_https: bool,
     pub download_proton_to_steam: bool,
+    /// Proton-CachyOS and Proton-Wineland builds for x86-64-v3 processors.
+    /// Linux only; Irori-only.
+    #[serde(rename = "iroriProtonCpuLevel")]
+    pub proton_cpu_level: ProtonCpuLevel,
     pub egs_linked_path: String,
     pub exit_to_tray: bool,
     pub gamepad_repeat_delay: u32,
@@ -1040,6 +1044,7 @@ impl Default for AppSettings {
             disable_gog_presence: false,
             download_no_https: false,
             download_proton_to_steam: false,
+            proton_cpu_level: ProtonCpuLevel::Auto,
             egs_linked_path: String::new(),
             exit_to_tray: false,
             gamepad_repeat_delay: 50,
@@ -1503,6 +1508,31 @@ impl<'de> Deserialize<'de> for FpsLimiter {
             "mangohud" => FpsLimiter::MangoHud,
             "dxvk" => FpsLimiter::Dxvk,
             _ => FpsLimiter::Auto,
+        })
+    }
+}
+
+/// Which build the Wine manager installs where a source publishes one for
+/// x86-64-v3 processors beside the baseline one (`iroriProtonCpuLevel`).
+/// Values a newer Irori writes read as [`ProtonCpuLevel::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtonCpuLevel {
+    /// The x86-64-v3 build when this processor runs it.
+    #[default]
+    Auto,
+    /// Always the baseline x86-64 build.
+    Baseline,
+    /// Always the x86-64-v3 build.
+    V3,
+}
+
+impl<'de> Deserialize<'de> for ProtonCpuLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "baseline" => ProtonCpuLevel::Baseline,
+            "v3" => ProtonCpuLevel::V3,
+            _ => ProtonCpuLevel::Auto,
         })
     }
 }
