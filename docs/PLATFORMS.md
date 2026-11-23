@@ -1168,6 +1168,24 @@ Picture and its menu open, never polled. Where outputs can't be switched or read
 (`pactl` missing, another system), the entry says "Not available" and A explains
 why; with one output it says there is nothing to switch to.
 
+### Turning the screen off while downloading
+
+The Downloads page and the palette offer "Turn the screen off" while downloads run. The
+desktop's own display power interface does it, and turns the screen on again at the next
+key press or mouse move; nothing needs root (`irori_services::screen`):
+
+| System | Done with |
+| --- | --- |
+| KDE Plasma | `kscreen-doctor --dpms off` |
+| GNOME | Mutter's `org.gnome.Mutter.DisplayConfig` `PowerSaveMode` set to 3 (`gdbus`) |
+| Other X11 desktops | `xset dpms force off` |
+| macOS | `pmset displaysleepnow` |
+| Windows | the `SC_MONITORPOWER` broadcast |
+
+sway, Hyprland and gamescope keep an output off until told otherwise, so the button isn't
+offered there. Inside the Flatpak the program runs on the host. While the screen is off and
+downloads run, the computer is kept from sleeping (the display isn't) until they are done.
+
 ### Power off, restart, sleep and log out (Big Picture)
 
 Big Picture's quick menu ends with Power off, Restart, Sleep and Log out, each

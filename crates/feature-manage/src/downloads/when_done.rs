@@ -3,8 +3,10 @@
 //! the queue empties the backend counts a minute down, which every screen
 //! shows with a way to cancel, and it never acts while a game runs.
 //!
-//! Also the download commands the command palette offers: pause, resume and
-//! this choice, so all of it is reachable from the keyboard and a controller.
+//! Also "Turn the screen off" while downloads run (the desktop turns it on
+//! again at the next input; `irori_services::screen`), and the download
+//! commands the command palette offers: pause, resume, the screen and this
+//! choice, so all of it is reachable from the keyboard and a controller.
 
 use std::time::{Duration, Instant};
 
@@ -167,11 +169,52 @@ pub(crate) fn countdown_banner(countdown: &PowerCountdown, cx: &App) -> AnyEleme
         .into_any_element()
 }
 
+/// Whether "Turn the screen off" is offered: downloads run, and this
+/// desktop turns the screen on again by itself.
+pub(crate) fn offers_screen_off(queue: &DownloadQueueSnapshot, cx: &App) -> bool {
+    !queue.paused && !queue.active.is_empty() && backend(cx).can_turn_screen_off()
+}
+
+/// Turn the screen off now; a failure is told as a notice, since the screen
+/// may already be dark.
+pub fn turn_screen_off(cx: &mut App) {
+    let b = backend(cx);
+    let task = {
+        let b = b.clone();
+        irori_ui::run(cx, async move { b.turn_screen_off().await })
+    };
+    // Written now, in the interface language, for the notice.
+    let title = t("manage.downloads.screen_off_failed").to_string();
+    cx.spawn(async move |_| {
+        if let Err(e) = task.await {
+            b.bus.notice(
+                irori_core::Notice::new(irori_core::NoticeLevel::Warning, title)
+                    .message(format!("{e:#}")),
+            );
+        }
+    })
+    .detach();
+}
+
+/// The downloads page's "Turn the screen off" button.
+pub(crate) fn screen_off_button(queue: &DownloadQueueSnapshot, cx: &App) -> Option<AnyElement> {
+    offers_screen_off(queue, cx).then(|| {
+        Button::new("screen-off")
+            .icon(IconName::MonitorOff)
+            .label(t("manage.downloads.screen_off"))
+            .tooltip(t("manage.downloads.screen_off_tooltip"))
+            .on_click(|_, _, cx| turn_screen_off(cx))
+            .into_any_element()
+    })
+}
+
 /// A download command of the command palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadCommand {
     Pause,
     Resume,
+    /// Turn the screen off while the downloads run.
+    ScreenOff,
     /// What to do once the queue is done (`None`: nothing).
     WhenDone(Option<PowerAction>),
     /// Cancel the countdown before sleeping or powering off.
@@ -191,6 +234,13 @@ pub fn download_commands(cx: &mut App) -> Vec<(SharedString, IconName, DownloadC
     }
     if queue.active.is_empty() {
         return rows;
+    }
+    if offers_screen_off(&queue, cx) {
+        rows.push((
+            t("manage.downloads.command.screen_off"),
+            IconName::MonitorOff,
+            DownloadCommand::ScreenOff,
+        ));
     }
     rows.push(if queue.paused {
         (
@@ -232,6 +282,7 @@ pub fn run_download_command(command: DownloadCommand, cx: &mut App) {
     match command {
         DownloadCommand::Pause => b.pause_downloads(),
         DownloadCommand::Resume => b.resume_downloads(),
+        DownloadCommand::ScreenOff => turn_screen_off(cx),
         DownloadCommand::WhenDone(choice) => b.set_when_downloads_done(choice),
         DownloadCommand::KeepOn => b.set_when_downloads_done(None),
     }

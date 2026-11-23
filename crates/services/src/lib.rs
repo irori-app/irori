@@ -54,6 +54,7 @@ pub mod replay;
 pub mod reshade;
 mod running;
 pub mod save_snapshots;
+pub mod screen;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
@@ -205,6 +206,9 @@ pub struct Inner {
     isolated: bool,
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
+    /// The computer is kept awake for downloads after the screen was turned
+    /// off (`screen.rs`).
+    screen_off_hold: AtomicBool,
     presence: discord::Presence,
     /// The replay buffer of the session it records, and its shortcut.
     replay: replay::ReplayState,
@@ -319,6 +323,7 @@ impl Backend {
             online: AtomicBool::new(true),
             isolated,
             auto_paused: AtomicBool::new(false),
+            screen_off_hold: AtomicBool::new(false),
             presence: discord::Presence::default(),
             replay: replay::ReplayState::default(),
             expired_logins: RwLock::new(BTreeMap::new()),

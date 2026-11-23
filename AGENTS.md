@@ -530,7 +530,12 @@ commands without a window.
   no name is whole. A smart category's own search rule can't use `smart:` (unknown).
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
-  cancel go through a `CancellationToken`. `DownloadQueueSnapshot::queue_place` is a
+  cancel go through a `CancellationToken`. "Turn the screen off" (Downloads page, palette;
+  `screen.rs`) asks the desktop's own display power interface (`kscreen-doctor`, GNOME's
+  `PowerSaveMode`, X11 DPMS, `pmset displaysleepnow`, Windows' `SC_MONITORPOWER`), which
+  wakes at the next input; never root, never offered where nothing would wake it (sway,
+  Hyprland, gamescope), and the computer is kept from sleeping (display not) until the
+  queue is done. `DownloadQueueSnapshot::queue_place` is a
   waiting item's place in line (covers read "Queued · #2"); `Backend::download_disks`
   (`download_space.rs`, blocking) adds up what the queue still downloads per disk
   against its free space. The downloads page (`irori_manage` `downloads/`) derives
