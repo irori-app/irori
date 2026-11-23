@@ -155,6 +155,8 @@ pub(crate) enum PaletteTarget {
     DetailRows,
     /// Set a game's time played by hand.
     EditPlaytime(GameId),
+    /// Install one copy of a game's entry.
+    InstallCopy(GameId),
     /// Turn a ROM library entry into an added PC game.
     PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
@@ -981,6 +983,10 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::DetailRows => window.defer(cx, irori_game::open_detail_rows_dialog),
         PaletteTarget::EditPlaytime(id) => window.defer(cx, move |window, cx| {
             irori_game::open_playtime_dialog(id, window, cx)
+        }),
+        // After the palette's own dialog has closed: the sheet is a dialog.
+        PaletteTarget::InstallCopy(id) => window.defer(cx, move |window, cx| {
+            irori_game::ops::install(&id, window, cx)
         }),
         PaletteTarget::PlayAsPcGame(id) => {
             irori_library::open_play_as_pc_game_dialog(&id, window, cx)

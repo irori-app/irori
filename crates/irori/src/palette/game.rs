@@ -185,6 +185,17 @@ pub(super) struct GameFacts {
     /// Its store keeps cloud saves Irori syncs.
     pub(super) syncable: bool,
     pub(super) actions: Vec<(usize, UserAction)>,
+    /// Its entry's other copies that can be played or installed, each with
+    /// its label ("Play with Steam").
+    pub(super) copies: Vec<CopyRow>,
+}
+
+/// Another copy of the game's entry, played or installed from the palette.
+#[derive(Debug, Clone)]
+pub(super) struct CopyRow {
+    pub(super) id: irori_core::GameId,
+    pub(super) label: SharedString,
+    pub(super) action: irori_ui::copies::CopyAction,
 }
 
 /// Every action of `game`, as the level → opens lists them: what it is
@@ -221,6 +232,18 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
             PaletteTarget::Play(id.clone()),
         ),
         _ => {}
+    }
+    for copy in &facts.copies {
+        let (icon, target) = match copy.action {
+            irori_ui::copies::CopyAction::Play => {
+                (IconName::Play, PaletteTarget::Play(copy.id.clone()))
+            }
+            irori_ui::copies::CopyAction::Install => (
+                IconName::Download,
+                PaletteTarget::InstallCopy(copy.id.clone()),
+            ),
+        };
+        push(Entry::new().label(copy.label.clone()).icon(icon), target);
     }
     push(
         Entry::new()

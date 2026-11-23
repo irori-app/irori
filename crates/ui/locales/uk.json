@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Файли {launcher}, які Irori не зміг прочитати",
   "ui.copies.title": "Копії",
   "ui.copies.open": "Відкрити копію з {store}",
+  "ui.copies.play": "Грати через {copy}",
+  "ui.copies.install": "Установити через {copy}",
   "ui.copies.make_default": "Зробити цю копію основною",
   "ui.copies.separate": "Показувати цю копію окремо",
   "ui.copies.separate_all": "Показувати кожну копію окремо",

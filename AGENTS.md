@@ -492,7 +492,9 @@ commands without a window.
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
   `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
   own title when the copies' folded titles differ, else a ROM's file or, for two copies
-  on one store, its folder.
+  on one store, its folder. Each other copy can be played or installed right from the
+  copies menu and the palette ("Play with Steam", `copies::copy_action`; through
+  `irori_ui::hooks::play_game`/`install_game`, the game page's own flows).
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank

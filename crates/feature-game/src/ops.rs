@@ -495,6 +495,16 @@ pub fn client_action(id: &GameId, action: ClientAction, window: &mut Window, cx:
     .detach();
 }
 
+/// Install `id` as its page's Install does: the install sheet, or the
+/// store's own client for games Irori doesn't install.
+pub fn install(id: &GameId, window: &mut Window, cx: &mut App) {
+    if id.runner.manages_installs() {
+        crate::install::open_install_sheet(id.clone(), window, cx);
+    } else {
+        client_action(id, ClientAction::Install, window, cx);
+    }
+}
+
 /// Point an added game at its program's new place (a file, or a folder with
 /// one program in it). Its title, art, settings and playtime stay.
 pub fn locate_program(id: &GameId, window: &mut Window, cx: &mut App) {

@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "File di {launcher} che Irori non è riuscito a leggere",
   "ui.copies.title": "Copie",
   "ui.copies.open": "Apri la copia di {store}",
+  "ui.copies.play": "Gioca con {copy}",
+  "ui.copies.install": "Installa con {copy}",
   "ui.copies.make_default": "Usa questa copia come predefinita",
   "ui.copies.separate": "Mostra questa copia a parte",
   "ui.copies.separate_all": "Mostra ogni copia a parte",

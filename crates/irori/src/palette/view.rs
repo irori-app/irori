@@ -282,6 +282,23 @@ fn game_facts(game: &GameInfo, cx: &mut App) -> super::game::GameFacts {
     let actions = irori_ui::user_actions::list(&id, cx);
     let syncable = irori_game::offers_sync(game, cx);
     let kind = models(cx).statuses.read(cx).kind(&id);
+    let copies = irori_ui::copies::labelled(&id, cx)
+        .into_iter()
+        .filter(|(copy, _)| copy.id() != id)
+        .filter_map(|(copy, label)| {
+            let busy = models(cx)
+                .statuses
+                .read(cx)
+                .kind(&copy.id())
+                .is_some_and(irori_core::StatusKind::is_busy);
+            let action = irori_ui::copies::copy_action(&copy, busy)?;
+            Some(super::game::CopyRow {
+                id: copy.id(),
+                label: irori_ui::copies::action_label(action, &label),
+                action,
+            })
+        })
+        .collect();
     let library = models(cx).library.read(cx);
     super::game::GameFacts {
         kind,
@@ -290,6 +307,7 @@ fn game_facts(game: &GameInfo, cx: &mut App) -> super::game::GameFacts {
         hidden: library.is_hidden(&id),
         syncable,
         actions,
+        copies,
     }
 }
 

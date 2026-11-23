@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Fișiere {launcher} pe care Irori nu le-a putut citi",
   "ui.copies.title": "Copii",
   "ui.copies.open": "Deschide copia de pe {store}",
+  "ui.copies.play": "Joacă prin {copy}",
+  "ui.copies.install": "Instalează prin {copy}",
   "ui.copies.make_default": "Folosește această copie implicit",
   "ui.copies.separate": "Afișează această copie separat",
   "ui.copies.separate_all": "Afișează fiecare copie separat",
