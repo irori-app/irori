@@ -748,7 +748,13 @@ commands without a window.
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is
-  shown unfiltered there, never lost.
+  shown unfiltered there, never lost. Developer and publisher (`ViewFilter::developers`,
+  `publishers`, compared by `filter::company_key`) offer the library's commonest 30
+  plus any picked; smart categories have no rule for them, so `smart_from_view` names
+  them as left over. Group by also offers a game's facts (`irori-library`'s
+  `groups.rs`: store, platform as it would run here, developer, publisher, release
+  year, playtime and size bands), each game in one section; the palette offers them
+  through `Grouping::BY_FACT`.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock
@@ -1245,11 +1251,22 @@ cx.spawn_in(window, async move |this, cx| {
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
 in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
 (through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
-grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+grid's row height follows it, `grid::caption_rem`; full leads with the value the
+library is sorted by, `format::sort_value`), `coverShape` (the grid's covers as boxes,
+squares or 16:9 banners of hero art: `components::cover_art_for`,
+`grid::grid_metrics_shaped`; Focus and favourites stay boxes, and only boxes are drawn
+whole), `coverHover` (rise or ring only)
 and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
 the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
 row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
-dragging its edge or with the arrow keys on it.
+dragging its edge or with the arrow keys on it; its covers are small, medium or large
+(`libraryFocusCoverSize`, `layouts::focus_tile_rem`, laid out by `grid::focus_metrics`
+outside the grid slider's range). With `libraryAutoLayout` the view switches between the
+grid and Focus as the window crosses the width Focus needs (`layouts::wide_enough_for_focus`,
+measured, never a breakpoint; `auto_layout` switches only on a crossing, so a view picked
+by hand holds, and never saves the switch). A click on a grid cover opens the
+drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
+opens the drawer (which then follows clicks).
 
 **Feature crates:**
 

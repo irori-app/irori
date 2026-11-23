@@ -1,6 +1,9 @@
 //! Games picked for bulk actions. Selection mode starts with the toolbar's
 //! "Select", a Ctrl-click or a Shift-click and ends with "Done" or Escape;
-//! while it lasts, clicking a game picks it instead of opening it.
+//! while it lasts, clicking a game picks it instead of opening it. The
+//! keyboard picks too: Shift with the arrows, Home, End and the page keys
+//! picks the games from where the steps began to the focused one, and
+//! Shift+Space (Ctrl+Space) picks or unpicks the focused game.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,6 +16,9 @@ pub struct Selection {
     picked: HashSet<GameId>,
     /// Where the last plain pick happened; Shift-click extends from here.
     anchor: Option<GameId>,
+    /// While Shift+arrows extend a range: the picks from before it, so a
+    /// step back unpicks what the range no longer covers.
+    range_base: Option<HashSet<GameId>>,
     /// Counts changes to the picks, so what is worked out from them is
     /// worked out again only after one.
     revision: u64,
@@ -64,6 +70,7 @@ impl Selection {
             self.picked.insert(id.clone());
         }
         self.anchor = Some(id.clone());
+        self.range_base = None;
     }
 
     /// Pick every game from the anchor to `id` in display order
@@ -78,6 +85,35 @@ impl Selection {
         self.revision += 1;
         let (lo, hi) = (from.min(to), from.max(to));
         self.picked.extend(order[lo..=hi].iter().map(|g| g.id()));
+        self.range_base = None;
+    }
+
+    /// Shift with a moving key: pick the games from where the range began to
+    /// `to` in display order, replacing what the range picked before, so
+    /// stepping back unpicks the games it leaves. A new range begins at
+    /// `from`, the game focused before the first step, and keeps the picks
+    /// made before it.
+    pub fn extend_range(&mut self, from: &GameId, to: &GameId, order: &[Arc<GameInfo>]) {
+        if self.range_base.is_none() {
+            self.range_base = Some(self.picked.clone());
+            self.anchor = Some(from.clone());
+        }
+        let position = |target: &GameId| order.iter().position(|g| &g.id() == target);
+        let (Some(start), Some(end)) = (self.anchor.as_ref().and_then(position), position(to))
+        else {
+            return;
+        };
+        self.active = true;
+        self.revision += 1;
+        let (lo, hi) = (start.min(end), start.max(end));
+        let mut picked = self.range_base.clone().unwrap_or_default();
+        picked.extend(order[lo..=hi].iter().map(|g| g.id()));
+        self.picked = picked;
+    }
+
+    /// A move without Shift: the next Shift step begins a new range.
+    pub fn end_range(&mut self) {
+        self.range_base = None;
     }
 
     /// Pick every shown game.
@@ -85,6 +121,7 @@ impl Selection {
         self.active = true;
         self.revision += 1;
         self.picked.extend(order.iter().map(|g| g.id()));
+        self.range_base = None;
     }
 
     /// Unpick everything but stay in selection mode.
@@ -92,6 +129,7 @@ impl Selection {
     pub fn clear(&mut self) {
         self.picked.clear();
         self.anchor = None;
+        self.range_base = None;
         self.revision += 1;
     }
 
@@ -106,6 +144,7 @@ impl Selection {
         self.picked.retain(|id| shown.contains(id));
         if self.picked.len() != before {
             self.revision += 1;
+            self.range_base = None;
         }
     }
 
@@ -167,6 +206,31 @@ mod tests {
         let mut s = Selection::default();
         s.extend_to(&id(2), &order);
         assert_eq!(picked(&s, &order), ["2"]);
+    }
+
+    #[test]
+    fn shift_steps_pick_a_range_that_follows_the_focus() {
+        let order = order(8);
+        let mut s = Selection::default();
+        // A pick made before the range stays.
+        s.toggle(&id(7));
+        s.end_range();
+        s.extend_range(&id(2), &id(3), &order);
+        assert_eq!(picked(&s, &order), ["2", "3", "7"]);
+        s.extend_range(&id(3), &id(5), &order);
+        assert_eq!(picked(&s, &order), ["2", "3", "4", "5", "7"]);
+        // Stepping back unpicks what the range leaves, past its start too.
+        s.extend_range(&id(5), &id(1), &order);
+        assert_eq!(picked(&s, &order), ["1", "2", "7"]);
+        // A plain move ends the range: the next one begins where it is.
+        s.end_range();
+        s.extend_range(&id(5), &id(6), &order);
+        assert_eq!(picked(&s, &order), ["1", "2", "5", "6", "7"]);
+        // Ticking one game ends it too.
+        s.toggle(&id(0));
+        s.extend_range(&id(3), &id(4), &order);
+        assert_eq!(picked(&s, &order), ["0", "1", "2", "3", "4", "5", "6", "7"]);
+        assert!(s.is_active());
     }
 
     #[test]

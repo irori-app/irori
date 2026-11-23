@@ -22,7 +22,9 @@ use irori_services::EffectiveStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{models, play_status};
 
-use crate::filter::{self, CategoryFilter, HiddenMode, InstallFilter, ReleaseWindow, ViewFilter};
+use crate::filter::{
+    self, CategoryFilter, Company, HiddenMode, InstallFilter, ReleaseWindow, ViewFilter,
+};
 use crate::value_search::{self, Section, ValueCache};
 
 /// Owner of the library's [`ViewFilter`]. Persists every change except the
@@ -126,6 +128,9 @@ pub struct FiltersPanel {
     genres: crate::filter::PerRevision<Vec<(String, String)>>,
     /// The commonest store tags, as (key, name).
     tags: crate::filter::PerRevision<Vec<(String, String)>>,
+    /// The commonest developers and publishers, as (key, name).
+    developers: crate::filter::PerRevision<Vec<(String, String)>>,
+    publishers: crate::filter::PerRevision<Vec<(String, String)>>,
     /// Where the panel was last drawn, for the room under it.
     top: Option<Pixels>,
     /// The field that finds a filter value by name, made at the first draw
@@ -156,6 +161,8 @@ impl FiltersPanel {
             systems: Default::default(),
             genres: Default::default(),
             tags: Default::default(),
+            developers: Default::default(),
+            publishers: Default::default(),
             top: None,
             search: None,
             values: ValueCache::default(),
@@ -223,6 +230,8 @@ fn section_label(section: Section) -> SharedString {
         Section::Mode => irori_ui::game_mode::title(),
         Section::Genre => t("library.filters.section.genre"),
         Section::Tag => t("library.filters.section.steam_tags"),
+        Section::Developer => t("library.filters.section.developer"),
+        Section::Publisher => t("library.filters.section.publisher"),
     }
 }
 
@@ -651,6 +660,81 @@ impl FiltersPanel {
         )
     }
 
+    /// One chip per common developer or publisher, and any picked ones;
+    /// several may be picked. `None` when no store names one.
+    fn render_companies(
+        &mut self,
+        f: &ViewFilter,
+        company: Company,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let snapshot = models(cx).library.read(cx).snapshot.clone();
+        let (cache, picked, title, id) = match company {
+            Company::Developer => (
+                &mut self.developers,
+                &f.developers,
+                "library.filters.section.developer",
+                "developer",
+            ),
+            Company::Publisher => (
+                &mut self.publishers,
+                &f.publishers,
+                "library.filters.section.publisher",
+                "publisher",
+            ),
+        };
+        let mut offered = cache
+            .get(&snapshot, |l| filter::present_companies(l, company))
+            .clone();
+        for name in picked {
+            let key = filter::company_key(name);
+            if !offered.iter().any(|(k, _)| *k == key) {
+                offered.push((key, name.clone()));
+            }
+        }
+        if offered.is_empty() {
+            return None;
+        }
+        let picked: std::collections::HashSet<String> =
+            picked.iter().map(|c| filter::company_key(c)).collect();
+        Some(
+            v_flex()
+                .gap_2()
+                .child(section(t(title)))
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .children(offered.into_iter().map(|(key, name)| {
+                            Button::new(SharedString::from(format!("{id}-{key}")))
+                                .xsmall()
+                                .outline()
+                                .label(name.clone())
+                                .selected(picked.contains(&key))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    let (key, name) = (key.clone(), name.clone());
+                                    this.set(
+                                        move |f| {
+                                            let set = match company {
+                                                Company::Developer => &mut f.developers,
+                                                Company::Publisher => &mut f.publishers,
+                                            };
+                                            filter::toggle_named(
+                                                set,
+                                                &key,
+                                                name,
+                                                filter::company_key,
+                                            )
+                                        },
+                                        cx,
+                                    )
+                                }))
+                        })),
+                )
+                .into_any_element(),
+        )
+    }
+
     /// Hide / show / only hidden games, behind the PIN when one is set, and
     /// the PIN itself: set it, lock again, or change it.
     fn render_hidden(
@@ -794,6 +878,8 @@ impl Render for FiltersPanel {
         let systems = self.render_systems(&f, cx);
         let genres = self.render_genres(&f, cx);
         let tags = self.render_tags(&f, cx);
+        let developers = self.render_companies(&f, Company::Developer, cx);
+        let publishers = self.render_companies(&f, Company::Publisher, cx);
         let categories = {
             let lib = models(cx).library.read(cx);
             irori_ui::categories::entries(&lib.user, &lib.categories)
@@ -947,6 +1033,8 @@ impl Render for FiltersPanel {
             .child(self.render_modes(&f, cx))
             .when_some(genres, |el, genres| el.child(genres))
             .when_some(tags, |el, tags| el.child(tags))
+            .when_some(developers, |el, d| el.child(d))
+            .when_some(publishers, |el, p| el.child(p))
             .child(self.render_age(&f, cx))
             .child(self.render_statuses(&f, cx))
             .child(self.render_categories(&f, &categories, cx))

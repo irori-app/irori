@@ -18,7 +18,8 @@ use gpui_kit::{
 };
 use irori_core::Runner;
 use irori_core::settings::{
-    CoverCaption, CoverCorners, CoverFit, CoverHover, LibraryBackground, LibraryLayout, UiPrefs,
+    CoverCaption, CoverCorners, CoverFit, CoverHover, CoverShape, FocusCoverSize,
+    LibraryBackground, LibraryLayout, UiPrefs,
 };
 use irori_services::StoreFilter;
 use irori_ui::i18n::{t, t_args};
@@ -125,17 +126,17 @@ impl LibraryView {
                     .dropdown_menu({
                         let model = self.filters.clone();
                         move |menu, _, _| {
-                            let options = [
-                                (Grouping::None, "library.toolbar.group.none"),
-                                (Grouping::Status, "library.toolbar.group.status"),
-                                (Grouping::Mode, "library.toolbar.group.mode"),
-                                (Grouping::Genre, "library.toolbar.group.genre"),
-                                (Grouping::Category, "library.toolbar.group.category"),
-                            ];
-                            options.into_iter().fold(menu, |menu, (option, key)| {
+                            Grouping::ALL.into_iter().fold(menu, |menu, option| {
                                 let model = model.clone();
+                                // The groupings by a game's facts follow
+                                // the user's own after a line.
+                                let menu = if option == Grouping::Store {
+                                    menu.separator()
+                                } else {
+                                    menu
+                                };
                                 menu.item(
-                                    PopupMenuItem::new(t(key))
+                                    PopupMenuItem::new(option.label())
                                         .checked(option == group)
                                         .on_click(move |_, _, cx| {
                                             model.update(cx, |m, cx| {
@@ -531,6 +532,21 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
     for (value, key, f) in captions {
         menu = menu.item(set(t(key), ui.cover_caption == value, f));
     }
+    menu = menu.separator().label(t("library.look.shape"));
+    let shapes: [LookRow<CoverShape>; 3] = [
+        (CoverShape::Portrait, "library.look.shape_portrait", |u| {
+            u.cover_shape = CoverShape::Portrait
+        }),
+        (CoverShape::Square, "library.look.shape_square", |u| {
+            u.cover_shape = CoverShape::Square
+        }),
+        (CoverShape::Banner, "library.look.shape_banner", |u| {
+            u.cover_shape = CoverShape::Banner
+        }),
+    ];
+    for (value, key, f) in shapes {
+        menu = menu.item(set(t(key), ui.cover_shape == value, f));
+    }
     menu = menu.separator().label(t("library.look.fit"));
     let fits: [LookRow<CoverFit>; 2] = [
         (CoverFit::Crop, "library.look.fit_crop", |u| {
@@ -557,6 +573,21 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
     ];
     for (value, key, f) in corners {
         menu = menu.item(set(t(key), ui.cover_corners == value, f));
+    }
+    menu = menu.separator().label(t("library.look.focus_size"));
+    let focus_sizes: [LookRow<FocusCoverSize>; 3] = [
+        (FocusCoverSize::Small, "library.look.focus_small", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Small
+        }),
+        (FocusCoverSize::Medium, "library.look.focus_medium", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Medium
+        }),
+        (FocusCoverSize::Large, "library.look.focus_large", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Large
+        }),
+    ];
+    for (value, key, f) in focus_sizes {
+        menu = menu.item(set(t(key), ui.library_focus_cover_size == value, f));
     }
     let rises = ui.cover_hover == CoverHover::Lift;
     menu.separator()
@@ -586,6 +617,16 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
             t("library.look.categories"),
             ui.cover_categories,
             |u| u.cover_categories = !u.cover_categories,
+        ))
+        .item(set(
+            t("library.look.open_details"),
+            ui.library_open_details_on_select,
+            |u| u.library_open_details_on_select = !u.library_open_details_on_select,
+        ))
+        .item(set(
+            t("library.look.auto_layout"),
+            ui.library_auto_layout,
+            |u| u.library_auto_layout = !u.library_auto_layout,
         ))
         .separator()
         .item(

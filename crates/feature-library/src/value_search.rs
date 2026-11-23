@@ -1,5 +1,6 @@
 //! Finding a filter value by name in the Filters popover: every category,
-//! system, play status, game mode, genre and store tag the library has, each
+//! system, play status, game mode, genre, store tag, developer and publisher
+//! the library has, each
 //! with how many shown games carry it. Typing in the popover's search field
 //! lists the values whose names hold the text; picking one ticks it as its
 //! own section would.
@@ -15,7 +16,7 @@ use irori_core::GameMode;
 use irori_services::search::tag_key;
 use irori_services::{CategoryIndex, CategoryRef, EffectiveStatus, LibrarySnapshot, UserData};
 
-use crate::filter::{ViewFilter, genre_key};
+use crate::filter::{Company, ViewFilter, company_key, genre_key, toggle_named};
 
 /// Most values a search lists; more ask for a longer text.
 pub const MAX_SHOWN: usize = 40;
@@ -29,6 +30,8 @@ pub enum Section {
     Mode,
     Genre,
     Tag,
+    Developer,
+    Publisher,
 }
 
 /// One value a filter can pick.
@@ -49,6 +52,13 @@ pub enum Value {
         key: String,
         name: String,
     },
+    /// A developer or publisher by its [`company_key`], with the name the
+    /// library shows.
+    Company {
+        company: Company,
+        key: String,
+        name: String,
+    },
 }
 
 impl Value {
@@ -60,6 +70,14 @@ impl Value {
             Value::Mode(_) => Section::Mode,
             Value::Genre { .. } => Section::Genre,
             Value::Tag { .. } => Section::Tag,
+            Value::Company {
+                company: Company::Developer,
+                ..
+            } => Section::Developer,
+            Value::Company {
+                company: Company::Publisher,
+                ..
+            } => Section::Publisher,
         }
     }
 
@@ -72,6 +90,9 @@ impl Value {
             Value::Mode(m) => filter.modes.contains(m),
             Value::Genre { key, .. } => filter.genres.iter().any(|g| genre_key(g) == *key),
             Value::Tag { key, .. } => filter.tags.iter().any(|t| tag_key(t) == *key),
+            Value::Company { company, key, .. } => companies(filter, *company)
+                .iter()
+                .any(|c| company_key(c) == *key),
         }
     }
 
@@ -108,7 +129,22 @@ impl Value {
                     filter.tags.insert(name.clone());
                 }
             }
+            Value::Company { company, key, name } => {
+                let set = match company {
+                    Company::Developer => &mut filter.developers,
+                    Company::Publisher => &mut filter.publishers,
+                };
+                toggle_named(set, key, name.clone(), company_key);
+            }
         }
+    }
+}
+
+/// The developers or publishers `filter` has picked.
+fn companies(filter: &ViewFilter, company: Company) -> &std::collections::BTreeSet<String> {
+    match company {
+        Company::Developer => &filter.developers,
+        Company::Publisher => &filter.publishers,
     }
 }
 
@@ -161,6 +197,8 @@ pub fn candidates(
     // key → (first name seen, count)
     let mut genres: HashMap<String, (String, usize)> = HashMap::new();
     let mut tags: HashMap<String, (String, usize)> = HashMap::new();
+    let mut developers: HashMap<String, (String, usize)> = HashMap::new();
+    let mut publishers: HashMap<String, (String, usize)> = HashMap::new();
     for g in library.games.iter() {
         let key = g.id().key();
         if user.hidden.contains(&key) {
@@ -175,6 +213,14 @@ pub fn candidates(
         }
         count_names(&mut genres, &g.genres, genre_key);
         count_names(&mut tags, &g.store_tags, tag_key);
+        for (company, counts) in [
+            (Company::Developer, &mut developers),
+            (Company::Publisher, &mut publishers),
+        ] {
+            if let Some(name) = company.of(g) {
+                count_names(counts, &[name.to_owned()], company_key);
+            }
+        }
     }
     let mut out: Vec<Candidate> = categories
         .iter()
@@ -215,6 +261,22 @@ pub fn candidates(
             n,
         )
     }));
+    for (company, counts) in [
+        (Company::Developer, developers),
+        (Company::Publisher, publishers),
+    ] {
+        out.extend(counts.into_iter().map(|(key, (name, n))| {
+            Candidate::new(
+                Value::Company {
+                    company,
+                    key,
+                    name: name.clone(),
+                },
+                name,
+                n,
+            )
+        }));
+    }
     out
 }
 
@@ -328,6 +390,7 @@ mod tests {
                 genres: genres.iter().map(|s| s.to_string()).collect(),
                 store_tags: tags.iter().map(|s| s.to_string()).collect(),
                 game_modes: modes.to_vec(),
+                developer: Some("Valve".into()),
                 ..Default::default()
             }
             .finalize(),
@@ -410,6 +473,13 @@ mod tests {
         assert!(filter.modes.contains(&GameMode::Coop));
         coop.toggle(&mut filter);
         assert!(filter.modes.is_empty());
+        let studio = find(&values, "valve")[0].value.clone();
+        assert_eq!(studio.section(), Section::Developer);
+        studio.toggle(&mut filter);
+        assert!(studio.is_picked(&filter));
+        assert_eq!(filter.developers.len(), 1);
+        studio.toggle(&mut filter);
+        assert!(filter.developers.is_empty());
         let genre = find(&values, "role")[0].value.clone();
         genre.toggle(&mut filter);
         assert!(genre.is_picked(&filter));

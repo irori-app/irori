@@ -30,6 +30,7 @@ mod filter;
 mod filters_panel;
 pub mod format;
 mod grid;
+mod groups;
 mod i18n;
 mod launch;
 mod launchbox;
@@ -102,6 +103,18 @@ gpui_kit::actions!(
         SelectLast,
         SelectPageUp,
         SelectPageDown,
+        /// Move like the Select actions and pick the games from where
+        /// these steps began to the focused one (Shift with the keys).
+        ExtendLeft,
+        ExtendRight,
+        ExtendUp,
+        ExtendDown,
+        ExtendFirst,
+        ExtendLast,
+        ExtendPageUp,
+        ExtendPageDown,
+        /// Pick or unpick the focused game for bulk actions.
+        PickFocused,
         /// Open the focused game's page.
         OpenSelected,
         /// Run the focused game's primary action (Play, Stop or Install).
@@ -178,6 +191,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("end", SelectLast, grid),
         KeyBinding::new("pageup", SelectPageUp, grid),
         KeyBinding::new("pagedown", SelectPageDown, grid),
+        KeyBinding::new("shift-left", ExtendLeft, grid),
+        KeyBinding::new("shift-right", ExtendRight, grid),
+        KeyBinding::new("shift-up", ExtendUp, grid),
+        KeyBinding::new("shift-down", ExtendDown, grid),
+        KeyBinding::new("shift-home", ExtendFirst, grid),
+        KeyBinding::new("shift-end", ExtendLast, grid),
+        KeyBinding::new("shift-pageup", ExtendPageUp, grid),
+        KeyBinding::new("shift-pagedown", ExtendPageDown, grid),
+        // Shift+Space everywhere; Ctrl+Space as file managers have it,
+        // though macOS may keep it for switching input sources.
+        KeyBinding::new("shift-space", PickFocused, grid),
+        KeyBinding::new("ctrl-space", PickFocused, grid),
         KeyBinding::new("enter", OpenSelected, grid),
         KeyBinding::new("i", ToggleDrawer, grid),
         KeyBinding::new("space", ActivateSelected, grid),
@@ -345,6 +370,21 @@ pub fn set_groups_by_category(on: bool, cx: &mut App) {
         } else {
             Grouping::None
         };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
+/// How the library splits its games into sections; `None` until a library
+/// view exists.
+pub fn grouping(cx: &App) -> Option<Grouping> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group)
+}
+
+/// Group the library by `group` (the palette's rows for a game's facts).
+/// Does nothing until a library view exists.
+pub fn set_grouping(group: Grouping, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
         model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
     }
 }

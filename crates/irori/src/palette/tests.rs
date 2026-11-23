@@ -7,6 +7,7 @@ fn targets(install: Option<InstallFilter>, favourites: Option<bool>, quick: bool
         grouped_by_mode: install.map(|_| true),
         grouped_by_genre: None,
         grouped_by_category: None,
+        grouping: None,
         categories: &[],
         views: &[],
         layout: LibraryLayout::Grid,
@@ -57,6 +58,7 @@ fn every_category_of_both_kinds_is_offered() {
         grouped_by_mode: Some(false),
         grouped_by_genre: Some(false),
         grouped_by_category: Some(false),
+        grouping: None,
         categories: &categories,
         views: &[],
         layout: LibraryLayout::Grid,
@@ -98,6 +100,7 @@ fn the_hidden_games_pin_is_offered_only_while_unlocked() {
             grouped_by_mode: None,
             grouped_by_genre: None,
             grouped_by_category: None,
+            grouping: None,
             categories: &[],
             views: &[],
             layout: LibraryLayout::Grid,
@@ -466,4 +469,48 @@ fn every_game_offers_its_links_in_its_level() {
             "{runner:?}"
         );
     }
+}
+
+#[test]
+fn groupings_by_a_games_facts_are_offered_and_undone() {
+    let offered = |grouping: Option<Grouping>| {
+        let mut targets = Vec::new();
+        let library = LibraryCommands {
+            grouped: None,
+            grouped_by_mode: None,
+            grouped_by_genre: None,
+            grouped_by_category: None,
+            grouping,
+            categories: &[],
+            views: &[],
+            layout: LibraryLayout::Grid,
+            install: None,
+            favourites: None,
+            quick_controls: false,
+            hidden_pin: None,
+        };
+        Palette::items(
+            None,
+            None,
+            library,
+            false,
+            &[],
+            (false, false),
+            &mut targets,
+        );
+        targets
+            .into_iter()
+            .filter_map(|t| match t {
+                PaletteTarget::GroupBy(g) => Some(g),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    // Without a library view, nothing to group.
+    assert!(offered(None).is_empty());
+    assert_eq!(offered(Some(Grouping::None)), Grouping::BY_FACT);
+    // The grouping in use is offered as its undoing.
+    let grouped = offered(Some(Grouping::Year));
+    assert_eq!(grouped.len(), Grouping::BY_FACT.len());
+    assert!(grouped.contains(&Grouping::None) && !grouped.contains(&Grouping::Year));
 }

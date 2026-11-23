@@ -889,6 +889,21 @@ const COVER_FIT: &[ChoiceOption] = &[
     ),
 ];
 
+const COVER_SHAPE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("portrait"),
+        Key("settings.option.cover_shape.portrait"),
+    ),
+    opt(
+        ChoiceValue::Str("square"),
+        Key("settings.option.cover_shape.square"),
+    ),
+    opt(
+        ChoiceValue::Str("banner"),
+        Key("settings.option.cover_shape.banner"),
+    ),
+];
+
 const COVER_CAPTION: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("full"),
@@ -923,6 +938,21 @@ const FOCUS_COLUMNS: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(1), Verbatim("1")),
     opt(ChoiceValue::Num(2), Verbatim("2")),
     opt(ChoiceValue::Num(3), Verbatim("3")),
+];
+
+const FOCUS_COVER_SIZE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("small"),
+        Key("settings.option.focus_cover_size.small"),
+    ),
+    opt(
+        ChoiceValue::Str("medium"),
+        Key("settings.option.focus_cover_size.medium"),
+    ),
+    opt(
+        ChoiceValue::Str("large"),
+        Key("settings.option.focus_cover_size.large"),
+    ),
 ];
 
 const DENSITY: &[ChoiceOption] = &[
@@ -2628,6 +2658,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
     ]),
     app(
+        "iroriUi.coverShape",
+        "settings.field.ui_cover_shape.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_SHAPE),
+    )
+    .help("settings.field.ui_cover_shape.help")
+    .keywords(&[
+        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
+    ]),
+    app(
         "iroriUi.coverCaption",
         "settings.field.ui_cover_caption.label",
         Appearance,
@@ -2653,6 +2694,40 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_focus_columns.help")
     .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryFocusCoverSize",
+        "settings.field.ui_focus_cover_size.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COVER_SIZE),
+    )
+    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
+    app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
+    app(
+        "iroriUi.libraryAutoLayout",
+        "settings.field.ui_auto_layout.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_auto_layout.help")
+    .keywords(&[
+        "focus",
+        "grid",
+        "width",
+        "window",
+        "automatic",
+        "resize",
+        "layout",
+    ]),
     app(
         "iroriUi.coverFavourite",
         "settings.field.ui_cover_favourite.label",

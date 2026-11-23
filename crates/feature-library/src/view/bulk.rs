@@ -118,8 +118,9 @@ pub(super) struct BulkCache {
 impl LibraryView {
     /// A click on a game: Shift extends the selection, Ctrl (or any click in
     /// selection mode) picks it. Otherwise the list opens its page; the grid
-    /// and Focus select it (the grid opens its drawer) and open the page on
-    /// a double click.
+    /// and Focus select it (the grid opens its drawer, unless
+    /// `libraryOpenDetailsOnSelect` is off) and open the page on a double
+    /// click.
     pub(super) fn click_game(
         &mut self,
         id: &GameId,
@@ -148,12 +149,29 @@ impl LibraryView {
                 // Arrow keys go on from the clicked game.
                 self.grid_focus.focus(window, cx);
                 match self.layout {
-                    LibraryLayout::Grid => self.open_drawer(window, cx),
+                    LibraryLayout::Grid if self.ui_prefs.library_open_details_on_select => {
+                        self.open_drawer(window, cx)
+                    }
+                    // An open drawer follows the click; a closed one stays
+                    // closed until `I`, Enter or a double click.
                     _ => self.show_focused(false, window, cx),
                 }
             }
         }
         cx.notify();
+    }
+
+    /// Shift+Space (Ctrl+Space): pick or unpick the focused game, starting
+    /// selection mode, as a Ctrl-click does.
+    pub(super) fn pick_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.grid_focus.is_focused(window) {
+            cx.propagate();
+            return;
+        }
+        if let Some(id) = self.focused_in_view() {
+            self.selection.toggle(&id);
+            cx.notify();
+        }
     }
 
     /// The toolbar's "Select" / "Done".

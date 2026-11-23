@@ -10,7 +10,7 @@ use gpui_kit::{
     linear_color_stop, linear_gradient, px, rems, rgb,
 };
 use irori_core::GameInfo;
-use irori_core::settings::CoverCorners;
+use irori_core::settings::{CoverCorners, CoverShape};
 
 use crate::art::{Art, art_store};
 use crate::motion::fade_in;
@@ -160,12 +160,28 @@ pub fn cover_radius(corners: CoverCorners, cx: &App) -> Pixels {
     }
 }
 
-/// A 2:3 cover tile. Pulses while its art loads; a game without cover art
-/// gets its title on a quiet wash instead.
+/// The art a cover of `shape` shows: box art for the usual 2:3 cover, the
+/// store's square art for a square one, the wide hero art for a banner,
+/// each falling back through the others the game has.
+pub fn cover_art_for(game: &GameInfo, shape: CoverShape) -> Option<&str> {
+    match shape {
+        CoverShape::Portrait => game.cover_art(),
+        CoverShape::Square => game
+            .art_square
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .or_else(|| game.cover_art()),
+        CoverShape::Banner => game.hero_art(),
+    }
+}
+
+/// A 2:3 cover tile (or another [`CoverShape`]). Pulses while its art
+/// loads; a game without cover art gets its title on a quiet wash instead.
 #[derive(IntoElement)]
 pub struct GameCover {
     game: Arc<GameInfo>,
     width: Rems,
+    shape: CoverShape,
     /// Set for art drawn whole in its own shape; 2:3 otherwise.
     height: Option<Rems>,
     radius: Option<Pixels>,
@@ -176,6 +192,7 @@ impl GameCover {
         Self {
             game,
             width: rems(11.),
+            shape: CoverShape::Portrait,
             height: None,
             radius: None,
         }
@@ -184,6 +201,12 @@ impl GameCover {
     /// Tile width; height follows the 2:3 cover ratio.
     pub fn width(mut self, width: Rems) -> Self {
         self.width = width;
+        self
+    }
+
+    /// The cover's shape: which art it shows, and its height for its width.
+    pub fn shape(mut self, shape: CoverShape) -> Self {
+        self.shape = shape;
         self
     }
 
@@ -205,7 +228,7 @@ impl GameCover {
 impl RenderOnce for GameCover {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let px = physical_width(self.width, window);
-        let (image, fresh) = match self.game.cover_art() {
+        let (image, fresh) = match cover_art_for(&self.game, self.shape) {
             Some(url) => (
                 art_image(url, px, false, cx),
                 art_is_fresh(url, px, false, cx),
@@ -216,7 +239,9 @@ impl RenderOnce for GameCover {
         let radius = self.radius.unwrap_or(theme.radius_lg);
         let base = div()
             .w(self.width)
-            .h(self.height.unwrap_or(rems(self.width.0 * 1.5)))
+            .h(self
+                .height
+                .unwrap_or(rems(self.width.0 * self.shape.ratio())))
             .flex_shrink_0()
             .overflow_hidden()
             .rounded(radius)
@@ -262,5 +287,31 @@ impl RenderOnce for GameCover {
                     ),
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_shape_shows_its_own_art_and_falls_back() {
+        let mut game = GameInfo {
+            art_cover: Some("box".into()),
+            art_square: Some("square".into()),
+            art_background: Some("hero".into()),
+            ..Default::default()
+        };
+        assert_eq!(cover_art_for(&game, CoverShape::Portrait), Some("box"));
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("square"));
+        assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("hero"));
+        game.art_square = None;
+        game.art_background = None;
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("box"));
+        assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("box"));
+        game.art_square = Some(String::new());
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("box"));
+        game.art_cover = None;
+        assert_eq!(cover_art_for(&game, CoverShape::Portrait), None);
     }
 }

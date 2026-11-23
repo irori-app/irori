@@ -50,6 +50,9 @@ pub fn smart_from_view(name: &str, view: &ViewFilter) -> (SmartCategory, ViewFil
         hide_unavailable: view.hide_unavailable,
         released: view.released,
         smart_categories: view.smart_categories.clone(),
+        // Smart categories have no rule for who made a game.
+        developers: view.developers.clone(),
+        publishers: view.publishers.clone(),
         ..Default::default()
     };
     if let StoreFilter::Store(runner) = view.store {
