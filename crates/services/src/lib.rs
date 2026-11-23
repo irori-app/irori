@@ -26,6 +26,7 @@ mod download_power;
 mod download_space;
 mod downloads;
 pub mod duplicates;
+pub mod engine_health;
 mod engines;
 mod facts;
 pub mod field_rules;

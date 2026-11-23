@@ -3,7 +3,9 @@
 //! one-click installs and updates of the versions Irori manages, RetroArch
 //! cores, each system's default emulator, the RetroAchievements account
 //! ([`retro`]), starting an emulator without a game ([`open`]), and the
-//! usual ROM folders found on this computer ([`found`]).
+//! usual ROM folders found on this computer ([`found`]). Each emulator's
+//! card says how it stands: a dot (ready, a program gone, not installed),
+//! how many games play with it and which program is gone.
 
 mod configure;
 mod custom;
@@ -43,6 +45,7 @@ use irori_engines::bios::{FileState, SystemBios, SystemState};
 use irori_engines::releases::{self, Release};
 use irori_engines::{EngineKind, EngineRef, Host, Installation, Origin, systems};
 use irori_services::EngineStatus;
+use irori_services::engine_health::EngineHealth;
 use irori_ui::components::{EmptyState, PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -102,6 +105,8 @@ pub fn choice_name(choice: &EngineRef) -> String {
 pub struct EmulatorsView {
     tab_ix: usize,
     statuses: Option<Vec<EngineStatus>>,
+    /// Each emulator's standing by engine id: its games, programs gone.
+    health: HashMap<String, EngineHealth>,
     /// BIOS status by system id.
     bios: HashMap<String, SystemBios>,
     /// Emulated games in the library by system id.
@@ -164,6 +169,7 @@ impl EmulatorsView {
             retro,
             tab_ix: 0,
             statuses: None,
+            health: HashMap::new(),
             bios: HashMap::new(),
             counts: BTreeMap::new(),
             scanning: false,
@@ -190,15 +196,18 @@ impl EmulatorsView {
         let b = backend(cx);
         self.counts = b.emulated_counts();
         let task = irori_ui::run(cx, async move {
-            Ok((b.engine_statuses().await, b.bios_statuses().await))
+            let statuses = b.engine_statuses().await;
+            let health = b.engine_health(statuses.clone()).await;
+            Ok((statuses, health, b.bios_statuses().await))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok((statuses, bios)) = task.await else {
+            let Ok((statuses, health, bios)) = task.await else {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 open::remember(&statuses, cx);
                 this.statuses = Some(statuses);
+                this.health = health;
                 this.bios = bios.into_iter().map(|b| (b.system.clone(), b)).collect();
                 this.sync_system_selects(window, cx);
                 cx.notify();
@@ -759,6 +768,7 @@ impl EmulatorsView {
             .enumerate()
             .map(|(ix, i)| self.render_installation(ix, status, i, cx))
             .collect();
+        let health = self.health.get(&m.id);
         let release_error = match self.releases.get(&m.id) {
             Some(Err(e)) if !status.is_installed() => Some(e.clone()),
             _ => None,
@@ -779,6 +789,7 @@ impl EmulatorsView {
                                 h_flex()
                                     .gap_2()
                                     .flex_wrap()
+                                    .child(health_dot(status, health, cx))
                                     .child(div().text_lg().font_semibold().child(m.name.clone()))
                                     .child(if status.is_installed() {
                                         Tag::success()
@@ -814,7 +825,8 @@ impl EmulatorsView {
                             .child(div().text_sm().text_color(muted).child(t_args(
                                 "manage.emulators.plays",
                                 &[("systems", &systems_text)],
-                            ))),
+                            )))
+                            .children(health_lines(health, cx)),
                     )
                     .when_some(op, |d, live| d.child(render_op(&live, cx)))
                     .child(div().flex_shrink_0().child(primary)),
@@ -1454,6 +1466,69 @@ pub(crate) fn bios_line(status: &SystemBios) -> Option<(bool, SharedString)> {
 }
 
 /// Inline progress of a running install.
+/// A dot saying how an emulator stands: ready, a program it was set up
+/// with is gone, or not installed. The card's tags and lines say it in
+/// words too.
+fn health_dot(status: &EngineStatus, health: Option<&EngineHealth>, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let gone = health.is_some_and(|h| !h.missing.is_empty());
+    let colour = if gone {
+        theme.warning
+    } else if status.is_installed() {
+        theme.success
+    } else {
+        theme.muted_foreground.opacity(0.5)
+    };
+    div()
+        .flex_shrink_0()
+        .size(rems(0.625))
+        .rounded_full()
+        .bg(colour)
+        .into_any_element()
+}
+
+/// The games that play with an emulator, and the programs it lost.
+fn health_lines(health: Option<&EngineHealth>, cx: &App) -> Vec<AnyElement> {
+    let Some(health) = health else {
+        return Vec::new();
+    };
+    let theme = cx.theme();
+    let mut lines = Vec::new();
+    if health.games > 0 {
+        let count = health.games.to_string();
+        lines.push(
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(t_args(
+                    if health.games == 1 {
+                        "manage.emulators.health.games_one"
+                    } else {
+                        "manage.emulators.health.games_other"
+                    },
+                    &[("count", &count)],
+                ))
+                .into_any_element(),
+        );
+    }
+    for program in &health.missing {
+        lines.push(
+            h_flex()
+                .gap_1()
+                .min_w_0()
+                .text_sm()
+                .text_color(theme.warning)
+                .child(Icon::new(IconName::TriangleAlert).xsmall())
+                .child(div().min_w_0().truncate().child(t_args(
+                    "manage.emulators.health.missing",
+                    &[("path", &program.display().to_string())],
+                )))
+                .into_any_element(),
+        );
+    }
+    lines
+}
+
 fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
     let progress = live.progress.unwrap_or_default();
     let unpacking = live.step.as_deref() == Some("Unpacking");
