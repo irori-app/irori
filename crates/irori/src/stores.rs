@@ -191,6 +191,13 @@ pub fn hooks() -> Hooks {
         show_unlocks: Some(Arc::new(irori_bigpicture::overlay::show_unlocks)),
         uninstall: Some(Arc::new(irori_game::open_uninstall_dialog)),
         game_setup: Some(Arc::new(irori_settings::setup_card)),
+        found_sources: Some(Arc::new(irori_manage::found_sources_view)),
+        play: Some(Arc::new(|id, window, cx| {
+            irori_game::ops::play(&id, None, window, cx).detach()
+        })),
+        install: Some(Arc::new(|id, window, cx| {
+            irori_game::ops::install(&id, window, cx)
+        })),
     }
 }
 

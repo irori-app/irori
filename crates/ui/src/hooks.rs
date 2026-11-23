@@ -77,6 +77,7 @@ type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
 type UnlocksFn = Arc<dyn Fn(GameId, Vec<irori_core::Achievement>, &mut App) -> bool>;
 type GameFn = Arc<dyn Fn(GameId, &mut Window, &mut App)>;
 type GameViewFn = Arc<dyn Fn(GameId, &mut Window, &mut App) -> AnyView>;
+type ViewFn = Arc<dyn Fn(&mut Window, &mut App) -> AnyView>;
 
 /// The library's suggestion to read the Steam library from the Steam client
 /// (the Steam store and its dialog live outside the UI layer).
@@ -122,6 +123,16 @@ pub struct Hooks {
     /// Make the Setup card of one game for its page: what its settings
     /// change, by section (the settings feature draws it).
     pub game_setup: Option<GameViewFn>,
+    /// Make what the empty library shows: the game sources found on this
+    /// computer (the management screens draw it, from stores the library
+    /// doesn't know).
+    pub found_sources: Option<ViewFn>,
+    /// Play one game (its copy) as the game page does: saves conflicts and
+    /// missing files answered there (the game feature).
+    pub play: Option<GameFn>,
+    /// Install one game (its copy): the install sheet, or the store's own
+    /// client for games Irori doesn't install (the game feature).
+    pub install: Option<GameFn>,
 }
 
 impl Global for Hooks {}
@@ -150,6 +161,15 @@ pub fn open_emulation_setup(window: &mut Window, cx: &mut App) {
         Some(open) => open(window, cx),
         None => crate::navigate(crate::Route::Emulators, cx),
     }
+}
+
+/// The game sources found on this computer, for the empty library; `None`
+/// without the hook (tests), where the library says it is empty instead.
+pub fn found_sources(window: &mut Window, cx: &mut App) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.found_sources.clone())?;
+    Some(hook(window, cx))
 }
 
 /// Import games and library data from Lutris.
@@ -272,6 +292,24 @@ pub fn show_unlocks(id: GameId, unlocks: Vec<irori_core::Achievement>, cx: &mut 
     {
         Some(show) => show(id, unlocks, cx),
         None => false,
+    }
+}
+
+/// Play `id`, as its page does; without the hook, open the page, where
+/// Play is.
+pub fn play_game(id: GameId, window: &mut Window, cx: &mut App) {
+    match cx.try_global::<Hooks>().and_then(|h| h.play.clone()) {
+        Some(play) => play(id, window, cx),
+        None => crate::navigate(crate::Route::Game(id), cx),
+    }
+}
+
+/// Install `id`, as its page does; without the hook, open the page, where
+/// Install is.
+pub fn install_game(id: GameId, window: &mut Window, cx: &mut App) {
+    match cx.try_global::<Hooks>().and_then(|h| h.install.clone()) {
+        Some(install) => install(id, window, cx),
+        None => crate::navigate(crate::Route::Game(id), cx),
     }
 }
 

@@ -863,6 +863,23 @@ const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     ),
 ];
 
+/// The board shown first (`ageRatingBoard`): the region's, or one by name.
+const AGE_RATING_BOARDS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.age_rating_board.auto"),
+    ),
+    opt(ChoiceValue::Str("PEGI"), Verbatim("PEGI")),
+    opt(ChoiceValue::Str("ESRB"), Verbatim("ESRB")),
+    opt(ChoiceValue::Str("USK"), Verbatim("USK")),
+    opt(ChoiceValue::Str("ACB"), Verbatim("ACB")),
+    opt(ChoiceValue::Str("CERO"), Verbatim("CERO")),
+    opt(ChoiceValue::Str("ClassInd"), Verbatim("ClassInd")),
+    opt(ChoiceValue::Str("GRAC"), Verbatim("GRAC")),
+    opt(ChoiceValue::Str("CSRR"), Verbatim("CSRR")),
+    opt(ChoiceValue::Str("GOG"), Verbatim("GOG")),
+];
+
 const COVER_CORNERS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("square"),
@@ -886,6 +903,21 @@ const COVER_FIT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("whole"),
         Key("settings.option.cover_fit.whole"),
+    ),
+];
+
+const COVER_SHAPE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("portrait"),
+        Key("settings.option.cover_shape.portrait"),
+    ),
+    opt(
+        ChoiceValue::Str("square"),
+        Key("settings.option.cover_shape.square"),
+    ),
+    opt(
+        ChoiceValue::Str("banner"),
+        Key("settings.option.cover_shape.banner"),
     ),
 ];
 
@@ -923,6 +955,21 @@ const FOCUS_COLUMNS: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(1), Verbatim("1")),
     opt(ChoiceValue::Num(2), Verbatim("2")),
     opt(ChoiceValue::Num(3), Verbatim("3")),
+];
+
+const FOCUS_COVER_SIZE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("small"),
+        Key("settings.option.focus_cover_size.small"),
+    ),
+    opt(
+        ChoiceValue::Str("medium"),
+        Key("settings.option.focus_cover_size.medium"),
+    ),
+    opt(
+        ChoiceValue::Str("large"),
+        Key("settings.option.focus_cover_size.large"),
+    ),
 ];
 
 const DENSITY: &[ChoiceOption] = &[
@@ -1284,6 +1331,11 @@ const NEEDS_STORE_BADGES: &[Condition] = &[when(
     "iroriUi.showStoreBadges",
     true,
     "settings.requires.store_badges",
+)];
+const NEEDS_AGE_RATINGS: &[Condition] = &[when(
+    "iroriUi.showAgeRatings",
+    true,
+    "settings.requires.age_ratings",
 )];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
@@ -2365,6 +2417,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["overlay", "guide", "volume", "shortcut"])
     .requires(NEEDS_OVERLAY),
     app(
+        "iroriOverlay.momentChord",
+        "settings.field.overlay_moment_chord.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_moment_chord.help")
+    .keywords(&[
+        "overlay",
+        "guide",
+        "y",
+        "triangle",
+        "journal",
+        "moment",
+        "screenshot",
+        "shortcut",
+    ])
+    .requires(NEEDS_OVERLAY),
+    app(
         "iroriOverlay.volumeStep",
         "settings.field.overlay_volume_step.label",
         Controller,
@@ -2591,6 +2662,27 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_group_copies.help")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
     app(
+        "iroriUi.showAgeRatings",
+        "settings.field.ui_show_age_ratings.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_show_age_ratings.help")
+    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
+    app(
+        "iroriUi.ageRatingBoard",
+        "settings.field.ui_age_rating_board.label",
+        Appearance,
+        "settings.group.library",
+        Choice(AGE_RATING_BOARDS),
+    )
+    .help("settings.field.ui_age_rating_board.help")
+    .keywords(&[
+        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
+    ])
+    .requires(NEEDS_AGE_RATINGS),
+    app(
         "iroriUi.trailerAutoplay",
         "settings.field.ui_trailer_autoplay.label",
         Appearance,
@@ -2628,6 +2720,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
     ]),
     app(
+        "iroriUi.coverShape",
+        "settings.field.ui_cover_shape.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_SHAPE),
+    )
+    .help("settings.field.ui_cover_shape.help")
+    .keywords(&[
+        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
+    ]),
+    app(
         "iroriUi.coverCaption",
         "settings.field.ui_cover_caption.label",
         Appearance,
@@ -2653,6 +2756,40 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_focus_columns.help")
     .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryFocusCoverSize",
+        "settings.field.ui_focus_cover_size.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COVER_SIZE),
+    )
+    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
+    app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
+    app(
+        "iroriUi.libraryAutoLayout",
+        "settings.field.ui_auto_layout.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_auto_layout.help")
+    .keywords(&[
+        "focus",
+        "grid",
+        "width",
+        "window",
+        "automatic",
+        "resize",
+        "layout",
+    ]),
     app(
         "iroriUi.coverFavourite",
         "settings.field.ui_cover_favourite.label",

@@ -224,6 +224,16 @@ fn warm(copies: &[Arc<GameInfo>], cx: &mut App) {
     .detach();
 }
 
+/// "Copies", the heading of a game's copies.
+pub fn title_label() -> gpui_kit::SharedString {
+    t("ui.copies.title")
+}
+
+/// "Make this the default copy", for menus and tooltips.
+pub fn make_default_label() -> gpui_kit::SharedString {
+    t("ui.copies.make_default")
+}
+
 /// "Open the Steam copy", for menus and tooltips.
 pub fn open_label(store: &str) -> gpui_kit::SharedString {
     t_args("ui.copies.open", &[("store", store)])
@@ -259,19 +269,74 @@ pub fn make_default(id: GameId, group: Vec<GameId>, cx: &mut App) {
         .detach();
 }
 
-/// Add items for `id`'s copies to `menu`: open each other copy, make this
-/// one the default, separate it or all of them. Nothing for a game with
-/// one copy.
+/// What can be done with a copy right from a menu: play it, install it,
+/// or nothing while it is busy (running, installing…).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyAction {
+    Play,
+    Install,
+}
+
+/// The [`CopyAction`] `copy` offers while its status is `busy`.
+pub fn copy_action(copy: &GameInfo, busy: bool) -> Option<CopyAction> {
+    if busy || copy.is_dlc {
+        return None;
+    }
+    if copy.is_installed {
+        Some(CopyAction::Play)
+    } else if copy.runner().manages_installs() || copy.runner() == Runner::Steam {
+        // Steam installs its own games when asked.
+        Some(CopyAction::Install)
+    } else {
+        None
+    }
+}
+
+/// "Play with Steam" or "Install with GOG · Hades II", for `label`.
+pub fn action_label(action: CopyAction, label: &CopyLabel) -> gpui_kit::SharedString {
+    let key = match action {
+        CopyAction::Play => "ui.copies.play",
+        CopyAction::Install => "ui.copies.install",
+    };
+    t_args(key, &[("copy", &label.text())])
+}
+
+/// Play or install `id` as its page would.
+pub fn run_action(action: CopyAction, id: GameId, window: &mut gpui_kit::Window, cx: &mut App) {
+    match action {
+        CopyAction::Play => crate::hooks::play_game(id, window, cx),
+        CopyAction::Install => crate::hooks::install_game(id, window, cx),
+    }
+}
+
+/// Add items for `id`'s copies to `menu`: play or install each other copy
+/// and open it, make this one the default, separate it or all of them.
+/// Nothing for a game with one copy.
 pub fn menu_items(mut menu: PopupMenu, id: &GameId, cx: &App) -> PopupMenu {
     let copies = of(id, cx);
     if copies.len() < 2 {
         return menu;
     }
     let group = ids(&copies);
+    let statuses = models(cx).statuses.read(cx);
     for copy in copies.iter().filter(|c| c.id() != *id) {
         let copy_id = copy.id();
         let engine = engine_name(copy, cx);
         let label = copy_label(copy, &copies, engine.as_deref());
+        let busy = statuses
+            .kind(&copy_id)
+            .is_some_and(irori_core::StatusKind::is_busy);
+        if let Some(action) = copy_action(copy, busy) {
+            let run_id = copy_id.clone();
+            menu = menu.item(
+                PopupMenuItem::new(action_label(action, &label))
+                    .icon(match action {
+                        CopyAction::Play => IconName::Play,
+                        CopyAction::Install => IconName::Download,
+                    })
+                    .on_click(move |_, window, cx| run_action(action, run_id.clone(), window, cx)),
+            );
+        }
         menu = menu.item(
             PopupMenuItem::new(open_label(&label.text()))
                 .icon(IconName::Layers)
@@ -400,6 +465,23 @@ mod tests {
             "Added manually · Doom (GOG)"
         );
         assert_eq!(copy_label(&b, &group, None).text(), "Added manually · Doom");
+    }
+
+    #[test]
+    fn copies_offer_play_or_install_unless_busy() {
+        let installed = Arc::new(GameInfo {
+            runner: Some(Runner::Gog),
+            is_installed: true,
+            ..Default::default()
+        });
+        let missing = game(Runner::Legendary, "2", "Hades", None);
+        let steam = game(Runner::Steam, "3", "Hades", None);
+        let launcher = game(Runner::Launchers, "ea:4", "Hades", None);
+        assert_eq!(copy_action(&installed, false), Some(CopyAction::Play));
+        assert_eq!(copy_action(&installed, true), None);
+        assert_eq!(copy_action(&missing, false), Some(CopyAction::Install));
+        assert_eq!(copy_action(&steam, false), Some(CopyAction::Install));
+        assert_eq!(copy_action(&launcher, false), None);
     }
 
     #[test]

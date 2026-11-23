@@ -275,6 +275,33 @@ pub fn open_install_folder(id: &GameId, window: &mut Window, cx: &mut App) {
     }
 }
 
+/// Open the folder holding most of the game's screenshots and clips; says
+/// so when none were taken yet. Finding it lists the screenshot folders,
+/// so it runs off the UI thread.
+pub fn open_captures_folder(id: &GameId, window: &mut Window, cx: &mut App) {
+    let (b, game) = (backend(cx), id.clone());
+    let title = title_of(id, cx);
+    run_reporting(
+        window,
+        cx,
+        t("game.ops.open_failed"),
+        async move {
+            let finder = b.clone();
+            b.spawn_blocking(move || finder.captures_folder(&game))
+                .await
+                .map_err(anyhow::Error::from)
+        },
+        move |folder, window, cx| match folder {
+            Some(folder) => open_path(folder, window, cx),
+            None => window.push_notification(
+                Notification::info(t_args("game.ops.no_captures", &[("title", &title)])),
+                cx,
+            ),
+        },
+    )
+    .detach();
+}
+
 /// Open the Wine prefix of a game in the file manager.
 pub fn open_prefix_folder(id: &GameId, window: &mut Window, cx: &mut App) {
     let b = backend(cx);
@@ -466,6 +493,16 @@ pub fn client_action(id: &GameId, action: ClientAction, window: &mut Window, cx:
         |_, _, _| {},
     )
     .detach();
+}
+
+/// Install `id` as its page's Install does: the install sheet, or the
+/// store's own client for games Irori doesn't install.
+pub fn install(id: &GameId, window: &mut Window, cx: &mut App) {
+    if id.runner.manages_installs() {
+        crate::install::open_install_sheet(id.clone(), window, cx);
+    } else {
+        client_action(id, ClientAction::Install, window, cx);
+    }
 }
 
 /// Point an added game at its program's new place (a file, or a folder with

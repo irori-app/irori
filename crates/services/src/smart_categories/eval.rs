@@ -10,6 +10,10 @@
 //!
 //! An entry of several copies (one game on several stores) is in a category
 //! when any of its copies is.
+//!
+//! Besides the library and the user data, answers read [`Inputs`]:
+//! HowLongToBeat times, the play history's counts and the waiting updates,
+//! each of which tells its changes apart ([`IndexKey`]).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -20,6 +24,7 @@ use irori_core::{GameId, GameInfo, GameMode, Runner};
 use super::{CategoryRef, Match, Rule, SmartCategory};
 use crate::play_status::EffectiveStatus;
 use crate::search::{ParsedQuery, Query, tag_key};
+use crate::sessions::SessionStats;
 use crate::{LibrarySnapshot, UserData};
 
 /// A three-valued answer.
@@ -74,6 +79,16 @@ pub struct HltbTimes {
     pub hours: Arc<HashMap<String, u32>>,
 }
 
+/// What answers read besides the library and the user data.
+#[derive(Debug, Clone, Default)]
+pub struct Inputs {
+    pub hltb: HltbTimes,
+    /// How often and how long games were played ([`crate::sessions::stats`]).
+    pub plays: Arc<SessionStats>,
+    /// Games with an update waiting; a new `Arc` per change.
+    pub updates: Arc<HashSet<GameId>>,
+}
+
 /// How many local calendar days before `today` the time `stamp` was:
 /// RFC 3339 times count by their day in `tz` (a game played at 23:30 local
 /// time was played that day, whatever the UTC date), plain `YYYY-MM-DD`
@@ -97,15 +112,21 @@ pub struct IndexKey {
     pub hltb: u64,
     /// Local today, for "last played" rules.
     pub today: Option<NaiveDate>,
+    /// [`SessionStats::revision`].
+    pub plays: u64,
+    /// The waiting updates' identity.
+    pub updates: usize,
 }
 
 impl IndexKey {
-    pub fn new(library: &LibrarySnapshot, user: &Arc<UserData>, hltb: &HltbTimes) -> Self {
+    pub fn new(library: &LibrarySnapshot, user: &Arc<UserData>, inputs: &Inputs) -> Self {
         Self {
             revision: library.revision,
             user: Arc::as_ptr(user) as usize,
-            hltb: hltb.revision,
+            hltb: inputs.hltb.revision,
             today: Some(chrono::Local::now().date_naive()),
+            plays: inputs.plays.revision,
+            updates: Arc::as_ptr(&inputs.updates) as *const () as usize,
         }
     }
 }
@@ -129,19 +150,13 @@ impl CategoryIndex {
         key: IndexKey,
         library: &LibrarySnapshot,
         user: &UserData,
-        hltb: &HashMap<String, u32>,
+        inputs: &Inputs,
         tz: &Tz,
     ) -> Self {
         let today = key
             .today
             .unwrap_or_else(|| chrono::Local::now().date_naive());
-        let facts = Facts {
-            library,
-            user,
-            hltb,
-            today,
-            tz,
-        };
+        let facts = Facts::new(library, user, inputs, today, tz);
         let mut smart = HashMap::new();
         let mut counts = HashMap::new();
         let mut unreadable = BTreeSet::new();
@@ -205,17 +220,11 @@ pub fn count_matches<Tz: TimeZone>(
     category: &SmartCategory,
     library: &LibrarySnapshot,
     user: &UserData,
-    hltb: &HashMap<String, u32>,
+    inputs: &Inputs,
     today: NaiveDate,
     tz: &Tz,
 ) -> usize {
-    let facts = Facts {
-        library,
-        user,
-        hltb,
-        today,
-        tz,
-    };
+    let facts = Facts::new(library, user, inputs, today, tz);
     Compiled::new(category, user).members(&facts).1
 }
 
@@ -233,8 +242,53 @@ struct Facts<'a, Tz: TimeZone> {
     library: &'a LibrarySnapshot,
     user: &'a UserData,
     hltb: &'a HashMap<String, u32>,
+    plays: &'a SessionStats,
+    updates: &'a HashSet<GameId>,
     today: NaiveDate,
     tz: &'a Tz,
+}
+
+impl<'a, Tz: TimeZone> Facts<'a, Tz> {
+    fn new(
+        library: &'a LibrarySnapshot,
+        user: &'a UserData,
+        inputs: &'a Inputs,
+        today: NaiveDate,
+        tz: &'a Tz,
+    ) -> Self {
+        Self {
+            library,
+            user,
+            hltb: &inputs.hltb.hours,
+            plays: &inputs.plays,
+            updates: &inputs.updates,
+            today,
+            tz,
+        }
+    }
+
+    /// Days since `stamp` within `min..=max` days ago; an unreadable or
+    /// missing time doesn't match.
+    fn days_within(&self, stamp: Option<&str>, min: Option<u32>, max: Option<u32>) -> bool {
+        stamp
+            .and_then(|at| days_ago(at, self.today, self.tz))
+            .is_some_and(|days| within(days, min.map(i64::from), max.map(i64::from)))
+    }
+}
+
+const GIB: u64 = 1 << 30;
+
+/// The year a release date names ("2017-03-03", "2017").
+fn release_year(game: &GameInfo) -> Option<i32> {
+    game.release_date.as_deref()?.trim().get(..4)?.parse().ok()
+}
+
+/// Whether `company` holds any of the `wanted` keys ([`tag_key`]).
+fn company_matches(company: Option<&str>, wanted: &[String]) -> bool {
+    company.is_some_and(|c| {
+        let key = tag_key(c);
+        wanted.iter().any(|w| key.contains(w.as_str()))
+    })
 }
 
 /// A rule made ready to test many games.
@@ -254,6 +308,31 @@ enum Test<'a> {
     Query(Box<(ParsedQuery, Option<Query>)>),
     Favourite,
     Genre(HashSet<String>),
+    DateAdded(Option<u32>, Option<u32>),
+    ReleaseYear(Option<i32>, Option<i32>),
+    Rating(Option<u8>, Option<u8>),
+    Score(Option<u8>, Option<u8>),
+    Size(Option<u32>, Option<u32>),
+    Update,
+    Offline,
+    TimesPlayed(Option<u32>, Option<u32>),
+    AverageSession(Option<u64>, Option<u64>),
+    FirstPlayed(Option<u32>, Option<u32>),
+    HltbProgress(Option<u32>, Option<u32>),
+    Hidden,
+    Notes,
+    Developer(Vec<String>),
+    Publisher(Vec<String>),
+    Copies,
+}
+
+/// The keys of the company names a rule holds; empty names name nothing.
+fn company_keys(names: &[String]) -> Vec<String> {
+    names
+        .iter()
+        .map(|n| tag_key(n))
+        .filter(|k| !k.is_empty())
+        .collect()
 }
 
 fn genre_key(genre: &str) -> String {
@@ -302,6 +381,34 @@ impl<'a> Test<'a> {
             }
             Rule::Favourite {} => Test::Favourite,
             Rule::Genre { genres } => Test::Genre(genres.iter().map(|g| genre_key(g)).collect()),
+            Rule::DateAdded { min_days, max_days } => Test::DateAdded(*min_days, *max_days),
+            Rule::ReleaseYear { min_year, max_year } => Test::ReleaseYear(*min_year, *max_year),
+            Rule::Rating {
+                min_stars,
+                max_stars,
+            } => Test::Rating(*min_stars, *max_stars),
+            Rule::Score {
+                min_score,
+                max_score,
+            } => Test::Score(*min_score, *max_score),
+            Rule::Size { min_gib, max_gib } => Test::Size(*min_gib, *max_gib),
+            Rule::Update {} => Test::Update,
+            Rule::Offline {} => Test::Offline,
+            Rule::TimesPlayed { min, max } => Test::TimesPlayed(*min, *max),
+            Rule::AverageSession {
+                min_minutes,
+                max_minutes,
+            } => Test::AverageSession(*min_minutes, *max_minutes),
+            Rule::FirstPlayed { min_days, max_days } => Test::FirstPlayed(*min_days, *max_days),
+            Rule::HltbProgress {
+                min_percent,
+                max_percent,
+            } => Test::HltbProgress(*min_percent, *max_percent),
+            Rule::Hidden {} => Test::Hidden,
+            Rule::Notes {} => Test::Notes,
+            Rule::Developer { names } => Test::Developer(company_keys(names)),
+            Rule::Publisher { names } => Test::Publisher(company_keys(names)),
+            Rule::Copies {} => Test::Copies,
         }
     }
 
@@ -343,8 +450,14 @@ impl<'a> Test<'a> {
             }
             Test::Query(q) => {
                 let (parsed, text) = &**q;
+                // Smart categories' games aren't known while categories are
+                // worked out (one may name another, or itself).
+                if !parsed.smart.is_empty() {
+                    return Truth::Unknown;
+                }
                 parsed.modes_match(&game.game_modes)
                     && parsed.tags_match(&game.store_tags)
+                    && parsed.categories_match(f.user, &[key()])
                     && text.as_ref().is_none_or(|text| {
                         // The search index holds entries: score the entry.
                         let entry = &f.library.games[ix];
@@ -353,6 +466,66 @@ impl<'a> Test<'a> {
             }
             Test::Favourite => f.user.favourites.contains(&key()),
             Test::Genre(wanted) => game.genres.iter().any(|g| wanted.contains(&genre_key(g))),
+            Test::DateAdded(min, max) => {
+                let key = key();
+                let added = game
+                    .date_added
+                    .as_deref()
+                    .or_else(|| f.user.first_seen.get(&key).map(String::as_str));
+                f.days_within(added, *min, *max)
+            }
+            Test::ReleaseYear(min, max) => {
+                release_year(game).is_some_and(|y| within(y, *min, *max))
+            }
+            Test::Rating(min, max) => f
+                .user
+                .ratings
+                .get(&key())
+                .is_some_and(|stars| within(*stars, *min, *max)),
+            Test::Score(min, max) => game.rating.is_some_and(|s| within(s, *min, *max)),
+            Test::Size(min, max) => game
+                .install
+                .as_ref()
+                .map(|i| i.install_size_bytes)
+                .filter(|bytes| game.is_installed && *bytes > 0)
+                .is_some_and(|bytes| within(bytes / GIB, min.map(u64::from), max.map(u64::from))),
+            Test::Update => f.updates.contains(&game.id()),
+            Test::Offline => game.can_run_offline,
+            // Before the history is read, plays are unknown, not none.
+            Test::TimesPlayed(min, max) => match f.plays.get(&key()) {
+                Some(plays) => within(plays.count, *min, *max),
+                None => return Truth::Unknown,
+            },
+            Test::AverageSession(min, max) => match f.plays.get(&key()) {
+                Some(plays) => plays
+                    .average_minutes()
+                    .is_some_and(|m| within(m, *min, *max)),
+                None => return Truth::Unknown,
+            },
+            Test::FirstPlayed(min, max) => {
+                let record = f.user.playtime.get(&key());
+                f.days_within(record.and_then(|r| r.first_played.as_deref()), *min, *max)
+            }
+            Test::HltbProgress(min, max) => {
+                let key = key();
+                let played = f.user.playtime.get(&key).map_or(0, |r| r.total_minutes);
+                f.hltb
+                    .get(&key)
+                    .filter(|hours| **hours > 0)
+                    .is_some_and(|hours| {
+                        let percent = played * 100 / (u64::from(*hours) * 60);
+                        within(percent, min.map(u64::from), max.map(u64::from))
+                    })
+            }
+            Test::Hidden => f.user.hidden.contains(&key()),
+            Test::Notes => f
+                .user
+                .journal
+                .get(&key())
+                .is_some_and(|days| days.values().any(|note| !note.is_empty())),
+            Test::Developer(wanted) => company_matches(game.developer.as_deref(), wanted),
+            Test::Publisher(wanted) => company_matches(game.publisher.as_deref(), wanted),
+            Test::Copies => f.library.copies_of(&f.library.games[ix].id()).len() > 1,
         })
     }
 }

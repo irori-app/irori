@@ -156,22 +156,22 @@ pub fn icon(category: &CategoryRef) -> IconName {
 }
 
 /// The index to show for `library` and `user`: `current` while it was
-/// built from them (and today), else a new one. HowLongToBeat times are
-/// asked from the backend.
+/// built from them, `inputs` (`Backend::category_inputs`) and today, else a
+/// new one.
 pub fn index_for(
     current: Option<&Arc<CategoryIndex>>,
     library: &LibrarySnapshot,
     user: &Arc<UserData>,
-    hltb: &irori_services::HltbTimes,
+    inputs: &irori_services::smart_categories::Inputs,
 ) -> Arc<CategoryIndex> {
-    let key = irori_services::smart_categories::IndexKey::new(library, user, hltb);
+    let key = irori_services::smart_categories::IndexKey::new(library, user, inputs);
     match current {
         Some(index) if index.key == key => index.clone(),
         _ => Arc::new(CategoryIndex::build(
             key,
             library,
             user,
-            &hltb.hours,
+            inputs,
             &chrono::Local,
         )),
     }
@@ -215,26 +215,39 @@ mod tests {
             },
             HashMap::new(),
         );
-        let hltb = irori_services::HltbTimes::default();
-        let first = index_for(None, &library, &user, &hltb);
+        let inputs = irori_services::smart_categories::Inputs::default();
+        let first = index_for(None, &library, &user, &inputs);
         assert!(Arc::ptr_eq(
             &first,
-            &index_for(Some(&first), &library, &user, &hltb)
+            &index_for(Some(&first), &library, &user, &inputs)
         ));
         assert_eq!(first.count(&CategoryRef::Smart("s".into())), 1);
-        // New HowLongToBeat times or new user data mean a new index.
-        let newer = irori_services::HltbTimes {
-            revision: 1,
-            ..Default::default()
-        };
+        // New HowLongToBeat times, plays, updates or user data mean a new
+        // index.
+        let mut newer = inputs.clone();
+        newer.hltb.revision = 1;
         assert!(!Arc::ptr_eq(
             &first,
             &index_for(Some(&first), &library, &user, &newer)
         ));
+        let mut played = inputs.clone();
+        let mut stats = irori_services::sessions::SessionStats::default();
+        stats.revision = 5;
+        played.plays = Arc::new(stats);
+        assert!(!Arc::ptr_eq(
+            &first,
+            &index_for(Some(&first), &library, &user, &played)
+        ));
+        let mut updated = inputs.clone();
+        updated.updates = Arc::default();
+        assert!(!Arc::ptr_eq(
+            &first,
+            &index_for(Some(&first), &library, &user, &updated)
+        ));
         let other_user = Arc::new((*user).clone());
         assert!(!Arc::ptr_eq(
             &first,
-            &index_for(Some(&first), &library, &other_user, &hltb)
+            &index_for(Some(&first), &library, &other_user, &inputs)
         ));
     }
 }

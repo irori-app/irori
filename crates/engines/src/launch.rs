@@ -236,16 +236,7 @@ pub fn command(input: &LaunchInput) -> Result<CommandSpec> {
         home: dirs::home_dir().unwrap_or_default().display().to_string(),
         engine_home: home.display().to_string(),
         engine_dir: engine_dir.display().to_string(),
-        xdg_data: std::env::var("XDG_DATA_HOME")
-            .ok()
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .unwrap_or_default()
-                    .join(".local/share")
-                    .display()
-                    .to_string()
-            }),
+        xdg_data: xdg_data(),
     };
 
     // Folders the Flatpak sandbox must see.
@@ -301,17 +292,7 @@ pub fn command(input: &LaunchInput) -> Result<CommandSpec> {
                     shared.push(bios.root.clone());
                 }
             }
-            if installation.origin == Origin::Managed
-                && let Some(marker) = manifest.portable_marker.get(os)
-            {
-                let marker = engine_dir.join(marker);
-                if !own_settings && !marker.exists() {
-                    std::fs::write(&marker, b"")
-                        .with_context(|| format!("creating {}", marker.display()))?;
-                } else if own_settings && marker.exists() {
-                    let _ = std::fs::remove_file(&marker);
-                }
-            }
+            sync_portable_marker(manifest, installation, &engine_dir, own_settings)?;
         }
     }
 
@@ -410,8 +391,45 @@ pub fn command(input: &LaunchInput) -> Result<CommandSpec> {
     Ok(spec)
 }
 
+/// A managed version keeps its settings beside itself (the manifest's
+/// portable marker) while Irori manages them, and in the engine's usual
+/// place when the user keeps their own.
+pub(crate) fn sync_portable_marker(
+    manifest: &EngineManifest,
+    installation: &Installation,
+    engine_dir: &Path,
+    own_settings: bool,
+) -> Result<()> {
+    if installation.origin == Origin::Managed
+        && let Some(marker) = manifest.portable_marker.get(Os::current())
+    {
+        let marker = engine_dir.join(marker);
+        if !own_settings && !marker.exists() {
+            std::fs::write(&marker, b"")
+                .with_context(|| format!("creating {}", marker.display()))?;
+        } else if own_settings && marker.exists() {
+            let _ = std::fs::remove_file(&marker);
+        }
+    }
+    Ok(())
+}
+
+/// `$XDG_DATA_HOME`, else `~/.local/share`.
+pub(crate) fn xdg_data() -> String {
+    std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".local/share")
+                .display()
+                .to_string()
+        })
+}
+
 /// The executable of `program`: itself, or the binary of an app bundle.
-fn program_of(program: &Path) -> Result<PathBuf> {
+pub(crate) fn program_of(program: &Path) -> Result<PathBuf> {
     if program.extension().is_some_and(|e| e == "app") {
         if cfg!(target_os = "macos") {
             return irori_core::platform::bundle_executable(program);
@@ -425,17 +443,17 @@ fn flag(values: &BTreeMap<String, Value>, id: &str) -> bool {
     values.get(id).and_then(Value::as_bool).unwrap_or(false)
 }
 
-struct Vars {
-    rom: String,
-    rom_dir: String,
-    home: String,
-    engine_home: String,
-    engine_dir: String,
-    xdg_data: String,
+pub(crate) struct Vars {
+    pub(crate) rom: String,
+    pub(crate) rom_dir: String,
+    pub(crate) home: String,
+    pub(crate) engine_home: String,
+    pub(crate) engine_dir: String,
+    pub(crate) xdg_data: String,
 }
 
 impl Vars {
-    fn expand(&self, s: &str) -> String {
+    pub(crate) fn expand(&self, s: &str) -> String {
         s.replace("{rom_dir}", &self.rom_dir)
             .replace("{rom}", &self.rom)
             .replace("{engine_home}", &self.engine_home)

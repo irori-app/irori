@@ -19,9 +19,12 @@ pub mod capture;
 pub mod copies;
 mod discord;
 pub mod displays;
+mod download_power;
+mod download_space;
 mod downloads;
 mod engines;
 mod facts;
+pub mod field_rules;
 pub mod file_achievements;
 mod files;
 mod follow;
@@ -90,18 +93,21 @@ pub use app_update::{AppUpdateStatus, InstallKind, Release};
 pub use audio::{GameAudio, Volume, VolumeTarget};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
 pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
+pub use download_power::{DOWNLOADS_FINISHED_NOTICE, POWER_COUNTDOWN, PowerCountdown};
+pub use download_space::QueueDisk;
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
+pub use irori_engines::rom_sources::{Plan as RomPlan, RomSource, SourceKind as RomSourceKind};
 pub use irori_steam_api::StoreHit as SteamHit;
-pub use journal::{Journal, JournalEntry};
+pub use journal::{Journal, JournalEntry, LeftOff};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};
 pub use optiscaler::{OptiscalerInstallParams, OptiscalerStatus};
-pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};
 pub use replay::{QuickLaunchShortcut, Recorder, RecorderInfo, ReplayInfo, ShortcutState};
@@ -372,6 +378,9 @@ impl Backend {
         // Initialise stores from disk, then build the library.
         let b = self.clone();
         self.spawn(async move {
+            // Read beside the stores: sorting and smart categories count
+            // plays from the first library on.
+            let plays = b.spawn_blocking(crate::sessions::load_stats);
             let inits = b.stores.values().map(|s| {
                 let s = s.clone();
                 async move {
@@ -381,6 +390,7 @@ impl Backend {
                 }
             });
             futures::future::join_all(inits).await;
+            let _ = plays.await;
             // Before anything that may wait on the network: the first screen
             // depends on this.
             b.rebuild_library();

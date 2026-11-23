@@ -20,10 +20,14 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use chrono::{Datelike as _, Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike as _};
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::Input;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Sizable as _, StyledExt as _, VirtualListScrollHandle, h_flex, v_flex,
+    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, VirtualListScrollHandle, h_flex, v_flex,
     v_virtual_list,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -38,7 +42,7 @@ use irori_ui::style::KeyboardFocusable as _;
 use irori_ui::{backend, models};
 
 use super::GamePage;
-use super::journal::JournalRow;
+use super::journal::{JournalFilter, JournalRow};
 use crate::load::{Load, calendar_date};
 
 /// Height of a day row, in rem.
@@ -221,7 +225,7 @@ pub(crate) enum TimelineMode {
     Days,
     /// One row per session.
     Sessions,
-    /// One row per day, with its journal note.
+    /// The journal: each day's notes.
     Journal,
 }
 
@@ -231,11 +235,15 @@ pub(crate) struct TimelineView {
     pub data: Load<Arc<Timeline>>,
     mode: TimelineMode,
     /// What the sizes were measured for: the timeline, the mode, the rem
-    /// size and, in the journal, the user data the notes come from.
-    key: Option<(usize, TimelineMode, Pixels, usize)>,
+    /// size and, in the journal, the user data the notes come from and the
+    /// filter.
+    key: Option<(usize, TimelineMode, Pixels, usize, JournalFilter)>,
     sizes: Rc<Vec<Size<Pixels>>>,
     /// The journal's rows, rebuilt with the sizes.
     pub(super) journal: Rc<Vec<JournalRow>>,
+    /// Which notes the journal shows; its query comes from the page's
+    /// search field.
+    pub(super) filter: JournalFilter,
     /// The row shown highlighted, with its session times for a day.
     pub(super) active: Option<usize>,
     focus: Option<FocusHandle>,
@@ -250,6 +258,7 @@ impl Default for TimelineView {
             key: None,
             sizes: Rc::default(),
             journal: Rc::default(),
+            filter: JournalFilter::default(),
             active: None,
             focus: None,
             scroll: VirtualListScrollHandle::new(),
@@ -261,22 +270,24 @@ impl TimelineView {
     fn sync(
         &mut self,
         timeline: &Arc<Timeline>,
-        notes: Option<&BTreeMap<NaiveDate, JournalEntry>>,
+        notes: Option<&BTreeMap<NaiveDate, Vec<JournalEntry>>>,
         user: usize,
         rem: Pixels,
     ) {
-        let user = if self.mode == TimelineMode::Journal {
-            user
+        let journal = self.mode == TimelineMode::Journal;
+        let user = if journal { user } else { 0 };
+        let filter = if journal {
+            self.filter.clone()
         } else {
-            0
+            JournalFilter::default()
         };
-        let key = (Arc::as_ptr(timeline) as usize, self.mode, rem, user);
-        if self.key == Some(key) {
+        let key = (Arc::as_ptr(timeline) as usize, self.mode, rem, user, filter);
+        if self.key.as_ref() == Some(&key) {
             return;
         }
-        if self.mode == TimelineMode::Journal {
+        if journal {
             let today = Local::now().date_naive();
-            self.journal = Rc::new(super::journal::rows(timeline, notes, today));
+            self.journal = Rc::new(super::journal::rows(timeline, notes, today, &key.4));
         }
         let heights: Vec<f32> = match self.mode {
             TimelineMode::Days => timeline.rows.iter().map(TimelineRow::rem).collect(),
@@ -297,8 +308,8 @@ impl TimelineView {
     }
 }
 
-/// Whether the panel shows its list: the journal always has today, the
-/// other views only a game with a history.
+/// Whether the panel shows its list: the journal always has today (or what
+/// its search found), the other views only a game with a history.
 fn list_shown(mode: TimelineMode, has_rows: bool) -> bool {
     has_rows || mode == TimelineMode::Journal
 }
@@ -529,6 +540,44 @@ impl GamePage {
                         })),
                 )
             });
+        let journal_tools = (self.timeline.mode == TimelineMode::Journal
+            && !self.timeline.data.is_loading())
+        .then(|| {
+            h_flex()
+                .w_full()
+                .gap_3()
+                .flex_wrap()
+                .items_center()
+                .child(
+                    div().w(rems(14.)).min_w_0().child(
+                        Input::new(&self.journal_query)
+                            .small()
+                            .prefix(Icon::new(IconName::Search).small())
+                            .cleanable(true),
+                    ),
+                )
+                .child(
+                    Checkbox::new("journal-notes-only")
+                        .label(t("game.journal.notes_only"))
+                        .checked(self.timeline.filter.notes_only)
+                        .on_change(cx.listener(|this, on: &bool, _, cx| {
+                            this.timeline.filter.notes_only = *on;
+                            cx.notify();
+                        })),
+                )
+                .child(div().flex_1())
+                .child(
+                    Button::new("journal-new-note")
+                        .small()
+                        .outline()
+                        .icon(IconName::Plus)
+                        .label(t("game.journal.new_note"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_note(Local::now().date_naive(), None, window, cx)
+                        })),
+                )
+        });
+        self.timeline.filter.query = self.journal_query.read(cx).value().to_string();
         let body = if !show_list {
             div()
                 .text_sm()
@@ -577,12 +626,14 @@ impl GamePage {
             .border_1()
             .border_color(theme.border)
             .child(header)
+            .children(journal_tools)
             .child(body)
             .into_any_element()
     }
 
     /// Up, Down, Home and End move between rows (days, in the timeline); the
-    /// list keeps the row in view. In the journal, Enter opens the day's note.
+    /// list keeps the row in view. In the journal, Enter opens the note (or
+    /// writes a new one of the day).
     fn on_timeline_key(
         &mut self,
         event: &KeyDownEvent,

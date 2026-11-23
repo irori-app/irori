@@ -57,6 +57,8 @@ pub enum HomeRow {
     /// MangoHud's frame limit: Left and Right step through [`FRAME_LIMITS`].
     FrameLimit,
     Screenshot,
+    /// A screenshot and a journal note to write later.
+    MarkMoment,
     /// Save a clip of the replay buffer recording this session.
     SaveReplay,
     /// The game's play status: Left and Right (or A) step through them.
@@ -69,7 +71,7 @@ pub enum HomeRow {
 
 impl HomeRow {
     /// Every row, in their order.
-    pub const ALL: [HomeRow; 13] = [
+    pub const ALL: [HomeRow; 14] = [
         HomeRow::SystemVolume,
         HomeRow::GameVolume,
         HomeRow::Output,
@@ -78,6 +80,7 @@ impl HomeRow {
         HomeRow::MangoHud,
         HomeRow::FrameLimit,
         HomeRow::Screenshot,
+        HomeRow::MarkMoment,
         HomeRow::SaveReplay,
         HomeRow::PlayStatus,
         HomeRow::BackToGame,
@@ -590,6 +593,7 @@ mod tests {
         nav.input(Down, rows);
         assert_eq!(nav.input(Right, rows), Action::None, "not a value");
         assert_eq!(nav.home_row(7), Some(HomeRow::Screenshot));
+        assert_eq!(nav.home_row(8), Some(HomeRow::MarkMoment));
         for _ in 0..10 {
             nav.input(Down, rows);
         }

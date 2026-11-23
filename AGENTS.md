@@ -474,7 +474,12 @@ commands without a window.
   cloud saves and Wine operations.
 - **Library:** store games without DLC, plus user overrides (title, art), become a
   sorted `Arc<LibrarySnapshot>` with a revision number. Rebuilds are debounced (30 ms)
-  after `LibraryChanged`/`GameChanged`.
+  after `LibraryChanged`/`GameChanged`. Titles sort by `irori_core::sort_key`, in
+  natural order (numbers by value, Roman numerals II–XX after the first word as
+  numbers), recomputed at every rebuild. Sorting by times played (and smart
+  categories on plays) reads `sessions::stats()`: per-game session counts and
+  seconds, read from `sessions.jsonl` once at start and kept in step by `append` and
+  `replace_all`, never read on the UI thread.
 - **Copies** (`copies.rs`): one game owned on several stores is one library entry
   (`iroriUi.groupCopies`, on by default). Irori matches copies itself only by folded
   title on different stores, never with two of one title on a store, release years
@@ -487,15 +492,48 @@ commands without a window.
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
   `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
   own title when the copies' folded titles differ, else a ROM's file or, for two copies
-  on one store, its folder.
+  on one store, its folder. Each other copy can be played or installed right from the
+  copies menu and the palette ("Play with Steam", `copies::copy_action`; through
+  `irori_ui::hooks::play_game`/`install_game`, the game page's own flows). The game
+  page's Copies card lists every copy with its own time played, Play or Install, the
+  default star, and the copies' time added up (`irori_game` `page/copies.rs`).
+  Favourite, hidden, play status and rating describe the game, not the copy: setting
+  one writes every copy of the entry (`UserDataService::set_copy_groups`, kept by the
+  library rebuild), and combining copies shares them (`UserData::share_between`: any
+  copy's favourite or hidden flag, the latest status, the default copy's rating), so
+  any default copy shows the same. Categories, playtime, notes and overrides stay per
+  copy.
+  Games left apart that are linked to the same Steam app as one of an entry's copies
+  (editions, remasters) are *possible copies* (`copies::possible`,
+  `Backend::possible_copies`, memory only): the game page offers Link (combine) or
+  Keep apart, which stands like a separation.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
   exact, prefix, word, then fuzzy (a typo or two, letters in order), titles before
   people. `related.rs` finds a game's series, studio and genre neighbours the same way.
+  Besides `mode:` and `tag:`, `ParsedQuery` takes `category:` (manual categories, any
+  copy of an entry) and `smart:` terms (smart categories, through the `CategoryIndex`
+  in `irori-library`'s `apply_in`), names folded like tags, a name's start enough when
+  no name is whole. A smart category's own search rule can't use `smart:` (unknown).
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
-  cancel go through a `CancellationToken`.
+  cancel go through a `CancellationToken`. `DownloadQueueSnapshot::queue_place` is a
+  waiting item's place in line (covers read "Queued · #2"); `Backend::download_disks`
+  (`download_space.rs`, blocking) adds up what the queue still downloads per disk
+  against its free space. The downloads page (`irori_manage` `downloads/`) derives
+  finish and start times from the speed history it keeps (`queue::estimate`, at the
+  averaged rate, only on progress), filters its history and plays finished installs;
+  the title bar's pill and the sidebar's badge are views of their own
+  (`downloads/indicator.rs`) that redraw only when what they show changes.
+  "When downloads finish" (`download_power.rs`, `Backend::set_when_downloads_done`:
+  sleep or power off through `power::PowerSystem`, never `sudo`) is off by default,
+  held for the run only and used once: when the worker empties the queue it counts
+  `POWER_COUNTDOWN` (a minute) down, shown with "Keep it on" in the shell's notice,
+  the pill and the downloads page, and never acts while a game runs or a session
+  is ending (`power_when_idle`, unlike `Backend::power`, stops no game). New work
+  in the queue stops the countdown. The palette offers it and pause/resume
+  (`irori_manage::download_commands`).
 - **Updates** (`updates.rs`): the update manager's component side. Wine builds, DXVK,
   VKD3D-Proton, DXVK-NVAPI, umu, the anticheat runtimes, emulators and RetroArch cores are
   checked once a session and daily, from lists cached for a day. Each has a stable id; a
@@ -526,8 +564,13 @@ commands without a window.
     renames) are filled from rules: store, tags, game mode, play status, age
     rating, installed, playtime range, last played (local calendar days ago),
     HowLongToBeat main story, system, manual category, search text, favourite,
-    genre. Rows combine with All or Any, plus "Leave out" rows; an empty All
-    or Any takes every game. An entry is in one when any of its copies is.
+    genre, date added, release year, the user's rating, review score, size on
+    disk, update waiting, runs offline, times played, average session, first
+    played, HowLongToBeat progress, hidden, journal notes, developer,
+    publisher, owned on several stores. Rows combine with All or Any, plus
+    "Leave out" rows; an empty All or Any takes every game. An entry is in one
+    when any of its copies is. A new rule kind is a new `Rule` variant with
+    `#[serde(default)]` fields: an older Irori keeps it as a row it can't read.
   - Both kinds can be pinned and coloured (`CategoryLook`: in the smart
     category, else `UserData::category_looks` by name) and are named by a
     `CategoryRef`. `UserData::categories_in_order` lists both, pinned first.
@@ -539,9 +582,11 @@ commands without a window.
     unknown, and a game whose answer is unknown isn't shown. `CategoryIndex`
     holds every category's games and counts (hidden games not counted), built
     once per library revision, user-data change, HowLongToBeat change and day
-    (`IndexKey`), never per frame. HowLongToBeat rules read
-    `Backend::hltb_times` (main-story hours learned with a game's wiki info,
-    kept in `store-facts.json`), never a wiki entry.
+    (`IndexKey`), never per frame. Besides the library and user data it reads
+    `Inputs` (`Backend::category_inputs`): `Backend::hltb_times` (main-story
+    hours learned with a game's wiki info, kept in `store-facts.json`, never a
+    wiki entry), `sessions::stats()` (play counts; unknown until the history
+    is read) and the waiting updates, each a part of `IndexKey`.
   - Smart categories are read the way they were written: unknown keys stay on
     the category and on every row (`extra`), unknown rules stay as rows, and an
     entry that can't be read at all is kept whole. Backups carry both kinds and
@@ -552,14 +597,19 @@ commands without a window.
     first, counted from `LibraryModel::categories`, the index the event pump
     rebuilds only when its `IndexKey` changes). The library's Views menu has one
     Categories section (smart ones marked, each counted), the Filters popover
-    ticks both, Group by → Category puts each game in its first category's
+    ticks both (its search field finds any filter value by name with its count:
+    categories, systems, play statuses, modes, genres, Steam tags;
+    `irori-library`'s `value_search.rs`, worked out once per library, user-data
+    and index change), Group by → Category puts each game in its first category's
     section (`irori-library`'s `categories.rs`), covers show both with their
     colours, and the context menu has "Add to ▸" for manual categories and a
     read-only "In: …" for smart ones. The sidebar's Views section lists the
     saved views, then the pinned categories of both kinds
     (`irori_library::show_category`). The category manager creates, pins,
     colours, edits and deletes both; the smart editor is `dialogs/smart.rs`
-    (`open_smart_category_editor`), also opened from Manage views to turn a
+    (`open_smart_category_editor`; kinds picked from a searchable list in
+    sections, and a line naming the manual categories its rules name that
+    this computer lacks), also opened from Manage views to turn a
     view into a smart category (`categories::smart_from_view`, which says
     which criteria no rule holds). The palette shows any category and groups by
     category. Big Picture adds a shelf per pinned category after the theme's
@@ -577,12 +627,26 @@ commands without a window.
   HowLongToBeat pages the sources found, and the user's links, each opened through
   `irori_ui::web_url`; "Links…" (`irori_game::open_links_dialog`: the row, the game
   menu, the palette) adds and removes them.
-- **Journal** (`journal.rs`): one note per game per local calendar day (optional
-  title, text, paths of that day's screenshots), written with
-  `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
-  notes, and a restore keeps the later-written note of each day. Screens edit them
-  through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
-  Journal tab).
+- **Journal** (`journal.rs`): notes per game and local calendar day, several a day,
+  each with an id, an optional time of day (none: about the whole day), title, text,
+  the capture it is about and that day's screenshots it links; a moment marked in
+  game (`marked`) waits for words. Written with `UserDataService::set_journal_entry`
+  (removed with `remove_journal_entry`); an empty note is removed. They live under
+  `journal_notes` in `library.json`, and the older one-note-a-day `journal` key is
+  still written beside them (`journal::mirror`: each day's notes joined in time
+  order), so an older Irori keeps every note's text. Reading (`journal::read`, on
+  load and restore) migrates `journal` alone into whole-day notes (ids `day-<date>`)
+  and, with both keys, keeps a day an older Irori edited as a whole-day note beside
+  the notes. Backups carry the notes (old backups'
+  day notes restore the same way) and a restore keeps the later-written version of
+  each note; sync has a register per note (`<game>#<id>`). Screens edit them through
+  `irori_ui::journal::open_editor` (the game page's timeline, with search and "Only
+  days with notes"; the stats page's Journal tab, with search; the overlay's
+  Journal tab). "Where I left off" (`UserData::left_off`, `LeftOff`, 280 characters)
+  is one short note per game under its status on the game page (and drawer), edited
+  through `irori_ui::journal::open_left_off_editor` there and in the overlay's
+  Journal tab; clearing it offers Undo (`set_left_off` returns what was there). A
+  register per game in sync, the later-written one kept by backups.
 - **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
   store details (a store page's gaps: screenshots, trailers, description, genres, date;
   cached a week in `<cache>/steam-details/`), ProtonDB and the Steam Deck rating follow. It
@@ -652,7 +716,8 @@ commands without a window.
   search result whose folded name is the title (the release year decides between
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
-  genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
+  genres, release date, screenshots, age ratings, an edition's from its parent game,
+  kept in `store-facts.json` like the stores'; `ExtraInfo::details_from` names IGDB), and the
   art picker offers IGDB's covers and artworks (no square art or logos). With a
   SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
   game named like the search, `pick_game`) and pills filter by source; every picture
@@ -680,7 +745,11 @@ commands without a window.
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
-  through `irori_ui::play_status` (names, colours, icons, menu, button).
+  through `irori_ui::play_status` (names, colours, icons, menu, button). Every real
+  change is kept in `UserData::status_history` (`StatusChange`, at most 64 a game;
+  setting the same status again isn't one, an undone bulk edit leaves none), merged
+  as a set by backups and sync; `play_status::times_set` gives the days a game got a
+  status, so the backlog counts a game beaten in March after it is played again.
 - **Age ratings** (`irori_core::age_rating`, `store_facts.rs`): `AgeRating {system,
   rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
   E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
@@ -692,7 +761,9 @@ commands without a window.
   request is made for ratings alone. The game page shows the board of the user's region
   (`irori_ui::age_rating`: interface language, then the system locale's region) as a
   text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
-  goes by the strictest board.
+  goes by the strictest board. `iroriUi.ageRatingBoard` names the board shown first
+  instead (`age_rating::lead_with`), and `iroriUi.showAgeRatings` off leaves the card
+  off game pages (the filter still works).
 - **Game modes** (`irori_core::game_mode`, `store_facts.rs`): `GameMode` is single,
   co-op, local (split screen, couch), online (LAN included) or MMO; `GameInfo::game_modes`
   holds a normalized list. Sources, none of them asked in the background: Steam's
@@ -709,10 +780,33 @@ commands without a window.
   section per game by `filter::mode_section`) and searches (`mode:coop`,
   `search::ParsedQuery`) by them; the game page shows them as chips that open the
   library filtered by one mode (`GamePageEvent::ShowGameMode`).
+- **Details the user sets** (`GameOverrides::developer`, `publisher`, `genres`;
+  `MetadataEdit`, `UserDataService::set_metadata`): "Developer, publisher and genres…"
+  (`irori_library::open_metadata_dialog`: the library's game menu, the bulk bar's Details
+  menu, the palette for one game or the picked ones) sets them for one game or many at
+  once; they win over the stores', the wikis' and IGDB's at the library rebuild, the game
+  page shows the user's genres over the store page's, the Modify dialog keeps them, and
+  they travel with sync in the overrides register. Emptying one gives it back to the
+  stores.
+- **Field rules** (`field_rules.rs`, `UserData::field_rules`, "Manage genres and
+  companies…": `irori_library::open_fields_dialog`, the bulk bar's Details menu, the
+  palette): a genre, developer or publisher renamed, merged into another (renamed to its
+  name) or removed across the library, matched without case or spacing, laid over every
+  game at the library rebuild before the per-game details above. The manager lists the
+  values as the stores give them (`Backend::field_values`, off the UI thread, virtual
+  list) and suggests merging spellings that fold alike (`field_rules::duplicates`). Each
+  rule is a sync register (`<field>:<value>`), and backups carry them with the library
+  part (a rule made since stays).
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is
-  shown unfiltered there, never lost.
+  shown unfiltered there, never lost. Developer and publisher (`ViewFilter::developers`,
+  `publishers`, compared by `filter::company_key`) offer the library's commonest 30
+  plus any picked; smart categories have no rule for them, so `smart_from_view` names
+  them as left over. Group by also offers a game's facts (`irori-library`'s
+  `groups.rs`: store, platform as it would run here, developer, publisher, release
+  year, playtime and size bands), each game in one section; the palette offers them
+  through `Grouping::BY_FACT`.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock
@@ -811,7 +905,12 @@ commands without a window.
   and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
-  every session, so nothing counts twice. New user data that should travel needs a
+  every session, so nothing counts twice. "Edit time played" (`Backend::set_playtime`)
+  keeps the user's edit apart (`UserData::playtime_adjust`, seconds added or taken
+  away; the record includes it, `counted_seconds` is without it): shares, store totals
+  and merged totals are counted without it and the merged edit (a register) is applied
+  after, so later sessions add to it and no computer counts it twice; backups carry
+  it. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
   `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
@@ -893,13 +992,41 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them, and journal notes link them. Video files (mp4, mkv,
+  and its insight card show them, and journal notes link them; "Open screenshots
+  folder" (game menu, palette) opens the folder holding most of a game's captures
+  (`ScreenshotIndex::folder_of`, `Backend::captures_folder`). Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
   read the same way. A clip's `file://` address in the art store is its poster
   (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats Journeys** (`irori-library::stats::journeys`, `journeys_view`): a lane per
+  game played in the period on one axis (a dot per day sized by its time, started
+  here or from before, beaten and abandoned days from the status history), games
+  played per day, and per game its time, sessions, days to beat and hours a week;
+  filters (beaten, ongoing, abandoned, started here) and orders are pills; a lane
+  opens the game sheet. A week shows its month. One virtual list.
+- **Stats Discoveries** (`irori-library::stats::discoveries`, `discoveries_view`): the
+  period's findings (comeback, marathon, streak, new favourite, busiest day, night
+  owl, early bird, weekends, one game, variety, beaten), each scored by how unusual it
+  is, the highest over the hero; a kind can be pinned or hidden (kept in
+  `state/stats-page.json`); milestones of hours, games, beaten games and days played
+  with the day each was reached (`None` before the history) and the next ones at the
+  last 90 days' pace; the week around today a year ago (games and notes); "Copy
+  summary" puts a few lines on the clipboard.
+- **Stats backlog extras** (`irori-library::stats::backlog::extras`,
+  `backlog_extras_view`): the queue (Plan to play, oldest first, each with How Long To
+  Beat's main story from `Backend::hltb_times`, else the median of the user's beaten
+  games, and when it would be done at the last twelve weeks' pace), the shelf (Playing
+  or On hold, no session for 30 days), the pile (added from `first_seen`, started,
+  beaten per month) and the year's beaten games against How Long To Beat.
+- **Stats game sheet** (`irori-library::stats::sheet`, `sheet_view`): every game on the
+  stats page (top games, insights, the backlog's covers, Journeys' lanes,
+  Discoveries) opens a sheet with its numbers over the period shown: time in the
+  period and in all, a bar per day (week, month), week (year) or month (all time),
+  sessions, average and longest, the usual start hour (`Played::hour`), the weekend
+  share, first and last play and its status changes; "Open game page" leaves.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure
@@ -917,13 +1044,16 @@ commands without a window.
   (`irori_services::trash`: freedesktop trash, `~/.Trash`, the Recycle Bin) and is only
   deleted where the disk has none. Settings → Storage draws it, with a list of installed
   games by size or last played that opens their folder or uninstalls them
-  (`irori_ui::hooks::uninstall`).
+  (`irori_ui::hooks::uninstall`). A game page whose store gives no install size shows
+  the folder's measured one (`Backend::install_folder_size`, the same cache).
 - **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
   folder, the defaults', the launchers' and the installed games', each with the
   installed games running in it (a launcher's game counts for the prefix holding its
   folder); games uninstalled since are only "was the prefix of". Steam's, native and
   browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
-  deleting stays with Storage's unused-prefix cleanup.
+  deleting stays with Storage's unused-prefix cleanup. Uninstalling never deletes a
+  prefix another installed game plays in (`Backend::games_sharing_prefix`): the dialog
+  names those games and keeps it, and `uninstall` refuses it too.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
@@ -1209,11 +1339,25 @@ cx.spawn_in(window, async move |this, cx| {
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
 in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
 (through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
-grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+grid's row height follows it, `grid::caption_rem`; full leads with the value the
+library is sorted by, `format::sort_value`), `coverShape` (the grid's covers as boxes,
+squares or 16:9 banners of hero art: `components::cover_art_for`,
+`grid::grid_metrics_shaped`; Focus and favourites stay boxes, and only boxes are drawn
+whole), `coverHover` (rise or ring only)
 and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
 the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
 row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
-dragging its edge or with the arrow keys on it.
+dragging its edge or with the arrow keys on it; its covers are small, medium or large
+(`libraryFocusCoverSize`, `layouts::focus_tile_rem`, laid out by `grid::focus_metrics`
+outside the grid slider's range). With `libraryAutoLayout` the view switches between the
+grid and Focus as the window crosses the width Focus needs (`layouts::wide_enough_for_focus`,
+measured, never a breakpoint; `auto_layout` switches only on a crossing, so a view picked
+by hand holds, and never saves the switch). A click on a grid cover opens the
+drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
+opens the drawer (which then follows clicks).
+The game page's Details leave out the kinds of rows in `iroriUi.hiddenDetailRows`
+("Edit rows…", `irori_game::open_detail_rows_dialog`; ids in `detail_rows.rs` are user
+data).
 
 **Feature crates:**
 
@@ -1222,6 +1366,17 @@ dragging its edge or with the arrow keys on it.
   enums and `pub use i18n::CATALOGS`.
 - Key contexts are `*_CONTEXT` constants. Actions are declared per crate and bound
   once.
+
+**Onboarding** (`irori-manage` `onboarding/`): the import step lists Heroic and the other
+launchers found off the UI thread (Lutris, Bottles, Faugus Launcher, Playnite;
+`onboarding::launchers`), each imported with its summary. Getting started
+(`onboarding::hub`, `irori_manage::open_getting_started`: onboarding's last page, the
+palette, the empty library) is a checklist of three steps that tick themselves from the
+library and settings (a game; a look other than the defaults; a switch for playing on),
+or that the user marks as fine as they are (`<state>/getting-started.json`), then tips. The empty
+library shows `onboarding::found` through `irori_ui::hooks::found_sources`: Steam with
+its state and the one action it needs, emulators and ROM folders found, the other
+launchers, and the stores to log in to.
 
 ### 4.5 Shell (`crates/irori`)
 
@@ -1342,7 +1497,11 @@ Microsoft's approval page (`irori_manage::login`).
   gilrs reads Windows.Gaming.Input through the patched `crates/gilrs-core`, which
   never panics (release builds abort on a panic) and reads controllers whose
   `NonRoamableId` fails. PlayStation and Switch Pro controllers that Steam or an SDL
-  program switched to their full HID report still read nothing there.
+  program switched to their full HID report still read nothing there. On Linux the
+  `xpad` driver reports an Xbox pad's X and Y as `BTN_X`/`BTN_Y`, which the kernel
+  also names `BTN_NORTH`/`BTN_WEST`; SDL's database undoes that, so a pad it doesn't
+  list (gilrs' default mapping) gets its top and left buttons swapped back when its
+  event device's driver is `xpad` (`reader::swaps_north_west`).
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
   keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K, Page Up/Down) when the element
@@ -1463,9 +1622,13 @@ Microsoft's approval page (`irori_manage::login`).
   `set_audio_output`, screenshots `Backend::take_screenshot`
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
-  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
-  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot,
+  Up/Down change the system volume and Y marks the moment, each switchable
+  (`iroriOverlay.screenshotChord`, `volumeChords`, `momentChord`, `gamepad::Chords`),
+  by `volumeStep`. Marking a moment (also Home's "Mark this moment",
+  `overlay::mark_moment`, `Backend::mark_moment`) takes a screenshot and adds a
+  journal note at that time about it, `marked` and waiting for words (kept without a
+  screenshot when none can be taken); `side` places the panel
   (`window::placement`). What differs per system is one table,
   `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
   reads too; macOS and Windows use GPUI's pop-up window (a non-activating
@@ -1561,6 +1724,22 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   default installation per engine. Installing never changes what games use; Update does,
   and a game pinned with `iroriEngineVersion` keeps its version. Flatpak and system
   installs are detected and labelled, never installed or removed.
+- **Open without a game** (`irori_engines::open`, `Backend::open_engine`; the
+  Emulators page's Open and the palette's "Open <emulator>", both
+  `irori_manage::open_engine`): the default installation starts with the settings games
+  get (RetroArch's managed configuration, a managed version's portable marker) but
+  without the launch template. Its output goes to `engine-<id>.log`, and one that fails
+  within 3 s says why. Converting engines (AnyPS5) have nothing to open. The palette's
+  list is kept in memory and read again in the background once older than a minute.
+- **Usual ROM folders** (`irori_engines::rom_sources`, `Backend::rom_sources`,
+  `irori_manage::open_rom_sources_dialog`: the setup guide's first page, the empty
+  library, Getting started, the palette): EmuDeck's `Emulation/roms`, RetroDECK's
+  `retrodeck/roms` and `ROMs` folders at home and at the top of other disks (Linux
+  `/run/media`, `/media`, `/mnt`; macOS `/Volumes`; other Windows drives), read only.
+  A system folder counts once it holds a file its system plays (EmuDeck's notes
+  don't); only systems an installed or downloadable emulator plays are offered, folders
+  the library already scans are left out, and the others are named. Nothing is added
+  until the user picks the systems (`Backend::add_rom_folders`).
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.

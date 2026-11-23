@@ -7,6 +7,10 @@
 //! (shown as such, and removable), and a match mode this version can't read
 //! stays until the user picks one. The editor reopens a category with the
 //! mode it was saved with, whatever its rows.
+//!
+//! A row's kind is picked from a searchable list, grouped by what the rule
+//! reads ([`Group`]). A category rule naming manual categories this computer
+//! doesn't have says so.
 
 use std::collections::BTreeSet;
 
@@ -15,6 +19,9 @@ use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::select::{
+    SearchableVec, Select, SelectEvent, SelectGroup, SelectItem, SelectState,
+};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _,
     WindowExt as _, h_flex, v_flex,
@@ -23,7 +30,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div,
+    Styled as _, Subscription, Window, div, rems,
 };
 use irori_core::{GameMode, Runner};
 use irori_services::{Condition, EffectiveStatus, Match, Rule, SmartCategory};
@@ -33,42 +40,131 @@ use irori_ui::{backend, models};
 use super::categories::{NameError, validate_name};
 use super::{dialog_width, text};
 
-/// The kinds of rule the editor offers, in its menu's order.
+/// What a kind of rule reads, the sections of the kind list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Group {
+    Library,
+    Play,
+    Details,
+    Yours,
+}
+
+impl Group {
+    pub const ALL: [Group; 4] = [Group::Library, Group::Play, Group::Details, Group::Yours];
+
+    pub fn label(self) -> SharedString {
+        t(match self {
+            Group::Library => "library.smart.group.library",
+            Group::Play => "library.smart.group.play",
+            Group::Details => "library.smart.group.details",
+            Group::Yours => "library.smart.group.yours",
+        })
+    }
+}
+
+/// The kinds of rule the editor offers, in its list's order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Store,
     Installed,
-    Status,
-    Playtime,
-    LastPlayed,
-    Hltb,
-    Mode,
-    Tags,
-    Genre,
-    AgeRating,
+    Update,
+    Size,
+    Offline,
+    DateAdded,
+    Copies,
     System,
-    Category,
-    Favourite,
     Query,
+    Playtime,
+    TimesPlayed,
+    AverageSession,
+    LastPlayed,
+    FirstPlayed,
+    Hltb,
+    HltbProgress,
+    ReleaseYear,
+    Score,
+    Genre,
+    Tags,
+    Mode,
+    AgeRating,
+    Developer,
+    Publisher,
+    Status,
+    Favourite,
+    Rating,
+    Category,
+    Hidden,
+    Notes,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 14] = [
+    pub const ALL: [Kind; 30] = [
         Kind::Store,
         Kind::Installed,
-        Kind::Status,
-        Kind::Playtime,
-        Kind::LastPlayed,
-        Kind::Hltb,
-        Kind::Mode,
-        Kind::Tags,
-        Kind::Genre,
-        Kind::AgeRating,
+        Kind::Update,
+        Kind::Size,
+        Kind::Offline,
+        Kind::DateAdded,
+        Kind::Copies,
         Kind::System,
-        Kind::Category,
-        Kind::Favourite,
         Kind::Query,
+        Kind::Playtime,
+        Kind::TimesPlayed,
+        Kind::AverageSession,
+        Kind::LastPlayed,
+        Kind::FirstPlayed,
+        Kind::Hltb,
+        Kind::HltbProgress,
+        Kind::ReleaseYear,
+        Kind::Score,
+        Kind::Genre,
+        Kind::Tags,
+        Kind::Mode,
+        Kind::AgeRating,
+        Kind::Developer,
+        Kind::Publisher,
+        Kind::Status,
+        Kind::Favourite,
+        Kind::Rating,
+        Kind::Category,
+        Kind::Hidden,
+        Kind::Notes,
     ];
+
+    pub fn group(self) -> Group {
+        match self {
+            Kind::Store
+            | Kind::Installed
+            | Kind::Update
+            | Kind::Size
+            | Kind::Offline
+            | Kind::DateAdded
+            | Kind::Copies
+            | Kind::System
+            | Kind::Query => Group::Library,
+            Kind::Playtime
+            | Kind::TimesPlayed
+            | Kind::AverageSession
+            | Kind::LastPlayed
+            | Kind::FirstPlayed
+            | Kind::Hltb
+            | Kind::HltbProgress => Group::Play,
+            Kind::ReleaseYear
+            | Kind::Score
+            | Kind::Genre
+            | Kind::Tags
+            | Kind::Mode
+            | Kind::AgeRating
+            | Kind::Developer
+            | Kind::Publisher => Group::Details,
+            Kind::Status
+            | Kind::Favourite
+            | Kind::Rating
+            | Kind::Category
+            | Kind::Hidden
+            | Kind::Notes => Group::Yours,
+        }
+    }
 
     pub fn of(rule: &Rule) -> Kind {
         match rule {
@@ -86,6 +182,22 @@ impl Kind {
             Rule::Category { .. } => Kind::Category,
             Rule::Favourite {} => Kind::Favourite,
             Rule::Query { .. } => Kind::Query,
+            Rule::DateAdded { .. } => Kind::DateAdded,
+            Rule::ReleaseYear { .. } => Kind::ReleaseYear,
+            Rule::Rating { .. } => Kind::Rating,
+            Rule::Score { .. } => Kind::Score,
+            Rule::Size { .. } => Kind::Size,
+            Rule::Update {} => Kind::Update,
+            Rule::Offline {} => Kind::Offline,
+            Rule::TimesPlayed { .. } => Kind::TimesPlayed,
+            Rule::AverageSession { .. } => Kind::AverageSession,
+            Rule::FirstPlayed { .. } => Kind::FirstPlayed,
+            Rule::HltbProgress { .. } => Kind::HltbProgress,
+            Rule::Hidden {} => Kind::Hidden,
+            Rule::Notes {} => Kind::Notes,
+            Rule::Developer { .. } => Kind::Developer,
+            Rule::Publisher { .. } => Kind::Publisher,
+            Rule::Copies {} => Kind::Copies,
         }
     }
 
@@ -105,6 +217,22 @@ impl Kind {
             Kind::Category => "library.smart.rule.category",
             Kind::Favourite => "library.smart.rule.favourite",
             Kind::Query => "library.smart.rule.query",
+            Kind::DateAdded => "library.smart.rule.date_added",
+            Kind::ReleaseYear => "library.smart.rule.release_year",
+            Kind::Rating => "library.smart.rule.rating",
+            Kind::Score => "library.smart.rule.score",
+            Kind::Size => "library.smart.rule.size",
+            Kind::Update => "library.smart.rule.update",
+            Kind::Offline => "library.smart.rule.offline",
+            Kind::TimesPlayed => "library.smart.rule.times_played",
+            Kind::AverageSession => "library.smart.rule.average_session",
+            Kind::FirstPlayed => "library.smart.rule.first_played",
+            Kind::HltbProgress => "library.smart.rule.hltb_progress",
+            Kind::Hidden => "library.smart.rule.hidden",
+            Kind::Notes => "library.smart.rule.notes",
+            Kind::Developer => "library.smart.rule.developer",
+            Kind::Publisher => "library.smart.rule.publisher",
+            Kind::Copies => "library.smart.rule.copies",
         })
     }
 
@@ -149,16 +277,164 @@ impl Kind {
             Kind::Query => Rule::Query {
                 query: String::new(),
             },
+            Kind::DateAdded => Rule::DateAdded {
+                min_days: None,
+                max_days: None,
+            },
+            Kind::ReleaseYear => Rule::ReleaseYear {
+                min_year: None,
+                max_year: None,
+            },
+            Kind::Rating => Rule::Rating {
+                min_stars: None,
+                max_stars: None,
+            },
+            Kind::Score => Rule::Score {
+                min_score: None,
+                max_score: None,
+            },
+            Kind::Size => Rule::Size {
+                min_gib: None,
+                max_gib: None,
+            },
+            Kind::Update => Rule::Update {},
+            Kind::Offline => Rule::Offline {},
+            Kind::TimesPlayed => Rule::TimesPlayed {
+                min: None,
+                max: None,
+            },
+            Kind::AverageSession => Rule::AverageSession {
+                min_minutes: None,
+                max_minutes: None,
+            },
+            Kind::FirstPlayed => Rule::FirstPlayed {
+                min_days: None,
+                max_days: None,
+            },
+            Kind::HltbProgress => Rule::HltbProgress {
+                min_percent: None,
+                max_percent: None,
+            },
+            Kind::Hidden => Rule::Hidden {},
+            Kind::Notes => Rule::Notes {},
+            Kind::Developer => Rule::Developer { names: Vec::new() },
+            Kind::Publisher => Rule::Publisher { names: Vec::new() },
+            Kind::Copies => Rule::Copies {},
         }
+    }
+
+    /// Whether the row's values are a range of numbers (two fields).
+    fn ranged(self) -> bool {
+        matches!(
+            self,
+            Kind::Playtime
+                | Kind::LastPlayed
+                | Kind::Hltb
+                | Kind::DateAdded
+                | Kind::ReleaseYear
+                | Kind::Rating
+                | Kind::Score
+                | Kind::Size
+                | Kind::TimesPlayed
+                | Kind::AverageSession
+                | Kind::FirstPlayed
+                | Kind::HltbProgress
+        )
     }
 
     /// Whether the row's values are typed (two fields: text, or a range).
     fn typed(self) -> bool {
-        matches!(
-            self,
-            Kind::Playtime | Kind::LastPlayed | Kind::Hltb | Kind::Tags | Kind::Genre | Kind::Query
-        )
+        self.ranged()
+            || matches!(
+                self,
+                Kind::Tags | Kind::Genre | Kind::Query | Kind::Developer | Kind::Publisher
+            )
     }
+
+    /// What a range counts in, after its fields.
+    fn unit(self) -> Option<SharedString> {
+        Some(t(match self {
+            Kind::LastPlayed | Kind::DateAdded | Kind::FirstPlayed => "library.smart.unit.days_ago",
+            Kind::Playtime | Kind::Hltb => "library.smart.unit.hours",
+            Kind::Rating => "library.smart.unit.stars",
+            Kind::Score => "library.smart.unit.score",
+            Kind::Size => "library.smart.unit.gib",
+            Kind::TimesPlayed => "library.smart.unit.times",
+            Kind::AverageSession => "library.smart.unit.minutes",
+            Kind::HltbProgress => "library.smart.unit.percent",
+            _ => return None,
+        }))
+    }
+
+    /// The hint shown in place of values for a rule that has none.
+    fn hint(self) -> Option<SharedString> {
+        Some(t(match self {
+            Kind::Favourite => "library.smart.favourite_hint",
+            Kind::Update => "library.smart.update_hint",
+            Kind::Offline => "library.smart.offline_hint",
+            Kind::Hidden => "library.smart.hidden_hint",
+            Kind::Notes => "library.smart.notes_hint",
+            Kind::Copies => "library.smart.copies_hint",
+            _ => return None,
+        }))
+    }
+}
+
+/// A kind in the searchable kind list.
+#[derive(Debug, Clone)]
+pub struct KindItem {
+    kind: Kind,
+    title: SharedString,
+}
+
+impl SelectItem for KindItem {
+    type Value = Kind;
+
+    fn title(&self) -> SharedString {
+        self.title.clone()
+    }
+
+    fn value(&self) -> &Kind {
+        &self.kind
+    }
+}
+
+type KindItems = SearchableVec<SelectGroup<KindItem>>;
+type KindSelect = SelectState<KindItems>;
+
+/// Every kind, in sections by [`Group`].
+fn kind_items() -> KindItems {
+    SearchableVec::new(
+        Group::ALL
+            .into_iter()
+            .map(|g| {
+                SelectGroup::new(g.label()).items(
+                    Kind::ALL
+                        .into_iter()
+                        .filter(|k| k.group() == g)
+                        .map(|kind| KindItem {
+                            kind,
+                            title: kind.label(),
+                        }),
+                )
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// A searchable kind list showing `kind`.
+fn kind_select(
+    kind: Option<Kind>,
+    window: &mut Window,
+    cx: &mut Context<SmartEditor>,
+) -> Entity<KindSelect> {
+    cx.new(|cx| {
+        let mut state = SelectState::new(kind_items(), None, window, cx).searchable(true);
+        if let Some(kind) = kind {
+            state.set_selected_value(&kind, window, cx);
+        }
+        state
+    })
 }
 
 /// The text fields of a typed rule: its text, or its range's low and high
@@ -180,8 +456,34 @@ pub fn texts_of(rule: &Rule) -> (String, String) {
             min_hours,
             max_hours,
         } => (n(min_hours.map(u64::from)), n(max_hours.map(u64::from))),
+        Rule::DateAdded { min_days, max_days } | Rule::FirstPlayed { min_days, max_days } => {
+            (n(min_days.map(u64::from)), n(max_days.map(u64::from)))
+        }
+        Rule::ReleaseYear { min_year, max_year } => {
+            let y = |v: Option<i32>| v.map(|v| v.to_string()).unwrap_or_default();
+            (y(*min_year), y(*max_year))
+        }
+        Rule::Rating {
+            min_stars,
+            max_stars,
+        } => (n(min_stars.map(u64::from)), n(max_stars.map(u64::from))),
+        Rule::Score {
+            min_score,
+            max_score,
+        } => (n(min_score.map(u64::from)), n(max_score.map(u64::from))),
+        Rule::Size { min_gib, max_gib } => (n(min_gib.map(u64::from)), n(max_gib.map(u64::from))),
+        Rule::TimesPlayed { min, max } => (n(min.map(u64::from)), n(max.map(u64::from))),
+        Rule::AverageSession {
+            min_minutes,
+            max_minutes,
+        } => (n(*min_minutes), n(*max_minutes)),
+        Rule::HltbProgress {
+            min_percent,
+            max_percent,
+        } => (n(min_percent.map(u64::from)), n(max_percent.map(u64::from))),
         Rule::Tags { tags } => (tags.join(", "), String::new()),
         Rule::Genre { genres } => (genres.join(", "), String::new()),
+        Rule::Developer { names } | Rule::Publisher { names } => (names.join(", "), String::new()),
         Rule::Query { query } => (query.clone(), String::new()),
         _ => (String::new(), String::new()),
     }
@@ -191,6 +493,8 @@ pub fn texts_of(rule: &Rule) -> (String, String) {
 /// A number that doesn't read leaves its end of the range open.
 pub fn with_texts(rule: &Rule, a: &str, b: &str) -> Rule {
     let number = |s: &str| s.trim().parse::<u32>().ok();
+    // A number on a short scale, held to its top.
+    let small = |s: &str, top: u8| number(s).map(|n| n.min(u32::from(top)) as u8);
     let list = |s: &str| -> Vec<String> {
         s.split(',')
             .map(str::trim)
@@ -211,6 +515,47 @@ pub fn with_texts(rule: &Rule, a: &str, b: &str) -> Rule {
             min_hours: number(a),
             max_hours: number(b),
         },
+        Rule::DateAdded { .. } => Rule::DateAdded {
+            min_days: number(a),
+            max_days: number(b),
+        },
+        Rule::FirstPlayed { .. } => Rule::FirstPlayed {
+            min_days: number(a),
+            max_days: number(b),
+        },
+        Rule::ReleaseYear { .. } => {
+            let year = |s: &str| s.trim().parse::<i32>().ok();
+            Rule::ReleaseYear {
+                min_year: year(a),
+                max_year: year(b),
+            }
+        }
+        Rule::Rating { .. } => Rule::Rating {
+            min_stars: small(a, irori_services::userdata::MAX_RATING),
+            max_stars: small(b, irori_services::userdata::MAX_RATING),
+        },
+        Rule::Score { .. } => Rule::Score {
+            min_score: small(a, 100),
+            max_score: small(b, 100),
+        },
+        Rule::Size { .. } => Rule::Size {
+            min_gib: number(a),
+            max_gib: number(b),
+        },
+        Rule::TimesPlayed { .. } => Rule::TimesPlayed {
+            min: number(a),
+            max: number(b),
+        },
+        Rule::AverageSession { .. } => Rule::AverageSession {
+            min_minutes: number(a).map(u64::from),
+            max_minutes: number(b).map(u64::from),
+        },
+        Rule::HltbProgress { .. } => Rule::HltbProgress {
+            min_percent: number(a),
+            max_percent: number(b),
+        },
+        Rule::Developer { .. } => Rule::Developer { names: list(a) },
+        Rule::Publisher { .. } => Rule::Publisher { names: list(a) },
         Rule::Tags { .. } => Rule::Tags { tags: list(a) },
         Rule::Genre { .. } => Rule::Genre { genres: list(a) },
         Rule::Query { .. } => Rule::Query {
@@ -222,6 +567,9 @@ pub fn with_texts(rule: &Rule, a: &str, b: &str) -> Rule {
 
 /// One row being edited.
 struct Row {
+    /// Tells rows apart while they move (the kind list reports by it).
+    id: usize,
+    kind: Entity<KindSelect>,
     /// The row as it was read: what a newer Irori added to it, or the
     /// whole of a rule this version can't read.
     original: Condition,
@@ -262,8 +610,15 @@ pub struct SmartEditor {
     rules: Vec<Row>,
     leave_out: Vec<Row>,
     next_row: usize,
+    /// The kind lists that add a row to the rules and to "Leave out".
+    add_rule: Entity<KindSelect>,
+    add_leave_out: Entity<KindSelect>,
     /// The last counted draft, with what it was counted against.
-    preview: Option<(SmartCategory, (u64, usize, u64), usize)>,
+    preview: Option<(
+        SmartCategory,
+        irori_services::smart_categories::IndexKey,
+        usize,
+    )>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -280,7 +635,9 @@ impl SmartEditor {
                 .default_value(base.name.clone())
         });
         let library = models(cx).library.clone();
-        let subscriptions = vec![
+        let add_rule = kind_select(None, window, cx);
+        let add_leave_out = kind_select(None, window, cx);
+        let mut subscriptions = vec![
             cx.observe(&library, |_, _, cx| cx.notify()),
             cx.subscribe_in(&name, window, |this, _, event, window, cx| match event {
                 InputEvent::Change => cx.notify(),
@@ -288,12 +645,27 @@ impl SmartEditor {
                 _ => {}
             }),
         ];
+        for (list, select) in [(List::Rules, &add_rule), (List::LeaveOut, &add_leave_out)] {
+            subscriptions.push(cx.subscribe_in(
+                select,
+                window,
+                move |this, select, event: &SelectEvent<KindItems>, window, cx| {
+                    if let SelectEvent::Confirm(Some(kind)) = event {
+                        this.add(list, *kind, window, cx);
+                        // Ready to add another.
+                        select.update(cx, |s, cx| s.set_selected_index(None, window, cx));
+                    }
+                },
+            ));
+        }
         let mut this = Self {
             id,
             matching: base.matching.clone(),
             rules: Vec::new(),
             leave_out: Vec::new(),
             next_row: 0,
+            add_rule,
+            add_leave_out,
             preview: None,
             name,
             base: base.clone(),
@@ -316,10 +688,15 @@ impl SmartEditor {
         cx: &mut Context<Self>,
     ) {
         let (a_text, b_text) = original.rule.as_ref().map(texts_of).unwrap_or_default();
-        let placeholders = match original.rule.as_ref().map(Kind::of) {
+        let kind = original.rule.as_ref().map(Kind::of);
+        let placeholders = match kind {
             Some(Kind::Tags | Kind::Genre) => {
                 (t("library.smart.list_placeholder"), SharedString::default())
             }
+            Some(Kind::Developer | Kind::Publisher) => (
+                t("library.smart.company_placeholder"),
+                SharedString::default(),
+            ),
             Some(Kind::Query) => (
                 t("library.smart.query_placeholder"),
                 SharedString::default(),
@@ -344,8 +721,21 @@ impl SmartEditor {
                     }
                 }));
         }
+        let id = self.next_row;
         self.next_row += 1;
+        let kind = kind_select(kind, window, cx);
+        self._subscriptions.push(cx.subscribe_in(
+            &kind,
+            window,
+            move |this, _, event: &SelectEvent<KindItems>, window, cx| {
+                if let SelectEvent::Confirm(Some(kind)) = event {
+                    this.set_kind(list, id, *kind, window, cx);
+                }
+            },
+        ));
         let row = Row {
+            id,
+            kind,
             rule: original.rule.clone(),
             original,
             a,
@@ -374,14 +764,15 @@ impl SmartEditor {
     fn set_kind(
         &mut self,
         list: List,
-        ix: usize,
+        id: usize,
         kind: Kind,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(row) = self.rows_mut(list).get(ix) else {
+        let Some(ix) = self.rows_mut(list).iter().position(|r| r.id == id) else {
             return;
         };
+        let row = &self.rows_mut(list)[ix];
         if row.rule.as_ref().map(Kind::of) == Some(kind) {
             return;
         }
@@ -450,14 +841,10 @@ impl SmartEditor {
     /// How many games the draft holds, counted again only when the draft
     /// or the library changed.
     fn count(&mut self, draft: &SmartCategory, cx: &App) -> usize {
-        let b = backend(cx);
-        let hltb = b.hltb_times();
+        let inputs = backend(cx).category_inputs();
         let lib = models(cx).library.read(cx);
-        let key = (
-            lib.snapshot.revision,
-            std::sync::Arc::as_ptr(&lib.user) as usize,
-            hltb.revision,
-        );
+        let key =
+            irori_services::smart_categories::IndexKey::new(&lib.snapshot, &lib.user, &inputs);
         if let Some((d, k, n)) = &self.preview
             && d == draft
             && *k == key
@@ -468,7 +855,7 @@ impl SmartEditor {
             draft,
             &lib.snapshot,
             &lib.user,
-            &hltb.hours,
+            &inputs,
             chrono::Local::now().date_naive(),
             &chrono::Local,
         );
@@ -512,7 +899,6 @@ impl SmartEditor {
             List::LeaveOut => "leave-out",
         };
         let id = |part: &str| SharedString::from(format!("smart-{prefix}-{ix}-{part}"));
-        let editor = cx.entity().downgrade();
         let remove = Button::new(id("remove"))
             .small()
             .ghost()
@@ -535,32 +921,15 @@ impl SmartEditor {
                 .into_any_element();
         };
         let kind = Kind::of(rule);
-        let kind_button = Button::new(id("kind"))
-            .small()
-            .outline()
-            .label(kind.label())
-            .dropdown_caret(true)
-            .dropdown_menu({
-                let editor = editor.clone();
-                move |menu, _, _| {
-                    Kind::ALL.into_iter().fold(menu, |menu, k| {
-                        let editor = editor.clone();
-                        menu.item(PopupMenuItem::new(k.label()).checked(k == kind).on_click(
-                            move |_, window, cx| {
-                                let _ = editor
-                                    .update(cx, |this, cx| this.set_kind(list, ix, k, window, cx));
-                            },
-                        ))
-                    })
-                }
-            });
+        let kind_button = div().w_56().flex_none().child(
+            Select::new(&row.kind)
+                .small()
+                .search_placeholder(t("library.smart.find_rule"))
+                .menu_width(rems(18.)),
+        );
         let value: AnyElement = if kind.typed() {
-            let ranged = matches!(kind, Kind::Playtime | Kind::LastPlayed | Kind::Hltb);
-            let unit = match kind {
-                Kind::LastPlayed => Some(t("library.smart.unit.days_ago")),
-                Kind::Playtime | Kind::Hltb => Some(t("library.smart.unit.hours")),
-                _ => None,
-            };
+            let ranged = kind.ranged();
+            let unit = kind.unit();
             h_flex()
                 .flex_1()
                 .min_w_0()
@@ -740,16 +1109,15 @@ impl SmartEditor {
                     ));
                 }
             }
-            Rule::Favourite {} => {
+            _ => {
                 return div()
                     .flex_1()
                     .min_w_0()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child(t("library.smart.favourite_hint"))
+                    .when_some(Kind::of(rule).hint(), |el, hint| el.child(hint))
                     .into_any_element();
             }
-            _ => return div().flex_1().into_any_element(),
         }
         let picked: Vec<SharedString> = options
             .iter()
@@ -797,27 +1165,20 @@ impl SmartEditor {
             .into_any_element()
     }
 
-    fn render_add(&self, list: List, cx: &mut Context<Self>) -> impl IntoElement {
-        let editor = cx.entity().downgrade();
-        let id = match list {
-            List::Rules => "smart-add-rule",
-            List::LeaveOut => "smart-add-leave-out",
+    /// A searchable kind list that adds a row of the kind picked.
+    fn render_add(&self, list: List) -> impl IntoElement {
+        let state = match list {
+            List::Rules => &self.add_rule,
+            List::LeaveOut => &self.add_leave_out,
         };
-        Button::new(id)
-            .small()
-            .ghost()
-            .icon(IconName::Plus)
-            .label(t("library.smart.add_rule"))
-            .dropdown_menu(move |menu, _, _| {
-                Kind::ALL.into_iter().fold(menu, |menu, kind| {
-                    let editor = editor.clone();
-                    menu.item(
-                        PopupMenuItem::new(kind.label()).on_click(move |_, window, cx| {
-                            let _ = editor.update(cx, |this, cx| this.add(list, kind, window, cx));
-                        }),
-                    )
-                })
-            })
+        div().w_56().child(
+            Select::new(state)
+                .small()
+                .icon(IconName::Plus)
+                .placeholder(t("library.smart.add_rule"))
+                .search_placeholder(t("library.smart.find_rule"))
+                .menu_width(rems(18.)),
+        )
     }
 }
 
@@ -825,6 +1186,9 @@ impl Render for SmartEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let draft = self.draft(cx);
         let count = self.count(&draft, cx);
+        // Categories the rules name that another computer synced.
+        let missing = draft.missing_categories(&models(cx).library.read(cx).user);
+        let warning = cx.theme().warning;
         let name = self.name_result(cx);
         let muted = cx.theme().muted_foreground;
         let modes = [
@@ -894,7 +1258,7 @@ impl Render for SmartEditor {
                     })
                     .children(rules),
             )
-            .child(self.render_add(List::Rules, cx))
+            .child(self.render_add(List::Rules))
             .child(
                 div()
                     .text_sm()
@@ -909,7 +1273,13 @@ impl Render for SmartEditor {
                     .overflow_y_scroll()
                     .children(leave_out),
             )
-            .child(self.render_add(List::LeaveOut, cx))
+            .child(self.render_add(List::LeaveOut))
+            .when(!missing.is_empty(), |el| {
+                el.child(div().text_xs().text_color(warning).child(t_args(
+                    "library.smart.missing_categories",
+                    &[("names", &missing.join(&t("library.filter.list_separator")))],
+                )))
+            })
             .child(div().text_sm().text_color(muted).child(match count {
                 1 => t("library.smart.matches_one"),
                 n => t_args("library.smart.matches_other", &[("count", &n.to_string())]),
@@ -999,11 +1369,68 @@ mod tests {
         );
         let tags = with_texts(&Kind::Tags.new_rule(), " Co-op , ,Puzzle", "");
         assert_eq!(texts_of(&tags), ("Co-op, Puzzle".into(), String::new()));
+        // Short scales are held to their top.
+        assert_eq!(
+            with_texts(&Kind::Rating.new_rule(), "4", "9"),
+            Rule::Rating {
+                min_stars: Some(4),
+                max_stars: Some(5)
+            }
+        );
+        assert_eq!(
+            with_texts(&Kind::Score.new_rule(), "", "250"),
+            Rule::Score {
+                min_score: None,
+                max_score: Some(100)
+            }
+        );
+        let years = with_texts(&Kind::ReleaseYear.new_rule(), "1998", "2004");
+        assert_eq!(texts_of(&years), ("1998".into(), "2004".into()));
+        let devs = with_texts(&Kind::Developer.new_rule(), "Valve, id Software", "");
+        assert_eq!(
+            devs,
+            Rule::Developer {
+                names: vec!["Valve".into(), "id Software".into()]
+            }
+        );
+        for kind in [
+            Kind::DateAdded,
+            Kind::Size,
+            Kind::TimesPlayed,
+            Kind::AverageSession,
+            Kind::FirstPlayed,
+            Kind::HltbProgress,
+        ] {
+            let rule = with_texts(&kind.new_rule(), "3", "7");
+            assert_eq!(texts_of(&rule), ("3".into(), "7".into()), "{kind:?}");
+        }
         // Kinds picked from lists keep their values.
         let installed = Rule::Installed { installed: false };
         assert_eq!(with_texts(&installed, "x", "y"), installed);
-        for kind in Kind::ALL {
+        crate::i18n::register();
+        for (ix, kind) in Kind::ALL.into_iter().enumerate() {
             assert_eq!(Kind::of(&kind.new_rule()), kind);
+            assert!(!Kind::ALL[..ix].contains(&kind), "{kind:?} twice");
+            // Every kind has values to type, a list to pick from or a hint.
+            let picked = matches!(
+                kind,
+                Kind::Store
+                    | Kind::Installed
+                    | Kind::Status
+                    | Kind::Mode
+                    | Kind::AgeRating
+                    | Kind::System
+                    | Kind::Category
+            );
+            let ways = [kind.typed(), kind.hint().is_some(), picked];
+            assert_eq!(ways.iter().filter(|w| **w).count(), 1, "{kind:?}");
+            assert_eq!(
+                kind.unit().is_some(),
+                kind.ranged() && kind != Kind::ReleaseYear
+            );
+        }
+        for group in Group::ALL {
+            assert!(Kind::ALL.iter().any(|k| k.group() == group));
         }
     }
 }

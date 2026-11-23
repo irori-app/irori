@@ -21,7 +21,7 @@ use serde_json::{Map, Value};
 
 use crate::play_status::EffectiveStatus;
 
-pub use eval::{CategoryIndex, HltbTimes, IndexKey, Truth, count_matches, days_ago};
+pub use eval::{CategoryIndex, HltbTimes, IndexKey, Inputs, Truth, count_matches, days_ago};
 
 /// One category of either kind.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -148,6 +148,94 @@ pub enum Rule {
     Favourite {},
     /// Has any of these genres (compared without case).
     Genre { genres: Vec<String> },
+    /// Added to the library at least `min_days` and at most `max_days`
+    /// local calendar days ago: when the account got it, where the store
+    /// says, else when Irori first listed it.
+    DateAdded {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_days: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_days: Option<u32>,
+    },
+    /// Released from `min_year` to `max_year`. Games without a release
+    /// date don't match.
+    ReleaseYear {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_year: Option<i32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_year: Option<i32>,
+    },
+    /// The user gave it `min_stars` to `max_stars`. Unrated games don't
+    /// match.
+    Rating {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_stars: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_stars: Option<u8>,
+    },
+    /// Its review score, 0–100, is from `min_score` to `max_score`. Games
+    /// without one don't match.
+    Score {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_score: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_score: Option<u8>,
+    },
+    /// Installed and taking `min_gib` to `max_gib` whole GiB. Games without
+    /// a known size don't match.
+    Size {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_gib: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_gib: Option<u32>,
+    },
+    /// An update is waiting.
+    Update {},
+    /// Starts without an internet connection.
+    Offline {},
+    /// Played `min` to `max` times (sessions; starts that failed don't
+    /// count).
+    TimesPlayed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<u32>,
+    },
+    /// Its sessions last `min_minutes` to `max_minutes` on average. Games
+    /// never played don't match.
+    AverageSession {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_minutes: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_minutes: Option<u64>,
+    },
+    /// First played at least `min_days` and at most `max_days` local
+    /// calendar days ago. Games never played don't match.
+    FirstPlayed {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_days: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_days: Option<u32>,
+    },
+    /// Played `min_percent` to `max_percent` of HowLongToBeat's main-story
+    /// time. Games without a known time don't match.
+    HltbProgress {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_percent: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_percent: Option<u32>,
+    },
+    /// Hidden in the library.
+    Hidden {},
+    /// Has a note in the journal.
+    Notes {},
+    /// Made by a developer whose name holds any of these (compared like
+    /// store tags: case, spaces and punctuation don't matter).
+    Developer { names: Vec<String> },
+    /// Published by a company whose name holds any of these.
+    Publisher { names: Vec<String> },
+    /// Owned on more than one store (copies shown as one entry).
+    Copies {},
 }
 
 impl Rule {
@@ -168,6 +256,22 @@ impl Rule {
             Rule::Query { .. } => "query",
             Rule::Favourite {} => "favourite",
             Rule::Genre { .. } => "genre",
+            Rule::DateAdded { .. } => "dateAdded",
+            Rule::ReleaseYear { .. } => "releaseYear",
+            Rule::Rating { .. } => "rating",
+            Rule::Score { .. } => "score",
+            Rule::Size { .. } => "size",
+            Rule::Update {} => "update",
+            Rule::Offline {} => "offline",
+            Rule::TimesPlayed { .. } => "timesPlayed",
+            Rule::AverageSession { .. } => "averageSession",
+            Rule::FirstPlayed { .. } => "firstPlayed",
+            Rule::HltbProgress { .. } => "hltbProgress",
+            Rule::Hidden {} => "hidden",
+            Rule::Notes {} => "notes",
+            Rule::Developer { .. } => "developer",
+            Rule::Publisher { .. } => "publisher",
+            Rule::Copies {} => "copies",
         }
     }
 }
@@ -414,6 +518,26 @@ impl SmartCategory {
         next
     }
 
+    /// The manual categories its rules name that `user` doesn't have (on
+    /// this computer), sorted.
+    pub fn missing_categories(&self, user: &crate::UserData) -> Vec<String> {
+        let mut missing: Vec<String> = self
+            .rules
+            .iter()
+            .chain(&self.leave_out)
+            .filter_map(|c| match &c.rule {
+                Some(Rule::Category { names }) => Some(names),
+                _ => None,
+            })
+            .flatten()
+            .filter(|n| !user.categories.contains_key(*n))
+            .cloned()
+            .collect();
+        missing.sort();
+        missing.dedup();
+        missing
+    }
+
     /// The rules after renaming manual category `from` to `to`.
     pub fn rename_category(&mut self, from: &str, to: &str) -> bool {
         let mut changed = false;
@@ -433,4 +557,16 @@ impl SmartCategory {
 /// renames, so filters, shelves and sync follow the category.
 pub fn new_id() -> String {
     format!("s-{}", uuid::Uuid::new_v4().simple())
+}
+
+impl crate::Backend {
+    /// What smart categories read besides the library and the user data,
+    /// as it is now (no I/O).
+    pub fn category_inputs(&self) -> Inputs {
+        Inputs {
+            hltb: self.hltb_times(),
+            plays: crate::sessions::stats(),
+            updates: self.updates(),
+        }
+    }
 }

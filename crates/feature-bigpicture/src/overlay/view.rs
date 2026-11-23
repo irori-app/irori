@@ -45,7 +45,10 @@ const SHOT_REM: f32 = 15.;
 /// Achievement icon size, in rem.
 const ICON_REM: f32 = 3.;
 /// Time for the overlay's surface to leave the screen before a screenshot.
-const SCREENSHOT_DELAY: Duration = Duration::from_millis(300);
+pub(super) const SCREENSHOT_DELAY: Duration = Duration::from_millis(300);
+/// Rows of the Journal tab before today's notes: write a note, where I
+/// left off.
+const JOURNAL_ACTIONS: usize = 2;
 
 /// Something read in the background: on its way, there, or failed.
 enum Load<T> {
@@ -85,6 +88,8 @@ pub(super) struct OverlayView {
     /// The screenshot shown large, by its place in `shots`.
     preview: Option<usize>,
     achievements: Load<Arc<Vec<Achievement>>>,
+    /// Today's notes on the game, in the day's order; read on every draw.
+    journal_today: Vec<JournalEntry>,
     image_cache: Entity<LruImageCache>,
     /// Wheel travel not yet turned into a row (as in Big Picture).
     wheel: WheelTravel,
@@ -155,6 +160,7 @@ impl OverlayView {
             shots: Load::Loading,
             preview: None,
             achievements: Load::Loading,
+            journal_today: Vec::new(),
             image_cache: LruImageCache::new(24, cx),
             wheel: WheelTravel::default(),
             _tasks: Vec::new(),
@@ -309,7 +315,7 @@ impl OverlayView {
                 }
                 _ => 0,
             },
-            Tab::Journal => 1,
+            Tab::Journal => JOURNAL_ACTIONS + self.journal_today.len(),
         }
     }
 
@@ -401,6 +407,11 @@ impl OverlayView {
                     super::close(cx);
                     irori_ui::backend(cx).save_clip();
                 }
+                Some(HomeRow::MarkMoment) => {
+                    let id = self.game.clone();
+                    super::close(cx);
+                    super::mark_moment(id, true, cx);
+                }
                 Some(HomeRow::PlayStatus) => self.step_status(1, cx),
                 Some(HomeRow::MangoHud) => self.toggle_mangohud(window, cx),
                 Some(HomeRow::FrameLimit) => self.step_frame_limit(1, window, cx),
@@ -416,12 +427,22 @@ impl OverlayView {
             }
             Tab::Achievements => {}
             Tab::Controllers => self.controller_pressed(row, window, cx),
+            Tab::Journal if row == 1 => {
+                irori_ui::journal::open_left_off_editor(self.game.clone(), &self.title, window, cx);
+            }
             Tab::Journal => {
+                // Row 0 writes a new note; the rows after the actions open
+                // today's notes, newest first.
+                let note = row
+                    .checked_sub(JOURNAL_ACTIONS)
+                    .and_then(|ix| self.journal_today.iter().rev().nth(ix))
+                    .map(|n| n.id.clone());
                 let today = chrono::Local::now().date_naive();
                 let date = crate::text::relative_day(today, today);
                 irori_ui::journal::open_editor(
                     self.game.clone(),
                     today,
+                    note,
                     &self.title,
                     &date,
                     window,
@@ -554,6 +575,13 @@ fn loaded<T>(result: anyhow::Result<T>) -> Load<T> {
 
 impl Render for OverlayView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Read on every draw (the data is in memory), so a note saved in
+        // the editor shows as soon as it closes.
+        self.journal_today = irori_ui::backend(cx)
+            .userdata
+            .snapshot()
+            .journal_day(&self.game.key(), chrono::Local::now().date_naive())
+            .to_vec();
         let kind = self.kind(cx);
         let body = match self.nav.tab() {
             Tab::Home => self.render_home(cx),
@@ -1211,48 +1239,77 @@ impl OverlayView {
     }
 
     fn render_journal(&self, cx: &mut Context<Self>) -> AnyElement {
-        // Read on every draw (the data is in memory), so a note saved in
-        // the editor shows as soon as it closes.
-        let note: Option<JournalEntry> = irori_ui::backend(cx)
-            .userdata
-            .snapshot()
-            .journal_entry(&self.game.key(), chrono::Local::now().date_naive())
-            .filter(|n| !n.is_empty())
-            .cloned();
-        let label = if note.is_some() {
-            t("bigpicture.overlay.journal_edit")
-        } else {
-            t("bigpicture.overlay.journal_write")
-        };
-        let row = self.row(Tab::Journal, 0, IconName::NotebookPen, label, None, cx);
+        let write = self.row(
+            Tab::Journal,
+            0,
+            IconName::NotebookPen,
+            t("bigpicture.overlay.journal_write"),
+            None,
+            cx,
+        );
+        let left_off = irori_ui::models(cx)
+            .library
+            .read(cx)
+            .user
+            .left_off
+            .get(&self.game.key())
+            .map(|l| {
+                div()
+                    .text_sm()
+                    .line_clamp(1)
+                    .child(l.text.clone())
+                    .into_any_element()
+            });
+        let left_off = self.row(
+            Tab::Journal,
+            1,
+            IconName::Bookmark,
+            t("bigpicture.overlay.left_off"),
+            left_off,
+            cx,
+        );
+        let notes: Vec<AnyElement> = self
+            .journal_today
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(ix, note)| {
+                let label = note_label(note);
+                let icon = if note.is_waiting() {
+                    IconName::Bookmark
+                } else {
+                    IconName::StickyNote
+                };
+                let time = irori_ui::journal::time_label(note.time)
+                    .map(|t| div().text_sm().child(t).into_any_element());
+                self.row(Tab::Journal, ix + JOURNAL_ACTIONS, icon, label, time, cx)
+            })
+            .collect();
         let theme = cx.theme();
         v_flex()
             .id("overlay-journal")
             .size_full()
             .gap_3()
             .overflow_y_scroll()
+            .child(write)
+            .child(left_off)
             .child(
                 div()
                     .text_xs()
                     .font_semibold()
                     .text_color(theme.muted_foreground)
                     .child(SharedString::from(
-                        t("bigpicture.overlay.journal_today").to_uppercase(),
+                        t("bigpicture.overlay.journal_notes_today").to_uppercase(),
                     )),
             )
-            .map(|d| match &note {
-                Some(note) => d
-                    .when(!note.title.is_empty(), |d| {
-                        d.child(div().text_lg().font_semibold().child(note.title.clone()))
-                    })
-                    .child(div().child(note.text.clone())),
-                None => d.child(
+            .when(notes.is_empty(), |d| {
+                d.child(
                     div()
                         .text_color(theme.muted_foreground)
-                        .child(t("bigpicture.overlay.journal_empty")),
-                ),
+                        .child(t("bigpicture.overlay.journal_none_today")),
+                )
             })
-            .child(row)
+            .children(notes)
             .child(
                 div()
                     .text_sm()
@@ -1398,5 +1455,20 @@ fn tab_label(tab: Tab) -> SharedString {
         Tab::Achievements => t("bigpicture.overlay.tab.achievements"),
         Tab::Journal => t("bigpicture.overlay.tab.journal"),
         Tab::Controllers => t("bigpicture.overlay.tab.controllers"),
+    }
+}
+
+/// How a note reads as an overlay row: its title, else the start of its
+/// text, else that it is a moment marked to write later.
+fn note_label(note: &JournalEntry) -> SharedString {
+    let words = if note.title.trim().is_empty() {
+        note.text.lines().next().unwrap_or_default().trim()
+    } else {
+        note.title.trim()
+    };
+    if words.is_empty() {
+        t("bigpicture.overlay.journal_marked")
+    } else {
+        SharedString::from(words.to_string())
     }
 }

@@ -20,6 +20,7 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use super::GamePage;
+use crate::detail_rows::DetailRow;
 use crate::hooks::HowLongToBeat;
 use crate::i18n::{platform_label, playtime_label};
 use crate::load::{calendar_date, format_day, parse_date};
@@ -155,6 +156,25 @@ pub(super) fn known_links(
     links
 }
 
+/// The install's size as the store gives it, else as measured on disk
+/// (marked as such), else nothing.
+fn install_size_text(store_bytes: u64, store_text: &str, measured: Option<u64>) -> String {
+    if store_bytes > 0 {
+        return format_bytes(store_bytes);
+    }
+    if !store_text.trim().is_empty() {
+        return store_text.to_string();
+    }
+    match measured.filter(|b| *b > 0) {
+        Some(bytes) => t_args(
+            "game.details.measured_size",
+            &[("size", &format_bytes(bytes))],
+        )
+        .to_string(),
+        None => String::new(),
+    }
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -176,10 +196,38 @@ impl GamePage {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let muted = self.ink.panel_muted;
-        let credits = self.credit_rows(game, muted);
-        let play = self.play_rows(muted, cx);
-        let install = self.install_rows(game, muted, cx);
-        let compat = self.compat_detail_rows(muted, cx);
+        let hidden = crate::detail_rows::hidden(cx);
+        let shows = |row: DetailRow| row.shown_in(&hidden);
+        let credits = self.credit_rows(game, muted, &shows);
+        let tags = self.tag_rows(game, self.shown_genres(game, cx), muted, &shows);
+        let steam_tags = if shows(DetailRow::SteamTags) {
+            self.steam_tag_rows(game, muted, cx)
+        } else {
+            Vec::new()
+        };
+        let play = self.play_rows(muted, &shows, cx);
+        let install = self.install_rows(game, muted, &shows, cx);
+        let compat = if shows(DetailRow::HowLongToBeat) {
+            self.compat_detail_rows(muted, cx)
+        } else {
+            Vec::new()
+        };
+        let steam = if shows(DetailRow::Steam) {
+            self.steam_rows(muted)
+        } else {
+            Vec::new()
+        };
+        let links = if shows(DetailRow::Links) {
+            self.link_rows(game, muted, cx)
+        } else {
+            Vec::new()
+        };
+        let edit_rows = Button::new("details-edit-rows")
+            .ghost()
+            .xsmall()
+            .icon(IconName::Settings2)
+            .tooltip(t("game.details.edit_rows"))
+            .on_click(|_, window, cx| crate::detail_rows::open_detail_rows_dialog(window, cx));
         let theme = cx.theme();
         v_flex()
             .id("game-details")
@@ -192,18 +240,26 @@ impl GamePage {
             .border_1()
             .border_color(theme.border)
             .child(
-                div()
+                h_flex()
+                    .w_full()
                     .pb_2()
-                    .child(super::section_title(t("game.info.details"), self.ink.text)),
+                    .gap_2()
+                    .justify_between()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .child(super::section_title(t("game.info.details"), self.ink.text)),
+                    )
+                    .child(edit_rows),
             )
             .children(group(credits, cx))
-            .children(group(self.tag_rows(game, muted), cx))
-            .children(group(self.steam_tag_rows(game, muted, cx), cx))
+            .children(group(tags, cx))
+            .children(group(steam_tags, cx))
             .children(group(play, cx))
             .children(group(install, cx))
             .children(group(compat, cx))
-            .children(group(self.steam_rows(muted), cx))
-            .children(group(self.link_rows(game, muted, cx), cx))
+            .children(group(steam, cx))
+            .children(group(links, cx))
             .into_any_element()
     }
 
@@ -259,27 +315,37 @@ impl GamePage {
     }
 
     /// Developer, publisher and release date.
-    fn credit_rows(&self, game: &GameInfo, muted: Hsla) -> Vec<AnyElement> {
+    fn credit_rows(
+        &self,
+        game: &GameInfo,
+        muted: Hsla,
+        shows: &dyn Fn(DetailRow) -> bool,
+    ) -> Vec<AnyElement> {
         let mut rows = Vec::new();
-        if let Some(d) = game.developer.as_ref().filter(|d| !d.is_empty()) {
+        if let Some(d) = game
+            .developer
+            .as_ref()
+            .filter(|d| !d.is_empty() && shows(DetailRow::Developer))
+        {
             rows.push(row(
                 t("game.details.developer"),
                 chips(vec![d.clone()]),
                 muted,
             ));
         }
-        if let Some(p) = game
-            .publisher
-            .as_ref()
-            .filter(|p| !p.is_empty() && game.developer.as_ref() != Some(p))
-        {
+        if let Some(p) = game.publisher.as_ref().filter(|p| {
+            !p.is_empty() && game.developer.as_ref() != Some(p) && shows(DetailRow::Publisher)
+        }) {
             rows.push(row(
                 t("game.details.publisher"),
                 chips(vec![p.clone()]),
                 muted,
             ));
         }
-        if let Some(date) = self.release_date(game) {
+        if let Some(date) = self
+            .release_date(game)
+            .filter(|_| shows(DetailRow::Released))
+        {
             rows.push(row(t("game.details.released"), text(date), muted));
         }
         rows
@@ -287,18 +353,18 @@ impl GamePage {
 
     /// Genres, the platforms the game is offered for, and a ROM's region and
     /// revision, as chips.
-    fn tag_rows(&self, game: &GameInfo, muted: Hsla) -> Vec<AnyElement> {
+    fn tag_rows(
+        &self,
+        game: &GameInfo,
+        genres: Vec<String>,
+        muted: Hsla,
+        shows: &dyn Fn(DetailRow) -> bool,
+    ) -> Vec<AnyElement> {
         let mut rows = Vec::new();
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
-        if !genres.is_empty() {
+        if !genres.is_empty() && shows(DetailRow::Genres) {
             rows.push(row(t("game.details.genres"), chips(genres), muted));
         }
-        if self.id.runner != irori_core::Runner::Emulation {
+        if self.id.runner != irori_core::Runner::Emulation && shows(DetailRow::Platforms) {
             let platforms: Vec<String> = crate::install::installable_platforms(game)
                 .iter()
                 .map(|p| platform_label(*p).to_string())
@@ -307,7 +373,7 @@ impl GamePage {
                 rows.push(row(t("game.info.platforms"), chips(platforms), muted));
             }
         }
-        if !game.tags.is_empty() {
+        if !game.tags.is_empty() && shows(DetailRow::Tags) {
             rows.push(row(t("game.details.tags"), chips(game.tags.clone()), muted));
         }
         rows
@@ -316,12 +382,7 @@ impl GamePage {
     /// The game's Steam tags as chips, each showing the library's games with
     /// that tag; the strongest first, the rest behind "+N".
     fn steam_tag_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
+        let genres = self.shown_genres(game, cx);
         let tags = tag_chips(&game.store_tags, &genres, &game.game_modes);
         if tags.is_empty() {
             return Vec::new();
@@ -443,6 +504,26 @@ impl GamePage {
         )]
     }
 
+    /// The genres the page shows: the user's own, else the store page's,
+    /// else the library's.
+    pub(super) fn shown_genres(&self, game: &GameInfo, cx: &App) -> Vec<String> {
+        let own = models(cx)
+            .library
+            .read(cx)
+            .user
+            .overrides
+            .get(&self.id.key())
+            .is_some_and(|o| o.genres.is_some());
+        if own {
+            return game.genres.clone();
+        }
+        self.extra
+            .ready()
+            .map(|e| e.genres.clone())
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| game.genres.clone())
+    }
+
     /// The release date in the interface language, or as the store wrote it
     /// when it isn't a date.
     pub(super) fn release_date(&self, game: &GameInfo) -> Option<String> {
@@ -458,7 +539,12 @@ impl GamePage {
     }
 
     /// Play time, first and last played, achievements and the account.
-    fn play_rows(&self, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+    fn play_rows(
+        &self,
+        muted: Hsla,
+        shows: &dyn Fn(DetailRow) -> bool,
+        cx: &Context<Self>,
+    ) -> Vec<AnyElement> {
         let record = models(cx)
             .library
             .read(cx)
@@ -469,26 +555,61 @@ impl GamePage {
         let now = unix_now() as i64;
         let minutes = record.as_ref().map_or(0, |r| r.total_minutes);
         let played = record.as_ref().is_some_and(|r| r.last_played.is_some());
-        let mut rows = vec![row(
-            t("game.info.playtime"),
-            text(playtime_label(minutes, played)),
-            muted,
-        )];
-        if let Some(last) = record.as_ref().and_then(|r| r.last_played.as_deref()) {
+        let mut rows = Vec::new();
+        if shows(DetailRow::Playtime) {
+            let id = self.id.clone();
+            rows.push(row(
+                t("game.info.playtime"),
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .justify_between()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .child(playtime_label(minutes, played)),
+                    )
+                    .child(
+                        Button::new("details-edit-playtime")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Pencil)
+                            .tooltip(t("game.menu.edit_playtime"))
+                            .on_click(move |_, window, cx| {
+                                crate::playtime_edit::open_playtime_dialog(id.clone(), window, cx)
+                            }),
+                    ),
+                muted,
+            ));
+        }
+        if let Some(last) = record
+            .as_ref()
+            .and_then(|r| r.last_played.as_deref())
+            .filter(|_| shows(DetailRow::LastPlayed))
+        {
             rows.push(row(
                 t("game.info.last_played"),
                 text(format_day(last, now)),
                 muted,
             ));
         }
-        if let Some(first) = record.as_ref().and_then(|r| r.first_played.as_deref()) {
+        if let Some(first) = record
+            .as_ref()
+            .and_then(|r| r.first_played.as_deref())
+            .filter(|_| shows(DetailRow::FirstPlayed))
+        {
             rows.push(row(
                 t("game.info.first_played"),
                 text(format_day(first, now)),
                 muted,
             ));
         }
-        if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
+        if let Some(list) = self
+            .achievements
+            .ready()
+            .filter(|a| !a.is_empty() && shows(DetailRow::Achievements))
+        {
             let unlocked = list.iter().filter(|a| a.is_unlocked()).count();
             let percent = completion_percent(unlocked, list.len());
             rows.push(row(
@@ -510,6 +631,7 @@ impl GamePage {
             ));
         }
         if self.id.runner.manages_installs()
+            && shows(DetailRow::Account)
             && let Some(account) = backend(cx)
                 .store(self.id.runner)
                 .and_then(|s| s.game_account(&self.id.app_name))
@@ -524,7 +646,13 @@ impl GamePage {
     }
 
     /// Folder and size, version, language, Wine, saves and offline play.
-    fn install_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+    fn install_rows(
+        &self,
+        game: &GameInfo,
+        muted: Hsla,
+        shows: &dyn Fn(DetailRow) -> bool,
+        cx: &Context<Self>,
+    ) -> Vec<AnyElement> {
         let mut rows = Vec::new();
         // Steam picks the build and Proton, syncs saves and decides about
         // offline play for its games; Irori only knows where they are.
@@ -532,12 +660,12 @@ impl GamePage {
         let b = backend(cx);
         match &game.install {
             Some(install) if game.is_installed => {
-                if let Some(path) = game.install_path() {
-                    let size = if install.install_size_bytes > 0 {
-                        format_bytes(install.install_size_bytes)
-                    } else {
-                        install.install_size.clone()
-                    };
+                if let Some(path) = game.install_path().filter(|_| shows(DetailRow::Location)) {
+                    let size = install_size_text(
+                        install.install_size_bytes,
+                        &install.install_size,
+                        self.measured_size,
+                    );
                     let id = self.id.clone();
                     rows.push(row(
                         t("game.common.location"),
@@ -562,7 +690,7 @@ impl GamePage {
                         muted,
                     ));
                 }
-                if managed {
+                if managed && shows(DetailRow::Platform) {
                     rows.push(row(
                         t("game.common.platform"),
                         text(platform_label(install.platform)),
@@ -577,10 +705,14 @@ impl GamePage {
                     version =
                         t_args("game.info.version_pinned", &[("version", &version)]).to_string();
                 }
-                if !version.trim().is_empty() {
+                if !version.trim().is_empty() && shows(DetailRow::Version) {
                     rows.push(row(t("game.common.version"), text(version), muted));
                 }
-                if let Some(language) = &install.language {
+                if let Some(language) = install
+                    .language
+                    .as_ref()
+                    .filter(|_| shows(DetailRow::Language))
+                {
                     rows.push(row(
                         t("game.common.language"),
                         text(crate::load::language_name(language)),
@@ -594,24 +726,30 @@ impl GamePage {
                     } else {
                         t("game.info.not_set").to_string()
                     };
-                    rows.push(row("Wine", text(wine), muted));
-                    let prefix = irori_runtime::prefix_path(&b.settings.app(), &settings, game);
-                    rows.push(row(
-                        t("game.common.prefix"),
-                        text(prefix.display().to_string()),
-                        muted,
-                    ));
+                    if shows(DetailRow::Wine) {
+                        rows.push(row("Wine", text(wine), muted));
+                    }
+                    if shows(DetailRow::Prefix) {
+                        let prefix = irori_runtime::prefix_path(&b.settings.app(), &settings, game);
+                        rows.push(row(
+                            t("game.common.prefix"),
+                            text(prefix.display().to_string()),
+                            muted,
+                        ));
+                    }
                 }
             }
             // The platforms on offer are among the game's tags.
             _ => {}
         }
         if !managed {
-            rows.push(row(
-                t("game.info.launcher"),
-                text(self.id.runner.store_name()),
-                muted,
-            ));
+            if shows(DetailRow::Launcher) {
+                rows.push(row(
+                    t("game.info.launcher"),
+                    text(self.id.runner.store_name()),
+                    muted,
+                ));
+            }
             return rows;
         }
         let store_supports = b
@@ -631,17 +769,25 @@ impl GamePage {
                 t("game.info.saves_not_supported")
             }
         };
-        rows.push(row(t("game.info.cloud_saves"), text(saves), muted));
-        rows.push(row(
-            t("game.info.offline_play"),
-            text(if game.can_run_offline {
-                t("game.info.offline_supported")
-            } else {
-                t("game.info.offline_needs_connection")
-            }),
-            muted,
-        ));
-        if let Some(app) = &game.third_party_managed_app {
+        if shows(DetailRow::CloudSaves) {
+            rows.push(row(t("game.info.cloud_saves"), text(saves), muted));
+        }
+        if shows(DetailRow::Offline) {
+            rows.push(row(
+                t("game.info.offline_play"),
+                text(if game.can_run_offline {
+                    t("game.info.offline_supported")
+                } else {
+                    t("game.info.offline_needs_connection")
+                }),
+                muted,
+            ));
+        }
+        if let Some(app) = game
+            .third_party_managed_app
+            .as_ref()
+            .filter(|_| shows(DetailRow::Launcher))
+        {
             rows.push(row(t("game.info.launcher"), text(app.clone()), muted));
         }
         rows
@@ -882,6 +1028,22 @@ mod tests {
             ["SteamDB", "PCGamingWiki", "IGDB"],
             "not a search page"
         );
+    }
+
+    #[test]
+    fn the_measured_size_stands_in_for_the_stores() {
+        crate::i18n::register();
+        use irori_core::util::format_bytes;
+        let gib = 3 * 1024 * 1024 * 1024;
+        assert_eq!(
+            super::install_size_text(gib, "", Some(1)),
+            format_bytes(gib)
+        );
+        assert_eq!(super::install_size_text(0, "2 GB", Some(gib)), "2 GB");
+        let measured = super::install_size_text(0, " ", Some(gib));
+        assert!(measured.contains(&format_bytes(gib)), "{measured}");
+        assert_eq!(super::install_size_text(0, "", None), "");
+        assert_eq!(super::install_size_text(0, "", Some(0)), "");
     }
 
     #[test]

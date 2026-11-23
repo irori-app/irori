@@ -1197,6 +1197,54 @@ pub enum CoverFit {
     Whole,
 }
 
+/// The shape of the library grid's covers (`coverShape`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverShape {
+    /// Square art: the store's square capsule, else the box art cropped.
+    Square,
+    /// A wide banner of the game's hero art, 16:9.
+    Banner,
+    /// Box art, 2:3. Last, so a shape a newer Irori writes reads as this.
+    #[default]
+    #[serde(other)]
+    Portrait,
+}
+
+impl CoverShape {
+    /// Height over width.
+    pub fn ratio(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.5,
+            CoverShape::Square => 1.0,
+            CoverShape::Banner => 9.0 / 16.0,
+        }
+    }
+
+    /// How much wider than a box a cover of this shape is drawn at one
+    /// cover size, so the size slider keeps covers of about one weight.
+    pub fn width_scale(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.0,
+            CoverShape::Square => 1.2,
+            CoverShape::Banner => 1.75,
+        }
+    }
+}
+
+/// How large the covers in the Focus view's column are
+/// (`libraryFocusCoverSize`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusCoverSize {
+    Small,
+    Large,
+    /// Last, so a size a newer Irori writes reads as this one.
+    #[default]
+    #[serde(other)]
+    Medium,
+}
+
 /// How a cover answers the pointer and the keyboard focus (`coverHover`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1391,6 +1439,9 @@ pub struct OverlayPrefs {
     pub screenshot_chord: bool,
     /// Guide + Up/Down change the system's volume.
     pub volume_chords: bool,
+    /// Guide + Y (Triangle) marks the moment: a screenshot and a journal
+    /// note to write later (`momentChord`).
+    pub moment_chord: bool,
     /// How far one press of a volume control moves a volume, in percent
     /// (see [`Self::volume_step`]).
     pub volume_step: u32,
@@ -1408,6 +1459,7 @@ impl Default for OverlayPrefs {
             side: OverlaySide::Center,
             screenshot_chord: true,
             volume_chords: true,
+            moment_chord: true,
             volume_step: 5,
             level_notice: true,
             back_start: true,
@@ -1607,12 +1659,24 @@ pub struct UiPrefs {
     pub cover_caption: CoverCaption,
     pub cover_hover: CoverHover,
     pub cover_fit: CoverFit,
+    /// The shape of the grid's covers (`coverShape`).
+    pub cover_shape: CoverShape,
     /// The star on favourites' covers (`coverFavourite`, on unless turned
     /// off).
     pub cover_favourite: bool,
     /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
     /// 1 to 3); 0 fits as many as the window allows.
     pub library_focus_columns: u32,
+    /// How large the Focus view's covers are (`libraryFocusCoverSize`).
+    pub library_focus_cover_size: FocusCoverSize,
+    /// The library switches to Focus when the window grows wide enough for
+    /// its page beside the covers, and to the grid when it shrinks below
+    /// that (`libraryAutoLayout`, off unless turned on).
+    pub library_auto_layout: bool,
+    /// A click on a cover in the grid opens the drawer about the game
+    /// (`libraryOpenDetailsOnSelect`, on unless turned off); off, it only
+    /// selects it, and `I`, Enter or a double click go further.
+    pub library_open_details_on_select: bool,
     /// Store badges stay on every cover (`storeBadgesAlways`); off, they
     /// show on the cover pointed at or focused.
     pub store_badges_always: bool,
@@ -1620,6 +1684,16 @@ pub struct UiPrefs {
     /// (`storeBadgesOneStore`, off unless turned on), where they all say the
     /// same.
     pub store_badges_one_store: bool,
+    /// Game pages show the age-rating card (`showAgeRatings`, on unless
+    /// turned off). The library's age filter works either way.
+    pub show_age_ratings: bool,
+    /// The board whose rating shows first (`ageRatingBoard`): its name
+    /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
+    /// the board of the user's region.
+    pub age_rating_board: String,
+    /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
+    /// ids such as `publisher`); ids a later Irori adds stay as written.
+    pub hidden_detail_rows: Vec<String>,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1820,10 +1894,17 @@ impl Default for UiPrefs {
             cover_caption: CoverCaption::Full,
             cover_hover: CoverHover::Lift,
             cover_fit: CoverFit::Crop,
+            cover_shape: CoverShape::Portrait,
             cover_favourite: true,
             library_focus_columns: 0,
+            library_focus_cover_size: FocusCoverSize::Medium,
+            library_auto_layout: false,
+            library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
+            show_age_ratings: true,
+            age_rating_board: String::new(),
+            hidden_detail_rows: Vec::new(),
         }
     }
 }
@@ -2034,6 +2115,47 @@ mod tests {
         assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
         let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
         assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn a_click_opens_the_drawer_unless_turned_off() {
+        assert!(UiPrefs::default().library_open_details_on_select);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryOpenDetailsOnSelect":false}"#).unwrap();
+        assert!(!ui.library_open_details_on_select);
+    }
+
+    #[test]
+    fn focus_covers_are_medium_unless_chosen() {
+        assert_eq!(
+            UiPrefs::default().library_focus_cover_size,
+            FocusCoverSize::Medium
+        );
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryFocusCoverSize":"large"}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Large);
+        // A size a newer Irori writes doesn't lose the other settings.
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"libraryFocusCoverSize":"huge","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Medium);
+        assert_eq!(ui.tile_size, 9.0);
+    }
+
+    #[test]
+    fn the_layout_follows_the_window_only_when_asked() {
+        assert!(!UiPrefs::default().library_auto_layout);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryAutoLayout":true}"#).unwrap();
+        assert!(ui.library_auto_layout);
+    }
+
+    #[test]
+    fn covers_are_boxes_unless_another_shape_is_chosen() {
+        assert_eq!(UiPrefs::default().cover_shape, CoverShape::Portrait);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverShape":"banner"}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Banner);
+        assert!(CoverShape::Banner.ratio() < 1.0 && CoverShape::Square.ratio() == 1.0);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"coverShape":"hexagon","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Portrait);
+        assert_eq!(ui.tile_size, 9.0);
     }
 
     #[test]

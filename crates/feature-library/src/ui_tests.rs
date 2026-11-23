@@ -448,7 +448,11 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     assert_eq!(state(cx).0, ["Alan Wake", "Celeste", "Inside"]);
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
-    assert_eq!(state(cx).0.len(), 5);
+    // Every game shown: tests share one state folder, so another test's
+    // added game may be among them.
+    let shown = cx.read(|cx| view.read(cx).visible_games().len());
+    assert!(shown >= 5);
+    assert_eq!(state(cx).0.len(), shown);
     // The bar offers to take the picked games out of Steam too.
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
@@ -547,6 +551,22 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     draw(cx);
     assert!(state(cx).1);
     cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    assert!(!state(cx).1);
+
+    // With details on click off, a click only selects; I still opens the
+    // drawer, which then follows the clicks.
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(false, cx)));
+    click(cx, "1", 1);
+    assert_eq!(focused(cx), Some(game("1")));
+    assert!(!state(cx).1);
+    cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    click(cx, "3", 1);
+    assert!(state(cx).1);
+    assert_eq!(focused(cx), Some(game("3")));
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(true, cx)));
+    cx.simulate_keystrokes(window, "escape");
     draw(cx);
     assert!(!state(cx).1);
 
@@ -1436,4 +1456,172 @@ fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
         cx.run_until_parked();
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[gpui_kit::test]
+fn the_filters_popover_finds_a_value_by_name(cx: &mut TestAppContext) {
+    use crate::filters_panel::{FilterModel, FiltersPanel};
+
+    let _backend = start(cx);
+    let model = cx.update(|cx| cx.new(|_| FilterModel::new(crate::filter::ViewFilter::default())));
+    let (window, panel) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(800.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |_, cx| cx.new(|cx| FiltersPanel::new(model.clone(), cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    // Nothing searched: the sections, and no values worked out.
+    assert_eq!(cx.read(|cx| panel.read(cx).found_values(cx)), None);
+
+    // The play status is found by name, with its count. Tests share one
+    // state folder, so another test may have given some games a status.
+    cx.update_window(window, |_, window, cx| {
+        panel.update(cx, |p, cx| p.search_for("not pla", window, cx))
+    })
+    .unwrap();
+    draw(cx);
+    let found = cx
+        .read(|cx| panel.read(cx).found_values(cx))
+        .expect("searched");
+    assert!(
+        found.len() == 1 && found.iter().all(|(_, count)| *count > 0),
+        "{found:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn picking_a_range_with_the_keyboard(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.show_layout_for_test(irori_core::settings::LibraryLayout::List, cx)
+        })
+    });
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+    let state = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).selection_state());
+
+    // Shift+Down from the first game picks it and the ones stepped onto.
+    cx.simulate_keystrokes(window, "home shift-down shift-down");
+    draw(cx);
+    assert_eq!(
+        state(cx),
+        (
+            vec!["Alan Wake".into(), "Celeste".into(), "Hades".into()],
+            true
+        )
+    );
+    // Stepping back unpicks what the range leaves.
+    cx.simulate_keystrokes(window, "shift-up");
+    draw(cx);
+    assert_eq!(state(cx).0, ["Alan Wake", "Celeste"]);
+    // A plain move ends the range; Shift+Space ticks one game alone.
+    cx.simulate_keystrokes(window, "down down down shift-space");
+    draw(cx);
+    assert_eq!(state(cx).0, ["Alan Wake", "Celeste", "Outer Wilds"]);
+    // Shift+End picks from there to the last game.
+    cx.simulate_keystrokes(window, "up shift-end");
+    draw(cx);
+    assert_eq!(
+        state(cx).0,
+        ["Alan Wake", "Celeste", "Inside", "Outer Wilds"]
+    );
+}
+
+#[gpui_kit::test]
+fn the_view_follows_the_window_width_when_asked(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1600.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let layout = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window).0)
+            .unwrap()
+    };
+    let resize = |cx: &mut TestAppContext, width: f32| {
+        cx.simulate_window_resize(window, size(px(width), px(800.)));
+        settle(cx);
+    };
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "off: nothing switches");
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(true, cx)));
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Focus, "wide: Focus");
+    resize(cx, 700.);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "narrow: the grid");
+    // A view picked by hand holds while the window stays on its side.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    resize(cx, 720.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    resize(cx, 1600.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(false, cx)));
 }

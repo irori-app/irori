@@ -1360,6 +1360,7 @@ mod tests {
                 install_folder: None,
                 icon: Some("/icons/tux.png".into()),
                 kind: FoundKind::DesktopEntry,
+                others: Vec::new(),
             }),
         );
         assert_eq!(entry.title, "SuperTux");

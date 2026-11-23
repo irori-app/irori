@@ -429,7 +429,8 @@ impl LibraryView {
     /// keys, to show one, two or three covers to a row.
     pub(super) fn render_focus_handle(&self, cx: &mut Context<Self>) -> AnyElement {
         let ring = cx.theme().ring;
-        let now = layouts::focus_columns_near(self.frame.focus_rem);
+        let tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        let now = layouts::focus_columns_near(self.frame.focus_rem, tile);
         div()
             .id("library-focus-handle")
             .keyboard_focusable(cx)
@@ -468,7 +469,8 @@ impl LibraryView {
     ) {
         let left: Pixels = event.bounds.left();
         let width = (event.event.position.x - left).max(px(0.)) / window.rem_size();
-        self.set_focus_columns(layouts::focus_columns_near(width), cx);
+        let tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        self.set_focus_columns(layouts::focus_columns_near(width, tile), cx);
     }
 
     /// Follow a drag of the drawer's edge anywhere over the library body,

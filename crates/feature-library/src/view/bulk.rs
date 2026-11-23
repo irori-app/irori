@@ -46,8 +46,53 @@ pub(super) struct BulkSummary {
     ids: Rc<Vec<GameId>>,
     all_favourite: bool,
     all_hidden: bool,
-    /// Each category, and whether every picked game is in it.
-    categories: Rc<Vec<(String, bool)>>,
+    /// Each category, and how many of the picked games are in it.
+    categories: Rc<Vec<(String, usize)>>,
+}
+
+/// How many of the picked games a category holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Membership {
+    None,
+    /// Some of them: this many.
+    Some(usize),
+    All,
+}
+
+impl Membership {
+    pub(crate) fn of(inside: usize, picked: usize) -> Self {
+        match inside {
+            0 => Membership::None,
+            n if n >= picked => Membership::All,
+            n => Membership::Some(n),
+        }
+    }
+
+    /// Picking the category's row adds every picked game to it unless all
+    /// are in already, which takes them out.
+    pub(crate) fn adds(self) -> bool {
+        self != Membership::All
+    }
+}
+
+/// A category's row in the bulk Categories menu: its name, with "3 of 7"
+/// when only some of the `picked` games are in it.
+pub(crate) fn category_row_label(
+    name: &str,
+    membership: Membership,
+    picked: usize,
+) -> SharedString {
+    match membership {
+        Membership::Some(n) => t_args(
+            "library.bulk.category_some",
+            &[
+                ("name", name),
+                ("count", &n.to_string()),
+                ("total", &picked.to_string()),
+            ],
+        ),
+        _ => name.to_owned().into(),
+    }
 }
 
 /// What a [`BulkSummary`] depends on: the picks, the shown list and the
@@ -73,8 +118,9 @@ pub(super) struct BulkCache {
 impl LibraryView {
     /// A click on a game: Shift extends the selection, Ctrl (or any click in
     /// selection mode) picks it. Otherwise the list opens its page; the grid
-    /// and Focus select it (the grid opens its drawer) and open the page on
-    /// a double click.
+    /// and Focus select it (the grid opens its drawer, unless
+    /// `libraryOpenDetailsOnSelect` is off) and open the page on a double
+    /// click.
     pub(super) fn click_game(
         &mut self,
         id: &GameId,
@@ -103,12 +149,29 @@ impl LibraryView {
                 // Arrow keys go on from the clicked game.
                 self.grid_focus.focus(window, cx);
                 match self.layout {
-                    LibraryLayout::Grid => self.open_drawer(window, cx),
+                    LibraryLayout::Grid if self.ui_prefs.library_open_details_on_select => {
+                        self.open_drawer(window, cx)
+                    }
+                    // An open drawer follows the click; a closed one stays
+                    // closed until `I`, Enter or a double click.
                     _ => self.show_focused(false, window, cx),
                 }
             }
         }
         cx.notify();
+    }
+
+    /// Shift+Space (Ctrl+Space): pick or unpick the focused game, starting
+    /// selection mode, as a Ctrl-click does.
+    pub(super) fn pick_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.grid_focus.is_focused(window) {
+            cx.propagate();
+            return;
+        }
+        if let Some(id) = self.focused_in_view() {
+            self.selection.toggle(&id);
+            cx.notify();
+        }
     }
 
     /// The toolbar's "Select" / "Done".
@@ -230,7 +293,7 @@ impl LibraryView {
             .map(|(name, games)| {
                 (
                     name.clone(),
-                    !keys.is_empty() && keys.iter().all(|k| games.contains(k)),
+                    keys.iter().filter(|k| games.contains(*k)).count(),
                 )
             })
             .collect();
@@ -611,35 +674,44 @@ impl LibraryView {
             .label(t("library.bulk.categories"))
             .disabled(nothing)
             .dropdown_menu(move |mut menu, _, _| {
-                for (name, all_in) in categories.iter() {
-                    let (ids, name, add) = (category_ids.clone(), name.clone(), !*all_in);
-                    menu = menu.item(PopupMenuItem::new(name.clone()).checked(*all_in).on_click(
-                        move |_, window, cx| {
-                            let message = counted(
-                                if add {
-                                    (
-                                        "library.bulk.done.categorized_one",
-                                        "library.bulk.done.categorized_other",
-                                    )
-                                } else {
-                                    (
-                                        "library.bulk.done.uncategorized_one",
-                                        "library.bulk.done.uncategorized_other",
-                                    )
-                                },
-                                ids.len(),
-                                &[("category", &name)],
-                            );
-                            let name = name.clone();
-                            edit_with_undo(
-                                ids.to_vec(),
-                                message,
-                                move |u, ids| u.set_category_many(ids, &name, add),
-                                window,
-                                cx,
-                            )
-                        },
-                    ));
+                for (name, inside) in categories.iter() {
+                    let membership = Membership::of(*inside, category_ids.len());
+                    let (ids, name, add) = (category_ids.clone(), name.clone(), membership.adds());
+                    let mut row = PopupMenuItem::new(category_row_label(
+                        &name,
+                        membership,
+                        category_ids.len(),
+                    ))
+                    .checked(membership == Membership::All);
+                    if let Membership::Some(_) = membership {
+                        // A mixed tick: some of the picked games are in it.
+                        row = row.icon(IconName::Minus);
+                    }
+                    menu = menu.item(row.on_click(move |_, window, cx| {
+                        let message = counted(
+                            if add {
+                                (
+                                    "library.bulk.done.categorized_one",
+                                    "library.bulk.done.categorized_other",
+                                )
+                            } else {
+                                (
+                                    "library.bulk.done.uncategorized_one",
+                                    "library.bulk.done.uncategorized_other",
+                                )
+                            },
+                            ids.len(),
+                            &[("category", &name)],
+                        );
+                        let name = name.clone();
+                        edit_with_undo(
+                            ids.to_vec(),
+                            message,
+                            move |u, ids| u.set_category_many(ids, &name, add),
+                            window,
+                            cx,
+                        )
+                    }));
                 }
                 if !categories.is_empty() {
                     menu = menu.separator();
@@ -905,4 +977,32 @@ fn uninstall_all(games: Vec<Arc<GameInfo>>, window: &mut Window, cx: &mut gpui_k
             });
         })
         .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn categories_say_how_many_of_the_picks_they_hold() {
+        crate::i18n::register();
+        assert_eq!(Membership::of(0, 7), Membership::None);
+        assert_eq!(Membership::of(3, 7), Membership::Some(3));
+        assert_eq!(Membership::of(7, 7), Membership::All);
+        assert_eq!(
+            category_row_label("Unplayed", Membership::of(3, 7), 7),
+            "Unplayed (3 of 7)"
+        );
+        assert_eq!(
+            category_row_label("Unplayed", Membership::All, 7),
+            "Unplayed"
+        );
+        assert_eq!(
+            category_row_label("Unplayed", Membership::None, 7),
+            "Unplayed"
+        );
+        // Some or none in: picking adds every game; all in: takes them out.
+        assert!(Membership::Some(3).adds() && Membership::None.adds());
+        assert!(!Membership::All.adds());
+    }
 }
