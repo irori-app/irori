@@ -11,8 +11,9 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
+    InteractiveElement, IntoElement, MouseButton, NavigationDirection, ParentElement as _, Render,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
+    rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
 use irori_ui::components::{BrandMark, BrandWordmark};
@@ -690,6 +691,27 @@ impl Focusable for AppShell {
     }
 }
 
+/// Bind hardware mouse back/forward buttons to window navigation history.
+fn bind_mouse_navigation<E: InteractiveElement>(el: E, enabled: bool) -> E {
+    if !enabled {
+        return el;
+    }
+    el.on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Back),
+        |_, _, cx| {
+            nav::go_back(cx);
+            cx.stop_propagation();
+        },
+    )
+    .on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Forward),
+        |_, _, cx| {
+            nav::go_forward(cx);
+            cx.stop_propagation();
+        },
+    )
+}
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !Self::is_narrow(window) {
@@ -727,6 +749,7 @@ impl Render for AppShell {
             .text_color(cx.theme().foreground)
             .on_action(cx.listener(|_, _: &GoBack, _, cx| nav::go_back(cx)))
             .on_action(cx.listener(|_, _: &GoForward, _, cx| nav::go_forward(cx)))
+            .map(|this| bind_mouse_navigation(this, !fullscreen_mode))
             .on_action(cx.listener(|this, _: &OpenPalette, window, cx| {
                 this.palette.open(window, cx);
             }))
@@ -1094,6 +1117,105 @@ mod title_bar_tests {
             narrow_after.search.size.width > px(120.),
             "the search button stays usable: {:?}",
             narrow_after.search
+        );
+    }
+
+    struct MouseNavHarness {
+        enabled: bool,
+        occluded: bool,
+    }
+
+    impl Render for MouseNavHarness {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            bind_mouse_navigation(
+                div().id("mouse-nav-root").relative().size_full(),
+                self.enabled,
+            )
+            .when(self.occluded, |this| {
+                this.child(
+                    div()
+                        .id("mouse-nav-occluder")
+                        .absolute()
+                        .inset_0()
+                        .occlude(),
+                )
+            })
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mouse_side_buttons_navigate_history_unless_occluded_or_disabled(cx: &mut TestAppContext) {
+        let _ = start(cx);
+        let window = cx.open_window(size(px(400.), px(300.)), |_, _| MouseNavHarness {
+            enabled: true,
+            occluded: false,
+        });
+        let mut vcx = VisualTestContext::from_window(window.into(), cx);
+        vcx.update(|window, cx| {
+            nav::navigate(Route::Updates, cx);
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+
+        let pos = gpui_kit::point(px(100.), px(100.));
+        let mods = gpui_kit::Modifiers::default();
+
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Library
+        );
+
+        vcx.simulate_mouse_down(
+            pos,
+            MouseButton::Navigate(NavigationDirection::Forward),
+            mods,
+        );
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // An occluded overlay (dialog, sheet, palette) must absorb pointer clicks.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = true;
+                cx.notify();
+            })
+            .expect("update mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // Disabled (Big Picture mode) ignores mouse side buttons.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = false;
+                view.enabled = false;
+                cx.notify();
+            })
+            .expect("disable mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
         );
     }
 }
