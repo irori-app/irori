@@ -12,8 +12,10 @@ use irori_core::{Event, EventBus, GameId, GameInfo, Paths, json_store, util};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::journal::{self, Journal, JournalEntry};
-use crate::play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+use crate::journal::{self, Journal, JournalEntry, LeftOff, LegacyJournal};
+use crate::play_status::{
+    self, EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory,
+};
 use crate::smart_categories::{CategoryLook, CategoryRef, SmartCategory};
 
 /// Persisted shape. Game keys are `GameId::key()` strings.
@@ -37,15 +39,29 @@ pub struct UserData {
     pub store_hidden_imported: BTreeSet<String>,
     /// The play status the user set per game, with when they set it.
     pub play_status: BTreeMap<String, PlayStatusRecord>,
+    /// Every real change of each game's play status, oldest first.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: StatusHistory,
     /// How many games the user means to beat, by calendar year.
     pub backlog_goals: BTreeMap<i32, u32>,
     /// The user's own rating of each game, from 1 to 5 stars. Unrated games
     /// have no entry.
     #[serde(default)]
     pub ratings: BTreeMap<String, u8>,
-    /// The user's notes, per game and day played.
-    #[serde(default)]
+    /// The user's notes, per game and day, several a day.
+    #[serde(default, rename = "journal_notes")]
     pub journal: Journal,
+    /// Where the user left off in each game.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: BTreeMap<String, LeftOff>,
+    /// Notes as Irori kept them before several a day (one per game and
+    /// day), read from older files and moved into `journal` on load.
+    #[serde(
+        default,
+        rename = "journal",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub legacy_journal: LegacyJournal,
     /// Categories filled from rules, by id.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub smart_categories: BTreeMap<String, SmartCategory>,
@@ -84,6 +100,7 @@ pub struct BulkSnapshot {
     /// Every category that existed, with which of the games were in it.
     categories: BTreeMap<String, BTreeSet<String>>,
     play_status: BTreeMap<String, PlayStatusRecord>,
+    status_history: StatusHistory,
 }
 
 impl BulkSnapshot {
@@ -151,13 +168,20 @@ impl UserData {
         }
         take(&mut self.first_seen, from, to);
         take(&mut self.play_status, from, to);
-        take(&mut self.ratings, from, to);
-        if let Some(days) = self.journal.remove(from) {
-            let mine = self.journal.entry(to.to_string()).or_default();
-            for (day, entry) in days {
-                mine.entry(day).or_insert(entry);
-            }
+        if let Some(changes) = self.status_history.remove(from) {
+            let from_history = StatusHistory::from([(to.to_string(), changes)]);
+            play_status::merge_history(&mut self.status_history, &from_history);
         }
+        take(&mut self.ratings, from, to);
+        take(&mut self.left_off, from, to);
+        journal::carry_over(&mut self.journal, from, to);
+    }
+
+    /// Bring data written by older versions into today's shape: the
+    /// one-note-a-day journal becomes whole-day notes.
+    pub fn migrate(&mut self) {
+        let legacy = std::mem::take(&mut self.legacy_journal);
+        journal::migrate(&mut self.journal, legacy);
     }
 
     /// The status the user set for a game, if any.
@@ -223,9 +247,20 @@ impl UserData {
         all
     }
 
-    /// The user's note on a game for one day, if they wrote one.
-    pub fn journal_entry(&self, key: &str, day: chrono::NaiveDate) -> Option<&JournalEntry> {
-        self.journal.get(key)?.get(&day)
+    /// The user's notes on a game for one day, in the day's order.
+    pub fn journal_day(&self, key: &str, day: chrono::NaiveDate) -> &[JournalEntry] {
+        self.journal
+            .get(key)
+            .and_then(|days| days.get(&day))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// One note of a game, with its day.
+    pub fn journal_note(&self, key: &str, id: &str) -> Option<(chrono::NaiveDate, &JournalEntry)> {
+        self.journal
+            .get(key)?
+            .iter()
+            .find_map(|(day, notes)| notes.iter().find(|n| n.id == id).map(|n| (*day, n)))
     }
 }
 
@@ -247,6 +282,10 @@ impl UserData {
             play_status: keys
                 .iter()
                 .filter_map(|k| Some((k.clone(), self.play_status.get(k)?.clone())))
+                .collect(),
+            status_history: keys
+                .iter()
+                .filter_map(|k| Some((k.clone(), self.status_history.get(k)?.clone())))
                 .collect(),
             keys,
         }
@@ -288,16 +327,28 @@ impl UserData {
                     self.play_status.remove(key);
                 }
             }
+            // An undone change never happened: it leaves no history.
+            match snap.status_history.get(key) {
+                Some(changes) => {
+                    self.status_history.insert(key.clone(), changes.clone());
+                }
+                None => {
+                    self.status_history.remove(key);
+                }
+            }
         }
     }
 }
 
 /// Set (or clear) the play status of `keys`, dated `now`. A game already
-/// in that status keeps the date it got it.
+/// in that status keeps the date it got it; every real change is added to
+/// its history.
 fn apply_play_status(d: &mut UserData, keys: &[String], status: Option<PlayStatus>, now: &str) {
     for key in keys {
+        if d.play_status(key) == status {
+            continue;
+        }
         match status {
-            Some(status) if d.play_status(key) == Some(status) => {}
             Some(status) => {
                 d.play_status.insert(
                     key.clone(),
@@ -311,6 +362,13 @@ fn apply_play_status(d: &mut UserData, keys: &[String], status: Option<PlayStatu
                 d.play_status.remove(key);
             }
         }
+        play_status::record(
+            d.status_history.entry(key.clone()).or_default(),
+            StatusChange {
+                at: now.to_string(),
+                status,
+            },
+        );
     }
 }
 
@@ -509,7 +567,11 @@ fn file() -> PathBuf {
 impl UserDataService {
     pub fn load(bus: EventBus) -> Self {
         Self {
-            data: RwLock::new(Arc::new(json_store::read_or_default(&file()))),
+            data: RwLock::new(Arc::new({
+                let mut data: UserData = json_store::read_or_default(&file());
+                data.migrate();
+                data
+            })),
             bus,
         }
     }
@@ -707,17 +769,79 @@ impl UserDataService {
         self.update(None, |d| d.restore(snap));
     }
 
-    /// Write a game's note for `day`, or remove it with `None` or a note
-    /// with nothing in it.
+    /// Write one of a game's notes on `day`: the note of `entry.id`, or a
+    /// new one when it has none. A note with nothing in it is removed.
+    /// Returns the note's id.
     pub fn set_journal_entry(
         &self,
         id: &GameId,
         day: chrono::NaiveDate,
-        entry: Option<JournalEntry>,
-    ) {
+        entry: JournalEntry,
+    ) -> String {
         let now = util::now_rfc3339();
+        let mut note = String::new();
         self.update(Some(id), |d| {
-            journal::apply(&mut d.journal, &id.key(), day, entry, &now)
+            note = journal::put(&mut d.journal, &id.key(), day, entry, &now);
+        });
+        note
+    }
+
+    /// Delete one of a game's notes; returns it with its day, to put back
+    /// with [`Self::restore_journal_entry`].
+    pub fn remove_journal_entry(
+        &self,
+        id: &GameId,
+        note: &str,
+    ) -> Option<(chrono::NaiveDate, JournalEntry)> {
+        let mut removed = None;
+        self.update_if(Some(id), |d| {
+            removed = journal::remove(&mut d.journal, &id.key(), note);
+            removed.is_some()
+        });
+        removed
+    }
+
+    /// Write where the user left off in a game, or clear it with an empty
+    /// text. Returns what was there before, to put back with
+    /// [`Self::restore_left_off`].
+    pub fn set_left_off(&self, id: &GameId, text: &str) -> Option<LeftOff> {
+        let now = util::now_rfc3339();
+        let key = id.key();
+        let mut before = None;
+        self.update_if(Some(id), |d| {
+            before = d.left_off.get(&key).cloned();
+            let next = LeftOff::new(text, &now);
+            if before.as_ref().map(|b| &b.text) == next.as_ref().map(|n| &n.text) {
+                return false;
+            }
+            match next {
+                Some(next) => d.left_off.insert(key.clone(), next),
+                None => d.left_off.remove(&key),
+            };
+            true
+        });
+        before
+    }
+
+    /// Put back where the user left off as [`Self::set_left_off`] found it
+    /// (Undo).
+    pub fn restore_left_off(&self, id: &GameId, before: Option<LeftOff>) {
+        let key = id.key();
+        self.update(Some(id), |d| match before {
+            Some(before) => {
+                d.left_off.insert(key, before);
+            }
+            None => {
+                d.left_off.remove(&key);
+            }
+        });
+    }
+
+    /// Put back a note [`Self::remove_journal_entry`] took, as it was.
+    pub fn restore_journal_entry(&self, id: &GameId, day: chrono::NaiveDate, entry: JournalEntry) {
+        let updated = entry.updated.clone();
+        self.update(Some(id), |d| {
+            journal::put(&mut d.journal, &id.key(), day, entry, &updated);
         });
     }
 
@@ -1226,6 +1350,19 @@ mod tests {
         );
         apply_play_status(&mut data, &keys, None, "later");
         assert!(data.play_status.is_empty());
+        // Every real change was kept; setting the same status again wasn't.
+        let kept: Vec<_> = data.status_history["gog:1"]
+            .iter()
+            .map(|c| (c.at.as_str(), c.status))
+            .collect();
+        assert_eq!(
+            kept,
+            [
+                ("monday", Some(PlayStatus::Playing)),
+                ("friday", Some(PlayStatus::Beaten)),
+                ("later", None)
+            ]
+        );
     }
 
     #[test]
@@ -1346,5 +1483,19 @@ mod tests {
             d.category_name(&CategoryRef::Smart("s-1".into())),
             Some("Big RPGs")
         );
+    }
+
+    #[test]
+    fn a_one_note_a_day_journal_is_read_and_written_in_the_new_shape() {
+        let old = r#"{"favourites":["gog:1"],"journal":{"gog:1":{"2026-11-01":{"text":"Old note","updated":"2026-11-01T20:00:00Z"}}}}"#;
+        let mut d: UserData = serde_json::from_str(old).unwrap();
+        d.migrate();
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+        assert_eq!(d.journal_day("gog:1", day)[0].text, "Old note");
+        assert!(d.journal_note("gog:1", "day-2026-11-01").is_some());
+        let written = serde_json::to_value(&d).unwrap();
+        assert!(written.get("journal").is_none(), "{written}");
+        assert!(written["journal_notes"]["gog:1"]["2026-11-01"].is_array());
+        assert_eq!(written["favourites"][0], "gog:1");
     }
 }

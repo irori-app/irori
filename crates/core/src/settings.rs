@@ -1439,6 +1439,9 @@ pub struct OverlayPrefs {
     pub screenshot_chord: bool,
     /// Guide + Up/Down change the system's volume.
     pub volume_chords: bool,
+    /// Guide + Y (Triangle) marks the moment: a screenshot and a journal
+    /// note to write later (`momentChord`).
+    pub moment_chord: bool,
     /// How far one press of a volume control moves a volume, in percent
     /// (see [`Self::volume_step`]).
     pub volume_step: u32,
@@ -1456,6 +1459,7 @@ impl Default for OverlayPrefs {
             side: OverlaySide::Center,
             screenshot_chord: true,
             volume_chords: true,
+            moment_chord: true,
             volume_step: 5,
             level_notice: true,
             back_start: true,

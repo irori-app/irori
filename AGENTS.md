@@ -613,12 +613,23 @@ commands without a window.
   HowLongToBeat pages the sources found, and the user's links, each opened through
   `irori_ui::web_url`; "Links…" (`irori_game::open_links_dialog`: the row, the game
   menu, the palette) adds and removes them.
-- **Journal** (`journal.rs`): one note per game per local calendar day (optional
-  title, text, paths of that day's screenshots), written with
-  `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
-  notes, and a restore keeps the later-written note of each day. Screens edit them
-  through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
-  Journal tab).
+- **Journal** (`journal.rs`): notes per game and local calendar day, several a day,
+  each with an id, an optional time of day (none: about the whole day), title, text,
+  the capture it is about and that day's screenshots it links; a moment marked in
+  game (`marked`) waits for words. Written with `UserDataService::set_journal_entry`
+  (removed with `remove_journal_entry`); an empty note is removed. They live under
+  `journal_notes` in `library.json`: the one-note-a-day `journal` of older files is
+  read and migrated on load (`UserData::migrate`, ids `day-<date>`), so an older
+  Irori still reads the rest of the file. Backups carry the notes (old backups'
+  day notes restore the same way) and a restore keeps the later-written version of
+  each note; sync has a register per note (`<game>#<id>`). Screens edit them through
+  `irori_ui::journal::open_editor` (the game page's timeline, with search and "Only
+  days with notes"; the stats page's Journal tab, with search; the overlay's
+  Journal tab). "Where I left off" (`UserData::left_off`, `LeftOff`, 280 characters)
+  is one short note per game under its status on the game page (and drawer), edited
+  through `irori_ui::journal::open_left_off_editor` there and in the overlay's
+  Journal tab; clearing it offers Undo (`set_left_off` returns what was there). A
+  register per game in sync, the later-written one kept by backups.
 - **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
   store details (a store page's gaps: screenshots, trailers, description, genres, date;
   cached a week in `<cache>/steam-details/`), ProtonDB and the Steam Deck rating follow. It
@@ -716,7 +727,11 @@ commands without a window.
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
-  through `irori_ui::play_status` (names, colours, icons, menu, button).
+  through `irori_ui::play_status` (names, colours, icons, menu, button). Every real
+  change is kept in `UserData::status_history` (`StatusChange`, at most 64 a game;
+  setting the same status again isn't one, an undone bulk edit leaves none), merged
+  as a set by backups and sync; `play_status::times_set` gives the days a game got a
+  status, so the backlog counts a game beaten in March after it is played again.
 - **Age ratings** (`irori_core::age_rating`, `store_facts.rs`): `AgeRating {system,
   rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
   E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and
@@ -942,6 +957,32 @@ commands without a window.
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats Journeys** (`irori-library::stats::journeys`, `journeys_view`): a lane per
+  game played in the period on one axis (a dot per day sized by its time, started
+  here or from before, beaten and abandoned days from the status history), games
+  played per day, and per game its time, sessions, days to beat and hours a week;
+  filters (beaten, ongoing, abandoned, started here) and orders are pills; a lane
+  opens the game sheet. A week shows its month. One virtual list.
+- **Stats Discoveries** (`irori-library::stats::discoveries`, `discoveries_view`): the
+  period's findings (comeback, marathon, streak, new favourite, busiest day, night
+  owl, early bird, weekends, one game, variety, beaten), each scored by how unusual it
+  is, the highest over the hero; a kind can be pinned or hidden (kept in
+  `state/stats-page.json`); milestones of hours, games, beaten games and days played
+  with the day each was reached (`None` before the history) and the next ones at the
+  last 90 days' pace; the week around today a year ago (games and notes); "Copy
+  summary" puts a few lines on the clipboard.
+- **Stats backlog extras** (`irori-library::stats::backlog::extras`,
+  `backlog_extras_view`): the queue (Plan to play, oldest first, each with How Long To
+  Beat's main story from `Backend::hltb_times`, else the median of the user's beaten
+  games, and when it would be done at the last twelve weeks' pace), the shelf (Playing
+  or On hold, no session for 30 days), the pile (added from `first_seen`, started,
+  beaten per month) and the year's beaten games against How Long To Beat.
+- **Stats game sheet** (`irori-library::stats::sheet`, `sheet_view`): every game on the
+  stats page (top games, insights, the backlog's covers, Journeys' lanes,
+  Discoveries) opens a sheet with its numbers over the period shown: time in the
+  period and in all, a bar per day (week, month), week (year) or month (all time),
+  sessions, average and longest, the usual start hour (`Played::hour`), the weekend
+  share, first and last play and its status changes; "Open game page" leaves.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure
@@ -1531,9 +1572,13 @@ Microsoft's approval page (`irori_manage::login`).
   `set_audio_output`, screenshots `Backend::take_screenshot`
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
-  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
-  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot,
+  Up/Down change the system volume and Y marks the moment, each switchable
+  (`iroriOverlay.screenshotChord`, `volumeChords`, `momentChord`, `gamepad::Chords`),
+  by `volumeStep`. Marking a moment (also Home's "Mark this moment",
+  `overlay::mark_moment`, `Backend::mark_moment`) takes a screenshot and adds a
+  journal note at that time about it, `marked` and waiting for words (kept without a
+  screenshot when none can be taken); `side` places the panel
   (`window::placement`). What differs per system is one table,
   `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
   reads too; macOS and Windows use GPUI's pop-up window (a non-activating

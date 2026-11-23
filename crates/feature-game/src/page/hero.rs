@@ -222,6 +222,7 @@ impl GamePage {
         let game_modes = self.render_game_modes(game, cx);
         let sandbox = self.render_sandbox(cx);
         let tools = self.render_tools(game, cx);
+        let left_off = self.render_left_off(game, cx);
         let rating = self.render_rating(cx);
         let facts = self.render_facts(game, cx);
         // Everything in the column takes the cover's width; long action
@@ -245,6 +246,7 @@ impl GamePage {
             .children(game_modes)
             .children(sandbox)
             .child(tools)
+            .child(left_off)
             .child(rating)
             .children(facts)
             .into_any_element()

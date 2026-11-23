@@ -158,6 +158,11 @@ impl OverlayView {
                     HomeRow::Screenshot => {
                         (IconName::Camera, t("bigpicture.overlay.screenshot"), None)
                     }
+                    HomeRow::MarkMoment => (
+                        IconName::Bookmark,
+                        t("bigpicture.overlay.mark_moment"),
+                        None,
+                    ),
                     HomeRow::SaveReplay => (
                         IconName::Clapperboard,
                         t("bigpicture.overlay.save_replay"),

@@ -670,14 +670,18 @@ pub enum Chord {
     VolumeUp,
     /// Guide + Down: the system's volume down.
     VolumeDown,
+    /// Guide + Y (Triangle): mark the moment in the journal.
+    MarkMoment,
 }
 
 /// Which of the in-game overlay's chords are on (`iroriOverlay`'s
-/// `screenshotChord` and `volumeChords`, while the overlay is).
+/// `screenshotChord`, `volumeChords` and `momentChord`, while the overlay
+/// is).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Chords {
     pub screenshot: bool,
     pub volume: bool,
+    pub moment: bool,
 }
 
 impl Chords {
@@ -688,6 +692,7 @@ impl Chords {
         Chords {
             screenshot: on && prefs.screenshot_chord,
             volume: on && prefs.volume_chords,
+            moment: on && prefs.moment_chord,
         }
     }
 }
@@ -702,6 +707,7 @@ impl Chord {
             GamepadInput::NextPage if chords.screenshot => Some(Chord::Screenshot),
             GamepadInput::Up if chords.volume => Some(Chord::VolumeUp),
             GamepadInput::Down if chords.volume => Some(Chord::VolumeDown),
+            GamepadInput::Menu if chords.moment => Some(Chord::MarkMoment),
             _ => None,
         }
     }
@@ -1062,6 +1068,7 @@ mod tests {
         let on = Chords {
             screenshot: true,
             volume: true,
+            moment: true,
         };
         assert_eq!(Chord::of(Alt, off), Some(Chord::Clip));
         assert_eq!(Chord::of(Alt, on), Some(Chord::Clip));
@@ -1072,19 +1079,24 @@ mod tests {
         assert_eq!(Chord::of(Up, off), None);
         assert_eq!(Chord::of(Confirm, on), None);
         assert_eq!(Chord::of(PrevPage, on), None);
+        assert_eq!(Chord::of(Menu, on), Some(Chord::MarkMoment));
+        assert_eq!(Chord::of(Menu, off), None);
         // Each can be turned off on its own.
         let shots = Chords {
             screenshot: true,
             volume: false,
+            moment: true,
         };
         assert_eq!(Chord::of(NextPage, shots), Some(Chord::Screenshot));
         assert_eq!(Chord::of(Up, shots), None);
         let volume = Chords {
             screenshot: false,
             volume: true,
+            moment: false,
         };
         assert_eq!(Chord::of(NextPage, volume), None);
         assert_eq!(Chord::of(Down, volume), Some(Chord::VolumeDown));
+        assert_eq!(Chord::of(Menu, volume), None, "moment chord off");
         let prefs = irori_core::settings::OverlayPrefs {
             enabled: true,
             volume_chords: false,

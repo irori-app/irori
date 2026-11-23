@@ -96,6 +96,7 @@ impl Device {
             registers: merged.registers.clone(),
             playtime: merged.playtime.clone(),
             sessions: merged.sessions.clone(),
+            status_history: merged.data.status_history.clone(),
         });
         merged
     }
@@ -861,4 +862,111 @@ fn a_computer_that_only_sends_playtime_keeps_its_organisation_to_itself() {
     round(&mut desk, &mut deck, t(80));
     assert!(!desk.data.favourites.contains("gog:2"));
     assert!(!deck.data.favourites.contains("gog:3"));
+}
+
+fn write_note(d: &mut Device, game: &str, day: &str, id: &str, text: &str, at: Millis) {
+    let day = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").unwrap();
+    let note = crate::JournalEntry {
+        id: id.into(),
+        text: text.into(),
+        ..Default::default()
+    };
+    crate::journal::put(&mut d.data.journal, game, day, note, &rfc(at));
+}
+
+fn note_texts(d: &Device, game: &str) -> Vec<String> {
+    crate::journal::all(&d.data.journal)
+        .into_iter()
+        .filter(|(g, _, _)| *g == game)
+        .map(|(_, _, n)| n.text.clone())
+        .collect()
+}
+
+#[test]
+fn journal_notes_of_one_day_from_two_computers_are_both_kept() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    // Written before sync was on: each keeps the time it was written.
+    write_note(&mut a, "gog:1", "2026-11-02", "n-a", "From the desk", t(1));
+    write_note(&mut b, "gog:1", "2026-11-02", "n-b", "From the couch", t(2));
+    round(&mut a, &mut b, t(10));
+    for d in [&a, &b] {
+        let mut texts = note_texts(d, "gog:1");
+        texts.sort();
+        assert_eq!(texts, ["From the couch", "From the desk"]);
+    }
+
+    // The later edit of one note wins; a deleted note goes everywhere.
+    write_note(&mut a, "gog:1", "2026-11-02", "n-b", "Couch, edited", t(20));
+    a.tick(t(20));
+    round(&mut a, &mut b, t(30));
+    assert!(note_texts(&b, "gog:1").contains(&"Couch, edited".to_string()));
+    crate::journal::remove(&mut b.data.journal, "gog:1", "n-a");
+    b.tick(t(40));
+    round(&mut b, &mut a, t(50));
+    assert_eq!(note_texts(&a, "gog:1"), ["Couch, edited"]);
+    assert_eq!(a.data.journal, b.data.journal);
+}
+
+#[test]
+fn a_journal_note_edited_on_two_computers_at_once_is_a_conflict() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    write_note(&mut a, "gog:1", "2026-11-02", "n", "First", t(1));
+    round(&mut a, &mut b, t(2));
+    write_note(&mut a, "gog:1", "2026-11-02", "n", "Edited here", t(10));
+    a.tick(t(10));
+    write_note(&mut b, "gog:1", "2026-11-02", "n", "Edited there", t(11));
+    b.tick(t(11));
+    b.sync(t(12), &[&a]);
+    let merged = a.sync(t(13), &[&b]);
+    assert_eq!(note_texts(&a, "gog:1"), ["Edited there"]);
+    assert_eq!(merged.conflicts.len(), 1);
+    assert_eq!(merged.conflicts[0].field, ConflictField::Journal);
+    assert_eq!(merged.conflicts[0].subject, "gog:1");
+}
+
+#[test]
+fn status_changes_from_every_computer_are_kept_once() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    let change = |at: Millis, status| crate::StatusChange {
+        at: rfc(at),
+        status: Some(status),
+    };
+    a.data
+        .status_history
+        .insert("gog:1".into(), vec![change(t(1), PlayStatus::Beaten)]);
+    b.data.status_history.insert(
+        "gog:1".into(),
+        vec![
+            change(t(1), PlayStatus::Beaten),
+            change(t(5), PlayStatus::Playing),
+        ],
+    );
+    round(&mut a, &mut b, t(10));
+    assert_eq!(a.data.status_history["gog:1"].len(), 2);
+    assert_eq!(a.data.status_history, b.data.status_history);
+    // A computer that only sends playtime neither sends nor takes them.
+    let mut deck = Device::new("deck");
+    deck.scope = Scope::PlaytimeOnly;
+    deck.sync(t(20), &[&a]);
+    assert!(deck.data.status_history.is_empty());
+    assert!(deck.published.status_history.is_empty());
+}
+
+#[test]
+fn where_i_left_off_travels_and_its_clearing_too() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.left_off.insert(
+        "gog:1".into(),
+        crate::LeftOff::new("Before the bridge", &rfc(t(1))).unwrap(),
+    );
+    round(&mut a, &mut b, t(10));
+    assert_eq!(b.data.left_off["gog:1"].text, "Before the bridge");
+    b.data.left_off.remove("gog:1");
+    b.tick(t(20));
+    round(&mut b, &mut a, t(30));
+    assert!(a.data.left_off.is_empty());
 }

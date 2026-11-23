@@ -2395,6 +2395,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["overlay", "guide", "volume", "shortcut"])
     .requires(NEEDS_OVERLAY),
     app(
+        "iroriOverlay.momentChord",
+        "settings.field.overlay_moment_chord.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_moment_chord.help")
+    .keywords(&[
+        "overlay",
+        "guide",
+        "y",
+        "triangle",
+        "journal",
+        "moment",
+        "screenshot",
+        "shortcut",
+    ])
+    .requires(NEEDS_OVERLAY),
+    app(
         "iroriOverlay.volumeStep",
         "settings.field.overlay_volume_step.label",
         Controller,
