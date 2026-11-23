@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Microsoft 장치 페이지 열기",
   "ui.game_window.no_window": "게임에 아직 앞으로 가져올 창이 없습니다",
   "ui.game_window.unsupported": "이 데스크톱에서는 Irori가 게임 창을 앞으로 가져올 수 없습니다. 작업 표시줄에서 전환하세요",
-  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다"
+  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다",
+  "ui.rosetta.missing_title": "Rosetta가 필요합니다",
+  "ui.rosetta.missing": "“{what}”은(는) Intel Mac용으로 만들어졌습니다. 이 Mac에서는 Rosetta 2로 실행되지만 설치되어 있지 않습니다. Irori가 Apple 소프트웨어 업데이트로 설치한 다음 게임을 시작할 수 있습니다.",
+  "ui.rosetta.licence": "Rosetta를 설치하면 이에 대한 Apple 소프트웨어 사용권 계약에 동의하게 됩니다.",
+  "ui.rosetta.install_and_play": "설치하고 플레이",
+  "ui.rosetta.cancel": "취소",
+  "ui.rosetta.installing": "Rosetta 설치 중",
+  "ui.rosetta.installing_detail": "Apple 소프트웨어 업데이트가 Rosetta 2를 설치하고 있습니다. 끝나면 게임이 시작됩니다.",
+  "ui.rosetta.install_failed": "Rosetta를 설치할 수 없습니다"
 }

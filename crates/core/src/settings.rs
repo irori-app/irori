@@ -230,6 +230,12 @@ pub struct GameSettings {
     /// `RetinaMode`). Irori-only.
     #[serde(rename = "iroriRetinaMode", alias = "emberRetinaMode")]
     pub retina_mode: bool,
+    /// macOS on Apple silicon: start a native Mac game's Intel code under
+    /// Rosetta even when the program also has Apple silicon code (a game
+    /// whose arm64 build misbehaves). Intel-only programs always run under
+    /// Rosetta. Irori-only.
+    #[serde(rename = "iroriRosetta")]
+    pub rosetta: bool,
     /// The emulator that plays this game (`duckstation`,
     /// `retroarch:<core>`); empty for the system's default. Irori-only.
     #[serde(rename = "iroriEngine", alias = "emberEngine")]
@@ -587,6 +593,7 @@ impl Default for GameSettings {
             lsfg: LsfgSettings::default(),
             enable_quick_saves_menu: false,
             retina_mode: false,
+            rosetta: false,
             engine: String::new(),
             engine_version: String::new(),
             engine_options: BTreeMap::new(),

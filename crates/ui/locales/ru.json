@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Открыть страницу устройств Microsoft",
   "ui.game_window.no_window": "У игры пока нет окна, которое можно вывести вперёд",
   "ui.game_window.unsupported": "Это окружение не позволяет Irori вывести окно игры вперёд; переключитесь на него через панель задач",
-  "ui.game_window.failed": "Не удалось вывести окно игры вперёд"
+  "ui.game_window.failed": "Не удалось вывести окно игры вперёд",
+  "ui.rosetta.missing_title": "Нужна Rosetta",
+  "ui.rosetta.missing": "«{what}» собрана для Mac с Intel. На этом Mac она работает через Rosetta 2, которая не установлена. Irori может установить её через «Обновление ПО» Apple, а затем запустить игру.",
+  "ui.rosetta.licence": "Устанавливая Rosetta, вы принимаете лицензионное соглашение Apple на это ПО.",
+  "ui.rosetta.install_and_play": "Установить и играть",
+  "ui.rosetta.cancel": "Отмена",
+  "ui.rosetta.installing": "Установка Rosetta",
+  "ui.rosetta.installing_detail": "«Обновление ПО» Apple устанавливает Rosetta 2. Игра запустится, когда установка завершится.",
+  "ui.rosetta.install_failed": "Не удалось установить Rosetta"
 }

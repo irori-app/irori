@@ -364,12 +364,80 @@ pub fn wine_build(dir: &Path, name: &str) -> WineInstallation {
     let lib32 = root.join("lib");
     WineInstallation {
         bin: bin.to_string_lossy().into_owned(),
-        name: name.to_string(),
+        name: latest_name(dir, name),
         kind: WineKind::Wine,
         lib: lib.is_dir().then(|| lib.to_string_lossy().into_owned()),
         lib32: lib32.is_dir().then(|| lib32.to_string_lossy().into_owned()),
         wineserver: wineserver_for(&bin).map(|p| p.to_string_lossy().into_owned()),
     }
+}
+
+/// A macOS Wine bundle's own version (`CFBundleShortVersionString`, else
+/// `CFBundleVersion`) from its `Info.plist`, at `dir` or in a `Wine.app`
+/// inside it.
+pub fn bundle_version(dir: &Path) -> Option<String> {
+    ["Contents/Info.plist", "Wine.app/Contents/Info.plist"]
+        .iter()
+        .find_map(|p| plist::Value::from_file(dir.join(p)).ok())
+        .and_then(|info| {
+            let info = info.into_dictionary()?;
+            ["CFBundleShortVersionString", "CFBundleVersion"]
+                .iter()
+                .find_map(|k| info.get(k)?.as_string().map(str::trim).map(str::to_string))
+                .filter(|v| !v.is_empty())
+        })
+}
+
+/// The name a build at `dir` is listed under: its folder's, and for a
+/// `…-latest` build also the version it holds now, so it reads apart from
+/// the numbered build it was copied from.
+fn latest_name(dir: &Path, name: &str) -> String {
+    if !name.to_ascii_lowercase().ends_with("-latest") {
+        return name.to_string();
+    }
+    match bundle_version(dir) {
+        Some(version) => format!("{name} ({version})"),
+        None => name.to_string(),
+    }
+}
+
+/// The folders the wrapper makers put their wrappers in, with the maker's
+/// name: Sikarugir (Wineskin's current successor), Kegworks (its previous
+/// name) and Wineskin.
+const WRAPPER_MAKERS: [&str; 3] = ["Sikarugir", "Kegworks", "Wineskin"];
+
+/// Wine inside a Sikarugir, Kegworks or Wineskin wrapper app: the engine in
+/// `Contents/SharedSupport/wine` (current wrappers; some engines ship only
+/// `wine`, no `wine64`), else in `Contents/Frameworks/wswine.bundle` (older
+/// Wineskin).
+pub fn wrapper_wine(wrapper: &Path) -> Option<PathBuf> {
+    [
+        "Contents/SharedSupport/wine/bin",
+        "Contents/Frameworks/wswine.bundle/bin",
+    ]
+    .iter()
+    .flat_map(|dir| ["wine64", "wine"].map(|bin| wrapper.join(dir).join(bin)))
+    .find(|bin| bin.is_file())
+}
+
+/// The wrappers in `~/Applications/<maker>` and `/Applications/<maker>` under
+/// each of `roots`, as Wine builds named `<wrapper> (<maker>)`. Their own
+/// prefixes stay theirs: only the Wine engine is offered.
+pub fn wrapper_builds(roots: &[PathBuf]) -> Vec<(PathBuf, String)> {
+    let mut out = Vec::new();
+    for root in roots {
+        for maker in WRAPPER_MAKERS {
+            for (name, dir) in sorted_entries(&root.join(maker)) {
+                let Some(stem) = name.strip_suffix(".app") else {
+                    continue;
+                };
+                if let Some(bin) = wrapper_wine(&dir) {
+                    out.push((bin, format!("{stem} ({maker})")));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Discover macOS Wine bundles and externally managed CrossOver/Whisky installs.
@@ -391,43 +459,48 @@ pub fn mac_installations(app: &AppSettings) -> Vec<DiscoveredWine> {
         }
     }
     let home = locations::home();
-    let mut candidates: Vec<(PathBuf, &str, WineKind)> = Vec::new();
+    let mut candidates: Vec<(PathBuf, String, WineKind)> = Vec::new();
     for base in [PathBuf::from("/Applications"), home.join("Applications")] {
-        for name in ["CrossOver.app", "CrossOver Preview.app"] {
+        // Named by the app, so CrossOver and its Preview, side by side, can
+        // be told apart in the pickers.
+        for name in ["CrossOver", "CrossOver Preview"] {
             candidates.push((
-                base.join(name)
+                base.join(format!("{name}.app"))
                     .join("Contents/SharedSupport/CrossOver/bin/wine"),
-                "CrossOver",
+                name.into(),
                 WineKind::Crossover,
             ));
         }
         for name in ["Wine Stable.app", "Wine Staging.app", "Wine Devel.app"] {
             candidates.push((
                 base.join(name).join("Contents/Resources/wine/bin/wine64"),
-                name,
+                name.into(),
                 WineKind::Wine,
             ));
         }
     }
     candidates.push((
         home.join("Library/Application Support/com.isaacmarovitz.Whisky/Libraries/Wine/bin/wine64"),
-        "Whisky",
+        "Whisky".into(),
         WineKind::Toolkit,
     ));
-    for prefix in ["/opt/homebrew", "/usr/local"] {
-        candidates.push((
-            Path::new(prefix).join("bin/wine64"),
-            "System Wine",
-            WineKind::Wine,
-        ));
-        candidates.push((
-            Path::new(prefix).join("bin/wine"),
-            "System Wine",
-            WineKind::Wine,
-        ));
+    for (bin, name) in wrapper_builds(&[home.join("Applications"), PathBuf::from("/Applications")])
+    {
+        candidates.push((bin, name, WineKind::Wine));
+    }
+    // Homebrew for Apple silicon and Homebrew for Intel (run under Rosetta)
+    // can both be installed: their builds say which they are.
+    for (prefix, label) in [("/opt/homebrew", ""), ("/usr/local", " (/usr/local)")] {
+        for bin in ["bin/wine64", "bin/wine"] {
+            candidates.push((
+                Path::new(prefix).join(bin),
+                format!("System Wine{label}"),
+                WineKind::Wine,
+            ));
+        }
         candidates.push((
             Path::new(prefix).join("opt/game-porting-toolkit/bin/wine64"),
-            "Game Porting Toolkit",
+            format!("Game Porting Toolkit{label}"),
             WineKind::Toolkit,
         ));
     }
@@ -441,13 +514,13 @@ pub fn mac_installations(app: &AppSettings) -> Vec<DiscoveredWine> {
         } else {
             WineKind::Wine
         };
-        candidates.push((path, "Custom Wine", kind));
+        candidates.push((path, "Custom Wine".into(), kind));
     }
     for (bin, name, kind) in candidates {
         out.push(DiscoveredWine {
             installation: WineInstallation {
                 bin: bin.to_string_lossy().into_owned(),
-                name: name.into(),
+                name,
                 kind,
                 wineserver: wineserver_for(&bin).map(|p| p.to_string_lossy().into_owned()),
                 ..Default::default()
@@ -663,6 +736,69 @@ mod tests {
             assert_eq!(Path::new(&installation.bin), root.join("bin/wine64"));
             assert!(is_valid(&installation));
         }
+    }
+
+    #[test]
+    fn finds_sikarugir_kegworks_and_wineskin_wrappers() {
+        let root = tempfile::tempdir().unwrap();
+        let apps = root.path().join("Applications");
+        let new = apps.join("Sikarugir/Witcher.app/Contents/SharedSupport/wine/bin");
+        touch(&new.join("wine"));
+        touch(&new.join("wineserver"));
+        let keg = apps.join("Kegworks/Hades.app/Contents/SharedSupport/wine/bin");
+        touch(&keg.join("wine64"));
+        touch(&keg.join("wine"));
+        let old = apps.join("Wineskin/Old.app/Contents/Frameworks/wswine.bundle/bin");
+        touch(&old.join("wine"));
+        // Not an app, and an app without an engine.
+        touch(&apps.join("Wineskin/notes.txt"));
+        std::fs::create_dir_all(apps.join("Sikarugir/Empty.app/Contents")).unwrap();
+
+        let found = wrapper_builds(std::slice::from_ref(&apps));
+        let names: Vec<_> = found.iter().map(|(_, n)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Witcher (Sikarugir)", "Hades (Kegworks)", "Old (Wineskin)"]
+        );
+        assert_eq!(found[0].0, new.join("wine"));
+        assert_eq!(found[1].0, keg.join("wine64"));
+        assert_eq!(found[2].0, old.join("wine"));
+    }
+
+    #[test]
+    fn latest_builds_show_the_version_they_hold() {
+        let dir = tempfile::tempdir().unwrap();
+        let latest = dir.path().join("Wine-Crossover-latest");
+        touch(&latest.join("Contents/Resources/wine/bin/wine64"));
+        let mut info = plist::Dictionary::new();
+        info.insert(
+            "CFBundleShortVersionString".into(),
+            plist::Value::String("23.7.1".into()),
+        );
+        plist::Value::Dictionary(info)
+            .to_file_xml(latest.join("Contents/Info.plist"))
+            .unwrap();
+        let numbered = dir.path().join("Wine-Crossover-23.7.1");
+        std::fs::create_dir_all(&numbered).unwrap();
+        std::fs::copy(
+            latest.join("Contents/Info.plist"),
+            dir.path().join("Info.plist"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            wine_build(&latest, "Wine-Crossover-latest").name,
+            "Wine-Crossover-latest (23.7.1)"
+        );
+        // A numbered build already says which it is.
+        assert_eq!(
+            wine_build(&numbered, "Wine-Crossover-23.7.1").name,
+            "Wine-Crossover-23.7.1"
+        );
+        // Without a bundle version the folder's name stays.
+        let bare = dir.path().join("GE-latest");
+        touch(&bare.join("bin/wine"));
+        assert_eq!(wine_build(&bare, "GE-latest").name, "GE-latest");
     }
 
     #[test]

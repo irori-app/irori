@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Irori はここからインストール済みの Steam ゲームと Steam の Proton を読み込み、Steam にゲームを追加します。",
   "settings.field.default_steam_path.label": "Steamフォルダー",
   "settings.field.crossover_bottles_path.label": "CrossOver のボトルフォルダー",
-  "settings.field.crossover_bottles_path.help": "CrossOver の環境設定でボトルを外付けドライブなどへ移動した場合に設定します。",
+  "settings.field.crossover_bottles_path.help": "Irori は CrossOver の環境設定にあるフォルダを使います。外付けドライブなど別のフォルダを使う場合だけ設定してください。",
   "settings.field.compat_tools_path.label": "ダウンロードした Wine と Proton のフォルダー",
   "settings.field.compat_tools_path.help": "新しい Wine と Proton のビルドは、ここの「wine」と「proton」フォルダーに入ります。空欄にすると Irori のデータフォルダーを使います。インストール済みのビルドはそのまま残ります。",
   "settings.field.default_wine_prefix_dir.help": "Windowsゲームごとに、このフォルダー内に専用のプレフィックスが作成されます。",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "変更は Big Picture、オーバーレイ、その他すべての画面に適用されます。Guide、十字キー、スティックの役割は変わりません。",
   "settings.controller_map.reset": "ボタンをリセット",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "ネイティブMac",
   "settings.option.nav_sounds.off": "オフ",
   "settings.option.nav_sounds.soft": "ソフト",
   "settings.option.nav_sounds.classic": "クラシック",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "デスクトップにはまだクイックランチャー用のキーがありません。デスクトップのショートカット設定で割り当ててください。",
   "settings.quick_launch.commands_file": "{desktop} では、ほかのウィンドウで押されたキーをプログラムが受け取れません。これを {file} に追加し、設定を再読み込みしてください:",
   "settings.quick_launch.command": "このコマンドをデスクトップのキーボード設定でキーに割り当ててください:",
-  "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:"
+  "settings.quick_launch.off": "このコマンドでもクイックランチャーを開けます。必要ならデスクトップのキーボード設定でキーに割り当ててください:",
+  "settings.field.rosetta.label": "Rosetta で実行",
+  "settings.field.rosetta.help": "Apple シリコン版があってもゲームの Intel 版を起動します。Apple シリコン版がうまく動かないゲーム向けです。Intel Mac 専用のゲームは常に Rosetta で動きます。"
 }

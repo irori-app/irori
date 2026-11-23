@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "打开 Microsoft 设备页面",
   "ui.game_window.no_window": "游戏还没有可置于前台的窗口",
   "ui.game_window.unsupported": "此桌面不允许 Irori 将游戏窗口置于前台；请从任务栏切换过去",
-  "ui.game_window.failed": "无法将游戏窗口置于前台"
+  "ui.game_window.failed": "无法将游戏窗口置于前台",
+  "ui.rosetta.missing_title": "需要 Rosetta",
+  "ui.rosetta.missing": "“{what}”是为 Intel Mac 构建的。在这台 Mac 上它要通过 Rosetta 2 运行，但 Rosetta 2 尚未安装。Irori 可以用 Apple 的软件更新安装它，然后启动游戏。",
+  "ui.rosetta.licence": "安装 Rosetta 即表示接受 Apple 针对它的软件许可协议。",
+  "ui.rosetta.install_and_play": "安装并开始游戏",
+  "ui.rosetta.cancel": "取消",
+  "ui.rosetta.installing": "正在安装 Rosetta",
+  "ui.rosetta.installing_detail": "Apple 的软件更新正在安装 Rosetta 2。完成后游戏就会启动。",
+  "ui.rosetta.install_failed": "无法安装 Rosetta"
 }

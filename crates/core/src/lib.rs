@@ -12,6 +12,7 @@ pub mod events;
 pub mod fs_guard;
 pub mod game;
 pub mod game_mode;
+pub mod home_rename;
 pub mod host;
 pub mod http;
 pub mod install;

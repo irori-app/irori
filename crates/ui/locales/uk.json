@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Відкрити сторінку пристроїв Microsoft",
   "ui.game_window.no_window": "У гри ще немає вікна, яке можна вивести вперед",
   "ui.game_window.unsupported": "Це середовище не дозволяє Irori вивести вікно гри вперед; перемкніться на нього через панель завдань",
-  "ui.game_window.failed": "Не вдалося вивести вікно гри вперед"
+  "ui.game_window.failed": "Не вдалося вивести вікно гри вперед",
+  "ui.rosetta.missing_title": "Потрібна Rosetta",
+  "ui.rosetta.missing": "«{what}» зібрано для Mac з Intel. На цьому Mac вона працює через Rosetta 2, яку не встановлено. Irori може встановити її через «Оновлення ПЗ» Apple, а потім запустити гру.",
+  "ui.rosetta.licence": "Встановлюючи Rosetta, ви приймаєте ліцензійну угоду Apple на це ПЗ.",
+  "ui.rosetta.install_and_play": "Встановити й грати",
+  "ui.rosetta.cancel": "Скасувати",
+  "ui.rosetta.installing": "Встановлення Rosetta",
+  "ui.rosetta.installing_detail": "«Оновлення ПЗ» Apple встановлює Rosetta 2. Гра запуститься, коли встановлення завершиться.",
+  "ui.rosetta.install_failed": "Не вдалося встановити Rosetta"
 }

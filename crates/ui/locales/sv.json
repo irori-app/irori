@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Öppna Microsofts enhetssida",
   "ui.game_window.no_window": "Spelet har inget fönster att ta fram ännu",
   "ui.game_window.unsupported": "Det här skrivbordet låter inte Irori ta fram spelets fönster; byt till det från aktivitetsfältet",
-  "ui.game_window.failed": "Spelets fönster kunde inte tas fram"
+  "ui.game_window.failed": "Spelets fönster kunde inte tas fram",
+  "ui.rosetta.missing_title": "Rosetta behövs",
+  "ui.rosetta.missing": "”{what}” är byggt för Intel-Mac. På den här Macen körs det via Rosetta 2, som inte är installerat. Irori kan installera det med Apples Programuppdatering och sedan starta spelet.",
+  "ui.rosetta.licence": "Genom att installera Rosetta godkänner du Apples programlicensavtal för det.",
+  "ui.rosetta.install_and_play": "Installera och spela",
+  "ui.rosetta.cancel": "Avbryt",
+  "ui.rosetta.installing": "Installerar Rosetta",
+  "ui.rosetta.installing_detail": "Apples Programuppdatering installerar Rosetta 2. Spelet startar när det är klart.",
+  "ui.rosetta.install_failed": "Det gick inte att installera Rosetta"
 }

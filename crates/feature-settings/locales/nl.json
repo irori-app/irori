@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Hier leest Irori je geïnstalleerde Steam-games en de Proton-versies van Steam, en voegt het games aan Steam toe.",
   "settings.field.default_steam_path.label": "Steam-map",
   "settings.field.crossover_bottles_path.label": "Map met CrossOver-bottles",
-  "settings.field.crossover_bottles_path.help": "Stel dit in als je je bottles in de voorkeuren van CrossOver hebt verplaatst, bijvoorbeeld naar een externe schijf.",
+  "settings.field.crossover_bottles_path.help": "Irori gebruikt de map die in de voorkeuren van CrossOver staat. Stel dit alleen in om een andere map te gebruiken, bijvoorbeeld op een externe schijf.",
   "settings.field.compat_tools_path.label": "Map voor gedownloade Wine en Proton",
   "settings.field.compat_tools_path.help": "Nieuwe Wine- en Proton-versies komen hier in de mappen ‘wine’ en ‘proton’. Laat leeg om de gegevensmap van Irori te gebruiken. Al geïnstalleerde versies blijven waar ze zijn.",
   "settings.field.default_wine_prefix_dir.help": "Elke Windows-game krijgt een eigen prefix in deze map.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Wijzigingen gelden in Big Picture, de overlay en elk ander scherm. Guide, de D-pad en de sticks houden hun taak.",
   "settings.controller_map.reset": "Knoppen herstellen",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Native Mac",
   "settings.option.nav_sounds.off": "Uit",
   "settings.option.nav_sounds.soft": "Zacht",
   "settings.option.nav_sounds.classic": "Klassiek",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "Je desktop heeft nog geen toetsen voor de snelstarter; stel ze in bij de sneltoetsinstellingen van de desktop.",
   "settings.quick_launch.commands_file": "{desktop} laat programma’s niet luisteren naar toetsen die in andere vensters worden ingedrukt. Voeg dit toe aan {file} en laad de configuratie opnieuw:",
   "settings.quick_launch.command": "Koppel deze opdracht aan een toets in de toetsenbordinstellingen van je desktop:",
-  "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:"
+  "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:",
+  "settings.field.rosetta.label": "Uitvoeren met Rosetta",
+  "settings.field.rosetta.help": "Start de Intel-versie van het spel, ook als er een voor Apple silicon is, voor spellen waarvan de Apple silicon-versie niet goed werkt. Spellen alleen voor Intel-Macs draaien altijd met Rosetta."
 }

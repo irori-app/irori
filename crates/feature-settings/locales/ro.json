@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "De aici citește Irori jocurile Steam instalate și versiunile Proton din Steam și adaugă jocuri în Steam.",
   "settings.field.default_steam_path.label": "Folderul Steam",
   "settings.field.crossover_bottles_path.label": "Dosarul sticlelor CrossOver",
-  "settings.field.crossover_bottles_path.help": "Setează-l dacă ai mutat sticlele din preferințele CrossOver, de exemplu pe un disc extern.",
+  "settings.field.crossover_bottles_path.help": "Irori folosește dosarul indicat în preferințele CrossOver. Setează-l doar pentru a folosi alt dosar, de exemplu pe un disc extern.",
   "settings.field.compat_tools_path.label": "Folder pentru Wine și Proton descărcate",
   "settings.field.compat_tools_path.help": "Versiunile noi de Wine și Proton ajung aici, în folderele „wine” și „proton”. Lasă gol pentru a folosi folderul de date al Irori. Versiunile deja instalate rămân unde sunt.",
   "settings.field.default_wine_prefix_dir.help": "Fiecare joc Windows primește propriul prefix în acest folder.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Modificările se aplică în Big Picture, în suprapunere și pe orice alt ecran. Guide, D-pad-ul și stick-urile își păstrează rolul.",
   "settings.controller_map.reset": "Resetează butoanele",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Mac nativ",
   "settings.option.nav_sounds.off": "Oprite",
   "settings.option.nav_sounds.soft": "Blânde",
   "settings.option.nav_sounds.classic": "Clasice",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "Desktopul nu are încă taste pentru lansatorul rapid; atribuie-i în setările de scurtături ale desktopului.",
   "settings.quick_launch.commands_file": "{desktop} nu lasă programele să asculte tastele apăsate în alte ferestre. Adaugă asta în {file}, apoi reîncarcă configurația:",
   "settings.quick_launch.command": "Atribuie această comandă unei taste în setările de tastatură ale desktopului:",
-  "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:"
+  "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:",
+  "settings.field.rosetta.label": "Rulează cu Rosetta",
+  "settings.field.rosetta.help": "Pornește versiunea pentru Intel a jocului chiar dacă are și una pentru Apple silicon, pentru jocurile a căror versiune Apple silicon nu merge bine. Jocurile doar pentru Mac-uri cu Intel rulează mereu cu Rosetta."
 }

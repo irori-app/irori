@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Отсюда Irori читает установленные игры Steam и сборки Proton из Steam и добавляет игры в Steam.",
   "settings.field.default_steam_path.label": "Папка Steam",
   "settings.field.crossover_bottles_path.label": "Папка бутылок CrossOver",
-  "settings.field.crossover_bottles_path.help": "Укажите, если вы перенесли бутылки в настройках CrossOver, например на внешний диск.",
+  "settings.field.crossover_bottles_path.help": "Irori использует папку, указанную в настройках CrossOver. Задайте её, только чтобы использовать другую папку, например на внешнем диске.",
   "settings.field.compat_tools_path.label": "Папка для скачанных Wine и Proton",
   "settings.field.compat_tools_path.help": "Новые сборки Wine и Proton попадают сюда, в папки «wine» и «proton». Оставьте пустым, чтобы использовать папку данных Irori. Уже установленные сборки остаются на месте.",
   "settings.field.default_wine_prefix_dir.help": "Каждая игра для Windows получает собственный префикс в этой папке.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Изменения действуют в Big Picture, оверлее и на всех остальных экранах. Guide, крестовина и стики сохраняют свои функции.",
   "settings.controller_map.reset": "Сбросить кнопки",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Нативный Mac",
   "settings.option.nav_sounds.off": "Выкл.",
   "settings.option.nav_sounds.soft": "Мягкие",
   "settings.option.nav_sounds.classic": "Классические",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "У рабочего стола пока нет клавиш для быстрого запуска; назначьте их в его настройках сочетаний.",
   "settings.quick_launch.commands_file": "{desktop} не даёт программам слушать клавиши, нажатые в других окнах. Добавьте это в {file} и перезагрузите конфигурацию:",
   "settings.quick_launch.command": "Назначьте эту команду на клавишу в настройках клавиатуры рабочего стола:",
-  "settings.quick_launch.off": "Быстрый запуск открывает и эта команда; при желании назначьте её на клавишу в настройках клавиатуры рабочего стола:"
+  "settings.quick_launch.off": "Быстрый запуск открывает и эта команда; при желании назначьте её на клавишу в настройках клавиатуры рабочего стола:",
+  "settings.field.rosetta.label": "Запускать через Rosetta",
+  "settings.field.rosetta.help": "Запускает Intel-версию игры, даже если есть версия для Apple silicon, — для игр, у которых версия для Apple silicon работает плохо. Игры только для Mac с Intel всегда запускаются через Rosetta."
 }

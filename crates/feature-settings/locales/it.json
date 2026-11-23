@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Da qui Irori legge i giochi Steam installati e le versioni di Proton di Steam, e aggiunge giochi a Steam.",
   "settings.field.default_steam_path.label": "Cartella di Steam",
   "settings.field.crossover_bottles_path.label": "Cartella delle bottiglie di CrossOver",
-  "settings.field.crossover_bottles_path.help": "Impostala se hai spostato le bottiglie nelle preferenze di CrossOver, ad esempio su un disco esterno.",
+  "settings.field.crossover_bottles_path.help": "Irori usa la cartella indicata nelle preferenze di CrossOver. Impostala solo per usare un’altra cartella, ad esempio su un disco esterno.",
   "settings.field.compat_tools_path.label": "Cartella per Wine e Proton scaricati",
   "settings.field.compat_tools_path.help": "Le nuove versioni di Wine e Proton vanno nelle cartelle «wine» e «proton» al suo interno. Lascia vuoto per usare la cartella dati di Irori. Le versioni già installate restano dove sono.",
   "settings.field.default_wine_prefix_dir.help": "Ogni gioco Windows ha il proprio prefisso in questa cartella.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Le modifiche valgono in Big Picture, nell’overlay e in ogni altra schermata. Guide, croce direzionale e stick mantengono la loro funzione.",
   "settings.controller_map.reset": "Ripristina i pulsanti",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Mac nativo",
   "settings.option.nav_sounds.off": "Disattivati",
   "settings.option.nav_sounds.soft": "Morbidi",
   "settings.option.nav_sounds.classic": "Classici",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "Il desktop non ha ancora tasti per l’avvio rapido; assegnali nelle impostazioni delle scorciatoie del desktop.",
   "settings.quick_launch.commands_file": "{desktop} non permette ai programmi di ascoltare i tasti premuti in altre finestre. Aggiungi questo a {file}, poi ricarica la configurazione:",
   "settings.quick_launch.command": "Assegna questo comando a un tasto nelle impostazioni della tastiera del desktop:",
-  "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:"
+  "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:",
+  "settings.field.rosetta.label": "Esegui con Rosetta",
+  "settings.field.rosetta.help": "Avvia la versione Intel del gioco anche se ne ha una per Apple silicon, per i giochi la cui versione Apple silicon dà problemi. I giochi solo per Mac Intel funzionano sempre con Rosetta."
 }

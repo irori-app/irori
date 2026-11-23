@@ -349,5 +349,13 @@
   "ui.xbox.open_devices": "Microsofts Geräteseite öffnen",
   "ui.game_window.no_window": "Das Spiel hat noch kein Fenster, das nach vorne geholt werden kann",
   "ui.game_window.unsupported": "Dieser Desktop lässt Irori das Spielfenster nicht nach vorne holen; wechsle über die Taskleiste dorthin",
-  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden"
+  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden",
+  "ui.rosetta.missing_title": "Rosetta wird benötigt",
+  "ui.rosetta.missing": "„{what}“ ist für Intel-Macs gebaut. Auf diesem Mac läuft es über Rosetta 2, das nicht installiert ist. Irori kann es mit Apples Softwareaktualisierung installieren und dann das Spiel starten.",
+  "ui.rosetta.licence": "Mit der Installation von Rosetta stimmen Sie Apples Softwarelizenzvertrag dafür zu.",
+  "ui.rosetta.install_and_play": "Installieren und spielen",
+  "ui.rosetta.cancel": "Abbrechen",
+  "ui.rosetta.installing": "Rosetta wird installiert",
+  "ui.rosetta.installing_detail": "Apples Softwareaktualisierung installiert Rosetta 2. Das Spiel startet, sobald sie fertig ist.",
+  "ui.rosetta.install_failed": "Rosetta konnte nicht installiert werden"
 }

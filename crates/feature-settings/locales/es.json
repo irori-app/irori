@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Desde aquí Irori lee tus juegos instalados de Steam y las versiones de Proton de Steam, y añade juegos a Steam.",
   "settings.field.default_steam_path.label": "Carpeta de Steam",
   "settings.field.crossover_bottles_path.label": "Carpeta de botellas de CrossOver",
-  "settings.field.crossover_bottles_path.help": "Indícala si moviste las botellas en las preferencias de CrossOver, por ejemplo a un disco externo.",
+  "settings.field.crossover_bottles_path.help": "Irori usa la carpeta que indican las preferencias de CrossOver. Cámbiala solo para usar otra carpeta, por ejemplo en un disco externo.",
   "settings.field.compat_tools_path.label": "Carpeta para Wine y Proton descargados",
   "settings.field.compat_tools_path.help": "Las nuevas versiones de Wine y Proton se guardan aquí, en las carpetas «wine» y «proton». Déjalo vacío para usar la carpeta de datos de Irori. Las versiones ya instaladas se quedan donde están.",
   "settings.field.default_wine_prefix_dir.help": "Cada juego de Windows tiene su propio prefijo dentro de esta carpeta.",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "Los cambios se aplican en Big Picture, la superposición y todas las demás pantallas. Guide, la cruceta y los sticks conservan sus funciones.",
   "settings.controller_map.reset": "Restablecer botones",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "Mac nativo",
   "settings.option.nav_sounds.off": "Desactivados",
   "settings.option.nav_sounds.soft": "Suaves",
   "settings.option.nav_sounds.classic": "Clásicos",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "Tu escritorio aún no tiene teclas para el lanzador rápido; asígnale algunas en los ajustes de atajos del escritorio.",
   "settings.quick_launch.commands_file": "{desktop} no permite que los programas escuchen las teclas pulsadas en otras ventanas. Añade esto a {file} y vuelve a cargar su configuración:",
   "settings.quick_launch.command": "Asigna este comando a una tecla en los ajustes de teclado de tu escritorio:",
-  "settings.quick_launch.off": "Este comando también abre el lanzador rápido; si quieres, asígnalo a una tecla en los ajustes de teclado del escritorio:"
+  "settings.quick_launch.off": "Este comando también abre el lanzador rápido; si quieres, asígnalo a una tecla en los ajustes de teclado del escritorio:",
+  "settings.field.rosetta.label": "Ejecutar con Rosetta",
+  "settings.field.rosetta.help": "Inicia la versión para Intel del juego aunque también tenga una para Apple silicon, para juegos cuya versión para Apple silicon falla. Los juegos solo para Mac con Intel siempre funcionan con Rosetta."
 }

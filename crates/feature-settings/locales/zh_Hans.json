@@ -351,7 +351,7 @@
   "settings.field.default_steam_path.help": "Irori 从这里读取已安装的 Steam 游戏和 Steam 的 Proton 版本，并将游戏添加到 Steam。",
   "settings.field.default_steam_path.label": "Steam 文件夹",
   "settings.field.crossover_bottles_path.label": "CrossOver 容器文件夹",
-  "settings.field.crossover_bottles_path.help": "如果你在 CrossOver 偏好设置中移动了容器（例如移到外置硬盘），请设置此项。",
+  "settings.field.crossover_bottles_path.help": "Irori 使用 CrossOver 自己的偏好设置中指定的文件夹。只有要使用其他文件夹（例如外置磁盘上的）时才需设置。",
   "settings.field.compat_tools_path.label": "下载的 Wine 和 Proton 存放文件夹",
   "settings.field.compat_tools_path.help": "新的 Wine 和 Proton 版本会放在此处的“wine”和“proton”文件夹中。留空则使用 Irori 的数据文件夹。已安装的版本保留在原处。",
   "settings.field.default_wine_prefix_dir.help": "每个 Windows 游戏都会在此文件夹中拥有自己的前缀。",
@@ -1651,6 +1651,7 @@
   "settings.controller_map.everywhere": "更改会应用到 Big Picture、覆盖层和其他所有界面。Guide、十字键和摇杆的功能保持不变。",
   "settings.controller_map.reset": "重置按键",
   "settings.group.big_picture": "Big Picture",
+  "settings.group.native_mac": "原生 Mac",
   "settings.option.nav_sounds.off": "关",
   "settings.option.nav_sounds.soft": "柔和",
   "settings.option.nav_sounds.classic": "经典",
@@ -1676,5 +1677,7 @@
   "settings.quick_launch.unassigned": "桌面尚未为快速启动器分配按键；请在桌面的快捷键设置中分配。",
   "settings.quick_launch.commands_file": "{desktop} 不允许程序监听在其他窗口中按下的按键。请将以下内容添加到 {file}，然后重新载入其配置：",
   "settings.quick_launch.command": "请在桌面的键盘设置中将此命令绑定到按键：",
-  "settings.quick_launch.off": "此命令也能打开快速启动器；如有需要，可在桌面的键盘设置中将其绑定到按键："
+  "settings.quick_launch.off": "此命令也能打开快速启动器；如有需要，可在桌面的键盘设置中将其绑定到按键：",
+  "settings.field.rosetta.label": "通过 Rosetta 运行",
+  "settings.field.rosetta.help": "即使游戏也有 Apple 芯片版本，仍启动它的 Intel 版本，适用于 Apple 芯片版本运行不正常的游戏。只为 Intel Mac 制作的游戏总是通过 Rosetta 运行。"
 }

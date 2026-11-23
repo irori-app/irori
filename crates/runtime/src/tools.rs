@@ -686,11 +686,102 @@ pub async fn refresh_winetricks() -> Result<()> {
     ensure_winetricks(true).await.map(|_| ())
 }
 
-/// Missing helper programs winetricks relies on.
+/// Where Homebrew (Apple silicon, then Intel) and MacPorts put programs. A
+/// Mac app started from Finder or the Dock gets launchd's short `PATH`
+/// without them, so winetricks wouldn't find `cabextract` or 7-Zip.
+const MAC_TOOL_DIRS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
+
+/// The `PATH` winetricks runs with: the Wine build's folder first, then on
+/// macOS the folder holding the `7z` shim ([`seven_zip_shim`]), then the
+/// inherited `PATH`, then the Homebrew and MacPorts folders it lacks.
+pub fn winetricks_search_path(
+    wine_dir: &str,
+    shim: Option<&Path>,
+    inherited: &str,
+    tool_dirs: &[PathBuf],
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut push = |p: String| {
+        if !p.is_empty() && !parts.contains(&p) {
+            parts.push(p);
+        }
+    };
+    push(wine_dir.to_string());
+    if let Some(shim) = shim {
+        push(shim.to_string_lossy().into_owned());
+    }
+    for p in inherited.split(':') {
+        push(p.to_string());
+    }
+    for d in tool_dirs {
+        push(d.to_string_lossy().into_owned());
+    }
+    parts.join(":")
+}
+
+/// The Homebrew and MacPorts folders on this Mac; none elsewhere.
+fn mac_tool_dirs() -> Vec<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return Vec::new();
+    }
+    MAC_TOOL_DIRS
+        .iter()
+        .map(PathBuf::from)
+        .filter(|d| d.is_dir())
+        .collect()
+}
+
+/// Homebrew's 7-Zip is `7zz`, a name winetricks doesn't look for: when
+/// `search` has `7zz` but no `7z`, a folder under `dir` holding a `7z` link
+/// to it, made once. `None` when no shim is needed or it can't be made.
+pub fn seven_zip_shim(search: &str, dir: &Path) -> Option<PathBuf> {
+    let cwd = std::env::temp_dir();
+    if which::which_in("7z", Some(search), &cwd).is_ok() {
+        return None;
+    }
+    let real = which::which_in("7zz", Some(search), &cwd).ok()?;
+    let link = dir.join("7z");
+    if std::fs::read_link(&link).ok().as_deref() != Some(real.as_path()) {
+        std::fs::create_dir_all(dir).ok()?;
+        let _ = std::fs::remove_file(&link);
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(&real, &link).is_ok();
+        // Winetricks doesn't run on Windows.
+        #[cfg(not(unix))]
+        let made = false;
+        if !made {
+            return None;
+        }
+    }
+    Some(dir.to_path_buf())
+}
+
+/// The `PATH` for winetricks with the Wine build's folder `wine_dir`.
+fn winetricks_path_var(wine_dir: &str) -> String {
+    let inherited = std::env::var("PATH").unwrap_or_default();
+    let tools = mac_tool_dirs();
+    let without_shim = winetricks_search_path(wine_dir, None, &inherited, &tools);
+    let shim = if cfg!(target_os = "macos") {
+        seven_zip_shim(
+            &without_shim,
+            &irori_core::Paths::get().tools_dir().join("winetricks-bin"),
+        )
+    } else {
+        None
+    };
+    winetricks_search_path(wine_dir, shim.as_deref(), &inherited, &tools)
+}
+
+/// Missing helper programs winetricks relies on, looked for where
+/// winetricks will look.
 pub fn winetricks_missing_dependencies() -> Vec<&'static str> {
+    let search = winetricks_path_var("");
+    let cwd = std::env::temp_dir();
     ["7z", "cabextract", "zenity", "unzip", "curl"]
         .into_iter()
-        .filter(|d| which::which(d).is_err())
+        // winetricks asks with osascript on macOS, never zenity.
+        .filter(|d| !(cfg!(target_os = "macos") && *d == "zenity"))
+        .filter(|d| which::which_in(d, Some(&search), &cwd).is_err())
         .collect()
 }
 
@@ -746,12 +837,11 @@ pub async fn run_winetricks(
         .parent()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let path = std::env::var("PATH").unwrap_or_default();
     vars.insert(
         "WINEPREFIX".into(),
         wine_prefix.to_string_lossy().into_owned(),
     );
-    vars.insert("PATH".into(), format!("{wine_dir}:{path}"));
+    vars.insert("PATH".into(), winetricks_path_var(&wine_dir));
     vars.insert(
         "GAMEID".into(),
         if gui { "winetricks-gui" } else { "umu-0" }.into(),
@@ -925,6 +1015,53 @@ mod tests {
             vec!["nvapi64.dll", "nvofapi64.dll"]
         );
         assert!(dll_names(&dir.path().join("missing")).await.is_empty());
+    }
+
+    #[test]
+    fn winetricks_path_adds_tool_folders_once() {
+        let tools = [
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/opt/local/bin"),
+        ];
+        assert_eq!(
+            winetricks_search_path(
+                "/w/bin",
+                Some(Path::new("/shim")),
+                "/usr/bin:/bin:/opt/homebrew/bin",
+                &tools
+            ),
+            "/w/bin:/shim:/usr/bin:/bin:/opt/homebrew/bin:/opt/local/bin"
+        );
+        assert_eq!(winetricks_search_path("", None, "", &[]), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn seven_zip_shim_links_7zz_as_7z() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let real = bin.join("7zz");
+        std::fs::write(&real, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let shim_dir = dir.path().join("shim");
+        let search = bin.to_string_lossy().into_owned();
+
+        let shim = seven_zip_shim(&search, &shim_dir).unwrap();
+        assert_eq!(std::fs::read_link(shim.join("7z")).unwrap(), real);
+        // Made once: asking again keeps it.
+        assert_eq!(seven_zip_shim(&search, &shim_dir), Some(shim_dir.clone()));
+
+        // A real `7z` needs no shim, and without 7-Zip there is none to make.
+        std::fs::copy(&real, bin.join("7z")).unwrap();
+        assert_eq!(seven_zip_shim(&search, &shim_dir), None);
+        let empty = dir.path().join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert_eq!(
+            seven_zip_shim(&empty.to_string_lossy(), &dir.path().join("other")),
+            None
+        );
     }
 
     #[test]

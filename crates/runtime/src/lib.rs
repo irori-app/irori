@@ -19,6 +19,7 @@ pub mod mangohud;
 pub mod prefix;
 pub mod protontricks;
 pub mod release_checks;
+pub mod rosetta;
 pub mod runtimes;
 pub mod sandbox;
 pub mod sysinfo;
@@ -153,19 +154,9 @@ pub async fn wine_context(
     allow_download: bool,
 ) -> Result<WineContext> {
     let wine = resolve_wine(app, settings, ctx, allow_download).await?;
-    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        // These macOS Wine distributions execute Intel Windows code through
-        // Rosetta. Test its availability without installing anything silently.
-        let rosetta = irori_core::process::run(
-            &CommandSpec::new("/usr/bin/arch").args(["-x86_64", "/usr/bin/true"]),
-            irori_core::process::RunOptions::default(),
-        )
-        .await;
-        anyhow::ensure!(
-            rosetta.is_ok_and(|r| r.success()),
-            "This Wine runtime needs Rosetta 2. Install Rosetta in macOS, then try again."
-        );
-    }
+    // These macOS Wine distributions execute Intel Windows code through
+    // Rosetta. Nothing is installed silently: the UI offers it.
+    rosetta::ensure(&wine.name).await?;
     let prefix = if wine.kind == WineKind::Crossover {
         let bottle = settings.wine_crossover_bottle.trim();
         anyhow::ensure!(
