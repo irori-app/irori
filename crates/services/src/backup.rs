@@ -93,6 +93,9 @@ pub struct Backup {
     pub settings: Option<Value>,
     /// Per-game setting overrides by `GameId::key()`.
     pub game_settings: BTreeMap<String, Value>,
+    /// The game settings' variables, wrappers and programs hold only each
+    /// game's own entries (`merged_lists`). Older backups hold whole lists.
+    pub merged_lists: bool,
     pub library: Option<LibraryBackup>,
     pub playtime: Option<PlaytimeBackup>,
 }
@@ -191,6 +194,7 @@ impl Backend {
             irori_version: env!("CARGO_PKG_VERSION").into(),
             settings: parts.settings.then(|| self.backup_settings()).transpose()?,
             game_settings,
+            merged_lists: true,
             library: parts.library.then(|| LibraryBackup {
                 favourites: user.favourites.clone(),
                 hidden: user.hidden.clone(),
@@ -274,8 +278,14 @@ impl Backend {
                 let (Some(id), Value::Object(map)) = (game_id(key), value) else {
                     continue;
                 };
-                self.settings
-                    .replace_overrides(&id, GameSettingsOverrides(map.clone()));
+                let mut overrides = GameSettingsOverrides(map.clone());
+                if !backup.merged_lists {
+                    crate::settings_migration::keep_whole_lists(
+                        &mut overrides,
+                        &self.settings.app().game,
+                    );
+                }
+                self.settings.replace_overrides(&id, overrides);
                 summary.game_settings += 1;
             }
         }

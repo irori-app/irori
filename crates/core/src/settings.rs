@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::Runner;
 use crate::game::{CloudSaveLocation, LaunchOption};
+use crate::merged_lists;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -621,13 +622,21 @@ impl GameSettingsOverrides {
                     }
                     continue;
                 }
+                // Variables, wrappers and programs hold the game's own
+                // entries, laid over the defaults' (`merged_lists`).
+                if let Some(field) = merged_lists::key_field(k) {
+                    let merged = merged_lists::merge(map.get(k), v, field);
+                    map.insert(k.clone(), merged);
+                    continue;
+                }
                 map.insert(k.clone(), v.clone());
             }
         }
         serde_json::from_value(base).unwrap_or_else(|_| defaults.clone())
     }
 
-    /// Overrides that turn `defaults` into `effective`: every key whose value differs.
+    /// Overrides that turn `defaults` into `effective`: every key whose value
+    /// differs, lists that merge by key as the game's own entries.
     pub fn diff(defaults: &GameSettings, effective: &GameSettings) -> Self {
         let (Value::Object(d), Value::Object(e)) = (
             serde_json::to_value(defaults).expect("settings serialize"),
@@ -635,7 +644,24 @@ impl GameSettingsOverrides {
         ) else {
             return Self::default();
         };
-        Self(e.into_iter().filter(|(k, v)| d.get(k) != Some(v)).collect())
+        Self(
+            e.into_iter()
+                .filter_map(|(k, v)| {
+                    let value = override_of(&d, &k, v)?;
+                    Some((k, value))
+                })
+                .collect(),
+        )
+    }
+
+    /// What to store for `key` so the game reads `value` over `defaults`:
+    /// `None` when that is the default, the game's own entries for a list
+    /// that merges by key, else `value` itself.
+    pub fn override_value(defaults: &GameSettings, key: &str, value: Value) -> Option<Value> {
+        let Value::Object(d) = serde_json::to_value(defaults).expect("settings serialize") else {
+            return Some(value);
+        };
+        override_of(&d, key, value)
     }
 
     pub fn is_overridden(&self, key: &str) -> bool {
@@ -648,6 +674,13 @@ impl GameSettingsOverrides {
 
     pub fn reset(&mut self, key: &str) {
         self.0.remove(key);
+    }
+}
+
+fn override_of(defaults: &Map<String, Value>, key: &str, value: Value) -> Option<Value> {
+    match merged_lists::key_field(key) {
+        Some(field) => merged_lists::own_entries(defaults.get(key), &value, field),
+        None => (defaults.get(key) != Some(&value)).then_some(value),
     }
 }
 
@@ -1686,6 +1719,60 @@ mod tests {
         assert_eq!(o.0.len(), 2);
         assert!(o.is_overridden("showFps"));
         assert_eq!(o.apply(&defaults), changed);
+    }
+
+    #[test]
+    fn game_variables_merge_over_the_defaults() {
+        let var = |k: &str, v: &str| EnvVar {
+            key: k.into(),
+            value: v.into(),
+        };
+        let mut defaults = GameSettings {
+            environment_options: vec![var("FOO", "1"), var("BAR", "2")],
+            ..Default::default()
+        };
+        let mut game = GameSettingsOverrides::default();
+        game.set(
+            "enviromentOptions",
+            serde_json::json!([{"key": "PROTON_USE_XALIA", "value": "0"}]),
+        );
+        assert_eq!(
+            game.apply(&defaults).environment_options,
+            vec![
+                var("FOO", "1"),
+                var("BAR", "2"),
+                var("PROTON_USE_XALIA", "0")
+            ]
+        );
+
+        // A game that copied the whole list before reads the same, and a
+        // variable added to the defaults since reaches it too.
+        game.set(
+            "enviromentOptions",
+            serde_json::json!([
+                {"key": "FOO", "value": "1"},
+                {"key": "BAR", "value": "9"},
+            ]),
+        );
+        defaults.environment_options.push(var("NEW", "x"));
+        assert_eq!(
+            game.apply(&defaults).environment_options,
+            vec![var("FOO", "1"), var("BAR", "9"), var("NEW", "x")]
+        );
+
+        // Taking a default variable out for one game stores a removal.
+        let mut wanted = defaults.clone();
+        wanted.environment_options = vec![var("BAR", "2"), var("OWN", "y")];
+        let o = GameSettingsOverrides::diff(&defaults, &wanted);
+        assert_eq!(
+            o.0["enviromentOptions"],
+            serde_json::json!([
+                {"key": "FOO", "iroriRemoved": true},
+                {"key": "NEW", "iroriRemoved": true},
+                {"key": "OWN", "value": "y"},
+            ])
+        );
+        assert_eq!(o.apply(&defaults), wanted);
     }
 
     #[test]

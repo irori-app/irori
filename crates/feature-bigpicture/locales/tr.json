@@ -9,6 +9,7 @@
   "bigpicture.action.play": "Oyna",
   "bigpicture.action.play_with_log": "Günlüklerle oyna",
   "bigpicture.action.stop": "Durdur",
+  "bigpicture.action.cancel_launch": "Başlatmayı iptal et",
   "bigpicture.action.install": "Kur",
   "bigpicture.action.cancel_download": "İndirmeyi iptal et",
   "bigpicture.action.update": "Güncelle",

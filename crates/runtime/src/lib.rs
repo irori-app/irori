@@ -674,8 +674,18 @@ pub async fn kill_game_prefix(
     prefix::kill(&wine, &prefix).await
 }
 
-/// Default prefix path for a game when its settings name none.
+/// Default prefix path for a game when its settings name none: the prefix
+/// another launcher installed it in, else one of its own under the prefixes
+/// folder.
 pub fn default_prefix(app: &AppSettings, game: &GameInfo) -> PathBuf {
+    if let Some(prefix) = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .filter(|p| !p.trim().is_empty())
+    {
+        return irori_core::paths::expand_home(prefix.trim());
+    }
     let base = if app.default_wine_prefix_dir.is_empty() {
         PathBuf::from(&app.default_install_path).join("Prefixes")
     } else {
@@ -692,6 +702,14 @@ pub async fn wine_installations(app: &AppSettings) -> Vec<WineInstallation> {
         .into_iter()
         .map(|d| d.installation)
         .collect()
+}
+
+/// Every usable build, as [`wine_installations`], each with its source when
+/// another build has the same name, for pickers to tell them apart.
+pub async fn wine_installations_with_sources(
+    app: &AppSettings,
+) -> Vec<(WineInstallation, Option<discovery::WineSource>)> {
+    discovery::sources_where_shared(discovery::discover(app).await)
 }
 
 /// Run winetricks for the game's prefix: GUI when `verbs` is empty.
@@ -742,14 +760,41 @@ pub fn prefix_path(app: &AppSettings, settings: &GameSettings, game: &GameInfo) 
     }
 }
 
-/// Whether `prefix` is shared by several games: the root that holds every
-/// game's own prefix, or the prefix set for all games in the defaults.
-/// Deleting it with one game would take the others' saves with it.
-pub fn prefix_is_shared(app: &AppSettings, prefix: &Path) -> bool {
-    let same = |setting: &str| {
-        !setting.trim().is_empty() && irori_core::paths::expand_home(setting) == prefix
+/// The prefix to suggest when installing: the game's saved prefix while it
+/// still exists, else the one the defaults give it. A prefix deleted since
+/// (by hand, or a cleanup) would otherwise be offered again.
+pub fn install_prefix(app: &AppSettings, settings: &GameSettings, game: &GameInfo) -> PathBuf {
+    let saved = prefix_path(app, settings, game);
+    if settings.wine_prefix.is_empty() || saved.exists() {
+        return saved;
+    }
+    let defaults = GameSettings {
+        wine_version: settings.wine_version.clone(),
+        wine_crossover_bottle: settings.wine_crossover_bottle.clone(),
+        wine_prefix: app.game.wine_prefix.clone(),
+        ..GameSettings::default()
     };
-    same(&app.default_wine_prefix_dir) || same(&app.game.wine_prefix)
+    prefix_path(app, &defaults, game)
+}
+
+/// Whether `prefix` is shared by several games: the root that holds every
+/// game's own prefix, the prefix set for all games in the defaults, or the
+/// prefix of another launcher (the linked Epic Games Launcher's, the one
+/// `game` was installed in). Deleting it with one game would take the others'
+/// saves, or the launcher, with it.
+pub fn prefix_is_shared(app: &AppSettings, game: &GameInfo, prefix: &Path) -> bool {
+    let same = |setting: &str| {
+        !setting.trim().is_empty() && irori_core::paths::expand_home(setting.trim()) == prefix
+    };
+    let store_prefix = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .unwrap_or_default();
+    same(&app.default_wine_prefix_dir)
+        || same(&app.game.wine_prefix)
+        || same(&app.egs_linked_path)
+        || same(store_prefix)
 }
 
 /// Install (`enabled`) or remove a DLL tool in the game's prefix (the DXVK /
@@ -851,13 +896,13 @@ mod tests {
             default_wine_prefix_dir: "~/Games/Prefixes".into(),
             ..Default::default()
         };
-        assert!(prefix_is_shared(&app, &root));
-        assert!(!prefix_is_shared(&app, &root.join("My Game")));
+        assert!(prefix_is_shared(&app, &game(), &root));
+        assert!(!prefix_is_shared(&app, &game(), &root.join("My Game")));
         app.game.wine_prefix = "/data/shared".into();
-        assert!(prefix_is_shared(&app, Path::new("/data/shared")));
+        assert!(prefix_is_shared(&app, &game(), Path::new("/data/shared")));
         app.game.wine_prefix.clear();
         assert!(
-            !prefix_is_shared(&app, Path::new("")),
+            !prefix_is_shared(&app, &game(), Path::new("")),
             "no setting, no match"
         );
     }
@@ -875,6 +920,54 @@ mod tests {
         );
         gs.wine_prefix = "/x/y".into();
         assert_eq!(prefix_path(&app, &gs, &game()), PathBuf::from("/x/y"));
+    }
+
+    /// Heroic #6001: a game imported from the Epic Games Launcher's prefix
+    /// plays there unless the user chose a prefix, and that prefix (EGL's
+    /// own) is never deleted with the game.
+    #[test]
+    fn games_from_another_launcher_use_its_prefix() {
+        let mut app = AppSettings {
+            default_wine_prefix_dir: "/p".into(),
+            ..Default::default()
+        };
+        let mut imported = game();
+        if let Some(install) = imported.install.as_mut() {
+            install.store_prefix = Some("/egl".into());
+        }
+        let mut gs = GameSettings::default();
+        assert_eq!(default_prefix(&app, &imported), PathBuf::from("/egl"));
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/egl"));
+        assert!(prefix_is_shared(&app, &imported, Path::new("/egl")));
+        assert!(!prefix_is_shared(&app, &game(), Path::new("/egl")));
+        app.egs_linked_path = " /egl ".into();
+        assert!(prefix_is_shared(&app, &game(), Path::new("/egl")));
+        gs.wine_prefix = "/mine".into();
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/mine"));
+    }
+
+    #[test]
+    fn a_deleted_prefix_is_not_suggested_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = AppSettings {
+            default_wine_prefix_dir: dir.path().display().to_string(),
+            ..Default::default()
+        };
+        let mut gs = GameSettings {
+            wine_prefix: dir.path().join("old").display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
+        std::fs::create_dir(dir.path().join("old")).unwrap();
+        assert_eq!(install_prefix(&app, &gs, &game()), dir.path().join("old"));
+        gs.wine_prefix.clear();
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
     }
 
     #[test]

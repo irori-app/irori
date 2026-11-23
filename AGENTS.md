@@ -94,6 +94,9 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
+  without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
+  fails then brings the window up to say why.
 - `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
@@ -336,7 +339,7 @@ and `launch.rs` before changing anything below the UI.
 - Store config goes under `store_config_dir(runner)`, as do credentials (written only
   through `irori_secrets`, see below), store caches under
   `store_cache_dir(runner)`, and Irori state (`library.json`, `downloads.json`,
-  `sessions.jsonl`) under `state_dir()`.
+  `sessions.jsonl`, `running.json`) under `state_dir()`.
 - Per-game settings are `config/games/<runner>/<app>.json`. Logs go under
   `logs_dir()`; the app log is `data/logs/irori.log`, and a panic writes
   `crash-<time>.txt` beside it (`crates/irori/src/crash.rs`).
@@ -373,6 +376,16 @@ and `launch.rs` before changing anything below the UI.
 - Per-game overrides are sparse (`GameSettingsOverrides`, a JSON map): the effective
   settings are the defaults with the overridden keys applied. Reset a field with
   `SettingsService::set_game_value(id, key, None)`.
+- Variables, wrappers and programs started alongside (`merged_lists.rs`:
+  `enviromentOptions` by `key`, `wrapperOptions` by `exe`, `iroriLaunchPrograms` by
+  `path`) merge by key: a game's override holds only its own entries, laid over the
+  defaults' list, and `{"key": "X", "iroriRemoved": true}` takes a default entry out for
+  that game. Write a game's list through `GameSettingsOverrides::override_value` (the
+  settings form and `diff` do), which stores just those entries. Game settings and
+  backups written before the merge, whose lists replaced the defaults' whole, are
+  rewritten once with removals of the default entries they left out
+  (`irori-services`' `settings_migration.rs`, recorded in `state/migrations.json`), so
+  every game keeps the list it had.
 - Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
   from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
   as overrides (variables, wrappers and programs merge by key into the current list),
@@ -639,7 +652,13 @@ commands without a window.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
-  id, then title, unless the user chose one (`iroriLudusaviTitle`). Windows games pass
+  id, then title, unless the user chose one (`iroriLudusaviTitle`). When those find
+  nothing, the title without its region or revision tags is tried, then, for a game
+  played in an emulator, the name an emulator manifest gives it (`… (PS2)`,
+  `… (RetroArch)`, from Ludusavi's fuzzy search over the title and the ROM's name,
+  `ludusavi/names.rs`); a name found that way is kept in `<cache>/ludusavi-names.json`
+  by game key and the title it was found for (a renamed game searches again), never as
+  the user's choice. Windows games pass
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
@@ -789,7 +808,16 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
-- **Launching** (`games.rs`):
+- **Launching** (`games.rs`). Until the game starts (status `Launching`),
+  `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
+  steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
+  and the launch ends with `LaunchCancelled`, which screens don't show as an error.
+  The game page's Cancel button and Escape, Big Picture's Cancel launch row and the
+  palette cancel it. Sessions Irori follows itself (not `LaunchPlan::watch` ones) are
+  kept in `state/running.json` (`running.rs`: pid, process start time, start, folder,
+  mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
+  still running (a pid whose process started at another time was reused) to their end,
+  so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
   1. Busy and availability checks.
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with
@@ -1424,7 +1452,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 
 - **Without an account** the library is what Steam installed (`scan.rs`: library
   folders, manifests, `localconfig.vdf` playtime, `appcache/librarycache` art), watched
-  with `notify` on each `steamapps` folder. With one (`account.rs`), it adds the account's
+  with `notify` on each `steamapps` folder. On Linux the library folders of every Steam
+  install under the home folder that lists them (native, Flatpak, Snap) are read, not only
+  the chosen one's (`scan::steam_installs`). With one (`account.rs`), it adds the account's
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
@@ -1472,8 +1502,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   quoting for a Windows build, which every game is on Windows and a game whose manifest
   records Proton (`platform_override_source` `windows`) is elsewhere, so the same options
   reach the game alike on every system; the `steam://run` fallback quotes arguments with
-  blanks. A `SteamGameWatch` follows the reaper (Linux), the game folder's
-  processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+  blanks. Every link and launch is handed over with `process::open_detached` (no
+  pipes of Irori's, a process group of its own, only the opener's exit status waited
+  for; `client::Opener`), so a Steam it starts never depends on Irori, and a link the
+  system's opener refuses goes to Steam's own program (`client::link_commands`). The
+  launch plan's command then only exits. A `SteamGameWatch` follows the reaper (Linux),
+  the game folder's processes and the manifest's launch flags, re-checking known PIDs
+  before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
   Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as

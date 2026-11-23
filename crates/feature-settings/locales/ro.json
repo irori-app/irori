@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Copia din cloud suprascrie salvările de pe acest computer.",
   "settings.saves.force_download.title": "Înlocuiești salvările locale pentru „{title}”?",
   "settings.saves.force_upload.confirm": "Forțează încărcarea",
+  "settings.saves.force_upload.deletes_description": "Nu există salvări în dosarul de salvări al acestui joc, așa că salvările din cloud pentru „{title}” vor fi șterse. Acțiunea nu poate fi anulată.",
   "settings.saves.force_upload.description": "Salvările de pe acest computer suprascriu copia din cloud.",
   "settings.saves.force_upload.title": "Înlocuiești salvările din cloud pentru „{title}”?",
   "settings.saves.in_sync": "Salvările sunt sincronizate.",

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "클라우드 사본이 이 컴퓨터의 저장 파일을 덮어씁니다.",
   "settings.saves.force_download.title": "“{title}”의 로컬 저장 파일을 바꾸시겠습니까?",
   "settings.saves.force_upload.confirm": "강제 업로드",
+  "settings.saves.force_upload.deletes_description": "이 게임의 저장 폴더에 저장 파일이 없으므로 “{title}”의 클라우드 저장 파일이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
   "settings.saves.force_upload.description": "이 컴퓨터의 저장 파일이 클라우드 사본을 덮어씁니다.",
   "settings.saves.force_upload.title": "“{title}”의 클라우드 저장 파일을 바꾸시겠습니까?",
   "settings.saves.in_sync": "저장 파일이 동기화되어 있습니다.",

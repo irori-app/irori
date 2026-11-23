@@ -85,6 +85,8 @@ gpui_kit::actions!(
         OpenGameSettingsAction,
         /// Check why the last run failed ("Troubleshoot launch").
         TroubleshootLaunch,
+        /// Cancel the launch being prepared (Escape while "Launching…").
+        CancelLaunch,
     ]
 );
 
@@ -99,5 +101,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-shift-l", OpenGameLog, ctx),
         KeyBinding::new("ctrl-shift-s", OpenGameSettingsAction, ctx),
         KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
+        KeyBinding::new("escape", CancelLaunch, ctx),
     ]);
 }

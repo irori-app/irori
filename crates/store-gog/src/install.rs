@@ -1832,6 +1832,7 @@ impl GogStore {
         }
     }
 
+    /// Whether GOG offers a newer build of `rec` for its platform and branch.
     async fn has_update(&self, rec: &InstalledRecord, client: &Client) -> bool {
         if rec.platform == InstallPlatform::Linux {
             return match client.product(&rec.app_name, &["downloads"]).await {
@@ -1849,10 +1850,15 @@ impl GogStore {
         let Some(latest) = builds.latest(rec.branch()) else {
             return false;
         };
-        if let Some(etag) = rec.version_etag.as_deref().filter(|e| !e.is_empty()) {
-            return client.meta_changed(latest, etag).await.unwrap_or(false);
+        if let Some(update) = build_update(rec.build_id(), &latest.build_id) {
+            return update;
         }
-        rec.build_id().is_some_and(|b| b != latest.build_id)
+        // Without both build ids the meta's ETag is a hint; one that can't
+        // tell (missing, weak, no answer) means no update is known.
+        match rec.version_etag.as_deref() {
+            Some(etag) => client.meta_changed(latest, etag).await.unwrap_or(false),
+            None => false,
+        }
     }
 
     pub(crate) async fn list_updatable(&self) -> Result<Vec<String>> {
@@ -1891,11 +1897,30 @@ impl GogStore {
     }
 }
 
+/// Whether GOG's `latest` build is an update of the `installed` one, decided
+/// by the build ids when both are known (`None` otherwise). The ids, not the
+/// meta's ETag, say which build is installed: an ETag changes when the CDN
+/// recompresses, weakens or drops it, and named a new version that wasn't
+/// (Heroic #6000).
+fn build_update(installed: Option<&str>, latest: &str) -> Option<bool> {
+    let installed = installed.filter(|b| !b.is_empty())?;
+    (!latest.is_empty()).then(|| installed != latest)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn build_ids_decide_updates() {
+        assert_eq!(build_update(Some("b1"), "b1"), Some(false));
+        assert_eq!(build_update(Some("b1"), "b2"), Some(true));
+        assert_eq!(build_update(None, "b2"), None);
+        assert_eq!(build_update(Some(""), "b2"), None);
+        assert_eq!(build_update(Some("b1"), ""), None);
+    }
 
     const INFO: &str = r#"{"size": {"*": {"download_size": 10, "disk_size": 20},
         "en-US": {"download_size": 100, "disk_size": 200}, "de-DE": {"download_size": 110, "disk_size": 210}},

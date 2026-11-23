@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Облачная копия перезапишет сохранения на этом компьютере.",
   "settings.saves.force_download.title": "Заменить локальные сохранения «{title}»?",
   "settings.saves.force_upload.confirm": "Принудительно загрузить",
+  "settings.saves.force_upload.deletes_description": "В папке сохранений этой игры нет сохранений, поэтому облачные сохранения «{title}» будут удалены. Это действие нельзя отменить.",
   "settings.saves.force_upload.description": "Сохранения на этом компьютере перезапишут облачную копию.",
   "settings.saves.force_upload.title": "Заменить облачные сохранения «{title}»?",
   "settings.saves.in_sync": "Сохранения синхронизированы.",

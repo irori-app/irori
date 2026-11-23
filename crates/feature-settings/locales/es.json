@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "La copia de la nube sobrescribe las partidas guardadas de este equipo.",
   "settings.saves.force_download.title": "¿Sustituir las partidas guardadas locales de «{title}»?",
   "settings.saves.force_upload.confirm": "Forzar subida",
+  "settings.saves.force_upload.deletes_description": "No hay partidas guardadas en la carpeta de guardado de este juego, así que se eliminarán las partidas guardadas en la nube de «{title}». Esta acción no se puede deshacer.",
   "settings.saves.force_upload.description": "Las partidas guardadas de este equipo sobrescriben la copia de la nube.",
   "settings.saves.force_upload.title": "¿Sustituir las partidas guardadas en la nube de «{title}»?",
   "settings.saves.in_sync": "Las partidas guardadas están sincronizadas.",

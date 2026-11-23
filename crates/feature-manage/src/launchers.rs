@@ -145,19 +145,20 @@ impl LaunchersSection {
     fn load_wines(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let b = backend(cx);
         let task = irori_ui::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&b.settings.app()).await)
+            Ok(irori_runtime::wine_installations_with_sources(&b.settings.app()).await)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok(wines) = task.await else { return };
+            let Ok(found) = task.await else { return };
             let _ = this.update_in(cx, |this, window, cx| {
                 let default = backend(cx).settings.app().game.wine_version.bin.clone();
-                let items: Vec<WineChoice> = wines
+                let items: Vec<WineChoice> = found
                     .iter()
-                    .map(|w| WineChoice {
+                    .map(|(w, source)| WineChoice {
                         value: w.bin.clone().into(),
-                        title: w.name.clone().into(),
+                        title: irori_ui::wine_choice::build_label(w, *source),
                     })
                     .collect();
+                let wines: Vec<_> = found.into_iter().map(|(w, _)| w).collect();
                 let ix = wines
                     .iter()
                     .position(|w| w.bin == default)

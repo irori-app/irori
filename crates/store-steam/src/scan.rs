@@ -121,14 +121,36 @@ fn runs_windows_build(state: &Vdf) -> bool {
     })
 }
 
-/// The Steam folder itself plus every library in its
-/// `steamapps/libraryfolders.vdf`, existing ones only, without duplicates
-/// (`~/.steam/steam` is usually a link to `~/.local/share/Steam`).
-pub(crate) fn libraries(steam_dir: &Path) -> Vec<PathBuf> {
-    let mut candidates = vec![steam_dir.to_path_buf()];
-    let list = steam_dir.join("steamapps").join("libraryfolders.vdf");
-    if let Ok(text) = std::fs::read_to_string(&list) {
-        candidates.extend(vdf::library_folders(&vdf::parse(&text)));
+/// The Steam installs whose libraries hold this computer's Steam games:
+/// `steam_dir` (the one Irori uses), then on Linux every other Steam under
+/// `home` that lists its libraries. The Steam that runs may not be the one
+/// chosen (a native Steam left behind when the user moved to the Snap or
+/// the Flatpak keeps its folder and the setting), and only the running
+/// one's `libraryfolders.vdf` knows a library on another drive.
+pub(crate) fn steam_installs(steam_dir: &Path, home: &Path) -> Vec<PathBuf> {
+    let mut installs = vec![steam_dir.to_path_buf()];
+    if cfg!(target_os = "linux") {
+        installs.extend(
+            irori_core::platform::linux_steam_dirs(home)
+                .into_iter()
+                .filter(|d| d.join("steamapps/libraryfolders.vdf").is_file()),
+        );
+    }
+    installs
+}
+
+/// Each Steam install of `installs` plus every library in its
+/// `steamapps/libraryfolders.vdf`, in that order, existing ones only,
+/// without duplicates (`~/.steam/steam` is usually a link to
+/// `~/.local/share/Steam`).
+pub(crate) fn libraries(installs: &[PathBuf]) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for steam_dir in installs {
+        candidates.push(steam_dir.clone());
+        let list = steam_dir.join("steamapps").join("libraryfolders.vdf");
+        if let Ok(text) = std::fs::read_to_string(&list) {
+            candidates.extend(vdf::library_folders(&vdf::parse(&text)));
+        }
     }
     let mut seen = HashSet::new();
     candidates
@@ -138,11 +160,13 @@ pub(crate) fn libraries(steam_dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Every game installed in the Steam libraries of `steam_dir`, sorted by
-/// app ID. An app installed in two libraries is listed once.
-pub(crate) fn installed_apps(steam_dir: &Path) -> Vec<InstalledApp> {
+/// Every game installed in the Steam libraries of `installs`, sorted by app
+/// ID. An app installed in two libraries is listed once: from the first
+/// library whose copy has its folder (a move to another drive that stopped
+/// half way leaves a manifest behind), else the first.
+pub(crate) fn installed_apps(installs: &[PathBuf]) -> Vec<InstalledApp> {
     let mut apps: HashMap<String, InstalledApp> = HashMap::new();
-    for library in libraries(steam_dir) {
+    for library in libraries(installs) {
         let Ok(entries) = std::fs::read_dir(library.join("steamapps")) else {
             continue;
         };
@@ -157,7 +181,12 @@ pub(crate) fn installed_apps(steam_dir: &Path) -> Vec<InstalledApp> {
                 continue;
             };
             if let Some(app) = parse_manifest(&text, &library) {
-                apps.entry(app.app_id.clone()).or_insert(app);
+                match apps.get(&app.app_id) {
+                    Some(kept) if kept.install_path.is_dir() || !app.install_path.is_dir() => {}
+                    _ => {
+                        apps.insert(app.app_id.clone(), app);
+                    }
+                }
             }
         }
     }
@@ -400,12 +429,86 @@ mod tests {
         write(&second, "228980", "Steamworks Common Redistributables");
         std::fs::write(second.join("steamapps/notes.txt"), "x").unwrap();
 
-        assert_eq!(libraries(&steam), vec![steam.clone(), second.clone()]);
-        let apps = installed_apps(&steam);
+        let steam_only = [steam.clone()];
+        assert_eq!(libraries(&steam_only), vec![steam.clone(), second.clone()]);
+        let apps = installed_apps(&steam_only);
         let ids: Vec<&str> = apps.iter().map(|a| a.app_id.as_str()).collect();
         assert_eq!(ids, ["400", "620"]);
         assert_eq!(apps[0].install_path, second.join("steamapps/common/Portal"));
-        assert!(installed_apps(&dir.path().join("missing")).is_empty());
+        assert!(installed_apps(&[dir.path().join("missing")]).is_empty());
+    }
+
+    /// The setting names a native Steam left behind; the Snap Steam that
+    /// runs lists a second drive. Its games are installed too.
+    #[test]
+    fn reads_the_libraries_of_every_steam_install() {
+        let home = tempfile::tempdir().unwrap();
+        let home = home.path();
+        let stale = home.join(".steam/steam");
+        let snap = home.join("snap/steam/common/.local/share/Steam");
+        let drive = home.join("hdd/SteamLibrary");
+        for dir in [&stale, &snap, &drive] {
+            std::fs::create_dir_all(dir.join("steamapps")).unwrap();
+        }
+        let escaped = |p: &Path| p.to_string_lossy().replace('\\', "\\\\");
+        std::fs::write(
+            snap.join("steamapps/libraryfolders.vdf"),
+            format!(
+                "\"libraryfolders\" {{ \"0\" {{ \"path\" \"{}\" }} \"1\" {{ \"path\" \"{}\" }} }}",
+                escaped(&snap),
+                escaped(&drive)
+            ),
+        )
+        .unwrap();
+        let write = |lib: &Path, id: &str, name: &str| {
+            std::fs::create_dir_all(lib.join("steamapps/common").join(name)).unwrap();
+            std::fs::write(
+                lib.join(format!("steamapps/appmanifest_{id}.acf")),
+                manifest(id, name, name, 4),
+            )
+            .unwrap();
+        };
+        write(&snap, "620", "Portal 2");
+        write(&drive, "400", "Portal");
+        // A manifest the half-finished move of Portal left in the stale
+        // install, without the game's folder.
+        std::fs::write(
+            stale.join("steamapps/appmanifest_400.acf"),
+            manifest("400", "Portal", "Portal", 4),
+        )
+        .unwrap();
+
+        let installs = steam_installs(&stale, home);
+        if cfg!(target_os = "linux") {
+            assert_eq!(installs, [stale.clone(), snap.clone()]);
+            let apps = installed_apps(&installs);
+            let found: Vec<(&str, &Path)> = apps
+                .iter()
+                .map(|a| (a.app_id.as_str(), a.install_path.as_path()))
+                .collect();
+            assert_eq!(
+                found,
+                [
+                    ("400", drive.join("steamapps/common/Portal").as_path()),
+                    ("620", snap.join("steamapps/common/Portal 2").as_path()),
+                ]
+            );
+        } else {
+            // One Steam per computer elsewhere.
+            assert_eq!(installs, std::slice::from_ref(&stale));
+        }
+        // Every install's libraries, each read once.
+        let all = [stale.clone(), snap.clone(), snap.join("../Steam")];
+        assert_eq!(
+            libraries(&all),
+            [stale.clone(), snap.clone(), drive.clone()]
+        );
+        let apps = installed_apps(&all);
+        assert_eq!(
+            apps[0].install_path,
+            drive.join("steamapps/common/Portal"),
+            "the copy with its folder wins over a leftover manifest"
+        );
     }
 
     #[test]

@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "このコンピューターのセーブデータが、クラウドのデータで上書きされます。",
   "settings.saves.force_download.title": "「{title}」のローカルのセーブデータを置き換えますか？",
   "settings.saves.force_upload.confirm": "強制アップロード",
+  "settings.saves.force_upload.deletes_description": "このゲームのセーブフォルダーにセーブデータがないため、「{title}」のクラウドのセーブデータは削除されます。この操作は元に戻せません。",
   "settings.saves.force_upload.description": "クラウドのデータが、このコンピューターのセーブデータで上書きされます。",
   "settings.saves.force_upload.title": "「{title}」のクラウドのセーブデータを置き換えますか？",
   "settings.saves.in_sync": "セーブデータは同期済みです。",

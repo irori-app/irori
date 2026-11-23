@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "A cópia na nuvem substitui os dados guardados neste computador.",
   "settings.saves.force_download.title": "Substituir os dados guardados locais de «{title}»?",
   "settings.saves.force_upload.confirm": "Forçar envio",
+  "settings.saves.force_upload.deletes_description": "Não há dados guardados na pasta de gravações deste jogo, por isso os dados guardados na nuvem de «{title}» serão eliminados. Esta ação não pode ser anulada.",
   "settings.saves.force_upload.description": "Os dados guardados neste computador substituem a cópia na nuvem.",
   "settings.saves.force_upload.title": "Substituir os dados guardados na nuvem de «{title}»?",
   "settings.saves.in_sync": "Os dados guardados estão sincronizados.",

@@ -9,6 +9,7 @@
 //! which of them handles a game.
 
 pub mod client;
+mod names;
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -33,6 +34,57 @@ pub const TITLE_KEY: &str = "iroriLudusaviTitle";
 /// doesn't know the game. Matching reads Ludusavi's whole data set, so it is
 /// done once per game.
 static MATCHES: Lazy<Mutex<HashMap<String, Option<String>>>> = Lazy::new(Default::default);
+
+/// Names the wider search found ([`Backend::ludusavi_fallback`]), kept in
+/// `<cache>/ludusavi-names.json` by game key apart from the user's choice.
+/// Each remembers the title it was found for, so a renamed game searches
+/// again.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct FoundName {
+    for_title: String,
+    name: String,
+}
+
+/// Serialises reads and writes of the found names file.
+static FOUND_FILE: Mutex<()> = parking_lot::const_mutex(());
+
+fn found_names_file() -> PathBuf {
+    irori_core::Paths::get().cache.join("ludusavi-names.json")
+}
+
+/// The name found earlier for `key` while its title was `title`.
+fn found_name(key: &str, title: &str) -> Option<String> {
+    let _guard = FOUND_FILE.lock();
+    let names: HashMap<String, FoundName> =
+        irori_core::json_store::read_or_default(&found_names_file());
+    names
+        .get(key)
+        .filter(|f| f.for_title == title)
+        .map(|f| f.name.clone())
+}
+
+/// Forget this session's matches, as a restart does. Only the Unix test of
+/// emulated games' names uses it (it runs a stand-in shell script).
+#[cfg(all(test, unix))]
+pub(crate) fn forget_matches_for_test() {
+    MATCHES.lock().clear();
+}
+
+fn remember_found_name(key: &str, title: &str, name: &str) {
+    let _guard = FOUND_FILE.lock();
+    let file = found_names_file();
+    let mut names: HashMap<String, FoundName> = irori_core::json_store::read_or_default(&file);
+    names.insert(
+        key.to_string(),
+        FoundName {
+            for_title: title.to_string(),
+            name: name.to_string(),
+        },
+    );
+    if let Err(e) = irori_core::json_store::write(&file, &names) {
+        tracing::warn!("keeping Ludusavi's name of {key}: {e:#}");
+    }
+}
 
 /// The installed Ludusavi, for the settings page.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,8 +287,8 @@ impl Backend {
     }
 
     /// `id`'s title in Ludusavi: the one the user chose, else the automatic
-    /// match (Steam id, GOG id, then title). `Ok(None)` when Ludusavi
-    /// doesn't know the game.
+    /// match (Steam id, GOG id, then title, then [`Self::ludusavi_fallback`]).
+    /// `Ok(None)` when Ludusavi doesn't know the game.
     pub async fn ludusavi_title(&self, id: &GameId) -> Result<Option<String>> {
         let chosen = self.settings.game(id).ludusavi_title;
         if !chosen.trim().is_empty() {
@@ -247,14 +299,70 @@ impl Backend {
         }
         let game = self.game(id).context("The game is not in the library")?;
         let ludusavi = self.require_ludusavi().await?;
-        let found = ludusavi
+        let mut found = ludusavi
             .find(&query_for(&game))
             .await?
             .into_iter()
             .next()
             .map(|m| m.title);
+        if found.is_none() {
+            found = match found_name(&id.key(), &game.title) {
+                Some(name) => Some(name),
+                None => {
+                    let name = self.ludusavi_fallback(&ludusavi, &game).await?;
+                    // Kept apart from the user's choice, so the wider
+                    // search runs once.
+                    if let Some(name) = &name {
+                        remember_found_name(&id.key(), &game.title, name);
+                    }
+                    name
+                }
+            };
+        }
         MATCHES.lock().insert(id.key(), found.clone());
         Ok(found)
+    }
+
+    /// The names tried when `game`'s ids and title find nothing: the title
+    /// without its region or revision tags, then, for a game played in an
+    /// emulator, the name an emulator manifest gives it (`… (PS2)`,
+    /// `… (RetroArch)`), taken from Ludusavi's fuzzy search.
+    async fn ludusavi_fallback(
+        &self,
+        ludusavi: &Ludusavi,
+        game: &GameInfo,
+    ) -> Result<Option<String>> {
+        if let Some(untagged) = names::untagged_title(game) {
+            let query = TitleQuery {
+                names: vec![untagged],
+                normalized: true,
+                ..Default::default()
+            };
+            if let Some(m) = ludusavi.find(&query).await?.into_iter().next() {
+                return Ok(Some(m.title));
+            }
+        }
+        let settings = self.settings.game(&game.id());
+        let engine = match &game.system {
+            _ if !settings.engine.trim().is_empty() => Some(settings.engine.clone()),
+            Some(system) => self.settings.app().system_engines.get(system).cloned(),
+            None => return Ok(None),
+        };
+        let retroarch = engine.map(|e| e.starts_with("retroarch"));
+        let bases = names::emulated_bases(game);
+        for base in &bases {
+            let query = TitleQuery {
+                names: vec![base.clone()],
+                fuzzy: true,
+                multiple: true,
+                ..Default::default()
+            };
+            let found = ludusavi.find(&query).await?;
+            if let Some(title) = names::pick_emulated(&found, &bases, retroarch) {
+                return Ok(Some(title));
+            }
+        }
+        Ok(None)
     }
 
     /// Titles of Ludusavi's data set matching what the user typed, best first.

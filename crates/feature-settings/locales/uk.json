@@ -858,6 +858,7 @@
   "settings.saves.force_download.description": "Хмарна копія перезапише збереження на цьому комп’ютері.",
   "settings.saves.force_download.title": "Замінити локальні збереження «{title}»?",
   "settings.saves.force_upload.confirm": "Примусово вивантажити",
+  "settings.saves.force_upload.deletes_description": "У теці збережень цієї гри немає збережень, тому хмарні збереження «{title}» буде видалено. Цю дію не можна скасувати.",
   "settings.saves.force_upload.description": "Збереження на цьому комп’ютері перезапишуть хмарну копію.",
   "settings.saves.force_upload.title": "Замінити хмарні збереження «{title}»?",
   "settings.saves.in_sync": "Збереження синхронізовано.",

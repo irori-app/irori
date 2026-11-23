@@ -570,6 +570,7 @@ impl LaunchersStore {
         let umu = irori_runtime::runtimes::is_umu_supported(&settings, true)
             .then(irori_runtime::runtimes::umu_path);
         let wc = wine_context(setup, umu);
+        irori_runtime::prefix::check_layout(&wc)?;
         let mut argv = vec![program.display().to_string()];
         argv.extend(args);
         let mut cmd = irori_runtime::prefix::WineCommand::new(argv);

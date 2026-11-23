@@ -25,9 +25,11 @@ use gpui_kit::{
 };
 use irori_core::settings::{AppSettings, GameSettings, UiPrefs, WineInstallation};
 use irori_core::{GameId, InstallPlatform, Paths, Runner};
+use irori_runtime::discovery::WineSource;
 use irori_runtime::graphics::HostGraphics;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::Desktop;
+use irori_ui::wine_choice::build_label;
 use irori_ui::{Route, backend, models};
 use serde_json::Value;
 
@@ -145,6 +147,8 @@ impl PairEditor {
 struct WinePicker {
     select: ChoiceState,
     builds: Option<Vec<WineInstallation>>,
+    /// Where each build sharing its name with another was found, by `bin`.
+    sources: HashMap<String, WineSource>,
     loading: bool,
 }
 
@@ -333,14 +337,18 @@ impl SettingsForm {
         wine.loading = true;
         let app = backend(cx).settings.app();
         let task = irori_ui::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&app).await)
+            Ok(irori_runtime::wine_installations_with_sources(&app).await)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let builds = task.await.unwrap_or_default();
+            let found = task.await.unwrap_or_default();
             this.update_in(cx, |this, window, cx| {
                 if let Some(wine) = &mut this.wine {
                     wine.loading = false;
-                    wine.builds = Some(builds);
+                    wine.sources = found
+                        .iter()
+                        .filter_map(|(w, source)| Some((w.bin.clone(), (*source)?)))
+                        .collect();
+                    wine.builds = Some(found.into_iter().map(|(w, _)| w).collect());
                 }
                 this.sync_wine_select(window, cx);
                 cx.notify();
@@ -757,6 +765,7 @@ impl SettingsForm {
                 self.wine = Some(WinePicker {
                     select,
                     builds: None,
+                    sources: HashMap::new(),
                     loading: false,
                 });
                 self.sync_wine_select(window, cx);
@@ -1033,7 +1042,7 @@ impl SettingsForm {
             .flatten()
             .map(|w| ChoiceItem {
                 key: w.bin.clone().into(),
-                label: w.name.clone().into(),
+                label: build_label(w, wine.sources.get(&w.bin).copied()),
             })
             .collect();
         if current.is_set() && !items.iter().any(|i| i.key.as_ref() == current.bin) {

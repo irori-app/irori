@@ -9,6 +9,7 @@
   "bigpicture.action.play": "プレイ",
   "bigpicture.action.play_with_log": "ログ付きでプレイ",
   "bigpicture.action.stop": "停止",
+  "bigpicture.action.cancel_launch": "起動をキャンセル",
   "bigpicture.action.install": "インストール",
   "bigpicture.action.cancel_download": "ダウンロードをキャンセル",
   "bigpicture.action.update": "アップデート",
