@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Rechercher des jeux et des commandes…",
   "shell.offline": "Hors ligne",
   "shell.offline.tooltip": "Vous êtes hors ligne. Les jeux installés qui le permettent se lancent quand même.",
-  "shell.downloads.progress": "Téléchargement de {title} — {percent} %",
-  "shell.downloads.paused": "Téléchargements (en pause)",
   "shell.palette.go_to": "Aller à {place}",
   "shell.palette.refresh": "Actualiser la bibliothèque",
   "shell.palette.play": "Jouer à {title}",

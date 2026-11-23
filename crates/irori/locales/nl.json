@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Games en opdrachten zoeken…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Je bent offline. Geïnstalleerde games die het ondersteunen, starten nog steeds.",
-  "shell.downloads.progress": "{title} downloaden — {percent}%",
-  "shell.downloads.paused": "Downloads (gepauzeerd)",
   "shell.palette.go_to": "Ga naar {place}",
   "shell.palette.refresh": "Bibliotheek vernieuwen",
   "shell.palette.play": "{title} spelen",

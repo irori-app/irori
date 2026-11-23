@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Search games and commands…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "You're offline. Installed games that support it still launch.",
-  "shell.downloads.progress": "Downloading {title} — {percent}%",
-  "shell.downloads.paused": "Downloads (paused)",
   "shell.palette.go_to": "Go to {place}",
   "shell.palette.refresh": "Refresh library",
   "shell.palette.play": "Play {title}",

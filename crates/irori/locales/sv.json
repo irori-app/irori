@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Sök spel och kommandon…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Du är offline. Installerade spel som stöder det startar ändå.",
-  "shell.downloads.progress": "Laddar ned {title} — {percent} %",
-  "shell.downloads.paused": "Nedladdningar (pausade)",
   "shell.palette.go_to": "Gå till {place}",
   "shell.palette.refresh": "Uppdatera biblioteket",
   "shell.palette.play": "Spela {title}",

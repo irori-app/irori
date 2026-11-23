@@ -30,8 +30,6 @@
   "shell.search.placeholder": "ゲームとコマンドを検索…",
   "shell.offline": "オフライン",
   "shell.offline.tooltip": "オフラインです。対応しているインストール済みのゲームは起動できます。",
-  "shell.downloads.progress": "{title} をダウンロード中 — {percent}%",
-  "shell.downloads.paused": "ダウンロード (一時停止中)",
   "shell.palette.go_to": "{place} へ移動",
   "shell.palette.refresh": "ライブラリを更新",
   "shell.palette.play": "{title} をプレイ",

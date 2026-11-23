@@ -30,8 +30,6 @@
   "shell.search.placeholder": "搜尋遊戲與指令…",
   "shell.offline": "離線",
   "shell.offline.tooltip": "你目前處於離線狀態。支援離線的已安裝遊戲仍可啟動。",
-  "shell.downloads.progress": "正在下載 {title} — {percent}%",
-  "shell.downloads.paused": "下載（已暫停）",
   "shell.palette.go_to": "前往{place}",
   "shell.palette.refresh": "重新整理遊戲庫",
   "shell.palette.play": "遊玩 {title}",

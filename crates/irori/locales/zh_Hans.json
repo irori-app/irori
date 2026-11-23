@@ -30,8 +30,6 @@
   "shell.search.placeholder": "搜索游戏和命令…",
   "shell.offline": "离线",
   "shell.offline.tooltip": "你当前处于离线状态。支持离线的已安装游戏仍可启动。",
-  "shell.downloads.progress": "正在下载 {title} — {percent}%",
-  "shell.downloads.paused": "下载（已暂停）",
   "shell.palette.go_to": "前往{place}",
   "shell.palette.refresh": "刷新游戏库",
   "shell.palette.play": "玩 {title}",

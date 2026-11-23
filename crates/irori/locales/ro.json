@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Caută jocuri și comenzi…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Ești offline. Jocurile instalate care permit asta pornesc în continuare.",
-  "shell.downloads.progress": "Se descarcă {title} — {percent}%",
-  "shell.downloads.paused": "Descărcări (în pauză)",
   "shell.palette.go_to": "Mergi la {place}",
   "shell.palette.refresh": "Reîmprospătează biblioteca",
   "shell.palette.play": "Joacă {title}",

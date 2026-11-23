@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Buscar juegos y comandos…",
   "shell.offline": "Sin conexión",
   "shell.offline.tooltip": "Estás sin conexión. Los juegos instalados que lo admiten se pueden iniciar igualmente.",
-  "shell.downloads.progress": "Descargando {title} — {percent} %",
-  "shell.downloads.paused": "Descargas (en pausa)",
   "shell.palette.go_to": "Ir a {place}",
   "shell.palette.refresh": "Actualizar biblioteca",
   "shell.palette.play": "Jugar a {title}",

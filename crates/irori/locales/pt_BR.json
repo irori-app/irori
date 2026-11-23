@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Pesquisar jogos e comandos…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Você está offline. Jogos instalados que suportam isso ainda iniciam.",
-  "shell.downloads.progress": "Baixando {title} — {percent}%",
-  "shell.downloads.paused": "Downloads (pausados)",
   "shell.palette.go_to": "Ir para {place}",
   "shell.palette.refresh": "Atualizar biblioteca",
   "shell.palette.play": "Jogar {title}",

@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Hledat hry a příkazy…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Jste offline. Nainstalované hry, které to podporují, se přesto spustí.",
-  "shell.downloads.progress": "Stahování {title} — {percent} %",
-  "shell.downloads.paused": "Stahování (pozastaveno)",
   "shell.palette.go_to": "Přejít na {place}",
   "shell.palette.refresh": "Obnovit knihovnu",
   "shell.palette.play": "Hrát {title}",

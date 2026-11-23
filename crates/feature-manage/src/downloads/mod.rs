@@ -1,8 +1,11 @@
 //! The downloads page ([`Route::Downloads`](irori_ui::Route::Downloads)).
 
+mod indicator;
 mod queue;
 mod space;
 mod speed;
+
+pub use indicator::{DownloadsBadge, DownloadsPanel, DownloadsPill};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};

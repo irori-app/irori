@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Oyun ve komut ara…",
   "shell.offline": "Çevrimdışı",
   "shell.offline.tooltip": "Çevrimdışısın. Destekleyen yüklü oyunlar yine de başlar.",
-  "shell.downloads.progress": "{title} indiriliyor — %{percent}",
-  "shell.downloads.paused": "İndirmeler (duraklatıldı)",
   "shell.palette.go_to": "{place} sayfasına git",
   "shell.palette.refresh": "Kütüphaneyi yenile",
   "shell.palette.play": "{title} oyna",

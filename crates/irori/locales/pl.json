@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Szukaj gier i poleceń…",
   "shell.offline": "Offline",
   "shell.offline.tooltip": "Jesteś offline. Zainstalowane gry, które to obsługują, nadal się uruchomią.",
-  "shell.downloads.progress": "Pobieranie {title} — {percent}%",
-  "shell.downloads.paused": "Pobieranie (wstrzymane)",
   "shell.palette.go_to": "Przejdź do: {place}",
   "shell.palette.refresh": "Odśwież bibliotekę",
   "shell.palette.play": "Graj w {title}",

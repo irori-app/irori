@@ -30,8 +30,6 @@
   "shell.search.placeholder": "Поиск игр и команд…",
   "shell.offline": "Не в сети",
   "shell.offline.tooltip": "Вы не в сети. Установленные игры, которые это поддерживают, всё равно запустятся.",
-  "shell.downloads.progress": "Загрузка {title} — {percent}%",
-  "shell.downloads.paused": "Загрузки (приостановлены)",
   "shell.palette.go_to": "Перейти: {place}",
   "shell.palette.refresh": "Обновить библиотеку",
   "shell.palette.play": "Играть в {title}",
