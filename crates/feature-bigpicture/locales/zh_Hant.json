@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "今日推薦",
   "bigpicture.shelf.stores": "每個商店一列",
   "bigpicture.hint.undo": "復原",
-  "bigpicture.hint.redo": "重做"
+  "bigpicture.hint.redo": "重做",
+  "bigpicture.action.back_to_game": "返回遊戲"
 }

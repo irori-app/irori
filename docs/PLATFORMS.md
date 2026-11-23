@@ -448,8 +448,24 @@ game) and from the screenshot folders in the table above, where a file counts fo
 the play session it was taken in. Irori never moves, renames or removes them.
 gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
 Steam saves them instead. Videos (mp4, mkv, webm, mov) in those folders and in the
-replay buffer's clip folders show with a play badge over their game's art and open in
-the system's player.
+replay buffer's clip folders show with a play badge and open in the system's player.
+With ffmpeg on the computer (on `PATH`, Homebrew's or MacPorts' folders on macOS, or
+the host's inside the Flatpak; never bundled) a clip shows a poster frame from about
+two thirds in and its length, in the Album and in journal notes; without it, its
+game's art.
+
+### Trailers
+
+A game page shows its Steam trailers (also for games of other stores linked to a Steam
+app) above the screenshots, played through the computer's ffmpeg, found as for clip
+posters. Sound plays through ffmpeg's PulseAudio output (PipeWire answers it too), else
+ALSA, on Linux and AudioToolbox on macOS, when the ffmpeg was built with them; ffmpeg has
+no sound output for Windows, where trailers stay muted. Without ffmpeg the page says so:
+on Linux and macOS install it from the system's packages (`ffmpeg`; Homebrew's or
+MacPorts' on macOS) and choose "Look again"; on Windows Irori offers to download the LGPL
+build from github.com/BtbN/FFmpeg-Builds (linked from ffmpeg.org), asks first, and uses it
+only when it matches the release's published SHA-256. Inside the Flatpak the host's
+ffmpeg is used when the sandbox has none.
 
 ### Replay buffer
 
@@ -535,6 +551,17 @@ game (`Backend::take_screenshot`), or of the desktop when none runs. The shortcu
 set up only while the replay buffer is on, so Alt+F10 and Alt+F12 stay free otherwise.
 macOS and Windows have no replay buffer; there the commands still work, and the in-game
 overlay's Ctrl+Shift+O and its screenshot button take screenshots.
+
+The same session asks for a third shortcut, "quick-launch" (Ctrl+Alt+K suggested; the
+X11 grab takes it when it is free, else its command is offered alone), which opens the
+quick launcher: the command palette in a window of its own. General → Tray and window →
+"Open the quick launcher with a shortcut" sets the session up when Irori starts without
+waiting for the replay buffer, and shows its keys, or the line that binds
+`irori --quick-launch` (for example `bindsym Ctrl+Mod1+k exec irori --quick-launch` for
+Sway). On macOS and Windows the setting registers ⌃⌥K / Ctrl+Alt+K itself
+(`RegisterEventHotKey`, `RegisterHotKey`, the in-game overlay's registration with a key
+id of its own), which needs no permission; another program holding the keys leaves the
+command to bind. `irori://quick-launch` opens it as well.
 
 Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
 after its title, which is how the Album finds the game; a folder whose game left the

@@ -166,6 +166,8 @@ pub fn cover_radius(corners: CoverCorners, cx: &App) -> Pixels {
 pub struct GameCover {
     game: Arc<GameInfo>,
     width: Rems,
+    /// Set for art drawn whole in its own shape; 2:3 otherwise.
+    height: Option<Rems>,
     radius: Option<Pixels>,
 }
 
@@ -174,6 +176,7 @@ impl GameCover {
         Self {
             game,
             width: rems(11.),
+            height: None,
             radius: None,
         }
     }
@@ -181,6 +184,13 @@ impl GameCover {
     /// Tile width; height follows the 2:3 cover ratio.
     pub fn width(mut self, width: Rems) -> Self {
         self.width = width;
+        self
+    }
+
+    /// Tile height, for art drawn whole in its own shape (sized to it by the
+    /// caller); the 2:3 cover ratio otherwise.
+    pub fn height(mut self, height: Rems) -> Self {
+        self.height = Some(height);
         self
     }
 
@@ -206,7 +216,7 @@ impl RenderOnce for GameCover {
         let radius = self.radius.unwrap_or(theme.radius_lg);
         let base = div()
             .w(self.width)
-            .h(rems(self.width.0 * 1.5))
+            .h(self.height.unwrap_or(rems(self.width.0 * 1.5)))
             .flex_shrink_0()
             .overflow_hidden()
             .rounded(radius)

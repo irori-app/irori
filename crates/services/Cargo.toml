@@ -49,6 +49,8 @@ sha2.workspace = true
 # handshake. ring, as reqwest's rustls already uses, so no second provider.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 hex.workspace = true
+# The ffmpeg build downloaded on Windows comes as a zip.
+zip.workspace = true
 uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 

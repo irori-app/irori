@@ -85,6 +85,7 @@ pub fn game_info(ent: &Entitlement, installed: Option<&InstalledGame>) -> GameIn
             short_description: description,
             release_date,
             genres: d.genres.clone(),
+            screenshots: d.screenshots.clone(),
             ..Default::default()
         }),
         ..Default::default()
@@ -161,7 +162,8 @@ mod tests {
           "developer": "Foo Studio", "publisher": "Foo Pub", "genres": ["Action", "RPG"],
           "logoUrl": "https://img/logo.png", "releaseDate": "2020-01-02T00:00:00Z",
           "shortDescription": "A game.", "esrbRating": "TEEN", "pegiRating": "PEGI_12",
-          "uskRating": "RATING_PENDING", "screenshots": [],
+          "uskRating": "RATING_PENDING",
+          "screenshots": ["https://img/shot1.jpg", "https://img/shot2.jpg"],
           "websites": {"official": null}}}}},
       {"id": "ent-2", "product": {"id": "amzn1.adg.product.def",
         "productDetail": {"iconUrl": "", "details": {"backgroundUrl2": "https://img/w.jpg",
@@ -202,6 +204,10 @@ mod tests {
         let extra = a.extra.as_ref().unwrap();
         assert_eq!(extra.description.as_deref(), Some("A game."));
         assert_eq!(extra.release_date.as_deref(), Some("2020-01-02T00:00:00Z"));
+        assert_eq!(
+            extra.screenshots,
+            ["https://img/shot1.jpg", "https://img/shot2.jpg"]
+        );
         assert_eq!(a.sort_title, "foo: the game™");
 
         let b = game_info(&games[1], None);

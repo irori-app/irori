@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Tip dne",
   "bigpicture.shelf.stores": "Jedna pro každý obchod",
   "bigpicture.hint.undo": "Zpět",
-  "bigpicture.hint.redo": "Znovu"
+  "bigpicture.hint.redo": "Znovu",
+  "bigpicture.action.back_to_game": "Zpět do hry"
 }

@@ -5,6 +5,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{App, Global, Window};
+use irori_core::GameId;
 
 /// Which artwork to pick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +21,7 @@ pub enum ArtSlot {
 /// Called with the full-size image URL the user picked.
 pub type OnPicked = Rc<dyn Fn(String, &mut Window, &mut App)>;
 
-type Opener = Rc<dyn Fn(ArtSlot, &str, OnPicked, &mut Window, &mut App)>;
+type Opener = Rc<dyn Fn(ArtSlot, &str, Option<&GameId>, OnPicked, &mut Window, &mut App)>;
 
 struct ArtPickerHook(Opener);
 
@@ -28,7 +29,7 @@ impl Global for ArtPickerHook {}
 
 /// Install the opener (the shell, with `irori_library`'s picker).
 pub fn install(
-    open: impl Fn(ArtSlot, &str, OnPicked, &mut Window, &mut App) + 'static,
+    open: impl Fn(ArtSlot, &str, Option<&GameId>, OnPicked, &mut Window, &mut App) + 'static,
     cx: &mut App,
 ) {
     cx.set_global(ArtPickerHook(Rc::new(open)));
@@ -45,5 +46,21 @@ pub fn open(slot: ArtSlot, title: &str, on_picked: OnPicked, window: &mut Window
     let Some(open) = cx.try_global::<ArtPickerHook>().map(|h| h.0.clone()) else {
         return;
     };
-    open(slot, title, on_picked, window, cx);
+    open(slot, title, None, on_picked, window, cx);
+}
+
+/// [`open`] for one game, so the picker can offer the art made for it (a
+/// ROM's LaunchBox boxes).
+pub fn open_for_game(
+    slot: ArtSlot,
+    game: &GameId,
+    title: &str,
+    on_picked: OnPicked,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let Some(open) = cx.try_global::<ArtPickerHook>().map(|h| h.0.clone()) else {
+        return;
+    };
+    open(slot, title, Some(game), on_picked, window, cx);
 }

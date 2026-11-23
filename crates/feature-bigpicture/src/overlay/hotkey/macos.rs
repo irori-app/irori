@@ -1,7 +1,8 @@
 //! macOS: Carbon's `RegisterEventHotKey`, delivered to the application's
 //! event target by the main run loop GPUI runs. It needs no Accessibility
 //! permission, and since macOS 15 a shortcut must hold Control or Command,
-//! which Control+Shift+O does.
+//! which Control+Shift+O and Control+Option+K do. Every registration's
+//! handler sees every press, so a press goes to the sender of its key's id.
 
 use std::ffi::c_void;
 
@@ -53,38 +54,79 @@ unsafe extern "C" {
         out_ref: *mut EventHotKeyRef,
     ) -> OsStatus;
     fn UnregisterEventHotKey(hot_key: EventHotKeyRef) -> OsStatus;
+    fn GetEventParameter(
+        event: EventRef,
+        name: u32,
+        desired_type: u32,
+        actual_type: *mut u32,
+        buffer_size: usize,
+        actual_size: *mut usize,
+        data: *mut c_void,
+    ) -> OsStatus;
 }
 
 /// `kEventClassKeyboard` ('keyb') and `kEventHotKeyPressed`.
 const KEYBOARD: u32 = u32::from_be_bytes(*b"keyb");
 const HOT_KEY_PRESSED: u32 = 5;
-/// `controlKey` and `shiftKey`.
-const MODIFIERS: u32 = 0x1000 | 0x0200;
-/// `kVK_ANSI_O`: a key position, so other keyboard layouts press the key
-/// where O is on a US keyboard.
-const KEY_O: u32 = 0x1F;
+/// `controlKey`, `shiftKey` and `optionKey`.
+const CONTROL: u32 = 0x1000;
+const SHIFT: u32 = 0x0200;
+const OPTION: u32 = 0x0800;
 /// Irori's signature for its hot keys ('iror').
 const SIGNATURE: u32 = u32::from_be_bytes(*b"iror");
+/// `kEventParamDirectObject` ('----') and `typeEventHotKeyID` ('hkid').
+const DIRECT_OBJECT: u32 = u32::from_be_bytes(*b"----");
+const HOT_KEY_ID: u32 = u32::from_be_bytes(*b"hkid");
+/// `eventNotHandledErr`: the next handler gets the press.
+const NOT_HANDLED: OsStatus = -9874;
 
-/// Where a press goes; the handler is a plain C function.
-static PRESSED: Mutex<Option<UnboundedSender<()>>> = Mutex::new(None);
+/// Where each key's presses go, by id; the handler is a plain C function.
+static PRESSED: Mutex<Vec<(u32, UnboundedSender<()>)>> = Mutex::new(Vec::new());
 
-extern "C" fn on_hot_key(_: EventHandlerCallRef, _: EventRef, _: *mut c_void) -> OsStatus {
-    if let Some(tx) = PRESSED.lock().as_ref() {
-        let _ = tx.unbounded_send(());
+extern "C" fn on_hot_key(_: EventHandlerCallRef, event: EventRef, _: *mut c_void) -> OsStatus {
+    let mut id = EventHotKeyId {
+        signature: 0,
+        id: 0,
+    };
+    // SAFETY: reads the pressed key's id into a local of its exact size.
+    let status = unsafe {
+        GetEventParameter(
+            event,
+            DIRECT_OBJECT,
+            HOT_KEY_ID,
+            std::ptr::null_mut(),
+            std::mem::size_of::<EventHotKeyId>(),
+            std::ptr::null_mut(),
+            (&mut id as *mut EventHotKeyId).cast(),
+        )
+    };
+    if status != 0 || id.signature != SIGNATURE {
+        return NOT_HANDLED;
     }
-    0
+    match PRESSED.lock().iter().find(|(key, _)| *key == id.id) {
+        Some((_, tx)) => {
+            let _ = tx.unbounded_send(());
+            0
+        }
+        None => NOT_HANDLED,
+    }
 }
 
 /// The registered shortcut; dropping it gives it back.
 pub(super) struct Registration {
+    id: u32,
     hot_key: EventHotKeyRef,
     handler: EventHandlerRef,
 }
 
-/// Register Control+Shift+O. Call on the main thread.
-pub(super) fn register(pressed: UnboundedSender<()>) -> Result<Registration> {
-    *PRESSED.lock() = Some(pressed);
+/// Register `key`. Call on the main thread.
+pub(super) fn register(key: super::Key, pressed: UnboundedSender<()>) -> Result<Registration> {
+    {
+        let mut senders = PRESSED.lock();
+        senders.retain(|(id, _)| *id != key.id);
+        senders.push((key.id, pressed));
+    }
+    let modifiers = CONTROL | if key.alt { OPTION } else { SHIFT };
     let spec = EventTypeSpec {
         event_class: KEYBOARD,
         event_kind: HOT_KEY_PRESSED,
@@ -105,20 +147,26 @@ pub(super) fn register(pressed: UnboundedSender<()>) -> Result<Registration> {
             &mut handler,
         );
         if status != 0 {
+            PRESSED.lock().retain(|(id, _)| *id != key.id);
             bail!("the event handler wasn't installed ({status})");
         }
         let id = EventHotKeyId {
             signature: SIGNATURE,
-            id: 1,
+            id: key.id,
         };
-        let status = RegisterEventHotKey(KEY_O, MODIFIERS, id, target, 0, &mut hot_key);
+        let status = RegisterEventHotKey(key.mac_key, modifiers, id, target, 0, &mut hot_key);
         if status != 0 {
             RemoveEventHandler(handler);
+            PRESSED.lock().retain(|(id, _)| *id != key.id);
             // -9878, eventHotKeyExistsErr: another program has it.
             bail!("another program has the shortcut ({status})");
         }
     }
-    Ok(Registration { hot_key, handler })
+    Ok(Registration {
+        id: key.id,
+        hot_key,
+        handler,
+    })
 }
 
 impl Drop for Registration {
@@ -129,6 +177,6 @@ impl Drop for Registration {
             UnregisterEventHotKey(self.hot_key);
             RemoveEventHandler(self.handler);
         }
-        PRESSED.lock().take();
+        PRESSED.lock().retain(|(id, _)| *id != self.id);
     }
 }

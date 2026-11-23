@@ -345,9 +345,12 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
-    /// The game's Steam app id for its achievements read from game files,
-    /// when the user chose one; empty finds it in the game's files and
-    /// variables. Per game only. Irori-only.
+    /// The Steam app the game is linked to, when the user chose one, or
+    /// `none` for none: Steam's tags, store details, ProtonDB and the
+    /// achievements read from game files follow it, and umu names the game
+    /// by it. Empty finds it (wikis, the exact title; the game's files for
+    /// achievements). It never changes how the game itself starts. Per game
+    /// only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
     /// The umu database id (`GAMEID`) the game runs with under umu, when the
@@ -909,6 +912,22 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Box art for the ROM library from the LaunchBox Games Database: its
+    /// game list (about 110 MB) is downloaded, and again once a week while
+    /// the ROM library has games. Off by default; the art picker's and the
+    /// palette's download turn it on. Irori-only.
+    #[serde(rename = "iroriLaunchBox", default)]
+    pub launchbox: bool,
+    /// Link games of other stores to the Steam app of their exact title
+    /// (edition words aside, and a release year apart at most), for
+    /// Steam's tags, ProtonDB and screenshots, when no source names their
+    /// Steam app. Off by default. Irori-only.
+    #[serde(rename = "iroriSteamTitleMatch")]
+    pub steam_title_match: bool,
+    /// Steam tags each game keeps, strongest first (5–20); tags far fewer
+    /// players gave than the strongest are left out too. Irori-only.
+    #[serde(rename = "iroriSteamTagLimit")]
+    pub steam_tag_limit: u32,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -976,6 +995,9 @@ impl Default for AppSettings {
             achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
+            launchbox: false,
+            steam_title_match: false,
+            steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
@@ -1163,6 +1185,18 @@ pub enum CoverCaption {
     None,
 }
 
+/// How the library draws box art (`coverFit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverFit {
+    /// Every cover filled to 2:3, cut where its shape differs.
+    #[default]
+    Crop,
+    /// Each picture whole in its own shape (tall, square, wide), standing
+    /// on its row; tall boxes of one row share a height.
+    Whole,
+}
+
 /// How a cover answers the pointer and the keyboard focus (`coverHover`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1176,6 +1210,9 @@ pub enum CoverHover {
 
 /// The art cache's default cap in MiB.
 pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
+/// [`AppSettings::steam_tag_limit`] by default: every tag Steam names.
+pub const DEFAULT_STEAM_TAG_LIMIT: u32 = 20;
 
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1504,6 +1541,9 @@ pub struct UiPrefs {
     /// Copies of one game from several stores are one library entry
     /// (`groupCopies`, on unless turned off).
     pub group_copies: bool,
+    /// A game page's first trailer starts on its own, muted
+    /// (`trailerAutoplay`, off unless turned on).
+    pub trailer_autoplay: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1537,6 +1577,10 @@ pub struct UiPrefs {
     /// Open Big Picture when a controller connects while Irori runs, or
     /// is connected when it starts.
     pub big_picture_on_controller: bool,
+    /// Ask the desktop for a shortcut that opens the quick launcher (the
+    /// command palette in a window of its own) from anywhere
+    /// (`quickLaunchShortcut`); off, `irori --quick-launch` still opens it.
+    pub quick_launch_shortcut: bool,
     /// The controller button held to open Big Picture from anywhere in
     /// Irori (`bigPictureHoldButton`).
     pub big_picture_hold_button: HoldButton,
@@ -1562,12 +1606,20 @@ pub struct UiPrefs {
     pub cover_corners: CoverCorners,
     pub cover_caption: CoverCaption,
     pub cover_hover: CoverHover,
+    pub cover_fit: CoverFit,
     /// The star on favourites' covers (`coverFavourite`, on unless turned
     /// off).
     pub cover_favourite: bool,
     /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
     /// 1 to 3); 0 fits as many as the window allows.
     pub library_focus_columns: u32,
+    /// Store badges stay on every cover (`storeBadgesAlways`); off, they
+    /// show on the cover pointed at or focused.
+    pub store_badges_always: bool,
+    /// Store badges show while the library lists one store too
+    /// (`storeBadgesOneStore`, off unless turned on), where they all say the
+    /// same.
+    pub store_badges_one_store: bool,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1737,6 +1789,7 @@ impl Default for UiPrefs {
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
+            trailer_autoplay: false,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1752,6 +1805,7 @@ impl Default for UiPrefs {
             big_picture_layout: String::new(),
             big_picture_theme: String::new(),
             big_picture_on_controller: false,
+            quick_launch_shortcut: false,
             big_picture_hold_button: HoldButton::Start,
             big_picture_hold_ms: 1000,
             accent_color: String::new(),
@@ -1765,8 +1819,11 @@ impl Default for UiPrefs {
             cover_corners: CoverCorners::Rounded,
             cover_caption: CoverCaption::Full,
             cover_hover: CoverHover::Lift,
+            cover_fit: CoverFit::Crop,
             cover_favourite: true,
             library_focus_columns: 0,
+            store_badges_always: false,
+            store_badges_one_store: false,
         }
     }
 }
@@ -1977,6 +2034,23 @@ mod tests {
         assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
         let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
         assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn covers_are_cropped_unless_drawn_whole() {
+        assert_eq!(UiPrefs::default().cover_fit, CoverFit::Crop);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverFit":"whole"}"#).unwrap();
+        assert_eq!(ui.cover_fit, CoverFit::Whole);
+    }
+
+    #[test]
+    fn store_badges_show_on_hover_and_not_for_one_store_by_default() {
+        let ui = UiPrefs::default();
+        assert!(ui.show_store_badges && !ui.store_badges_always && !ui.store_badges_one_store);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"storeBadgesAlways":true,"storeBadgesOneStore":true}"#)
+                .unwrap();
+        assert!(ui.store_badges_always && ui.store_badges_one_store);
     }
 
     #[test]

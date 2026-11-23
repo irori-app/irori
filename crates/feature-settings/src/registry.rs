@@ -266,6 +266,8 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// LaunchBox's stored game list: its size, and removing it while off.
+    LaunchBox,
     /// A Steam game's launch options in Steam itself.
     SteamLaunchOptions,
     /// One game's umu id: the one used, its source, a database search.
@@ -273,6 +275,8 @@ pub enum PanelKind {
     /// What each controller button does, drawn on the controller, with the
     /// buttons' jobs changeable.
     ButtonMap,
+    /// The quick launcher's shortcut: its keys, or the lines to bind.
+    QuickLaunch,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -874,6 +878,17 @@ const COVER_CORNERS: &[ChoiceOption] = &[
     ),
 ];
 
+const COVER_FIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("crop"),
+        Key("settings.option.cover_fit.crop"),
+    ),
+    opt(
+        ChoiceValue::Str("whole"),
+        Key("settings.option.cover_fit.whole"),
+    ),
+];
+
 const COVER_CAPTION: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("full"),
@@ -1265,6 +1280,11 @@ const REPLAY_CAPTURE: &[ChoiceOption] = &[
     ),
 ];
 
+const NEEDS_STORE_BADGES: &[Condition] = &[when(
+    "iroriUi.showStoreBadges",
+    true,
+    "settings.requires.store_badges",
+)];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -1726,6 +1746,30 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.big_picture_on_controller.help")
     .keywords(&["controller", "gamepad", "console", "big picture", "connect"]),
+    app(
+        "iroriUi.quickLaunchShortcut",
+        "settings.field.quick_launch_shortcut.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.quick_launch_shortcut.help")
+    .keywords(&[
+        "quick launch",
+        "launcher",
+        "palette",
+        "shortcut",
+        "hotkey",
+        "keyboard",
+    ]),
+    app(
+        "panel.quick_launch",
+        "settings.field.panel_quick_launch.label",
+        General,
+        "settings.group.tray_and_window",
+        Panel(PanelKind::QuickLaunch),
+    )
+    .keywords(&["quick launch", "launcher", "shortcut", "hotkey", "command"]),
     app(
         "iroriUi.bigPictureFullscreen",
         "settings.field.big_picture_fullscreen.label",
@@ -2518,6 +2562,26 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["badge", "store", "label"]),
     app(
+        "iroriUi.storeBadgesAlways",
+        "settings.field.ui_store_badges_always.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_always.help")
+    .keywords(&["badge", "store", "logo", "always", "cover", "emulator"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.storeBadgesOneStore",
+        "settings.field.ui_store_badges_one_store.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_one_store.help")
+    .keywords(&["badge", "store", "filter", "one store"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
         "iroriUi.groupCopies",
         "settings.field.ui_group_copies.label",
         Appearance,
@@ -2526,6 +2590,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_group_copies.help")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
+        "iroriUi.trailerAutoplay",
+        "settings.field.ui_trailer_autoplay.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_trailer_autoplay.help")
+    .keywords(&["trailer", "video", "movie", "autoplay", "ffmpeg"]),
     app(
         "iroriUi.coverCategories",
         "settings.field.ui_cover_categories.label",
@@ -2543,6 +2616,17 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(COVER_CORNERS),
     )
     .keywords(&["cover", "corner", "round", "square", "radius"]),
+    app(
+        "iroriUi.coverFit",
+        "settings.field.ui_cover_fit.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_FIT),
+    )
+    .help("settings.field.ui_cover_fit.help")
+    .keywords(&[
+        "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
+    ]),
     app(
         "iroriUi.coverCaption",
         "settings.field.ui_cover_caption.label",
@@ -2730,6 +2814,26 @@ pub static FIELDS: &[FieldSpec] = &[
         "screenshots",
     ]),
     app(
+        "iroriSteamTitleMatch",
+        "settings.field.steam_title_match.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.steam_title_match.help")
+    .keywords(&[
+        "steam", "app id", "link", "match", "tags", "protondb", "metadata",
+    ]),
+    app(
+        "iroriSteamTagLimit",
+        "settings.field.steam_tag_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Text(TextKind::Number { min: 5, max: 20 }),
+    )
+    .help("settings.field.steam_tag_limit.help")
+    .keywords(&["steam", "tags", "limit", "metadata"]),
+    app(
         "panel.igdb",
         "settings.field.panel_igdb.label",
         Advanced,
@@ -2737,6 +2841,31 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::Igdb),
     )
     .keywords(&["igdb", "twitch", "client id", "client secret"]),
+    app(
+        "iroriLaunchBox",
+        "settings.field.launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.launchbox.help")
+    .keywords(&[
+        "launchbox",
+        "box art",
+        "cover",
+        "rom",
+        "emulation",
+        "region",
+        "download",
+    ]),
+    app(
+        "panel.launchbox",
+        "settings.field.panel_launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::LaunchBox),
+    )
+    .keywords(&["launchbox", "game list", "remove", "disk", "space"]),
     app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",
@@ -3769,7 +3898,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.field.steam_app_id.label",
         Launch,
         "settings.group.achievements",
-        Text(TextKind::Digits { max_len: 10 }),
+        // An app id, or `none` for a game Steam doesn't sell.
+        Text(TextKind::Plain),
     )
     .help("settings.field.steam_app_id.help")
     .placeholder(Key("settings.field.steam_app_id.placeholder"))
@@ -3780,6 +3910,9 @@ pub static FIELDS: &[FieldSpec] = &[
         "appid",
         "goldberg",
         "gbe",
+        "link",
+        "tags",
+        "protondb",
     ]),
     game_only(
         "iroriInSunshine",

@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Выбор дня",
   "bigpicture.shelf.stores": "По одной на магазин",
   "bigpicture.hint.undo": "Отменить",
-  "bigpicture.hint.redo": "Повторить"
+  "bigpicture.hint.redo": "Повторить",
+  "bigpicture.action.back_to_game": "Вернуться в игру"
 }

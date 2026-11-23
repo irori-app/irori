@@ -28,7 +28,10 @@ pub mod support;
 mod view;
 mod window;
 
+#[cfg(any(target_os = "macos", windows))]
+pub use hotkey::{GlobalShortcut, QUICK_LAUNCH_LABEL, register_quick_launch};
 pub use notice::show_unlocks;
+pub use window::take_foreground;
 
 #[cfg(test)]
 mod tests;

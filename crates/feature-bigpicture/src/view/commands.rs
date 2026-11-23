@@ -67,6 +67,11 @@ impl BigPictureView {
                     error("bigpicture.error.stop"),
                 )
             }
+            // The desktop answers at once; failures are told there.
+            GameAction::BackToGame => {
+                irori_ui::game_window::back_to_game(id, window, cx);
+                return;
+            }
             // The launch itself ends quietly; nothing to track here.
             GameAction::CancelLaunch => {
                 b.cancel_launch(&id);

@@ -39,6 +39,7 @@ pub fn game_event(
             irori_library::open_categories_dialog(Some(&id), window, cx);
         }
         GamePageEvent::ShowGameMode(mode) => irori_library::show_game_mode(*mode, cx),
+        GamePageEvent::ShowTag(tag) => irori_library::show_tag(tag.to_string(), cx),
     }
 }
 

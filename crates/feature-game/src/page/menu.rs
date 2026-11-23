@@ -400,6 +400,17 @@ pub(super) fn build_menu(
     }
     let i = id.clone();
     menu = menu.item(
+        item("game.menu.links", IconName::ExternalLink)
+            .on_click(move |_, window, cx| crate::links::open_links_dialog(i.clone(), window, cx)),
+    );
+    if !matches!(id.runner, Runner::Steam | Runner::Emulation) {
+        let i = id.clone();
+        menu = menu.item(item("game.menu.steam_link", IconName::Link).on_click(
+            move |_, window, cx| crate::steam_match::open_steam_link_dialog(i.clone(), window, cx),
+        ));
+    }
+    let i = id.clone();
+    menu = menu.item(
         item(
             if hidden {
                 "game.menu.show_in_library"
@@ -443,6 +454,20 @@ pub(super) fn build_menu(
         menu = menu.item(item("game.menu.store_page", IconName::Store).on_click(
             move |_, window, cx| irori_ui::hooks::open_store_page(runner, url.clone(), window, cx),
         ));
+    }
+    if let Some(page) = page
+        .as_ref()
+        .and_then(|p| p.upgrade())
+        .filter(|p| p.read(cx).has_trailer(cx))
+    {
+        let page = page.downgrade();
+        menu = menu.item(
+            PopupMenuItem::new(t("game.menu.play_trailer"))
+                .icon(IconName::Clapperboard)
+                .on_click(move |_, _, cx| {
+                    let _ = page.update(cx, |p, cx| p.toggle_trailer(cx));
+                }),
+        );
     }
     if game.is_installed && client {
         menu = menu.separator();

@@ -117,6 +117,47 @@ pub fn grid_metrics_for(
     }
 }
 
+/// Height over width from which a picture counts as a tall box: boxes of a
+/// row share one height. Squarer art (handheld and disc boxes) and wide art
+/// keep their own.
+pub const TALL_RATIO: f32 = 1.2;
+
+/// Width and height in rem of each cover drawn whole in a row of cells
+/// `tile_rem` wide and [`COVER_RATIO`] tall, from each picture's height over
+/// width (`None` while unknown: the whole cell). Each picture keeps its shape
+/// inside its cell; the tall ones share the lowest of their heights, so a row
+/// of boxes stands even instead of stepping by a few pixels.
+pub fn whole_sizes(aspects: &[Option<f32>], tile_rem: f32) -> Vec<(f32, f32)> {
+    let cell_h = tile_rem * COVER_RATIO;
+    let natural = |ratio: f32| {
+        if ratio > COVER_RATIO {
+            (cell_h / ratio, cell_h)
+        } else {
+            (tile_rem, tile_rem * ratio)
+        }
+    };
+    let ratios: Vec<Option<f32>> = aspects
+        .iter()
+        .map(|a| a.filter(|r| r.is_finite() && *r > 0.0))
+        .collect();
+    let shared = ratios
+        .iter()
+        .flatten()
+        .filter(|r| **r >= TALL_RATIO)
+        .map(|r| natural(*r).1)
+        .fold(None, |low: Option<f32>, h| {
+            Some(low.map_or(h, |l| l.min(h)))
+        });
+    ratios
+        .iter()
+        .map(|ratio| match (ratio, shared) {
+            (None, _) => (tile_rem, cell_h),
+            (Some(r), Some(h)) if *r >= TALL_RATIO => (h / r, h),
+            (Some(r), _) => natural(*r),
+        })
+        .collect()
+}
+
 /// Screens of covers the library keeps decoded: the one shown plus one above
 /// and one below, so scrolling back a little never reloads art.
 const SCREENS_CACHED: usize = 3;
@@ -278,6 +319,36 @@ mod tests {
         // Preferred width is clamped to the slider range.
         let m = grid_metrics(100.0, 2.0);
         assert!(m.tile_rem >= MIN_TILE_REM);
+    }
+
+    #[test]
+    fn whole_covers_keep_their_shape_and_tall_boxes_share_a_height() {
+        let close = |a: (f32, f32), b: (f32, f32)| {
+            assert!(
+                (a.0 - b.0).abs() < 1e-4 && (a.1 - b.1).abs() < 1e-4,
+                "{a:?} {b:?}"
+            );
+        };
+        // A 2:3 box fills its cell; unknown art keeps the whole cell.
+        let sizes = whole_sizes(&[Some(1.5), None], 10.0);
+        close(sizes[0], (10.0, 15.0));
+        close(sizes[1], (10.0, 15.0));
+        // A DVD box (1.4) and a 2:3 one stand at the DVD's height.
+        let sizes = whole_sizes(&[Some(1.5), Some(1.4)], 10.0);
+        close(sizes[0], (14.0 / 1.5, 14.0));
+        close(sizes[1], (10.0, 14.0));
+        // Square and wide art keep their own height, full width.
+        let sizes = whole_sizes(&[Some(1.0), Some(0.5), Some(1.4)], 10.0);
+        close(sizes[0], (10.0, 10.0));
+        close(sizes[1], (10.0, 5.0));
+        close(sizes[2], (10.0, 14.0));
+        // Taller than the cell: as high as it, narrower.
+        let sizes = whole_sizes(&[Some(2.0)], 10.0);
+        close(sizes[0], (7.5, 15.0));
+        // Nothing grows past its cell.
+        for (w, h) in whole_sizes(&[Some(1.3), Some(1.7), Some(0.2), Some(f32::NAN)], 8.0) {
+            assert!(w <= 8.0 + 1e-4 && h <= 12.0 + 1e-4);
+        }
     }
 
     #[test]

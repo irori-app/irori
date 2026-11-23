@@ -410,6 +410,7 @@ impl Backend {
         let user = self.userdata.snapshot();
         let tag_language =
             irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
+        let tag_limit = self.settings.app().steam_tag_limit;
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
             .values()
@@ -438,7 +439,9 @@ impl Backend {
                     }
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
-                    self.steam_tags.complete(&mut g, tag_language);
+                    let app = self.steam_links.linked(&g).app_id();
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
@@ -448,7 +451,9 @@ impl Backend {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
-                    self.steam_tags.complete(&mut g, tag_language);
+                    let app = self.steam_links.linked(&g).app_id();
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {
@@ -463,12 +468,21 @@ impl Backend {
         games.retain(|g| shown.shows(g.runner()));
         // Learn missing release dates and scores in the background; the
         // library is rebuilt once they arrive.
+        self.seed_steam_links(&games);
         if self.is_online() {
             let (b, list) = (self.clone(), games.clone());
             self.spawn(async move {
                 let facts = b.facts.refresh(&list).await;
-                let tags = b.steam_tags.refresh(&list, tag_language).await;
+                let apps: Vec<u32> = list
+                    .iter()
+                    .filter_map(|g| b.steam_links.linked(g).app_id())
+                    .collect();
+                let tags = b.steam_tags.refresh(&apps, tag_language).await;
                 if facts || tags {
+                    b.rebuild_library();
+                }
+                // After the tags: a title found here brings its own.
+                if b.match_steam_titles(&list).await {
                     b.rebuild_library();
                 }
             });

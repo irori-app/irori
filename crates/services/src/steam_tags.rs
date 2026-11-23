@@ -1,5 +1,10 @@
-//! Steam's user tags for Steam games ("Puzzle", "Co-op", "Great
-//! Soundtrack"), which the library filters and searches by (`tag:`).
+//! Steam's user tags ("Puzzle", "Co-op", "Great Soundtrack") for Steam
+//! games and games linked to a Steam app (`steam_link`), which the library
+//! filters and searches by (`tag:`), and the game page shows.
+//!
+//! A game keeps its strongest tags only: at most `iroriSteamTagLimit` (5–20),
+//! and none that fewer than a quarter as many players gave as the
+//! strongest ([`kept`]), so a stray vote doesn't tag a game.
 //!
 //! Each app's tag ids and the tags' names come from two keyless store
 //! endpoints and are kept in `<cache>/steam-tags.json`: an app's tags for a
@@ -13,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use irori_core::{GameInfo, Paths, Runner, json_store, util};
+use irori_core::{GameInfo, Paths, json_store, util};
 use irori_steam_api::Client;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -25,6 +30,10 @@ const NAMES_FRESH_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 #[serde(default)]
 struct AppTags {
     ids: Vec<u32>,
+    /// The players who gave each of `ids`; empty in answers kept before
+    /// votes were (and every tag then counts).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    votes: Vec<u64>,
     /// Unix time of the answer.
     fetched: u64,
 }
@@ -54,13 +63,6 @@ fn file() -> PathBuf {
     Paths::get().cache.join("steam-tags.json")
 }
 
-/// The app id of a Steam game.
-fn app_id(game: &GameInfo) -> Option<u32> {
-    (game.runner() == Runner::Steam)
-        .then(|| game.app_name.parse().ok())
-        .flatten()
-}
-
 impl SteamTagsService {
     pub fn load() -> Self {
         Self {
@@ -69,10 +71,11 @@ impl SteamTagsService {
         }
     }
 
-    /// Fill in a Steam game's tags, named in `language`, from what is
-    /// known. Tags without a name in that language fall back to English.
-    pub fn complete(&self, game: &mut GameInfo, language: &str) {
-        let Some(id) = app_id(game) else {
+    /// Fill in the tags of a game whose Steam app is `app`, named in
+    /// `language`, from what is known: at most `limit` (see [`kept`]). Tags
+    /// without a name in that language fall back to English.
+    pub fn complete(&self, game: &mut GameInfo, language: &str, app: Option<u32>, limit: u32) {
+        let Some(id) = app else {
             return;
         };
         let cache = self.cache.read();
@@ -81,8 +84,7 @@ impl SteamTagsService {
         };
         let local = cache.names.get(language).map(|n| &n.names);
         let english = cache.names.get("english").map(|n| &n.names);
-        game.store_tags = app
-            .ids
+        game.store_tags = kept(&app.ids, &app.votes, limit)
             .iter()
             .filter_map(|tag| {
                 local
@@ -93,12 +95,12 @@ impl SteamTagsService {
             .collect();
     }
 
-    /// Steam games without a fresh answer.
-    fn missing(&self, games: &[std::sync::Arc<GameInfo>], now: u64) -> Vec<u32> {
+    /// Apps without a fresh answer.
+    fn missing(&self, apps: &[u32], now: u64) -> Vec<u32> {
         let cache = self.cache.read();
-        let mut ids: Vec<u32> = games
+        let mut ids: Vec<u32> = apps
             .iter()
-            .filter_map(|g| app_id(g))
+            .copied()
             .filter(|id| {
                 cache
                     .apps
@@ -119,19 +121,19 @@ impl SteamTagsService {
             .is_none_or(|n| now.saturating_sub(n.fetched) >= NAMES_FRESH_FOR.as_secs())
     }
 
-    /// Ask Steam for the tags of games without a fresh answer, and for the
-    /// names in `language` (and English, the fallback) when they are old.
-    /// Returns whether anything was learned. One round runs at a time.
-    pub async fn refresh(&self, games: &[std::sync::Arc<GameInfo>], language: &str) -> bool {
+    /// Ask Steam for the tags of the library's Steam `apps` without a fresh
+    /// answer, and for the names in `language` (and English, the fallback)
+    /// when they are old. Returns whether anything was learned. One round
+    /// runs at a time.
+    pub async fn refresh(&self, apps: &[u32], language: &str) -> bool {
         let now = util::unix_now();
-        let missing = self.missing(games, now);
+        let missing = self.missing(apps, now);
         let mut languages = vec![language.to_owned()];
         if language != "english" {
             languages.push("english".into());
         }
         languages.retain(|l| self.names_stale(l, now));
-        let has_steam = games.iter().any(|g| app_id(g).is_some());
-        if !has_steam
+        if apps.is_empty()
             || (missing.is_empty() && languages.is_empty())
             || self.busy.swap(true, Ordering::AcqRel)
         {
@@ -182,8 +184,15 @@ impl SteamTagsService {
                     // An app the store doesn't know is an answer too, so it
                     // isn't asked for again before the month is out.
                     for id in missing {
-                        let ids = found.get(id).cloned().unwrap_or_default();
-                        cache.apps.insert(*id, AppTags { ids, fetched: now });
+                        let tags = found.get(id).map(Vec::as_slice).unwrap_or_default();
+                        cache.apps.insert(
+                            *id,
+                            AppTags {
+                                ids: tags.iter().map(|t| t.id).collect(),
+                                votes: tags.iter().map(|t| t.votes).collect(),
+                                fetched: now,
+                            },
+                        );
                     }
                     learned = true;
                 }
@@ -200,6 +209,7 @@ impl SteamTagsService {
             app,
             AppTags {
                 ids: ids.to_vec(),
+                votes: Vec::new(),
                 fetched: util::unix_now(),
             },
         );
@@ -213,10 +223,34 @@ impl SteamTagsService {
     }
 }
 
+/// Share of the strongest tag's votes a tag needs to be kept, in percent.
+const VOTE_FLOOR_PERCENT: u64 = 25;
+/// The fewest and most tags a game keeps (`iroriSteamTagLimit`).
+pub const TAG_LIMITS: std::ops::RangeInclusive<u32> = 5..=20;
+
+/// The tags of `ids` (strongest first) a game keeps: at most `limit`
+/// (held to [`TAG_LIMITS`]), and, when `votes` are known, only those with
+/// at least a quarter of the strongest tag's votes.
+pub(crate) fn kept(ids: &[u32], votes: &[u64], limit: u32) -> Vec<u32> {
+    let limit = limit.clamp(*TAG_LIMITS.start(), *TAG_LIMITS.end()) as usize;
+    let top = votes.iter().copied().max().unwrap_or(0);
+    ids.iter()
+        .enumerate()
+        .filter(|(i, _)| {
+            top == 0
+                || votes
+                    .get(*i)
+                    .is_none_or(|v| v * 100 >= top * VOTE_FLOOR_PERCENT)
+        })
+        .map(|(_, id)| *id)
+        .take(limit)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use irori_core::Runner;
 
     fn steam(app: &str) -> GameInfo {
         GameInfo {
@@ -250,40 +284,46 @@ mod tests {
             },
         );
         let mut game = steam("620");
-        tags.complete(&mut game, "german");
+        tags.complete(&mut game, "german", Some(620), 20);
         assert_eq!(game.store_tags, ["Co-op", "Rätsel", "Funny"]);
 
+        // A game of another store gets the tags of the app it is linked to.
         let mut other = GameInfo {
             runner: Some(Runner::Gog),
-            app_name: "620".into(),
+            app_name: "1".into(),
             ..Default::default()
         };
-        tags.complete(&mut other, "english");
-        assert!(other.store_tags.is_empty(), "only Steam games");
+        tags.complete(&mut other, "english", None, 20);
+        assert!(other.store_tags.is_empty(), "not linked");
+        tags.complete(&mut other, "english", Some(620), 20);
+        assert_eq!(other.store_tags, ["Co-op", "Puzzle", "Funny"]);
     }
 
     #[test]
-    fn only_steam_games_without_a_fresh_answer_are_asked_for() {
+    fn only_apps_without_a_fresh_answer_are_asked_for() {
         let tags = service();
         tags.seed(620, &[1], "english", &[(1, "Puzzle")]);
         let now = util::unix_now();
-        let games = vec![
-            Arc::new(steam("620")),
-            Arc::new(steam("400")),
-            Arc::new(steam("400")),
-            Arc::new(steam("not a number")),
-            Arc::new(GameInfo {
-                runner: Some(Runner::Gog),
-                app_name: "1".into(),
-                ..Default::default()
-            }),
-        ];
-        assert_eq!(tags.missing(&games, now), [400]);
+        let apps = [620, 400, 400];
+        assert_eq!(tags.missing(&apps, now), [400]);
         assert_eq!(
-            tags.missing(&games, now + APP_FRESH_FOR.as_secs()),
+            tags.missing(&apps, now + APP_FRESH_FOR.as_secs()),
             [400, 620]
         );
         assert!(!tags.names_stale("english", now));
         assert!(tags.names_stale("german", now));
+    }
+
+    #[test]
+    fn games_keep_their_strongest_tags_only() {
+        let ids: Vec<u32> = (1..=30).collect();
+        // Without votes, the limit alone, held to 5–20.
+        assert_eq!(kept(&ids, &[], 8), (1..=8).collect::<Vec<_>>());
+        assert_eq!(kept(&ids, &[], 0).len(), 5);
+        assert_eq!(kept(&ids, &[], 99).len(), 20);
+        // With votes, tags under a quarter of the strongest's go.
+        let votes = [400, 300, 100, 99, 250];
+        assert_eq!(kept(&ids[..5], &votes, 20), [1, 2, 3, 5]);
+        assert_eq!(kept(&ids[..5], &votes, 5), [1, 2, 3, 5]);
     }
 }

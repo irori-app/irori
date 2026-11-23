@@ -36,6 +36,7 @@ pub mod journal;
 mod library;
 pub mod ludusavi;
 pub mod mangohud;
+pub mod media;
 pub mod mods;
 mod network;
 pub mod optiscaler;
@@ -56,6 +57,7 @@ pub mod settings;
 mod settings_migration;
 pub mod smart_categories;
 pub mod status;
+pub mod steam_link;
 mod steam_tags;
 pub mod storage;
 mod store_facts;
@@ -93,6 +95,7 @@ pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
+pub use irori_steam_api::StoreHit as SteamHit;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
@@ -101,7 +104,7 @@ pub use optiscaler::{OptiscalerInstallParams, OptiscalerStatus};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};
-pub use replay::{Recorder, RecorderInfo, ReplayInfo, ShortcutState};
+pub use replay::{QuickLaunchShortcut, Recorder, RecorderInfo, ReplayInfo, ShortcutState};
 pub use reshade::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
@@ -111,7 +114,9 @@ pub use smart_categories::{
     CategoryIndex, CategoryLook, CategoryRef, Condition, HltbTimes, Match, Rule, SmartCategory,
 };
 pub use status::StatusRegistry;
+pub use steam_link::{STEAM_NONE, SteamLink, TitleLinkReport};
 pub use storage::{CleanupKind, StorageReport};
+pub use store_facts::DetailsReport;
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };
@@ -143,6 +148,7 @@ pub struct Inner {
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
     steam_tags: steam_tags::SteamTagsService,
+    steam_links: steam_link::SteamLinkService,
     hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
@@ -261,6 +267,7 @@ impl Backend {
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
             steam_tags: steam_tags::SteamTagsService::load(),
+            steam_links: steam_link::SteamLinkService::load(),
             hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
@@ -431,6 +438,7 @@ impl Backend {
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
+            let mut tag_limit = b.settings.app().steam_tag_limit;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -439,6 +447,7 @@ impl Backend {
                         while rx.try_recv().is_ok() {}
                         b.rebuild_library();
                     }
+                    Ok(Event::GameSettingsChanged(id)) => b.follow_steam_link_setting(&id),
                     Ok(Event::WineVersionsChanged) => {
                         let b = b.clone();
                         b.clone()
@@ -455,10 +464,15 @@ impl Backend {
                                 b.bus.emit(Event::AccountChanged(runner));
                             }
                         }
-                        if app.ui.stores != shown || now != on || app.ui.group_copies != copies {
+                        if app.ui.stores != shown
+                            || now != on
+                            || app.ui.group_copies != copies
+                            || app.steam_tag_limit != tag_limit
+                        {
                             shown = app.ui.stores;
                             on = now;
                             copies = app.ui.group_copies;
+                            tag_limit = app.steam_tag_limit;
                             b.rebuild_library();
                         }
                     }

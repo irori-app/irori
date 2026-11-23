@@ -595,6 +595,8 @@ pub enum GameAction {
     /// Play with verbose Wine/Proton logs for this session, showing the log.
     PlayWithLog,
     Stop,
+    /// Bring the running game's window to the front.
+    BackToGame,
     /// Stop the launch being prepared; the game doesn't start.
     CancelLaunch,
     Install,
@@ -610,6 +612,7 @@ impl GameAction {
             GameAction::Play => "bigpicture.action.play",
             GameAction::PlayWithLog => "bigpicture.action.play_with_log",
             GameAction::Stop => "bigpicture.action.stop",
+            GameAction::BackToGame => "bigpicture.action.back_to_game",
             GameAction::CancelLaunch => "bigpicture.action.cancel_launch",
             GameAction::Install => "bigpicture.action.install",
             GameAction::CancelDownload => "bigpicture.action.cancel_download",
@@ -623,6 +626,7 @@ impl GameAction {
             GameAction::Play => IconName::Play,
             GameAction::PlayWithLog => IconName::ScrollText,
             GameAction::Stop => IconName::CircleStop,
+            GameAction::BackToGame => IconName::AppWindow,
             GameAction::CancelLaunch => IconName::X,
             GameAction::Install => IconName::Download,
             GameAction::CancelDownload => IconName::X,
@@ -674,6 +678,7 @@ impl PageRow {
             PageRow::Action(GameAction::Play) => "bp-row-play",
             PageRow::Action(GameAction::PlayWithLog) => "bp-row-play-with-log",
             PageRow::Action(GameAction::Stop) => "bp-row-stop",
+            PageRow::Action(GameAction::BackToGame) => "bp-row-back-to-game",
             PageRow::Action(GameAction::CancelLaunch) => "bp-row-cancel-launch",
             PageRow::Action(GameAction::Install) => "bp-row-install",
             PageRow::Action(GameAction::CancelDownload) => "bp-row-cancel-download",
@@ -720,6 +725,9 @@ impl PageRow {
 pub fn page_rows(state: GameState, platforms: usize, log_shown: bool) -> Vec<PageRow> {
     let main = main_action(state);
     let mut out = vec![PageRow::Action(main)];
+    if state.playing {
+        out.push(PageRow::Action(GameAction::BackToGame));
+    }
     if main == GameAction::Play {
         out.push(PageRow::Action(GameAction::PlayWithLog));
     }
@@ -1468,9 +1476,13 @@ mod tests {
             ..installed
         };
         assert_eq!(
-            page_rows(playing, 1, false)[0],
-            PageRow::Action(GameAction::Stop)
+            page_rows(playing, 1, false)[..2],
+            [
+                PageRow::Action(GameAction::Stop),
+                PageRow::Action(GameAction::BackToGame)
+            ]
         );
+        assert!(!page_rows(installed, 1, false).contains(&PageRow::Action(GameAction::BackToGame)));
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::PlayWithLog)));
         assert!(page_rows(playing, 1, false).contains(&PageRow::Log));
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::Uninstall)));

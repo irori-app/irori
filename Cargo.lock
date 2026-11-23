@@ -5196,6 +5196,7 @@ dependencies = [
  "irori-core",
  "irori-depot",
  "irori-engines",
+ "irori-extras",
  "irori-retroachievements-api",
  "irori-secrets",
  "notify",
@@ -5209,6 +5210,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zip",
 ]
 
 [[package]]
@@ -5308,6 +5310,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "plist",
+ "quick-xml 0.42.0",
  "regex",
  "reqwest",
  "rusqlite",
@@ -5322,6 +5325,7 @@ dependencies = [
  "tracing",
  "url",
  "windows-registry 0.6.1",
+ "zip",
 ]
 
 [[package]]
@@ -5816,6 +5820,7 @@ dependencies = [
  "windows-registry 0.6.1",
  "windows-sys 0.61.2",
  "x11rb",
+ "zip",
 ]
 
 [[package]]
@@ -5827,6 +5832,7 @@ dependencies = [
  "gpui-pre",
  "irori-bigpicture",
  "irori-core",
+ "irori-emulation",
  "irori-epic",
  "irori-extras",
  "irori-reshade",

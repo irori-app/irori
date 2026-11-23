@@ -739,8 +739,17 @@ impl UserDataService {
             if let Some(old) = d.overrides.get(&id.key()) {
                 o.copy_of = old.copy_of.clone();
                 o.default_copy = old.default_copy;
+                o.links = old.links.clone();
             }
             put_overrides(d, &id.key(), o);
+        });
+    }
+
+    /// Keep `links` with `id` (its "Links" section), in their order; an
+    /// empty list removes them.
+    pub fn set_links(&self, id: &GameId, links: Vec<irori_core::GameLink>) {
+        self.update(Some(id), |d| {
+            edit_overrides(d, &id.key(), |o| o.links = links)
         });
     }
 

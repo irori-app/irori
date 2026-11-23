@@ -700,3 +700,38 @@ fn the_replay_panel_shows_each_way_to_get_the_shortcuts(cx: &mut TestAppContext)
         )
     );
 }
+
+#[gpui_kit::test]
+fn the_quick_launcher_row_shows_each_way_to_open_it(cx: &mut TestAppContext) {
+    use irori_services::QuickLaunchShortcut;
+    use irori_services::replay::bindings::{Binding, Compositor, Program};
+
+    use crate::quick_launch::QuickLaunchPanel;
+
+    let (handle, panel) = open(cx, |_, cx| QuickLaunchPanel::new(cx));
+    let sway = Binding::quick_launch(Some(Compositor::Sway), &Program(vec!["irori".into()]));
+    for state in [
+        QuickLaunchShortcut::Off,
+        QuickLaunchShortcut::Keys(Some("Ctrl+Alt+K".into())),
+        QuickLaunchShortcut::Keys(Some(String::new())),
+        QuickLaunchShortcut::Keys(None),
+        QuickLaunchShortcut::Commands(sway.clone()),
+        QuickLaunchShortcut::Unavailable,
+    ] {
+        cx.update_window(handle, |_, window, cx| {
+            panel.update(cx, |p, cx| p.set_state(state, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+    // Copy puts Sway's exact line on the clipboard.
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.copy(sway.lines.clone(), window, cx))
+    })
+    .unwrap();
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|c| c.text()),
+        Some("bindsym Ctrl+Mod1+k exec irori --quick-launch".to_string())
+    );
+}

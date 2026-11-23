@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Dagens val",
   "bigpicture.shelf.stores": "En per butik",
   "bigpicture.hint.undo": "Ångra",
-  "bigpicture.hint.redo": "Gör om"
+  "bigpicture.hint.redo": "Gör om",
+  "bigpicture.action.back_to_game": "Tillbaka till spelet"
 }

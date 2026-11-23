@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use irori_core::{GameInfo, Runner};
+use irori_core::{GameInfo, InstallPlatform, Runner};
 use irori_extras::anticheat::{self, AntiCheatInfo, AntiCheatQuery, AntiCheatStatus};
 use irori_extras::known_fixes::{self, KnownFix};
 use irori_extras::wiki::{self, GameScore, ProtonDbTier, SteamDeckCompat, WikiInfo};
@@ -13,9 +13,11 @@ use irori_services::Backend;
 
 use irori_ui::i18n::t_args;
 
+use irori_extras::wiki::pcgamingwiki::PcFacts;
+
 use crate::hooks::{
-    AnticheatReport, AnticheatStatus, CompatibilityInfo, HowLongToBeat, ReviewScore,
-    SteamDeckStatus,
+    AnticheatReport, AnticheatStatus, CompatibilityInfo, HowLongToBeat, PcFeature, PcFeatures,
+    ReviewScore, SteamDeckStatus,
 };
 
 /// Gather every report for a game. Sources fail independently; the result
@@ -38,6 +40,7 @@ pub(crate) async fn load(backend: Backend, game: Arc<GameInfo>) -> Result<Compat
         anticheat::lookup(&query).await
     };
     let fix = known_fixes::lookup(game.runner(), &game.app_name).await;
+    let saves_for = save_platforms(&game);
     if let Err(e) = &wiki
         && ac.is_none()
         && fix.is_none()
@@ -49,7 +52,55 @@ pub(crate) async fn load(backend: Backend, game: Arc<GameInfo>) -> Result<Compat
         wiki.ok().as_deref(),
         ac.as_ref(),
         fix.as_ref(),
+        saves_for,
     ))
+}
+
+/// How PCGamingWiki names the platform whose save folder this game uses.
+fn save_platforms(game: &GameInfo) -> &'static [&'static str] {
+    let platform = game
+        .install
+        .as_ref()
+        .filter(|_| game.is_installed)
+        .map(|i| i.platform);
+    match platform {
+        Some(InstallPlatform::Linux) => &["Linux"],
+        Some(InstallPlatform::Mac) => &["OS X", "macOS", "Mac OS"],
+        _ => &["Windows"],
+    }
+}
+
+/// The PC facts the panel shows, with the save folder of `platforms` (else
+/// the first one listed that isn't Steam's cloud).
+fn pc_features(facts: &PcFacts, platforms: &[&str]) -> Option<PcFeatures> {
+    let rated = [
+        (PcFeature::Ultrawide, facts.ultrawide),
+        (PcFeature::Uhd4k, facts.uhd_4k),
+        (PcFeature::Hdr, facts.hdr),
+        (PcFeature::HighFps, facts.high_fps),
+        (PcFeature::Controller, facts.controller),
+    ];
+    let save_folder = facts
+        .saves
+        .iter()
+        .find(|s| platforms.iter().any(|p| s.platform.eq_ignore_ascii_case(p)))
+        .or_else(|| {
+            facts
+                .saves
+                .iter()
+                .find(|s| !s.platform.eq_ignore_ascii_case("steam"))
+        })
+        .map(|s| s.path.clone());
+    let pc = PcFeatures {
+        features: rated
+            .into_iter()
+            .filter_map(|(f, s)| Some((f, s?)))
+            .collect(),
+        engines: facts.engines.clone(),
+        save_folder,
+        fixes: facts.fixes,
+    };
+    (!pc.is_empty()).then_some(pc)
 }
 
 fn score(source: &str, s: &GameScore, url: impl Fn(&str) -> String) -> Option<ReviewScore> {
@@ -93,6 +144,7 @@ pub(crate) fn assemble(
     wiki: Option<&WikiInfo>,
     ac: Option<&AntiCheatInfo>,
     fix: Option<&KnownFix>,
+    save_platforms: &[&str],
 ) -> CompatibilityInfo {
     let mut info = CompatibilityInfo::default();
     if let Some(w) = wiki {
@@ -124,6 +176,7 @@ pub(crate) fn assemble(
             if p.page_id > 0 {
                 info.pcgamingwiki_url = Some(p.page_url());
             }
+            info.pc = pc_features(&p.pc, save_platforms);
             info.scores = [
                 score("Metacritic", &p.metacritic, |id| {
                     format!("https://www.metacritic.com/game/pc/{id}")
@@ -241,7 +294,7 @@ mod tests {
             wiki_link: Some("https://example.org/wiki".into()),
             ..Default::default()
         };
-        let info = assemble("Dota 2", Some(&wiki), Some(&ac), Some(&fix));
+        let info = assemble("Dota 2", Some(&wiki), Some(&ac), Some(&fix), &["Windows"]);
         assert_eq!(info.protondb_tier.as_deref(), Some("Gold"));
         assert_eq!(
             info.protondb_url.as_deref(),
@@ -259,15 +312,62 @@ mod tests {
         assert_eq!(report.reference.as_deref(), Some("https://example.org/ref"));
         assert_eq!(info.known_fixes, vec!["Winetricks: vcrun2019".to_string()]);
         assert_eq!(info.wiki_link.as_deref(), Some("https://example.org/wiki"));
-        assert!(assemble("x", None, None, None).is_empty());
+        assert!(assemble("x", None, None, None, &["Windows"]).is_empty());
     }
 
     #[test]
     fn protondb_search_without_steam_id() {
-        let info = assemble("Hades: Deluxe", Some(&WikiInfo::default()), None, None);
+        let info = assemble(
+            "Hades: Deluxe",
+            Some(&WikiInfo::default()),
+            None,
+            None,
+            &["Windows"],
+        );
         assert_eq!(
             info.protondb_url.as_deref(),
             Some("https://www.protondb.com/search?q=Hades+Deluxe")
         );
+    }
+
+    #[test]
+    fn pc_facts_show_the_platforms_save_folder() {
+        use irori_extras::wiki::pcgamingwiki::{SaveFolder, Support};
+        let facts = PcFacts {
+            hdr: Some(Support::Full),
+            controller: Some(Support::Limited),
+            saves: vec![
+                SaveFolder {
+                    platform: "Steam".into(),
+                    path: "<Steam-folder>".into(),
+                },
+                SaveFolder {
+                    platform: "Windows".into(),
+                    path: "%APPDATA%\\Game".into(),
+                },
+                SaveFolder {
+                    platform: "Linux".into(),
+                    path: "~/.local/share/Game".into(),
+                },
+            ],
+            fixes: 2,
+            ..Default::default()
+        };
+        let pc = pc_features(&facts, &["Linux"]).unwrap();
+        assert_eq!(pc.save_folder.as_deref(), Some("~/.local/share/Game"));
+        assert_eq!(
+            pc.features,
+            [
+                (PcFeature::Hdr, Support::Full),
+                (PcFeature::Controller, Support::Limited)
+            ]
+        );
+        let mac = pc_features(&facts, &["OS X"]).unwrap();
+        assert_eq!(
+            mac.save_folder.as_deref(),
+            Some("%APPDATA%\\Game"),
+            "not Steam's"
+        );
+        assert_eq!(pc_features(&PcFacts::default(), &["Windows"]), None);
     }
 }
