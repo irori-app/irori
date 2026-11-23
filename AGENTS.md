@@ -139,6 +139,8 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   Irori registers no such scheme; the user points one at it (`xdg-mime default`).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
+- `--gpu-helper` is internal too: on Windows, started elevated, it hides a graphics card
+  from a game for its session (`irori_services::gpu_hide`) and does nothing else.
 
 Environment variables:
 
@@ -1093,6 +1095,16 @@ commands without a window.
   user changed in Windows meanwhile is theirs. The registry sits behind
   `GpuPreferenceRegistry`, so the rules are tested on every system. The settings show
   it in place of `iroriGpu`, which stays Linux only.
+- **Hiding a graphics card** (`gpu_hide/`, per-game `iroriHideGpu`, a PnP instance id,
+  Windows only): the card is disabled for the session by an elevated copy of Irori
+  (`irori --gpu-helper`, handled first in `main.rs`, started through `ShellExecuteExW`
+  `runas`, so Windows' own prompt asks) that enables it again when Irori sets its
+  release event or Irori's process ends. `gpu_hide::plan` refuses a card showing a
+  display, one whose displays Windows doesn't name, the last enabled card and a card
+  the user disabled. `HiddenGpu` enables it at the session's end and whenever a launch
+  path drops it; `state/gpu-hidden.json` is written before the card is touched and
+  `recover_hidden_gpus` enables what is left at the next start. The devices sit behind
+  `GpuDevices`, so the rules and the recovery are tested on every system.
 - **Power** (`power/`, Big Picture's quick menu): `Backend::power_actions` lists what
   the system allows (logind's `Can*` answers on Linux, `IsPwrSuspendAllowed` for sleep
   on Windows, everything on macOS) and `Backend::power` takes one: logind on the system

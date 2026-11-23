@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Ви не в мережі. Завантаження продовжаться, коли з'єднання відновиться.",
   "shell.notice.logins_locked": "Не вдалося відкрити збережені входи",
   "shell.notice.logins_locked_message": "Розблокуйте системну в’язку ключів і перезапустіть Irori або увійдіть у крамниці знову.",
+  "shell.notice.gpu_still_hidden": "Відеокарта досі вимкнена",
+  "shell.notice.gpu_still_hidden_message": "Irori приховав {cards} від гри й не зміг увімкнути її знову. Увімкніть її в диспетчері пристроїв або перезапустіть Windows.",
   "shell.link_launch.title": "Запустити {title}?",
   "shell.link_launch.body": "Посилання із сайту або іншої програми хоче запустити цю гру.",
   "shell.link_launch.confirm": "Грати",

@@ -30,6 +30,7 @@ mod files;
 mod follow;
 pub mod game_window;
 mod games;
+pub mod gpu_hide;
 pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
@@ -490,6 +491,13 @@ impl Backend {
                 }
             }
         });
+
+        // A graphics card a killed session left disabled comes back
+        // (`gpu_hide`).
+        if interactive && !self.isolated && gpu_hide::system_devices().is_some() {
+            let b = self.clone();
+            self.spawn(async move { b.recover_hidden_gpus().await });
+        }
 
         // Windows' graphics preference follows a changed or cleared setting
         // at once, not only at the game's next launch (`gpu_preference`).

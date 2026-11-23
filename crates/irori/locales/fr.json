@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Vous êtes hors ligne. Les téléchargements reprendront dès le retour de la connexion.",
   "shell.notice.logins_locked": "Impossible d’ouvrir vos connexions enregistrées",
   "shell.notice.logins_locked_message": "Déverrouillez le trousseau du système et redémarrez Irori, ou reconnectez-vous à vos boutiques.",
+  "shell.notice.gpu_still_hidden": "Une carte graphique est toujours désactivée",
+  "shell.notice.gpu_still_hidden_message": "Irori a masqué {cards} à un jeu et n’a pas pu la réactiver. Réactivez-la dans le Gestionnaire de périphériques ou redémarrez Windows.",
   "shell.link_launch.title": "Lancer {title} ?",
   "shell.link_launch.body": "Un lien provenant d’un site web ou d’un autre programme veut lancer ce jeu.",
   "shell.link_launch.confirm": "Jouer",

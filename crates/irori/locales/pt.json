@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Está offline. As transferências retomam quando a ligação voltar.",
   "shell.notice.logins_locked": "Não foi possível abrir os inícios de sessão guardados",
   "shell.notice.logins_locked_message": "Desbloqueie o porta-chaves do sistema e reinicie o Irori, ou volte a iniciar sessão nas suas lojas.",
+  "shell.notice.gpu_still_hidden": "Uma placa gráfica continua desligada",
+  "shell.notice.gpu_still_hidden_message": "O Irori ocultou {cards} a um jogo e não conseguiu voltar a ligá-la. Ligue-a no Gestor de dispositivos ou reinicie o Windows.",
   "shell.link_launch.title": "Iniciar {title}?",
   "shell.link_launch.body": "Uma ligação de um site ou de outro programa quer iniciar este jogo.",
   "shell.link_launch.confirm": "Jogar",

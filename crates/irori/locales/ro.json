@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Ești offline. Descărcările se reiau când revine conexiunea.",
   "shell.notice.logins_locked": "Autentificările salvate nu au putut fi deschise",
   "shell.notice.logins_locked_message": "Deblochează portcheile sistemului și repornește Irori sau autentifică-te din nou în magazine.",
+  "shell.notice.gpu_still_hidden": "O placă video este încă oprită",
+  "shell.notice.gpu_still_hidden_message": "Irori a ascuns {cards} de un joc și nu a putut-o porni din nou. Pornește-o din Manager dispozitive sau repornește Windows.",
   "shell.link_launch.title": "Pornești {title}?",
   "shell.link_launch.body": "Un link de pe un site sau din alt program vrea să pornească acest joc.",
   "shell.link_launch.confirm": "Joacă",

@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Du är offline. Nedladdningarna fortsätter när anslutningen är tillbaka.",
   "shell.notice.logins_locked": "Dina sparade inloggningar kunde inte öppnas",
   "shell.notice.logins_locked_message": "Lås upp systemets nyckelring och starta om Irori, eller logga in i dina butiker igen.",
+  "shell.notice.gpu_still_hidden": "Ett grafikkort är fortfarande avstängt",
+  "shell.notice.gpu_still_hidden_message": "Irori dolde {cards} för ett spel och kunde inte slå på det igen. Slå på det i Enhetshanteraren eller starta om Windows.",
   "shell.link_launch.title": "Starta {title}?",
   "shell.link_launch.body": "En länk från en webbplats eller ett annat program vill starta det här spelet.",
   "shell.link_launch.confirm": "Spela",

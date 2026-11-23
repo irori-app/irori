@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Çevrimdışısın. Bağlantı geri geldiğinde indirmeler devam eder.",
   "shell.notice.logins_locked": "Kayıtlı oturum açma bilgileriniz açılamadı",
   "shell.notice.logins_locked_message": "Sistem anahtarlığının kilidini açıp Irori’yi yeniden başlatın veya mağazalarınızda yeniden oturum açın.",
+  "shell.notice.gpu_still_hidden": "Bir ekran kartı hâlâ kapalı",
+  "shell.notice.gpu_still_hidden_message": "Irori, {cards} kartını bir oyundan gizledi ve yeniden açamadı. Aygıt Yöneticisi’nden açın veya Windows’u yeniden başlatın.",
   "shell.link_launch.title": "{title} başlatılsın mı?",
   "shell.link_launch.body": "Bir web sitesinden veya başka bir programdan gelen bağlantı bu oyunu başlatmak istiyor.",
   "shell.link_launch.confirm": "Oyna",

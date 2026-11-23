@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "Jesteś offline. Pobieranie zostanie wznowione po przywróceniu połączenia.",
   "shell.notice.logins_locked": "Nie udało się otworzyć zapisanych logowań",
   "shell.notice.logins_locked_message": "Odblokuj systemowy pęk kluczy i uruchom ponownie Irori albo zaloguj się ponownie do sklepów.",
+  "shell.notice.gpu_still_hidden": "Karta graficzna jest nadal wyłączona",
+  "shell.notice.gpu_still_hidden_message": "Irori ukryło {cards} przed grą i nie mogło jej ponownie włączyć. Włącz ją w Menedżerze urządzeń lub uruchom ponownie Windows.",
   "shell.link_launch.title": "Uruchomić {title}?",
   "shell.link_launch.body": "Link ze strony internetowej lub innego programu chce uruchomić tę grę.",
   "shell.link_launch.confirm": "Graj",

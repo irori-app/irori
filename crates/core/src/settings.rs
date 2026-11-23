@@ -290,6 +290,12 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriWindowsGpu")]
     pub windows_gpu: String,
+    /// PnP instance id (`PCI\VEN_…&DEV_…\…`) of a graphics card Windows
+    /// hides from the game while it runs: disabled for the session through
+    /// Windows' own permission prompt and enabled again when it ends, never
+    /// one driving a display. Empty hides nothing. Windows only; Irori-only.
+    #[serde(rename = "iroriHideGpu")]
+    pub hide_gpu: String,
     /// NVIDIA Smooth Motion frame generation
     /// (`NVPRESENT_ENABLE_SMOOTH_MOTION`). Linux only; Irori-only.
     #[serde(rename = "iroriSmoothMotion")]
@@ -582,6 +588,7 @@ impl Default for GameSettings {
             xess_upgrade: false,
             gpu: String::new(),
             windows_gpu: String::new(),
+            hide_gpu: String::new(),
             smooth_motion: false,
             nvidia_reflex: false,
             lsfg: LsfgSettings::default(),
@@ -2072,6 +2079,10 @@ mod tests {
         let gs: GameSettings =
             serde_json::from_str(r#"{"iroriWindowsGpu": "highPerformance"}"#).unwrap();
         assert_eq!(gs.windows_gpu, "highPerformance");
+        assert_eq!(json["iroriHideGpu"], "");
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriHideGpu": "PCI\\VEN_10DE&DEV_2484\\4&1"}"#).unwrap();
+        assert_eq!(gs.hide_gpu, r"PCI\VEN_10DE&DEV_2484\4&1");
         assert_eq!(json["iroriLsfg"]["multiplier"], 2);
         assert_eq!(json["iroriLsfg"]["performanceMode"], false);
     }

@@ -193,6 +193,8 @@ pub struct SettingsForm {
     wine: Option<WinePicker>,
     /// The graphics cards and layers the GPU options need, once looked for.
     graphics: Option<Arc<HostGraphics>>,
+    /// Windows' display adapters, for `iroriHideGpu`, once looked for.
+    hideable_gpus: Option<Arc<Vec<irori_services::gpu_hide::Adapter>>>,
     /// The displays, for the HDR and gamescope hints (Linux, where those
     /// settings exist).
     displays: Option<Arc<irori_services::displays::DisplayReport>>,
@@ -265,6 +267,7 @@ impl SettingsForm {
             slider_seen: HashMap::new(),
             wine: None,
             graphics: None,
+            hideable_gpus: None,
             displays: None,
             prefix_choices: None,
             tool_versions: HashMap::new(),
@@ -294,6 +297,9 @@ impl SettingsForm {
         }
         if this.fields.iter().any(|f| f.path == "winePrefix") {
             this.load_prefix_choices(window, cx);
+        }
+        if this.fields.iter().any(|f| f.path == "iroriHideGpu") {
+            this.load_hideable_gpus(window, cx);
         }
         let settings_model = models(cx).settings.clone();
         this._subscriptions.push(
@@ -395,6 +401,25 @@ impl SettingsForm {
             this.update_in(cx, |this, window, cx| {
                 this.graphics = Some(Arc::new(graphics));
                 this.sync_gpu_select(window, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Look for the graphics cards a game could hide (Windows).
+    fn load_hideable_gpus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.hideable_gpus().await });
+        cx.spawn_in(window, async move |this, cx| {
+            let adapters = task.await.unwrap_or_else(|e| {
+                tracing::warn!("graphics cards: {e:#}");
+                Vec::new()
+            });
+            this.update_in(cx, |this, window, cx| {
+                this.hideable_gpus = Some(Arc::new(adapters));
+                this.sync_hide_gpu_select(window, cx);
                 cx.notify();
             })
             .ok();
@@ -968,6 +993,22 @@ impl SettingsForm {
                 self.choices.insert(spec.path, state);
                 self.sync_gpu_select(window, cx);
             }
+            CustomKind::HiddenGpu => {
+                let state =
+                    cx.new(|cx| SelectState::new(Vec::<ChoiceItem>::new(), None, window, cx));
+                let path = spec.path;
+                self._subscriptions.push(cx.subscribe_in(
+                    &state,
+                    window,
+                    move |this, _, event: &SelectEvent<Vec<ChoiceItem>>, window, cx| {
+                        if let SelectEvent::Confirm(Some(id)) = event {
+                            this.write(path, Value::String(id.to_string()), window, cx);
+                        }
+                    },
+                ));
+                self.choices.insert(spec.path, state);
+                self.sync_hide_gpu_select(window, cx);
+            }
             CustomKind::ThemeName => {
                 let items = theme_items(cx);
                 let current = value_to_text(self.value(spec.path));
@@ -1081,6 +1122,7 @@ impl SettingsForm {
         }
         self.sync_wine_select(window, cx);
         self.sync_gpu_select(window, cx);
+        self.sync_hide_gpu_select(window, cx);
         cx.notify();
     }
 
@@ -1115,6 +1157,7 @@ impl SettingsForm {
         }
         self.sync_wine_select(window, cx);
         self.sync_gpu_select(window, cx);
+        self.sync_hide_gpu_select(window, cx);
         cx.notify();
     }
 
@@ -1148,6 +1191,19 @@ impl SettingsForm {
             items.push(ChoiceItem::new(current.to_string(), label));
         }
         items
+    }
+
+    fn sync_hide_gpu_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.choices.get("iroriHideGpu").cloned() else {
+            return;
+        };
+        let current = value_to_text(self.value("iroriHideGpu")).trim().to_string();
+        let items = hide_gpu_items(self.hideable_gpus.as_deref().map(Vec::as_slice), &current);
+        let current: SharedString = current.into();
+        state.update(cx, |s, cx| {
+            s.set_items(items, window, cx);
+            s.set_selected_value(&current, window, cx);
+        });
     }
 
     fn sync_gpu_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2169,6 +2225,16 @@ impl SettingsForm {
                     .into_any_element(),
                 None => div().into_any_element(),
             },
+            CustomKind::HiddenGpu => match self.choices.get(path) {
+                Some(state) => Select::new(state)
+                    .id("field-iroriHideGpu")
+                    .accessibility_label(spec.label_text())
+                    .placeholder(t("settings.hide_gpu.none"))
+                    .disabled(row.disabled_reason.is_some())
+                    .w_80()
+                    .into_any_element(),
+                None => div().into_any_element(),
+            },
             CustomKind::ThemeName => match self.choices.get(path) {
                 Some(state) => Select::new(state)
                     .id("field-themeName")
@@ -2471,6 +2537,36 @@ fn choice_items(options: &[ChoiceOption]) -> Vec<ChoiceItem> {
         .collect()
 }
 
+/// "Hide nothing", every card a game may hide (never one showing a display:
+/// the same rule the launch keeps, `gpu_hide::plan`), and the chosen card
+/// even when it can't be hidden now, so the choice stays visible.
+fn hide_gpu_items(
+    adapters: Option<&[irori_services::gpu_hide::Adapter]>,
+    current: &str,
+) -> Vec<ChoiceItem> {
+    use irori_services::gpu_hide::{Plan, plan};
+    let mut items = vec![ChoiceItem::new("", t("settings.hide_gpu.none"))];
+    let all = adapters.unwrap_or_default();
+    items.extend(
+        all.iter()
+            .filter(|a| matches!(plan(&a.instance_id, all), Plan::Hide(_)))
+            .map(|a| ChoiceItem::new(a.instance_id.clone(), a.name.clone())),
+    );
+    if !current.is_empty() && !items.iter().any(|i| i.key.as_ref() == current) {
+        let name = all
+            .iter()
+            .find(|a| a.instance_id.eq_ignore_ascii_case(current))
+            .map_or(current, |a| a.name.as_str());
+        let label = if adapters.is_some() {
+            t_args("settings.hide_gpu.unavailable", &[("name", name)])
+        } else {
+            name.to_string().into()
+        };
+        items.push(ChoiceItem::new(current.to_string(), label));
+    }
+    items
+}
+
 /// The default theme followed by every theme of the theme registry.
 fn theme_items(cx: &App) -> Vec<ChoiceItem> {
     let default = match irori_ui::theme::followed_desktop(cx) {
@@ -2506,4 +2602,39 @@ fn slider_json(path: &str, v: f32) -> Value {
 /// Inline notice explaining why a whole group does not apply.
 pub(crate) fn info_alert(id: &'static str, text: impl Into<SharedString>) -> Alert {
     Alert::info(id, text.into())
+}
+
+#[cfg(test)]
+mod hide_gpu_tests {
+    use irori_services::gpu_hide::Adapter;
+
+    use super::{ChoiceItem, hide_gpu_items};
+
+    fn card(id: &str, display: bool) -> Adapter {
+        Adapter {
+            instance_id: id.into(),
+            name: format!("Card {id}"),
+            disabled: false,
+            drives_display: Some(display),
+        }
+    }
+
+    fn keys(items: Vec<ChoiceItem>) -> Vec<String> {
+        items.into_iter().map(|i| i.key.to_string()).collect()
+    }
+
+    #[test]
+    fn only_cards_a_game_may_hide_are_offered() {
+        let cards = [card(r"PCI\IGPU\1", false), card(r"PCI\DGPU\1", true)];
+        assert_eq!(
+            keys(hide_gpu_items(Some(&cards), "")),
+            vec!["", r"PCI\IGPU\1"]
+        );
+        // The card showing the display stays visible when it is the choice.
+        assert_eq!(
+            keys(hide_gpu_items(Some(&cards), r"PCI\DGPU\1")),
+            vec!["", r"PCI\IGPU\1", r"PCI\DGPU\1"]
+        );
+        assert_eq!(keys(hide_gpu_items(None, "")), vec![""]);
+    }
 }

@@ -72,6 +72,8 @@
   "shell.notice.downloads_paused_message": "你当前处于离线状态。恢复连接后将继续下载。",
   "shell.notice.logins_locked": "无法打开已保存的登录信息",
   "shell.notice.logins_locked_message": "请解锁系统密钥环并重启 Irori，或重新登录你的商店。",
+  "shell.notice.gpu_still_hidden": "有显卡仍处于停用状态",
+  "shell.notice.gpu_still_hidden_message": "Irori 为游戏隐藏了 {cards}，但未能重新启用。请在设备管理器中启用它，或重启 Windows。",
   "shell.link_launch.title": "启动 {title}？",
   "shell.link_launch.body": "来自网站或其他程序的链接想要启动此游戏。",
   "shell.link_launch.confirm": "开始游戏",

@@ -220,6 +220,9 @@ pub enum CustomKind {
     ThemeName,
     /// Graphics card picker fed by `irori_runtime::graphics`.
     GpuCard,
+    /// The graphics card Windows hides from a game, fed by
+    /// `Backend::hideable_gpus`.
+    HiddenGpu,
     /// Release picker of a tool installed into Wine prefixes.
     ToolVersion(DxTool),
     /// Base font size slider (interface zoom).
@@ -561,7 +564,9 @@ impl FieldSpec {
         // Windows' own graphics preference stands in for the card chooser
         // there, which only Linux can apply.
         match self.path {
-            "iroriWindowsGpu" | "iroriOverlay.backStart" => return host == HostPlatform::Windows,
+            "iroriWindowsGpu" | "iroriHideGpu" | "iroriOverlay.backStart" => {
+                return host == HostPlatform::Windows;
+            }
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -3803,6 +3808,26 @@ pub static FIELDS: &[FieldSpec] = &[
         "integrated",
         "discrete",
         "UserGpuPreferences",
+    ]),
+    // Windows has no per-program way to hide a card: it is disabled for the
+    // session (`irori_services::gpu_hide`), one game at a time.
+    game_only(
+        "iroriHideGpu",
+        "settings.field.hide_gpu.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Custom(CustomKind::HiddenGpu),
+    )
+    .help("settings.field.hide_gpu.help")
+    .keywords(&[
+        "gpu",
+        "graphics card",
+        "hide",
+        "disable",
+        "device manager",
+        "integrated",
+        "discrete",
+        "wrong gpu",
     ]),
     game(
         "nvidiaPrime",

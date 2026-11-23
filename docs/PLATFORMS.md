@@ -209,6 +209,23 @@ is. A game that starts through a launcher that hands over to another program get
 preference on the program Irori starts only. Steam and the third-party launchers start
 their own games, so their games don't show it.
 
+For a game that still picks the wrong card, its settings can **hide a graphics card**
+(`iroriHideGpu`, one game at a time; Windows only). Windows has no per-program way to
+hide one, so Irori disables the card while the game runs and enables it again when the
+session ends, when the launch fails or is cancelled, and when Irori itself goes away.
+Disabling a device needs an administrator: at each launch Windows' own permission prompt
+starts `irori --gpu-helper …` elevated, which disables the card (`CM_Disable_DevNode`,
+never persistently: a restart always brings it back), waits on two named events and on
+Irori's process, and enables the card again. Nothing is installed and no password is
+kept. The list offers only cards that may go: never one showing a display (matched with
+`EnumDisplayDevicesW`'s hardware ids, so identical twin cards both count as showing it),
+never when Windows can't say which cards show displays, never the last enabled card, and
+never a card the user disabled. Every card is written to `<state>/gpu-hidden.json` before
+it is disabled; should the helper be killed too, the next start enables what is still
+disabled (asking for permission again) or says which card to enable in Device Manager.
+The game's log says what was hidden, or why not. Declining the prompt starts the game
+with every card.
+
 - **Graphics card** (`iroriGpu`, a PCI address): cards come from `/sys/class/drm`,
   named from `pci.ids`. A Mesa card gets `DRI_PRIME=pci-…` and
   `MESA_VK_DEVICE_SELECT=<vendor>:<device>!` (left out when two cards are the same
