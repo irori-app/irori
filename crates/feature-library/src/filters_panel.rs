@@ -1,9 +1,11 @@
 //! The library's view criteria as an observable model, and the Filters
-//! popover that edits them.
+//! popover that edits them. A search field at its top finds any filter
+//! value by name ([`crate::value_search`]), with how many games carry it.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
@@ -21,6 +23,7 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::{models, play_status};
 
 use crate::filter::{self, CategoryFilter, HiddenMode, InstallFilter, ReleaseWindow, ViewFilter};
+use crate::value_search::{self, Section, ValueCache};
 
 /// Owner of the library's [`ViewFilter`]. Persists every change except the
 /// search query, off the UI thread.
@@ -125,6 +128,11 @@ pub struct FiltersPanel {
     tags: crate::filter::PerRevision<Vec<(String, String)>>,
     /// Where the panel was last drawn, for the room under it.
     top: Option<Pixels>,
+    /// The field that finds a filter value by name, made at the first draw
+    /// (it needs the window).
+    search: Option<Entity<InputState>>,
+    /// Every filter value with its count, for the search field.
+    values: ValueCache,
     _observe: Vec<Subscription>,
 }
 
@@ -149,6 +157,8 @@ impl FiltersPanel {
             genres: Default::default(),
             tags: Default::default(),
             top: None,
+            search: None,
+            values: ValueCache::default(),
             _observe: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&library, |_, _, cx| cx.notify()),
@@ -159,6 +169,167 @@ impl FiltersPanel {
 
     fn set(&self, f: impl FnOnce(&mut ViewFilter) + 'static, cx: &mut Context<Self>) {
         self.model.update(cx, |m, cx| m.update(f, cx));
+    }
+
+    /// The value search field, made on first use.
+    fn search_field(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<InputState> {
+        if let Some(search) = &self.search {
+            return search.clone();
+        }
+        let search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("library.filters.find_value")));
+        self._observe
+            .push(cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }));
+        self.search = Some(search.clone());
+        search
+    }
+
+    /// Type `text` into the value search field.
+    #[cfg(test)]
+    pub(crate) fn search_for(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let search = self.search_field(window, cx);
+        let text = text.to_owned();
+        search.update(cx, |s, cx| s.set_value(text, window, cx));
+    }
+
+    /// The values the last search found, as (name, count); `None` when
+    /// nothing is searched or nothing was drawn yet.
+    #[cfg(test)]
+    pub(crate) fn found_values(&self, cx: &App) -> Option<Vec<(String, usize)>> {
+        let query = self.search.as_ref()?.read(cx).value().trim().to_owned();
+        if query.is_empty() {
+            return None;
+        }
+        let all = self.values.cached()?;
+        Some(
+            value_search::find(&all, &query)
+                .iter()
+                .map(|c| (c.label.clone(), c.count))
+                .collect(),
+        )
+    }
+}
+
+/// The popover section a found value belongs to.
+fn section_label(section: Section) -> SharedString {
+    match section {
+        Section::Category => t("library.filters.section.categories"),
+        Section::System => t("library.filters.section.system"),
+        Section::Status => t("library.filters.section.play_status"),
+        Section::Mode => irori_ui::game_mode::title(),
+        Section::Genre => t("library.filters.section.genre"),
+        Section::Tag => t("library.filters.section.steam_tags"),
+    }
+}
+
+impl FiltersPanel {
+    /// The values whose names hold `query`, each ticked as its section
+    /// would tick it, with its section and how many games carry it.
+    fn render_values(
+        &mut self,
+        f: &ViewFilter,
+        query: &str,
+        max_h: Pixels,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (snapshot, user, index) = {
+            let lib = models(cx).library.read(cx);
+            (
+                lib.snapshot.clone(),
+                lib.user.clone(),
+                lib.categories.clone(),
+            )
+        };
+        let all = self
+            .values
+            .get(&snapshot, &user, &index, irori_ui::i18n::language(), || {
+                let categories: Vec<_> = irori_ui::categories::entries(&user, &index)
+                    .into_iter()
+                    .map(|e| (e.category, e.name, e.count))
+                    .collect();
+                let system = |id: &str| {
+                    irori_engines::systems::get(id).map_or(id.to_owned(), |s| s.short.clone())
+                };
+                let status = |s: EffectiveStatus| play_status::label(s).to_string();
+                let mode = |m: GameMode| irori_ui::game_mode::label(m).to_string();
+                let labels = value_search::Labels {
+                    system: &system,
+                    status: &status,
+                    mode: &mode,
+                };
+                value_search::candidates(&snapshot, &user, &categories, &labels)
+            });
+        let hits = value_search::find(&all, query);
+        let muted = cx.theme().muted_foreground;
+        let more = hits.len().saturating_sub(value_search::MAX_SHOWN);
+        let rows: Vec<AnyElement> = hits
+            .iter()
+            .take(value_search::MAX_SHOWN)
+            .enumerate()
+            .map(|(ix, hit)| {
+                let value = hit.value.clone();
+                let games = match hit.count {
+                    1 => t("library.filters.value_games_one"),
+                    n => t_args(
+                        "library.filters.value_games_other",
+                        &[("count", &n.to_string())],
+                    ),
+                };
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(
+                        div().flex_1().min_w_0().child(
+                            Checkbox::new(SharedString::from(format!("filter-value-{ix}")))
+                                .label(hit.label.clone())
+                                .checked(value.is_picked(f))
+                                .on_change(cx.listener(move |this, _: &bool, _, cx| {
+                                    let value = value.clone();
+                                    this.set(move |f| value.toggle(f), cx)
+                                })),
+                        ),
+                    )
+                    .child(
+                        h_flex()
+                            .flex_none()
+                            .gap_2()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(section_label(hit.value.section()))
+                            .child(games),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        v_flex()
+            .id("library-filter-values")
+            .max_h(max_h)
+            .overflow_y_scrollbar()
+            .pr_3()
+            .gap_2()
+            .when(rows.is_empty(), |el| {
+                el.child(
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(t_args("library.filters.no_values", &[("query", query)])),
+                )
+            })
+            .children(rows)
+            .when(more > 0, |el| {
+                el.child(div().text_xs().text_color(muted).child(match more {
+                    1 => t("library.filters.more_values_one"),
+                    n => t_args(
+                        "library.filters.more_values_other",
+                        &[("count", &n.to_string())],
+                    ),
+                }))
+            })
+            .into_any_element()
     }
 }
 
@@ -679,7 +850,8 @@ impl Render for FiltersPanel {
         // below the button (or half the window, where it is moved up).
         let visible = irori_ui::style::visible_bounds(window);
         let rem = window.rem_size();
-        let max_h = filters_height(visible, self.top, rem);
+        // Less the search field above the sections.
+        let max_h = (filters_height(visible, self.top, rem) - rem * 2.5).max(rem * 4.);
         let view = cx.entity().downgrade();
         let measure = canvas(
             move |bounds, _, cx| {
@@ -835,13 +1007,27 @@ impl Render for FiltersPanel {
                     ),
             );
 
+        let search = self.search_field(window, cx);
+        let query = search.read(cx).value().trim().to_owned();
+        let body = if query.is_empty() {
+            sections.into_any_element()
+        } else {
+            self.render_values(&f, &query, max_h, cx)
+        };
+
         v_flex()
             .id("library-filters-panel")
             .relative()
             .w_96()
             .gap_3()
             .child(measure)
-            .child(sections)
+            .child(
+                Input::new(&search)
+                    .small()
+                    .cleanable(true)
+                    .prefix(Icon::new(IconName::Search).small()),
+            )
+            .child(body)
             .child(
                 h_flex()
                     .justify_between()

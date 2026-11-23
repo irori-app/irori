@@ -568,7 +568,10 @@ commands without a window.
     first, counted from `LibraryModel::categories`, the index the event pump
     rebuilds only when its `IndexKey` changes). The library's Views menu has one
     Categories section (smart ones marked, each counted), the Filters popover
-    ticks both, Group by → Category puts each game in its first category's
+    ticks both (its search field finds any filter value by name with its count:
+    categories, systems, play statuses, modes, genres, Steam tags;
+    `irori-library`'s `value_search.rs`, worked out once per library, user-data
+    and index change), Group by → Category puts each game in its first category's
     section (`irori-library`'s `categories.rs`), covers show both with their
     colours, and the context menu has "Add to ▸" for manual categories and a
     read-only "In: …" for smart ones. The sidebar's Views section lists the
