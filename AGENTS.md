@@ -687,7 +687,11 @@ commands without a window.
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
   playtime and no status; filters and stats group by it. Screens show and set it
-  through `irori_ui::play_status` (names, colours, icons, menu, button).
+  through `irori_ui::play_status` (names, colours, icons, menu, button). Every real
+  change is kept in `UserData::status_history` (`StatusChange`, at most 64 a game;
+  setting the same status again isn't one, an undone bulk edit leaves none), merged
+  as a set by backups and sync; `play_status::times_set` gives the days a game got a
+  status, so the backlog counts a game beaten in March after it is played again.
 - **Age ratings** (`irori_core::age_rating`, `store_facts.rs`): `AgeRating {system,
   rating, descriptors, age}`, where `age` is the youngest age the rating allows (ESRB
   E → 6, T → 13, CERO B → 12…). Amazon (`esrbRating`, `pegiRating`, `uskRating`) and

@@ -60,6 +60,9 @@ pub struct LibraryBackup {
     pub categories: BTreeMap<String, BTreeSet<String>>,
     pub overrides: BTreeMap<String, GameOverrides>,
     pub play_status: BTreeMap<String, PlayStatusRecord>,
+    /// Every real change of each game's play status.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: crate::StatusHistory,
     pub backlog_goals: BTreeMap<i32, u32>,
     pub ratings: BTreeMap<String, u8>,
     /// Journal notes, several a day.
@@ -207,6 +210,7 @@ impl Backend {
                 categories: user.categories.clone(),
                 overrides: user.overrides.clone(),
                 play_status: user.play_status.clone(),
+                status_history: user.status_history.clone(),
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
@@ -415,6 +419,7 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
             d.play_status.insert(key.clone(), record.clone());
         }
     }
+    crate::play_status::merge_history(&mut d.status_history, &lib.status_history);
     for (year, goal) in &lib.backlog_goals {
         d.backlog_goals.entry(*year).or_insert(*goal);
     }

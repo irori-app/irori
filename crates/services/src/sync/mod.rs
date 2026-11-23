@@ -572,6 +572,7 @@ impl Backend {
                 registers: merged.registers.clone(),
                 playtime: merged.playtime.clone(),
                 sessions: merged.sessions.clone(),
+                status_history: merged.data.status_history.clone(),
             }),
         };
         let bytes = serde_json::to_vec(&file)?;

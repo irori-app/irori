@@ -34,6 +34,9 @@
 //! can't read part of a category keeps it as it came and never notes it as
 //! changed (or gone), so it can't publish an older copy or a deletion.
 //!
+//! Play status changes (the history behind each status) are merged as a
+//! set, like sessions: every change made anywhere is kept once.
+//!
 //! Playtime is never summed twice. Sessions are merged as a set (a session
 //! is its game and start time). Each computer also publishes, per game, the
 //! time it knows of beyond its sessions (store totals, imports): its total
@@ -197,6 +200,9 @@ pub struct Shared {
     pub registers: Registers,
     pub playtime: BTreeMap<String, PlaytimeShare>,
     pub sessions: Vec<Session>,
+    /// Every real play status change, by game.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: crate::StatusHistory,
 }
 
 /// What a computer exchanges with the others.
@@ -225,6 +231,7 @@ impl Scope {
                 },
                 playtime: shared.playtime.clone(),
                 sessions: shared.sessions.clone(),
+                status_history: Default::default(),
             },
         }
     }
@@ -499,6 +506,10 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     let changed = View::from_registers(&regs).apply(&mut data, &before);
     let playtime_changed = differing(&playtime, &local.data.playtime);
     data.playtime = playtime;
+    let history_added: usize = remotes
+        .iter()
+        .map(|r| crate::play_status::merge_history(&mut data.status_history, &r.status_history))
+        .sum();
 
     // A value the data can't hold as merged (a category kept for a game
     // added to it after it was deleted, a rating out of range) is recorded
@@ -525,7 +536,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
         playtime: shares,
         sessions,
         sessions_added,
-        changed: changed + playtime_changed,
+        changed: changed + playtime_changed + history_added,
         conflicts,
         clock,
     }

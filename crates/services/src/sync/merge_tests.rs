@@ -96,6 +96,7 @@ impl Device {
             registers: merged.registers.clone(),
             playtime: merged.playtime.clone(),
             sessions: merged.sessions.clone(),
+            status_history: merged.data.status_history.clone(),
         });
         merged
     }
@@ -923,4 +924,33 @@ fn a_journal_note_edited_on_two_computers_at_once_is_a_conflict() {
     assert_eq!(merged.conflicts.len(), 1);
     assert_eq!(merged.conflicts[0].field, ConflictField::Journal);
     assert_eq!(merged.conflicts[0].subject, "gog:1");
+}
+
+#[test]
+fn status_changes_from_every_computer_are_kept_once() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    let change = |at: Millis, status| crate::StatusChange {
+        at: rfc(at),
+        status: Some(status),
+    };
+    a.data
+        .status_history
+        .insert("gog:1".into(), vec![change(t(1), PlayStatus::Beaten)]);
+    b.data.status_history.insert(
+        "gog:1".into(),
+        vec![
+            change(t(1), PlayStatus::Beaten),
+            change(t(5), PlayStatus::Playing),
+        ],
+    );
+    round(&mut a, &mut b, t(10));
+    assert_eq!(a.data.status_history["gog:1"].len(), 2);
+    assert_eq!(a.data.status_history, b.data.status_history);
+    // A computer that only sends playtime neither sends nor takes them.
+    let mut deck = Device::new("deck");
+    deck.scope = Scope::PlaytimeOnly;
+    deck.sync(t(20), &[&a]);
+    assert!(deck.data.status_history.is_empty());
+    assert!(deck.published.status_history.is_empty());
 }

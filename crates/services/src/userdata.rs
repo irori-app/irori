@@ -13,7 +13,9 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 use crate::journal::{self, Journal, JournalEntry, LegacyJournal};
-use crate::play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+use crate::play_status::{
+    self, EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory,
+};
 use crate::smart_categories::{CategoryLook, CategoryRef, SmartCategory};
 
 /// Persisted shape. Game keys are `GameId::key()` strings.
@@ -37,6 +39,9 @@ pub struct UserData {
     pub store_hidden_imported: BTreeSet<String>,
     /// The play status the user set per game, with when they set it.
     pub play_status: BTreeMap<String, PlayStatusRecord>,
+    /// Every real change of each game's play status, oldest first.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: StatusHistory,
     /// How many games the user means to beat, by calendar year.
     pub backlog_goals: BTreeMap<i32, u32>,
     /// The user's own rating of each game, from 1 to 5 stars. Unrated games
@@ -92,6 +97,7 @@ pub struct BulkSnapshot {
     /// Every category that existed, with which of the games were in it.
     categories: BTreeMap<String, BTreeSet<String>>,
     play_status: BTreeMap<String, PlayStatusRecord>,
+    status_history: StatusHistory,
 }
 
 impl BulkSnapshot {
@@ -159,6 +165,10 @@ impl UserData {
         }
         take(&mut self.first_seen, from, to);
         take(&mut self.play_status, from, to);
+        if let Some(changes) = self.status_history.remove(from) {
+            let from_history = StatusHistory::from([(to.to_string(), changes)]);
+            play_status::merge_history(&mut self.status_history, &from_history);
+        }
         take(&mut self.ratings, from, to);
         journal::carry_over(&mut self.journal, from, to);
     }
@@ -269,6 +279,10 @@ impl UserData {
                 .iter()
                 .filter_map(|k| Some((k.clone(), self.play_status.get(k)?.clone())))
                 .collect(),
+            status_history: keys
+                .iter()
+                .filter_map(|k| Some((k.clone(), self.status_history.get(k)?.clone())))
+                .collect(),
             keys,
         }
     }
@@ -309,16 +323,28 @@ impl UserData {
                     self.play_status.remove(key);
                 }
             }
+            // An undone change never happened: it leaves no history.
+            match snap.status_history.get(key) {
+                Some(changes) => {
+                    self.status_history.insert(key.clone(), changes.clone());
+                }
+                None => {
+                    self.status_history.remove(key);
+                }
+            }
         }
     }
 }
 
 /// Set (or clear) the play status of `keys`, dated `now`. A game already
-/// in that status keeps the date it got it.
+/// in that status keeps the date it got it; every real change is added to
+/// its history.
 fn apply_play_status(d: &mut UserData, keys: &[String], status: Option<PlayStatus>, now: &str) {
     for key in keys {
+        if d.play_status(key) == status {
+            continue;
+        }
         match status {
-            Some(status) if d.play_status(key) == Some(status) => {}
             Some(status) => {
                 d.play_status.insert(
                     key.clone(),
@@ -332,6 +358,13 @@ fn apply_play_status(d: &mut UserData, keys: &[String], status: Option<PlayStatu
                 d.play_status.remove(key);
             }
         }
+        play_status::record(
+            d.status_history.entry(key.clone()).or_default(),
+            StatusChange {
+                at: now.to_string(),
+                status,
+            },
+        );
     }
 }
 
@@ -1277,6 +1310,19 @@ mod tests {
         );
         apply_play_status(&mut data, &keys, None, "later");
         assert!(data.play_status.is_empty());
+        // Every real change was kept; setting the same status again wasn't.
+        let kept: Vec<_> = data.status_history["gog:1"]
+            .iter()
+            .map(|c| (c.at.as_str(), c.status))
+            .collect();
+        assert_eq!(
+            kept,
+            [
+                ("monday", Some(PlayStatus::Playing)),
+                ("friday", Some(PlayStatus::Beaten)),
+                ("later", None)
+            ]
+        );
     }
 
     #[test]

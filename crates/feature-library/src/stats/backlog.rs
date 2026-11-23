@@ -1,6 +1,8 @@
 //! What the backlog tab shows for one year: the games beaten and abandoned
-//! in it (on the day their status was set), the yearly goal and the pace
-//! towards it, and the whole library grouped by play status.
+//! in it (on the day their status was set, by its history of changes, so a
+//! game beaten in March still counts after it is played again), the yearly
+//! goal and the pace towards it, and the whole library grouped by play
+//! status.
 
 use std::collections::BTreeMap;
 
@@ -89,14 +91,29 @@ pub fn compute<'a>(
         *by_status.entry(user.effective_status(key)).or_default() += 1;
         in_library.insert(key.to_string());
     }
+    let keys: std::collections::BTreeSet<&String> = user
+        .play_status
+        .keys()
+        .chain(user.status_history.keys())
+        .filter(|k| in_library.contains(k.as_str()))
+        .collect();
+    // A game counts once a year, on the last day of the year it got the
+    // status.
     let marks = |wanted: PlayStatus| -> Vec<Mark> {
-        let mut list: Vec<Mark> = user
-            .play_status
+        let mut list: Vec<Mark> = keys
             .iter()
-            .filter(|(key, r)| r.status == wanted && in_library.contains(key.as_str()))
-            .filter_map(|(key, r)| {
-                let day = rfc3339_day(&r.since)?;
-                (day.year() == year).then_some(Mark {
+            .filter_map(|key| {
+                let changes = user.status_history.get(*key).map_or(&[][..], Vec::as_slice);
+                let day = irori_services::play_status::times_set(
+                    changes,
+                    user.play_status.get(*key),
+                    wanted,
+                )
+                .into_iter()
+                .filter_map(rfc3339_day)
+                .filter(|d| d.year() == year)
+                .max()?;
+                Some(Mark {
                     id: game_id(key)?,
                     day,
                 })
@@ -295,5 +312,29 @@ mod tests {
         assert_eq!(b.goal, Some(2));
         assert_eq!(b.verdict, Some(Verdict::Reached));
         assert_eq!(b.median_days_to_beat, None);
+    }
+
+    #[test]
+    fn a_game_beaten_then_played_again_still_counts_in_its_year() {
+        let mut user = UserData::default();
+        set(&mut user, "gog:1", PlayStatus::Playing, "2026-06-01");
+        user.status_history.insert(
+            "gog:1".into(),
+            vec![
+                irori_services::StatusChange {
+                    at: "2026-03-10T12:00:00Z".into(),
+                    status: Some(PlayStatus::Beaten),
+                },
+                irori_services::StatusChange {
+                    at: "2026-06-01T12:00:00Z".into(),
+                    status: Some(PlayStatus::Playing),
+                },
+            ],
+        );
+        let b = compute(&history(vec![]), &user, ["gog:1"], 2026, day("2026-10-01"));
+        assert_eq!(b.beaten.len(), 1);
+        assert_eq!(b.beaten[0].day, day("2026-03-10"));
+        let before = compute(&history(vec![]), &user, ["gog:1"], 2025, day("2026-10-01"));
+        assert!(before.beaten.is_empty());
     }
 }
