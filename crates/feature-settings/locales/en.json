@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Bind this command to a key in your desktop’s keyboard settings:",
   "settings.quick_launch.off": "This command opens the quick launcher too; bind it to a key in your desktop’s keyboard settings if you like:",
   "settings.field.rosetta.label": "Run with Rosetta",
-  "settings.field.rosetta.help": "Starts the game’s Intel version even when it also has one for Apple silicon, for games whose Apple silicon version misbehaves. Games made only for Intel Macs always run with Rosetta."
+  "settings.field.rosetta.help": "Starts the game’s Intel version even when it also has one for Apple silicon, for games whose Apple silicon version misbehaves. Games made only for Intel Macs always run with Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS through MetalFX",
+  "settings.field.metal_fx_dlss.help": "Lets games that use NVIDIA DLSS upscale with Apple’s MetalFX. Only Wine builds that ship it can: Game Porting Toolkit 3, a recent CrossOver or a DXMT build. With others it stays off and the game log says why."
 }

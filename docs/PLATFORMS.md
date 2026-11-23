@@ -67,6 +67,18 @@ store) read as the current home when that old home no longer exists, and the
 next save keeps them. Other users' homes, `/Users/Shared` and other disks are
 left alone (`irori_core::home_rename`, turned on by `main.rs` only).
 
+DLSS through MetalFX (a game's Wine › Display, `iroriMetalFxDlss`) works with
+builds that ship the translation: D3DMetal 3's `nvngx-on-metalfx.dll` (Game
+Porting Toolkit 3, recent CrossOver) or DXMT's `nvngx.dll` beside
+`winemetal.dll`. Before launch Irori copies the build's NGX DLL (as `nvngx.dll`
+and `_nvngx.dll`) and `nvapi64.dll` into the prefix's `system32` (a file there
+before is set aside), sets `HKLM\Software\NVIDIA Corporation\Global\NGXCore\FullPath`,
+prefers those copies in `WINEDLLOVERRIDES` and sets `D3DM_ENABLE_METALFX=1` or
+`DXMT_ENABLE_NVEXT=1`. What it wrote is recorded in the prefix
+(`.irori-metalfx.json`); turning the setting off, or a build without the
+translation (which the game's log and status then name), takes exactly that
+back out. The build itself is never changed.
+
 macOS settings include Msync, Metal HUD, Rosetta AVX advertisement and Retina mode.
 Retina mode sets `HKCU\Software\Wine\Mac Driver\RetinaMode` in the prefix before
 launch, only when it differs from what `user.reg` already holds, so Wine, CrossOver

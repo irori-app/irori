@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "請在桌面的鍵盤設定中將此指令綁定到按鍵：",
   "settings.quick_launch.off": "此指令也能開啟快速啟動器；如有需要，可在桌面的鍵盤設定中將其綁定到按鍵：",
   "settings.field.rosetta.label": "透過 Rosetta 執行",
-  "settings.field.rosetta.help": "即使遊戲也有 Apple 晶片版本，仍啟動它的 Intel 版本，適用於 Apple 晶片版本執行不正常的遊戲。只為 Intel Mac 製作的遊戲總是透過 Rosetta 執行。"
+  "settings.field.rosetta.help": "即使遊戲也有 Apple 晶片版本，仍啟動它的 Intel 版本，適用於 Apple 晶片版本執行不正常的遊戲。只為 Intel Mac 製作的遊戲總是透過 Rosetta 執行。",
+  "settings.field.metal_fx_dlss.label": "透過 MetalFX 使用 DLSS",
+  "settings.field.metal_fx_dlss.help": "讓使用 NVIDIA DLSS 的遊戲透過 Apple 的 MetalFX 進行超解析度縮放。只有內建此功能的 Wine 版本可以：Game Porting Toolkit 3、較新的 CrossOver 或含 DXMT 的版本。其他版本下保持關閉，遊戲記錄會說明原因。"
 }

@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Назначьте эту команду на клавишу в настройках клавиатуры рабочего стола:",
   "settings.quick_launch.off": "Быстрый запуск открывает и эта команда; при желании назначьте её на клавишу в настройках клавиатуры рабочего стола:",
   "settings.field.rosetta.label": "Запускать через Rosetta",
-  "settings.field.rosetta.help": "Запускает Intel-версию игры, даже если есть версия для Apple silicon, — для игр, у которых версия для Apple silicon работает плохо. Игры только для Mac с Intel всегда запускаются через Rosetta."
+  "settings.field.rosetta.help": "Запускает Intel-версию игры, даже если есть версия для Apple silicon, — для игр, у которых версия для Apple silicon работает плохо. Игры только для Mac с Intel всегда запускаются через Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS через MetalFX",
+  "settings.field.metal_fx_dlss.help": "Позволяет играм с NVIDIA DLSS масштабировать изображение через MetalFX от Apple. Это умеют только сборки Wine, в которых это есть: Game Porting Toolkit 3, свежий CrossOver или сборка с DXMT. С другими параметр остаётся выключенным, а журнал игры объясняет почему."
 }

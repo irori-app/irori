@@ -16,6 +16,7 @@ pub mod locations;
 pub mod mac_driver;
 pub mod manager;
 pub mod mangohud;
+pub mod metalfx;
 pub mod prefix;
 pub mod protontricks;
 pub mod release_checks;
@@ -428,6 +429,26 @@ pub async fn prepare_launch(
         }
         note(ctx, &format!("Could not change Retina mode: {e:#}"));
     }
+    let metalfx = if cfg!(target_os = "macos") {
+        match metalfx::apply(app, &effective, &wc, settings.metal_fx_dlss, ctx).await {
+            Ok(applied) => {
+                if let Some(why) = applied.unavailable {
+                    note(ctx, why);
+                }
+                applied
+            }
+            Err(e) if is_cancelled(&e) => return Err(e),
+            Err(e) => {
+                note(
+                    ctx,
+                    &format!("Could not set up DLSS through MetalFX: {e:#}"),
+                );
+                metalfx::Applied::default()
+            }
+        }
+    } else {
+        metalfx::Applied::default()
+    };
     match prefix::register_game(&wc.prefix, &target.id.app_name).await {
         Ok(true) => {
             tracing::info!("Created/Updated Wineprefix at {}", wc.prefix.display());
@@ -491,6 +512,7 @@ pub async fn prepare_launch(
     );
     env::layer(&mut vars, env::game_debug_env(&effective, &host));
     env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
+    metalfx.add_to(&mut vars);
     if wc.uses_umu
         && let Some(found) = umu::resolve(target.id, &target.game.title, &effective).await
     {

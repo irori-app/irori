@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Bind det här kommandot till en tangent i skrivbordets tangentbordsinställningar:",
   "settings.quick_launch.off": "Det här kommandot öppnar också snabbstartaren; bind det till en tangent i skrivbordets tangentbordsinställningar om du vill:",
   "settings.field.rosetta.label": "Kör med Rosetta",
-  "settings.field.rosetta.help": "Startar spelets Intel-version även när det också har en för Apple silicon, för spel vars Apple silicon-version krånglar. Spel som bara är gjorda för Intel-Mac körs alltid med Rosetta."
+  "settings.field.rosetta.help": "Startar spelets Intel-version även när det också har en för Apple silicon, för spel vars Apple silicon-version krånglar. Spel som bara är gjorda för Intel-Mac körs alltid med Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS via MetalFX",
+  "settings.field.metal_fx_dlss.help": "Låter spel som använder NVIDIA DLSS skala upp med Apples MetalFX. Bara Wine-versioner som har det kan: Game Porting Toolkit 3, en ny CrossOver eller en DXMT-version. Med andra förblir det av och spelloggen säger varför."
 }

@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Bu komutu masaüstünüzün klavye ayarlarında bir tuşa atayın:",
   "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:",
   "settings.field.rosetta.label": "Rosetta ile çalıştır",
-  "settings.field.rosetta.help": "Apple silicon sürümü de olsa oyunun Intel sürümünü başlatır; Apple silicon sürümü sorun çıkaran oyunlar içindir. Yalnızca Intel Mac’ler için yapılan oyunlar her zaman Rosetta ile çalışır."
+  "settings.field.rosetta.help": "Apple silicon sürümü de olsa oyunun Intel sürümünü başlatır; Apple silicon sürümü sorun çıkaran oyunlar içindir. Yalnızca Intel Mac’ler için yapılan oyunlar her zaman Rosetta ile çalışır.",
+  "settings.field.metal_fx_dlss.label": "MetalFX ile DLSS",
+  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS kullanan oyunların Apple’ın MetalFX’iyle ölçeklemesini sağlar. Bunu yalnızca onu içeren Wine sürümleri yapabilir: Game Porting Toolkit 3, yeni bir CrossOver veya DXMT içeren bir sürüm. Diğerlerinde kapalı kalır ve oyun günlüğü nedenini söyler."
 }

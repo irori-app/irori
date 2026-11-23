@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Přiřaďte tento příkaz klávese v nastavení klávesnice desktopu:",
   "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:",
   "settings.field.rosetta.label": "Spouštět přes Rosettu",
-  "settings.field.rosetta.help": "Spustí verzi hry pro Intel, i když má hra i verzi pro Apple silicon – pro hry, jejichž verze pro Apple silicon nefunguje správně. Hry jen pro Macy s Intelem běží přes Rosettu vždy."
+  "settings.field.rosetta.help": "Spustí verzi hry pro Intel, i když má hra i verzi pro Apple silicon – pro hry, jejichž verze pro Apple silicon nefunguje správně. Hry jen pro Macy s Intelem běží přes Rosettu vždy.",
+  "settings.field.metal_fx_dlss.label": "DLSS přes MetalFX",
+  "settings.field.metal_fx_dlss.help": "Umožní hrám, které používají NVIDIA DLSS, zvětšovat obraz pomocí MetalFX od Applu. Umí to jen sestavení Wine, která to obsahují: Game Porting Toolkit 3, novější CrossOver nebo sestavení s DXMT. U ostatních zůstane vypnuto a záznam hry uvede proč."
 }

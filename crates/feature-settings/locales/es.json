@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Asigna este comando a una tecla en los ajustes de teclado de tu escritorio:",
   "settings.quick_launch.off": "Este comando también abre el lanzador rápido; si quieres, asígnalo a una tecla en los ajustes de teclado del escritorio:",
   "settings.field.rosetta.label": "Ejecutar con Rosetta",
-  "settings.field.rosetta.help": "Inicia la versión para Intel del juego aunque también tenga una para Apple silicon, para juegos cuya versión para Apple silicon falla. Los juegos solo para Mac con Intel siempre funcionan con Rosetta."
+  "settings.field.rosetta.help": "Inicia la versión para Intel del juego aunque también tenga una para Apple silicon, para juegos cuya versión para Apple silicon falla. Los juegos solo para Mac con Intel siempre funcionan con Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS mediante MetalFX",
+  "settings.field.metal_fx_dlss.help": "Permite que los juegos que usan NVIDIA DLSS escalen con MetalFX de Apple. Solo pueden las compilaciones de Wine que lo incluyen: Game Porting Toolkit 3, un CrossOver reciente o una compilación con DXMT. Con las demás queda desactivado y el registro del juego explica por qué."
 }

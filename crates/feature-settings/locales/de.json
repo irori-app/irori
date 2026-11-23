@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Lege diesen Befehl in den Tastatureinstellungen deines Desktops auf eine Taste:",
   "settings.quick_launch.off": "Auch dieser Befehl öffnet den Schnellstarter; lege ihn auf Wunsch in den Tastatureinstellungen deines Desktops auf eine Taste:",
   "settings.field.rosetta.label": "Mit Rosetta ausführen",
-  "settings.field.rosetta.help": "Startet die Intel-Version des Spiels, auch wenn es eine für Apple Silicon hat – für Spiele, deren Apple-Silicon-Version Probleme macht. Spiele nur für Intel-Macs laufen immer mit Rosetta."
+  "settings.field.rosetta.help": "Startet die Intel-Version des Spiels, auch wenn es eine für Apple Silicon hat – für Spiele, deren Apple-Silicon-Version Probleme macht. Spiele nur für Intel-Macs laufen immer mit Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS über MetalFX",
+  "settings.field.metal_fx_dlss.help": "Lässt Spiele mit NVIDIA DLSS mit Apples MetalFX hochskalieren. Das können nur Wine-Builds, die es mitbringen: Game Porting Toolkit 3, ein aktuelles CrossOver oder ein DXMT-Build. Bei anderen bleibt es aus, und das Spielprotokoll nennt den Grund."
 }

@@ -1171,7 +1171,9 @@ commands without a window.
      `arch -x86_64` (`irori_runtime::rosetta::for_launch`); without Rosetta the
      launch fails with the typed `RosettaMissing`, and `irori_ui` asks before
      `Backend::install_rosetta` runs Apple's `softwareupdate`. Wine on Apple
-     silicon fails with it too.
+     silicon fails with it too. `iroriMetalFxDlss` (macOS) is set up in the
+     prefix by `irori_runtime::metalfx` only for builds that ship the
+     translation, and taken back out from its record otherwise.
   6. `process::spawn`, with a capped game log, then the programs started
      alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
      Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);

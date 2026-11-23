@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Associez cette commande à une touche dans les réglages clavier de votre bureau :",
   "settings.quick_launch.off": "Cette commande ouvre aussi le lanceur rapide ; associez-la à une touche dans les réglages clavier du bureau si vous le souhaitez :",
   "settings.field.rosetta.label": "Exécuter avec Rosetta",
-  "settings.field.rosetta.help": "Lance la version Intel du jeu même s’il en a aussi une pour Apple silicon, pour les jeux dont la version Apple silicon pose problème. Les jeux uniquement pour Mac Intel passent toujours par Rosetta."
+  "settings.field.rosetta.help": "Lance la version Intel du jeu même s’il en a aussi une pour Apple silicon, pour les jeux dont la version Apple silicon pose problème. Les jeux uniquement pour Mac Intel passent toujours par Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS via MetalFX",
+  "settings.field.metal_fx_dlss.help": "Permet aux jeux qui utilisent NVIDIA DLSS d’effectuer la mise à l’échelle avec MetalFX d’Apple. Seules les versions de Wine qui l’incluent le peuvent : Game Porting Toolkit 3, un CrossOver récent ou une version avec DXMT. Avec les autres, il reste désactivé et le journal du jeu en donne la raison."
 }

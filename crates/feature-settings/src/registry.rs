@@ -556,6 +556,7 @@ impl FieldSpec {
                 | "iroriRetinaMode"
                 | "iroriCrossoverBottlesPath"
                 | "iroriRosetta"
+                | "iroriMetalFxDlss"
         );
         if mac_only && host != HostPlatform::Mac {
             return false;
@@ -3292,6 +3293,27 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("macOS"))
     .help("settings.field.retina_mode.help")
     .keywords(&["retina", "hidpi", "resolution", "scaling", "mac"]),
+    game(
+        "iroriMetalFxDlss",
+        "settings.field.metal_fx_dlss.label",
+        Wine,
+        "settings.group.display",
+        Toggle,
+    )
+    .tag(Verbatim("macOS"))
+    .help("settings.field.metal_fx_dlss.help")
+    .keywords(&[
+        "dlss",
+        "metalfx",
+        "upscaling",
+        "nvidia",
+        "d3dmetal",
+        "dxmt",
+        "game porting toolkit",
+        "gptk",
+        "crossover",
+        "mac",
+    ]),
     game(
         "enableWineWayland",
         "settings.field.enable_wine_wayland.label",

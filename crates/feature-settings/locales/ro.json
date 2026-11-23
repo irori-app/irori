@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Atribuie această comandă unei taste în setările de tastatură ale desktopului:",
   "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:",
   "settings.field.rosetta.label": "Rulează cu Rosetta",
-  "settings.field.rosetta.help": "Pornește versiunea pentru Intel a jocului chiar dacă are și una pentru Apple silicon, pentru jocurile a căror versiune Apple silicon nu merge bine. Jocurile doar pentru Mac-uri cu Intel rulează mereu cu Rosetta."
+  "settings.field.rosetta.help": "Pornește versiunea pentru Intel a jocului chiar dacă are și una pentru Apple silicon, pentru jocurile a căror versiune Apple silicon nu merge bine. Jocurile doar pentru Mac-uri cu Intel rulează mereu cu Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS prin MetalFX",
+  "settings.field.metal_fx_dlss.help": "Permite jocurilor care folosesc NVIDIA DLSS să scaleze imaginea cu MetalFX de la Apple. Pot face asta doar versiunile Wine care îl includ: Game Porting Toolkit 3, un CrossOver recent sau o versiune cu DXMT. Cu celelalte rămâne oprit, iar jurnalul jocului spune de ce."
 }

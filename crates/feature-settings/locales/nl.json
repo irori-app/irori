@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Koppel deze opdracht aan een toets in de toetsenbordinstellingen van je desktop:",
   "settings.quick_launch.off": "Deze opdracht opent de snelstarter ook; koppel hem desgewenst aan een toets in de toetsenbordinstellingen van je desktop:",
   "settings.field.rosetta.label": "Uitvoeren met Rosetta",
-  "settings.field.rosetta.help": "Start de Intel-versie van het spel, ook als er een voor Apple silicon is, voor spellen waarvan de Apple silicon-versie niet goed werkt. Spellen alleen voor Intel-Macs draaien altijd met Rosetta."
+  "settings.field.rosetta.help": "Start de Intel-versie van het spel, ook als er een voor Apple silicon is, voor spellen waarvan de Apple silicon-versie niet goed werkt. Spellen alleen voor Intel-Macs draaien altijd met Rosetta.",
+  "settings.field.metal_fx_dlss.label": "DLSS via MetalFX",
+  "settings.field.metal_fx_dlss.help": "Laat spellen die NVIDIA DLSS gebruiken opschalen met MetalFX van Apple. Alleen Wine-builds die het meeleveren kunnen dat: Game Porting Toolkit 3, een recente CrossOver of een DXMT-build. Bij andere blijft het uit en zegt het spellogboek waarom."
 }

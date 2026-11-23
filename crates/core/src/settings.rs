@@ -236,6 +236,11 @@ pub struct GameSettings {
     /// Rosetta. Irori-only.
     #[serde(rename = "iroriRosetta")]
     pub rosetta: bool,
+    /// macOS: NVIDIA DLSS translated to MetalFX, where the Wine build ships
+    /// the translation (Game Porting Toolkit 3's D3DMetal, CrossOver, DXMT).
+    /// Irori-only.
+    #[serde(rename = "iroriMetalFxDlss")]
+    pub metal_fx_dlss: bool,
     /// The emulator that plays this game (`duckstation`,
     /// `retroarch:<core>`); empty for the system's default. Irori-only.
     #[serde(rename = "iroriEngine", alias = "emberEngine")]
@@ -594,6 +599,7 @@ impl Default for GameSettings {
             enable_quick_saves_menu: false,
             retina_mode: false,
             rosetta: false,
+            metal_fx_dlss: false,
             engine: String::new(),
             engine_version: String::new(),
             engine_options: BTreeMap::new(),

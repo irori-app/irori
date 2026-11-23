@@ -1679,5 +1679,7 @@
   "settings.quick_launch.command": "Przypisz to polecenie do klawisza w ustawieniach klawiatury pulpitu:",
   "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:",
   "settings.field.rosetta.label": "Uruchamiaj przez Rosettę",
-  "settings.field.rosetta.help": "Uruchamia wersję gry dla procesorów Intel, nawet jeśli ma też wersję dla Apple silicon – dla gier, których wersja na Apple silicon źle działa. Gry tylko dla Maców z Intelem zawsze działają przez Rosettę."
+  "settings.field.rosetta.help": "Uruchamia wersję gry dla procesorów Intel, nawet jeśli ma też wersję dla Apple silicon – dla gier, których wersja na Apple silicon źle działa. Gry tylko dla Maców z Intelem zawsze działają przez Rosettę.",
+  "settings.field.metal_fx_dlss.label": "DLSS przez MetalFX",
+  "settings.field.metal_fx_dlss.help": "Pozwala grom korzystającym z NVIDIA DLSS skalować obraz przez MetalFX od Apple. Potrafią to tylko kompilacje Wine, które to zawierają: Game Porting Toolkit 3, nowszy CrossOver lub kompilacja z DXMT. Przy innych pozostaje wyłączone, a dziennik gry podaje powód."
 }
