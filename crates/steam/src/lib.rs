@@ -1,8 +1,8 @@
-//! Steam protocol client, built on Steam's Web API (the calls the Steam
-//! client and steamcommunity.com make).
+//! Steam Web API client (the public Web API and web session endpoints).
 //!
-//! * [`auth`]: sign-in through `IAuthenticationService` (QR code, or
-//!   password and Steam Guard), refresh tokens, and [`TokenClaims`].
+//! * [`auth`]: browser-session cookie parsing, web JWT renewal
+//!   (`/jwt/refresh`), [`SteamAuth`] (`WebSession` or `ApiKey`), and
+//!   [`TokenClaims`].
 //! * [`library`]: owned games, the Steam Family library and store details.
 //! * [`achievements`]: a game's achievements, the account's unlocks and
 //!   their global unlock rates.
@@ -23,7 +23,6 @@ pub mod auth;
 mod error;
 pub mod friends;
 pub mod library;
-mod proto;
 pub mod search;
 pub mod tags;
 
@@ -31,12 +30,9 @@ pub use achievements::{
     AchievementGroup, AchievementSchema, GameAchievement, UserAchievement, UserAchievementGroup,
     UserAchievements,
 };
-pub use api::{API_BASE, ASSETS_BASE, Client, Endpoints, STORE_BASE};
+pub use api::{API_BASE, ASSETS_BASE, Client, Endpoints, LOGIN_BASE, STORE_BASE};
 pub use assets::AppAssets;
-pub use auth::{
-    Confirmation, CredentialsSession, DeviceInfo, GuardKind, OS_TYPE, Poll, QrSession, Renewed,
-    TokenClaims, Tokens,
-};
+pub use auth::{Renewed, SteamAuth, TokenClaims, parse_steam_cookie};
 pub use error::SteamError;
 pub use friends::PlayerSummary;
 pub use library::{

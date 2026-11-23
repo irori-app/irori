@@ -382,6 +382,7 @@ fn steam_card_reads_the_library_from_the_client(cx: &mut TestAppContext) {
         irori_steam_api::Endpoints {
             api: dead.clone(),
             store: dead.clone(),
+            login: dead.clone(),
             assets: dead,
         },
     );
@@ -541,6 +542,7 @@ fn steam_friends_window_lists_friends_and_offers_only_real_joins(cx: &mut TestAp
         irori_steam_api::Endpoints {
             api: "http://127.0.0.1:9".into(),
             store: "http://127.0.0.1:9".into(),
+            login: "http://127.0.0.1:9".into(),
             assets: "http://127.0.0.1:9".into(),
         },
     );
@@ -705,4 +707,75 @@ fn xbox_friends_have_a_tab_of_their_own(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("xbox-friend-32").is_some());
     // Read only: nothing to join or message.
     assert!(vcx.debug_bounds("friend-join-31").is_none());
+}
+
+#[gpui_kit::test]
+fn steam_sign_in_view_renders_both_tabs_and_validates_api_key(cx: &mut TestAppContext) {
+    use crate::login::steam::{Mode, SteamSignInView, SteamSignedIn};
+
+    setup(cx);
+    let emitted = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = emitted.clone();
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            let view = cx.new(|cx| SteamSignInView::new(window, cx));
+            cx.subscribe(&view, move |_, event: &SteamSignedIn, _| {
+                sink.lock().unwrap().push(event.0.clone());
+            })
+            .detach();
+            view
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    // Default tab is Steam website, showing the tab bar and either the open
+    // button (when irori-sign-in is present) or the API key fallback button.
+    assert!(vcx.debug_bounds("steam-sign-in-mode").is_some());
+    assert!(
+        vcx.debug_bounds("steam-web-open").is_some()
+            || vcx.debug_bounds("steam-web-use-api-key").is_some()
+    );
+
+    // Switch to the guided Steam Web API key tab.
+    vcx.update(|window, cx| {
+        view.update(cx, |v, cx| v.set_mode(Mode::ApiKey, window, cx));
+    });
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("steam-api-open-key-page").is_some());
+    assert!(vcx.debug_bounds("steam-api-open-privacy-page").is_some());
+    assert!(vcx.debug_bounds("steam-api-connect").is_some());
+
+    // Invalid API key reports an inline error and does not emit.
+    vcx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_api_inputs_for_test("76561197960265729", "too-short", window, cx);
+        });
+    });
+    vcx.run_until_parked();
+    click(&mut vcx, "steam-api-connect");
+    vcx.run_until_parked();
+    assert!(vcx.update(|_, cx| view.read(cx).error().is_some()));
+    assert!(emitted.lock().unwrap().is_empty());
+
+    // Valid SteamID64 + 32-char hex API key emits the API key login payload.
+    vcx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_api_inputs_for_test(
+                "76561197960265729",
+                "0123456789ABCDEF0123456789ABCDEF",
+                window,
+                cx,
+            );
+        });
+    });
+    vcx.run_until_parked();
+    click(&mut vcx, "steam-api-connect");
+    vcx.run_until_parked();
+    assert!(vcx.update(|_, cx| view.read(cx).error().is_none()));
+    let sent = emitted.lock().unwrap().clone();
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].contains("apiKey"));
+    assert!(sent[0].contains("76561197960265729"));
 }

@@ -35,6 +35,9 @@ const SIGN_IN_FLAG: &str = "--sign-in-window";
 /// The window's first argument for the Microsoft account sign-in
 /// (`irori_sign_in::microsoft::MICROSOFT_ACCOUNT_FLAG`).
 const MICROSOFT_ACCOUNT_FLAG: &str = "--microsoft-account";
+/// The window's first argument for Steam's official web sign-in
+/// (`irori_sign_in::steam::STEAM_ACCOUNT_FLAG`).
+const STEAM_ACCOUNT_FLAG: &str = "--steam-account";
 
 /// The program that shows the sign-in window.
 #[derive(Debug, Clone)]
@@ -97,6 +100,18 @@ pub(super) async fn sign_in_microsoft(
         "--profile",
         &profile,
     ];
+    run(helper, &args, cancel).await
+}
+
+/// Show Steam's official web sign-in page at `url` in the sign-in window until
+/// Steam sets its web session cookies, the window closes, or `cancel` fires.
+pub(super) async fn sign_in_steam(
+    helper: Helper,
+    url: String,
+    title: String,
+    cancel: CancellationToken,
+) -> Result<WindowOutcome> {
+    let args = [STEAM_ACCOUNT_FLAG, "--url", &url, "--title", &title];
     run(helper, &args, cancel).await
 }
 

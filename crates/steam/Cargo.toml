@@ -1,6 +1,6 @@
 [package]
 name = "irori-steam-api"
-description = "Steam protocol client: sign-in through IAuthenticationService, owned and family-shared games, store details"
+description = "Steam Web API client: browser session renewal, Web API key auth, owned and family-shared games, store details"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,8 +13,6 @@ thiserror.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-prost.workspace = true
-rsa.workspace = true
 base64.workspace = true
 tracing.workspace = true
 
