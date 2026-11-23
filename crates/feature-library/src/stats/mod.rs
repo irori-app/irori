@@ -6,6 +6,9 @@
 //!   picked up again, new games); the most played games as covers.
 //! - **Backlog**: the games beaten and abandoned in a year on a timeline, the
 //!   yearly goal and its pace, and the library grouped by play status.
+//! - **Discoveries**: the period in sentences scored by how unusual they are
+//!   (pin or hide each kind), milestones reached and next, a year ago, and
+//!   "Copy summary".
 //! - **Album**: the screenshots the user took in the period, by game.
 //! - **Journal**: the notes the user wrote on days in the period.
 //!
@@ -30,6 +33,8 @@ mod album_view;
 pub(crate) mod backlog;
 mod backlog_extras_view;
 mod backlog_view;
+pub(crate) mod discoveries;
+mod discoveries_view;
 mod hero;
 pub(crate) mod journal;
 mod journal_view;
@@ -60,12 +65,13 @@ use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, Render, Size, Styled as _, Subscription, Window, div, px,
 };
-use irori_core::GameId;
+use irori_core::{GameId, Paths, json_store};
 use irori_services::{ScreenshotIndex, UserData};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::EmptyState;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
+use serde::{Deserialize, Serialize};
 
 use album::{Album, Shot};
 use album_view::{AlbumItem, GridLayout};
@@ -80,8 +86,23 @@ use storage::{DriveUsage, InstalledGame};
 pub(crate) enum Tab {
     Overview,
     Backlog,
+    Discoveries,
     Album,
     Journal,
+}
+
+/// What the stats page keeps between runs (`state/stats-page.json`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+struct StatsPrefs {
+    /// Kinds of discovery that lead, in the order pinned.
+    pinned: Vec<String>,
+    /// Kinds of discovery not shown.
+    hidden: Vec<String>,
+}
+
+fn prefs_file() -> std::path::PathBuf {
+    Paths::get().state_dir().join("stats-page.json")
 }
 
 pub struct StatsView {
@@ -96,6 +117,10 @@ pub struct StatsView {
     history: Option<Arc<History>>,
     overview: Option<Overview>,
     backlog: Option<Backlog>,
+    /// What stood out in the period, its milestones and a year ago.
+    discoveries: Option<Arc<discoveries::Discoveries>>,
+    /// The discoveries pinned and hidden, kept between runs.
+    prefs: StatsPrefs,
     /// The backlog's queue, shelf, pile and How Long To Beat cards.
     backlog_extras: Option<backlog::Extras>,
     /// The user's screenshots; `None` until first read.
@@ -169,6 +194,8 @@ impl StatsView {
             overview: None,
             backlog: None,
             backlog_extras: None,
+            discoveries: None,
+            prefs: StatsPrefs::default(),
             screenshots: None,
             album: None,
             album_game: None,
@@ -192,7 +219,63 @@ impl StatsView {
         };
         view.reload(cx);
         view.reload_storage(cx);
+        view.load_prefs(cx);
         view
+    }
+
+    /// Read the page's kept choices, off the UI thread.
+    fn load_prefs(&mut self, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::state::run_infallible(cx, async move {
+            b.spawn_blocking(|| json_store::read_or_default::<StatsPrefs>(&prefs_file()))
+                .await
+                .ok()
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(Some(prefs)) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.prefs = prefs;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Keep the page's choices, off the UI thread.
+    fn save_prefs(&mut self, cx: &mut Context<Self>) {
+        let prefs = self.prefs.clone();
+        let b = backend(cx);
+        irori_ui::state::run_infallible(cx, async move {
+            let _ = b
+                .spawn_blocking(move || {
+                    if let Err(e) = json_store::write(&prefs_file(), &prefs) {
+                        tracing::warn!("saving the stats page's choices: {e:#}");
+                    }
+                })
+                .await;
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Pin a kind of discovery (it leads from then on), or unpin it.
+    fn toggle_pin(&mut self, kind: &str, cx: &mut Context<Self>) {
+        if let Some(ix) = self.prefs.pinned.iter().position(|p| p == kind) {
+            self.prefs.pinned.remove(ix);
+        } else {
+            self.prefs.pinned.push(kind.to_string());
+        }
+        self.save_prefs(cx);
+    }
+
+    /// Stop showing a kind of discovery.
+    fn hide_kind(&mut self, kind: &str, cx: &mut Context<Self>) {
+        self.prefs.pinned.retain(|p| p != kind);
+        if !self.prefs.hidden.iter().any(|h| h == kind) {
+            self.prefs.hidden.push(kind.to_string());
+        }
+        self.save_prefs(cx);
     }
 
     fn today() -> NaiveDate {
@@ -267,6 +350,15 @@ impl StatsView {
             |id| snapshot.get(id).is_some(),
             today,
         ));
+        self.discoveries = self.overview.as_ref().map(|o| {
+            Arc::new(discoveries::compute(
+                &history,
+                o,
+                &user,
+                |id| snapshot.get(id).is_some(),
+                today,
+            ))
+        });
         let query = self.journal_query.read(cx).value().to_string();
         self.journal = Some(Arc::new(journal::compute(
             &user.journal,
@@ -326,7 +418,7 @@ impl StatsView {
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let today = Self::today();
         match self.tab {
-            Tab::Overview | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let to = if by < 0 {
                     period.previous()
@@ -366,7 +458,7 @@ impl StatsView {
                 .min();
         }
         match self.tab {
-            Tab::Overview | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let back = period
                     .previous()
@@ -493,6 +585,7 @@ impl Render for StatsView {
                     .child(self.render_overview(window, cx))
                     .into_any_element(),
                 Tab::Backlog => self.render_backlog(window, cx),
+                Tab::Discoveries => self.render_discoveries(window, cx),
                 Tab::Album => self.render_album(window, cx),
                 Tab::Journal => self.render_journal(window, cx),
             }

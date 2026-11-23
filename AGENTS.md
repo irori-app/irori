@@ -915,6 +915,14 @@ commands without a window.
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats Discoveries** (`irori-library::stats::discoveries`, `discoveries_view`): the
+  period's findings (comeback, marathon, streak, new favourite, busiest day, night
+  owl, early bird, weekends, one game, variety, beaten), each scored by how unusual it
+  is, the highest over the hero; a kind can be pinned or hidden (kept in
+  `state/stats-page.json`); milestones of hours, games, beaten games and days played
+  with the day each was reached (`None` before the history) and the next ones at the
+  last 90 days' pace; the week around today a year ago (games and notes); "Copy
+  summary" puts a few lines on the clipboard.
 - **Stats backlog extras** (`irori-library::stats::backlog::extras`,
   `backlog_extras_view`): the queue (Plan to play, oldest first, each with How Long To
   Beat's main story from `Backend::hltb_times`, else the median of the user's beaten

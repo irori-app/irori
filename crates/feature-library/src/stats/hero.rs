@@ -140,6 +140,11 @@ impl StatsView {
                     t("library.stats.tab.overview"),
                 ),
                 (Tab::Backlog, IconName::Flag, t("library.stats.tab.backlog")),
+                (
+                    Tab::Discoveries,
+                    IconName::Lightbulb,
+                    t("library.stats.tab.discoveries"),
+                ),
                 (Tab::Album, IconName::Images, t("library.stats.tab.album")),
                 (
                     Tab::Journal,
@@ -165,7 +170,9 @@ impl StatsView {
             )
         });
         let label = match self.tab {
-            Tab::Overview | Tab::Album | Tab::Journal => text::period(&self.period()),
+            Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
+                text::period(&self.period())
+            }
             Tab::Backlog => self.year().to_string().into(),
         };
         let stepper = (self.tab == Tab::Backlog || self.span != Span::All).then(|| {
@@ -415,7 +422,7 @@ impl StatsView {
 }
 
 /// A row of pill buttons, one selected.
-fn pills<T: Copy + 'static>(
+pub(super) fn pills<T: Copy + 'static>(
     id: &'static str,
     items: Vec<(Option<IconName>, SharedString, bool, T)>,
     cx: &mut Context<StatsView>,
