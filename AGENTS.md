@@ -1119,7 +1119,11 @@ commands without a window.
   failing, with the driver install command for the distribution and GPU to copy
   (`vulkan_driver_command`). Fixes tried this session (`mark_fix_tried`) come last.
   `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
-  `sudo`: a low map count is explained with the commands to run. Games through
+  `sudo`: a low map count is explained with the commands to run. For a Rockstar
+  title from Epic it also reads Yama's `kernel.yama.ptrace_scope` and the Rockstar
+  Games Launcher's `launcher.log` in the prefix: from 2 up Wine can't show the
+  launcher that Epic started it ("Buy now"), explained with the commands that set it
+  to 1 (at 3, which only a restart lowers, the lasting one). Games through
   Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`
   (`irori_runtime::env::game_debug_env`) unless the user set `WINEDEBUG` or verbose
   logs, so the log names a missing DLL; installers and winetricks keep their own.
