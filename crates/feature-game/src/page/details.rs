@@ -14,8 +14,8 @@ use gpui_kit::{
     AnyElement, App, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement,
     SharedString, Styled, div, px, relative, rems,
 };
-use irori_core::GameInfo;
 use irori_core::util::{format_bytes, unix_now};
+use irori_core::{GameInfo, GameMode};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -94,6 +94,32 @@ fn chip_split(count: usize, max: usize) -> (usize, Option<usize>) {
     }
 }
 
+/// Steam tags shown as chips before the rest wait behind "+N".
+const TAG_CHIPS: usize = 6;
+
+/// The Steam tags worth a chip: those that no genre or game mode the page
+/// already shows names (in the interface language or as Steam spells the
+/// mode in English).
+pub(super) fn tag_chips(tags: &[String], genres: &[String], modes: &[GameMode]) -> Vec<String> {
+    use irori_services::search::tag_key;
+    let shown: std::collections::HashSet<String> = genres
+        .iter()
+        .map(|g| tag_key(g))
+        .chain(
+            modes
+                .iter()
+                .map(|m| tag_key(&irori_ui::game_mode::label(*m))),
+        )
+        .collect();
+    tags.iter()
+        .filter(|tag| !shown.contains(&tag_key(tag)))
+        .filter(|tag| {
+            GameMode::from_search(tag).is_none_or(|named| !named.iter().all(|m| modes.contains(m)))
+        })
+        .cloned()
+        .collect()
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -137,6 +163,7 @@ impl GamePage {
             )
             .children(group(credits, cx))
             .children(group(self.tag_rows(game, muted), cx))
+            .children(group(self.steam_tag_rows(game, muted, cx), cx))
             .children(group(play, cx))
             .children(group(install, cx))
             .children(group(compat, cx))
@@ -248,6 +275,70 @@ impl GamePage {
             rows.push(row(t("game.details.tags"), chips(game.tags.clone()), muted));
         }
         rows
+    }
+
+    /// The game's Steam tags as chips, each showing the library's games with
+    /// that tag; the strongest first, the rest behind "+N".
+    fn steam_tag_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+        let genres = self
+            .extra
+            .ready()
+            .map(|e| e.genres.clone())
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| game.genres.clone());
+        let tags = tag_chips(&game.store_tags, &genres, &game.game_modes);
+        if tags.is_empty() {
+            return Vec::new();
+        }
+        let (shown, more) = if self.tags_expanded {
+            (tags.len(), None)
+        } else {
+            chip_split(tags.len(), TAG_CHIPS)
+        };
+        let chips = tags.into_iter().take(shown).enumerate().map(|(i, tag)| {
+            let label: SharedString = tag.into();
+            let event = label.clone();
+            Button::new(("steam-tag", i))
+                .xsmall()
+                .outline()
+                .label(label.clone())
+                .tooltip(t_args("game.details.show_tag", &[("tag", &label)]))
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    cx.emit(super::GamePageEvent::ShowTag(event.clone()))
+                }))
+        });
+        let toggle = match more {
+            Some(n) => Some(
+                Button::new("steam-tags-more")
+                    .xsmall()
+                    .ghost()
+                    .label(t_args("game.details.more", &[("count", &n.to_string())])),
+            ),
+            None if self.tags_expanded => Some(
+                Button::new("steam-tags-more")
+                    .xsmall()
+                    .ghost()
+                    .label(t("game.details.fewer")),
+            ),
+            None => None,
+        }
+        .map(|b| {
+            b.on_click(cx.listener(|this, _, _, cx| {
+                this.tags_expanded = !this.tags_expanded;
+                cx.notify();
+            }))
+        });
+        vec![row(
+            t("game.details.steam_tags"),
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .gap_1()
+                .flex_wrap()
+                .children(chips)
+                .children(toggle),
+            muted,
+        )]
     }
 
     /// The release date in the interface language, or as the store wrote it
@@ -640,6 +731,31 @@ fn hltb_bar(h: &HowLongToBeat, played_hours: f32, muted: Hsla, cx: &App) -> AnyE
 #[cfg(test)]
 mod tests {
     use super::chip_split;
+    use irori_core::GameMode;
+
+    #[test]
+    fn tag_chips_leave_out_what_genres_and_modes_say() {
+        crate::i18n::register();
+        let tags: Vec<String> = [
+            "Roguelike",
+            "Action",
+            "Co-op",
+            "Singleplayer",
+            "Great Soundtrack",
+        ]
+        .map(String::from)
+        .to_vec();
+        let genres = vec!["action".to_string()];
+        assert_eq!(
+            super::tag_chips(&tags, &genres, &[GameMode::Single, GameMode::Coop]),
+            ["Roguelike", "Great Soundtrack"]
+        );
+        // A mode the page doesn't show keeps its tag.
+        assert_eq!(
+            super::tag_chips(&tags, &[], &[GameMode::Single]),
+            ["Roguelike", "Action", "Co-op", "Great Soundtrack"]
+        );
+    }
 
     #[test]
     fn chips_past_the_limit_collapse() {

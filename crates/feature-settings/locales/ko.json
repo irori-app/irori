@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "대기 화면 표시 시간",
   "settings.field.idle_minutes.help": "Big Picture가 대기 화면을 표시하기까지 입력이 없는 시간(분)입니다. 0이면 표시하지 않습니다. 버튼, 키, 마우스 움직임으로 Big Picture로 돌아옵니다.",
   "settings.field.idle_screen.label": "대기 화면",
+  "settings.field.steam_tag_limit.help": "라이브러리가 게임마다 유지할 가장 강한 Steam 태그의 수(5~20)입니다. 가장 강한 태그보다 훨씬 적은 플레이어가 단 태그는 제외됩니다.",
+  "settings.field.steam_tag_limit.label": "게임당 Steam 태그",
   "settings.field.steam_title_match.help": "위키에 나와 있지 않을 때 다른 상점의 게임을 같은 제목(에디션 이름 제외, 출시 시기 1년 이내)의 Steam 앱에 연결하여 Steam 태그, 상점 정보, ProtonDB에 사용합니다. 한 번에 몇 개씩만 검색하며 결과는 한 달 동안 보관됩니다.",
   "settings.field.steam_title_match.label": "정확한 제목으로 Steam에서 게임 찾기",
   "settings.option.idle_screen.slideshow": "게임 아트를 차례로 표시",

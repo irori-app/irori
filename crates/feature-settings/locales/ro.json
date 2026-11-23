@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Ecran de repaus după",
   "settings.field.idle_minutes.help": "Minute fără activitate până când Big Picture arată ecranul de repaus; 0 nu îl arată niciodată. Orice buton, tastă sau mișcare a mouse-ului readuce Big Picture.",
   "settings.field.idle_screen.label": "Ecran de repaus",
+  "settings.field.steam_tag_limit.help": "Câte dintre cele mai puternice etichete Steam ale unui joc păstrează biblioteca, de la 5 la 20. Etichetele date de mult mai puțini jucători decât cea mai puternică sunt omise.",
+  "settings.field.steam_tag_limit.label": "Etichete Steam per joc",
   "settings.field.steam_title_match.help": "Leagă jocurile din alte magazine de aplicația Steam cu același titlu (fără numele edițiilor, lansată la cel mult un an distanță) când nicio wiki nu indică una, pentru etichetele Steam, detaliile din magazin și ProtonDB. Se caută câteva jocuri odată, iar răspunsurile sunt păstrate o lună.",
   "settings.field.steam_title_match.label": "Găsește jocurile pe Steam după titlul exact",
   "settings.option.idle_screen.slideshow": "Imaginile jocurilor tale, una după alta",

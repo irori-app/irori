@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Écran de veille après",
   "settings.field.idle_minutes.help": "Minutes sans action avant que Big Picture affiche l’écran de veille ; 0 ne l’affiche jamais. Un bouton, une touche ou un mouvement de souris ramène Big Picture.",
   "settings.field.idle_screen.label": "Écran de veille",
+  "settings.field.steam_tag_limit.help": "Combien des tags Steam les plus forts d’un jeu la bibliothèque garde, de 5 à 20. Les tags donnés par bien moins de joueurs que le plus fort sont omis.",
+  "settings.field.steam_tag_limit.label": "Tags Steam par jeu",
   "settings.field.steam_title_match.help": "Lie les jeux des autres boutiques à l’app Steam du même titre (hors noms d’édition, sortie à un an près) quand aucun wiki n’en indique, pour les tags Steam, les détails de la boutique et ProtonDB. Quelques jeux sont recherchés à la fois, et les réponses sont gardées un mois.",
   "settings.field.steam_title_match.label": "Trouver les jeux sur Steam par leur titre exact",
   "settings.option.idle_screen.slideshow": "Les images de vos jeux, l’une après l’autre",

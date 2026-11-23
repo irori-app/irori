@@ -410,6 +410,7 @@ impl Backend {
         let user = self.userdata.snapshot();
         let tag_language =
             irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
+        let tag_limit = self.settings.app().steam_tag_limit;
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
             .values()
@@ -439,7 +440,8 @@ impl Backend {
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
                     let app = self.steam_links.linked(&g).app_id();
-                    self.steam_tags.complete(&mut g, tag_language, app);
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
@@ -450,7 +452,8 @@ impl Backend {
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
                     let app = self.steam_links.linked(&g).app_id();
-                    self.steam_tags.complete(&mut g, tag_language, app);
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {

@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "閒置畫面等待時間",
   "settings.field.idle_minutes.help": "無操作多少分鐘後 Big Picture 顯示閒置畫面；0 表示永不顯示。按任意按鍵或移動滑鼠即可返回 Big Picture。",
   "settings.field.idle_screen.label": "閒置畫面",
+  "settings.field.steam_tag_limit.help": "收藏庫為每款遊戲保留的最強 Steam 標籤數量，5 到 20 個。給出人數遠少於最強標籤的標籤會被略去。",
+  "settings.field.steam_tag_limit.label": "每款遊戲的 Steam 標籤數",
   "settings.field.steam_title_match.help": "當沒有 wiki 列出對應應用程式時，將其他商店的遊戲連結到標題相同（不計版本名稱，發行時間相差不超過一年）的 Steam 應用程式，用於 Steam 標籤、商店詳細資料和 ProtonDB。每次只尋找幾款遊戲，結果保留一個月。",
   "settings.field.steam_title_match.label": "依準確標題在 Steam 上尋找遊戲",
   "settings.option.idle_screen.slideshow": "依序顯示遊戲圖片",

@@ -596,8 +596,13 @@ commands without a window.
   `IStoreBrowseService/GetItems` and `IStoreService/GetTagList`
   (`irori_steam_api::tags`), kept in `<cache>/steam-tags.json` (a month per app, a week
   per language) and asked after a library rebuild only for apps without an answer.
-  The library filters by them (`ViewFilter::tags`, the commonest 30 offered) and
-  searches with `tag:` (`search::tag_key` folds case and punctuation).
+  A game keeps at most `iroriSteamTagLimit` (5–20) and none with under a quarter of
+  the strongest tag's votes (`steam_tags::kept`; answers cached before votes were kept
+  count every tag). The library filters by them (`ViewFilter::tags`, the commonest 30
+  offered) and searches with `tag:` (`search::tag_key` folds case and punctuation);
+  the game page's details show them as chips, leaving out what its genres and modes
+  already say (`details::tag_chips`), each opening the library filtered by that tag
+  (`GamePageEvent::ShowTag`, `irori_library::show_tag`).
 - **Hidden games PIN** (`hidden_lock.rs`, UI `irori_ui::hidden_lock`): with a PIN,
   `LibrarySnapshot::hidden_locked` holds until it is entered (per run) and every place
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big

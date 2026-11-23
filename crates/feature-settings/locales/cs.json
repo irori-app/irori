@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Spořič po",
   "settings.field.idle_minutes.help": "Minuty bez vstupu, než Big Picture ukáže spořič; 0 jej nikdy neukáže. Jakékoli tlačítko, klávesa nebo pohyb myši vrátí Big Picture zpět.",
   "settings.field.idle_screen.label": "Spořič",
+  "settings.field.steam_tag_limit.help": "Kolik nejsilnějších štítků Steamu u hry knihovna ponechá, od 5 do 20. Štítky, které přidělilo mnohem méně hráčů než tomu nejsilnějšímu, se vynechají.",
+  "settings.field.steam_tag_limit.label": "Štítků Steamu na hru",
   "settings.field.steam_title_match.help": "Propojí hry z jiných obchodů s aplikací Steam se stejným názvem (bez ohledu na název edice, vydanou nejvýše rok od sebe), pokud žádná wiki žádnou neuvádí, kvůli štítkům Steamu, údajům z obchodu a ProtonDB. Vyhledává se jen několik her najednou a odpovědi se uchovávají měsíc.",
   "settings.field.steam_title_match.label": "Hledat hry na Steamu podle přesného názvu",
   "settings.option.idle_screen.slideshow": "Obrázky vašich her jeden po druhém",

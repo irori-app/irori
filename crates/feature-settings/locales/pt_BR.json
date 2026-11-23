@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Tela de descanso após",
   "settings.field.idle_minutes.help": "Minutos sem atividade até o Big Picture mostrar a tela de descanso; 0 nunca a mostra. Qualquer botão, tecla ou movimento do mouse traz o Big Picture de volta.",
   "settings.field.idle_screen.label": "Tela de descanso",
+  "settings.field.steam_tag_limit.help": "Quantas das tags da Steam mais fortes de um jogo a biblioteca mantém, de 5 a 20. Tags dadas por muito menos jogadores do que a mais forte ficam de fora.",
+  "settings.field.steam_tag_limit.label": "Tags da Steam por jogo",
   "settings.field.steam_title_match.help": "Vincula os jogos de outras lojas ao app da Steam com o mesmo título (sem contar nomes de edição, lançado com até um ano de diferença) quando nenhuma wiki indica um, para as tags da Steam, os detalhes da loja e o ProtonDB. Poucos jogos são procurados por vez e as respostas ficam guardadas por um mês.",
   "settings.field.steam_title_match.label": "Encontrar jogos na Steam pelo título exato",
   "settings.option.idle_screen.slideshow": "Artes dos seus jogos, uma após a outra",

@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Viloskärm efter",
   "settings.field.idle_minutes.help": "Minuter utan inmatning innan Big Picture visar viloskärmen; 0 visar den aldrig. Varje knapp, tangent eller musrörelse tar tillbaka Big Picture.",
   "settings.field.idle_screen.label": "Viloskärm",
+  "settings.field.steam_tag_limit.help": "Hur många av ett spels starkaste Steam-taggar biblioteket behåller, från 5 till 20. Taggar som långt färre spelare gav än den starkaste utelämnas.",
+  "settings.field.steam_tag_limit.label": "Steam-taggar per spel",
   "settings.field.steam_title_match.help": "Länkar spel från andra butiker till Steam-appen med samma titel (utgåvenamn oräknade, utgiven inom ett år) när ingen wiki anger någon, för Steams taggar, butiksdetaljer och ProtonDB. Några få spel slås upp åt gången och svaren sparas i en månad.",
   "settings.field.steam_title_match.label": "Hitta spel på Steam via exakt titel",
   "settings.option.idle_screen.slideshow": "Dina spels bilder, en i taget",

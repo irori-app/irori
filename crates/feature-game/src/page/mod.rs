@@ -87,6 +87,9 @@ pub enum GamePageEvent {
     /// A game-mode chip was chosen: show the library's games of that mode
     /// (`irori_library::show_game_mode`).
     ShowGameMode(irori_core::GameMode),
+    /// A Steam tag chip was chosen: show the library's games with that tag
+    /// (`irori_library::show_tag`).
+    ShowTag(SharedString),
 }
 
 /// A small uppercase label over the page ("SCREENSHOTS", "DETAILS"), in
@@ -177,6 +180,8 @@ pub struct GamePage {
     changelog_expanded: bool,
     /// The trailer player, made once the store page names trailers.
     trailer: Option<Entity<irori_ui::trailer::TrailerPlayer>>,
+    /// Every Steam tag chip is shown, not just the strongest.
+    tags_expanded: bool,
     /// Index of the screenshot open in the viewer.
     viewer: Option<usize>,
     viewer_focus: FocusHandle,
@@ -317,6 +322,7 @@ impl GamePage {
             page_width: Rc::new(Cell::new(px(0.))),
             sticky: false,
             changelog_expanded: false,
+            tags_expanded: false,
             viewer: None,
             trailer: None,
             viewer_focus: cx.focus_handle(),

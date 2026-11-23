@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "アイドル画面までの時間",
   "settings.field.idle_minutes.help": "Big Picture がアイドル画面を表示するまでの無操作の分数。0 で表示しません。ボタン、キー、マウスの動きで Big Picture に戻ります。",
   "settings.field.idle_screen.label": "アイドル画面",
+  "settings.field.steam_tag_limit.help": "ライブラリが保持するゲームの上位 Steam タグの数(5〜20)。最上位のタグよりはるかに少ないプレイヤーしか付けていないタグは除外されます。",
+  "settings.field.steam_tag_limit.label": "ゲームごとの Steam タグ",
   "settings.field.steam_title_match.help": "Wiki に記載がない場合、他のストアのゲームを同じタイトル(エディション名は除き、発売が 1 年以内)の Steam アプリにリンクし、Steam のタグ、ストアの詳細、ProtonDB に使います。一度に数本ずつ検索し、結果は 1 か月保持します。",
   "settings.field.steam_title_match.label": "正確なタイトルで Steam のゲームを探す",
   "settings.option.idle_screen.slideshow": "ゲームのアートを順番に表示",

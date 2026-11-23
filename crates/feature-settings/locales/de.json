@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Ruhebildschirm nach",
   "settings.field.idle_minutes.help": "Minuten ohne Eingabe, bis Big Picture den Ruhebildschirm zeigt; 0 zeigt ihn nie. Jede Taste und jede Mausbewegung holt Big Picture zurück.",
   "settings.field.idle_screen.label": "Ruhebildschirm",
+  "settings.field.steam_tag_limit.help": "Wie viele der stärksten Steam-Tags eines Spiels die Bibliothek behält, von 5 bis 20. Tags, die weit weniger Spieler vergeben haben als den stärksten, werden weggelassen.",
+  "settings.field.steam_tag_limit.label": "Steam-Tags pro Spiel",
   "settings.field.steam_title_match.help": "Verknüpft Spiele anderer Shops mit der Steam-App gleichen Titels (Editionsnamen ausgenommen, höchstens ein Jahr auseinander erschienen), wenn kein Wiki eine nennt – für Steam-Tags, Shopdetails und ProtonDB. Es werden nur wenige Spiele auf einmal nachgeschlagen, und die Antworten werden einen Monat lang behalten.",
   "settings.field.steam_title_match.label": "Spiele auf Steam über den genauen Titel finden",
   "settings.option.idle_screen.slideshow": "Bilder deiner Spiele nacheinander",

@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "闲置画面等待时间",
   "settings.field.idle_minutes.help": "无操作多少分钟后 Big Picture 显示闲置画面；0 表示从不显示。按任意按键或移动鼠标即可返回 Big Picture。",
   "settings.field.idle_screen.label": "闲置画面",
+  "settings.field.steam_tag_limit.help": "库为每款游戏保留的最强 Steam 标签数量，5 到 20 个。给出人数远少于最强标签的标签会被略去。",
+  "settings.field.steam_tag_limit.label": "每款游戏的 Steam 标签数",
   "settings.field.steam_title_match.help": "当没有 wiki 给出对应应用时，将其他商店的游戏关联到标题相同（不计版本名称，发行时间相差不超过一年）的 Steam 应用，用于 Steam 标签、商店详情和 ProtonDB。每次只查找几款游戏，结果保留一个月。",
   "settings.field.steam_title_match.label": "按准确标题在 Steam 上查找游戏",
   "settings.option.idle_screen.slideshow": "依次显示游戏图片",

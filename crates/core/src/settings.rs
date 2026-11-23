@@ -918,6 +918,10 @@ pub struct AppSettings {
     /// Steam app. Off by default. Irori-only.
     #[serde(rename = "iroriSteamTitleMatch")]
     pub steam_title_match: bool,
+    /// Steam tags each game keeps, strongest first (5–20); tags far fewer
+    /// players gave than the strongest are left out too. Irori-only.
+    #[serde(rename = "iroriSteamTagLimit")]
+    pub steam_tag_limit: u32,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -986,6 +990,7 @@ impl Default for AppSettings {
             file_achievements: false,
             igdb: false,
             steam_title_match: false,
+            steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
@@ -1198,6 +1203,9 @@ pub enum CoverHover {
 
 /// The art cache's default cap in MiB.
 pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
+/// [`AppSettings::steam_tag_limit`] by default: every tag Steam names.
+pub const DEFAULT_STEAM_TAG_LIMIT: u32 = 20;
 
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

@@ -387,6 +387,20 @@ pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
     irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 
+/// Show the library's games with Steam tag `tag` (a game page's tag
+/// chip): the Filters popover's criteria give way to that tag alone, while
+/// the search, store, sort and grouping stay.
+pub fn show_tag(tag: String, cx: &mut App) {
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.tags = [tag].into();
+        },
+        cx,
+    );
+    irori_ui::navigate(irori_ui::Route::Library, cx);
+}
+
 /// How the library shows games: grid, list or Focus (`iroriUi.libraryLayout`).
 pub fn library_layout(cx: &App) -> irori_core::settings::LibraryLayout {
     irori_ui::models(cx).settings.read(cx).app.ui.library_layout

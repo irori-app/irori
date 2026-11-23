@@ -435,6 +435,7 @@ impl Backend {
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
+            let mut tag_limit = b.settings.app().steam_tag_limit;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -460,10 +461,15 @@ impl Backend {
                                 b.bus.emit(Event::AccountChanged(runner));
                             }
                         }
-                        if app.ui.stores != shown || now != on || app.ui.group_copies != copies {
+                        if app.ui.stores != shown
+                            || now != on
+                            || app.ui.group_copies != copies
+                            || app.steam_tag_limit != tag_limit
+                        {
                             shown = app.ui.stores;
                             on = now;
                             copies = app.ui.group_copies;
+                            tag_limit = app.steam_tag_limit;
                             b.rebuild_library();
                         }
                     }

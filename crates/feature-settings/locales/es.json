@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Pantalla de reposo tras",
   "settings.field.idle_minutes.help": "Minutos sin actividad antes de que Big Picture muestre la pantalla de reposo; 0 no la muestra nunca. Cualquier botón, tecla o movimiento del ratón devuelve Big Picture.",
   "settings.field.idle_screen.label": "Pantalla de reposo",
+  "settings.field.steam_tag_limit.help": "Cuántas de las etiquetas de Steam más fuertes de un juego conserva la biblioteca, de 5 a 20. Se omiten las que dieron muchos menos jugadores que la más fuerte.",
+  "settings.field.steam_tag_limit.label": "Etiquetas de Steam por juego",
   "settings.field.steam_title_match.help": "Vincula los juegos de otras tiendas con la app de Steam del mismo título (sin contar nombres de edición y publicada con menos de un año de diferencia) cuando ninguna wiki indica una, para las etiquetas de Steam, los detalles de la tienda y ProtonDB. Se buscan pocos juegos a la vez y las respuestas se guardan un mes.",
   "settings.field.steam_title_match.label": "Buscar juegos en Steam por su título exacto",
   "settings.option.idle_screen.slideshow": "Arte de tus juegos, uno tras otro",

@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Экран ожидания через",
   "settings.field.idle_minutes.help": "Минуты без ввода до показа экрана ожидания в Big Picture; 0 — никогда. Любая кнопка, клавиша или движение мыши возвращает Big Picture.",
   "settings.field.idle_screen.label": "Экран ожидания",
+  "settings.field.steam_tag_limit.help": "Сколько самых сильных меток Steam игры хранит библиотека, от 5 до 20. Метки, которые поставило намного меньше игроков, чем самую сильную, не показываются.",
+  "settings.field.steam_tag_limit.label": "Меток Steam на игру",
   "settings.field.steam_title_match.help": "Связывает игры из других магазинов с приложением Steam с тем же названием (без учёта названия издания, вышедшим не более чем на год раньше или позже), если ни одна вики его не указывает, — для меток Steam, сведений из магазина и ProtonDB. За раз ищется несколько игр, ответы хранятся месяц.",
   "settings.field.steam_title_match.label": "Искать игры в Steam по точному названию",
   "settings.option.idle_screen.slideshow": "Обложки ваших игр по очереди",

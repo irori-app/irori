@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Ekran bezczynności po",
   "settings.field.idle_minutes.help": "Minuty bez działań, po których Big Picture pokazuje ekran bezczynności; 0 nigdy go nie pokazuje. Dowolny przycisk, klawisz lub ruch myszy przywraca Big Picture.",
   "settings.field.idle_screen.label": "Ekran bezczynności",
+  "settings.field.steam_tag_limit.help": "Ile najsilniejszych tagów Steam gry zachowuje biblioteka, od 5 do 20. Tagi nadane przez znacznie mniej graczy niż najsilniejszy są pomijane.",
+  "settings.field.steam_tag_limit.label": "Tagi Steam na grę",
   "settings.field.steam_title_match.help": "Łączy gry z innych sklepów z aplikacją Steam o tym samym tytule (pomijając nazwy edycji, wydaną najwyżej rok później lub wcześniej), gdy żadna wiki jej nie podaje — dla tagów Steam, szczegółów ze sklepu i ProtonDB. Wyszukuje się kilka gier naraz, a odpowiedzi są przechowywane przez miesiąc.",
   "settings.field.steam_title_match.label": "Szukaj gier w Steam po dokładnym tytule",
   "settings.option.idle_screen.slideshow": "Grafiki twoich gier, jedna po drugiej",

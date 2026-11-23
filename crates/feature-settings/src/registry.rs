@@ -2823,6 +2823,15 @@ pub static FIELDS: &[FieldSpec] = &[
         "steam", "app id", "link", "match", "tags", "protondb", "metadata",
     ]),
     app(
+        "iroriSteamTagLimit",
+        "settings.field.steam_tag_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Text(TextKind::Number { min: 5, max: 20 }),
+    )
+    .help("settings.field.steam_tag_limit.help")
+    .keywords(&["steam", "tags", "limit", "metadata"]),
+    app(
         "panel.igdb",
         "settings.field.panel_igdb.label",
         Advanced,

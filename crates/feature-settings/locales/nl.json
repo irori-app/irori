@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Rustscherm na",
   "settings.field.idle_minutes.help": "Minuten zonder invoer voordat Big Picture het rustscherm toont; 0 toont het nooit. Elke knop, toets of muisbeweging brengt Big Picture terug.",
   "settings.field.idle_screen.label": "Rustscherm",
+  "settings.field.steam_tag_limit.help": "Hoeveel van de sterkste Steam-tags van een spel de bibliotheek bewaart, van 5 tot 20. Tags die veel minder spelers gaven dan de sterkste worden weggelaten.",
+  "settings.field.steam_tag_limit.label": "Steam-tags per spel",
   "settings.field.steam_title_match.help": "Koppelt spellen uit andere winkels aan de Steam-app met dezelfde titel (editienamen buiten beschouwing, hooguit een jaar verschil in verschijning) als geen wiki er een noemt, voor Steam-tags, winkelgegevens en ProtonDB. Er worden een paar spellen tegelijk opgezocht en de antwoorden blijven een maand bewaard.",
   "settings.field.steam_title_match.label": "Spellen op Steam vinden op hun exacte titel",
   "settings.option.idle_screen.slideshow": "Afbeeldingen van je spellen, een voor een",

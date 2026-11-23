@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Екран очікування через",
   "settings.field.idle_minutes.help": "Хвилини без введення до показу екрана очікування в Big Picture; 0 — ніколи. Будь-яка кнопка, клавіша чи рух миші повертає Big Picture.",
   "settings.field.idle_screen.label": "Екран очікування",
+  "settings.field.steam_tag_limit.help": "Скільки найсильніших міток Steam гри зберігає бібліотека, від 5 до 20. Мітки, які поставило набагато менше гравців, ніж найсильнішу, не показуються.",
+  "settings.field.steam_tag_limit.label": "Міток Steam на гру",
   "settings.field.steam_title_match.help": "Пов’язує ігри з інших крамниць із застосунком Steam з тією самою назвою (без урахування назви видання, що вийшов не більш ніж на рік раніше чи пізніше), якщо жодна вікі його не вказує, — для міток Steam, відомостей з крамниці та ProtonDB. За раз шукається кілька ігор, відповіді зберігаються місяць.",
   "settings.field.steam_title_match.label": "Шукати ігри в Steam за точною назвою",
   "settings.option.idle_screen.slideshow": "Зображення ваших ігор по черзі",

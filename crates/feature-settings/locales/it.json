@@ -1627,6 +1627,8 @@
   "settings.field.idle_minutes.label": "Schermata di riposo dopo",
   "settings.field.idle_minutes.help": "Minuti senza input prima che Big Picture mostri la schermata di riposo; 0 non la mostra mai. Qualsiasi pulsante, tasto o movimento del mouse riporta Big Picture.",
   "settings.field.idle_screen.label": "Schermata di riposo",
+  "settings.field.steam_tag_limit.help": "Quanti dei tag di Steam più forti di un gioco conserva la libreria, da 5 a 20. I tag dati da molti meno giocatori rispetto al più forte vengono omessi.",
+  "settings.field.steam_tag_limit.label": "Tag di Steam per gioco",
   "settings.field.steam_title_match.help": "Collega i giochi degli altri negozi all’app di Steam con lo stesso titolo (a parte i nomi delle edizioni, uscita entro un anno) quando nessuna wiki ne indica una, per i tag di Steam, i dettagli del negozio e ProtonDB. Si cercano pochi giochi alla volta e le risposte vengono conservate per un mese.",
   "settings.field.steam_title_match.label": "Trova i giochi su Steam in base al titolo esatto",
   "settings.option.idle_screen.slideshow": "Le immagini dei tuoi giochi, una dopo l’altra",
