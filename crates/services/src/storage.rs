@@ -966,9 +966,17 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
         .iter()
         .map(|(p, title)| (resolve(p), title))
         .collect();
+    // Folders other launchers (Lutris, Bottles…) keep are theirs to remove:
+    // never offered, and deleting them is refused anyway.
+    let others: Vec<PathBuf> = fs_guard::OtherLaunchers::load()
+        .resolved()
+        .into_iter()
+        .map(|(dir, _)| dir)
+        .collect();
     let orphans: Vec<CleanupItem> = orphan_prefixes(&prefixes, &used_prefixes)
         .into_iter()
         .filter(|p| !fs_guard::protected_dirs(app).contains(p))
+        .filter(|p| !others.iter().any(|o| o.starts_with(p)))
         .map(|p| CleanupItem {
             path: p.clone(),
             bytes: prefix_sizes.get(p).copied().unwrap_or(0),
@@ -1058,6 +1066,7 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
     used_paths.extend(used_prefixes.iter().cloned());
     used_paths.extend(used_programs.iter().cloned());
     used_paths.extend(plan.named.iter().cloned());
+    used_paths.extend(others.iter().cloned());
     let protected = fs_guard::protected_dirs(app);
     let mut strays: Vec<CleanupItem> = if root_is_home || !plan.downloading.is_empty() {
         Vec::new()

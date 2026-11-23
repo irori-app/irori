@@ -447,7 +447,11 @@ host (Steam, Ludusavi, another Flatpak) is found with `host::find_program` /
 list and stop host processes. Outside a Flatpak they act on this system.
 
 **Deleting files:** call `fs_guard::ensure_deletable(dir, app)` before any recursive
-delete of a game or prefix directory.
+delete of a game or prefix directory. It also refuses the folders other launchers keep
+(`fs_guard::OtherLaunchers`, `state/other-launchers.json`: Lutris', Bottles' and Faugus
+Launcher's games, prefixes and Wine builds, read from their data at start and by the
+imports, plus the folders of every game imported from them) and any folder holding
+one; storage cleanups never offer them.
 
 **Untrusted data** (store APIs, community JSON, archives, links):
 

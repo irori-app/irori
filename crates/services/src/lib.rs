@@ -42,6 +42,7 @@ pub mod mangohud;
 pub mod media;
 pub mod mods;
 mod network;
+mod other_launchers;
 pub mod play_status;
 pub mod power;
 pub mod prefixes;
@@ -531,6 +532,7 @@ impl Backend {
             let b = self.clone();
             self.spawn(async move {
                 b.load_steam_shortcut_queue().await;
+                b.note_other_launchers().await;
                 b.periodic_tasks().await
             });
             self.watch_for_sunshine();
