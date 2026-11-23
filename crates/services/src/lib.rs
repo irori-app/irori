@@ -18,6 +18,7 @@ mod backup_restore;
 pub mod backup_schedule;
 pub mod bluetooth;
 pub mod capture;
+pub mod category_file;
 pub mod copies;
 mod discord;
 pub mod displays;

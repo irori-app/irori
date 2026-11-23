@@ -1,6 +1,7 @@
 //! Managing categories of both kinds: create, rename, pin, colour and
 //! delete manual ones, create, edit, pin, colour and delete smart ones
-//! (edited in [`super::smart`]); choosing the manual categories of one
+//! (edited in [`super::smart`]); export and import them as a file
+//! (`irori_services::category_file`); choosing the manual categories of one
 //! game; and the small "New category" dialog used from a game's menu.
 //! Names are unique across both kinds.
 //!
@@ -17,6 +18,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
@@ -508,19 +510,39 @@ impl Render for CategoriesDialog {
                             ),
                     )
                     .child(
-                        h_flex().child(
-                            Button::new("create-smart-category")
-                                .small()
-                                .ghost()
-                                .icon(IconName::Sparkles)
-                                .label(t("library.categories.create_smart"))
-                                .on_click(|_, window, cx| {
-                                    window.close_dialog(cx);
-                                    super::smart::open_smart_category_editor(
-                                        None, None, window, cx,
-                                    );
-                                }),
-                        ),
+                        h_flex()
+                            .gap_1()
+                            .flex_wrap()
+                            .child(
+                                Button::new("create-smart-category")
+                                    .small()
+                                    .ghost()
+                                    .icon(IconName::Sparkles)
+                                    .label(t("library.categories.create_smart"))
+                                    .on_click(|_, window, cx| {
+                                        window.close_dialog(cx);
+                                        super::smart::open_smart_category_editor(
+                                            None, None, window, cx,
+                                        );
+                                    }),
+                            )
+                            .child(
+                                Button::new("export-categories")
+                                    .small()
+                                    .ghost()
+                                    .icon(IconName::Upload)
+                                    .label(t("library.categories.export"))
+                                    .disabled(categories.is_empty())
+                                    .on_click(|_, window, cx| export_categories(window, cx)),
+                            )
+                            .child(
+                                Button::new("import-categories")
+                                    .small()
+                                    .ghost()
+                                    .icon(IconName::Download)
+                                    .label(t("library.categories.import"))
+                                    .on_click(|_, window, cx| import_categories(window, cx)),
+                            ),
                     )
                     .when(exists, |this| {
                         this.child(
@@ -548,6 +570,103 @@ impl Render for CategoriesDialog {
                     .children(rows),
             )
     }
+}
+
+/// Ask where to save the categories of both kinds, then write them.
+pub fn export_categories(window: &mut Window, cx: &mut App) {
+    let start = dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .unwrap_or_default();
+    let name = format!(
+        "irori-categories-{}.json",
+        chrono::Local::now().format("%Y-%m-%d")
+    );
+    let rx = cx.prompt_for_new_path(&start, Some(&name));
+    let b = backend(cx);
+    window
+        .spawn(cx, async move |cx| {
+            let Ok(Ok(Some(path))) = rx.await else { return };
+            let task = cx.update(|_, cx| {
+                irori_ui::run(cx, async move {
+                    let writer = b.clone();
+                    b.spawn_blocking(move || writer.export_categories(&path))
+                        .await
+                        .map_err(anyhow::Error::from)?
+                })
+            });
+            let Ok(task) = task else { return };
+            let result = task.await;
+            let _ = cx.update(|window, cx| {
+                let note = match result {
+                    Ok(count) => Notification::success(t_args(
+                        if count == 1 {
+                            "library.categories.exported_one"
+                        } else {
+                            "library.categories.exported_other"
+                        },
+                        &[("count", &count.to_string())],
+                    )),
+                    Err(e) => Notification::error(format!("{e:#}"))
+                        .title(t("library.categories.export_failed")),
+                };
+                window.push_notification(note, cx);
+            });
+        })
+        .detach();
+}
+
+/// Ask for a categories file (or an Irori backup) and merge its categories.
+pub fn import_categories(window: &mut Window, cx: &mut App) {
+    let pick = super::pick_path(false, t("library.categories.import"), cx);
+    let b = backend(cx);
+    window
+        .spawn(cx, async move |cx| {
+            let Some(path) = pick.await else { return };
+            let task = cx.update(|_, cx| {
+                irori_ui::run(cx, async move {
+                    let worker = b.clone();
+                    b.spawn_blocking(move || worker.import_categories(&path))
+                        .await
+                        .map_err(anyhow::Error::from)?
+                })
+            });
+            let Ok(task) = task else { return };
+            let result = task.await;
+            let _ = cx.update(|window, cx| {
+                let note = match result {
+                    Ok(done) => Notification::success(import_summary(done)),
+                    Err(e) => Notification::error(format!("{e:#}"))
+                        .title(t("library.categories.import_failed")),
+                };
+                window.push_notification(note, cx);
+            });
+        })
+        .detach();
+}
+
+/// What an import did, in one sentence.
+fn import_summary(done: irori_services::category_file::CategoriesImport) -> SharedString {
+    let changed = done.added + done.extended;
+    if changed == 0 && done.skipped == 0 {
+        return t("library.categories.imported_nothing");
+    }
+    let mut text = t_args(
+        if changed == 1 {
+            "library.categories.imported_one"
+        } else {
+            "library.categories.imported_other"
+        },
+        &[("count", &changed.to_string())],
+    )
+    .to_string();
+    if done.skipped > 0 {
+        text.push(' ');
+        text.push_str(&t_args(
+            "library.categories.import_skipped",
+            &[("count", &done.skipped.to_string())],
+        ));
+    }
+    text.into()
 }
 
 /// Open the category manager (`None`), or the categories of one game.

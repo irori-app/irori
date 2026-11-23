@@ -51,7 +51,7 @@ use irori_core::GameId;
 use irori_sideload::SideloadStore;
 
 pub use commands::{GameCommand, GameState};
-pub use dialogs::categories::open_categories_dialog;
+pub use dialogs::categories::{export_categories, import_categories, open_categories_dialog};
 pub use dialogs::duplicates::open_duplicates_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::fields::open_fields_dialog;
