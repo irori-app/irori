@@ -120,6 +120,18 @@ pub const BUILT_IN: &[(&str, &str)] = &[
         "anyps5",
         include_str!("../../../assets/engines/anyps5.json"),
     ),
+    (
+        "flycast",
+        include_str!("../../../assets/engines/flycast.json"),
+    ),
+    (
+        "vita3k",
+        include_str!("../../../assets/engines/vita3k.json"),
+    ),
+    (
+        "ryujinx",
+        include_str!("../../../assets/engines/ryujinx.json"),
+    ),
 ];
 
 /// An engine choice as stored in settings: `duckstation`, or

@@ -1694,11 +1694,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   pickers and "Play with…" like any engine; removing one deletes only its manifest, and
   a game or system still naming it plays with the system's default. Any engine can also
   use a program the user picks ("Use a program on this computer…", `Origin::Custom`).
-- **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
-  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
-  DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
-  experimental Cemu, RPCS3, xemu, shadPS4 and AnyPS5 (never a system's default while
-  another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
+- **Engines shipped:** RetroArch (13 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
+  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Flycast, Gopher64, MAME, Mupen64Plus,
+  M64Py, DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
+  experimental Cemu, RPCS3, xemu, shadPS4, AnyPS5, Vita3K and Ryujinx (never a system's
+  default while another engine plays it; Ryujinx detected only, never downloaded, see
+  `docs/design/engines.md` 3.2.4). Vita3K runs a game it installed by its title id, the
+  game folder's name (`{rom_dir_name}`), so the ROM folder is its `ux0/app`. Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`), the files naming them
   (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
   and the folders of their own layout that never name them (`layoutFolders`). A disc

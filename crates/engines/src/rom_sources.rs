@@ -329,6 +329,7 @@ mod tests {
         write(&home.join("Emulation/roms/gba/Advance Wars.zip"));
         write(&home.join("Emulation/roms/dreamcast/Shenmue.gdi"));
         write(&home.join("Emulation/roms/saturn/systeminfo.txt"));
+        write(&home.join("Emulation/roms/saturn/Nights (USA).chd"));
         // DOS games are folders.
         write(&home.join("Emulation/roms/dos/KEEN/KEEN1.EXE"));
         // RetroDECK on a card.
@@ -341,8 +342,8 @@ mod tests {
         let emudeck = &found[0];
         assert_eq!(emudeck.kind, SourceKind::EmuDeck);
         let ids: Vec<&str> = emudeck.systems.iter().map(|(s, _)| s.as_str()).collect();
-        assert_eq!(ids, ["dos", "gba", "psx"]);
-        assert_eq!(emudeck.unknown, ["dreamcast"]);
+        assert_eq!(ids, ["dos", "dreamcast", "gba", "psx"]);
+        assert_eq!(emudeck.unknown, ["saturn"]);
         assert_eq!(found[1].kind, SourceKind::RetroDeck);
         assert_eq!(found[1].systems[0].0, "n64");
         assert_eq!(found[1].systems[0].1, disk.join("retrodeck/roms/n64"));
@@ -358,6 +359,9 @@ mod tests {
             ("pcengine", "pce"),
             ("megacd", "segacd"),
             ("mame", "arcade"),
+            ("dreamcast", "dreamcast"),
+            ("psvita", "psvita"),
+            ("switch", "switch"),
         ] {
             assert_eq!(systems::by_folder(folder).map(|s| s.id.as_str()), Some(id));
         }
