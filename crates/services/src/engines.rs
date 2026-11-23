@@ -1,7 +1,8 @@
 //! Emulators for the UI: the engines Irori knows, their installations,
 //! downloadable versions, installs, updates and removals, RetroArch cores,
-//! each system's default emulator and BIOS status, and starting one
-//! without a game. Every change emits [`Event::EnginesChanged`].
+//! each system's default emulator and BIOS status, starting one without a
+//! game, and the usual ROM folders found on this computer. Every change
+//! emits [`Event::EnginesChanged`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,6 +12,7 @@ use irori_core::{Event, OpContext};
 use irori_engines::bios::{self, BiosIndex, SystemBios};
 use irori_engines::custom::CustomEngine;
 use irori_engines::releases::{self, Release};
+use irori_engines::rom_sources::{self, Plan as RomPlan, RomSource};
 use irori_engines::state::{CoreInstall, ManagedInstall};
 use irori_engines::{EngineManifest, EngineRef, Installation, discovery, install, retroarch};
 
@@ -330,6 +332,78 @@ impl Backend {
         });
         self.refresh_store(irori_core::Runner::Emulation, false)
             .await
+    }
+
+    /// Add several ROM folders and scan once. Folders that are gone are
+    /// left out.
+    pub async fn add_rom_folders(&self, folders: Vec<PathBuf>) -> Result<()> {
+        let folders = self
+            .spawn_blocking(move || {
+                folders
+                    .into_iter()
+                    .filter(|f| f.is_dir())
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .context("checking the folders stopped")?;
+        anyhow::ensure!(
+            !folders.is_empty(),
+            "none of these folders is there anymore"
+        );
+        self.settings.update_app(|s| {
+            for folder in &folders {
+                let text = folder.display().to_string();
+                if !s.rom_folders.contains(&text) {
+                    s.rom_folders.push(text);
+                }
+            }
+        });
+        self.refresh_store(irori_core::Runner::Emulation, false)
+            .await
+    }
+
+    /// The usual ROM folders on this computer (EmuDeck's, RetroDECK's, a
+    /// `ROMs` folder, at home and at the top of other disks) and what
+    /// adding them would add: only systems an emulator here plays or Irori
+    /// can download, and nothing the library already scans. Only reads.
+    pub async fn rom_sources(&self) -> (Vec<RomSource>, RomPlan) {
+        let existing: Vec<PathBuf> = self
+            .settings
+            .app()
+            .rom_folders
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        self.spawn_blocking(move || {
+            let home = dirs::home_dir().unwrap_or_default();
+            let sources = rom_sources::find(&home, &rom_sources::mount_roots());
+            if sources.is_empty() {
+                return (sources, RomPlan::default());
+            }
+            let state = irori_engines::state::load();
+            let host = irori_engines::Host::current();
+            let usable: Vec<Arc<EngineManifest>> = irori_engines::engines()
+                .iter()
+                .filter(|m| m.downloadable_on(host) || !discovery::find(m, &state).is_empty())
+                .cloned()
+                .collect();
+            let playable = |system: &str| {
+                let listed = irori_engines::systems::get(system)
+                    .map(|s| s.engines.clone())
+                    .unwrap_or_default();
+                usable.iter().any(|m| {
+                    m.systems.iter().any(|s| s == system)
+                        || listed
+                            .iter()
+                            .filter_map(|e| EngineRef::parse(e))
+                            .any(|e| e.engine == m.id)
+                })
+            };
+            let plan = rom_sources::plan(&sources, &existing, playable);
+            (sources, plan)
+        })
+        .await
+        .unwrap_or_default()
     }
 
     /// Stop scanning a ROM folder; its games leave the library. Files stay.

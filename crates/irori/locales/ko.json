@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "{title}의 모드가 아직 게임 폴더에 있습니다",
   "shell.palette.set_up_emulation": "에뮬레이션 설정",
   "shell.palette.set_up_emulation_keywords": "에뮬레이터 ROM 콘솔 레트로 BIOS RetroArch",
+  "shell.palette.find_roms": "이 컴퓨터에서 ROM 찾기",
+  "shell.palette.find_roms_keywords": "에뮬레이션 EmuDeck RetroDECK 롬 폴더 에뮬레이터 검색",
   "shell.palette.add_emulator": "에뮬레이터 추가",
   "shell.palette.add_emulator_keywords": "사용자 에뮬레이터 프로그램 빌드",
   "shell.palette.open_engine": "{engine} 열기",

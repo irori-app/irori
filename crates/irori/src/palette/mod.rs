@@ -71,6 +71,8 @@ pub(crate) enum PaletteTarget {
     AddEmulator,
     /// Start an emulator without a game (its id and name).
     OpenEngine(String, SharedString),
+    /// The usual ROM folders found on this computer, to add.
+    FindRoms,
     /// The Steam friends window.
     SteamFriends,
     XboxOfflinePlay,
@@ -385,6 +387,14 @@ impl Palette {
                 targets,
             );
         }
+        push(
+            Entry::new()
+                .label(t("shell.palette.find_roms"))
+                .keywords([t("shell.palette.find_roms_keywords")])
+                .icon(IconName::Search),
+            PaletteTarget::FindRoms,
+            targets,
+        );
         push(
             Entry::new()
                 .label(t("shell.palette.set_up_emulation"))
@@ -849,6 +859,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::AddEmulator => irori_manage::open_custom_engine_dialog(None, window, cx),
         PaletteTarget::OpenEngine(id, name) => irori_manage::open_engine(id, name, window, cx),
+        PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
         PaletteTarget::XboxFriends => {

@@ -12,6 +12,8 @@
 //! - managed installs with several versions side by side ([`install`]);
 //! - RetroArch cores ([`retroarch`]);
 //! - the BIOS index and per-system BIOS status ([`bios`]);
+//! - the ROM folders EmuDeck, RetroDECK and users usually keep
+//!   ([`rom_sources`]);
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
 //! - turning a game file into a command ([`launch`]), and starting an
@@ -36,6 +38,7 @@ pub mod open;
 pub mod releases;
 pub mod relink;
 pub mod retroarch;
+pub mod rom_sources;
 pub mod sfo;
 pub mod state;
 pub mod systems;

@@ -47,7 +47,8 @@ pub use accounts::AccountsView;
 pub use downloads::DownloadsView;
 pub use emulators::{
     EmulatorsView, InstallTarget, OpenableEngine, choice_name, open_custom_engine_dialog,
-    open_emulation_setup, open_engine, open_engine_settings, openable_engines, start_install,
+    open_emulation_setup, open_engine, open_engine_settings, open_rom_sources_dialog,
+    openable_engines, start_install,
 };
 pub use friends::{
     FriendsSource, friends_available, install_steam_store, open_friends_dialog,

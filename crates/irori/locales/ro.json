@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "Modurile pentru {title} sunt încă în folderul jocului",
   "shell.palette.set_up_emulation": "Configurează emularea",
   "shell.palette.set_up_emulation_keywords": "emulator ROM consolă retro BIOS RetroArch",
+  "shell.palette.find_roms": "Caută ROM-uri pe acest computer",
+  "shell.palette.find_roms_keywords": "emulare EmuDeck RetroDECK rom-uri folder emulator caută",
   "shell.palette.add_emulator": "Adaugă un emulator",
   "shell.palette.add_emulator_keywords": "emulator propriu program versiune",
   "shell.palette.open_engine": "Deschide {engine}",

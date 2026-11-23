@@ -2,10 +2,12 @@
 //! every emulator Irori knows with the installs found on this computer,
 //! one-click installs and updates of the versions Irori manages, RetroArch
 //! cores, each system's default emulator, the RetroAchievements account
-//! ([`retro`]), and starting an emulator without a game ([`open`]).
+//! ([`retro`]), starting an emulator without a game ([`open`]), and the
+//! usual ROM folders found on this computer ([`found`]).
 
 mod configure;
 mod custom;
+mod found;
 mod open;
 mod ops;
 mod retro;
@@ -49,6 +51,7 @@ use crate::common::{card, notify_error};
 use crate::format;
 pub use configure::open_engine_settings;
 pub use custom::{confirm_remove_custom_engine, open_custom_engine_dialog};
+pub use found::open_rom_sources_dialog;
 pub use open::{OpenableEngine, open_engine, openable_engines};
 use ops::{EngineOps, OpLive, cancel_install, core_key, core_name, engine_key, engine_ops};
 pub use ops::{InstallTarget, start_install};

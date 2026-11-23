@@ -94,6 +94,7 @@ pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
+pub use irori_engines::rom_sources::{Plan as RomPlan, RomSource, SourceKind as RomSourceKind};
 pub use irori_steam_api::StoreHit as SteamHit;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};

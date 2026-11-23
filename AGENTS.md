@@ -1572,6 +1572,15 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   without the launch template. Its output goes to `engine-<id>.log`, and one that fails
   within 3 s says why. Converting engines (AnyPS5) have nothing to open. The palette's
   list is kept in memory and read again in the background once older than a minute.
+- **Usual ROM folders** (`irori_engines::rom_sources`, `Backend::rom_sources`,
+  `irori_manage::open_rom_sources_dialog`: the setup guide's first page, the empty
+  library, Getting started, the palette): EmuDeck's `Emulation/roms`, RetroDECK's
+  `retrodeck/roms` and `ROMs` folders at home and at the top of other disks (Linux
+  `/run/media`, `/media`, `/mnt`; macOS `/Volumes`; other Windows drives), read only.
+  A system folder counts once it holds a file its system plays (EmuDeck's notes
+  don't); only systems an installed or downloadable emulator plays are offered, folders
+  the library already scans are left out, and the others are named. Nothing is added
+  until the user picks the systems (`Backend::add_rom_folders`).
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
