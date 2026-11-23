@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Kan de games niet uit Steam verwijderen",
   "library.bulk.steam_remove_title_one": "‘{title}’ uit Steam verwijderen?",
   "library.bulk.steam_remove_title_other": "{count} games uit Steam verwijderen?",
-  "library.bulk.steam_remove_description": "Irori verwijdert de Steam-snelkoppelingen die het voor deze games heeft gemaakt, met hun afbeeldingen. Snelkoppelingen van andere programma’s blijven. Sluit Steam eerst.",
+  "library.bulk.steam_remove_description": "Irori verwijdert de Steam-snelkoppelingen die het voor deze games heeft gemaakt, met hun afbeeldingen. Snelkoppelingen van andere programma’s blijven. Draait Steam, dan gebeurt dat zodra het sluit.",
   "library.bulk.steam_remove_confirm": "Verwijderen uit Steam",
   "library.bulk.unfavourite": "Uit favorieten verwijderen",
   "library.bulk.unhide": "Tonen",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "uitgespeeld in {days} dagen",
   "library.stats.journeys.pace": "{hours} u per week",
   "library.stats.journeys.games_at_once": "Games per dag",
-  "library.stats.journeys.most_at_once": "Tot {count}"
+  "library.stats.journeys.most_at_once": "Tot {count}",
+  "library.steam_queued": "Steam draait. {title} wordt aan Steam toegevoegd zodra Steam sluit.",
+  "library.steam_remove_queued": "Steam draait. {title} wordt uit Steam verwijderd zodra Steam sluit.",
+  "library.bulk.steam_queued": "Steam draait. Games die aan Steam worden toegevoegd zodra het sluit: {count}.",
+  "library.bulk.steam_remove_queued": "Steam draait. Games die uit Steam worden verwijderd zodra het sluit: {count}."
 }

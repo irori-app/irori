@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "无法从 Steam 中移除这些游戏",
   "library.bulk.steam_remove_title_one": "要从 Steam 中移除“{title}”吗？",
   "library.bulk.steam_remove_title_other": "要从 Steam 中移除 {count} 款游戏吗？",
-  "library.bulk.steam_remove_description": "Irori 会移除它为这些游戏创建的 Steam 快捷方式及其图片。其他程序创建的快捷方式会保留。请先关闭 Steam。",
+  "library.bulk.steam_remove_description": "Irori 会移除它为这些游戏创建的 Steam 快捷方式及其图片。其他程序创建的快捷方式会保留。如果 Steam 正在运行，会在它关闭后移除。",
   "library.bulk.steam_remove_confirm": "从 Steam 中移除",
   "library.bulk.unfavourite": "取消收藏",
   "library.bulk.unhide": "取消隐藏",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "{days} 天通关",
   "library.stats.journeys.pace": "每周 {hours} 小时",
   "library.stats.journeys.games_at_once": "每天的游戏数",
-  "library.stats.journeys.most_at_once": "最多 {count}"
+  "library.stats.journeys.most_at_once": "最多 {count}",
+  "library.steam_queued": "Steam 正在运行。{title} 将在 Steam 关闭后添加到 Steam。",
+  "library.steam_remove_queued": "Steam 正在运行。{title} 将在 Steam 关闭后从 Steam 移除。",
+  "library.bulk.steam_queued": "Steam 正在运行。将在 Steam 关闭后添加的游戏：{count}。",
+  "library.bulk.steam_remove_queued": "Steam 正在运行。将在 Steam 关闭后移除的游戏：{count}。"
 }

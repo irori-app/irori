@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Název hry, ID aplikace Steam nebo adresa obchodu",
   "game.steam_link.searching": "Hledání na Steamu…",
   "game.steam_link.title": "Aplikace Steam pro „{title}“",
-  "game.steam_link.unknown": "Není propojeno s aplikací Steam"
+  "game.steam_link.unknown": "Není propojeno s aplikací Steam",
+  "game.ops.steam_shortcut_queued": "Steam běží: zástupce Steamu pro {title} se přidá, až se Steam zavře",
+  "game.ops.steam_shortcut_remove_queued": "Steam běží: zástupce Steamu pro {title} se odebere, až se Steam zavře"
 }

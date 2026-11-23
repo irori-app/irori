@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Название игры, ID приложения Steam или адрес в магазине",
   "game.steam_link.searching": "Поиск в Steam…",
   "game.steam_link.title": "Приложение Steam для «{title}»",
-  "game.steam_link.unknown": "Не связано с приложением Steam"
+  "game.steam_link.unknown": "Не связано с приложением Steam",
+  "game.ops.steam_shortcut_queued": "Steam запущен: ярлык Steam для {title} будет добавлен, когда Steam закроется",
+  "game.ops.steam_shortcut_remove_queued": "Steam запущен: ярлык Steam для {title} будет удалён, когда Steam закроется"
 }

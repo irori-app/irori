@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "ゲーム名、Steam のアプリ ID、またはストアのアドレス",
   "game.steam_link.searching": "Steam を検索中…",
   "game.steam_link.title": "「{title}」の Steam アプリ",
-  "game.steam_link.unknown": "Steam のアプリにリンクされていません"
+  "game.steam_link.unknown": "Steam のアプリにリンクされていません",
+  "game.ops.steam_shortcut_queued": "Steam が起動中です: {title} の Steam ショートカットは Steam の終了後に追加されます",
+  "game.ops.steam_shortcut_remove_queued": "Steam が起動中です: {title} の Steam ショートカットは Steam の終了後に削除されます"
 }

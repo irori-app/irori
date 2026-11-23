@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Oprește jocul offline",
   "manage.xbox.offline.close": "Închide",
   "manage.xbox.offline.changed": "Jocul offline a fost schimbat",
-  "manage.xbox.offline.failed": "Jocul offline nu a putut fi schimbat"
+  "manage.xbox.offline.failed": "Jocul offline nu a putut fi schimbat",
+  "manage.steam_shortcuts.waiting_one": "1 modificare a comenzilor rapide așteaptă închiderea Steam",
+  "manage.steam_shortcuts.waiting_other": "Modificări ale comenzilor rapide care așteaptă închiderea Steam: {count}"
 }

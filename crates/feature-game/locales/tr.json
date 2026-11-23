@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Oyun adı, Steam uygulama kimliği veya mağaza adresi",
   "game.steam_link.searching": "Steam’de aranıyor…",
   "game.steam_link.title": "“{title}” için Steam uygulaması",
-  "game.steam_link.unknown": "Bir Steam uygulamasına bağlı değil"
+  "game.steam_link.unknown": "Bir Steam uygulamasına bağlı değil",
+  "game.ops.steam_shortcut_queued": "Steam çalışıyor: {title} için Steam kısayolu Steam kapanınca eklenecek",
+  "game.ops.steam_shortcut_remove_queued": "Steam çalışıyor: {title} için Steam kısayolu Steam kapanınca kaldırılacak"
 }

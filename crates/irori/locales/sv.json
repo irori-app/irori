@@ -251,5 +251,6 @@
   "shell.palette.pick_other_games": "Välj bland andra spel",
   "shell.palette.random_empty": "Det finns inga spel att välja bland här",
   "shell.palette.preview_enter_play": "Retur spelar det, eller går tillbaka till det medan det körs; Skift+Retur visar det i Irori; → visar dess åtgärder",
-  "shell.quick_launch.failed": "Snabbstartaren kunde inte öppnas"
+  "shell.quick_launch.failed": "Snabbstartaren kunde inte öppnas",
+  "shell.notice.steam_shortcuts_failed": "Steam-genvägarna ändrades inte"
 }

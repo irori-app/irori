@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Interrompi gioco offline",
   "manage.xbox.offline.close": "Chiudi",
   "manage.xbox.offline.changed": "Gioco offline modificato",
-  "manage.xbox.offline.failed": "Impossibile modificare il gioco offline"
+  "manage.xbox.offline.failed": "Impossibile modificare il gioco offline",
+  "manage.steam_shortcuts.waiting_one": "1 modifica ai collegamenti attende la chiusura di Steam",
+  "manage.steam_shortcuts.waiting_other": "{count} modifiche ai collegamenti attendono la chiusura di Steam"
 }

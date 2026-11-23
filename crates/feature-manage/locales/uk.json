@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Припинити гру офлайн",
   "manage.xbox.offline.close": "Закрити",
   "manage.xbox.offline.changed": "Гру офлайн змінено",
-  "manage.xbox.offline.failed": "Не вдалося змінити гру офлайн"
+  "manage.xbox.offline.failed": "Не вдалося змінити гру офлайн",
+  "manage.steam_shortcuts.waiting_one": "1 зміна ярликів чекає на закриття Steam",
+  "manage.steam_shortcuts.waiting_other": "Змін ярликів чекають на закриття Steam: {count}"
 }

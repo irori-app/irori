@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Nazwa gry, ID aplikacji Steam lub adres sklepu",
   "game.steam_link.searching": "Wyszukiwanie w Steam…",
   "game.steam_link.title": "Aplikacja Steam dla „{title}”",
-  "game.steam_link.unknown": "Nie połączono z aplikacją Steam"
+  "game.steam_link.unknown": "Nie połączono z aplikacją Steam",
+  "game.ops.steam_shortcut_queued": "Steam działa: skrót Steam do {title} zostanie dodany po zamknięciu Steama",
+  "game.ops.steam_shortcut_remove_queued": "Steam działa: skrót Steam do {title} zostanie usunięty po zamknięciu Steama"
 }

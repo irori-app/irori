@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Oyunlar Steam'den kaldırılamadı",
   "library.bulk.steam_remove_title_one": "“{title}” Steam'den kaldırılsın mı?",
   "library.bulk.steam_remove_title_other": "{count} oyun Steam'den kaldırılsın mı?",
-  "library.bulk.steam_remove_description": "Irori, bu oyunlar için oluşturduğu Steam kısayollarını görselleriyle birlikte kaldırır. Diğer programların kısayolları kalır. Önce Steam'i kapatın.",
+  "library.bulk.steam_remove_description": "Irori, bu oyunlar için oluşturduğu Steam kısayollarını görselleriyle birlikte kaldırır. Diğer programların kısayolları kalır. Steam çalışıyorsa, kapandığında kaldırılırlar.",
   "library.bulk.steam_remove_confirm": "Steam'den kaldır",
   "library.bulk.unfavourite": "Favorilerden çıkar",
   "library.bulk.unhide": "Göster",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "{days} günde bitti",
   "library.stats.journeys.pace": "haftada {hours} sa",
   "library.stats.journeys.games_at_once": "Günlük oyunlar",
-  "library.stats.journeys.most_at_once": "En çok {count}"
+  "library.stats.journeys.most_at_once": "En çok {count}",
+  "library.steam_queued": "Steam çalışıyor. {title}, Steam kapanınca Steam'e eklenecek.",
+  "library.steam_remove_queued": "Steam çalışıyor. {title}, Steam kapanınca Steam'den kaldırılacak.",
+  "library.bulk.steam_queued": "Steam çalışıyor. Steam kapanınca eklenecek oyunlar: {count}.",
+  "library.bulk.steam_remove_queued": "Steam çalışıyor. Steam kapanınca kaldırılacak oyunlar: {count}."
 }

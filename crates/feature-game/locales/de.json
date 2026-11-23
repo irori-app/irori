@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Spielname, Steam-App-ID oder Shop-Adresse",
   "game.steam_link.searching": "Steam wird durchsucht…",
   "game.steam_link.title": "Steam-App für „{title}“",
-  "game.steam_link.unknown": "Mit keiner Steam-App verknüpft"
+  "game.steam_link.unknown": "Mit keiner Steam-App verknüpft",
+  "game.ops.steam_shortcut_queued": "Steam läuft: Die Steam-Verknüpfung für {title} wird angelegt, sobald Steam beendet ist",
+  "game.ops.steam_shortcut_remove_queued": "Steam läuft: Die Steam-Verknüpfung für {title} wird entfernt, sobald Steam beendet ist"
 }

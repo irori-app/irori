@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Arrêter le jeu hors ligne",
   "manage.xbox.offline.close": "Fermer",
   "manage.xbox.offline.changed": "Jeu hors ligne modifié",
-  "manage.xbox.offline.failed": "Impossible de modifier le jeu hors ligne"
+  "manage.xbox.offline.failed": "Impossible de modifier le jeu hors ligne",
+  "manage.steam_shortcuts.waiting_one": "1 modification de raccourci attend la fermeture de Steam",
+  "manage.steam_shortcuts.waiting_other": "{count} modifications de raccourcis attendent la fermeture de Steam"
 }

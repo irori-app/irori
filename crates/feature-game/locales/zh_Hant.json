@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "遊戲名稱、Steam 應用程式 ID 或商店網址",
   "game.steam_link.searching": "正在搜尋 Steam…",
   "game.steam_link.title": "「{title}」的 Steam 應用程式",
-  "game.steam_link.unknown": "未連結到 Steam 應用程式"
+  "game.steam_link.unknown": "未連結到 Steam 應用程式",
+  "game.ops.steam_shortcut_queued": "Steam 正在執行：{title} 的 Steam 捷徑將在 Steam 關閉後新增",
+  "game.ops.steam_shortcut_remove_queued": "Steam 正在執行：{title} 的 Steam 捷徑將在 Steam 關閉後移除"
 }

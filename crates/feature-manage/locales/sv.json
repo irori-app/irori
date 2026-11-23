@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Sluta spela offline",
   "manage.xbox.offline.close": "Stäng",
   "manage.xbox.offline.changed": "Offlinespel ändrat",
-  "manage.xbox.offline.failed": "Kunde inte ändra offlinespel"
+  "manage.xbox.offline.failed": "Kunde inte ändra offlinespel",
+  "manage.steam_shortcuts.waiting_one": "1 genvägsändring väntar på att Steam stängs",
+  "manage.steam_shortcuts.waiting_other": "{count} genvägsändringar väntar på att Steam stängs"
 }

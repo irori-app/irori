@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Deixar de jogar offline",
   "manage.xbox.offline.close": "Fechar",
   "manage.xbox.offline.changed": "Jogo offline alterado",
-  "manage.xbox.offline.failed": "Não foi possível alterar o jogo offline"
+  "manage.xbox.offline.failed": "Não foi possível alterar o jogo offline",
+  "manage.steam_shortcuts.waiting_one": "1 alteração de atalhos espera que o Steam feche",
+  "manage.steam_shortcuts.waiting_other": "{count} alterações de atalhos esperam que o Steam feche"
 }

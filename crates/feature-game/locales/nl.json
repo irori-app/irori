@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Spelnaam, Steam-app-ID of winkeladres",
   "game.steam_link.searching": "Steam doorzoeken…",
   "game.steam_link.title": "Steam-app voor ‘{title}’",
-  "game.steam_link.unknown": "Niet gekoppeld aan een Steam-app"
+  "game.steam_link.unknown": "Niet gekoppeld aan een Steam-app",
+  "game.ops.steam_shortcut_queued": "Steam draait: de Steam-snelkoppeling voor {title} wordt toegevoegd zodra Steam sluit",
+  "game.ops.steam_shortcut_remove_queued": "Steam draait: de Steam-snelkoppeling voor {title} wordt verwijderd zodra Steam sluit"
 }

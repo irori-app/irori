@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Game name, Steam app id or store address",
   "game.steam_link.searching": "Searching Steam…",
   "game.steam_link.title": "Steam app for “{title}”",
-  "game.steam_link.unknown": "Not linked to a Steam app"
+  "game.steam_link.unknown": "Not linked to a Steam app",
+  "game.ops.steam_shortcut_queued": "Steam is running: the Steam shortcut for {title} is added when Steam closes",
+  "game.ops.steam_shortcut_remove_queued": "Steam is running: the Steam shortcut for {title} is removed when Steam closes"
 }

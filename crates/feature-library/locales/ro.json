@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Jocurile nu au putut fi eliminate din Steam",
   "library.bulk.steam_remove_title_one": "Elimini „{title}” din Steam?",
   "library.bulk.steam_remove_title_other": "Elimini jocurile din Steam ({count})?",
-  "library.bulk.steam_remove_description": "Irori elimină comenzile rapide Steam create de el pentru aceste jocuri, împreună cu imaginile lor. Comenzile rapide ale altor programe rămân. Închide mai întâi Steam.",
+  "library.bulk.steam_remove_description": "Irori elimină comenzile rapide Steam create de el pentru aceste jocuri, împreună cu imaginile lor. Comenzile rapide ale altor programe rămân. Dacă Steam rulează, dispar când acesta se închide.",
   "library.bulk.steam_remove_confirm": "Elimină din Steam",
   "library.bulk.unfavourite": "Elimină din favorite",
   "library.bulk.unhide": "Afișează",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "terminat în {days} zile",
   "library.stats.journeys.pace": "{hours} h pe săptămână",
   "library.stats.journeys.games_at_once": "Jocuri pe zi",
-  "library.stats.journeys.most_at_once": "Până la {count}"
+  "library.stats.journeys.most_at_once": "Până la {count}",
+  "library.steam_queued": "Steam rulează. {title} se adaugă în Steam când acesta se închide.",
+  "library.steam_remove_queued": "Steam rulează. {title} se elimină din Steam când acesta se închide.",
+  "library.bulk.steam_queued": "Steam rulează. Jocuri adăugate în Steam când acesta se închide: {count}.",
+  "library.bulk.steam_remove_queued": "Steam rulează. Jocuri eliminate din Steam când acesta se închide: {count}."
 }

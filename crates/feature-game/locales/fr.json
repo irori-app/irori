@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Nom du jeu, ID d’app Steam ou adresse de la boutique",
   "game.steam_link.searching": "Recherche sur Steam…",
   "game.steam_link.title": "App Steam pour « {title} »",
-  "game.steam_link.unknown": "Lié à aucune app Steam"
+  "game.steam_link.unknown": "Lié à aucune app Steam",
+  "game.ops.steam_shortcut_queued": "Steam est ouvert : le raccourci Steam de {title} sera ajouté à la fermeture de Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam est ouvert : le raccourci Steam de {title} sera retiré à la fermeture de Steam"
 }

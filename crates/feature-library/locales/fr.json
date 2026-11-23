@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Impossible de retirer les jeux de Steam",
   "library.bulk.steam_remove_title_one": "Retirer « {title} » de Steam ?",
   "library.bulk.steam_remove_title_other": "Retirer {count} jeux de Steam ?",
-  "library.bulk.steam_remove_description": "Irori retire les raccourcis Steam qu’il a créés pour ces jeux, avec leurs illustrations. Les raccourcis d’autres programmes restent. Fermez d’abord Steam.",
+  "library.bulk.steam_remove_description": "Irori retire les raccourcis Steam qu’il a créés pour ces jeux, avec leurs illustrations. Les raccourcis d’autres programmes restent. Si Steam est ouvert, ils partent à sa fermeture.",
   "library.bulk.steam_remove_confirm": "Retirer de Steam",
   "library.bulk.unfavourite": "Retirer des favoris",
   "library.bulk.unhide": "Afficher",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "terminé en {days} jours",
   "library.stats.journeys.pace": "{hours} h par semaine",
   "library.stats.journeys.games_at_once": "Jeux par jour",
-  "library.stats.journeys.most_at_once": "Jusqu’à {count}"
+  "library.stats.journeys.most_at_once": "Jusqu’à {count}",
+  "library.steam_queued": "Steam est ouvert. {title} sera ajouté à Steam à sa fermeture.",
+  "library.steam_remove_queued": "Steam est ouvert. {title} sera retiré de Steam à sa fermeture.",
+  "library.bulk.steam_queued": "Steam est ouvert. Jeux ajoutés à Steam à sa fermeture : {count}.",
+  "library.bulk.steam_remove_queued": "Steam est ouvert. Jeux retirés de Steam à sa fermeture : {count}."
 }

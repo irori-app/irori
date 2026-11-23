@@ -251,5 +251,6 @@
   "shell.palette.pick_other_games": "Выбирать из других игр",
   "shell.palette.random_empty": "Здесь нет игр для выбора",
   "shell.palette.preview_enter_play": "Enter запускает игру или возвращает в неё, пока она идёт; Shift+Enter показывает её в Irori; → — её действия",
-  "shell.quick_launch.failed": "Не удалось открыть быстрый запуск"
+  "shell.quick_launch.failed": "Не удалось открыть быстрый запуск",
+  "shell.notice.steam_shortcuts_failed": "Ярлыки Steam не изменены"
 }

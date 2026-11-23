@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "게임 이름, Steam 앱 ID 또는 상점 주소",
   "game.steam_link.searching": "Steam 검색 중…",
   "game.steam_link.title": "“{title}”의 Steam 앱",
-  "game.steam_link.unknown": "Steam 앱에 연결되지 않음"
+  "game.steam_link.unknown": "Steam 앱에 연결되지 않음",
+  "game.ops.steam_shortcut_queued": "Steam이 실행 중입니다: {title}의 Steam 바로 가기는 Steam이 종료되면 추가됩니다",
+  "game.ops.steam_shortcut_remove_queued": "Steam이 실행 중입니다: {title}의 Steam 바로 가기는 Steam이 종료되면 제거됩니다"
 }

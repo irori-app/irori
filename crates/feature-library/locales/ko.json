@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "게임을 Steam에서 제거하지 못했습니다",
   "library.bulk.steam_remove_title_one": "‘{title}’을(를) Steam에서 제거할까요?",
   "library.bulk.steam_remove_title_other": "게임 {count}개를 Steam에서 제거할까요?",
-  "library.bulk.steam_remove_description": "Irori가 이 게임들에 만든 Steam 바로 가기를 이미지와 함께 제거합니다. 다른 프로그램이 만든 바로 가기는 남습니다. 먼저 Steam을 종료하세요.",
+  "library.bulk.steam_remove_description": "Irori가 이 게임들에 만든 Steam 바로 가기를 이미지와 함께 제거합니다. 다른 프로그램이 만든 바로 가기는 남습니다. Steam이 실행 중이면 종료될 때 제거됩니다.",
   "library.bulk.steam_remove_confirm": "Steam에서 제거",
   "library.bulk.unfavourite": "즐겨찾기에서 제거",
   "library.bulk.unhide": "숨기기 해제",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "{days}일 만에 완료",
   "library.stats.journeys.pace": "주당 {hours}시간",
   "library.stats.journeys.games_at_once": "하루 게임 수",
-  "library.stats.journeys.most_at_once": "최대 {count}"
+  "library.stats.journeys.most_at_once": "최대 {count}",
+  "library.steam_queued": "Steam이 실행 중입니다. {title}은(는) Steam이 종료되면 Steam에 추가됩니다.",
+  "library.steam_remove_queued": "Steam이 실행 중입니다. {title}은(는) Steam이 종료되면 Steam에서 제거됩니다.",
+  "library.bulk.steam_queued": "Steam이 실행 중입니다. Steam이 종료되면 추가될 게임: {count}.",
+  "library.bulk.steam_remove_queued": "Steam이 실행 중입니다. Steam이 종료되면 제거될 게임: {count}."
 }

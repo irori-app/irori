@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Spelnamn, Steam-app-id eller butiksadress",
   "game.steam_link.searching": "Söker på Steam…",
   "game.steam_link.title": "Steam-app för ”{title}”",
-  "game.steam_link.unknown": "Inte länkat till någon Steam-app"
+  "game.steam_link.unknown": "Inte länkat till någon Steam-app",
+  "game.ops.steam_shortcut_queued": "Steam körs: Steam-genvägen för {title} läggs till när Steam stängs",
+  "game.ops.steam_shortcut_remove_queued": "Steam körs: Steam-genvägen för {title} tas bort när Steam stängs"
 }

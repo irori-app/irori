@@ -453,6 +453,7 @@ mod tests {
             can_add: false,
             steam_client: None,
             steam_hidden: None,
+            steam_waiting: None,
         }
     }
 

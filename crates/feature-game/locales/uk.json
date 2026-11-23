@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Назва гри, ID застосунку Steam або адреса в крамниці",
   "game.steam_link.searching": "Пошук у Steam…",
   "game.steam_link.title": "Застосунок Steam для «{title}»",
-  "game.steam_link.unknown": "Не пов’язано із застосунком Steam"
+  "game.steam_link.unknown": "Не пов’язано із застосунком Steam",
+  "game.ops.steam_shortcut_queued": "Steam запущено: ярлик Steam для {title} буде додано, коли Steam закриється",
+  "game.ops.steam_shortcut_remove_queued": "Steam запущено: ярлик Steam для {title} буде вилучено, коли Steam закриється"
 }

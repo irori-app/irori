@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Offline spelen stoppen",
   "manage.xbox.offline.close": "Sluiten",
   "manage.xbox.offline.changed": "Offline spelen gewijzigd",
-  "manage.xbox.offline.failed": "Kan offline spelen niet wijzigen"
+  "manage.xbox.offline.failed": "Kan offline spelen niet wijzigen",
+  "manage.steam_shortcuts.waiting_one": "1 snelkoppelingswijziging wacht tot Steam sluit",
+  "manage.steam_shortcuts.waiting_other": "{count} snelkoppelingswijzigingen wachten tot Steam sluit"
 }

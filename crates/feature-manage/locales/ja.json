@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "オフラインプレイをやめる",
   "manage.xbox.offline.close": "閉じる",
   "manage.xbox.offline.changed": "オフラインプレイを変更しました",
-  "manage.xbox.offline.failed": "オフラインプレイを変更できませんでした"
+  "manage.xbox.offline.failed": "オフラインプレイを変更できませんでした",
+  "manage.steam_shortcuts.waiting_one": "1 件のショートカットの変更が Steam の終了を待っています",
+  "manage.steam_shortcuts.waiting_other": "{count} 件のショートカットの変更が Steam の終了を待っています"
 }

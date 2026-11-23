@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Nome del gioco, ID dell’app di Steam o indirizzo del negozio",
   "game.steam_link.searching": "Ricerca su Steam…",
   "game.steam_link.title": "App di Steam per «{title}»",
-  "game.steam_link.unknown": "Non collegato a un’app di Steam"
+  "game.steam_link.unknown": "Non collegato a un’app di Steam",
+  "game.ops.steam_shortcut_queued": "Steam è in esecuzione: il collegamento Steam di {title} verrà aggiunto alla chiusura di Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam è in esecuzione: il collegamento Steam di {title} verrà rimosso alla chiusura di Steam"
 }

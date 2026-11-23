@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Nie udało się usunąć gier ze Steama",
   "library.bulk.steam_remove_title_one": "Usunąć „{title}” ze Steama?",
   "library.bulk.steam_remove_title_other": "Usunąć gry ze Steama ({count})?",
-  "library.bulk.steam_remove_description": "Irori usunie utworzone przez siebie skróty Steam do tych gier wraz z ich grafikami. Skróty innych programów pozostaną. Najpierw zamknij Steama.",
+  "library.bulk.steam_remove_description": "Irori usunie utworzone przez siebie skróty Steam do tych gier wraz z ich grafikami. Skróty innych programów pozostaną. Jeśli Steam działa, znikną po jego zamknięciu.",
   "library.bulk.steam_remove_confirm": "Usuń ze Steama",
   "library.bulk.unfavourite": "Usuń z ulubionych",
   "library.bulk.unhide": "Pokaż",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "ukończono w {days} dni",
   "library.stats.journeys.pace": "{hours} h tygodniowo",
   "library.stats.journeys.games_at_once": "Gry dziennie",
-  "library.stats.journeys.most_at_once": "Do {count}"
+  "library.stats.journeys.most_at_once": "Do {count}",
+  "library.steam_queued": "Steam działa. {title} zostanie dodane do Steama po jego zamknięciu.",
+  "library.steam_remove_queued": "Steam działa. {title} zostanie usunięte ze Steama po jego zamknięciu.",
+  "library.bulk.steam_queued": "Steam działa. Gry dodane do Steama po jego zamknięciu: {count}.",
+  "library.bulk.steam_remove_queued": "Steam działa. Gry usunięte ze Steama po jego zamknięciu: {count}."
 }

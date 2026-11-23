@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Couldn’t remove the games from Steam",
   "library.bulk.steam_remove_title_one": "Remove “{title}” from Steam?",
   "library.bulk.steam_remove_title_other": "Remove {count} games from Steam?",
-  "library.bulk.steam_remove_description": "Irori removes the Steam shortcuts it created for these games, with their artwork. Shortcuts other programs created stay. Close Steam first.",
+  "library.bulk.steam_remove_description": "Irori removes the Steam shortcuts it created for these games, with their artwork. Shortcuts other programs created stay. While Steam runs, they go when it closes.",
   "library.bulk.steam_remove_confirm": "Remove from Steam",
   "library.bulk.unfavourite": "Remove from favourites",
   "library.bulk.unhide": "Unhide",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "beaten in {days} days",
   "library.stats.journeys.pace": "{hours} h a week",
   "library.stats.journeys.games_at_once": "Games each day",
-  "library.stats.journeys.most_at_once": "Up to {count}"
+  "library.stats.journeys.most_at_once": "Up to {count}",
+  "library.steam_queued": "Steam is running. {title} is added to Steam when Steam closes.",
+  "library.steam_remove_queued": "Steam is running. {title} is removed from Steam when Steam closes.",
+  "library.bulk.steam_queued": "Steam is running. Games added to Steam when it closes: {count}.",
+  "library.bulk.steam_remove_queued": "Steam is running. Games removed from Steam when it closes: {count}."
 }

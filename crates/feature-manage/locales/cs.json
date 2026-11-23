@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Ukončit hraní offline",
   "manage.xbox.offline.close": "Zavřít",
   "manage.xbox.offline.changed": "Hraní offline změněno",
-  "manage.xbox.offline.failed": "Hraní offline nelze změnit"
+  "manage.xbox.offline.failed": "Hraní offline nelze změnit",
+  "manage.steam_shortcuts.waiting_one": "1 změna zástupců čeká na zavření Steamu",
+  "manage.steam_shortcuts.waiting_other": "Změny zástupců čekající na zavření Steamu: {count}"
 }

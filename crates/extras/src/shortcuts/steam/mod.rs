@@ -4,7 +4,8 @@
 //! Steam reads `shortcuts.vdf` at startup and rewrites it when its own
 //! shortcuts change, so the file is only edited while Steam is not running.
 //! When Steam is running the report says so ([`SteamReport::steam_running`])
-//! and nothing is written; the caller asks the user to close Steam.
+//! and nothing is written; the caller queues the change ([`queue`]), which is
+//! made once Steam has closed.
 //!
 //! Entries start the game with `irori --launch <runner>/<app> --wait`, so
 //! Steam follows the game's session, not a launcher that hands over and
@@ -12,6 +13,7 @@
 //! fields ([`sync`]); every write is backed up first and read back.
 
 pub mod art;
+pub mod queue;
 pub mod shortcuts_file;
 pub mod sync;
 pub mod vdf;
@@ -263,6 +265,8 @@ pub struct SyncReport {
     /// Entries whose command, tag or icon Irori brought up to date.
     pub updated: usize,
     pub removed: usize,
+    /// Games whose change waits for Steam to close ([`queue`]).
+    pub queued: usize,
     /// Steam users whose `shortcuts.vdf` was rewritten.
     pub users_changed: usize,
     /// Per-user problems (corrupt files, write errors).

@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Die Spiele konnten nicht aus Steam entfernt werden",
   "library.bulk.steam_remove_title_one": "„{title}“ aus Steam entfernen?",
   "library.bulk.steam_remove_title_other": "{count} Spiele aus Steam entfernen?",
-  "library.bulk.steam_remove_description": "Irori entfernt die Steam-Verknüpfungen, die es für diese Spiele angelegt hat, samt ihren Bildern. Verknüpfungen anderer Programme bleiben. Schließe Steam vorher.",
+  "library.bulk.steam_remove_description": "Irori entfernt die Steam-Verknüpfungen, die es für diese Spiele angelegt hat, samt ihren Bildern. Verknüpfungen anderer Programme bleiben. Läuft Steam, geschieht das nach dem Beenden.",
   "library.bulk.steam_remove_confirm": "Aus Steam entfernen",
   "library.bulk.unfavourite": "Aus Favoriten entfernen",
   "library.bulk.unhide": "Einblenden",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "in {days} Tagen durchgespielt",
   "library.stats.journeys.pace": "{hours} h pro Woche",
   "library.stats.journeys.games_at_once": "Spiele pro Tag",
-  "library.stats.journeys.most_at_once": "Bis zu {count}"
+  "library.stats.journeys.most_at_once": "Bis zu {count}",
+  "library.steam_queued": "Steam läuft. {title} wird zu Steam hinzugefügt, sobald Steam beendet ist.",
+  "library.steam_remove_queued": "Steam läuft. {title} wird aus Steam entfernt, sobald Steam beendet ist.",
+  "library.bulk.steam_queued": "Steam läuft. Spiele, die nach dem Beenden zu Steam hinzugefügt werden: {count}.",
+  "library.bulk.steam_remove_queued": "Steam läuft. Spiele, die nach dem Beenden aus Steam entfernt werden: {count}."
 }

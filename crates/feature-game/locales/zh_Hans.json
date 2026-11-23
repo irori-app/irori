@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "游戏名称、Steam 应用 ID 或商店地址",
   "game.steam_link.searching": "正在搜索 Steam…",
   "game.steam_link.title": "“{title}”的 Steam 应用",
-  "game.steam_link.unknown": "未关联到 Steam 应用"
+  "game.steam_link.unknown": "未关联到 Steam 应用",
+  "game.ops.steam_shortcut_queued": "Steam 正在运行：{title} 的 Steam 快捷方式将在 Steam 关闭后添加",
+  "game.ops.steam_shortcut_remove_queued": "Steam 正在运行：{title} 的 Steam 快捷方式将在 Steam 关闭后移除"
 }

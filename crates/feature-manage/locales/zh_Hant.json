@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "停止離線遊玩",
   "manage.xbox.offline.close": "關閉",
   "manage.xbox.offline.changed": "已變更離線遊玩",
-  "manage.xbox.offline.failed": "無法變更離線遊玩"
+  "manage.xbox.offline.failed": "無法變更離線遊玩",
+  "manage.steam_shortcuts.waiting_one": "1 項捷徑變更正在等待 Steam 關閉",
+  "manage.steam_shortcuts.waiting_other": "{count} 項捷徑變更正在等待 Steam 關閉"
 }

@@ -951,5 +951,7 @@
   "game.steam_link.search_placeholder": "Numele jocului, ID-ul aplicației Steam sau adresa din magazin",
   "game.steam_link.searching": "Se caută pe Steam…",
   "game.steam_link.title": "Aplicația Steam pentru „{title}”",
-  "game.steam_link.unknown": "Nelegat de o aplicație Steam"
+  "game.steam_link.unknown": "Nelegat de o aplicație Steam",
+  "game.ops.steam_shortcut_queued": "Steam rulează: comanda rapidă Steam pentru {title} se adaugă când se închide Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam rulează: comanda rapidă Steam pentru {title} se elimină când se închide Steam"
 }

@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "無法從 Steam 中移除這些遊戲",
   "library.bulk.steam_remove_title_one": "要從 Steam 中移除「{title}」嗎？",
   "library.bulk.steam_remove_title_other": "要從 Steam 中移除 {count} 款遊戲嗎？",
-  "library.bulk.steam_remove_description": "Irori 會移除它為這些遊戲建立的 Steam 捷徑及其圖片。其他程式建立的捷徑會保留。請先關閉 Steam。",
+  "library.bulk.steam_remove_description": "Irori 會移除它為這些遊戲建立的 Steam 捷徑及其圖片。其他程式建立的捷徑會保留。如果 Steam 正在執行，會在它關閉後移除。",
   "library.bulk.steam_remove_confirm": "從 Steam 中移除",
   "library.bulk.unfavourite": "取消收藏",
   "library.bulk.unhide": "取消隱藏",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "{days} 天通關",
   "library.stats.journeys.pace": "每週 {hours} 小時",
   "library.stats.journeys.games_at_once": "每天的遊戲數",
-  "library.stats.journeys.most_at_once": "最多 {count}"
+  "library.stats.journeys.most_at_once": "最多 {count}",
+  "library.steam_queued": "Steam 正在執行。{title} 將在 Steam 關閉後加入 Steam。",
+  "library.steam_remove_queued": "Steam 正在執行。{title} 將在 Steam 關閉後從 Steam 移除。",
+  "library.bulk.steam_queued": "Steam 正在執行。將在 Steam 關閉後加入的遊戲：{count}。",
+  "library.bulk.steam_remove_queued": "Steam 正在執行。將在 Steam 關閉後移除的遊戲：{count}。"
 }

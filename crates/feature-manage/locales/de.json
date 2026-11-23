@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Offline spielen beenden",
   "manage.xbox.offline.close": "Schließen",
   "manage.xbox.offline.changed": "Offline spielen geändert",
-  "manage.xbox.offline.failed": "Offline spielen konnte nicht geändert werden"
+  "manage.xbox.offline.failed": "Offline spielen konnte nicht geändert werden",
+  "manage.steam_shortcuts.waiting_one": "1 Änderung an Verknüpfungen wartet, bis Steam beendet ist",
+  "manage.steam_shortcuts.waiting_other": "{count} Änderungen an Verknüpfungen warten, bis Steam beendet ist"
 }

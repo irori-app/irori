@@ -967,7 +967,11 @@ commands without a window.
   an icon Irori made (the name, collections and the rest stay the user's; an entry
   without `appid` gets the one Steam computed, so its art stays). The file is edited only
   while Steam is closed, copied to `shortcuts.vdf.irori-backup` first and read back after
-  every write (a bad read-back puts the previous file back). Art goes to `grid/`
+  every write (a bad read-back puts the previous file back). A change asked for while
+  Steam runs (always in Game Mode) waits in `state/steam-shortcut-queue.json`
+  (`shortcuts::steam::queue`; a later change of a game replaces an earlier one) and is
+  made from the periodic tick once Steam has closed; the Steam card says how many wait
+  (`Backend::steam_shortcuts_waiting`). Art goes to `grid/`
   (portrait, wide, hero, logo; existing pictures stay): Irori's own art first, from the art
   store's originals (`Paths::art_original`), then Steam's CDN for slots it lacks (and the
   wide capsule). UI: "Add to Steam" and "Remove from Steam" in the game menu, the

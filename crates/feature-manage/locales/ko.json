@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "오프라인 플레이 중단",
   "manage.xbox.offline.close": "닫기",
   "manage.xbox.offline.changed": "오프라인 플레이가 변경되었습니다",
-  "manage.xbox.offline.failed": "오프라인 플레이를 변경할 수 없습니다"
+  "manage.xbox.offline.failed": "오프라인 플레이를 변경할 수 없습니다",
+  "manage.steam_shortcuts.waiting_one": "바로 가기 변경 1개가 Steam 종료를 기다리고 있습니다",
+  "manage.steam_shortcuts.waiting_other": "바로 가기 변경 {count}개가 Steam 종료를 기다리고 있습니다"
 }

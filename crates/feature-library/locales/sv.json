@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Det gick inte att ta bort spelen från Steam",
   "library.bulk.steam_remove_title_one": "Ta bort ”{title}” från Steam?",
   "library.bulk.steam_remove_title_other": "Ta bort {count} spel från Steam?",
-  "library.bulk.steam_remove_description": "Irori tar bort Steam-genvägarna som det skapade för de här spelen, med deras bilder. Genvägar från andra program finns kvar. Stäng Steam först.",
+  "library.bulk.steam_remove_description": "Irori tar bort Steam-genvägarna som det skapade för de här spelen, med deras bilder. Genvägar från andra program finns kvar. Om Steam körs tas de bort när det stängs.",
   "library.bulk.steam_remove_confirm": "Ta bort från Steam",
   "library.bulk.unfavourite": "Ta bort från favoriter",
   "library.bulk.unhide": "Visa",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "klarat på {days} dagar",
   "library.stats.journeys.pace": "{hours} h i veckan",
   "library.stats.journeys.games_at_once": "Spel per dag",
-  "library.stats.journeys.most_at_once": "Upp till {count}"
+  "library.stats.journeys.most_at_once": "Upp till {count}",
+  "library.steam_queued": "Steam körs. {title} läggs till i Steam när Steam stängs.",
+  "library.steam_remove_queued": "Steam körs. {title} tas bort från Steam när Steam stängs.",
+  "library.bulk.steam_queued": "Steam körs. Spel som läggs till i Steam när det stängs: {count}.",
+  "library.bulk.steam_remove_queued": "Steam körs. Spel som tas bort från Steam när det stängs: {count}."
 }

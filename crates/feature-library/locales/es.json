@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "No se pudieron quitar los juegos de Steam",
   "library.bulk.steam_remove_title_one": "¿Quitar «{title}» de Steam?",
   "library.bulk.steam_remove_title_other": "¿Quitar {count} juegos de Steam?",
-  "library.bulk.steam_remove_description": "Irori quita los accesos directos de Steam que creó para estos juegos, con sus imágenes. Los accesos directos de otros programas se quedan. Cierra Steam antes.",
+  "library.bulk.steam_remove_description": "Irori quita los accesos directos de Steam que creó para estos juegos, con sus imágenes. Los accesos directos de otros programas se quedan. Si Steam está abierto, se quitan cuando se cierre.",
   "library.bulk.steam_remove_confirm": "Quitar de Steam",
   "library.bulk.unfavourite": "Quitar de favoritos",
   "library.bulk.unhide": "Mostrar",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "terminado en {days} días",
   "library.stats.journeys.pace": "{hours} h a la semana",
   "library.stats.journeys.games_at_once": "Juegos por día",
-  "library.stats.journeys.most_at_once": "Hasta {count}"
+  "library.stats.journeys.most_at_once": "Hasta {count}",
+  "library.steam_queued": "Steam está abierto. {title} se añadirá a Steam cuando se cierre.",
+  "library.steam_remove_queued": "Steam está abierto. {title} se quitará de Steam cuando se cierre.",
+  "library.bulk.steam_queued": "Steam está abierto. Juegos que se añadirán a Steam cuando se cierre: {count}.",
+  "library.bulk.steam_remove_queued": "Steam está abierto. Juegos que se quitarán de Steam cuando se cierre: {count}."
 }

@@ -797,5 +797,7 @@
   "manage.xbox.offline.turn_off": "Dejar de jugar sin conexión",
   "manage.xbox.offline.close": "Cerrar",
   "manage.xbox.offline.changed": "Juego sin conexión cambiado",
-  "manage.xbox.offline.failed": "No se pudo cambiar el juego sin conexión"
+  "manage.xbox.offline.failed": "No se pudo cambiar el juego sin conexión",
+  "manage.steam_shortcuts.waiting_one": "1 cambio de accesos directos espera a que se cierre Steam",
+  "manage.steam_shortcuts.waiting_other": "{count} cambios de accesos directos esperan a que se cierre Steam"
 }

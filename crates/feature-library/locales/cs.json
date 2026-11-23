@@ -80,7 +80,7 @@
   "library.bulk.steam_remove_failed": "Hry se nepodařilo odebrat ze Steamu",
   "library.bulk.steam_remove_title_one": "Odebrat „{title}“ ze Steamu?",
   "library.bulk.steam_remove_title_other": "Odebrat ze Steamu hry ({count})?",
-  "library.bulk.steam_remove_description": "Irori odebere zástupce Steamu, které pro tyto hry vytvořil, i s jejich obrázky. Zástupci jiných programů zůstanou. Nejdřív zavřete Steam.",
+  "library.bulk.steam_remove_description": "Irori odebere zástupce Steamu, které pro tyto hry vytvořil, i s jejich obrázky. Zástupci jiných programů zůstanou. Pokud Steam běží, odeberou se po jeho zavření.",
   "library.bulk.steam_remove_confirm": "Odebrat ze Steamu",
   "library.bulk.unfavourite": "Odebrat z oblíbených",
   "library.bulk.unhide": "Zobrazit",
@@ -1164,5 +1164,9 @@
   "library.stats.journeys.days_to_beat": "dohráno za {days} dní",
   "library.stats.journeys.pace": "{hours} h týdně",
   "library.stats.journeys.games_at_once": "Hry za den",
-  "library.stats.journeys.most_at_once": "Až {count}"
+  "library.stats.journeys.most_at_once": "Až {count}",
+  "library.steam_queued": "Steam běží. {title} se do Steamu přidá, až se Steam zavře.",
+  "library.steam_remove_queued": "Steam běží. {title} se ze Steamu odebere, až se Steam zavře.",
+  "library.bulk.steam_queued": "Steam běží. Her přidaných do Steamu po jeho zavření: {count}.",
+  "library.bulk.steam_remove_queued": "Steam běží. Her odebraných ze Steamu po jeho zavření: {count}."
 }
