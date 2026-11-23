@@ -1223,6 +1223,10 @@ dragging its edge or with the arrow keys on it.
 - Key contexts are `*_CONTEXT` constants. Actions are declared per crate and bound
   once.
 
+**Onboarding** (`irori-manage` `onboarding/`): the import step lists Heroic and the other
+launchers found off the UI thread (Lutris, Bottles, Faugus Launcher, Playnite;
+`onboarding::launchers`), each imported with its summary.
+
 ### 4.5 Shell (`crates/irori`)
 
 `main.rs` does these steps in order. Keep them in this order:
