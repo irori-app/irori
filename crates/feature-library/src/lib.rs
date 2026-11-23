@@ -121,6 +121,20 @@ gpui_kit::actions!(
         NextLibraryView,
         /// Open the grid's drawer on the focused game, or close it.
         ToggleDrawer,
+        /// Move through the art picker's pictures (arrows, a controller's
+        /// directions).
+        ArtPickerUp,
+        ArtPickerDown,
+        ArtPickerLeft,
+        ArtPickerRight,
+        /// Use the picture the art picker's cursor is on.
+        UseArt,
+        /// Move to the art picker's search field.
+        SearchArt,
+        /// Show the previous or next source's pictures (a controller's
+        /// shoulders).
+        PrevArtSource,
+        NextArtSource,
     ]
 );
 
@@ -165,6 +179,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
         KeyBinding::new("delete", RemovePicked, grid),
         KeyBinding::new("escape", EndSelection, grid),
+    ]);
+    let art = Some(dialogs::steamgrid::ART_PICKER_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", ArtPickerUp, art),
+        KeyBinding::new("down", ArtPickerDown, art),
+        KeyBinding::new("left", ArtPickerLeft, art),
+        KeyBinding::new("right", ArtPickerRight, art),
+        KeyBinding::new("enter", UseArt, art),
+        KeyBinding::new("ctrl-enter", SearchArt, art),
+        KeyBinding::new("ctrl-f", SearchArt, art),
+        KeyBinding::new("pageup", PrevArtSource, art),
+        KeyBinding::new("pagedown", NextArtSource, art),
     ]);
 }
 

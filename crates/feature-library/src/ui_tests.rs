@@ -1230,3 +1230,88 @@ fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(source(&both, cx), (ArtSource::All, false));
 }
+
+#[gpui_kit::test]
+fn the_art_picker_moves_through_pictures_with_the_arrows(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent, ArtSource, Found};
+    use irori_extras::steamgrid::SgdbImage;
+
+    let _backend = start(cx);
+    // The shell binds the library's keys at start.
+    cx.update(crate::init);
+    let (window, picker) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, true, window, cx))
+            })
+        })
+        .expect("window opens");
+    let picked = Arc::new(parking_lot::Mutex::new(None::<String>));
+    let sink = picked.clone();
+    cx.update(|cx| {
+        cx.subscribe(&picker, move |_, event: &ArtPickerEvent, _| {
+            if let ArtPickerEvent::Picked(url) = event {
+                *sink.lock() = Some(url.clone());
+            }
+        })
+        .detach()
+    });
+    let found = (0..5)
+        .map(|id| Found {
+            source: ArtSource::Igdb,
+            image: SgdbImage {
+                id,
+                url: format!("https://example.invalid/{id}.png"),
+                thumb: String::new(),
+                width: Some(600),
+                height: Some(900),
+            },
+        })
+        .collect();
+    cx.update(|cx| picker.update(cx, |p, cx| p.show_for_test(found, cx)));
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    let cursor = |cx: &mut TestAppContext| cx.read(|cx| picker.read(cx).cursor());
+
+    // From the search field, Down reaches the first picture; Right moves on.
+    cx.update_window(window, |_, window, cx| {
+        picker.read(cx).query_focus(cx).focus(window, cx)
+    })
+    .unwrap();
+    cx.simulate_keystrokes(window, "down");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(0));
+    let holds = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).holds_keyboard(window)
+        })
+        .unwrap();
+    assert!(holds, "the pictures hold the keyboard");
+    cx.simulate_keystrokes(window, "right");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(1));
+
+    // Enter uses the picture the cursor is on.
+    cx.simulate_keystrokes(window, "enter");
+    assert_eq!(
+        picked.lock().as_deref(),
+        Some("https://example.invalid/1.png")
+    );
+
+    // Up from the first row goes back to the search field.
+    cx.simulate_keystrokes(window, "up");
+    assert_eq!(cursor(cx), None);
+    let in_search = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).query_focus(cx).is_focused(window)
+        })
+        .unwrap();
+    assert!(in_search);
+}

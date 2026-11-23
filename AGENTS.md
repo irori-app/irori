@@ -1355,6 +1355,12 @@ Microsoft's approval page (`irori_manage::login`).
   end (`layout::end_scroll`).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
+- The art picker (a game's settings → Artwork → find online, also inside Big Picture)
+  answers a controller through its keys (`irori-library`'s `ART_PICKER_CONTEXT`): the
+  directions move a cursor through the pictures by rows (`step_cursor`; up from the
+  first row and down from the search field cross between them), A uses the picture, X
+  (Ctrl+Enter) goes to the search field, where the system's keyboard opens, and the
+  shoulders (Page Up/Down) switch the source shown.
 - **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
   game Irori started runs opens a panel above the game (`overlay::open`) instead of
   toggling Big Picture, and every controller input goes to it while it is open. It is
