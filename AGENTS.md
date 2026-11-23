@@ -712,7 +712,10 @@ commands without a window.
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is
-  shown unfiltered there, never lost.
+  shown unfiltered there, never lost. Developer and publisher (`ViewFilter::developers`,
+  `publishers`, compared by `filter::company_key`) offer the library's commonest 30
+  plus any picked; smart categories have no rule for them, so `smart_from_view` names
+  them as left over.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock

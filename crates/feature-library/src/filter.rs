@@ -210,6 +210,69 @@ pub fn present_tags(library: &LibrarySnapshot) -> Vec<(String, String)> {
     tags
 }
 
+/// Who made or published a game: facets of the Filters popover, and two of
+/// the library's groupings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Company {
+    Developer,
+    Publisher,
+}
+
+impl Company {
+    /// The game's developer or publisher, when its store names one.
+    pub fn of(self, game: &GameInfo) -> Option<&str> {
+        match self {
+            Company::Developer => game.developer.as_deref(),
+            Company::Publisher => game.publisher.as_deref(),
+        }
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    }
+}
+
+/// How company names compare: stores spell one differently ("Valve",
+/// "VALVE ").
+pub fn company_key(company: &str) -> String {
+    company.trim().to_lowercase()
+}
+
+/// Developers or publishers the Filters popover offers: the commonest in
+/// the library (a big library names hundreds). Picked ones stay offered.
+pub const SHOWN_COMPANIES: usize = 30;
+
+/// Pick `name` in `set`, or unpick every spelling of `key` (as `fold`
+/// compares names) when one is picked.
+pub fn toggle_named(set: &mut BTreeSet<String>, key: &str, name: String, fold: fn(&str) -> String) {
+    let before = set.len();
+    set.retain(|n| fold(n) != key);
+    if set.len() == before {
+        set.insert(name);
+    }
+}
+
+/// The [`SHOWN_COMPANIES`] commonest developers or publishers among the
+/// library's games, as (key, the name it is shown with: the library's first
+/// spelling), by name.
+pub fn present_companies(library: &LibrarySnapshot, company: Company) -> Vec<(String, String)> {
+    let mut counts: HashMap<String, (usize, String)> = HashMap::new();
+    for name in library.games.iter().filter_map(|g| company.of(g)) {
+        counts
+            .entry(company_key(name))
+            .or_insert_with(|| (0, name.to_owned()))
+            .0 += 1;
+    }
+    let mut common: Vec<(String, usize, String)> = counts
+        .into_iter()
+        .map(|(k, (n, name))| (k, n, name))
+        .collect();
+    common.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    common.truncate(SHOWN_COMPANIES);
+    let mut shown: Vec<(String, String)> =
+        common.into_iter().map(|(k, _, name)| (k, name)).collect();
+    shown.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
+    shown
+}
+
 /// The first spelling of each genre key among `games`.
 fn genre_names(games: &[Arc<GameInfo>]) -> std::collections::HashMap<String, String> {
     let mut names = std::collections::HashMap::new();
@@ -418,6 +481,11 @@ pub struct ViewFilter {
     /// Games with any of these store tags (Steam's), as shown when picked
     /// and compared by `tag_key`; empty shows every game.
     pub tags: BTreeSet<String>,
+    /// Games made by any of these developers, as shown when picked and
+    /// compared by [`company_key`]; empty shows every game.
+    pub developers: BTreeSet<String>,
+    /// Games published by any of these, as [`ViewFilter::developers`].
+    pub publishers: BTreeSet<String>,
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -476,6 +544,8 @@ impl ViewFilter {
             !self.modes.is_empty(),
             !self.genres.is_empty(),
             !self.tags.is_empty(),
+            !self.developers.is_empty(),
+            !self.publishers.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -605,6 +675,16 @@ impl ViewFilter {
         if !self.tags.is_empty() {
             let names: Vec<&str> = self.tags.iter().map(String::as_str).collect();
             out.push(names.join(&t("library.filter.list_separator")));
+        }
+        for (picked, key) in [
+            (&self.developers, "library.filter.describe.developers"),
+            (&self.publishers, "library.filter.describe.publishers"),
+        ] {
+            if !picked.is_empty() {
+                let names: Vec<&str> = picked.iter().map(String::as_str).collect();
+                let names = names.join(&t("library.filter.list_separator"));
+                out.push(t_args(key, &[("names", &names)]).to_string());
+            }
         }
         let heading = self.category_heading(user);
         match self.category_names(user).len() {
@@ -945,6 +1025,19 @@ pub fn apply_in(
         let wanted: HashSet<String> = filter.tags.iter().map(|t| tag_key(t)).collect();
         games.retain(|g| g.store_tags.iter().any(|x| wanted.contains(&tag_key(x))));
     }
+    for (picked, company) in [
+        (&filter.developers, Company::Developer),
+        (&filter.publishers, Company::Publisher),
+    ] {
+        if !picked.is_empty() {
+            let wanted: HashSet<String> = picked.iter().map(|c| company_key(c)).collect();
+            games.retain(|g| {
+                company
+                    .of(g)
+                    .is_some_and(|c| wanted.contains(&company_key(c)))
+            });
+        }
+    }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
         games.retain(|g| filter.released.contains(g.release_date.as_deref(), year));
@@ -1163,6 +1256,61 @@ pub(crate) mod tests {
         // Saved views from before tags existed still read.
         let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
         assert!(old.tags.is_empty());
+    }
+
+    fn made_by(app: &str, title: &str, developer: &str, publisher: &str) -> Arc<GameInfo> {
+        let mut g = (*of_genres(app, title, &[])).clone();
+        g.developer = (!developer.is_empty()).then(|| developer.to_string());
+        g.publisher = (!publisher.is_empty()).then(|| publisher.to_string());
+        Arc::new(g)
+    }
+
+    #[test]
+    fn filters_by_developer_and_publisher() {
+        let library = snapshot(vec![
+            made_by("1", "Portal 2", "Valve", "Valve"),
+            made_by("2", "Half-Life", "VALVE ", "Sierra"),
+            made_by("3", "Hades", "Supergiant Games", "Supergiant Games"),
+            made_by("4", "Mystery", "", ""),
+        ]);
+        let user = Arc::new(UserData::default());
+        let none = Arc::new(HashSet::new());
+        // One developer spelled two ways is offered once, as first seen.
+        let offered: Vec<String> = present_companies(&library, Company::Developer)
+            .into_iter()
+            .map(|(_, n)| n)
+            .collect();
+        assert_eq!(offered, ["Supergiant Games", "Valve"]);
+        let f = ViewFilter {
+            developers: ["valve".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        let mut shown = titles(&shown);
+        shown.sort_unstable();
+        assert_eq!(shown, ["Half-Life", "Portal 2"]);
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(f.describe(&UserData::default()).len(), 1);
+        // Both facets narrow together.
+        let f = ViewFilter {
+            developers: ["Valve".to_string()].into(),
+            publishers: ["Sierra".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        assert_eq!(titles(&shown), ["Half-Life"]);
+        let mut reset = f.clone();
+        reset.reset_filters();
+        assert!(reset.developers.is_empty() && reset.publishers.is_empty());
+        // Picking a spelling again unpicks every spelling of it.
+        let mut picked = BTreeSet::from(["VALVE".to_string()]);
+        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
+        assert!(picked.is_empty());
+        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
+        assert_eq!(picked, BTreeSet::from(["Valve".to_string()]));
+        // Views saved before these facets read as before.
+        let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
+        assert!(old.developers.is_empty() && old.unknown.is_empty());
     }
 
     #[test]
