@@ -300,6 +300,22 @@ async fn installs_updates_repairs_and_uninstalls() {
     );
     assert!(f.store.list_updatable().await.unwrap().is_empty());
 
+    // Heroic #6000: the build id decides. An ETag that no longer matches
+    // the installed build's meta is no update, and without a build id a
+    // weak one can't say there is one.
+    let set = |build: Option<&str>, etag: &str| {
+        let (build, etag) = (build.map(str::to_string), etag.to_string());
+        f.store.modify_record(APP, move |r| {
+            r.build_id = build;
+            r.version_etag = Some(etag);
+        })
+    };
+    set(Some("b1"), "\"recompressed\"").await.unwrap();
+    assert!(f.store.list_updatable().await.unwrap().is_empty());
+    set(None, "W/\"e0\"").await.unwrap();
+    assert!(f.store.list_updatable().await.unwrap().is_empty());
+    set(Some("b1"), "\"e1\"").await.unwrap();
+
     // Update: only the changed chunk is fetched, the removed file goes.
     f.version.store(2, Ordering::SeqCst);
     assert_eq!(f.store.list_updatable().await.unwrap(), [APP]);

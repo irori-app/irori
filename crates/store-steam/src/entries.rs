@@ -109,7 +109,11 @@ pub(crate) fn installed(
     remote: Option<&RemoteArt>,
 ) -> GameInfo {
     let native = HostPlatform::current().native();
+    let base = base(&app.app_id, &app.name, Art::of(&app.app_id, local, remote));
     GameInfo {
+        // Steam still starts it, but the build is Windows': Proton runs it.
+        // What changes inside its folder (ReShade) has to know.
+        is_linux_native: base.is_linux_native && !app.windows_build,
         is_installed: true,
         install: Some(InstalledInfo {
             install_path: app.install_path.to_string_lossy().into_owned(),
@@ -120,7 +124,7 @@ pub(crate) fn installed(
             ..Default::default()
         }),
         installable: false,
-        ..base(&app.app_id, &app.name, Art::of(&app.app_id, local, remote))
+        ..base
     }
     .finalize()
 }

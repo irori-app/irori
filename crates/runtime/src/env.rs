@@ -6,13 +6,13 @@
 //!
 //! 1. [`wrapper_env`]: game identity for wrappers and umu (`GAMEID=umu-0`)
 //! 2. [`generic_env`]: PRIME offload, `STEAM_COMPAT_INSTALL_PATH`, user
-//!    variables, `LD_PRELOAD` reset
+//!    variables, MangoHud's frame limit, `LD_PRELOAD` reset
 //! 3. [`crate::graphics::graphics_env`]: the chosen graphics card, Smooth
 //!    Motion and lsfg-vk, except what the user's variables set
 //! 4. known-fixes variables
 //! 5. [`wine_env`]: Wine/Proton variables (Windows games only)
-//! 6. `GAMEID=<umu id>` when umu runs the game and the game is in the umu
-//!    database
+//! 6. `GAMEID=<umu id>` when umu runs the game and it has one
+//!    ([`crate::umu::resolve`])
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -70,6 +70,108 @@ fn with_vkd3d_flag(config: &str, flag: &str) -> String {
         flags.push(flag);
     }
     flags.join(",")
+}
+
+/// A frame limit as entered: a whole number above 0, else none.
+fn parse_fps_limit(value: &str) -> Option<u32> {
+    value.trim().parse::<u32>().ok().filter(|n| *n > 0)
+}
+
+/// `MANGOHUD_CONFIG` with MangoHud's frame limit set to `limit`. The value
+/// the user already has (their variable, else the one Irori was started
+/// with) keeps its other options; only its `fps_limit` is replaced. A value
+/// Irori starts gets `read_cfg`: once the variable is set, MangoHud reads
+/// its configuration file only when the variable asks for it, and the
+/// user's `MangoHud.conf` must keep applying.
+pub fn mangohud_config(existing: Option<&str>, limit: u32) -> String {
+    let existing = existing.map(remove_quote_if_necessary).unwrap_or_default();
+    let mut options: Vec<&str> = existing
+        .split(',')
+        .map(str::trim)
+        .filter(|o| !o.is_empty())
+        .filter(|o| o.split('=').next().map(str::trim) != Some("fps_limit"))
+        .collect();
+    if existing.trim().is_empty() {
+        options.push("read_cfg");
+    }
+    let limit = format!("fps_limit={limit}");
+    options.push(&limit);
+    options.join(",")
+}
+
+/// Merge `dxgi.maxFrameRate` and `d3d9.maxFrameRate` into an existing
+/// `DXVK_CONFIG` string without overriding explicit user caps. Returns
+/// `(merged, has_existing_cap)` where `merged` is `None` when `existing`
+/// already sets the cap.
+fn with_dxvk_fps_limit(existing: &str, cap: i32) -> (Option<String>, bool) {
+    let existing = remove_quote_if_necessary(existing);
+    let mut entries: Vec<String> = existing
+        .split([';', '\n'])
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .collect();
+
+    let mut has_global = false;
+    let mut has_dxgi = false;
+    let mut has_d3d9 = false;
+    for entry in &entries {
+        if let Some((key, _)) = entry.split_once('=') {
+            let key = key.trim();
+            if key.eq_ignore_ascii_case("dxvk.maxFrameRate") {
+                has_global = true;
+            } else if key.eq_ignore_ascii_case("dxgi.maxFrameRate") {
+                has_dxgi = true;
+            } else if key.eq_ignore_ascii_case("d3d9.maxFrameRate") {
+                has_d3d9 = true;
+            }
+        }
+    }
+
+    let has_existing_cap = has_global || has_dxgi || has_d3d9;
+    if has_global || (has_dxgi && has_d3d9) {
+        return (None, has_existing_cap);
+    }
+    if !has_dxgi {
+        entries.push(format!("dxgi.maxFrameRate={cap}"));
+    }
+    if !has_d3d9 {
+        entries.push(format!("d3d9.maxFrameRate={cap}"));
+    }
+    (Some(entries.join(";")), has_existing_cap)
+}
+
+/// Apply the configured frame rate limit across DXVK 3+ (`DXVK_CONFIG`), legacy
+/// DXVK/DXMT (`DXVK_FRAME_RATE`), and optionally VKD3D-Proton (`VKD3D_FRAME_RATE`).
+///
+/// DXVK 3.0 removed `DXVK_FRAME_RATE` in favor of `DXVK_CONFIG` options, and
+/// VKD3D-Proton caps DirectX 12 via `VKD3D_FRAME_RATE`.
+fn apply_fps_limit(env: &mut EnvMap, gs: &GameSettings, host: &HostEnv, include_vkd3d: bool) {
+    if !gs.enable_dxvk_fps_limit {
+        return;
+    }
+    let Ok(cap_val) = gs.dxvk_fps_cap.trim().parse::<i32>() else {
+        return;
+    };
+    let cap = cap_val.to_string();
+    let user_var = |key: &str| gs.environment_options.iter().rfind(|v| v.key.trim() == key);
+
+    let user_dxvk = user_var("DXVK_CONFIG").map(|v| remove_quote_if_necessary(&v.value));
+    let existing = user_dxvk
+        .as_deref()
+        .or_else(|| host.get("DXVK_CONFIG"))
+        .unwrap_or("");
+    let (merged, has_existing_cap) = with_dxvk_fps_limit(existing, cap_val);
+
+    if !has_existing_cap && user_var("DXVK_FRAME_RATE").is_none() {
+        env.insert("DXVK_FRAME_RATE".into(), cap.clone());
+    }
+    if let Some(merged) = merged {
+        env.insert("DXVK_CONFIG".into(), merged);
+    }
+    if include_vkd3d && cap_val >= 0 && user_var("VKD3D_FRAME_RATE").is_none() {
+        env.insert("VKD3D_FRAME_RATE".into(), cap);
+    }
 }
 
 /// Insert every variable of `top` into `base`, overwriting existing keys.
@@ -275,6 +377,17 @@ pub fn generic_env_for(
         }
         env.insert(key.to_string(), remove_quote_if_necessary(&var.value));
     }
+    if platform == irori_core::HostPlatform::Linux
+        && settings.show_mangohud
+        && let Some(limit) = parse_fps_limit(&settings.mangohud_fps_limit)
+    {
+        let existing = env
+            .get("MANGOHUD_CONFIG")
+            .map(String::as_str)
+            .or_else(|| host.get("MANGOHUD_CONFIG"));
+        let config = mangohud_config(existing, limit);
+        env.insert("MANGOHUD_CONFIG".into(), config);
+    }
     let user_sets_preload = settings
         .environment_options
         .iter()
@@ -353,9 +466,7 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
         if gs.advertise_avx_for_rosetta {
             env.insert("ROSETTA_ADVERTISE_AVX".into(), "1".into());
         }
-        if gs.enable_dxvk_fps_limit && !gs.dxvk_fps_cap.trim().is_empty() {
-            env.insert("DXVK_FRAME_RATE".into(), gs.dxvk_fps_cap.trim().into());
-        }
+        apply_fps_limit(&mut env, gs, input.host, false);
         return env;
     }
     let gs = input.settings;
@@ -408,9 +519,6 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
     if gs.show_fps {
         set("DXVK_HUD", "fps");
     }
-    if gs.enable_dxvk_fps_limit && !gs.dxvk_fps_cap.trim().is_empty() {
-        set("DXVK_FRAME_RATE", gs.dxvk_fps_cap.trim());
-    }
     if gs.enable_fsr {
         set("WINE_FULLSCREEN_FSR", "1");
         let strength = gs
@@ -458,6 +566,9 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
                 set("DXVK_HDR", "1");
             }
         }
+    }
+    if proton && gs.proton_prefer_sdl {
+        set("PROTON_PREFER_SDL", "1");
     }
     if gs.enable_wow64 {
         if proton {
@@ -601,6 +712,7 @@ pub fn wine_env_for(platform: irori_core::HostPlatform, input: &WineEnvInput<'_>
         );
         set("SteamVirtualGamepadInfo", "");
     }
+    apply_fps_limit(&mut env, gs, input.host, true);
     env
 }
 
@@ -828,6 +940,66 @@ mod tests {
     }
 
     #[test]
+    fn mangohud_frame_limit_keeps_the_users_configuration() {
+        use irori_core::HostPlatform::{Linux, Mac};
+        assert_eq!(mangohud_config(None, 60), "read_cfg,fps_limit=60");
+        assert_eq!(mangohud_config(Some(" "), 60), "read_cfg,fps_limit=60");
+        assert_eq!(
+            mangohud_config(Some("\"read_cfg,fps_limit=30,position=top-right\""), 90),
+            "read_cfg,position=top-right,fps_limit=90"
+        );
+        // The user's own options without `read_cfg` stay theirs.
+        assert_eq!(mangohud_config(Some("full"), 144), "full,fps_limit=144");
+
+        let mut gs = GameSettings {
+            show_mangohud: true,
+            mangohud_fps_limit: " 75 ".into(),
+            ..Default::default()
+        };
+        let none = HostEnv::default();
+        let env = generic_env_for(Linux, &gs, None, None, &none);
+        assert_eq!(env["MANGOHUD_CONFIG"], "read_cfg,fps_limit=75");
+        assert!(!generic_env_for(Mac, &gs, None, None, &none).contains_key("MANGOHUD_CONFIG"));
+
+        let host = HostEnv::from_pairs([("MANGOHUD_CONFIG", "fps,frametime")]);
+        let env = generic_env_for(Linux, &gs, None, None, &host);
+        assert_eq!(env["MANGOHUD_CONFIG"], "fps,frametime,fps_limit=75");
+        gs.environment_options = vec![user("MANGOHUD_CONFIG", "read_cfg,cpu_temp")];
+        let env = generic_env_for(Linux, &gs, None, None, &host);
+        assert_eq!(env["MANGOHUD_CONFIG"], "read_cfg,cpu_temp,fps_limit=75");
+
+        // No limit, an unreadable one, or MangoHud off leave the variable alone.
+        for (limit, on) in [("", true), ("0", true), ("sixty", true), ("60", false)] {
+            gs.mangohud_fps_limit = limit.into();
+            gs.show_mangohud = on;
+            gs.environment_options.clear();
+            let env = generic_env_for(Linux, &gs, None, None, &none);
+            assert!(!env.contains_key("MANGOHUD_CONFIG"), "{limit} {on}");
+        }
+    }
+
+    #[test]
+    fn proton_reads_controllers_through_sdl_when_asked() {
+        let host = HostEnv::default();
+        let mut gs = GameSettings::default();
+        let w = proton();
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
+        gs.proton_prefer_sdl = true;
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &w, &host));
+        assert_eq!(env["PROTON_PREFER_SDL"], "1");
+        // Plain Wine and macOS don't read it.
+        let wine = WineInstallation {
+            kind: WineKind::Wine,
+            ..proton()
+        };
+        let env = wine_env_for(irori_core::HostPlatform::Linux, &input(&gs, &wine, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
+        let env = wine_env_for(irori_core::HostPlatform::Mac, &input(&gs, &w, &host));
+        assert!(!env.contains_key("PROTON_PREFER_SDL"));
+    }
+
+    #[test]
     fn gamescope_keeps_the_game_off_wayland() {
         let gs = GameSettings {
             enable_wine_wayland: true,
@@ -1031,6 +1203,11 @@ mod tests {
         assert_eq!(env["PROTONPATH"], "/t/GE-Proton9-20");
         assert_eq!(env["DXVK_HUD"], "fps");
         assert_eq!(env["DXVK_FRAME_RATE"], "60");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=60;d3d9.maxFrameRate=60"
+        );
+        assert_eq!(env["VKD3D_FRAME_RATE"], "60");
         assert_eq!(env["WINE_FULLSCREEN_FSR"], "0");
         assert_eq!(env["PROTON_NO_ESYNC"], "1");
         assert_eq!(env["PROTON_NO_FSYNC"], "1");
@@ -1248,5 +1425,167 @@ mod tests {
         let mut env = EnvMap::new();
         apply_dll_overrides(&mut env, &[]);
         assert!(env.is_empty());
+    }
+
+    #[test]
+    fn fps_limit_merges_dxvk_config_and_respects_user_overrides() {
+        use irori_core::HostPlatform::{Linux, Mac};
+
+        let w = proton();
+        let none = HostEnv::default();
+
+        // Merges with quoted user DXVK_CONFIG.
+        let gs = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![user("DXVK_CONFIG", "\"dxgi.syncInterval=0;\"")],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs, &w, &none));
+        assert_eq!(env["DXVK_FRAME_RATE"], "144");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.syncInterval=0;dxgi.maxFrameRate=144;d3d9.maxFrameRate=144"
+        );
+        assert_eq!(env["VKD3D_FRAME_RATE"], "144");
+
+        // Merges with host DXVK_CONFIG when unset in environment_options.
+        let gs_host = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "120".into(),
+            ..Default::default()
+        };
+        let host = HostEnv::from_pairs([("DXVK_CONFIG", "d3d11.maxFrameLatency=1")]);
+        let env = wine_env_for(Linux, &input(&gs_host, &w, &host));
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "d3d11.maxFrameLatency=1;dxgi.maxFrameRate=120;d3d9.maxFrameRate=120"
+        );
+        assert_eq!(env["VKD3D_FRAME_RATE"], "120");
+
+        // Respects user-set dxgi.maxFrameRate, appends only d3d9.maxFrameRate,
+        // and skips DXVK_FRAME_RATE so legacy DXVK does not override it.
+        let gs_dxgi = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![user("DXVK_CONFIG", "dxgi.maxFrameRate=90")],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_dxgi, &w, &none));
+        assert!(!env.contains_key("DXVK_FRAME_RATE"));
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=90;d3d9.maxFrameRate=144"
+        );
+
+        // Respects user-set dxvk.maxFrameRate (leaves DXVK_CONFIG and DXVK_FRAME_RATE untouched).
+        let gs_global = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![user("DXVK_CONFIG", "dxvk.maxFrameRate=75")],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_global, &w, &none));
+        assert!(!env.contains_key("DXVK_FRAME_RATE"));
+        assert!(!env.contains_key("DXVK_CONFIG"));
+
+        // Duplicate DXVK_CONFIG entries follow last-entry-wins like generic_env_for.
+        let gs_dup = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![
+                user("DXVK_CONFIG", "dxvk.maxFrameRate=75"),
+                user("DXVK_CONFIG", "d3d11.maxFrameLatency=1"),
+            ],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_dup, &w, &none));
+        assert_eq!(env["DXVK_FRAME_RATE"], "144");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "d3d11.maxFrameLatency=1;dxgi.maxFrameRate=144;d3d9.maxFrameRate=144"
+        );
+
+        // Respects user-set DXVK_FRAME_RATE and VKD3D_FRAME_RATE.
+        let gs_user_vars = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![
+                user("DXVK_FRAME_RATE", "100"),
+                user("VKD3D_FRAME_RATE", "110"),
+            ],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_user_vars, &w, &none));
+        assert!(!env.contains_key("DXVK_FRAME_RATE"));
+        assert!(!env.contains_key("VKD3D_FRAME_RATE"));
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=144;d3d9.maxFrameRate=144"
+        );
+
+        // macOS sets DXVK_FRAME_RATE and DXVK_CONFIG, never VKD3D_FRAME_RATE.
+        let dir = tempfile::tempdir().unwrap();
+        let mac_wine = wine(dir.path());
+        let env = wine_env_for(Mac, &input(&gs_host, &mac_wine, &none));
+        assert_eq!(env["DXVK_FRAME_RATE"], "120");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=120;d3d9.maxFrameRate=120"
+        );
+        assert!(!env.contains_key("VKD3D_FRAME_RATE"));
+
+        // Non-numeric cap is never injected into any frame rate limit variable.
+        let gs_bad = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "60;dxgi.syncInterval=0".into(),
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_bad, &w, &none));
+        assert!(!env.contains_key("DXVK_FRAME_RATE"));
+        assert!(!env.contains_key("DXVK_CONFIG"));
+        assert!(!env.contains_key("VKD3D_FRAME_RATE"));
+
+        // Leading zeros are normalized to base-10 integers.
+        let gs_padded = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "060".into(),
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_padded, &w, &none));
+        assert_eq!(env["DXVK_FRAME_RATE"], "60");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=60;d3d9.maxFrameRate=60"
+        );
+        assert_eq!(env["VKD3D_FRAME_RATE"], "60");
+
+        // Negative DXVK cap applies to DXVK only (omitted from VKD3D_FRAME_RATE).
+        let gs_neg = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "-60".into(),
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_neg, &w, &none));
+        assert_eq!(env["DXVK_FRAME_RATE"], "-60");
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate=-60;d3d9.maxFrameRate=-60"
+        );
+        assert!(!env.contains_key("VKD3D_FRAME_RATE"));
+
+        // Whitespace around `=` in user DXVK_CONFIG is recognized.
+        let gs_spaced = GameSettings {
+            enable_dxvk_fps_limit: true,
+            dxvk_fps_cap: "144".into(),
+            environment_options: vec![user("DXVK_CONFIG", "dxgi.maxFrameRate = 90")],
+            ..Default::default()
+        };
+        let env = wine_env_for(Linux, &input(&gs_spaced, &w, &none));
+        assert!(!env.contains_key("DXVK_FRAME_RATE"));
+        assert_eq!(
+            env["DXVK_CONFIG"],
+            "dxgi.maxFrameRate = 90;d3d9.maxFrameRate=144"
+        );
     }
 }

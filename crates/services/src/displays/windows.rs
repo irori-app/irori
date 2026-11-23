@@ -52,6 +52,9 @@ fn read() -> Vec<Display> {
                 modes: gdi.as_deref().map(modes).unwrap_or_default(),
                 hdr_on: on,
                 hdr_capable: capable,
+                // Windows keeps variable refresh as one switch for every
+                // display (Graphics settings), not per display.
+                ..Default::default()
             }
         })
         .collect()

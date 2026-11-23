@@ -246,6 +246,7 @@ mod tests {
         let api = Client::with_endpoints(Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: format!("{}/store_item_assets/", server.base()),
         })
         .unwrap();

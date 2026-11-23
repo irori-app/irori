@@ -1,6 +1,7 @@
 //! The Sunshine panel of General → Integrations: whether Sunshine is on this
-//! computer, the login of its web UI, syncing now, taking Irori's games out,
-//! and how the last sync went.
+//! computer (or which other computer it is on, and its certificate), the
+//! login of its web UI, syncing now, taking Irori's games out, and how the
+//! last sync went.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
@@ -127,6 +128,37 @@ impl SunshinePanel {
         .detach();
     }
 
+    /// Trust the other computer's new certificate, then sync.
+    fn accept_certificate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        self.busy = true;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.accept_sunshine_certificate().await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.busy = false;
+                match result {
+                    Ok(report) => window.push_notification(
+                        Notification::success(summary(&report))
+                            .title(t("settings.sunshine.cert_accepted")),
+                        cx,
+                    ),
+                    Err(e) => window.push_notification(
+                        Notification::error(format!("{e:#}"))
+                            .title(t("settings.sunshine.sync_failed")),
+                        cx,
+                    ),
+                }
+                this.refresh(cx);
+            });
+        })
+        .detach();
+    }
+
     /// Sync now, or with `remove` take Irori's games out of Sunshine.
     fn run(&mut self, remove: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.busy {
@@ -167,7 +199,89 @@ impl SunshinePanel {
         .detach();
     }
 
+    /// Sunshine on another computer: where, which certificate Irori trusts,
+    /// and a changed one to accept.
+    fn render_remote(
+        &self,
+        address: &str,
+        status: &SunshineStatus,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let url = format!("https://{address}");
+        let busy = self.busy || status.syncing;
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .flex_wrap()
+                    .child(
+                        Icon::new(IconName::Globe)
+                            .small()
+                            .text_color(cx.theme().muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_sm()
+                            .child(t_args("settings.sunshine.remote", &[("address", address)])),
+                    )
+                    .child(
+                        Button::new("sunshine-open")
+                            .ghost()
+                            .small()
+                            .icon(IconName::ExternalLink)
+                            .label(t("settings.sunshine.open_web_ui"))
+                            .on_click(move |_, _, cx| cx.open_url(&url)),
+                    ),
+            )
+            .child(muted(t("settings.sunshine.remote_hint"), cx))
+            .when_some(status.pinned.clone(), |body, pin| {
+                body.child(
+                    div()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(t_args(
+                            "settings.sunshine.cert_pinned",
+                            &[("fingerprint", &pin)],
+                        )),
+                )
+            })
+            .when_some(status.changed_certificate.clone(), |body, fingerprint| {
+                body.child(
+                    Alert::warning(
+                        "sunshine-cert-changed",
+                        t_args(
+                            "settings.sunshine.cert_changed",
+                            &[("fingerprint", &fingerprint)],
+                        ),
+                    )
+                    .title(t("settings.sunshine.cert_changed_title")),
+                )
+                .child(
+                    h_flex().child(
+                        Button::new("sunshine-accept-cert")
+                            .outline()
+                            .small()
+                            .icon(IconName::Check)
+                            .label(t("settings.sunshine.cert_accept"))
+                            .loading(busy)
+                            .disabled(busy)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.accept_certificate(window, cx)
+                            })),
+                    ),
+                )
+            })
+            .into_any_element()
+    }
+
     fn render_found(&self, status: &SunshineStatus, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(address) = &status.remote {
+            return self.render_remote(address, status, cx);
+        }
         let theme = cx.theme();
         let (icon, color, text) = match &status.install {
             Some(install) => (
@@ -327,6 +441,12 @@ impl Render for SunshinePanel {
             .gap_3()
             .child(muted(t("settings.sunshine.description"), cx))
             .child(muted(t("settings.sunshine.apollo_works"), cx))
+            .when_some(status.address_error.clone(), |body, error| {
+                body.child(
+                    Alert::error("sunshine-address", SharedString::from(error))
+                        .title(t("settings.sunshine.address_invalid")),
+                )
+            })
             .child(self.render_found(&status, cx))
             .child(self.render_login(&status, cx))
             .when(status.host() == StreamHost::Apollo, |body| {

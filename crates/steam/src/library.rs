@@ -192,9 +192,13 @@ struct Envelope<T> {
 }
 
 impl Client {
-    /// The account's games, with playtime. An access token that may not see
+    /// The account's games, with playtime. A session or key that may not see
     /// the games gets an empty list (Steam answers `{"response": {}}`).
-    pub async fn owned_games(&self, access_token: &str, steamid: u64) -> Result<Vec<OwnedGame>> {
+    pub async fn owned_games(
+        &self,
+        auth: crate::auth::SteamAuth<'_>,
+        steamid: u64,
+    ) -> Result<Vec<OwnedGame>> {
         #[derive(Deserialize, Default)]
         #[serde(default)]
         struct Owned {
@@ -202,7 +206,7 @@ impl Client {
         }
         let url = format!("{}/IPlayerService/GetOwnedGames/v1/", self.endpoints().api);
         let query = [
-            ("access_token", access_token.to_string()),
+            auth.query_param(),
             ("steamid", steamid.to_string()),
             ("include_appinfo", "1".into()),
             ("include_played_free_games", "1".into()),
@@ -367,6 +371,7 @@ mod tests {
         Client::with_endpoints(Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         })
         .unwrap()
@@ -374,6 +379,8 @@ mod tests {
 
     #[tokio::test]
     async fn reads_owned_games() {
+        use crate::auth::SteamAuth;
+
         let server = TestServer::start(|req| {
             if !req.path.starts_with("/IPlayerService/GetOwnedGames/v1/?") {
                 return Resp::status(404);
@@ -381,7 +388,7 @@ mod tests {
             if req.path.contains("access_token=hidden") {
                 return Resp::json(json!({"response": {}}));
             }
-            if req.path.contains("access_token=revoked") {
+            if req.path.contains("access_token=revoked") || req.path.contains("key=badkey") {
                 return Resp::status(401);
             }
             Resp::json(json!({"response": {
@@ -410,7 +417,10 @@ mod tests {
             }}))
         });
         let api = client(&server);
-        let games = api.owned_games("token", STEAMID).await.unwrap();
+        let games = api
+            .owned_games(SteamAuth::WebSession("token"), STEAMID)
+            .await
+            .unwrap();
         assert_eq!(games.len(), 2);
         let hl2 = &games[0];
         assert_eq!((hl2.appid, hl2.name.as_str()), (220, "Half-Life 2"));
@@ -440,10 +450,32 @@ mod tests {
             assert!(path.contains(part), "{path} lacks {part}");
         }
 
-        assert!(api.owned_games("hidden", STEAMID).await.unwrap().is_empty());
-        let e = api.owned_games("revoked", STEAMID).await.unwrap_err();
+        let key_games = api
+            .owned_games(SteamAuth::ApiKey("myapikey"), STEAMID)
+            .await
+            .unwrap();
+        assert_eq!(key_games.len(), 2);
+        assert!(server.requests()[1].path.contains("key=myapikey"));
+
+        assert!(
+            api.owned_games(SteamAuth::WebSession("hidden"), STEAMID)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let e = api
+            .owned_games(SteamAuth::WebSession("revoked"), STEAMID)
+            .await
+            .unwrap_err();
         assert_eq!(e.downcast_ref(), Some(&SteamError::SessionRejected));
         assert!(!format!("{e:#}").contains("revoked"), "{e:#}");
+
+        let key_err = api
+            .owned_games(SteamAuth::ApiKey("badkey"), STEAMID)
+            .await
+            .unwrap_err();
+        assert_eq!(key_err.downcast_ref(), Some(&SteamError::SessionRejected));
+        assert!(!format!("{key_err:#}").contains("badkey"), "{key_err:#}");
     }
 
     #[tokio::test]

@@ -36,6 +36,15 @@ pub(crate) fn decide(status: SaveStatus, direction: SyncDirection) -> Action {
     }
 }
 
+/// Whether an upload with nothing to upload deletes the cloud saves: only a
+/// forced upload (the user confirmed replacing the cloud copy) from a folder
+/// with no files at all (`local`, its newest modification time, is 0). A
+/// folder whose files the game's filters leave out, and every other
+/// direction, keep the cloud saves.
+pub(crate) fn clears_cloud(direction: SyncDirection, local: u64) -> bool {
+    direction == SyncDirection::ForceUpload && local == 0
+}
+
 impl EpicStore {
     /// Compute (and remember) the save folder of an installed game.
     pub(crate) async fn resolve_save_path(
@@ -159,6 +168,24 @@ impl EpicStore {
                         saves::upload(&client, &session, app, pkg).await?;
                         log.push_str(&format!("Uploaded save {name}.\n"));
                     }
+                    None if clears_cloud(direction, local) && !remote.is_empty() => {
+                        // The user confirmed replacing the cloud saves with an
+                        // empty folder: without its manifests, the next sync
+                        // brings the deleted saves back (Heroic #5968).
+                        (ctx.step)("Deleting cloud saves");
+                        for save in &remote {
+                            client
+                                .delete_save_file(&session, &save.path)
+                                .await
+                                .with_context(|| {
+                                    format!("Could not delete the cloud save {}", save.name)
+                                })?;
+                        }
+                        log.push_str(&format!(
+                            "No save files here: deleted {} cloud saves.\n",
+                            remote.len()
+                        ));
+                    }
                     None => log.push_str("No save files to upload.\n"),
                 }
             }
@@ -198,5 +225,16 @@ mod tests {
         assert_eq!(decide(S::Conflict, D::Upload), Action::Conflict);
         assert_eq!(decide(S::Conflict, D::ForceUpload), Action::Upload);
         assert_eq!(decide(S::NoSave, D::ForceDownload), Action::Download);
+    }
+
+    #[test]
+    fn only_a_forced_upload_of_no_files_clears_the_cloud() {
+        use SyncDirection as D;
+        assert!(clears_cloud(D::ForceUpload, 0));
+        // Files the filters leave out still count as saves here.
+        assert!(!clears_cloud(D::ForceUpload, 1_700_000_000));
+        for direction in [D::Auto, D::Upload, D::Download, D::ForceDownload] {
+            assert!(!clears_cloud(direction, 0), "{direction:?}");
+        }
     }
 }

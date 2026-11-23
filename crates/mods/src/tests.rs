@@ -247,6 +247,78 @@ fn deploy_and_undeploy_restore_the_game_exactly() {
 }
 
 #[test]
+fn files_in_use_leave_the_deployment_untouched() {
+    let f = fixture();
+    let before = snapshot(&f.game);
+    let layers = f.lib.layers(&f.list).unwrap();
+    let manifest = f.lib.manifest_file();
+    deploy_links(&f.game, &layers, &manifest).unwrap();
+    let deployed = snapshot(&f.game);
+    let app = AppSettings::default();
+    let err = deploy::undeploy_checking(&manifest, &f.lib.written_dir(), &app, |p| {
+        p.ends_with("a.dll")
+    })
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("a.dll"), "{err:#}");
+    // Nothing moved; the reason is kept for the next attempt.
+    assert_eq!(snapshot(&f.game), deployed);
+    let record = deploy::read(&manifest).unwrap().unwrap();
+    assert!(record.blocked.unwrap().contains("still in use"));
+    // Once the file is free, the folder comes back exactly.
+    undeploy(&manifest, &f.lib.written_dir(), &app).unwrap();
+    assert_eq!(snapshot(&f.game), before);
+}
+
+#[test]
+fn copies_land_whole_or_not_at_all() {
+    let tmp = tempfile::tempdir().unwrap();
+    let from = tmp.path().join("from.bin");
+    std::fs::write(&from, b"payload").unwrap();
+    let to = tmp.path().join("out/to.bin");
+    std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+    crate::fsutil::copy_whole(&from, &to).unwrap();
+    assert_eq!(std::fs::read(&to).unwrap(), b"payload");
+    assert!(!tmp.path().join("out/to.bin.irori-partial").exists());
+    // A source that can't be read leaves neither the target nor a partial.
+    let missing = tmp.path().join("missing.bin");
+    let other = tmp.path().join("out/other.bin");
+    assert!(crate::fsutil::copy_whole(&missing, &other).is_err());
+    assert!(!other.exists());
+    assert!(!tmp.path().join("out/other.bin.irori-partial").exists());
+}
+
+#[test]
+fn locked_files_are_waited_for_within_a_budget() {
+    use crate::fsutil::{is_locked, retry_locked};
+    use std::time::Duration;
+    let locked = || std::io::Error::from_raw_os_error(if cfg!(windows) { 32 } else { 16 });
+    assert!(is_locked(&locked()));
+    assert!(!is_locked(&std::io::Error::from(
+        std::io::ErrorKind::NotFound
+    )));
+    let mut tries = 0;
+    let result = retry_locked(Duration::from_secs(2), || {
+        tries += 1;
+        if tries < 3 { Err(locked()) } else { Ok(tries) }
+    });
+    assert_eq!(result.unwrap(), 3);
+    let mut tries = 0;
+    let result: std::io::Result<()> = retry_locked(Duration::from_secs(2), || {
+        tries += 1;
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    });
+    assert!(result.is_err());
+    assert_eq!(tries, 1);
+    let mut tries = 0;
+    let result: std::io::Result<()> = retry_locked(Duration::ZERO, || {
+        tries += 1;
+        Err(locked())
+    });
+    assert!(result.is_err());
+    assert_eq!(tries, 1);
+}
+
+#[test]
 fn undeploy_recovers_from_an_interrupted_deployment() {
     let f = fixture();
     let before = snapshot(&f.game);
@@ -877,6 +949,38 @@ fn thunderstore_answers_are_parsed() {
     assert_eq!(page.results[0].display_name(), "More Company");
     let foreign = json!({ "namespace": "a", "name": "b", "latest": { "download_url": "https://evil.example/x.zip" } });
     assert!(thunderstore::parse_package(&foreign).is_none());
+    let listed = json!({
+        "namespace": "a", "name": "b",
+        "latest": { "download_url": "https://thunderstore.io/package/download/a/b/1.0.0/" },
+        "community_listings": [{ "community": "riskofrain2" }, { "community": "valheim" }]
+    });
+    assert_eq!(
+        thunderstore::parse_package(&listed).unwrap().communities,
+        ["riskofrain2", "valheim"]
+    );
+}
+
+#[test]
+fn mod_manager_links_are_parsed() {
+    use thunderstore::ModManagerLink;
+    let link =
+        ModManagerLink::parse("ror2mm://v1/install/thunderstore.io/bbepis/BepInExPack/5.4.2100/")
+            .unwrap();
+    assert_eq!(link.full_name(), "bbepis-BepInExPack");
+    assert_eq!(link.version, "5.4.2100");
+    assert!(
+        ModManagerLink::parse("ror2mm://v1/install/valheim.thunderstore.io/a/b_c/1.0.0").is_some()
+    );
+    for bad in [
+        "ror2mm://v1/install/evil.example/a/b/1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/../1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/b%2F..%2Fc/1.0.0/",
+        "ror2mm://v2/install/thunderstore.io/a/b/1.0.0/",
+        "ror2mm://v1/install/thunderstore.io/a/b/",
+        "nxm://a/mods/1/files/2",
+    ] {
+        assert_eq!(ModManagerLink::parse(bad), None, "{bad}");
+    }
 }
 
 #[tokio::test]
@@ -943,6 +1047,40 @@ fn nexus_links_parse_and_hide_their_key() {
         nexus::parse_mod_url("https://evil.com/stardewvalley/mods/1"),
         None
     );
+}
+
+#[tokio::test]
+async fn nexus_search_asks_graphql_with_the_text_as_a_variable() {
+    let server = TestServer::start(|req| {
+        if req.method != "POST" || req.path != "/v2/graphql" || req.header("apikey") != Some("k3y")
+        {
+            return Resp::status(404);
+        }
+        let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+        let vars = &body["variables"];
+        assert_eq!(vars["filter"]["gameDomainName"][0]["value"], "skyrim");
+        assert_eq!(vars["filter"]["nameStemmed"][0]["value"], "sky ui");
+        assert!(!body["query"].as_str().unwrap().contains("sky ui"));
+        Resp::json(json!({ "data": { "mods": { "totalCount": 2, "nodes": [
+            { "modId": 3863, "name": "SkyUI", "summary": "s", "author": "a", "version": "5.2",
+              "downloads": 10, "endorsements": "7", "thumbnailUrl": "https://img/x.png", "adultContent": false },
+            { "modId": 9, "name": "Adult", "adultContent": true },
+            { "name": "No id" }
+        ] } } }))
+    });
+    let client = nexus::Client::with_base(&server.base(), nexus::ApiKey("k3y".into()));
+    let page = client.search("skyrim", " sky* ui? ", 0).await.unwrap();
+    assert_eq!(page.total, 2);
+    assert_eq!(page.mods.len(), 1);
+    assert_eq!(page.mods[0].mod_id, 3863);
+    assert_eq!(page.mods[0].endorsements, 7);
+    assert_eq!(page.mods[0].thumbnail.as_deref(), Some("https://img/x.png"));
+    assert!(client.search("../x", "a", 0).await.is_err());
+    let empty = nexus::search_request("skyrim", "  ", 20);
+    assert!(empty["variables"]["filter"].get("nameStemmed").is_none());
+    assert_eq!(empty["variables"]["offset"], 20);
+    let failed = nexus::parse_search(&json!({ "errors": [{ "message": "bad" }] }));
+    assert!(format!("{:#}", failed.unwrap_err()).contains("bad"));
 }
 
 #[tokio::test]

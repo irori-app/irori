@@ -1,7 +1,9 @@
 //! Launch troubleshooting: gathers what the diagnosis reads about a game's
 //! last run (its log, its program's imports, the winetricks components in
-//! its prefix, its anticheat entry, `vm.max_map_count`), remembers the fixes
-//! tried this session, and installs winetricks components as a fix.
+//! its prefix, its anticheat entry, its graphics and sync settings,
+//! `vm.max_map_count`, the distribution and GPU), remembers the fixes tried
+//! this session, and applies the fixes that need the backend: winetricks
+//! components, and stopping a wineserver of another Wine version.
 
 pub mod analysis;
 pub mod pe;
@@ -14,14 +16,14 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
-use irori_core::{GameId, GameInfo, HostPlatform, InstallPlatform, Paths, Runner};
+use irori_core::{GameId, GameInfo, HostPlatform, InstallPlatform, Paths, Runner, WineKind};
 use irori_extras::anticheat::{self, AntiCheatQuery};
 use parking_lot::Mutex;
 
 pub use analysis::{
-    Detail, Diagnosis, Facts, Finding, Fix, FixContext, LaunchHint, MAP_COUNT_RECOMMENDED,
-    MAP_COUNT_WANTED, OfferedFix, diagnose, game_output_start, launch_hints, map_count_commands,
-    missing_dlls, runtime_verbs,
+    Detail, Diagnosis, Facts, Finding, Fix, FixContext, GpuVendor, LaunchHint,
+    MAP_COUNT_RECOMMENDED, MAP_COUNT_WANTED, OfferedFix, diagnose, distro_ids, game_output_start,
+    launch_hints, map_count_commands, missing_dlls, runtime_verbs, vulkan_driver_command,
 };
 pub use pe::PeInfo;
 
@@ -88,6 +90,37 @@ impl Backend {
         Ok(())
     }
 
+    /// Stop the wineserver of another Wine version still running for `id`'s
+    /// prefix, which makes every start fail with "version mismatch". On
+    /// Linux it is found by its `WINEPREFIX`, since a client of the game's
+    /// own Wine can't talk to it; elsewhere the game's Wine asks it to stop.
+    pub async fn stop_prefix_wineserver(&self, id: &GameId) -> Result<()> {
+        let game = self.game(id).context("unknown game")?;
+        let app = self.settings.app();
+        let settings = self.settings.game(id);
+        let prefix = irori_runtime::prefix_path(&app, &settings, &game);
+        if cfg!(target_os = "linux") {
+            let wanted = vec![prefix.clone(), prefix.join("pfx")];
+            let pids = self
+                .spawn_blocking(move || prefix_servers(Path::new("/proc"), &wanted))
+                .await
+                .unwrap_or_default();
+            if !pids.is_empty() {
+                let kill = irori_core::process::CommandSpec::new("kill")
+                    .arg("-TERM")
+                    .args(pids.iter().map(u32::to_string));
+                let out = irori_core::process::run(&kill, Default::default())
+                    .await
+                    .context("could not stop the wineserver")?;
+                anyhow::ensure!(out.success(), "{}", out.error_summary());
+                return Ok(());
+            }
+        }
+        irori_runtime::kill_game_prefix(&app, &settings, &game)
+            .await
+            .context("could not stop the wineserver")
+    }
+
     async fn launch_facts(&self, id: &GameId, game: &GameInfo, exit_code: Option<i32>) -> Facts {
         let app = self.settings.app();
         let settings = self.settings.game(id);
@@ -117,6 +150,14 @@ impl Backend {
             _ => Some(irori_runtime::prefix_path(&app, &settings, game)),
         });
         let log = Paths::get().game_log_file(id);
+        let vulkan_command = if cfg!(target_os = "linux") {
+            self.spawn_blocking(read_vulkan_command)
+                .await
+                .ok()
+                .flatten()
+        } else {
+            None
+        };
         let (lines, target_missing, exe_missing, program, installed_verbs, map_count) = {
             let (target, own_exe) = (target.clone(), own_exe.clone());
             let prefix = prefix.flatten();
@@ -160,6 +201,7 @@ impl Backend {
             installed_verbs,
             anticheat,
             map_count,
+            vulkan_command,
             context: FixContext {
                 needs_wine,
                 verifiable: id.runner.manages_installs()
@@ -174,9 +216,73 @@ impl Backend {
                         .steam_runtime
                         .as_deref()
                         .is_none_or(|r| r.trim().is_empty()),
+                plain_wine: cfg!(target_os = "linux")
+                    && needs_wine
+                    && id.runner != Runner::Steam
+                    && settings.wine_version.kind == WineKind::Wine,
+                dxvk_on: settings.auto_install_dxvk,
+                vkd3d_on: settings.auto_install_vkd3d,
+                sync_switchable: cfg!(target_os = "linux")
+                    && needs_wine
+                    && id.runner != Runner::Steam,
+                esync_on: settings.enable_esync,
+                fsync_on: settings.enable_fsync,
             },
         }
     }
+}
+
+/// The command installing this system's Vulkan driver: the distribution from
+/// os-release (the host's inside a Flatpak), the GPUs from sysfs.
+fn read_vulkan_command() -> Option<String> {
+    let os_release = ["/run/host/os-release", "/etc/os-release"]
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())?;
+    let gpus = irori_runtime::sysinfo::read_gpus(Path::new("/sys/bus/pci/devices"));
+    let mut vendors: Vec<GpuVendor> = Vec::new();
+    for v in gpus
+        .iter()
+        .filter_map(|g| GpuVendor::from_pci(&g.vendor_id))
+    {
+        if !vendors.contains(&v) {
+            vendors.push(v);
+        }
+    }
+    vulkan_driver_command(&distro_ids(&os_release), &vendors)
+}
+
+/// Process ids under `proc` of wineservers whose `WINEPREFIX` is one of
+/// `prefixes`. wineserver inherits the environment of the Wine client that
+/// started it, so its prefix is known even when its version isn't ours.
+fn prefix_servers(proc: &Path, prefixes: &[PathBuf]) -> Vec<u32> {
+    let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let wanted: Vec<PathBuf> = prefixes.iter().map(|p| canonical(p)).collect();
+    let Ok(entries) = std::fs::read_dir(proc) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|e| {
+            let pid: u32 = e.file_name().to_str()?.parse().ok()?;
+            let comm = std::fs::read_to_string(e.path().join("comm")).ok()?;
+            if !comm.trim().starts_with("wineserver") {
+                return None;
+            }
+            let environ = std::fs::read(e.path().join("environ")).ok()?;
+            let prefix = environ_prefix(&environ)?;
+            wanted.contains(&canonical(&prefix)).then_some(pid)
+        })
+        .collect()
+}
+
+/// `WINEPREFIX` in a `/proc/<pid>/environ` (NUL-separated `NAME=value`).
+fn environ_prefix(environ: &[u8]) -> Option<PathBuf> {
+    environ.split(|b| *b == 0).find_map(|var| {
+        let value = var.strip_prefix(b"WINEPREFIX=")?;
+        let text = String::from_utf8_lossy(value);
+        let trimmed = text.trim_end_matches('/');
+        (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+    })
 }
 
 /// A file Wine starts as a Windows program.

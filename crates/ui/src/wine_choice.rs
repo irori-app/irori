@@ -25,6 +25,7 @@ use gpui_kit::{
     Render, SharedString, Styled as _, Subscription, Window, div,
 };
 use irori_core::{GameId, GameInfo, WineInstallation};
+use irori_runtime::discovery::WineSource;
 use irori_services::Backend;
 
 use crate::i18n::{t, t_args};
@@ -51,6 +52,23 @@ impl SelectItem for WineItem {
 }
 
 type WineSelect = SelectState<Vec<WineItem>>;
+
+/// A build's name in a picker, with where it was found when another build
+/// has the same name ([`irori_runtime::wine_installations_with_sources`]).
+pub fn build_label(wine: &WineInstallation, source: Option<WineSource>) -> SharedString {
+    let Some(source) = source else {
+        return wine.name.clone().into();
+    };
+    let source = match source {
+        WineSource::System => t("ui.wine.source.system"),
+        WineSource::Custom => t("ui.wine.source.custom"),
+        other => other.label().into(),
+    };
+    t_args(
+        "ui.wine.build_with_source",
+        &[("name", &wine.name), ("source", &source)],
+    )
+}
 
 /// What the user chose, as plain data to apply once the game exists.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -201,17 +219,17 @@ impl WineChoice {
         let app = backend(cx).settings.app();
         let default_name = app.game.wine_version.name.clone();
         let task = crate::state::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&app).await)
+            Ok(irori_runtime::wine_installations_with_sources(&app).await)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let mut list = task.await.unwrap_or_default();
+            let mut found = task.await.unwrap_or_default();
             let _ = this.update_in(cx, |this, window, cx| {
                 // A pinned build that is gone stays listed, so it isn't
                 // dropped without the user choosing another.
                 if let Some(current) = &this.chosen
-                    && !list.iter().any(|w| w.bin == current.bin)
+                    && !found.iter().any(|(w, _)| w.bin == current.bin)
                 {
-                    list.insert(0, current.clone());
+                    found.insert(0, (current.clone(), None));
                 }
                 let default = if default_name.is_empty() {
                     t("ui.wine.default")
@@ -222,11 +240,12 @@ impl WineChoice {
                     value: SharedString::default(),
                     title: default,
                 })
-                .chain(list.iter().map(|w| WineItem {
+                .chain(found.iter().map(|(w, source)| WineItem {
                     value: w.bin.clone().into(),
-                    title: w.name.clone().into(),
+                    title: build_label(w, *source),
                 }))
                 .collect();
+                let list: Vec<WineInstallation> = found.into_iter().map(|(w, _)| w).collect();
                 let selected = this
                     .chosen
                     .as_ref()

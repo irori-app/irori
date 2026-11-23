@@ -1,6 +1,7 @@
 //! Unpacking mod archives: zip and 7-Zip in-process, rar through a program
-//! that can read it (`unrar`, `7z` or `bsdtar`). Blocking; run on the
-//! blocking pool.
+//! that can read it (`unrar`, `7z` or `bsdtar`; on Windows also the
+//! `tar.exe` Windows ships, which is bsdtar). Blocking; run on the blocking
+//! pool.
 //!
 //! An archive is untrusted. Every entry goes through
 //! [`archive_guard`]: nothing is written outside the destination, and links
@@ -187,12 +188,74 @@ fn rar_tool() -> Option<RarTool> {
             }
         }
     }
-    which::which("bsdtar").ok().map(RarTool::Bsdtar)
+    if let Ok(p) = which::which("bsdtar") {
+        return Some(RarTool::Bsdtar(p));
+    }
+    windows_tar(std::env::var_os("SystemRoot"))
+        .filter(|p| cfg!(windows) && p.is_file())
+        .map(RarTool::Bsdtar)
+}
+
+/// The `tar.exe` Windows 10 (1803) and later ship in `System32`: libarchive's
+/// bsdtar, which reads rar 4 and 5, so stock Windows unpacks rar mods with no
+/// other program. Named by its full path: a `tar` found on `PATH` may be GNU
+/// tar (Git for Windows, MSYS2), which can't read rar at all.
+fn windows_tar(system_root: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let root = system_root.filter(|r| !r.is_empty())?;
+    Some(PathBuf::from(root).join("System32").join("tar.exe"))
 }
 
 /// Whether rar archives can be unpacked here.
 pub fn can_unpack_rar() -> bool {
     rar_tool().is_some()
+}
+
+/// The command that installs 7-Zip here, for the hint shown while rar
+/// archives can't be unpacked: the system's package manager on the common
+/// Linux distributions, Homebrew on macOS, winget on Windows. `None` where
+/// Irori can't tell (other distributions, its Flatpak, whose sandbox a
+/// program installed on the host can't reach).
+pub fn seven_zip_command() -> Option<&'static str> {
+    if cfg!(windows) {
+        return Some("winget install 7zip.7zip");
+    }
+    if cfg!(target_os = "macos") {
+        return Some("brew install sevenzip");
+    }
+    if irori_core::host::is_flatpak() {
+        return None;
+    }
+    let os_release = ["/etc/os-release", "/usr/lib/os-release"]
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())?;
+    seven_zip_command_for(&os_release)
+}
+
+/// [`seven_zip_command`] for a Linux system described by `os_release`, by
+/// its `ID` and then each `ID_LIKE`.
+pub fn seven_zip_command_for(os_release: &str) -> Option<&'static str> {
+    let field = |key: &str| {
+        os_release.lines().find_map(|l| {
+            let value = l.strip_prefix(key)?.strip_prefix('=')?;
+            Some(value.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+        })
+    };
+    let likes = field("ID_LIKE").unwrap_or_default();
+    let ids = field("ID")
+        .into_iter()
+        .chain(likes.split_whitespace().map(str::to_string));
+    ids.into_iter().find_map(|id| {
+        Some(match id.as_str() {
+            "arch" => "sudo pacman -S 7zip",
+            "debian" | "ubuntu" => "sudo apt install 7zip",
+            "fedora" | "rhel" => "sudo dnf install 7zip",
+            "opensuse" | "suse" | "opensuse-tumbleweed" | "opensuse-leap" => {
+                "sudo zypper install 7zip"
+            }
+            "gentoo" => "sudo emerge app-arch/7zip",
+            _ => return None,
+        })
+    })
 }
 
 async fn unrar(archive: &Path, dest: &Path, cancel: &CancellationToken) -> Result<()> {
@@ -286,4 +349,46 @@ pub(crate) fn rar_names_for_test(seven_zip: bool, stdout: &str) -> Vec<String> {
         RarTool::Unrar(PathBuf::new())
     };
     rar_names(&tool, stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_tar_is_named_by_its_full_path() {
+        assert_eq!(
+            windows_tar(Some(r"C:\Windows".into())),
+            Some(
+                PathBuf::from(r"C:\Windows")
+                    .join("System32")
+                    .join("tar.exe")
+            )
+        );
+        assert_eq!(windows_tar(Some("".into())), None);
+        assert_eq!(windows_tar(None), None);
+    }
+
+    #[test]
+    fn seven_zip_command_follows_the_distribution() {
+        let cmd = seven_zip_command_for;
+        assert_eq!(cmd("ID=arch\n"), Some("sudo pacman -S 7zip"));
+        assert_eq!(
+            cmd("NAME=\"Linux Mint\"\nID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"),
+            Some("sudo apt install 7zip")
+        );
+        assert_eq!(
+            cmd("ID=cachyos\nID_LIKE=arch\n"),
+            Some("sudo pacman -S 7zip")
+        );
+        assert_eq!(cmd("ID=\"fedora\"\n"), Some("sudo dnf install 7zip"));
+        assert_eq!(
+            cmd("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"),
+            Some("sudo zypper install 7zip")
+        );
+        assert_eq!(cmd("ID=nixos\n"), None);
+        // `ID_LIKE` is not taken for `ID`.
+        assert_eq!(cmd("ID_LIKE=debian\nID=x\n"), Some("sudo apt install 7zip"));
+        assert_eq!(cmd(""), None);
+    }
 }

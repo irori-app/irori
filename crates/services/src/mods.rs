@@ -18,7 +18,7 @@ use irori_core::process::CancellationToken;
 use irori_core::{Event, GameId, GameInfo, Notice, NoticeLevel, Paths, Runner};
 use irori_mods::fomod::{self, Choices, FileState, ModuleConfig};
 use irori_mods::nexus::{self, ApiKey, NexusUser, NxmLink};
-use irori_mods::thunderstore::{self, Community, Ecosystem, GameKeys, SearchPage};
+use irori_mods::thunderstore::{self, Community, Ecosystem, GameKeys, ModManagerLink, SearchPage};
 use irori_mods::{
     Applied, Conflicts, DeployMethod, DownloadProgress, ModEntry, ModLibrary, ModList, ModSource,
     Staging, conflicts, deploy, layout, overlay,
@@ -43,6 +43,44 @@ pub struct ModsView {
     pub folder: PathBuf,
     /// Icons of mods that came with one, by mod id.
     pub icons: HashMap<String, PathBuf>,
+    /// No program here unpacks rar archives.
+    pub rar_missing: bool,
+    /// The command that installs 7-Zip on this system, when known.
+    pub seven_zip_command: Option<&'static str>,
+    /// For a Bethesda game: its script extender and whether it is used.
+    pub script_extender: Option<ScriptExtender>,
+}
+
+/// A Bethesda game's script extender (SKSE, F4SE…).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptExtender {
+    pub name: &'static str,
+    /// Its loader's file name, as the game folder or the mod spells it.
+    pub loader: String,
+    /// The loader is in the game folder or an enabled mod.
+    pub available: bool,
+    /// The game starts through the loader (its `targetExe`).
+    pub in_use: bool,
+    /// Steam starts the game's own program, whatever `targetExe` says.
+    pub steam: bool,
+}
+
+/// The loader `name` as the game folder or an enabled mod spells it, when
+/// either has it at the game folder's root.
+fn find_loader(game_dir: &Path, enabled: &[(String, Vec<String>)], name: &str) -> Option<String> {
+    let in_game = std::fs::read_dir(game_dir).ok().and_then(|entries| {
+        entries
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|n| n.eq_ignore_ascii_case(name))
+    });
+    in_game.or_else(|| {
+        enabled
+            .iter()
+            .flat_map(|(_, files)| files)
+            .find(|f| f.eq_ignore_ascii_case(name))
+            .cloned()
+    })
 }
 
 /// An archive install that needs the user's choices first.
@@ -213,6 +251,8 @@ impl Backend {
         let (_, game_dir) = self.mod_game(id)?;
         let lib = ModLibrary::for_game(id);
         let running = self.is_running(id);
+        let target_exe = self.settings.game(id).target_exe;
+        let steam = id.runner == Runner::Steam;
         self.spawn_blocking(move || {
             let list = lib.load()?;
             let enabled: Vec<(String, Vec<String>)> = list
@@ -246,6 +286,20 @@ impl Backend {
                 folder: lib.root().to_path_buf(),
                 icons,
                 list,
+                rar_missing: !irori_mods::archive::can_unpack_rar(),
+                seven_zip_command: irori_mods::archive::seven_zip_command(),
+                script_extender: irori_mods::bethesda::detect(&game_dir).map(|game| {
+                    let name = game.extender_loader();
+                    let found = find_loader(&game_dir, &enabled, name);
+                    let target = target_exe.trim().rsplit(['/', '\\']).next().unwrap_or("");
+                    ScriptExtender {
+                        name: game.extender_name(),
+                        available: found.is_some(),
+                        loader: found.unwrap_or_else(|| name.to_string()),
+                        in_use: target.eq_ignore_ascii_case(name),
+                        steam,
+                    }
+                }),
             })
         })
         .await?
@@ -285,6 +339,47 @@ impl Backend {
             list.mods.iter().map(|m| &m.id).ne(before.iter())
         })
         .await
+    }
+
+    /// Start a Bethesda game through its script extender's loader (its
+    /// `targetExe`), or again through its own program. Turning it off leaves
+    /// a program the user chose themselves alone.
+    pub async fn set_script_extender(&self, id: &GameId, on: bool) -> Result<()> {
+        let (_, game_dir) = self.mod_game_idle(id)?;
+        let lib = ModLibrary::for_game(id);
+        let dir = game_dir.clone();
+        let loader = self
+            .spawn_blocking(move || -> Result<Option<String>> {
+                let Some(game) = irori_mods::bethesda::detect(&dir) else {
+                    return Ok(None);
+                };
+                let list = lib.load()?;
+                let enabled: Vec<(String, Vec<String>)> = list
+                    .mods
+                    .iter()
+                    .filter(|m| m.enabled)
+                    .map(|m| Ok((m.id.clone(), lib.index(&m.id)?)))
+                    .collect::<Result<_>>()?;
+                let name = game.extender_loader();
+                Ok(Some(
+                    find_loader(&dir, &enabled, name).unwrap_or_else(|| name.to_string()),
+                ))
+            })
+            .await??
+            .context("Irori doesn't know a script extender for this game")?;
+        if on {
+            let path = game_dir.join(&loader).to_string_lossy().into_owned();
+            self.settings
+                .set_game_value(id, "targetExe", Some(serde_json::Value::String(path)));
+        } else {
+            let current = self.settings.game(id).target_exe;
+            let file = current.trim().rsplit(['/', '\\']).next().unwrap_or("");
+            if file.eq_ignore_ascii_case(&loader) {
+                self.settings.set_game_value(id, "targetExe", None);
+            }
+        }
+        self.mods_changed(id);
+        Ok(())
     }
 
     pub async fn set_mod_method(&self, id: &GameId, method: DeployMethod) -> Result<()> {
@@ -678,6 +773,70 @@ impl Backend {
         Ok(done)
     }
 
+    /// Which of `games` a Thunderstore link's package is for: the first
+    /// whose community (the user's choice, else the recognised one) lists
+    /// the package.
+    pub async fn thunderstore_link_game(
+        &self,
+        link: &ModManagerLink,
+        games: Vec<GameId>,
+    ) -> Result<Option<GameId>> {
+        let package =
+            thunderstore::package(thunderstore::BASE, &link.namespace, &link.name).await?;
+        for id in games {
+            let Ok(Some(community)) = self.mod_community(&id).await else {
+                continue;
+            };
+            if package
+                .communities
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case(&community.id))
+            {
+                return Ok(Some(id));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Install the package of a Thunderstore link (`ror2mm://`) into `id`,
+    /// with what it needs, from the game's community, else the first
+    /// community listing the package.
+    pub async fn install_thunderstore_link(
+        &self,
+        id: &GameId,
+        link: &ModManagerLink,
+        progress: ModProgress,
+    ) -> Result<InstallOutcome> {
+        let community = match self.mod_community(id).await? {
+            Some(c) => c,
+            None => {
+                let eco = self.thunderstore_ecosystem().await?;
+                let package =
+                    thunderstore::package(thunderstore::BASE, &link.namespace, &link.name).await?;
+                package
+                    .communities
+                    .iter()
+                    .find_map(|c| eco.community(c))
+                    .cloned()
+                    .with_context(|| {
+                        format!(
+                            "{} is in no Thunderstore community Irori knows",
+                            link.full_name()
+                        )
+                    })?
+            }
+        };
+        let names = self
+            .install_thunderstore(id, &community, &link.namespace, &link.name, progress)
+            .await?;
+        Ok(InstallOutcome::Installed {
+            name: names
+                .last()
+                .cloned()
+                .unwrap_or_else(|| link.name.replace('_', " ")),
+        })
+    }
+
     /// The saved Nexus Mods account, when a key is saved.
     pub async fn nexus_user(&self) -> Option<NexusUser> {
         let path = nexus_key_file();
@@ -719,6 +878,50 @@ impl Backend {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
             _ => Ok(()),
         }
+    }
+
+    /// The game's Nexus Mods name (`skyrimspecialedition`): the user's
+    /// choice, else the one its Nexus mods came from, else its title in
+    /// lower case without spaces, which is how Nexus names most games.
+    pub async fn mod_nexus_domain(&self, id: &GameId) -> Result<String> {
+        let (game, _) = self.mod_game(id)?;
+        let lib = ModLibrary::for_game(id);
+        let list = self.spawn_blocking(move || lib.load()).await??;
+        Ok(nexus_domain_of(&list, &game.title))
+    }
+
+    pub async fn set_mod_nexus_domain(&self, id: &GameId, domain: String) -> Result<()> {
+        let domain = domain.trim().to_ascii_lowercase();
+        if !nexus::is_domain(&domain) {
+            bail!("“{domain}” is not a Nexus Mods game");
+        }
+        let (game, _) = self.mod_game(id)?;
+        self.edit_mods(id, |list| {
+            let guess = {
+                let mut plain = list.clone();
+                plain.nexus_domain = None;
+                nexus_domain_of(&plain, &game.title)
+            };
+            let wanted = (domain != guess).then_some(domain);
+            let changed = list.nexus_domain != wanted;
+            list.nexus_domain = wanted;
+            changed
+        })
+        .await
+    }
+
+    /// A page of the Nexus Mods game `domain`'s mods whose name holds
+    /// `query`, asked with the saved key.
+    pub async fn search_nexus(
+        &self,
+        domain: &str,
+        query: &str,
+        offset: u32,
+    ) -> Result<nexus::SearchPage> {
+        self.nexus_client()
+            .await?
+            .search(domain, query, offset)
+            .await
     }
 
     pub async fn nexus_mod(
@@ -832,6 +1035,7 @@ impl Backend {
                 files: Vec::new(),
                 dirs: Vec::new(),
                 created_at: irori_core::util::now_rfc3339(),
+                blocked: None,
             };
             irori_core::json_store::write(&lib.manifest_file(), &manifest)?;
             match overlay::mount(&tool, &game_dir, lower, &lib.written_dir(), &lib.work_dir()).await
@@ -841,6 +1045,7 @@ impl Backend {
                         log,
                         &format!("Mods: {count} applied with fuse-overlayfs\n"),
                     );
+                    self.write_plugin_list(id, &lib, &game_dir, log).await;
                     self.mods_changed(id);
                     return Ok(true);
                 }
@@ -865,6 +1070,7 @@ impl Backend {
                     log,
                     &format!("Mods: {count} applied, {} files linked\n", d.files.len()),
                 );
+                self.write_plugin_list(id, &lib, &game_dir, log).await;
                 self.mods_changed(id);
                 Ok(true)
             }
@@ -875,6 +1081,37 @@ impl Backend {
                 }
                 Err(e.context("the mods could not be applied"))
             }
+        }
+    }
+
+    /// Before a launch under Wine: prefer the game folder's copy of each
+    /// proxy DLL the enabled mods put beside a program (`winhttp.dll` of
+    /// BepInEx…), merged into the user's own `WINEDLLOVERRIDES`.
+    pub(crate) async fn mods_launch_env(
+        &self,
+        id: &GameId,
+        game: &GameInfo,
+        env: &mut std::collections::BTreeMap<String, String>,
+    ) {
+        if !supports_mods(game) {
+            return;
+        }
+        let Some(game_dir) = game.install_path() else {
+            return;
+        };
+        let lib = ModLibrary::for_game(id);
+        let dlls = self
+            .spawn_blocking(move || {
+                if !lib.root().exists() {
+                    return Ok(Vec::new());
+                }
+                irori_mods::proxy::enabled_proxy_dlls(&lib, &game_dir)
+            })
+            .await;
+        match dlls {
+            Ok(Ok(dlls)) => add_proxy_overrides(&dlls, env),
+            Ok(Err(e)) => tracing::warn!("proxy DLLs of the mods of {id}: {e:#}"),
+            Err(e) => tracing::warn!("proxy DLLs of the mods of {id}: {e:#}"),
         }
     }
 
@@ -898,8 +1135,102 @@ impl Backend {
         self.mods_changed(id);
     }
 
-    /// Undo whatever deployment `lib` records.
+    /// For a Bethesda game, once its mods are in: write `Plugins.txt` with
+    /// their plugins and set the ini keys loose files need
+    /// ([`irori_mods::bethesda`]). A game that can't get them still plays,
+    /// and its log says why.
+    async fn write_plugin_list(&self, id: &GameId, lib: &ModLibrary, game_dir: &Path, log: &Path) {
+        let places = self.bethesda_places(id, game_dir);
+        let edition = match id.runner {
+            Runner::Gog => Some("GOG"),
+            Runner::Legendary => Some("EPIC"),
+            Runner::Xbox => Some("MS"),
+            _ => None,
+        };
+        let (lib, game_dir) = (lib.clone(), game_dir.to_path_buf());
+        let result = self
+            .spawn_blocking(move || -> Result<Option<String>> {
+                let Some(bethesda) = irori_mods::bethesda::detect(&game_dir) else {
+                    return Ok(None);
+                };
+                let places = places.context("the game's Wine prefix was not found")?;
+                let data = layout::data_dir(&game_dir).unwrap_or_else(|| "Data".into());
+                let list = lib.load()?;
+                let mods: Vec<Vec<String>> = list
+                    .mods
+                    .iter()
+                    .filter(|m| m.enabled)
+                    .map(|m| lib.index(&m.id))
+                    .collect::<Result<_>>()?;
+                let plugins = irori_mods::bethesda::mod_plugins(&mods, &data);
+                let applied = irori_mods::bethesda::apply(
+                    bethesda,
+                    &game_dir.join(&data),
+                    &places,
+                    edition,
+                    &plugins,
+                    &plugin_record(&lib),
+                )?;
+                Ok(Some(format!(
+                    "Mods: {} plugins listed in {}, {} ini settings set\n",
+                    applied.plugins,
+                    applied
+                        .plugins_txt
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                    applied.ini_keys
+                )))
+            })
+            .await;
+        match result {
+            Ok(Ok(Some(line))) => crate::games::append_log(log, &line),
+            Ok(Ok(None)) => {}
+            Ok(Err(e)) => {
+                tracing::warn!("plugin list of {id}: {e:#}");
+                crate::games::append_log(log, &format!("Mods: plugins not listed: {e:#}\n"));
+            }
+            Err(e) => tracing::warn!("plugin list of {id}: {e:#}"),
+        }
+    }
+
+    /// Where the game keeps `Plugins.txt` and its ini: the user's own
+    /// folders on Windows, else its Wine prefix (a Steam game's Proton
+    /// prefix sits in `compatdata` beside its library's `common`).
+    fn bethesda_places(
+        &self,
+        id: &GameId,
+        game_dir: &Path,
+    ) -> Option<irori_mods::bethesda::Places> {
+        if cfg!(windows) {
+            return Some(irori_mods::bethesda::Places {
+                local_app_data: dirs::data_local_dir()?,
+                documents: dirs::document_dir()?,
+            });
+        }
+        let prefix = if id.runner == Runner::Steam {
+            game_dir
+                .parent()?
+                .parent()?
+                .join("compatdata")
+                .join(id.app_name.as_ref())
+        } else {
+            let prefix = self.settings.game(id).wine_prefix;
+            if prefix.trim().is_empty() {
+                return None;
+            }
+            irori_core::paths::expand_home(prefix.trim())
+        };
+        let root = crate::ludusavi::wine_prefix_root(&prefix)?;
+        irori_mods::bethesda::Places::in_prefix(&root)
+    }
+
+    /// Undo whatever deployment `lib` records, its plugin list first.
     async fn take_out(&self, lib: &ModLibrary) -> Result<()> {
+        let record = plugin_record(lib);
+        if record.exists() {
+            self.spawn_blocking(move || irori_mods::bethesda::restore(&record))
+                .await??;
+        }
         let manifest = lib.manifest_file();
         let Some(deployment) = deploy::read(&manifest)? else {
             return Ok(());
@@ -927,8 +1258,15 @@ impl Backend {
         Ok(())
     }
 
-    /// At start: take out deployments a crash left in game folders.
+    /// At start: take out deployments a crash left in game folders, but not
+    /// those of games still running from before (they come out when those
+    /// end).
     pub(crate) async fn recover_mods(&self) {
+        let playing: Vec<PathBuf> = self
+            .running_games()
+            .iter()
+            .map(|id| ModLibrary::for_game(id).root().to_path_buf())
+            .collect();
         let base = ModLibrary::base_dir();
         let manifests: Vec<PathBuf> = self
             .spawn_blocking(move || {
@@ -949,7 +1287,7 @@ impl Backend {
             })
             .await
             .unwrap_or_default();
-        for root in manifests {
+        for root in manifests.into_iter().filter(|r| !playing.contains(r)) {
             let lib = ModLibrary::new(root);
             if let Err(e) = self.take_out(&lib).await {
                 tracing::error!("taking leftover mods out ({}): {e:#}", lib.root().display());
@@ -1054,6 +1392,45 @@ fn new_entry(name: String, version: Option<String>, source: ModSource) -> ModEnt
     }
 }
 
+/// [`Backend::mod_nexus_domain`] for a mod list and title.
+fn nexus_domain_of(list: &ModList, title: &str) -> String {
+    if let Some(d) = list.nexus_domain.as_ref().filter(|d| nexus::is_domain(d)) {
+        return d.clone();
+    }
+    let from_mods = list.mods.iter().rev().find_map(|m| match &m.source {
+        ModSource::Nexus { domain, .. } => Some(domain.clone()),
+        _ => None,
+    });
+    from_mods.unwrap_or_else(|| {
+        title
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    })
+}
+
+/// What [`irori_mods::bethesda::apply`] wrote for this game.
+fn plugin_record(lib: &ModLibrary) -> PathBuf {
+    lib.root().join("bethesda.json")
+}
+
+/// `<dll>=n,b` for each of `dlls` in `WINEDLLOVERRIDES`, replacing only
+/// what the variable said about those DLLs.
+fn add_proxy_overrides(dlls: &[String], env: &mut std::collections::BTreeMap<String, String>) {
+    if dlls.is_empty() {
+        return;
+    }
+    let key = env
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case("WINEDLLOVERRIDES"))
+        .cloned()
+        .unwrap_or_else(|| "WINEDLLOVERRIDES".to_string());
+    let add: Vec<(&str, &str)> = dlls.iter().map(|d| (d.as_str(), "n,b")).collect();
+    let value = irori_runtime::env::add_dll_overrides(env.get(&key).map(String::as_str), &add);
+    env.insert(key, value);
+}
+
 /// Every enabled mod's files, lower-cased.
 fn enabled_files(lib: &ModLibrary) -> Result<HashSet<String>> {
     let list = lib.load()?;
@@ -1108,6 +1485,62 @@ fn present_files(config: &ModuleConfig, game_dir: &Path, lib: &ModLibrary) -> Ar
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_dlls_join_the_users_overrides() {
+        let mut env = std::collections::BTreeMap::new();
+        env.insert(
+            "WINEDLLOVERRIDES".to_string(),
+            "winhttp=b;d3d11=n".to_string(),
+        );
+        add_proxy_overrides(&["dinput8".into(), "winhttp".into()], &mut env);
+        assert_eq!(env["WINEDLLOVERRIDES"], "d3d11=n;dinput8=n,b;winhttp=n,b");
+        let mut empty = std::collections::BTreeMap::new();
+        add_proxy_overrides(&[], &mut empty);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn script_extender_loaders_are_found_in_the_game_or_a_mod() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mods = vec![("skse".to_string(), vec!["SKSE64_Loader.exe".to_string()])];
+        assert_eq!(
+            find_loader(tmp.path(), &mods, "skse64_loader.exe").as_deref(),
+            Some("SKSE64_Loader.exe")
+        );
+        std::fs::write(tmp.path().join("skse64_loader.EXE"), b"MZ").unwrap();
+        assert_eq!(
+            find_loader(tmp.path(), &mods, "skse64_loader.exe").as_deref(),
+            Some("skse64_loader.EXE")
+        );
+        assert_eq!(find_loader(tmp.path(), &[], "f4se_loader.exe"), None);
+    }
+
+    #[test]
+    fn nexus_domains_come_from_choice_mods_or_title() {
+        let mut list = ModList::default();
+        assert_eq!(nexus_domain_of(&list, "Stardew Valley"), "stardewvalley");
+        list.mods.push(ModEntry {
+            source: ModSource::Nexus {
+                domain: "skyrimspecialedition".into(),
+                mod_id: 1,
+                file_id: 2,
+            },
+            ..new_entry(
+                "SkyUI".into(),
+                None,
+                ModSource::Archive {
+                    file_name: String::new(),
+                },
+            )
+        });
+        assert_eq!(
+            nexus_domain_of(&list, "The Elder Scrolls V: Skyrim Special Edition"),
+            "skyrimspecialedition"
+        );
+        list.nexus_domain = Some("skyrim".into());
+        assert_eq!(nexus_domain_of(&list, "x"), "skyrim");
+    }
 
     #[test]
     fn archive_names_drop_nexus_suffixes() {

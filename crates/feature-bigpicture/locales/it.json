@@ -9,6 +9,7 @@
   "bigpicture.action.play": "Gioca",
   "bigpicture.action.play_with_log": "Gioca con i log",
   "bigpicture.action.stop": "Arresta",
+  "bigpicture.action.cancel_launch": "Annulla avvio",
   "bigpicture.action.install": "Installa",
   "bigpicture.action.cancel_download": "Annulla download",
   "bigpicture.action.update": "Aggiorna",

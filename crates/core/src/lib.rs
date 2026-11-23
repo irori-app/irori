@@ -16,6 +16,7 @@ pub mod json_store;
 pub mod launch;
 pub mod launch_extras;
 pub mod log_cap;
+pub mod merged_lists;
 pub mod paths;
 pub mod platform;
 pub use platform::HostPlatform;

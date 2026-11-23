@@ -131,96 +131,180 @@ fn avatar_url(digest: &str) -> String {
 }
 
 impl Client {
-    /// SteamID64s of the friends of the account the token signs in, without
-    /// `steamid` (the account itself).
-    pub async fn friend_list(&self, access_token: &str, steamid: u64) -> Result<Vec<u64>> {
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Answer {
-            response: Response,
+    /// SteamID64s of the friends of `steamid`, without `steamid` itself.
+    pub async fn friend_list(
+        &self,
+        auth: crate::auth::SteamAuth<'_>,
+        steamid: u64,
+    ) -> Result<Vec<u64>> {
+        match auth {
+            crate::auth::SteamAuth::WebSession(access_token) => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Answer {
+                    response: Response,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Response {
+                    friendslist: List,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct List {
+                    friends: Vec<Entry>,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Entry {
+                    #[serde(deserialize_with = "lenient_u64")]
+                    ulfriendid: u64,
+                    #[serde(deserialize_with = "lenient_u64")]
+                    efriendrelationship: u64,
+                }
+                let url = format!(
+                    "{}/IFriendsListService/GetFriendsList/v1/",
+                    self.endpoints().api
+                );
+                let query = [("access_token", access_token.to_string())];
+                let answer: Answer = self
+                    .get_json(url, &query, "your friends list")
+                    .await
+                    .map_err(not_shared)?;
+                Ok(answer
+                    .response
+                    .friendslist
+                    .friends
+                    .into_iter()
+                    .filter(|f| f.efriendrelationship == FRIEND && f.ulfriendid != 0)
+                    .map(|f| f.ulfriendid)
+                    .filter(|&id| id != steamid)
+                    .collect())
+            }
+            crate::auth::SteamAuth::ApiKey(api_key) => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Answer {
+                    friendslist: List,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct List {
+                    friends: Vec<Entry>,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Entry {
+                    #[serde(deserialize_with = "lenient_u64")]
+                    steamid: u64,
+                    relationship: String,
+                }
+                let url = format!("{}/ISteamUser/GetFriendList/v1/", self.endpoints().api);
+                let query = [
+                    ("key", api_key.to_string()),
+                    ("steamid", steamid.to_string()),
+                    ("relationship", "friend".into()),
+                ];
+                let answer: Option<Answer> = self
+                    .get_json_allowing(url, &query, "your friends list", &[401])
+                    .await
+                    .map_err(not_shared)?;
+                Ok(answer
+                    .unwrap_or_default()
+                    .friendslist
+                    .friends
+                    .into_iter()
+                    .filter(|f| f.steamid != 0 && f.steamid != steamid)
+                    .filter(|f| f.relationship.is_empty() || f.relationship == "friend")
+                    .map(|f| f.steamid)
+                    .collect())
+            }
         }
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Response {
-            friendslist: List,
-        }
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct List {
-            friends: Vec<Entry>,
-        }
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Entry {
-            #[serde(deserialize_with = "lenient_u64")]
-            ulfriendid: u64,
-            #[serde(deserialize_with = "lenient_u64")]
-            efriendrelationship: u64,
-        }
-        let url = format!(
-            "{}/IFriendsListService/GetFriendsList/v1/",
-            self.endpoints().api
-        );
-        let query = [("access_token", access_token.to_string())];
-        let answer: Answer = self
-            .get_json(url, &query, "your friends list")
-            .await
-            .map_err(not_shared)?;
-        Ok(answer
-            .response
-            .friendslist
-            .friends
-            .into_iter()
-            .filter(|f| f.efriendrelationship == FRIEND && f.ulfriendid != 0)
-            .map(|f| f.ulfriendid)
-            .filter(|&id| id != steamid)
-            .collect())
     }
 
     /// Summaries of `steamids`, asked in batches; accounts Steam doesn't
     /// know are left out.
     pub async fn player_summaries(
         &self,
-        access_token: &str,
+        auth: crate::auth::SteamAuth<'_>,
         steamids: &[u64],
     ) -> Result<Vec<PlayerSummary>> {
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Answer {
-            response: Accounts,
+        match auth {
+            crate::auth::SteamAuth::WebSession(access_token) => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Answer {
+                    response: Accounts,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Accounts {
+                    accounts: Vec<LinkDetails>,
+                }
+                let url = format!(
+                    "{}/IPlayerService/GetPlayerLinkDetails/v1/",
+                    self.endpoints().api
+                );
+                let mut out = Vec::with_capacity(steamids.len());
+                for batch in steamids.chunks(SUMMARIES_PER_CALL) {
+                    let keys: Vec<String> =
+                        (0..batch.len()).map(|i| format!("steamids[{i}]")).collect();
+                    let mut query = vec![("access_token", access_token.to_string())];
+                    query.extend(
+                        keys.iter()
+                            .zip(batch)
+                            .map(|(key, id)| (key.as_str(), id.to_string())),
+                    );
+                    let answer: Answer = self
+                        .get_json(url.clone(), &query, "your friends' status")
+                        .await
+                        .map_err(not_shared)?;
+                    out.extend(
+                        answer
+                            .response
+                            .accounts
+                            .into_iter()
+                            .map(LinkDetails::into_summary)
+                            .filter(|p| p.steamid != 0),
+                    );
+                }
+                Ok(out)
+            }
+            crate::auth::SteamAuth::ApiKey(api_key) => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Answer {
+                    response: Players,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Players {
+                    players: Vec<PlayerSummary>,
+                }
+                let url = format!("{}/ISteamUser/GetPlayerSummaries/v2/", self.endpoints().api);
+                let mut out = Vec::with_capacity(steamids.len());
+                for batch in steamids.chunks(SUMMARIES_PER_CALL) {
+                    let joined = batch
+                        .iter()
+                        .map(u64::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let query = [("key", api_key.to_string()), ("steamids", joined)];
+                    let answer: Answer = self
+                        .get_json(url.clone(), &query, "your friends' status")
+                        .await
+                        .map_err(not_shared)?;
+                    out.extend(
+                        answer
+                            .response
+                            .players
+                            .into_iter()
+                            .filter(|p| p.steamid != 0),
+                    );
+                }
+                Ok(out)
+            }
         }
-        #[derive(Deserialize, Default)]
-        #[serde(default)]
-        struct Accounts {
-            accounts: Vec<LinkDetails>,
-        }
-        let url = format!(
-            "{}/IPlayerService/GetPlayerLinkDetails/v1/",
-            self.endpoints().api
-        );
-        let mut out = Vec::with_capacity(steamids.len());
-        for batch in steamids.chunks(SUMMARIES_PER_CALL) {
-            let keys: Vec<String> = (0..batch.len()).map(|i| format!("steamids[{i}]")).collect();
-            let mut query = vec![("access_token", access_token.to_string())];
-            query.extend(
-                keys.iter()
-                    .zip(batch)
-                    .map(|(key, id)| (key.as_str(), id.to_string())),
-            );
-            let answer: Answer = self
-                .get_json(url.clone(), &query, "your friends' status")
-                .await
-                .map_err(not_shared)?;
-            out.extend(
-                answer
-                    .response
-                    .accounts
-                    .into_iter()
-                    .map(LinkDetails::into_summary)
-                    .filter(|p| p.steamid != 0),
-            );
-        }
-        Ok(out)
     }
 }
 
@@ -245,6 +329,7 @@ mod tests {
         Client::with_endpoints(Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         })
         .unwrap()
@@ -252,6 +337,8 @@ mod tests {
 
     #[tokio::test]
     async fn reads_friends_and_what_they_play() {
+        use crate::auth::SteamAuth;
+
         let server = TestServer::start(|req| {
             let path = req.path.as_str();
             if path.contains("access_token=refused") {
@@ -300,14 +387,39 @@ mod tests {
                     {"public_data": {"persona_name": "nobody"}}
                 ]}}));
             }
+            if path.starts_with("/ISteamUser/GetFriendList/v1/?") {
+                return Resp::json(json!({"friendslist": {"friends": [
+                    {"steamid": "76561197960265730", "relationship": "friend"},
+                    {"steamid": ME.to_string(), "relationship": "friend"}
+                ]}}));
+            }
+            if path.starts_with("/ISteamUser/GetPlayerSummaries/v2/?") {
+                return Resp::json(json!({"response": {"players": [
+                    {
+                        "steamid": "76561197960265730",
+                        "personaname": "Ada",
+                        "profileurl": "https://steamcommunity.com/id/ada/",
+                        "avatarmedium": "https://avatars.steamstatic.com/ada_medium.jpg",
+                        "personastate": 1,
+                        "gameid": "730",
+                        "gameextrainfo": "Counter-Strike 2"
+                    }
+                ]}}));
+            }
             Resp::status(404)
         });
         let api = client(&server);
-        let ids = api.friend_list("token", ME).await.unwrap();
+        let ids = api
+            .friend_list(SteamAuth::WebSession("token"), ME)
+            .await
+            .unwrap();
         assert_eq!(ids, [76561197960265730, 76561197960265731]);
         assert!(server.requests()[0].path.contains("access_token=token"));
 
-        let players = api.player_summaries("token", &ids).await.unwrap();
+        let players = api
+            .player_summaries(SteamAuth::WebSession("token"), &ids)
+            .await
+            .unwrap();
         assert_eq!(players.len(), 2);
         let ada = &players[0];
         assert_eq!(ada.personaname, "Ada");
@@ -340,20 +452,48 @@ mod tests {
             assert!(path.contains(part), "{path} lacks {part}");
         }
 
-        let e = api.friend_list("refused", ME).await.unwrap_err();
+        let api_ids = api
+            .friend_list(SteamAuth::ApiKey("mykey"), ME)
+            .await
+            .unwrap();
+        assert_eq!(api_ids, [76561197960265730]);
+        let api_players = api
+            .player_summaries(SteamAuth::ApiKey("mykey"), &api_ids)
+            .await
+            .unwrap();
+        assert_eq!(api_players.len(), 1);
+        assert_eq!(api_players[0].personaname, "Ada");
+        assert_eq!(api_players[0].gameid, 730);
+
+        let e = api
+            .friend_list(SteamAuth::WebSession("refused"), ME)
+            .await
+            .unwrap_err();
         assert_eq!(e.downcast_ref(), Some(&SteamError::NotShared));
         assert!(!format!("{e:#}").contains("refused"), "{e:#}");
     }
 
     #[tokio::test]
     async fn asks_for_summaries_in_batches() {
+        use crate::auth::SteamAuth;
+
         let server = TestServer::start(|_| Resp::json(json!({"response": {}})));
         let api = client(&server);
         let ids: Vec<u64> = (1..=250).collect();
-        assert!(api.player_summaries("t", &ids).await.unwrap().is_empty());
+        assert!(
+            api.player_summaries(SteamAuth::WebSession("t"), &ids)
+                .await
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(server.requests().len(), 3);
         assert!(server.requests()[2].path.contains("steamids%5B49%5D=250"));
-        assert!(api.player_summaries("t", &[]).await.unwrap().is_empty());
+        assert!(
+            api.player_summaries(SteamAuth::WebSession("t"), &[])
+                .await
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(server.requests().len(), 3);
     }
 }

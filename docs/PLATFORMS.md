@@ -7,7 +7,7 @@ different native OS is rejected before launch.
 
 | Host | Native game builds | Windows game builds | Runtime manager |
 | --- | --- | --- | --- |
-| Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wine-GE, Kron4ek |
+| Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wineland, DW-Proton, UMU-Proton, Proton-EM, Proton-Sarek, Wine-GE, Kron4ek |
 | Linux arm64 | Linux, browser | Wine / Proton / umu | The arm64 builds of GE-Proton and CachyOS |
 | macOS Intel | macOS, browser | macOS Wine / CrossOver | Wine-Crossover, Wine-Staging-macOS |
 | macOS Apple silicon | macOS, browser | macOS Wine / CrossOver / Whisky / GPTK | Game-Porting-Toolkit, Wine-Crossover, Wine-Staging-macOS |
@@ -180,7 +180,9 @@ doesn't hide a Flatpak Steam. Adding games to Steam looks for `userdata` the sam
 The Wine manager installs the Wine and Proton builds it downloads into `<data>/tools/wine`
 and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder set in
 `iroriCompatToolsPath`; "Install Proton downloads into Steam" still sends Proton to Steam's
-`compatibilitytools.d`. Builds stay where they were installed when the folder changes,
+`compatibilitytools.d`. For `-latest` Proton builds, Irori rewrites `compatibilitytool.vdf`
+to keep the stable `<type>-latest` name so Steam games pinned to it keep their selection
+across updates and rollbacks. Builds stay where they were installed when the folder changes,
 and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
 on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
 

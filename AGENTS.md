@@ -88,12 +88,16 @@ irori install <runner>/<app> [--path DIR] [--platform windows|linux]   Ctrl+C st
 irori uninstall <runner>/<app> [--keep-files]
 irori sunshine-sync [--remove]                   bring Irori's games in Sunshine up to date, or take them out
 irori steam-shortcuts [--remove] [<runner>/<app>...]   bring Irori's Steam shortcuts up to date (Steam closed), or take them out
+irori displays [--json]                          the displays: modes, HDR and VRR (JSON versioned, for other tools)
 ```
 
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
   `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+- `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
+  without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
+  fails then brings the window up to say why.
 - `--save-clip` and `--screenshot` hand the request to the running Irori (save a clip of
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
@@ -108,7 +112,10 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
   Heroic's `heroic://launch/...`, and Nexus Mods' `nxm://<game>/mods/<mod>/files/<file>`
-  (installs the file after asking which game it is for). Any web page or program can open a link, so
+  (installs the file after asking which game it is for), and Thunderstore's
+  `ror2mm://v1/install/thunderstore.io/<owner>/<package>/<version>/` (installs the package
+  and what it needs, latest version, into the game picked; Irori doesn't register the scheme,
+  r2modman does, so the user points it at Irori). Any web page or program can open a link, so
   `irori://launch` asks before it starts a game; `--launch` doesn't.
 - A Windows file (`.exe`, `.msi`, `.bat`, `.cmd`, `.reg`, as a path or `file://` URL; not on
   Windows) opens in the Wine prefix of a game the user picks (`irori_game::open_windows_file_dialog`,
@@ -336,7 +343,7 @@ and `launch.rs` before changing anything below the UI.
 - Store config goes under `store_config_dir(runner)`, as do credentials (written only
   through `irori_secrets`, see below), store caches under
   `store_cache_dir(runner)`, and Irori state (`library.json`, `downloads.json`,
-  `sessions.jsonl`) under `state_dir()`.
+  `sessions.jsonl`, `running.json`) under `state_dir()`.
 - Per-game settings are `config/games/<runner>/<app>.json`. Logs go under
   `logs_dir()`; the app log is `data/logs/irori.log`, and a panic writes
   `crash-<time>.txt` beside it (`crates/irori/src/crash.rs`).
@@ -373,6 +380,16 @@ and `launch.rs` before changing anything below the UI.
 - Per-game overrides are sparse (`GameSettingsOverrides`, a JSON map): the effective
   settings are the defaults with the overridden keys applied. Reset a field with
   `SettingsService::set_game_value(id, key, None)`.
+- Variables, wrappers and programs started alongside (`merged_lists.rs`:
+  `enviromentOptions` by `key`, `wrapperOptions` by `exe`, `iroriLaunchPrograms` by
+  `path`) merge by key: a game's override holds only its own entries, laid over the
+  defaults' list, and `{"key": "X", "iroriRemoved": true}` takes a default entry out for
+  that game. Write a game's list through `GameSettingsOverrides::override_value` (the
+  settings form and `diff` do), which stores just those entries. Game settings and
+  backups written before the merge, whose lists replaced the defaults' whole, are
+  rewritten once with removals of the default entries they left out
+  (`irori-services`' `settings_migration.rs`, recorded in `state/migrations.json`), so
+  every game keeps the list it had.
 - Launch presets (`launch_extras.rs`; the user's in `iroriLaunchPresets`, Irori's own
   from `builtin_presets`) hold only `PRESET_KEYS`. Applying one writes just those keys
   as overrides (variables, wrappers and programs merge by key into the current list),
@@ -465,6 +482,15 @@ commands without a window.
   `run_automatic_updates`, which keeps to `iroriAutoUpdateFrom`/`Until` and, where the
   system can tell (not macOS), `iroriAutoUpdateUnmetered`. A Wine update in place keeps the
   replaced build in `<base>/.rollback/`, nested so discovery doesn't list it.
+  Wine manager sources (`irori_runtime::release_checks`) read their release feed
+  (`releases.atom`, not counted by GitHub) before the API and skip the API when it is
+  unchanged; GitHub's `x-ratelimit-*` budget is kept in `state/wine-release-checks.json`,
+  automatic checks leave a reserve of 10 calls, and a used-up budget is a typed
+  `RateLimited` the Wine manager shows with its reset time. Wine and Proton installs run
+  through `irori_ui::wine_installs` (one global entity), so the Wine manager and the
+  install sheet show the same download; with no Wine or Proton at all, the install sheet
+  offers "Download GE-Proton" (the newest numbered release, `manager::newest_release`),
+  which becomes the default Wine once installed.
 - **User data:** favourites, hidden games, categories, recents, playtime, play
   statuses, yearly backlog goals, art overrides and journal notes live in
   `state/library.json` behind `RwLock<Arc<UserData>>`, updated copy on write. Store
@@ -639,13 +665,30 @@ commands without a window.
 - **Save backups** (`ludusavi.rs`, client in `ludusavi/client.rs`): Ludusavi's CLI in
   `--api` mode, found on `PATH`, in the usual install folders, on Flathub or at
   `iroriLudusaviPath`; never bundled. A game matches a Ludusavi title by Steam id, GOG
-  id, then title, unless the user chose one (`iroriLudusaviTitle`). Windows games pass
+  id, then title, unless the user chose one (`iroriLudusaviTitle`). When those find
+  nothing, the title without its region or revision tags is tried, then, for a game
+  played in an emulator, the name an emulator manifest gives it (`… (PS2)`,
+  `… (RetroArch)`, from Ludusavi's fuzzy search over the title and the ROM's name,
+  `ludusavi/names.rs`); a name found that way is kept in `<cache>/ludusavi-names.json`
+  by game key and the title it was found for (a renamed game searches again), never as
+  the user's choice. Windows games pass
   the prefix that holds `drive_c` (`wine_prefix_root`: `<prefix>/pfx` for Proton run
   directly, flat for Wine and umu). `iroriLudusaviAutoBackup` backs up after a session,
   after the store's cloud upload; `SavesKeeper` says which of the two keeps a game.
   `iroriLudusaviInterval` (minutes, 0 = off) also backs up every so often while the
   game runs (`back_up_while_playing`): a timer task per session, one backup at a
   time, finished before the session's cloud upload.
+  Restores go into the game's current prefix (`ludusavi/restore.rs`): a preview's paths
+  are planned (the prefix holding most files and its Wine user moved into the current
+  ones, Windows paths into its `drive_c`; another prefix's files and the prefix's
+  `*.reg` files left out unless asked for) and the restore runs with `--config` on a
+  throwaway copy of Ludusavi's `config.yaml` holding the redirects and
+  `restore.toggledPaths`; Ludusavi's own configuration is never written. What a
+  restore replaces is copied first to `<data>/save-restore-undo/<game>/` (newest three
+  kept; `ludusavi/undo.rs`), and "Undo restore" puts it back. Backups are named and
+  locked through `ludusavi backups edit`, deleted by cutting them (and a full backup's
+  differential children) out of `mapping.yaml` (`ludusavi/mapping.rs`, never a locked
+  one), and kept per `iroriLudusaviFullLimit`/`iroriLudusaviDifferentialLimit`.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
@@ -655,13 +698,27 @@ commands without a window.
   before a new version first runs, and prune only their own files. Store sign-ins and the
   `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
-  WebDAV (`sync/target.rs`) and merges the others' (`sync/merge.rs`): every value the user
+  WebDAV or an rclone remote (`sync/target.rs`; `sync/rclone.rs` runs the user's own
+  rclone, found on `PATH` or on the host from the Flatpak, never bundled or downloaded:
+  the user adds remotes with `rclone config` and the account never reaches Irori)
+  and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
   every session, so nothing counts twice. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
-  `SyncService::playtime_guard`.
+  `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
+  publishes only playtime, sessions and playtime removals (`merge::Scope`): its
+  organisation stays its own.
+  Cloud copies (`sync/copies.rs`, `iroriSync.copies`: Off, Manual or Automatic per
+  kind) put Irori's scheduled backups, Ludusavi's backup folder and screenshots (not
+  clips) under `Irori sync/devices/<device id>/` at the same target, with a
+  `device.json`; only files new or changed since they were sent to that target go
+  (`state/cloud-copies.json`). Automatic copies ride the periodic tick every half hour
+  (2, 5, 15 then 30 minutes after failures) and never run while a game does. Another
+  computer's copies are brought back without replacing anything: backups into the
+  backup folder, saves into Ludusavi's (games it has no backups of), screenshots into
+  `Pictures/Irori/<computer>`.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on
@@ -677,6 +734,13 @@ commands without a window.
   when what Irori wants differs from `state/sunshine.json`; a failure waits 10 minutes.
   Turning the setting off takes Irori's applications out. A game with `iroriInSunshine` off
   (per game) gets none.
+  - **Another computer** (`iroriSunshine.address`, `sunshine/remote.rs`): the web UI at
+    that address (HTTPS only), its applications starting `irori` from that computer's
+    `PATH`. Its certificate is trusted on first use: the first connection records the
+    SHA-256 fingerprint in `state/sunshine.json` (by `host:port`), and a different one is
+    refused inside the TLS handshake (`PinVerifier`, rustls with ring), so nothing is sent;
+    the panel shows the new fingerprint and "Trust the new certificate"
+    (`Backend::accept_sunshine_certificate`). Loopback addresses aren't checked.
   - **Apollo** (Sunshine's fork) is told apart by its API: Basic auth is refused, so the
     client signs in at `/api/login` (one session cookie for the whole web UI: signing in
     signs a browser out, so the session is kept between syncs) and names applications by
@@ -747,14 +811,18 @@ commands without a window.
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
 - **Displays** (`displays/`, `Backend::displays(refresh)`): monitors, the mode in use,
-  the modes offered and HDR (on, capable), kept until a refresh. Linux reads
-  `/sys/class/drm` (modes, EDID name and HDR metadata) and asks the compositor's tool
-  (`kscreen-doctor`, `hyprctl`, `wlr-randr`, `xrandr`; `irori_core::host` inside the
-  Flatpak), merged by connector name (`merge`); Windows uses `QueryDisplayConfig` and
-  advanced colour info; macOS `system_profiler`. Every parser is pure and tested in
+  the modes offered, HDR and variable refresh (on, capable, the EDID's range), kept
+  until a refresh. Linux reads `/sys/class/drm` (modes, EDID name, HDR metadata, an EDID
+  1.4 continuous refresh range wider than 10 Hz or AMD's FreeSync block for VRR) and
+  asks the compositor's tool (`kscreen-doctor`'s `vrrPolicy` and capabilities, `hyprctl`'s
+  `vrr`, `wlr-randr`'s `adaptive_sync`, `xrandr --props`' `vrr_capable`;
+  `irori_core::host` inside the Flatpak), merged by connector name (`merge`); Windows
+  uses `QueryDisplayConfig` and advanced colour info (VRR stays unknown: Windows keeps
+  it as one switch for every display); macOS `system_profiler`. Every parser is pure and tested in
   `displays/parse.rs`; unknown stays `None`, never a guess. Settings › System info lists
   them (`irori_settings` `displays.rs`), and the HDR and gamescope fields' help adds a
-  hint from them (`displays::hint`).
+  hint from them (`displays::hint`). `irori displays --json` prints the report with a
+  `version` for other tools; fields are added, never renamed.
 - **Windows graphics preference** (`gpu_preference.rs`, `iroriWindowsGpu`, Windows
   only): Windows' own per-program choice in
   `HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, written before a launch to the
@@ -781,7 +849,12 @@ commands without a window.
   the prefix's `winetricks.log` (`pfx/` too, Steam's through protontricks' path),
   its anticheat entry and, on Linux, `vm.max_map_count`; `analysis.rs` turns that
   into findings, each with the log lines showing it and its fixes, and is pure and
-  tested. Fixes tried this session (`mark_fix_tried`) come last.
+  tested. Beside missing DLLs and anticheat it knows Direct3D 12 with VKD3D-Proton off
+  and wined3d with DXVK off under plain Wine (fix: turn the layer on), esync out of file
+  descriptors (fix: esync off, fsync on), a wineserver of another Wine version
+  (`Backend::stop_prefix_wineserver`, found by its `WINEPREFIX` in `/proc`) and Vulkan
+  failing, with the driver install command for the distribution and GPU to copy
+  (`vulkan_driver_command`). Fixes tried this session (`mark_fix_tried`) come last.
   `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
   `sudo`: a low map count is explained with the commands to run. Games through
   Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`
@@ -789,8 +862,20 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
-- **Launching** (`games.rs`):
-  1. Busy and availability checks.
+- **Launching** (`games.rs`). Until the game starts (status `Launching`),
+  `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
+  steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
+  and the launch ends with `LaunchCancelled`, which screens don't show as an error.
+  The game page's Cancel button and Escape, Big Picture's Cancel launch row and the
+  palette cancel it. Sessions Irori follows itself (not `LaunchPlan::watch` ones) are
+  kept in `state/running.json` (`running.rs`: pid, process start time, start, folder,
+  mods) until `finish_session`; when the app starts, `adopt_sessions` follows the ones
+  still running (a pid whose process started at another time was reused) to their end,
+  so playtime, mods and `GameExited` still happen, and `recover_mods` leaves their mods.
+  1. Busy and availability checks. Files that aren't where the install says
+     fail with the typed `GameFilesMissing`; `irori_ui::missing_files` offers
+     to locate them and play, or, for store games, to forget the install
+     (`Backend::forget_install`, which deletes nothing).
   2. Optional cloud-save sync, given up after `SAVE_SYNC_TIMEOUT` (3 minutes; the
      upload after the session too). A failed download stops the launch with
      `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
@@ -801,7 +886,12 @@ commands without a window.
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
      `WINEDLLOVERRIDES` (`env::apply_dll_overrides`), each replacing what the
-     variable said about its DLL; ReShade's are added after.
+     variable said about its DLL; ReShade's are added after. Under umu the
+     game's `GAMEID` comes from `irori_runtime::umu::resolve`: the user's
+     `iroriUmuId`, the umu database's entry for the store id, `umu-<Steam app
+     id>` from `iroriSteamAppId`, else a title the database (its CSV, cached a
+     week in `<cache>/umu-database.csv`) lists under one id. The game's Wine
+     section shows the id, its source and a database search.
   4. Before-launch script, waited for; with `iroriBeforeLaunchScriptAlongside` it
      starts at once and runs alongside the game as a program of the session
      (`programs::script_alongside`), stopped when the session ends or the launch
@@ -909,6 +999,11 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
+  `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
+  original with its thumbnails) go least recently used first. Art the store hands out
+  is noted with `art_cache::note_used` and never removed; each trim dates its files to
+  now, so recency survives restarts without file writes on the UI thread.
 
 **Theme and translucency:**
 
@@ -1219,6 +1314,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
+- **Play as a PC game.** A ROM entry that is really a program (the game
+  menu, the library's context menu, the palette:
+  `irori_library::open_play_as_pc_game_dialog`) opens "Add game" filled in from
+  it; saving moves what the user keeps about it to the new app
+  (`UserData::carry_over`: favourite, hidden, recents, categories, playtime, title
+  and art, date added, status, rating, journal) and hides the ROM entry. The file
+  stays, and so does the session history, under the ROM entry.
 - **Settings keys** are Irori-only: `iroriEngine`, `iroriEngineVersion`,
   `iroriEngineOptions` (merged per engine and option over the defaults),
   `iroriEngineOwnSettings`, `iroriSystemEngines`, `iroriRomFolders`, `iroriBiosFolder`.
@@ -1375,7 +1477,8 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   config's names, then the manifest's, with `ms-resource:` references looked up in
   Windows' `MrtCache`, then the game's folder name. Art is the package's own logos at
   their largest `scale-`/`targetsize-` variant (`file://` paths); sizes are added up in
-  the background after a scan. Games start with
+  the background after a scan, over the whole `<root>\<game>` folder when the package is
+  its `Content` (the GDK keeps shaders and staging beside it; `xbox::game_folder`). Games start with
   `rundll32 shell32.dll,ShellExec_RunDLL shell:AppsFolder\<family>!<app id>`, which
   returns at once with success, and a `GameWatch` follows (and stops) the processes
   running from the package folder. The game menu's "Show in Microsoft Store"
@@ -1424,7 +1527,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 
 - **Without an account** the library is what Steam installed (`scan.rs`: library
   folders, manifests, `localconfig.vdf` playtime, `appcache/librarycache` art), watched
-  with `notify` on each `steamapps` folder. With one (`account.rs`), it adds the account's
+  with `notify` on each `steamapps` folder. On Linux the library folders of every Steam
+  install under the home folder that lists them (native, Flatpak, Snap) are read, not only
+  the chosen one's (`scan::steam_installs`). With one (`account.rs`), it adds the account's
   owned and Family games, cached in `library.json`; `refresh` asks Steam at most every
   15 minutes unless it is a full refresh, and publishes the installed games even when
   Steam can't be reached.
@@ -1472,8 +1577,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   quoting for a Windows build, which every game is on Windows and a game whose manifest
   records Proton (`platform_override_source` `windows`) is elsewhere, so the same options
   reach the game alike on every system; the `steam://run` fallback quotes arguments with
-  blanks. A `SteamGameWatch` follows the reaper (Linux), the game folder's
-  processes and the manifest's launch flags, re-checking known PIDs before a full scan.
+  blanks. Every link and launch is handed over with `process::open_detached` (no
+  pipes of Irori's, a process group of its own, only the opener's exit status waited
+  for; `client::Opener`), so a Steam it starts never depends on Irori, and a link the
+  system's opener refuses goes to Steam's own program (`client::link_commands`). The
+  launch plan's command then only exits. A `SteamGameWatch` follows the reaper (Linux),
+  the game folder's processes and the manifest's launch flags, re-checking known PIDs
+  before a full scan.
 - **Compatibility tool** (`compat/`, Linux UI only: `irori_settings` `steam_compat.rs` in
   the game's Wine & Proton section, through `SteamStore::compat_tools`/`set_compat_tool`):
   Valve's Protons (installed apps named `Proton …`, mapped to Steam's names such as
@@ -1487,6 +1597,17 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   before `close_steam` (`steam -shutdown`), never in Steam's Game Mode. Reached from the
   game menu's "Steam Play…", the palette and the page's Settings button, all through
   `irori_game::ops::open_steam_play`/`settings_section`.
+- **Steam's launch options** (`compat/launch_options.rs`, `irori_settings`
+  `steam_launch.rs`, the Launch section's "Steam launch options"): the line Steam starts a
+  game with (`VAR=value wrapper %command% args`), in the account's
+  `userdata/<account>/config/localconfig.vdf` under
+  `UserLocalConfigStore/Software/Valve/Steam/apps/<appid>/LaunchOptions`, edited as text.
+  The compatibility tool's rules apply: only while Steam is closed (`SteamRunning`, asking
+  before `close_steam`, never in Game Mode), splicing only that value's bytes with the
+  strict parser of `compat/mapping.rs`, reading the edit back, `localconfig.vdf.irori-backup`
+  first. `with_variable` changes one variable in a line and keeps the rest as written.
+  Steam's client could also take the line while it runs (`SetAppLaunchOptions` over its
+  debugging port), but the client library's expression stays read-only, so Irori doesn't.
 - **Settings that apply**: Steam starts its games with its own Proton, variables and
   wrappers, so a Steam game's settings show only `FieldSpec::applies_to_steam` fields
   (launch arguments, scripts, programs started alongside, replay buffer, Sunshine, save
@@ -1523,33 +1644,70 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   folders, applied on top), and `deployment.json` while mods are applied. Mod ids
   are `[a-z0-9-]` only, so they never name anything outside that folder.
 - **Only while playing.** `Backend::launch_with` calls `apply_mods` right before
-  the game starts and `restore_mods` after it exits (after the saves sync).
+  the store builds the launch (so a program a mod brings exists when the store
+  checks it) and `restore_mods` after it exits (after the saves sync).
   Leftovers from a crash are taken out at start (`recover_mods`, the app only:
   a command-line run may sit beside a running game). Mods can't change while
   the game runs.
 - **Never delete game files.** Links: the full manifest is written before any
   file is touched; a game file a mod replaces is renamed to
   `<name>.irori-original` beside itself; `deploy::undeploy` is safe to rerun at
-  any step and calls `fs_guard::ensure_deletable` on the game folder first. A
+  any step and calls `fs_guard::ensure_deletable` on the game folder first. It
+  checks every file before changing any: one still in use (Windows sharing
+  violations, waited for up to 5 s in all) stops it with the folder as it was and
+  the reason in the manifest (`blocked`). Copies (across drives, or when links
+  fail) go to `<name>.irori-partial` and are renamed into place. A
   file Irori put there that the game changed or replaced goes to `.written/`.
   Overlay (Linux, `fuse-overlayfs`): the game folder is a lower layer and is
   never written; after unmounting, `overlay::settle` moves what the game wrote
   outside the mods' own files and folders into the game folder, where it would
   have gone without mods. Paths compare without letter case and follow the game
   folder's spelling (`align_case`).
+- **Bethesda games** (`irori_mods::bethesda`, told by their program: Oblivion,
+  Fallout 3/New Vegas/4/4 VR, Skyrim/SE/VR, Starfield): once mods are in,
+  `Plugins.txt` (local application data; under Wine the prefix's user, Steam's
+  `compatdata/<appid>/pfx`) lists the enabled mods' plugins after the user's own
+  entries, and `[Archive]` keys loose files need are set in the game's ini
+  (`bInvalidateOlderFiles`, `sResourceDataDirsFinal`). `bethesda.json` records it
+  first; `take_out` restores it before the files: the user's `Plugins.txt` comes
+  back from `.irori-original`, and only ini keys still holding Irori's value are
+  reset. The older games order plugins by file time, which Irori leaves alone.
+  The Mods tab offers "Start through SKSE/F4SE/…" (`Backend::set_script_extender`,
+  the per-game `targetExe`), except for Steam games, which Steam starts itself.
+- **Layouts** (`irori_mods::layout`): an archive's files go where the game reads
+  them: as they mirror the game folder; into `Data` for Bethesda plugins and data
+  folders; for Unreal Engine games (an `Engine` folder beside a project holding
+  `Content/Paks`), packages (`.pak`, `.ucas`, `.utoc`) into
+  `<Project>/Content/Paks/~mods`, `~mods`/`LogicMods` into `Content/Paks`, `Paks`
+  into `Content`, `Content`/`Binaries` into the project; else into the one game
+  folder that holds every folder the mod starts with.
+- **Proxy DLLs under Wine.** A DLL the enabled mods put beside a program of the
+  game or a mod whose name is one of `irori_mods::proxy::PROXY_DLLS` (`winhttp`,
+  `version`, `dinput8`, `dxgi`…) gets `<dll>=n,b` in `WINEDLLOVERRIDES` before the
+  store builds the launch (`Backend::mods_launch_env`, beside ReShade's), so Wine
+  loads the mod loader instead of its own copy.
 - **Sources.** Archives go through `irori_mods::archive` (zip and 7z in process;
-  rar through `unrar`/`7z`/`bsdtar` after listing every name), with
+  rar through `unrar`/`7z`/`bsdtar`, on Windows also `System32\tar.exe` by its full path, after listing every name; without one the Mods tab shows the command that installs 7-Zip here, `archive::seven_zip_command`), with
   `archive_guard` on every entry and no links. FOMOD (`fomod.rs`) is parsed as
   data only (no DTDs, no scripted installers); the UI asks the steps
   (`FomodPrompt`, `Backend::finish_fomod`). Thunderstore's ecosystem schema (cached
   a day) names each community's Steam/Epic ids, programs, loader and install
   rules; only BepInEx and MelonLoader communities install. Nexus Mods uses the
   user's personal API key (through `irori_secrets`, never logged); free accounts
-  install through `nxm://` links, which carry a one-time key.
+  install through `nxm://` links, which carry a one-time key. The Nexus dialog
+  searches the game's mods by name through Nexus' documented GraphQL API v2
+  (`nexus::Client::search`, `/v2/graphql`, the text only as a variable, adult mods
+  left out) for the game's Nexus name (`Backend::mod_nexus_domain`: the user's,
+  else its Nexus mods', else its folded title; kept in `mods.json` once a search
+  finds something); a result lists its files, which Premium installs and free
+  accounts open on the site for the `nxm://` button. Thunderstore's
+  `ror2mm://` links (`thunderstore::ModManagerLink`) name only a package; the
+  link dialog (`irori_game::open_thunderstore_link_dialog`) preselects the game
+  whose community lists it (`community_listings`).
 - **UI**: the game page's Mods tab (`irori_game::ModsPanel`, also a sheet from the
   game menu), `Event::ModsChanged(GameId)` refreshes it.
 
-### 4.12 ReShade and RenoDX
+### 4.12 ReShade, RenoDX and OptiScaler
 
 - **Scope.** Windows builds of games Irori installs (`irori_services::supports_reshade`),
   natively on Windows and under Wine elsewhere; the UI is the game settings' Tools
@@ -1557,6 +1715,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   command palette's "ReShade and RenoDX for …" row of the open game. Direct3D 9,
   DXGI (Direct3D 10/11/12) and OpenGL only: Vulkan needs ReShade's layer
   registered, Direct3D 8 and DirectDraw need wrappers (`ReshadeError::Unsupported`).
+- **Steam games.** A Steam game's Windows build takes ReShade too: natively on Windows,
+  and on Linux when Steam runs it through Proton (its appmanifest's
+  `platform_override_source`, shown as `GameInfo::is_linux_native` false). Its folder is
+  Steam's; its Tools section holds only ReShade and RenoDX. Steam starts the game, so
+  the DLL overrides go into Steam's launch options as `WINEDLLOVERRIDES`
+  (`irori_steam::with_dll_overrides`, `reshade_needs_steam_overrides`): after each
+  install, toggle or removal the panel writes the line when Steam is closed, and
+  otherwise offers to, asking before it closes Steam.
 - **One layer, several mods** (`irori_reshade::layer`): `GraphicsMod` names each mod
   Irori puts into a game folder, its manifest's path and its cache folder. Detection,
   cached downloads (`fetch.rs`), the journal, on/off and removal are shared, and
@@ -1581,8 +1747,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   file). Lists are cached a day, downloads under `<cache>/reshade`. Never bundle any.
 - **Journal** (`journal.rs`): the manifest (`<data>/reshade/<runner>/<app>.json`) lists
   every file with its hash and every folder created, saved before the first write.
-  An existing DLL that isn't ours refuses the install (`DllTaken`); an existing
-  `ReShade.ini`, compiler or shader is left alone and unrecorded. Off renames the DLL
+  An existing DLL that isn't ours refuses the install (`DllTaken`); one that is a
+  ReShade installed by hand (its version information names ReShade) is
+  `ManualInstall`, and the panel offers to take it over (`Existing::Adopt`: Irori's DLL
+  replaces it and is recorded; nothing else is touched). An existing
+  `ReShade.ini`, compiler or shader is left alone and unrecorded. Before every launch
+  `Backend::restore_graphics_mods` puts back recorded files a store's update or file
+  check deleted (`journal::missing`/`restore`), from the cache or the official source,
+  only when their bytes match the record. Off renames the DLL
   to `.irori-disabled`. Removal vets the folder with `fs_guard::ensure_deletable`,
   then deletes only recorded files whose hash still matches and recorded folders left
   empty. A failed or cancelled install removes what it wrote.
@@ -1608,6 +1780,33 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   off renames the add-on, and removing ReShade removes RenoDX first. The UI asks first
   when the game has anticheat, offers Update when the release's digest differs, and
   says under Wine that HDR also needs the display, session and Wine build.
+- **OptiScaler** (`irori_reshade::optiscaler`, `irori_reshade::optiscaler_keys`,
+  services `optiscaler.rs`, UI `irori_settings` `OptiscalerPanel` below RenoDX,
+  route id `optiscaler`): upscaling bridge for 64-bit Windows games (including
+  installed Windows games on Steam), plus optional FakeNVAPI and OptiPatcher,
+  from the official GitHub releases (`optiscaler/OptiScaler`,
+  `optiscaler/OptiScaler-nightly`, `optiscaler/fakenvapi`,
+  `optiscaler/OptiPatcher`). Release checks run only on demand with a 15-minute
+  TTL and ETag cache under `<cache>/reshade/optiscaler` (zero background
+  polling), verify SHA-256 digests, and stream `.7z` extraction via
+  `sevenz-rust2` guarded by `archive_guard`. Installs are journaled as
+  `GraphicsMod::Optiscaler` in `<data>/reshade/optiscaler/<runner>/<app>.json`
+  with `Manifest::optiscaler` recording channel, GPU driver mode (`MesaAuto`
+  installs `fakenvapi.dll` or `nvapi64.dll` and `fakenvapi.ini`; `Nvidia` skips
+  FakeNVAPI), proxy file (`dxgi.dll`, `version.dll`, `dbghelp.dll`, `d3d12.dll`,
+  `wininet.dll`, `winhttp.dll`, `winmm.dll` or `OptiScaler.asi`), OptiPatcher
+  toggle (`plugins/OptiPatcher.asi`), and optional per-game `[Menu] ShortcutKey`
+  override (captured via `OptiscalerKeyCapture` and mapped to Windows `VK_*` hex
+  codes in `optiscaler_keys.rs`, patched surgically into `OptiScaler.ini`).
+  Refuses untracked proxy files (`DllTaken`), renames to `.irori-disabled` when
+  off, and keeps user-modified files on removal. Under Wine/Proton,
+  `Backend::optiscaler_launch_env` merges `Manifest::overrides` into
+  `WINEDLLOVERRIDES` through `irori_runtime::env::add_dll_overrides` (skipping
+  `OptiScaler.asi`) and sets `PROTON_ENABLE_NVAPI=1` on Linux in NVIDIA mode
+  when unset; for Steam games on Linux, `Backend::sync_steam_user_reg`
+  surgically syncs `[Software\\Wine\\DllOverrides]` in the game's Proton prefix
+  `user.reg` so all proxy DLLs load without editing Steam Launch Options. The UI
+  asks before installing when anticheat is reported.
 
 ### 4.13 Xbox (Microsoft Store and PC Game Pass, Linux)
 

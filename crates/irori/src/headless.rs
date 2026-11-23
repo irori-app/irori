@@ -28,6 +28,7 @@ pub const COMMANDS: &[&str] = &[
     "accounts",
     "sunshine-sync",
     "steam-shortcuts",
+    "displays",
 ];
 
 pub const HELP: &str = "Commands (run without opening a window):
@@ -53,7 +54,9 @@ pub const HELP: &str = "Commands (run without opening a window):
   irori steam-shortcuts [--remove] [<runner>/<app>...]
                                       Bring Irori's Steam shortcuts up to date for every
                                       installed game, or the games named (Steam must be
-                                      closed; --remove: take them out of Steam)";
+                                      closed; --remove: take them out of Steam)
+  irori displays [--json]             Show the displays: modes, HDR and VRR (--json:
+                                      for other tools)";
 
 /// Run a headless command. Returns the process exit code.
 pub fn run(args: &[String]) -> Result<i32> {
@@ -112,6 +115,15 @@ pub fn run(args: &[String]) -> Result<i32> {
                 Ok(i32::from(!report.failed.is_empty()))
             }
             "steam-shortcuts" => steam_shortcuts(&backend, &args[1..]).await,
+            "displays" => {
+                let report = backend.displays(true).await;
+                if args.iter().any(|a| a == "--json") {
+                    println!("{}", displays_json(&report)?);
+                } else {
+                    print!("{}", irori_services::displays::format(&report));
+                }
+                Ok(0)
+            }
             "info" => info(&backend, &args[1..]).await,
             "playtime" => playtime(&backend, &args[1..]).await,
             "install" => install(&backend, &args[1..]).await,
@@ -119,6 +131,16 @@ pub fn run(args: &[String]) -> Result<i32> {
             other => bail!("unknown command {other}"),
         }
     })
+}
+
+/// The display report for other tools, with a version they can check:
+/// fields are added over time, never renamed or removed.
+fn displays_json(report: &irori_services::displays::DisplayReport) -> Result<String> {
+    let mut value = serde_json::to_value(report)?;
+    if let Some(map) = value.as_object_mut() {
+        map.insert("version".into(), 1.into());
+    }
+    Ok(serde_json::to_string_pretty(&value)?)
 }
 
 /// Stores initialise in the background at startup; wait until the first
@@ -581,6 +603,28 @@ mod tests {
         let picked = steam_shortcut_games(&games, |id| id.app_name.as_ref() == "locked");
         let names: Vec<&str> = picked.iter().map(|g| g.app_name.as_str()).collect();
         assert_eq!(names, ["installed"]);
+    }
+
+    #[test]
+    fn displays_json_is_versioned() {
+        use irori_services::displays::{Display, DisplayReport};
+        let report = DisplayReport {
+            displays: vec![Display {
+                connector: "DP-1".into(),
+                enabled: true,
+                vrr_on: Some(true),
+                vrr_range: Some((48, 144)),
+                ..Default::default()
+            }],
+            source: "kscreen-doctor".into(),
+            lists_modes: true,
+        };
+        let json: serde_json::Value =
+            serde_json::from_str(&displays_json(&report).unwrap()).unwrap();
+        assert_eq!(json["version"], 1);
+        assert_eq!(json["source"], "kscreen-doctor");
+        assert_eq!(json["displays"][0]["vrr_on"], true);
+        assert_eq!(json["displays"][0]["vrr_range"][1], 144);
     }
 
     #[test]

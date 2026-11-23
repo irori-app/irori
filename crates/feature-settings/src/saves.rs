@@ -162,6 +162,30 @@ impl SaveSyncPanel {
     }
 
     fn request_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.direction != SyncDirection::ForceUpload {
+            return self.confirm_sync(false, window, cx);
+        }
+        // A forced upload from a folder without saves deletes the cloud
+        // saves, and the question must say so: look at the folder first, off
+        // the UI thread. When that can't be told, the usual question stays.
+        let b = backend(cx);
+        let id = self.id.clone();
+        let task = irori_ui::run(
+            cx,
+            async move { b.forced_upload_deletes_cloud_saves(&id).await },
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let deletes = task.await.unwrap_or(false);
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.confirm_sync(deletes, window, cx)
+            });
+        })
+        .detach();
+    }
+
+    /// Ask before a forced sync (`deletes`: a forced upload takes the cloud
+    /// saves away), or sync right away.
+    fn confirm_sync(&mut self, deletes: bool, window: &mut Window, cx: &mut Context<Self>) {
         let direction = self.direction;
         let (title, description, ok) = match direction {
             SyncDirection::ForceDownload => (
@@ -181,7 +205,15 @@ impl SaveSyncPanel {
             .map(|g| g.title.clone())
             .unwrap_or_else(|| self.id.app_name.to_string());
         let title = t_args(title, &[("title", &name)]);
-        let (description, ok) = (t(description), t(ok));
+        let description = if deletes {
+            t_args(
+                "settings.saves.force_upload.deletes_description",
+                &[("title", &name)],
+            )
+        } else {
+            t(description)
+        };
+        let ok = t(ok);
         let weak = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let weak = weak.clone();

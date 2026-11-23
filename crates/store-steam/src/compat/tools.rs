@@ -76,7 +76,8 @@ pub(crate) fn installed_tools(steam_dir: &Path) -> Vec<CompatTool> {
 /// Valve's Proton builds installed in any Steam library.
 fn valve_tools(steam_dir: &Path) -> Vec<CompatTool> {
     let mut tools = Vec::new();
-    for library in scan::libraries(steam_dir) {
+    // Only this Steam's own libraries: it runs its games with those.
+    for library in scan::libraries(&[steam_dir.to_path_buf()]) {
         let Ok(entries) = std::fs::read_dir(library.join("steamapps")) else {
             continue;
         };
@@ -361,5 +362,47 @@ mod tests {
         );
         assert_eq!(natural_cmp("a", "A"), Ordering::Equal);
         assert_eq!(natural_cmp("a", "ab"), Ordering::Less);
+    }
+
+    #[test]
+    fn rewritten_latest_proton_parses_and_coexists_with_numbered_build() {
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("steam");
+        let tools_dir = steam.join("compatibilitytools.d");
+        let latest_dir = tools_dir.join("GE-Proton-latest");
+        let numbered_dir = tools_dir.join("GE-Proton10-20");
+        std::fs::create_dir_all(&latest_dir).unwrap();
+        std::fs::create_dir_all(&numbered_dir).unwrap();
+
+        let numbered_vdf = "\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton10-20\"\n    {\n      \"install_path\" \".\"\n      \"display_name\" \"GE-Proton10-20\"\n      \"from_oslist\" \"windows\"\n      \"to_oslist\" \"linux\"\n    }\n  }\n}\n";
+        std::fs::write(latest_dir.join("compatibilitytool.vdf"), numbered_vdf).unwrap();
+        std::fs::write(numbered_dir.join("compatibilitytool.vdf"), numbered_vdf).unwrap();
+
+        irori_runtime::vdf::rewrite_compat_tool_file(&latest_dir, "GE-Proton-latest");
+
+        let custom: Vec<CompatTool> = installed_tools(&steam)
+            .into_iter()
+            .filter(|t| matches!(&t.source, ToolSource::Custom(p) if p.starts_with(dir.path())))
+            .collect();
+        let pairs: Vec<(&str, &str)> = custom
+            .iter()
+            .map(|t| (t.name.as_str(), t.display_name.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("GE-Proton10-20", "GE-Proton10-20"),
+                ("GE-Proton-latest", "GE-Proton-latest"),
+            ]
+        );
+
+        let config = "\"InstallConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"CompatToolMapping\"\n\t\t\t\t{\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
+        let edited =
+            crate::compat::mapping::set_compat_tool(config, "620", Some("GE-Proton-latest"))
+                .unwrap();
+        assert_eq!(
+            crate::compat::mapping::compat_tool(&edited, "620").as_deref(),
+            Some("GE-Proton-latest")
+        );
     }
 }

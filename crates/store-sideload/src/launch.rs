@@ -273,6 +273,29 @@ pub(crate) fn native_plan(exe: &Path, args: Vec<String>, env: &LaunchEnvironment
     }
 }
 
+/// A game started by its own command line ([`SideloadApp::command`]):
+/// wrappers + program + the command's arguments + `args`, run in `dir`.
+pub(crate) fn command_plan(
+    program: &Path,
+    command_args: Vec<String>,
+    args: Vec<String>,
+    dir: Option<&Path>,
+    env: &LaunchEnvironment,
+) -> LaunchPlan {
+    let mut cmd = CommandSpec::new(program)
+        .args(command_args)
+        .args(args)
+        .envs(env.env.clone());
+    if let Some(dir) = dir {
+        cmd = cmd.cwd(dir);
+    }
+    LaunchPlan {
+        command: cmd.wrapped(&env.wrappers),
+        track_wineserver: false,
+        watch: None,
+    }
+}
+
 /// Windows launch: wrappers + Wine exec prefix + exe + args.
 pub(crate) fn wine_plan(
     exe: &Path,
@@ -474,6 +497,28 @@ mod tests {
         );
         assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/games/g")));
         assert_eq!(plan.command.env.get("FOO").map(String::as_str), Some("1"));
+        assert!(!plan.track_wineserver);
+    }
+
+    #[test]
+    fn a_command_runs_in_the_install_folder_inside_the_wrappers() {
+        let env = LaunchEnvironment {
+            wrappers: vec![vec!["gamemoderun".into()]],
+            ..Default::default()
+        };
+        let plan = command_plan(
+            Path::new("flatpak"),
+            vec!["run".into(), "com.example.Game".into()],
+            vec!["--hd".into()],
+            Some(Path::new("/games/g")),
+            &env,
+        );
+        assert_eq!(plan.command.program, PathBuf::from("gamemoderun"));
+        assert_eq!(
+            plan.command.args,
+            os(&["flatpak", "run", "com.example.Game", "--hd"])
+        );
+        assert_eq!(plan.command.cwd.as_deref(), Some(Path::new("/games/g")));
         assert!(!plan.track_wineserver);
     }
 

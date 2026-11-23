@@ -22,6 +22,12 @@ pub enum Step {
     DownloadingCompiler,
     /// Downloading an add-on (a RenoDX mod).
     DownloadingAddon,
+    /// Downloading the OptiScaler archive.
+    DownloadingOptiscaler,
+    /// Downloading FakeNVAPI for non-NVIDIA setups.
+    DownloadingFakenvapi,
+    /// Downloading the OptiPatcher ASI plugin.
+    DownloadingOptipatcher,
     Writing,
 }
 
@@ -41,6 +47,9 @@ pub struct InstallRequest {
     pub journal: PathBuf,
     /// Install the build with full add-on support (for RenoDX).
     pub addon: bool,
+    /// Take over a ReShade installed without Irori: its DLL is replaced and
+    /// recorded, its settings and shaders stay.
+    pub adopt: bool,
 }
 
 /// Find the program and API, refusing what ReShade or Irori can't do.
@@ -105,7 +114,12 @@ pub async fn install(
     }
 
     step(Step::Writing);
-    let mut files = vec![Planned::new(&dll, reshade, Existing::Refuse)];
+    let existing = if req.adopt {
+        Existing::Adopt
+    } else {
+        Existing::Refuse
+    };
+    let mut files = vec![Planned::new(&dll, reshade, existing)];
     if let Some(compiler) = compiler {
         files.push(Planned::new("d3dcompiler_47.dll", compiler, Existing::Keep));
     }
@@ -139,6 +153,7 @@ pub async fn install(
         created_dirs: Vec::new(),
         addon: req.addon,
         source: None,
+        optiscaler: None,
     };
     if !found.dir.is_dir() {
         bail!(

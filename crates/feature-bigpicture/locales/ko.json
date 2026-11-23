@@ -9,6 +9,7 @@
   "bigpicture.action.play": "플레이",
   "bigpicture.action.play_with_log": "로그와 함께 플레이",
   "bigpicture.action.stop": "중지",
+  "bigpicture.action.cancel_launch": "시작 취소",
   "bigpicture.action.install": "설치",
   "bigpicture.action.cancel_download": "다운로드 취소",
   "bigpicture.action.update": "업데이트",

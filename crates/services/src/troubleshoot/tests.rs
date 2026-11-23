@@ -433,3 +433,199 @@ fn reads_the_verbs_of_wine_and_proton_prefixes() {
     );
     assert!(super::installed_verbs(&prefix.join("none")).is_empty());
 }
+
+fn plain_wine() -> FixContext {
+    FixContext {
+        plain_wine: true,
+        sync_switchable: true,
+        esync_on: true,
+        fsync_on: false,
+        dxvk_on: true,
+        vkd3d_on: true,
+        ..wine()
+    }
+}
+
+#[test]
+fn direct3d_failures_point_at_the_layer_that_is_off() {
+    let log = ["0110:err:d3d12:d3d12_create_device Failed to create device"];
+    let mut f = facts(&log);
+    f.context = FixContext {
+        vkd3d_on: false,
+        ..plain_wine()
+    };
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), vec![LaunchHint::Direct3D12]);
+    assert_eq!(offered(&d), vec![Fix::EnableVkd3d]);
+    // With VKD3D-Proton on, or under Proton, the line means something else.
+    f.context = plain_wine();
+    assert!(hints(&diagnose(&f, &HashSet::new())).is_empty());
+    f.context = FixContext {
+        plain_wine: false,
+        vkd3d_on: false,
+        ..plain_wine()
+    };
+    assert!(hints(&diagnose(&f, &HashSet::new())).is_empty());
+
+    let mut f = facts(&["0024:err:wined3d:wined3d_adapter_init Failed to initialize adapter"]);
+    f.context = FixContext {
+        dxvk_on: false,
+        ..plain_wine()
+    };
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), vec![LaunchHint::Wined3d]);
+    assert_eq!(offered(&d), vec![Fix::EnableDxvk]);
+}
+
+#[test]
+fn a_program_using_direct3d_is_worth_checking_when_its_layer_is_off() {
+    let mut f = facts(&["nothing useful"]);
+    f.program = Some(program(&["KERNEL32.dll", "d3d12.dll", "d3d11.dll"], false));
+    f.context = FixContext {
+        dxvk_on: false,
+        vkd3d_on: false,
+        ..plain_wine()
+    };
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), vec![LaunchHint::Direct3D12, LaunchHint::Wined3d]);
+    assert!(d.findings.iter().all(|f| !f.confirmed));
+    assert_eq!(
+        d.findings[0].detail,
+        Some(Detail::ProgramGraphics {
+            dll: "d3d12.dll".into()
+        })
+    );
+    assert_eq!(offered(&d), vec![Fix::EnableVkd3d, Fix::EnableDxvk]);
+    // Both on: nothing to say.
+    f.context = plain_wine();
+    assert!(hints(&diagnose(&f, &HashSet::new())).is_empty());
+}
+
+#[test]
+fn esync_running_out_of_descriptors_offers_fsync() {
+    let mut f = facts(&[
+        "eventfd: Too many open files",
+        "err:esync:create_esync failed",
+    ]);
+    f.context = plain_wine();
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), vec![LaunchHint::EsyncLimit]);
+    assert_eq!(offered(&d), vec![Fix::UseFsync]);
+    assert_eq!(d.findings[0].detail, None);
+    f.context.fsync_on = true;
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(d.findings[0].detail, Some(Detail::EsyncWithFsync));
+    // Nothing to switch where Irori doesn't set the sync method.
+    f.context.sync_switchable = false;
+    assert!(offered(&diagnose(&f, &HashSet::new())).is_empty());
+}
+
+#[test]
+fn a_wineserver_of_another_version_is_stopped() {
+    let mut f = facts(&[
+        "wine client error:0: version mismatch 768/824.",
+        "Your wineserver binary was not upgraded correctly,",
+        "or you have an older one somewhere in your PATH.",
+        "Or maybe the wrong wineserver is still running?",
+    ]);
+    f.context = wine();
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), vec![LaunchHint::WineserverMismatch]);
+    assert_eq!(offered(&d), vec![Fix::StopWineserver]);
+    // A mismatch that isn't the server's is still the wrong build.
+    assert_eq!(
+        launch_hints(["err:module: version mismatch in ntdll"]),
+        vec![LaunchHint::WrongWineBuild]
+    );
+}
+
+#[test]
+fn vulkan_failures_offer_the_driver_command() {
+    let mut f = facts(&["err:vulkan:wine_vk_init Failed to load Vulkan"]);
+    f.vulkan_command = Some("sudo pacman -S --needed vulkan-radeon lib32-vulkan-radeon".into());
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(
+        offered(&d),
+        vec![Fix::VulkanDriver(
+            "sudo pacman -S --needed vulkan-radeon lib32-vulkan-radeon".into()
+        )]
+    );
+    f.vulkan_command = None;
+    let d = diagnose(&f, &HashSet::new());
+    assert!(offered(&d).is_empty());
+    assert_eq!(
+        d.findings[0].detail,
+        Some(Detail::VulkanDriver { command: None })
+    );
+}
+
+#[test]
+fn vulkan_driver_commands_per_distribution() {
+    let ids = |text: &str| distro_ids(text);
+    let cachy = ids("NAME=\"CachyOS Linux\"\nID=cachyos\nID_LIKE=arch\n");
+    assert_eq!(cachy, ["cachyos", "arch"]);
+    assert_eq!(
+        vulkan_driver_command(&cachy, &[GpuVendor::Amd]).as_deref(),
+        Some("sudo pacman -S --needed vulkan-radeon lib32-vulkan-radeon")
+    );
+    let mint = ids("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n");
+    assert_eq!(
+        vulkan_driver_command(&mint, &[GpuVendor::Intel, GpuVendor::Amd]).as_deref(),
+        Some(
+            "sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install mesa-vulkan-drivers mesa-vulkan-drivers:i386"
+        )
+    );
+    assert_eq!(
+        vulkan_driver_command(&mint, &[GpuVendor::Nvidia]).as_deref(),
+        Some("sudo ubuntu-drivers install")
+    );
+    let fedora = ids("ID=fedora\n");
+    assert_eq!(
+        vulkan_driver_command(&fedora, &[GpuVendor::Amd]).as_deref(),
+        Some("sudo dnf install mesa-vulkan-drivers mesa-vulkan-drivers.i686")
+    );
+    let tumbleweed = ids("ID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n");
+    assert_eq!(
+        vulkan_driver_command(&tumbleweed, &[GpuVendor::Intel]).as_deref(),
+        Some("sudo zypper install libvulkan_intel libvulkan_intel-32bit")
+    );
+    // Image-based systems, unknown ones and unknown GPUs get no command.
+    let bazzite = ids("ID=bazzite\nID_LIKE=\"fedora\"\n");
+    assert_eq!(vulkan_driver_command(&bazzite, &[GpuVendor::Amd]), None);
+    assert_eq!(
+        vulkan_driver_command(&ids("ID=gentoo\n"), &[GpuVendor::Amd]),
+        None
+    );
+    assert_eq!(vulkan_driver_command(&cachy, &[]), None);
+    assert_eq!(GpuVendor::from_pci("10de"), Some(GpuVendor::Nvidia));
+    assert_eq!(GpuVendor::from_pci("0x1002"), Some(GpuVendor::Amd));
+    assert_eq!(GpuVendor::from_pci("1af4"), None);
+}
+
+#[test]
+fn wineservers_are_found_by_their_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let proc = dir.path().join("proc");
+    let prefix = dir.path().join("prefixes/Game");
+    std::fs::create_dir_all(prefix.join("pfx")).unwrap();
+    let other = dir.path().join("prefixes/Other");
+    std::fs::create_dir_all(&other).unwrap();
+    let mk = |pid: u32, comm: &str, prefix: &std::path::Path| {
+        let d = proc.join(pid.to_string());
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("comm"), format!("{comm}\n")).unwrap();
+        let env = format!(
+            "HOME=/home/u\0WINEPREFIX={}/\0PATH=/usr/bin\0",
+            prefix.display()
+        );
+        std::fs::write(d.join("environ"), env).unwrap();
+    };
+    mk(100, "wineserver", &prefix.join("pfx"));
+    mk(101, "wineserver64", &prefix);
+    mk(102, "wineserver", &other);
+    mk(103, "game.exe", &prefix);
+    std::fs::create_dir_all(proc.join("self")).unwrap();
+    let mut pids = super::prefix_servers(&proc, &[prefix.clone(), prefix.join("pfx")]);
+    pids.sort();
+    assert_eq!(pids, [100, 101]);
+}

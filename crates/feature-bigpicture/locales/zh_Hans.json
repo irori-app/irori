@@ -9,6 +9,7 @@
   "bigpicture.action.play": "开始游戏",
   "bigpicture.action.play_with_log": "带日志游玩",
   "bigpicture.action.stop": "停止",
+  "bigpicture.action.cancel_launch": "取消启动",
   "bigpicture.action.install": "安装",
   "bigpicture.action.cancel_download": "取消下载",
   "bigpicture.action.update": "更新",

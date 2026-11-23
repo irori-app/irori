@@ -10,6 +10,7 @@
 pub mod accounts;
 pub mod achievements;
 pub mod app_update;
+pub mod art_cache;
 pub mod audio;
 pub mod backup;
 pub mod backup_schedule;
@@ -34,6 +35,7 @@ mod library;
 pub mod ludusavi;
 pub mod mods;
 mod network;
+pub mod optiscaler;
 pub mod play_status;
 pub mod power;
 mod programs;
@@ -41,11 +43,13 @@ pub mod related;
 pub mod renodx;
 pub mod replay;
 pub mod reshade;
+mod running;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
 pub mod sessions;
 pub mod settings;
+mod settings_migration;
 pub mod smart_categories;
 pub mod status;
 mod steam_tags;
@@ -79,17 +83,18 @@ pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
-pub use games::{LaunchParams, RunningGame, SAVE_SYNC_TIMEOUT};
+pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
 pub use journal::{Journal, JournalEntry};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
-pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, supports_mods};
+pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};
+pub use optiscaler::{OptiscalerInstallParams, OptiscalerStatus};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};
 pub use replay::{Recorder, ReplayInfo, ShortcutState};
-pub use reshade::{ReshadeStatus, supports_reshade};
+pub use reshade::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
 pub use sessions::Session;
@@ -102,7 +107,7 @@ pub use storage::{CleanupKind, StorageReport};
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };
-pub use sync::{SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
+pub use sync::{RcloneInfo, SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
@@ -333,9 +338,14 @@ impl Backend {
 
     fn spawn_background_tasks(&self, interactive: bool) {
         // Only the app: a command-line run may sit beside a running game.
+        // Games still running from before are followed again first, so
+        // their mods stay in while they play.
         if interactive {
             let b = self.clone();
-            self.spawn(async move { b.recover_mods().await });
+            self.spawn(async move {
+                b.adopt_sessions().await;
+                b.recover_mods().await;
+            });
         }
 
         // A new version of Irori backs up what the old one wrote first.
@@ -503,10 +513,12 @@ impl Backend {
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
+            self.cloud_copies_when_due().await;
             self.sync_sunshine_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;
+            self.trim_art_cache_when_due().await;
             let interval =
                 Duration::from_secs(self.settings.app().check_updates_interval.max(5) as u64 * 60);
             let reconnected = online && !was_online;
