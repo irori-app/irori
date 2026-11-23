@@ -2659,19 +2659,37 @@ impl LibraryView {
         let hover_id = id.clone();
         let click_id = id.clone();
         let caption_text = caption(game, &state, status.as_ref());
-        // Sections by play status read as a backlog: each cover says how long
-        // it has been played.
-        let played = self
-            .frame
-            .groups
-            .first()
-            .is_some_and(|g| matches!(g.kind, GroupKind::Status(_)))
+        // The caption names the value the library is sorted by, so the order
+        // reads at a glance; sections by play status or playtime read as a
+        // backlog, so there each cover says how long it has been played.
+        let sorted_by = (caption_kind == CoverCaption::Full)
             .then(|| {
                 let lib = models(cx).library.read(cx);
-                lib.user.playtime.get(&key).map(|r| r.total_minutes)
+                let minutes = lib.playtime_minutes(&id);
+                let added = game
+                    .date_added
+                    .clone()
+                    .or_else(|| lib.user.first_seen.get(&key).cloned());
+                let sort = self.filters.read(cx).filter().sort;
+                let backlog = self.frame.groups.first().is_some_and(|g| {
+                    matches!(g.kind, GroupKind::Status(_) | GroupKind::Playtime(_))
+                });
+                crate::format::sort_value(
+                    sort,
+                    game,
+                    minutes,
+                    lib.last_played(&id),
+                    added.as_deref(),
+                    crate::format::now(),
+                )
+                .or_else(|| {
+                    backlog
+                        .then(|| crate::format::playtime(minutes))
+                        .flatten()
+                        .map(|p| (IconName::Clock, p))
+                })
             })
-            .flatten()
-            .and_then(crate::format::playtime);
+            .flatten();
         v_flex()
             .id(ElementId::Name(format!("tile:{key}").into()))
             .w(width)
@@ -2717,7 +2735,7 @@ impl LibraryView {
                         )
                         .when(
                             caption_kind == CoverCaption::Full
-                                && (!caption_text.is_empty() || played.is_some()),
+                                && (!caption_text.is_empty() || sorted_by.is_some()),
                             |el| {
                                 el.child(
                                     h_flex()
@@ -2725,14 +2743,12 @@ impl LibraryView {
                                         .gap_1()
                                         .text_xs()
                                         .text_color(muted)
-                                        .when_some(played, |el, played| {
-                                            el.child(
-                                                Icon::new(IconName::Clock).xsmall().flex_none(),
-                                            )
-                                            .child(div().flex_none().child(played))
-                                            .when(!caption_text.is_empty(), |el| {
-                                                el.child(div().flex_none().child("·"))
-                                            })
+                                        .when_some(sorted_by, |el, (icon, value)| {
+                                            el.child(Icon::new(icon).xsmall().flex_none())
+                                                .child(div().flex_none().child(value))
+                                                .when(!caption_text.is_empty(), |el| {
+                                                    el.child(div().flex_none().child("·"))
+                                                })
                                         })
                                         .child(div().min_w_0().truncate().child(caption_text)),
                                 )

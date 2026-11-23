@@ -1215,7 +1215,8 @@ cx.spawn_in(window, async move |this, cx| {
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
 in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
 (through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
-grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+grid's row height follows it, `grid::caption_rem`; full leads with the value the
+library is sorted by, `format::sort_value`), `coverHover` (rise or ring only)
 and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
 the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
 row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
