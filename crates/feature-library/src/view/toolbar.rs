@@ -608,6 +608,11 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
             ui.library_open_details_on_select,
             |u| u.library_open_details_on_select = !u.library_open_details_on_select,
         ))
+        .item(set(
+            t("library.look.auto_layout"),
+            ui.library_auto_layout,
+            |u| u.library_auto_layout = !u.library_auto_layout,
+        ))
         .separator()
         .item(
             PopupMenuItem::new(t("library.look.more")).on_click(|_, _, cx| {

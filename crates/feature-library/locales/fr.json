@@ -613,6 +613,7 @@
   "library.look.badges": "Badges de boutique",
   "library.look.badges_always": "Badges de boutique sur chaque jaquette",
   "library.look.categories": "Catégories sur les jaquettes",
+  "library.look.auto_layout": "Vue Focus quand la fenêtre est large",
   "library.look.open_details": "Ouvrir les détails au clic",
   "library.look.more": "Autres réglages d’apparence…",
   "library.focus.empty": "Sélectionnez un jeu pour le voir ici",

@@ -613,6 +613,7 @@
   "library.look.badges": "ストアのバッジ",
   "library.look.badges_always": "すべてのカバーにストアバッジ",
   "library.look.categories": "カバーにカテゴリー",
+  "library.look.auto_layout": "ウィンドウが広いときはフォーカス表示",
   "library.look.open_details": "クリックで詳細を開く",
   "library.look.more": "その他の外観設定…",
   "library.focus.empty": "ゲームを選ぶとここに表示されます",

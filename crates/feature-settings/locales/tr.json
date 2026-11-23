@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Odak görünümünde satır başına kapak",
   "settings.field.ui_focus_columns.help": "Pencere yanındaki oyun sayfası için fazla darsa daha az. Sütunun kenarını da sürükleyebilirsiniz.",
   "settings.option.focus_columns.auto": "Sığdığı kadar",
+  "settings.field.ui_auto_layout.label": "Pencere genişliğine göre ızgara ile odak arasında geç",
+  "settings.field.ui_auto_layout.help": "Pencerede kapakların yanında oyun sayfasına yer olduğunda odak, daha darken ızgara. Kendi seçtiğiniz görünüm, pencere o genişliği yeniden geçene kadar kalır; liste olduğu gibi kalır.",
   "settings.field.ui_focus_cover_size.label": "Odak görünümünde kapak boyutu",
   "settings.option.focus_cover_size.small": "Küçük",
   "settings.option.focus_cover_size.medium": "Orta",

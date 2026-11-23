@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "포커스 보기의 한 줄 커버 수",
   "settings.field.ui_focus_columns.help": "창이 좁아 옆의 게임 페이지가 들어가지 않으면 줄어듭니다. 열의 가장자리를 끌어서 바꿀 수도 있습니다.",
   "settings.option.focus_columns.auto": "들어가는 만큼",
+  "settings.field.ui_auto_layout.label": "창 너비에 따라 그리드와 포커스 전환",
+  "settings.field.ui_auto_layout.help": "창에 표지 옆으로 게임 페이지를 놓을 공간이 있으면 포커스, 더 좁으면 그리드로 바꿉니다. 직접 고른 보기는 창이 그 너비를 다시 넘을 때까지 유지되며, 목록은 그대로입니다.",
   "settings.field.ui_focus_cover_size.label": "포커스 보기의 표지 크기",
   "settings.option.focus_cover_size.small": "작게",
   "settings.option.focus_cover_size.medium": "보통",

@@ -1222,7 +1222,10 @@ the background, store badges and cover categories in place. The Focus view's col
 row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
 dragging its edge or with the arrow keys on it; its covers are small, medium or large
 (`libraryFocusCoverSize`, `layouts::focus_tile_rem`, laid out by `grid::focus_metrics`
-outside the grid slider's range). A click on a grid cover opens the
+outside the grid slider's range). With `libraryAutoLayout` the view switches between the
+grid and Focus as the window crosses the width Focus needs (`layouts::wide_enough_for_focus`,
+measured, never a breakpoint; `auto_layout` switches only on a crossing, so a view picked
+by hand holds, and never saves the switch). A click on a grid cover opens the
 drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
 opens the drawer (which then follows clicks).
 

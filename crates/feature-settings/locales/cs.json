@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Obalů v řádku v zobrazení Focus",
   "settings.field.ui_focus_columns.help": "Méně, pokud je okno pro stránku hry vedle nich příliš úzké. Můžete také přetáhnout okraj sloupce.",
   "settings.option.focus_columns.auto": "Kolik se vejde",
+  "settings.field.ui_auto_layout.label": "Přepínat mezi mřížkou a Fokusem podle šířky okna",
+  "settings.field.ui_auto_layout.help": "Fokus, jakmile má okno vedle obalů místo pro stránku hry, mřížka, když je užší. Zobrazení, které zvolíte sami, platí, dokud okno tuto šířku znovu nepřekročí; seznam zůstává.",
   "settings.field.ui_focus_cover_size.label": "Velikost obalů v zobrazení Fokus",
   "settings.option.focus_cover_size.small": "Malé",
   "settings.option.focus_cover_size.medium": "Střední",

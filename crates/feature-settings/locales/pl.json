@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Okładek w rzędzie w widoku skupienia",
   "settings.field.ui_focus_columns.help": "Mniej, gdy okno jest za wąskie na stronę gry obok. Możesz też przeciągnąć krawędź kolumny.",
   "settings.option.focus_columns.auto": "Ile się zmieści",
+  "settings.field.ui_auto_layout.label": "Przełączaj siatkę i Fokus zależnie od szerokości okna",
+  "settings.field.ui_auto_layout.help": "Fokus, gdy okno ma miejsce na stronę gry obok okładek, siatka, gdy jest węższe. Widok wybrany przez Ciebie zostaje, aż okno znów przekroczy tę szerokość; lista się nie zmienia.",
   "settings.field.ui_focus_cover_size.label": "Rozmiar okładek w widoku Fokus",
   "settings.option.focus_cover_size.small": "Małe",
   "settings.option.focus_cover_size.medium": "Średnie",

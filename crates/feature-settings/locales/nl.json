@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Covers per rij in de focusweergave",
   "settings.field.ui_focus_columns.help": "Minder als het venster te smal is voor de gamepagina ernaast. Je kunt ook de rand van de kolom slepen.",
   "settings.option.focus_columns.auto": "Zoveel als past",
+  "settings.field.ui_auto_layout.label": "Wisselen tussen raster en focus met de breedte van het venster",
+  "settings.field.ui_auto_layout.help": "Focus zodra het venster ruimte heeft voor de gamepagina naast de hoezen, het raster als het smaller is. Een zelf gekozen weergave blijft tot het venster die breedte weer passeert; de lijst blijft zoals hij is.",
   "settings.field.ui_focus_cover_size.label": "Hoesgrootte in focusweergave",
   "settings.option.focus_cover_size.small": "Klein",
   "settings.option.focus_cover_size.medium": "Middel",

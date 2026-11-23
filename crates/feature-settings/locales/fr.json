@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Jaquettes par rangée en vue Focus",
   "settings.field.ui_focus_columns.help": "Moins si la fenêtre est trop étroite pour la page du jeu à côté. Vous pouvez aussi faire glisser le bord de la colonne.",
   "settings.option.focus_columns.auto": "Autant que possible",
+  "settings.field.ui_auto_layout.label": "Passer de la grille à Focus selon la largeur de la fenêtre",
+  "settings.field.ui_auto_layout.help": "Focus dès que la fenêtre a la place pour la page du jeu à côté des jaquettes, la grille quand elle est plus étroite. Une vue choisie vous-même tient jusqu’à ce que la fenêtre repasse cette largeur ; la liste reste telle quelle.",
   "settings.field.ui_focus_cover_size.label": "Taille des jaquettes en vue Focus",
   "settings.option.focus_cover_size.small": "Petites",
   "settings.option.focus_cover_size.medium": "Moyennes",

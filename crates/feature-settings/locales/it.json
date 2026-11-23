@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Copertine per riga nella vista Focus",
   "settings.field.ui_focus_columns.help": "Meno se la finestra è troppo stretta per la pagina del gioco accanto. Puoi anche trascinare il bordo della colonna.",
   "settings.option.focus_columns.auto": "Quante ne entrano",
+  "settings.field.ui_auto_layout.label": "Passare tra griglia e Focus in base alla larghezza della finestra",
+  "settings.field.ui_auto_layout.help": "Focus quando la finestra ha spazio per la pagina del gioco accanto alle copertine, la griglia quando è più stretta. Una vista scelta da te resta finché la finestra non supera di nuovo quella larghezza; l’elenco resta com’è.",
   "settings.field.ui_focus_cover_size.label": "Dimensione delle copertine nella vista Focus",
   "settings.option.focus_cover_size.small": "Piccole",
   "settings.option.focus_cover_size.medium": "Medie",

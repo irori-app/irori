@@ -103,6 +103,35 @@ pub fn focus_columns_near(width: f32, tile: f32) -> usize {
     (n.max(1.0) as usize).min(FOCUS_MAX_COLUMNS)
 }
 
+/// Whether a library body `width` rem wide holds the Focus view's column
+/// of covers `tile` rem wide and the game page beside it
+/// (`libraryAutoLayout` shows Focus from there). Measured from the room
+/// the page needs, not a fixed breakpoint.
+pub fn wide_enough_for_focus(width: f32, tile: f32) -> bool {
+    width - focus_column_rem(1, tile) >= FOCUS_PAGE_MIN_REM
+}
+
+/// With `libraryAutoLayout`: the view to switch to when the window is
+/// `wide` ([`wide_enough_for_focus`]) and was `was_wide` at the last frame
+/// (`None` at the first). Only a crossing (or the first frame) switches,
+/// and only between the grid and Focus, so a view the user picks holds
+/// until the window crosses the line again, and the list stays.
+pub fn auto_layout(
+    layout: LibraryLayout,
+    was_wide: Option<bool>,
+    wide: bool,
+) -> Option<LibraryLayout> {
+    if layout == LibraryLayout::List || was_wide == Some(wide) {
+        return None;
+    }
+    let wanted = if wide {
+        LibraryLayout::Focus
+    } else {
+        LibraryLayout::Grid
+    };
+    (layout != wanted).then_some(wanted)
+}
+
 /// What a click on a game does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Click {
@@ -181,6 +210,29 @@ mod tests {
         let narrow = focus_column_rem(1, t) + FOCUS_PAGE_MIN_REM + 1.0;
         assert_eq!(focus_columns_for(3, narrow, t), 1);
         assert_eq!(focus_columns_for(0, narrow, t), 1);
+    }
+
+    #[test]
+    fn the_view_follows_the_window_across_the_line_only() {
+        use LibraryLayout::*;
+        let t = FOCUS_TILE_REM;
+        let line = focus_column_rem(1, t) + FOCUS_PAGE_MIN_REM;
+        assert!(wide_enough_for_focus(line, t) && !wide_enough_for_focus(line - 0.5, t));
+        // Larger covers need a wider window.
+        let large = focus_tile_rem(FocusCoverSize::Large);
+        assert!(!wide_enough_for_focus(line, large));
+        // The first frame puts the view on its side of the line.
+        assert_eq!(auto_layout(Grid, None, true), Some(Focus));
+        assert_eq!(auto_layout(Focus, None, false), Some(Grid));
+        assert_eq!(auto_layout(Focus, None, true), None);
+        // Crossing switches; staying on one side leaves the user's pick.
+        assert_eq!(auto_layout(Focus, Some(true), false), Some(Grid));
+        assert_eq!(auto_layout(Grid, Some(false), true), Some(Focus));
+        assert_eq!(auto_layout(Grid, Some(true), true), None);
+        assert_eq!(auto_layout(Focus, Some(false), false), None);
+        // The list is never switched.
+        assert_eq!(auto_layout(List, Some(false), true), None);
+        assert_eq!(auto_layout(List, None, true), None);
     }
 
     #[test]

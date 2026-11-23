@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "聚焦视图每行封面数",
   "settings.field.ui_focus_columns.help": "窗口太窄、放不下旁边的游戏页面时会减少。也可以拖动该列的边缘。",
   "settings.option.focus_columns.auto": "尽量多",
+  "settings.field.ui_auto_layout.label": "根据窗口宽度在网格和聚焦之间切换",
+  "settings.field.ui_auto_layout.help": "窗口足以在封面旁放下游戏页面时使用聚焦，较窄时使用网格。你自己选择的视图会保持，直到窗口再次越过该宽度；列表保持不变。",
   "settings.field.ui_focus_cover_size.label": "聚焦视图中的封面大小",
   "settings.option.focus_cover_size.small": "小",
   "settings.option.focus_cover_size.medium": "中",

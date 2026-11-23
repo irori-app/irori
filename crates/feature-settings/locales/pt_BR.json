@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Capas por linha na visualização de foco",
   "settings.field.ui_focus_columns.help": "Menos quando a janela é estreita demais para a página do jogo ao lado. Você também pode arrastar a borda da coluna.",
   "settings.option.focus_columns.auto": "As que couberem",
+  "settings.field.ui_auto_layout.label": "Alternar entre grade e Foco conforme a largura da janela",
+  "settings.field.ui_auto_layout.help": "Foco quando a janela tem espaço para a página do jogo ao lado das capas, a grade quando é mais estreita. Uma visualização escolhida por você fica até a janela cruzar essa largura de novo; a lista continua como está.",
   "settings.field.ui_focus_cover_size.label": "Tamanho das capas na visualização Foco",
   "settings.option.focus_cover_size.small": "Pequenas",
   "settings.option.focus_cover_size.medium": "Médias",

@@ -1628,6 +1628,10 @@ pub struct UiPrefs {
     pub library_focus_columns: u32,
     /// How large the Focus view's covers are (`libraryFocusCoverSize`).
     pub library_focus_cover_size: FocusCoverSize,
+    /// The library switches to Focus when the window grows wide enough for
+    /// its page beside the covers, and to the grid when it shrinks below
+    /// that (`libraryAutoLayout`, off unless turned on).
+    pub library_auto_layout: bool,
     /// A click on a cover in the grid opens the drawer about the game
     /// (`libraryOpenDetailsOnSelect`, on unless turned off); off, it only
     /// selects it, and `I`, Enter or a double click go further.
@@ -1842,6 +1846,7 @@ impl Default for UiPrefs {
             cover_favourite: true,
             library_focus_columns: 0,
             library_focus_cover_size: FocusCoverSize::Medium,
+            library_auto_layout: false,
             library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
@@ -2077,6 +2082,13 @@ mod tests {
             serde_json::from_str(r#"{"libraryFocusCoverSize":"huge","tileSize":9.0}"#).unwrap();
         assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Medium);
         assert_eq!(ui.tile_size, 9.0);
+    }
+
+    #[test]
+    fn the_layout_follows_the_window_only_when_asked() {
+        assert!(!UiPrefs::default().library_auto_layout);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryAutoLayout":true}"#).unwrap();
+        assert!(ui.library_auto_layout);
     }
 
     #[test]

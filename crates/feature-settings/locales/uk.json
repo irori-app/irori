@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Обкладинок у ряду в режимі фокуса",
   "settings.field.ui_focus_columns.help": "Менше, якщо вікно завузьке для сторінки гри поруч. Можна також перетягнути край колонки.",
   "settings.option.focus_columns.auto": "Скільки вміститься",
+  "settings.field.ui_auto_layout.label": "Перемикати сітку й «Фокус» за шириною вікна",
+  "settings.field.ui_auto_layout.help": "«Фокус», коли у вікні досить місця для сторінки гри поруч з обкладинками, сітка — коли воно вужче. Вибраний вами вигляд тримається, доки вікно знову не перетне цю ширину; список лишається як є.",
   "settings.field.ui_focus_cover_size.label": "Розмір обкладинок у режимі «Фокус»",
   "settings.option.focus_cover_size.small": "Маленькі",
   "settings.option.focus_cover_size.medium": "Середні",

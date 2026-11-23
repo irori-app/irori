@@ -1519,3 +1519,56 @@ fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+
+#[gpui_kit::test]
+fn the_view_follows_the_window_width_when_asked(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1600.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let layout = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window).0)
+            .unwrap()
+    };
+    let resize = |cx: &mut TestAppContext, width: f32| {
+        cx.simulate_window_resize(window, size(px(width), px(800.)));
+        settle(cx);
+    };
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "off: nothing switches");
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(true, cx)));
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Focus, "wide: Focus");
+    resize(cx, 700.);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "narrow: the grid");
+    // A view picked by hand holds while the window stays on its side.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    resize(cx, 720.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    resize(cx, 1600.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(false, cx)));
+}

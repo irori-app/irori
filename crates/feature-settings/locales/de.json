@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Cover pro Reihe in der Fokusansicht",
   "settings.field.ui_focus_columns.help": "Weniger, wenn das Fenster für die Spielseite daneben zu schmal ist. Du kannst auch den Rand der Spalte ziehen.",
   "settings.option.focus_columns.auto": "So viele wie passen",
+  "settings.field.ui_auto_layout.label": "Je nach Fensterbreite zwischen Raster und Fokus wechseln",
+  "settings.field.ui_auto_layout.help": "Fokus, sobald das Fenster Platz für die Spielseite neben den Covern hat, das Raster, wenn es schmaler ist. Eine selbst gewählte Ansicht gilt, bis das Fenster diese Breite wieder überschreitet; die Liste bleibt.",
   "settings.field.ui_focus_cover_size.label": "Covergröße in der Fokusansicht",
   "settings.option.focus_cover_size.small": "Klein",
   "settings.option.focus_cover_size.medium": "Mittel",

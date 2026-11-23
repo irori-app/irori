@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Covers to a row in Focus view",
   "settings.field.ui_focus_columns.help": "Fewer when the window is too narrow for the game page beside them. You can also drag the column’s edge.",
   "settings.option.focus_columns.auto": "As many as fit",
+  "settings.field.ui_auto_layout.label": "Switch between grid and Focus with the window’s width",
+  "settings.field.ui_auto_layout.help": "Focus once the window has room for the game page beside the covers, the grid when it is narrower. Choosing a view yourself holds until the window crosses that width again; the list stays as it is.",
   "settings.field.ui_focus_cover_size.label": "Cover size in Focus view",
   "settings.option.focus_cover_size.small": "Small",
   "settings.option.focus_cover_size.medium": "Medium",

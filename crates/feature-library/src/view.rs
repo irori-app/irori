@@ -181,6 +181,12 @@ pub struct LibraryView {
     games: FilteredGames,
     top: TopCache,
     layout: LibraryLayout,
+    /// The view the user chose (`libraryLayout`); `layout` differs from it
+    /// while `libraryAutoLayout` switched with the window's width.
+    chosen_layout: LibraryLayout,
+    /// Whether the window was wide enough for Focus at the last frame,
+    /// while `libraryAutoLayout` is on.
+    auto_wide: Option<bool>,
     tile_rem: f32,
     density: Density,
     /// The interface preferences, for the background behind the covers.
@@ -280,10 +286,14 @@ impl LibraryView {
             cx.observe(&saved_views, |_, _, cx| cx.notify()),
             cx.observe_in(&m.settings, window, |this, settings, window, cx| {
                 let ui = settings.read(cx).app.ui.clone();
-                if this.layout != ui.library_layout {
+                if this.chosen_layout != ui.library_layout {
                     // Switched from elsewhere (the palette, Settings).
+                    this.chosen_layout = ui.library_layout;
                     this.layout = ui.library_layout;
                     this.scroll_to_focused();
+                }
+                if !ui.library_auto_layout {
+                    this.auto_wide = None;
                 }
                 this.density = ui.density;
                 this.ui_prefs = ui.clone();
@@ -337,6 +347,8 @@ impl LibraryView {
             games: FilteredGames::default(),
             top: TopCache::default(),
             layout: ui.library_layout,
+            chosen_layout: ui.library_layout,
+            auto_wide: None,
             tile_rem,
             density: ui.density,
             ui_prefs: ui.clone(),
@@ -463,6 +475,15 @@ impl LibraryView {
     #[cfg(test)]
     pub(crate) fn set_open_details_for_test(&mut self, on: bool, cx: &mut Context<Self>) {
         self.ui_prefs.library_open_details_on_select = on;
+        cx.notify();
+    }
+
+    /// Follow the window's width with the view, or stop, without saving it
+    /// (tests share one settings file).
+    #[cfg(test)]
+    pub(crate) fn set_auto_layout_for_test(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.ui_prefs.library_auto_layout = on;
+        self.auto_wide = None;
         cx.notify();
     }
 
@@ -626,6 +647,18 @@ impl LibraryView {
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
         let focus_tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        // Following the window's width switches the view for now; the
+        // user's own choice stays what is saved.
+        if self.ui_prefs.library_auto_layout {
+            let wide = layouts::wide_enough_for_focus(body_rem, focus_tile);
+            if let Some(layout) = layouts::auto_layout(self.layout, self.auto_wide, wide) {
+                self.layout = layout;
+                self.scroll_to_focused();
+                // The rows above were worked out for the other view.
+                cx.notify();
+            }
+            self.auto_wide = Some(wide);
+        }
         let focus_rem = layouts::focus_column_rem(
             layouts::focus_columns_for(self.ui_prefs.library_focus_columns, body_rem, focus_tile),
             focus_tile,
@@ -1428,10 +1461,11 @@ impl LibraryView {
     /// Switch to `layout` and remember it. The selected game stays
     /// selected and in view; Focus selects the first game when none is.
     fn set_layout(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
-        if self.layout == layout {
+        if self.layout == layout && self.chosen_layout == layout {
             return;
         }
         self.layout = layout;
+        self.chosen_layout = layout;
         persist_ui(cx, move |ui| ui.library_layout = layout);
         self.scroll_to_focused();
         cx.notify();

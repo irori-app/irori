@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Omslag per rad i fokusvyn",
   "settings.field.ui_focus_columns.help": "Färre när fönstret är för smalt för spelsidan bredvid. Du kan också dra i kolumnens kant.",
   "settings.option.focus_columns.auto": "Så många som får plats",
+  "settings.field.ui_auto_layout.label": "Växla mellan rutnät och fokus efter fönstrets bredd",
+  "settings.field.ui_auto_layout.help": "Fokus när fönstret har plats för spelsidan bredvid omslagen, rutnätet när det är smalare. En vy du väljer själv gäller tills fönstret passerar den bredden igen; listan förblir som den är.",
   "settings.field.ui_focus_cover_size.label": "Omslagsstorlek i fokusvyn",
   "settings.option.focus_cover_size.small": "Små",
   "settings.option.focus_cover_size.medium": "Mellan",

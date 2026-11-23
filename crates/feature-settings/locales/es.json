@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Portadas por fila en la vista de enfoque",
   "settings.field.ui_focus_columns.help": "Menos si la ventana es demasiado estrecha para la página del juego a su lado. También puedes arrastrar el borde de la columna.",
   "settings.option.focus_columns.auto": "Las que quepan",
+  "settings.field.ui_auto_layout.label": "Cambiar entre cuadrícula y Enfoque según el ancho de la ventana",
+  "settings.field.ui_auto_layout.help": "Enfoque cuando la ventana tiene sitio para la página del juego junto a las portadas, la cuadrícula cuando es más estrecha. La vista que elijas se mantiene hasta que la ventana vuelva a cruzar ese ancho; la lista no cambia.",
   "settings.field.ui_focus_cover_size.label": "Tamaño de las portadas en la vista Enfoque",
   "settings.option.focus_cover_size.small": "Pequeñas",
   "settings.option.focus_cover_size.medium": "Medianas",
