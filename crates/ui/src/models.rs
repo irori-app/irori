@@ -242,7 +242,7 @@ fn accounts_now(cx: &App) -> AccountsNow {
 pub(crate) fn install(cx: &mut App) {
     let b = backend(cx);
     let (snapshot, user) = (b.library(), b.userdata.snapshot());
-    let categories = crate::categories::index_for(None, &snapshot, &user, &b.hltb_times());
+    let categories = crate::categories::index_for(None, &snapshot, &user, &b.category_inputs());
     let library = cx.new(|_| LibraryModel {
         snapshot,
         user,
@@ -443,10 +443,10 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
     }
     if library {
         let (snapshot, user, updates) = (b.library(), b.userdata.snapshot(), b.updates());
-        let hltb = b.hltb_times();
+        let inputs = b.category_inputs();
         m.library.update(cx, |l, cx| {
             l.categories =
-                crate::categories::index_for(Some(&l.categories), &snapshot, &user, &hltb);
+                crate::categories::index_for(Some(&l.categories), &snapshot, &user, &inputs);
             l.snapshot = snapshot;
             l.user = user;
             l.updates = updates;

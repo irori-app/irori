@@ -1437,3 +1437,48 @@ fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+
+#[gpui_kit::test]
+fn the_filters_popover_finds_a_value_by_name(cx: &mut TestAppContext) {
+    use crate::filters_panel::{FilterModel, FiltersPanel};
+
+    let _backend = start(cx);
+    let model = cx.update(|cx| cx.new(|_| FilterModel::new(crate::filter::ViewFilter::default())));
+    let (window, panel) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(800.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |_, cx| cx.new(|cx| FiltersPanel::new(model.clone(), cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    // Nothing searched: the sections, and no values worked out.
+    assert_eq!(cx.read(|cx| panel.read(cx).found_values(cx)), None);
+
+    // Every game is unplayed: the play status is found, with its count.
+    cx.update_window(window, |_, window, cx| {
+        panel.update(cx, |p, cx| p.search_for("not pla", window, cx))
+    })
+    .unwrap();
+    draw(cx);
+    let found = cx
+        .read(|cx| panel.read(cx).found_values(cx))
+        .expect("searched");
+    assert!(found.iter().any(|(_, count)| *count == 5), "{found:?}");
+}

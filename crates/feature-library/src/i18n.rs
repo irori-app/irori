@@ -70,6 +70,8 @@ pub(crate) fn sort_label(sort: LibrarySort) -> String {
         LibrarySort::ReleaseDate => "library.sort.release_date",
         LibrarySort::DateAdded => "library.sort.date_added",
         LibrarySort::Score => "library.sort.score",
+        LibrarySort::TimesPlayed => "library.sort.times_played",
+        LibrarySort::Rating => "library.sort.rating",
     };
     t(key).to_string()
 }

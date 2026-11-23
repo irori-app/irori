@@ -39,6 +39,7 @@ mod random;
 mod selection;
 mod stats;
 mod top;
+mod value_search;
 mod view;
 mod views;
 
