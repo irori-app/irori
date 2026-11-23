@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "上次遊玩：{when}",
   "shell.palette.preview_shortcut": "快速鍵",
   "shell.palette.preview_run": "按 Enter 執行此命令",
-  "shell.palette.preview_enter_open": "按 Enter 開啟遊戲頁面"
+  "shell.palette.preview_enter_open": "按 Enter 開啟遊戲頁面，按 → 列出其動作",
+  "shell.palette.show_game": "顯示 {title}",
+  "shell.palette.store_page": "開啟 {store} 商店頁面",
+  "shell.palette.add_favourite": "加入最愛",
+  "shell.palette.remove_favourite": "從最愛中移除",
+  "shell.palette.open_folder": "開啟安裝資料夾",
+  "shell.palette.hide_game": "在遊戲庫中隱藏",
+  "shell.palette.unhide_game": "重新在遊戲庫中顯示",
+  "shell.palette.stop_game": "停止 {title}",
+  "shell.palette.back": "返回",
+  "shell.palette.actions": "動作",
+  "shell.palette.actions_placeholder": "{title} 的動作…",
+  "shell.palette.game_actions": "{title} 的所有動作"
 }

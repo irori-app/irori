@@ -1167,6 +1167,10 @@ Other parts:
   every row it holds; the recently played without a query), and a preview
   pane beside the list (`preview.rs`, left out in a narrow window) shows the
   highlighted game or command. Rows for running games follow `StatusModel`.
+  → on a game row (or the preview's Actions button) lists that game's
+  actions (`game::level_rows`: play, back to it or cancel, its page, store
+  page, favourite, status, folder, hide, Stop last); ←, Escape and Back
+  return.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362

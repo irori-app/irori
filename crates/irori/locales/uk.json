@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Останній запуск: {when}",
   "shell.palette.preview_shortcut": "Сполучення клавіш",
   "shell.palette.preview_run": "Enter виконує цю команду",
-  "shell.palette.preview_enter_open": "Enter відкриває сторінку гри"
+  "shell.palette.preview_enter_open": "Enter відкриває сторінку гри, → — її дії",
+  "shell.palette.show_game": "Показати {title}",
+  "shell.palette.store_page": "Відкрити сторінку в крамниці {store}",
+  "shell.palette.add_favourite": "Додати до улюблених",
+  "shell.palette.remove_favourite": "Прибрати з улюблених",
+  "shell.palette.open_folder": "Відкрити теку встановлення",
+  "shell.palette.hide_game": "Сховати з бібліотеки",
+  "shell.palette.unhide_game": "Знову показувати в бібліотеці",
+  "shell.palette.stop_game": "Зупинити {title}",
+  "shell.palette.back": "Назад",
+  "shell.palette.actions": "Дії",
+  "shell.palette.actions_placeholder": "Дії для {title}…",
+  "shell.palette.game_actions": "Усі дії для {title}"
 }

@@ -45,6 +45,20 @@ enum PaletteTarget {
     CancelLaunch(GameId),
     /// Bring the running game's window to the front.
     BackToGame(GameId),
+    /// Stop a running game.
+    Stop(GameId),
+    /// List a game's actions (the palette's second level).
+    GameActions(GameId),
+    /// Leave a game's actions for the palette's first level.
+    Back,
+    /// Show a game's page on its store's website.
+    StorePage(Runner, String),
+    /// Add a game to the favourites (`true`) or take it out.
+    Favourite(GameId, bool),
+    /// Hide a game (`true`) or show it again.
+    Hide(GameId, bool),
+    /// Open a game's install folder in the file manager.
+    OpenFolder(GameId),
     Route(Route),
     Refresh,
     Random,
@@ -209,6 +223,17 @@ impl Palette {
             );
         }
         if let Some((game, current, actions)) = open {
+            push(
+                Entry::new()
+                    .label(t_args(
+                        "shell.palette.game_actions",
+                        &[("title", &game.title)],
+                    ))
+                    .keywords([t("shell.palette.actions")])
+                    .icon(IconName::ChevronRight),
+                PaletteTarget::GameActions(game.id()),
+                targets,
+            );
             for (item, target) in game::rows(&game, current, &actions) {
                 push(item, target, targets);
             }
@@ -765,6 +790,15 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
             irori_ui::backend(cx).cancel_launch(&id);
         }
         PaletteTarget::BackToGame(id) => back_to_game(id, window, cx),
+        PaletteTarget::Stop(id) => irori_game::ops::stop(&id, window, cx).detach(),
+        PaletteTarget::StorePage(runner, url) => {
+            irori_ui::hooks::open_store_page(runner, url, window, cx)
+        }
+        PaletteTarget::Favourite(id, on) => irori_game::ops::set_favourite(&id, on, cx),
+        PaletteTarget::Hide(id, on) => irori_game::ops::set_hidden(&id, on, cx),
+        PaletteTarget::OpenFolder(id) => irori_game::ops::open_install_folder(&id, window, cx),
+        // The palette's own levels; its view handles them.
+        PaletteTarget::GameActions(_) | PaletteTarget::Back => {}
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),

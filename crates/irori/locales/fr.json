@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Dernière partie : {when}",
   "shell.palette.preview_shortcut": "Raccourci",
   "shell.palette.preview_run": "Entrée lance cette commande",
-  "shell.palette.preview_enter_open": "Entrée ouvre la page du jeu"
+  "shell.palette.preview_enter_open": "Entrée ouvre la page du jeu ; → affiche ses actions",
+  "shell.palette.show_game": "Afficher {title}",
+  "shell.palette.store_page": "Ouvrir la page de la boutique {store}",
+  "shell.palette.add_favourite": "Ajouter aux favoris",
+  "shell.palette.remove_favourite": "Retirer des favoris",
+  "shell.palette.open_folder": "Ouvrir le dossier d’installation",
+  "shell.palette.hide_game": "Masquer dans la bibliothèque",
+  "shell.palette.unhide_game": "Réafficher dans la bibliothèque",
+  "shell.palette.stop_game": "Arrêter {title}",
+  "shell.palette.back": "Retour",
+  "shell.palette.actions": "Actions",
+  "shell.palette.actions_placeholder": "Actions pour {title}…",
+  "shell.palette.game_actions": "Toutes les actions pour {title}"
 }

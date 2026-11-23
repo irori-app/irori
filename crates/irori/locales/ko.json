@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "마지막 플레이: {when}",
   "shell.palette.preview_shortcut": "단축키",
   "shell.palette.preview_run": "Enter 키로 이 명령 실행",
-  "shell.palette.preview_enter_open": "Enter 키로 게임 페이지 열기"
+  "shell.palette.preview_enter_open": "Enter 키로 게임 페이지 열기, → 키로 작업 보기",
+  "shell.palette.show_game": "{title} 보기",
+  "shell.palette.store_page": "{store} 스토어 페이지 열기",
+  "shell.palette.add_favourite": "즐겨찾기에 추가",
+  "shell.palette.remove_favourite": "즐겨찾기에서 제거",
+  "shell.palette.open_folder": "설치 폴더 열기",
+  "shell.palette.hide_game": "라이브러리에서 숨기기",
+  "shell.palette.unhide_game": "라이브러리에 다시 표시",
+  "shell.palette.stop_game": "{title} 중지",
+  "shell.palette.back": "뒤로",
+  "shell.palette.actions": "작업",
+  "shell.palette.actions_placeholder": "{title} 작업…",
+  "shell.palette.game_actions": "{title}의 모든 작업"
 }

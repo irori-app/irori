@@ -190,8 +190,106 @@ fn installed_windows_games_offer_reshade_and_renodx() {
     assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
 }
 
+/// What `level_rows` offers, as short names in order.
+fn level(game: &GameInfo, facts: &game::GameFacts) -> Vec<&'static str> {
+    game::level_rows(game, facts)
+        .into_iter()
+        .filter_map(|(_, target)| {
+            Some(match target {
+                PaletteTarget::Play(_) => "play",
+                PaletteTarget::BackToGame(_) => "back to game",
+                PaletteTarget::CancelLaunch(_) => "cancel",
+                PaletteTarget::Open(_) => "show",
+                PaletteTarget::StorePage(..) => "store",
+                PaletteTarget::Favourite(_, on) => {
+                    if on {
+                        "favourite"
+                    } else {
+                        "unfavourite"
+                    }
+                }
+                PaletteTarget::OpenFolder(_) => "folder",
+                PaletteTarget::Hide(_, on) => {
+                    if on {
+                        "hide"
+                    } else {
+                        "unhide"
+                    }
+                }
+                PaletteTarget::Stop(_) => "stop",
+                PaletteTarget::Back => "back",
+                _ => return None,
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn a_games_actions_follow_what_it_is_doing() {
+    use irori_core::StatusKind;
+    let installed = GameInfo {
+        runner: Some(Runner::Gog),
+        app_name: "1".into(),
+        title: "Hades".into(),
+        is_installed: true,
+        store_url: Some("https://www.gog.com/game/hades".into()),
+        install: Some(irori_core::InstalledInfo {
+            install_path: "/games/hades".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let idle = game::GameFacts::default();
+    assert_eq!(
+        level(&installed, &idle),
+        [
+            "play",
+            "show",
+            "store",
+            "favourite",
+            "folder",
+            "hide",
+            "back"
+        ]
+    );
+    // Running: back to it first, Stop low, never Play.
+    let playing = game::GameFacts {
+        kind: Some(StatusKind::Playing),
+        favourite: true,
+        hidden: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        level(&installed, &playing),
+        [
+            "back to game",
+            "show",
+            "store",
+            "unfavourite",
+            "folder",
+            "unhide",
+            "stop",
+            "back"
+        ]
+    );
+    let launching = game::GameFacts {
+        kind: Some(StatusKind::Launching),
+        ..Default::default()
+    };
+    assert_eq!(level(&installed, &launching)[0], "cancel");
+    // Not installed and without a store page: nothing to play or open.
+    let owned = GameInfo {
+        is_installed: false,
+        install: None,
+        store_url: None,
+        ..installed
+    };
+    assert_eq!(level(&owned, &idle), ["show", "favourite", "hide", "back"]);
+}
+
 /// The palette drawn over a real backend, typed into as a user would.
 mod ui {
+    use super::super::view::Level;
     use super::*;
     use crate::shell::title_bar_tests::{add_game, start, wait_for_status};
     use gpui_kit::{Entity, TestAppContext, VisualTestContext};
@@ -240,5 +338,20 @@ mod ui {
         backend.statuses.clear(&id);
         wait_for_status(cx, &id, false);
         assert!(!shown(&view, cx).iter().any(|s| s.starts_with("back")));
+
+        // → on the highlighted game lists its actions; Escape comes back.
+        cx.simulate_keystrokes("down");
+        cx.simulate_keystrokes("right");
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Game(id.clone())
+        );
+        let first = cx.read(|cx| view.read(cx).shown_rows()[0].target.clone());
+        assert!(
+            matches!(first, PaletteTarget::Play(_)),
+            "Play leads an idle game's actions"
+        );
+        cx.simulate_keystrokes("escape");
+        assert_eq!(cx.read(|cx| view.read(cx).level().clone()), Level::Root);
     }
 }

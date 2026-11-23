@@ -3,17 +3,22 @@
 //! opens; games are found per query with the library's search and drawn with
 //! their cover, so only a bounded number of game rows exists at a time. The
 //! rows for running games follow the games as they start and end.
+//!
+//! → on a game lists that game's actions (a second level, searched like the
+//! first); ←, Escape and the "Back" row return to the first level.
 
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::base::actions::Cancel;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
+use gpui_kit::component::input::{Escape as InputEscape, MoveLeft, MoveRight};
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
-    Styled as _, Subscription, Window, div, px, rems,
+    App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div, px, rems,
 };
 use irori_core::{GameId, GameInfo, StatusKind};
 use irori_ui::art::LruImageCache;
@@ -40,6 +45,9 @@ pub(super) struct Row {
     pub(super) entry: Entry,
     pub(super) target: PaletteTarget,
     pub(super) game: Option<Arc<GameInfo>>,
+    /// The game a command row acts on, previewed beside the list but drawn
+    /// as a command.
+    pub(super) about: Option<Arc<GameInfo>>,
     /// The store and state shown at the end of a game row.
     pub(super) detail: Option<SharedString>,
 }
@@ -50,8 +58,14 @@ impl Row {
             entry,
             target,
             game: None,
+            about: None,
             detail: None,
         }
+    }
+
+    /// The game the preview shows for this row.
+    pub(super) fn previewed_game(&self) -> Option<&Arc<GameInfo>> {
+        self.game.as_ref().or(self.about.as_ref())
     }
 
     fn item(&self) -> CommandItem {
@@ -163,12 +177,39 @@ fn lead_rows(live: &[(GameId, StatusKind)], cx: &App) -> Vec<Row> {
     rows
 }
 
+/// Which rows the palette lists.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Level {
+    /// Commands and games.
+    Root,
+    /// One game's actions.
+    Game(GameId),
+}
+
+/// The facts the level of `game`'s actions is built from.
+fn game_facts(game: &GameInfo, cx: &mut App) -> super::game::GameFacts {
+    let id = game.id();
+    let actions = irori_ui::user_actions::list(&id, cx);
+    let syncable = irori_game::offers_sync(game, cx);
+    let kind = models(cx).statuses.read(cx).kind(&id);
+    let library = models(cx).library.read(cx);
+    super::game::GameFacts {
+        kind,
+        status: library.user.play_status(&id.key()),
+        favourite: library.is_favourite(&id),
+        hidden: library.is_hidden(&id),
+        syncable,
+        actions,
+    }
+}
+
 /// The palette: a search over commands and games, with a preview.
 pub(crate) struct PaletteView {
     state: Entity<CommandState>,
     preview: Entity<PreviewPane>,
     images: Entity<LruImageCache>,
     host: Host,
+    level: Level,
     /// The command rows, built when the palette opened.
     commands: Vec<Row>,
     /// The running and starting games the first rows are about.
@@ -192,6 +233,12 @@ impl PaletteView {
                     this.rebuild(cx);
                 }
             }),
+            // A game's actions follow its favourite, hidden and status marks.
+            cx.observe(&m.library, |this, _, cx| {
+                if matches!(this.level, Level::Game(_)) {
+                    this.rebuild(cx);
+                }
+            }),
             cx.observe(&m.library, |this, library, cx| {
                 let revision = library.read(cx).snapshot.revision;
                 if revision != this.revision {
@@ -201,9 +248,17 @@ impl PaletteView {
         ];
         let mut view = Self {
             state: cx.new(|cx| CommandState::new(window, cx)),
-            preview: cx.new(|cx| PreviewPane::new(host, cx)),
+            preview: {
+                let weak = cx.weak_entity();
+                let show_actions = move |id: &GameId, window: &mut Window, cx: &mut App| {
+                    let id = id.clone();
+                    let _ = weak.update(cx, |v, cx| v.enter_game(id, window, cx));
+                };
+                cx.new(|cx| PreviewPane::new(host, Rc::new(show_actions), cx))
+            },
             images: LruImageCache::new(MAX_GAMES * 2, cx),
             host,
+            level: Level::Root,
             commands: super::command_rows(window, cx),
             live: live_games(cx),
             revision: 0,
@@ -221,6 +276,30 @@ impl PaletteView {
         state.update(cx, |s, cx| s.focus(window, cx));
     }
 
+    /// List `id`'s actions.
+    fn enter_game(&mut self, id: GameId, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_level(Level::Game(id), window, cx);
+    }
+
+    /// Show `level` with an empty query.
+    fn set_level(&mut self, level: Level, window: &mut Window, cx: &mut Context<Self>) {
+        self.level = level;
+        self.query.clear();
+        self.rebuild(cx);
+        // The field reports the cleared query back; after this update.
+        let state = self.state.clone();
+        window.defer(cx, move |window, cx| {
+            state.update(cx, |s, cx| s.set_query("", window, cx));
+            state.update(cx, |s, cx| s.focus(window, cx));
+        });
+    }
+
+    /// The highlighted row.
+    fn selected(&self, cx: &App) -> Option<&Row> {
+        let ix = self.state.read(cx).selected_index()?;
+        self.shown.get(ix.row)
+    }
+
     fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
         if self.query != query {
             self.query = query.to_owned();
@@ -232,6 +311,24 @@ impl PaletteView {
     /// after a change, so the preview follows it.
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let query = self.query.trim().to_lowercase();
+        if let Level::Game(id) = self.level.clone() {
+            let game = models(cx).library.read(cx).snapshot.get(&id).cloned();
+            let Some(game) = game else {
+                // The game left the library meanwhile.
+                self.level = Level::Root;
+                return self.rebuild(cx);
+            };
+            let facts = game_facts(&game, cx);
+            let rows: Vec<Row> = super::game::level_rows(&game, &facts)
+                .into_iter()
+                .filter(|(entry, _)| entry.matches(&query))
+                .map(|(entry, target)| Row {
+                    about: Some(game.clone()),
+                    ..Row::command(entry, target)
+                })
+                .collect();
+            return self.show_rows(rows, cx);
+        }
         let games = self.game_rows(&query, cx);
         // A running game's rows come along when its game is found, typo and
         // all, not only when their own words hold the query.
@@ -247,6 +344,10 @@ impl PaletteView {
             .filter(|r| r.entry.matches(&query) || found(&r.target))
             .collect();
         rows.extend(games);
+        self.show_rows(rows, cx);
+    }
+
+    fn show_rows(&mut self, rows: Vec<Row>, cx: &mut Context<Self>) {
         self.shown = Rc::new(rows);
         let first = self.shown.first().cloned();
         self.preview.update(cx, |p, cx| p.show(first, cx));
@@ -298,6 +399,7 @@ impl PaletteView {
                     .icon(IconName::Gamepad2),
                 target: PaletteTarget::Open(id),
                 game: Some(g),
+                about: None,
                 detail: Some(detail.into()),
             });
         }
@@ -310,8 +412,23 @@ impl PaletteView {
         self.shown.clone()
     }
 
-    /// Run the confirmed row.
-    fn confirm(host: Host, row: Row, window: &mut Window, cx: &mut App) {
+    /// The level the palette lists.
+    #[cfg(test)]
+    pub(super) fn level(&self) -> &Level {
+        &self.level
+    }
+
+    /// Run the confirmed row; the palette's own rows change its level.
+    fn confirm(view: &Entity<Self>, host: Host, row: Row, window: &mut Window, cx: &mut App) {
+        match row.target {
+            PaletteTarget::GameActions(id) => {
+                return view.update(cx, |v, cx| v.enter_game(id, window, cx));
+            }
+            PaletteTarget::Back => {
+                return view.update(cx, |v, cx| v.set_level(Level::Root, window, cx));
+            }
+            _ => {}
+        }
         match host {
             Host::Dialog => {
                 window.close_dialog(cx);
@@ -344,17 +461,26 @@ impl Render for PaletteView {
             }
         };
         let on_confirm = move |ix: IndexPath, window: &mut Window, cx: &mut App| {
-            let row = weak
-                .upgrade()
-                .and_then(|v| v.read(cx).shown.get(ix.row).cloned());
+            let Some(view) = weak.upgrade() else { return };
+            let row = view.read(cx).shown.get(ix.row).cloned();
             if let Some(row) = row {
-                Self::confirm(host, row, window, cx);
+                Self::confirm(&view, host, row, window, cx);
+            }
+        };
+        let placeholder = match &self.level {
+            Level::Root => t("shell.search.placeholder"),
+            Level::Game(id) => {
+                let title = irori_ui::backend(cx)
+                    .game(id)
+                    .map(|g| g.title.clone())
+                    .unwrap_or_default();
+                t_args("shell.palette.actions_placeholder", &[("title", &title)])
             }
         };
         let list = Command::new(&self.state)
             .bordered(false)
             .rounded(cx.theme().radius_lg)
-            .placeholder(t("shell.search.placeholder"))
+            .placeholder(placeholder)
             .max_h(px(440.))
             .filterable(false)
             .items(items)
@@ -365,6 +491,37 @@ impl Render for PaletteView {
             .image_cache(self.images.clone())
             .w_full()
             .items_stretch()
+            // In the capture phase, before the search field takes the keys
+            // for its cursor and the dialog takes Escape.
+            .capture_action(cx.listener(|this, _: &MoveRight, window, cx| {
+                if this.level == Level::Root
+                    && let Some(id) = this
+                        .selected(cx)
+                        .and_then(|r| r.game.as_ref())
+                        .map(|g| g.id())
+                {
+                    cx.stop_propagation();
+                    this.enter_game(id, window, cx);
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &MoveLeft, window, cx| {
+                if this.level != Level::Root && this.query.is_empty() {
+                    cx.stop_propagation();
+                    this.set_level(Level::Root, window, cx);
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &InputEscape, window, cx| {
+                if this.level != Level::Root {
+                    cx.stop_propagation();
+                    this.set_level(Level::Root, window, cx);
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &Cancel, window, cx| {
+                if this.level != Level::Root {
+                    cx.stop_propagation();
+                    this.set_level(Level::Root, window, cx);
+                }
+            }))
             .child(div().flex_1().min_w_0().child(list))
             .when(is_wide(window), |row| row.child(self.preview.clone()))
     }

@@ -3,13 +3,18 @@
 //! icon, its name and its key. A view of its own, so moving the highlight
 //! redraws only the pane.
 
+use std::rc::Rc;
+
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::Button;
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    Action, AnyElement, Context, IntoElement, ParentElement as _, Render, SharedString,
+    Action, AnyElement, App, Context, IntoElement, ParentElement as _, Render, SharedString,
     Styled as _, Subscription, Window, div, rems,
 };
+use irori_core::GameId;
 use irori_ui::components::GameCover;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
@@ -49,17 +54,22 @@ fn game_hint(host: Host) -> SharedString {
     }
 }
 
+/// Lists a game's actions (the palette's second level).
+pub(super) type ShowActions = Rc<dyn Fn(&GameId, &mut Window, &mut App)>;
+
 pub(super) struct PreviewPane {
     host: Host,
+    show_actions: ShowActions,
     row: Option<Row>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl PreviewPane {
-    pub(super) fn new(host: Host, cx: &mut Context<Self>) -> Self {
+    pub(super) fn new(host: Host, show_actions: ShowActions, cx: &mut Context<Self>) -> Self {
         let m = models(cx).clone();
         Self {
             host,
+            show_actions,
             row: None,
             _subscriptions: vec![
                 cx.observe(&m.library, |_, _, cx| cx.notify()),
@@ -75,9 +85,11 @@ impl PreviewPane {
     }
 
     fn game(&self, row: &Row, cx: &mut Context<Self>) -> AnyElement {
-        let Some(game) = row.game.clone() else {
+        let Some(game) = row.previewed_game().cloned() else {
             return div().into_any_element();
         };
+        // On the first level a game row also offers the game's actions.
+        let actions = row.game.is_some().then(|| self.show_actions.clone());
         let id = game.id();
         let (playtime, last, status, favourite) = {
             let library = models(cx).library.read(cx);
@@ -137,20 +149,26 @@ impl PreviewPane {
                     .child(Icon::new(irori_ui::play_status::icon(status)).small())
                     .child(irori_ui::play_status::label(status))
                     .when(favourite, |row| {
-                        row.child(
-                            Icon::new(gpui_kit::assets::IconName::Star)
-                                .small()
-                                .text_color(muted),
-                        )
+                        row.child(Icon::new(IconName::Star).small().text_color(muted))
                     }),
             )
-            .child(
-                div()
-                    .pt_2()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(game_hint(self.host)),
-            )
+            .when_some(actions, |pane, show| {
+                pane.child(
+                    div()
+                        .pt_2()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(game_hint(self.host)),
+                )
+                .child(
+                    Button::new("palette-game-actions")
+                        .small()
+                        .outline()
+                        .icon(IconName::ChevronRight)
+                        .label(t("shell.palette.actions"))
+                        .on_click(move |_, window, cx| show(&id, window, cx)),
+                )
+            })
             .into_any_element()
     }
 
@@ -191,7 +209,7 @@ impl Render for PreviewPane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let border = cx.theme().border;
         let content = match self.row.clone() {
-            Some(row) if row.game.is_some() => self.game(&row, cx),
+            Some(row) if row.previewed_game().is_some() => self.game(&row, cx),
             Some(row) => self.command(&row, window, cx),
             None => div().into_any_element(),
         };

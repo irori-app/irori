@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Son oynama: {when}",
   "shell.palette.preview_shortcut": "Kısayol",
   "shell.palette.preview_run": "Enter bu komutu çalıştırır",
-  "shell.palette.preview_enter_open": "Enter oyunun sayfasını açar"
+  "shell.palette.preview_enter_open": "Enter oyunun sayfasını açar; → eylemlerini listeler",
+  "shell.palette.show_game": "{title} oyununu göster",
+  "shell.palette.store_page": "{store} mağaza sayfasını aç",
+  "shell.palette.add_favourite": "Favorilere ekle",
+  "shell.palette.remove_favourite": "Favorilerden çıkar",
+  "shell.palette.open_folder": "Kurulum klasörünü aç",
+  "shell.palette.hide_game": "Kütüphanede gizle",
+  "shell.palette.unhide_game": "Kütüphanede yeniden göster",
+  "shell.palette.stop_game": "{title} oyununu durdur",
+  "shell.palette.back": "Geri",
+  "shell.palette.actions": "Eylemler",
+  "shell.palette.actions_placeholder": "{title} için eylemler…",
+  "shell.palette.game_actions": "{title} için tüm eylemler"
 }

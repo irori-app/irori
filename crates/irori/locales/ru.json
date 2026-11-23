@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Последний запуск: {when}",
   "shell.palette.preview_shortcut": "Сочетание клавиш",
   "shell.palette.preview_run": "Enter выполняет эту команду",
-  "shell.palette.preview_enter_open": "Enter открывает страницу игры"
+  "shell.palette.preview_enter_open": "Enter открывает страницу игры, → — её действия",
+  "shell.palette.show_game": "Показать {title}",
+  "shell.palette.store_page": "Открыть страницу в магазине {store}",
+  "shell.palette.add_favourite": "Добавить в избранное",
+  "shell.palette.remove_favourite": "Убрать из избранного",
+  "shell.palette.open_folder": "Открыть папку установки",
+  "shell.palette.hide_game": "Скрыть из библиотеки",
+  "shell.palette.unhide_game": "Снова показывать в библиотеке",
+  "shell.palette.stop_game": "Остановить {title}",
+  "shell.palette.back": "Назад",
+  "shell.palette.actions": "Действия",
+  "shell.palette.actions_placeholder": "Действия для {title}…",
+  "shell.palette.game_actions": "Все действия для {title}"
 }

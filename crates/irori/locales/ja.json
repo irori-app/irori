@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "最終プレイ: {when}",
   "shell.palette.preview_shortcut": "ショートカット",
   "shell.palette.preview_run": "Enter でこのコマンドを実行",
-  "shell.palette.preview_enter_open": "Enter でゲームのページを開く"
+  "shell.palette.preview_enter_open": "Enter でゲームのページを開く、→ でアクションを表示",
+  "shell.palette.show_game": "{title} を表示",
+  "shell.palette.store_page": "{store} のストアページを開く",
+  "shell.palette.add_favourite": "お気に入りに追加",
+  "shell.palette.remove_favourite": "お気に入りから削除",
+  "shell.palette.open_folder": "インストールフォルダーを開く",
+  "shell.palette.hide_game": "ライブラリで非表示にする",
+  "shell.palette.unhide_game": "ライブラリに再表示",
+  "shell.palette.stop_game": "{title} を終了",
+  "shell.palette.back": "戻る",
+  "shell.palette.actions": "アクション",
+  "shell.palette.actions_placeholder": "{title} のアクション…",
+  "shell.palette.game_actions": "{title} のすべてのアクション"
 }

@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Ultima dată jucat: {when}",
   "shell.palette.preview_shortcut": "Scurtătură",
   "shell.palette.preview_run": "Enter rulează această comandă",
-  "shell.palette.preview_enter_open": "Enter deschide pagina jocului"
+  "shell.palette.preview_enter_open": "Enter deschide pagina jocului; → îi arată acțiunile",
+  "shell.palette.show_game": "Afișează {title}",
+  "shell.palette.store_page": "Deschide pagina din magazinul {store}",
+  "shell.palette.add_favourite": "Adaugă la favorite",
+  "shell.palette.remove_favourite": "Elimină de la favorite",
+  "shell.palette.open_folder": "Deschide dosarul de instalare",
+  "shell.palette.hide_game": "Ascunde din bibliotecă",
+  "shell.palette.unhide_game": "Afișează din nou în bibliotecă",
+  "shell.palette.stop_game": "Oprește {title}",
+  "shell.palette.back": "Înapoi",
+  "shell.palette.actions": "Acțiuni",
+  "shell.palette.actions_placeholder": "Acțiuni pentru {title}…",
+  "shell.palette.game_actions": "Toate acțiunile pentru {title}"
 }

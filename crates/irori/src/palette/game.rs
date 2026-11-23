@@ -1,11 +1,14 @@
-//! The command palette's rows for the game whose page is open: its play
-//! status, the user's own actions, troubleshooting, Steam Play, playing a
-//! ROM as a PC game, ReShade and RenoDX, Steam shortcuts and save backups.
+//! The command palette's rows for one game: for the game whose page is
+//! open, its play status, the user's own actions, troubleshooting, Steam
+//! Play, playing a ROM as a PC game, ReShade and RenoDX, Steam shortcuts and
+//! save backups; and for any game, the level → opens, which adds playing,
+//! stopping, going back to it, its page, its store page, favourite, hiding
+//! and its folder.
 
 use super::entry::Entry;
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
-use irori_core::{GameInfo, Runner, UserAction};
+use irori_core::{GameInfo, Runner, StatusKind, UserAction};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 
@@ -169,4 +172,130 @@ pub(super) fn rows(
         );
     }
     rows
+}
+
+/// What the palette knows about a game when it lists the game's actions.
+#[derive(Debug, Clone, Default)]
+pub(super) struct GameFacts {
+    /// Running, starting, installing…
+    pub(super) kind: Option<StatusKind>,
+    pub(super) status: Option<PlayStatus>,
+    pub(super) favourite: bool,
+    pub(super) hidden: bool,
+    /// Its store keeps cloud saves Irori syncs.
+    pub(super) syncable: bool,
+    pub(super) actions: Vec<(usize, UserAction)>,
+}
+
+/// Every action of `game`, as the level → opens lists them: what it is
+/// doing decides the first row (back to it while it runs, cancel while it
+/// starts, else play), then its page and store page, favourite, the rows
+/// [`rows`] gives, its folder and hiding, and Stop last, out of the way of
+/// Enter.
+pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, PaletteTarget)> {
+    let id = game.id();
+    let title = game.title.as_str();
+    let mut out = Vec::new();
+    let mut push = |item: Entry, target: PaletteTarget| out.push((item, target));
+    let playing = facts.kind == Some(StatusKind::Playing);
+    match facts.kind {
+        Some(StatusKind::Playing) => push(
+            Entry::new()
+                .label(t_args("shell.palette.back_to_game", &[("title", title)]))
+                .keywords([t("shell.palette.back_to_game_keywords")])
+                .icon(IconName::AppWindow),
+            PaletteTarget::BackToGame(id.clone()),
+        ),
+        Some(StatusKind::Launching) => push(
+            Entry::new()
+                .label(t_args("shell.palette.cancel_launch", &[("title", title)]))
+                .keywords([t("shell.palette.cancel_launch_keywords")])
+                .icon(IconName::X),
+            PaletteTarget::CancelLaunch(id.clone()),
+        ),
+        Some(kind) if kind.is_busy() => {}
+        _ if game.is_installed => push(
+            Entry::new()
+                .label(t_args("shell.palette.play", &[("title", title)]))
+                .icon(IconName::Play),
+            PaletteTarget::Play(id.clone()),
+        ),
+        _ => {}
+    }
+    push(
+        Entry::new()
+            .label(t_args("shell.palette.show_game", &[("title", title)]))
+            .icon(IconName::Gamepad2),
+        PaletteTarget::Open(id.clone()),
+    );
+    if let Some(url) = game.store_url.clone().filter(|u| !u.is_empty()) {
+        push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.store_page",
+                    &[("store", game.runner().store_name())],
+                ))
+                .icon(IconName::Store),
+            PaletteTarget::StorePage(game.runner(), url),
+        );
+    }
+    push(
+        Entry::new()
+            .label(t(if facts.favourite {
+                "shell.palette.remove_favourite"
+            } else {
+                "shell.palette.add_favourite"
+            }))
+            .icon(IconName::Star),
+        PaletteTarget::Favourite(id.clone(), !facts.favourite),
+    );
+    for (item, target) in rows(game, facts.status, &facts.actions) {
+        push(item, target);
+    }
+    if facts.syncable {
+        push(
+            Entry::new()
+                .label(t_args("shell.palette.sync_saves", &[("title", title)]))
+                .keywords([t("shell.palette.sync_saves_keywords")])
+                .icon(IconName::RefreshCw),
+            PaletteTarget::SyncSaves(id.clone()),
+        );
+    }
+    if game.is_installed && game.install_path().is_some() {
+        push(
+            Entry::new()
+                .label(t("shell.palette.open_folder"))
+                .icon(IconName::FolderOpen),
+            PaletteTarget::OpenFolder(id.clone()),
+        );
+    }
+    push(
+        Entry::new()
+            .label(t(if facts.hidden {
+                "shell.palette.unhide_game"
+            } else {
+                "shell.palette.hide_game"
+            }))
+            .icon(if facts.hidden {
+                IconName::Eye
+            } else {
+                IconName::EyeOff
+            }),
+        PaletteTarget::Hide(id.clone(), !facts.hidden),
+    );
+    if playing {
+        push(
+            Entry::new()
+                .label(t_args("shell.palette.stop_game", &[("title", title)]))
+                .icon(IconName::Square),
+            PaletteTarget::Stop(id.clone()),
+        );
+    }
+    push(
+        Entry::new()
+            .label(t("shell.palette.back"))
+            .icon(IconName::ArrowLeft),
+        PaletteTarget::Back,
+    );
+    out
 }

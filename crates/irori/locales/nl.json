@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Laatst gespeeld: {when}",
   "shell.palette.preview_shortcut": "Sneltoets",
   "shell.palette.preview_run": "Enter voert deze opdracht uit",
-  "shell.palette.preview_enter_open": "Enter opent de pagina van de game"
+  "shell.palette.preview_enter_open": "Enter opent de pagina van de game; → toont de acties",
+  "shell.palette.show_game": "{title} tonen",
+  "shell.palette.store_page": "Winkelpagina op {store} openen",
+  "shell.palette.add_favourite": "Toevoegen aan favorieten",
+  "shell.palette.remove_favourite": "Verwijderen uit favorieten",
+  "shell.palette.open_folder": "Installatiemap openen",
+  "shell.palette.hide_game": "Verbergen in de bibliotheek",
+  "shell.palette.unhide_game": "Weer tonen in de bibliotheek",
+  "shell.palette.stop_game": "{title} stoppen",
+  "shell.palette.back": "Terug",
+  "shell.palette.actions": "Acties",
+  "shell.palette.actions_placeholder": "Acties voor {title}…",
+  "shell.palette.game_actions": "Alle acties voor {title}"
 }

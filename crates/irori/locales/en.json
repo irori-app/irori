@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Last played: {when}",
   "shell.palette.preview_shortcut": "Shortcut",
   "shell.palette.preview_run": "Enter runs this command",
-  "shell.palette.preview_enter_open": "Enter opens the game’s page"
+  "shell.palette.preview_enter_open": "Enter opens the game’s page; → lists its actions",
+  "shell.palette.show_game": "Show {title}",
+  "shell.palette.store_page": "Open the {store} store page",
+  "shell.palette.add_favourite": "Add to favourites",
+  "shell.palette.remove_favourite": "Remove from favourites",
+  "shell.palette.open_folder": "Open the install folder",
+  "shell.palette.hide_game": "Hide from the library",
+  "shell.palette.unhide_game": "Show in the library again",
+  "shell.palette.stop_game": "Stop {title}",
+  "shell.palette.back": "Back",
+  "shell.palette.actions": "Actions",
+  "shell.palette.actions_placeholder": "Actions for {title}…",
+  "shell.palette.game_actions": "All actions for {title}"
 }

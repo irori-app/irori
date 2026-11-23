@@ -201,5 +201,17 @@
   "shell.palette.preview_last_played": "Senast spelat: {when}",
   "shell.palette.preview_shortcut": "Kortkommando",
   "shell.palette.preview_run": "Retur kör det här kommandot",
-  "shell.palette.preview_enter_open": "Retur öppnar spelets sida"
+  "shell.palette.preview_enter_open": "Retur öppnar spelets sida; → visar dess åtgärder",
+  "shell.palette.show_game": "Visa {title}",
+  "shell.palette.store_page": "Öppna butikssidan på {store}",
+  "shell.palette.add_favourite": "Lägg till i favoriter",
+  "shell.palette.remove_favourite": "Ta bort från favoriter",
+  "shell.palette.open_folder": "Öppna installationsmappen",
+  "shell.palette.hide_game": "Dölj i biblioteket",
+  "shell.palette.unhide_game": "Visa i biblioteket igen",
+  "shell.palette.stop_game": "Stoppa {title}",
+  "shell.palette.back": "Tillbaka",
+  "shell.palette.actions": "Åtgärder",
+  "shell.palette.actions_placeholder": "Åtgärder för {title} …",
+  "shell.palette.game_actions": "Alla åtgärder för {title}"
 }
