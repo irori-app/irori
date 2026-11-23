@@ -4,16 +4,14 @@
 | --- | --- |
 | `irori-mark.svg` | The app icon: Linux, Windows, the tray, favicons. Also `packaging/irori.svg`. |
 | `irori-macos.svg` | The app icon on Apple's icon grid (824 pt tile on a 1024 canvas, with shadow). Source of `packaging/irori.icns`. |
-| `irori-glyph.svg` | The mark without its tile. The frame takes the text colour (`currentColor`). |
-| `irori-wordmark.svg` | The name, drawn in strokes. Letters take the text colour; the dots stay flame-coloured. |
-| `irori-lockup-dark.svg`, `irori-lockup-light.svg` | Mark and name side by side, for dark and light backgrounds. |
+| `irori-glyph.svg` | Tight-cropped bonfire and sword mark without canvas padding. |
+| `irori-wordmark.svg` | The name in `currentColor` lettering with `+` and `○` accents. |
+| `irori-lockup-dark.svg`, `irori-lockup-light.svg` | Mark and name side by side (`1620x512`), for dark and light backgrounds. |
+| `irori-banner.svg` | Dark hero banner (`1024x571`) with tagline for website and promotional use. |
 
-**The mark.** 囲 (the *i* of 囲炉裏, irori) draws an enclosure: the square frame of the
-hearth. A flame rises inside it and breaks through the top of the frame. The flame has
-three parts, a heart and two tongues behind it, in the way 火 (fire) is written.
+**The mark.** An RPG bonfire with a sword planted through the hearth logs, drawn as an open borderless silhouette so it stands clearly in desktop menus and light or dark UI themes. The `irori` wordmark pairs bold geometric letters with gamepad-inspired `+` and `○` accents above the `i` stems.
 
-**Colours.** Ash `#100b0a`–`#2a1f1a`, hearth wood `#c4ac90`–`#f5e9d9`, flame
-`#c92a1c` → `#ff5f2a` → `#ff963a` → `#ffcf6a`.
+**Colours.** Outline `#0a0321`, hearth logs `#2f2946`, flame `#c9268a` -> `#ff5f3a` -> `#fddb15`.
 
 **Rebuilding the icons** (needs `resvg`; `iconutil` is on macOS):
 
@@ -27,7 +25,4 @@ done
 iconutil -c icns /tmp/irori.iconset -o packaging/irori.icns
 ```
 
-`packaging/irori.ico` holds PNG frames of `irori-mark.svg` at 16, 24, 32, 48, 64, 128 and
-256 px.
-
-All of these were drawn for Irori from basic shapes; none is derived from another logo.
+`packaging/irori.ico` holds PNG frames of `irori-mark.svg` at 16, 24, 32, 48, 64, 128 and 256 px.

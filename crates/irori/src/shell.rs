@@ -15,7 +15,7 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
-use irori_ui::components::BrandMark;
+use irori_ui::components::{BrandMark, BrandWordmark};
 use irori_ui::glass::{self, Glass};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models::{self, models};
@@ -422,18 +422,20 @@ impl AppShell {
             .child(
                 h_flex()
                     .h(rems(4.5))
-                    .gap_2p5()
+                    .items_center()
+                    .gap_2()
                     .px_1()
                     .when(collapsed, |d| d.justify_center().px_0())
-                    .child(BrandMark::new(rems(2.)))
+                    .child(BrandMark::new(if collapsed {
+                        rems(2.)
+                    } else {
+                        rems(2.15)
+                    }))
                     .when(!collapsed, |this| {
-                        this.child(
-                            div()
-                                .font_extrabold()
-                                .text_xl()
-                                .text_color(irori_ui::style::SidebarPalette::new(cx).text)
-                                .child("Irori"),
-                        )
+                        this.child(BrandWordmark::new(
+                            rems(1.45),
+                            irori_ui::style::SidebarPalette::new(cx).text,
+                        ))
                     }),
             )
             .child(item(
