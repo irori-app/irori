@@ -425,6 +425,7 @@ impl Backend {
                         ),
                 );
             }
+            b.sync_steam_tools().await;
             b.sync_when_due().await;
             b.back_up_when_due().await;
             b.check_app_update_when_due().await;
@@ -447,6 +448,7 @@ impl Backend {
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
             let mut tag_limit = b.settings.app().steam_tag_limit;
+            let mut proton_to_steam = b.settings.app().download_proton_to_steam;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -458,11 +460,20 @@ impl Backend {
                     Ok(Event::GameSettingsChanged(id)) => b.follow_steam_link_setting(&id),
                     Ok(Event::WineVersionsChanged) => {
                         let b = b.clone();
-                        b.clone()
-                            .spawn(async move { b.forget_present_wine_updates().await });
+                        b.clone().spawn(async move {
+                            b.forget_present_wine_updates().await;
+                            // A build's registration with Steam comes and
+                            // goes with it.
+                            b.sync_steam_tools().await;
+                        });
                     }
                     Ok(Event::SettingsChanged) => {
                         let app = b.settings.app();
+                        if app.download_proton_to_steam != proton_to_steam {
+                            proton_to_steam = app.download_proton_to_steam;
+                            let b = b.clone();
+                            b.clone().spawn(async move { b.sync_steam_tools().await });
+                        }
                         let now = switches(&app);
                         for (runner, (was, is)) in [Runner::Zoom, Runner::Itch]
                             .into_iter()

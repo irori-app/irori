@@ -115,6 +115,22 @@ pub(crate) fn launch_sandbox(
     }
 }
 
+/// The Steam Linux Runtime a launch uses. A game's own choice stands; the
+/// game defaults' reaches every native build except the ROM library's, whose
+/// emulators are this computer's programs (often Flatpaks or AppImages) and
+/// would not find their own libraries inside the runtime's container.
+pub(crate) fn launch_steam_runtime(
+    runner: irori_core::Runner,
+    own_choice: bool,
+    runtime: Option<String>,
+) -> Option<String> {
+    if own_choice || runner != irori_core::Runner::Emulation {
+        runtime
+    } else {
+        None
+    }
+}
+
 /// End what a launcher left running. On Unix it is in the launcher's process
 /// group, which stopping already signals; Windows has to find each process.
 async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool) {
@@ -516,6 +532,11 @@ impl Backend {
             Self::target_platform(&game),
             self.settings.overrides(id).is_overridden("iroriSandbox"),
             settings.sandbox,
+        );
+        settings.steam_runtime = launch_steam_runtime(
+            id.runner,
+            self.settings.overrides(id).is_overridden("steamRuntime"),
+            settings.steam_runtime.take(),
         );
         if verbose {
             settings.verbose_logs = true;
@@ -1421,6 +1442,7 @@ impl Backend {
         if !store.supports_cloud_saves() || !game.cloud_save_enabled {
             bail!("{} has no cloud saves", game.title);
         }
+        self.forget_stale_save_path(id);
         let mut settings = self.settings.game(id);
         if settings.saves_path.is_empty() && settings.gog_saves.is_empty() {
             let app = self.settings.app();
@@ -1428,6 +1450,7 @@ impl Backend {
             let path = store.default_save_path(&id.app_name, Some(&prefix)).await?;
             self.settings
                 .set_game_value(id, "savesPath", Some(Value::String(path.clone())));
+            self.note_save_path_found(id);
             settings.saves_path = path;
         }
         Ok(if settings.gog_saves.is_empty() {
@@ -1440,6 +1463,72 @@ impl Backend {
                 .collect::<Vec<_>>()
                 .join("\n")
         })
+    }
+
+    /// The prefix the game's saves would be in now, and whether Proton lays
+    /// it out. Only works out paths; touches no files.
+    fn save_prefix(&self, id: &GameId) -> Option<(String, bool)> {
+        let game = self.game(id)?;
+        let settings = self.settings.game(id);
+        let app = self.settings.app();
+        let prefix = irori_runtime::prefix_path(&app, &settings, &game);
+        let wine = if settings.wine_version.is_set() {
+            &settings.wine_version
+        } else {
+            &app.game.wine_version
+        };
+        Some((
+            prefix.to_string_lossy().into_owned(),
+            wine.kind == irori_core::WineKind::Proton,
+        ))
+    }
+
+    /// Record that the game's `savesPath` is the store's default Irori just
+    /// worked out for its current prefix, so a later change of prefix or
+    /// Wine build works it out again instead of syncing the old prefix's
+    /// folder. Settings only; call after writing `savesPath`.
+    pub fn note_save_path_found(&self, id: &GameId) {
+        let Some((prefix, proton)) = self.save_prefix(id) else {
+            return;
+        };
+        let settings = self.settings.game(id);
+        let found = irori_core::SavesPathFound {
+            prefix,
+            proton,
+            path: settings.saves_path,
+            gog_saves: settings.gog_saves,
+        };
+        self.settings
+            .set_game_value(id, "iroriSavesPathFound", serde_json::to_value(found).ok());
+    }
+
+    /// Forget a `savesPath` Irori worked out for a prefix the game no longer
+    /// uses (the user picked another prefix, or switched between Wine and
+    /// Proton), so the next sync or the cloud-saves sheet finds the folder
+    /// in the current one. A folder the user chose or typed is kept.
+    /// Returns whether one was forgotten. Settings only.
+    pub fn forget_stale_save_path(&self, id: &GameId) -> bool {
+        let settings = self.settings.game(id);
+        let Some(found) = settings.saves_path_found.as_ref() else {
+            return false;
+        };
+        let Some((prefix, proton)) = self.save_prefix(id) else {
+            return false;
+        };
+        if !found.is_stale(&settings.saves_path, &settings.gog_saves, &prefix, proton) {
+            if !found.is_current(&settings.saves_path, &settings.gog_saves) {
+                // Typed over since: the folders are the user's now.
+                self.settings
+                    .set_game_value(id, "iroriSavesPathFound", None);
+            }
+            return false;
+        }
+        tracing::info!("{id}: the prefix changed, so its save folder is found again");
+        self.settings.set_game_value(id, "savesPath", None);
+        self.settings.set_game_value(id, "gogSaves", None);
+        self.settings
+            .set_game_value(id, "iroriSavesPathFound", None);
+        true
     }
 
     /// Run a Windows program (or `winecfg`, `regedit`…) in the game's prefix.
@@ -1970,9 +2059,26 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox};
+    use super::{failed_start, launch_sandbox, launch_steam_runtime};
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
+
+    #[test]
+    fn the_default_steam_runtime_leaves_emulators_alone() {
+        let sniper = || Some("umu-sniper".to_string());
+        for runner in [Runner::Gog, Runner::Sideload, Runner::Legendary] {
+            assert_eq!(launch_steam_runtime(runner, false, sniper()), sniper());
+        }
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, false, sniper()),
+            None
+        );
+        // A ROM's own choice is kept as it is.
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, true, sniper()),
+            sniper()
+        );
+    }
 
     #[test]
     fn the_default_sandbox_holds_only_games_it_can() {

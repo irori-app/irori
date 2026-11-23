@@ -240,6 +240,8 @@ impl CloudSavesPanel {
         let id = game.id();
         let store_supports = b.store(id.runner).is_some_and(|s| s.supports_cloud_saves());
         let support = CloudSupport::of(&game, store_supports);
+        // A folder found in a prefix the game has left is found again below.
+        b.forget_stale_save_path(&id);
         let settings = b.settings.game(&id);
         let saved = settings.saves_path.clone();
         let path = cx.new(|cx| {
@@ -472,6 +474,8 @@ impl CloudSavesPanel {
                             this.path.update(cx, |s, cx| s.set_value(path, window, cx));
                         }
                         this.persist_path(cx);
+                        // Found, not chosen: a later change of prefix finds it again.
+                        backend(cx).note_save_path_found(&this.id);
                     }
                     Ok((_, names)) => {
                         if let Some(rows) = this.locations.as_ref()

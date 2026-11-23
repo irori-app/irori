@@ -123,6 +123,7 @@ fn request(f: &Fixture) -> LaunchRequest {
     LaunchRequest {
         settings: Default::default(),
         environment: LaunchEnvironment {
+            without_wine: false,
             env: Default::default(),
             wrappers: vec![],
             wine: Some(WineLaunch {

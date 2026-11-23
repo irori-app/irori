@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::Runner;
-use crate::game::{CloudSaveLocation, LaunchOption};
+use crate::game::{CloudSaveLocation, LaunchOption, SavesPathFound};
 use crate::merged_lists;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -213,6 +213,13 @@ pub struct GameSettings {
     pub wine_version: WineInstallation,
     pub wrapper_options: Vec<Wrapper>,
     pub saves_path: String,
+    /// What Irori found `saves_path` for when it worked the folder out
+    /// itself; `None` when the user chose it. Per game; Irori-only.
+    #[serde(
+        rename = "iroriSavesPathFound",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub saves_path_found: Option<SavesPathFound>,
     pub gog_saves: Vec<CloudSaveLocation>,
     pub before_launch_script_path: String,
     /// Start the game without waiting for the before-launch script, which
@@ -223,6 +230,13 @@ pub struct GameSettings {
     pub after_launch_script_path: String,
     #[serde(rename = "disableUMU")]
     pub disable_umu: bool,
+    /// Start the game's program directly, without Wine or Proton, though
+    /// its build is Windows': for a native replacement (OpenJK,
+    /// fallout2-ce) set as its program that Irori can't recognise as one.
+    /// Programs of this system run without Wine anyway. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriNoWine")]
+    pub no_wine: bool,
     pub verbose_logs: bool,
     pub advertise_avx_for_rosetta: bool,
     pub enable_quick_saves_menu: bool,
@@ -576,11 +590,13 @@ impl Default for GameSettings {
             wine_version: WineInstallation::default(),
             wrapper_options: Vec::new(),
             saves_path: String::new(),
+            saves_path_found: None,
             gog_saves: Vec::new(),
             before_launch_script_path: String::new(),
             before_launch_script_alongside: false,
             after_launch_script_path: String::new(),
             disable_umu: false,
+            no_wine: false,
             verbose_logs: true,
             advertise_avx_for_rosetta: false,
             dxvk_version: String::new(),
@@ -803,6 +819,10 @@ pub struct AppSettings {
     pub disable_gog_presence: bool,
     pub download_no_https: bool,
     pub download_proton_to_steam: bool,
+    /// Proton-CachyOS and Proton-Wineland builds for x86-64-v3 processors.
+    /// Linux only; Irori-only.
+    #[serde(rename = "iroriProtonCpuLevel")]
+    pub proton_cpu_level: ProtonCpuLevel,
     pub egs_linked_path: String,
     pub exit_to_tray: bool,
     pub gamepad_repeat_delay: u32,
@@ -1045,6 +1065,7 @@ impl Default for AppSettings {
             disable_gog_presence: false,
             download_no_https: false,
             download_proton_to_steam: false,
+            proton_cpu_level: ProtonCpuLevel::Auto,
             egs_linked_path: String::new(),
             exit_to_tray: false,
             gamepad_repeat_delay: 50,
@@ -1508,6 +1529,31 @@ impl<'de> Deserialize<'de> for FpsLimiter {
             "mangohud" => FpsLimiter::MangoHud,
             "dxvk" => FpsLimiter::Dxvk,
             _ => FpsLimiter::Auto,
+        })
+    }
+}
+
+/// Which build the Wine manager installs where a source publishes one for
+/// x86-64-v3 processors beside the baseline one (`iroriProtonCpuLevel`).
+/// Values a newer Irori writes read as [`ProtonCpuLevel::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtonCpuLevel {
+    /// The x86-64-v3 build when this processor runs it.
+    #[default]
+    Auto,
+    /// Always the baseline x86-64 build.
+    Baseline,
+    /// Always the x86-64-v3 build.
+    V3,
+}
+
+impl<'de> Deserialize<'de> for ProtonCpuLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "baseline" => ProtonCpuLevel::Baseline,
+            "v3" => ProtonCpuLevel::V3,
+            _ => ProtonCpuLevel::Auto,
         })
     }
 }

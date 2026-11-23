@@ -239,6 +239,7 @@ async fn installs_updates_repairs_launches_and_uninstalls() {
     let request = LaunchRequest {
         settings: GameSettings::default(),
         environment: LaunchEnvironment {
+            without_wine: false,
             env: BTreeMap::new(),
             wrappers: vec![],
             wine: Some(WineLaunch {

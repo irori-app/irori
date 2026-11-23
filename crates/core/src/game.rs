@@ -279,6 +279,71 @@ pub struct CloudSaveLocation {
     pub location: String,
 }
 
+/// What a save folder Irori worked out itself was worked out for: the
+/// store's default is a path inside the game's Wine prefix, so it is only
+/// right for the prefix (and its layout: Proton keeps `drive_c` in `pfx/`)
+/// it was found in.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavesPathFound {
+    /// The prefix the folder was found in.
+    pub prefix: String,
+    /// Whether that prefix was Proton's.
+    pub proton: bool,
+    /// The `savesPath` it found, so a folder the user typed over it since
+    /// is recognised as theirs.
+    pub path: String,
+    /// The GOG locations (`gogSaves`) it found, likewise.
+    pub gog_saves: Vec<CloudSaveLocation>,
+}
+
+impl SavesPathFound {
+    /// Whether the folders are still the ones Irori found.
+    pub fn is_current(&self, saves_path: &str, gog_saves: &[CloudSaveLocation]) -> bool {
+        self.path == saves_path && self.gog_saves == gog_saves
+    }
+
+    /// Whether the folders are still the ones Irori found, but the game's
+    /// prefix (or its layout) is no longer the one they were found in, so
+    /// the store's default must be worked out again.
+    pub fn is_stale(
+        &self,
+        saves_path: &str,
+        gog_saves: &[CloudSaveLocation],
+        prefix: &str,
+        proton: bool,
+    ) -> bool {
+        self.is_current(saves_path, gog_saves) && (self.prefix != prefix || self.proton != proton)
+    }
+}
+
+#[cfg(test)]
+mod saves_path_found_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_found_folder_of_another_prefix_is_stale() {
+        let found = SavesPathFound {
+            prefix: "/p/a".into(),
+            proton: false,
+            path: "/p/a/drive_c/saves".into(),
+            gog_saves: Vec::new(),
+        };
+        let path = "/p/a/drive_c/saves";
+        assert!(!found.is_stale(path, &[], "/p/a", false));
+        assert!(found.is_stale(path, &[], "/p/b", false));
+        // Proton keeps drive_c in pfx/, so the layout counts too.
+        assert!(found.is_stale(path, &[], "/p/a", true));
+        // A folder typed over the found one is the user's.
+        assert!(!found.is_stale("/mine", &[], "/p/b", false));
+        let gog = [CloudSaveLocation {
+            name: "saves".into(),
+            location: "/mine".into(),
+        }];
+        assert!(!found.is_stale(path, &gog, "/p/b", false));
+    }
+}
+
 /// Store-side details that are fetched lazily for the game page.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]

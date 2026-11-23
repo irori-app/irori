@@ -515,6 +515,9 @@ commands without a window.
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
   exact, prefix, word, then fuzzy (a typo or two, letters in order), titles before
   people. `related.rs` finds a game's series, studio and genre neighbours the same way.
+  Letters fold through `irori_core::text` (Latin and Greek accents dropped, other
+  scripts kept, ™ and variation selectors ignored), which every metadata matcher
+  (HowLongToBeat, IGDB, PCGamingWiki, anticheat, SteamGridDB, LaunchBox) shares.
   Besides `mode:` and `tag:`, `ParsedQuery` takes `category:` (manual categories, any
   copy of an entry) and `smart:` terms (smart categories, through the `CategoryIndex`
   in `irori-library`'s `apply_in`), names folded like tags, a name's start enough when
@@ -1119,7 +1122,11 @@ commands without a window.
   failing, with the driver install command for the distribution and GPU to copy
   (`vulkan_driver_command`). Fixes tried this session (`mark_fix_tried`) come last.
   `install_prefix_verbs` runs winetricks (protontricks for Steam). Irori never runs
-  `sudo`: a low map count is explained with the commands to run. Games through
+  `sudo`: a low map count is explained with the commands to run. For a Rockstar
+  title from Epic it also reads Yama's `kernel.yama.ptrace_scope` and the Rockstar
+  Games Launcher's `launcher.log` in the prefix: from 2 up Wine can't show the
+  launcher that Epic started it ("Buy now"), explained with the commands that set it
+  to 1 (at 3, which only a restart lowers, the lasting one). Games through
   Wine or Proton get `WINEDEBUG=-all,err+module,err+mscoree`
   (`irori_runtime::env::game_debug_env`) unless the user set `WINEDEBUG` or verbose
   logs, so the log names a missing DLL; installers and winetricks keep their own.
@@ -1150,8 +1157,15 @@ commands without a window.
      upload after the session too). A failed download stops the launch with
      `SaveDownloadFailed`, and the UI (`irori_ui::save_conflict`) offers to try
      again or play anyway (`LaunchParams::skip_save_download`); a failed upload
-     raises a notice.
-  3. `irori_runtime::prepare_launch`, which also builds the bubblewrap sandbox for a
+     raises a notice. A save folder Irori worked out itself is stored with the
+     prefix it was found in (`iroriSavesPathFound`) and found again when the
+     prefix or its Wine/Proton layout changes; one the user chose stays.
+  3. `irori_runtime::prepare_launch`. A Windows build whose program (`targetExe`, else
+     the store's) is this system's by its first bytes (`irori_core::program_kind`), or
+     with `iroriNoWine` on, is prepared as a native build and marked
+     `LaunchEnvironment::without_wine`, which the stores honour (not Xbox's GDK games)
+     (`irori_runtime::without_wine`); AppImages get `APPIMAGE_EXTRACT_AND_RUN=1`
+     where FUSE can't mount them. It also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's

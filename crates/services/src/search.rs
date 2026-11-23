@@ -536,43 +536,15 @@ pub fn fold(s: &str) -> String {
         if matches!(c, '\'' | '’' | '`') {
             continue;
         }
-        for lower in c.to_lowercase() {
-            match unaccent(lower) {
-                Some(plain) => plain.chars().for_each(|p| push(p, &mut out)),
-                None if lower.is_alphanumeric() => push(lower, &mut out),
-                None => push(' ', &mut out),
-            }
-        }
+        // Accents and trademark signs as every metadata matcher folds them.
+        irori_core::text::fold_char(c, |f| {
+            push(if f.is_alphanumeric() { f } else { ' ' }, &mut out)
+        });
     }
     if out.ends_with(' ') {
         out.pop();
     }
     out
-}
-
-/// The plain letters of an accented Latin letter.
-fn unaccent(c: char) -> Option<&'static str> {
-    Some(match c {
-        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => "a",
-        'æ' => "ae",
-        'ç' | 'ć' | 'č' => "c",
-        'ď' | 'đ' => "d",
-        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ė' | 'ę' | 'ě' => "e",
-        'ğ' => "g",
-        'ì' | 'í' | 'î' | 'ï' | 'ī' | 'ı' => "i",
-        'ł' | 'ľ' => "l",
-        'ñ' | 'ń' | 'ň' => "n",
-        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ő' => "o",
-        'œ' => "oe",
-        'ř' => "r",
-        'ś' | 'š' | 'ş' | 'ș' => "s",
-        'ß' => "ss",
-        'ť' | 'ţ' | 'ț' => "t",
-        'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ů' | 'ű' => "u",
-        'ý' | 'ÿ' => "y",
-        'ź' | 'ż' | 'ž' => "z",
-        _ => return None,
-    })
 }
 
 /// The other spelling of a sequel number: digits for a Roman numeral and
@@ -735,6 +707,9 @@ mod tests {
         assert_eq!(fold("Assassin’s Creed"), "assassins creed");
         assert_eq!(fold("Ratchet & Clank"), "ratchet and clank");
         assert_eq!(fold("  ..  "), "");
+        // Trademark signs don't split a word; Greek accents fold too.
+        assert_eq!(fold("Pokémon™Ranger"), "pokemonranger");
+        assert_eq!(fold("Οδύσσεια"), "οδυσσεια");
     }
 
     #[test]

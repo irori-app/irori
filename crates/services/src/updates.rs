@@ -320,6 +320,29 @@ impl Backend {
             .collect()
     }
 
+    /// Offer the Wine manager's Proton builds to Steam while "Install Proton
+    /// downloads into Steam" is on, and take Irori's registrations out of
+    /// Steam's `compatibilitytools.d` when it is off or their build is gone
+    /// (`irori_runtime::steam_tools`). Linux only.
+    pub(crate) async fn sync_steam_tools(&self) {
+        if !cfg!(target_os = "linux") || self.isolated {
+            return;
+        }
+        let app = self.settings.app();
+        match self
+            .spawn_blocking(move || irori_runtime::steam_tools::sync(&app))
+            .await
+        {
+            Ok(Ok(changes)) if changes != Default::default() => tracing::info!(
+                "Steam compatibility tools: registered {:?}, removed {:?}",
+                changes.added,
+                changes.removed
+            ),
+            Ok(Err(e)) => tracing::warn!("registering Proton builds with Steam: {e:#}"),
+            _ => {}
+        }
+    }
+
     /// Drop the Wine and Proton updates whose build is now on this computer,
     /// so a build installed by hand clears its update at once rather than at
     /// the next daily check.

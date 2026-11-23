@@ -193,10 +193,16 @@ pub fn parse_search(json: &serde_json::Value) -> Vec<HowLongToBeat> {
         .collect()
 }
 
-/// Letters and digits only, lower case, Roman numerals II–X as digits, so
-/// "DOOM II: Hell on Earth" and "Doom 2 - Hell on Earth" compare equal.
+/// Letters and digits only, lower case, Latin and Greek accents dropped
+/// (`irori_core::text`), Roman numerals II–X as digits, so "DOOM II: Hell on
+/// Earth" and "Doom 2 - Hell on Earth" compare equal, and so do "Pokémon"
+/// and "Pokemon".
 pub(crate) fn fold(title: &str) -> String {
-    let words: Vec<String> = title
+    let mut plain = String::with_capacity(title.len());
+    title
+        .chars()
+        .for_each(|c| irori_core::text::fold_char(c, |f| plain.push(f)));
+    let words: Vec<String> = plain
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
         .map(|w| {
@@ -327,6 +333,17 @@ mod tests {
         assert_eq!((h.main_story, h.main_extra, h.completionist), (26, 60, 104));
         assert_eq!(h.game_name.as_deref(), Some("Cyberpunk"));
         assert!(parse_gog_store_page("<span></span>", "x").is_none());
+    }
+
+    #[test]
+    fn titles_match_across_accents_and_trademarks() {
+        assert_eq!(
+            fold("Pokémon™ Mystery Dungeon"),
+            fold("Pokemon Mystery Dungeon")
+        );
+        assert_eq!(fold("Ōkami HD"), "okamihd");
+        assert_eq!(fold("Ведьмак 3"), "ведьмак3");
+        assert_eq!(fold("™"), "");
     }
 
     #[test]

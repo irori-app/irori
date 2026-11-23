@@ -428,8 +428,9 @@ pub struct FieldSpec {
     pub requires: &'static [Condition],
     /// What the computer or game must have; checked before `requires`.
     pub needs: &'static [Need],
-    /// Only shown in the settings of a game installed as this system's own
-    /// build (Linux on Linux, Mac on macOS).
+    /// In a game's settings, only shown when the game is installed as this
+    /// system's own build (Linux on Linux, Mac on macOS); a field shared
+    /// with the game defaults shows there too.
     pub native_only: bool,
 }
 
@@ -618,6 +619,7 @@ impl FieldSpec {
                     | "iroriFsr4Upgrade"
                     | "iroriXessUpgrade"
                     | "downloadProtonToSteam"
+                    | "iroriProtonCpuLevel"
                     | "showValveProton"
                     | "iroriShaderCacheSize"
                     | "iroriSandbox.noNetwork"
@@ -1383,6 +1385,20 @@ const FPS_LIMITER: &[ChoiceOption] = &[
     opt(ChoiceValue::Str("gamescope"), Verbatim("gamescope")),
     opt(ChoiceValue::Str("mangohud"), Verbatim("MangoHud")),
     opt(ChoiceValue::Str("dxvk"), Verbatim("DXVK")),
+];
+const PROTON_CPU_LEVEL: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.proton_cpu_level.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("baseline"),
+        Key("settings.option.proton_cpu_level.baseline"),
+    ),
+    opt(
+        ChoiceValue::Str("v3"),
+        Key("settings.option.proton_cpu_level.v3"),
+    ),
 ];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
@@ -3065,7 +3081,26 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.wine",
         Toggle,
     )
+    .help("settings.field.download_proton_to_steam.help")
     .keywords(&["proton", "steam", "compatibilitytools"]),
+    app(
+        "iroriProtonCpuLevel",
+        "settings.field.proton_cpu_level.label",
+        Advanced,
+        "settings.group.wine",
+        Choice(PROTON_CPU_LEVEL),
+    )
+    .help("settings.field.proton_cpu_level.help")
+    .keywords(&[
+        "proton",
+        "cachyos",
+        "wineland",
+        "v3",
+        "avx2",
+        "x86-64",
+        "cpu",
+        "processor",
+    ]),
     app(
         "allowInstallationBrokenAnticheat",
         "settings.field.allow_installation_broken_anticheat.label",
@@ -3156,6 +3191,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.action_reset_settings.help")
     .keywords(&["reset", "defaults", "factory"]),
     // ---- Wine & Proton ----
+    game_only(
+        "iroriNoWine",
+        "settings.field.no_wine.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .help("settings.field.no_wine.help")
+    .keywords(&["wine", "proton", "native", "openjk", "port", "replacement"]),
     game(
         "wineVersion",
         "settings.field.wine_version.label",
@@ -4100,7 +4144,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.discord_presence.help")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
-    game_only(
+    game(
         "steamRuntime",
         "settings.field.steam_runtime.label",
         Launch,
@@ -4739,11 +4783,14 @@ mod tests {
         let natives: Vec<_> = FIELDS.iter().filter(|f| f.native_only).collect();
         let paths: Vec<_> = natives.iter().map(|f| f.path).collect();
         assert_eq!(paths, ["steamRuntime", "iroriRosetta"]);
-        for field in natives {
+        for field in &natives {
             assert!(field.applies_to_game(true));
-            assert!(!field.applies_to_game(false));
             assert_ne!(field.section, FieldSection::Wine);
         }
+        // The game defaults offer the Steam runtime, so every native build
+        // can start in it without setting each game; Rosetta is per game.
+        assert!(natives[0].applies_to_game(false));
+        assert!(!natives[1].applies_to_game(false));
         // Rosetta is a Mac's, the Steam runtime Linux's.
         let rosetta = FIELDS.iter().find(|f| f.path == "iroriRosetta").unwrap();
         assert_eq!(

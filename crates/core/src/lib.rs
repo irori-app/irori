@@ -25,10 +25,12 @@ pub mod paths;
 pub mod platform;
 pub use platform::HostPlatform;
 pub mod process;
+pub mod program_kind;
 pub mod runner;
 pub mod settings;
 pub mod status;
 pub mod store;
+pub mod text;
 pub mod user_actions;
 pub mod util;
 

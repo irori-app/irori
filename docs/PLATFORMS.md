@@ -225,8 +225,38 @@ The Wine manager installs the Wine and Proton builds it downloads into `<data>/t
 and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder set in
 `iroriCompatToolsPath`; "Install Proton downloads into Steam" still sends Proton to Steam's
 `compatibilitytools.d`. Builds stay where they were installed when the folder changes,
-and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
+and Irori reads both places.
+
+With that setting on, builds already in Irori's own folder are registered with Steam too:
+`compatibilitytools.d/irori-<build>` holds only a `compatibilitytool.vdf` whose
+`install_path` points at the build, and a marker file. Registrations follow the builds
+(at start, after installs and removals, and when the setting changes), all of them leave
+when it is turned off, and only marked folders are ever touched. A Flatpak or Snap Steam
+can't read Irori's folders, so nothing is registered there.
+
+Proton-CachyOS and Proton-Wineland publish an x86-64-v3 build (AVX2 and the rest of
+that level) beside the baseline one. `iroriProtonCpuLevel` (`auto`, `baseline`, `v3`)
+picks which one installs and updates; `auto` takes v3 when the processor runs it.
+
+Wine and Proton builds are also found in every native, Flatpak or Snap Steam that lists
+its libraries (Valve's Proton in each of their libraries when shown), in each Steam's
+`compatibilitytools.d`, and in the folders `STEAM_EXTRA_COMPAT_TOOLS_PATHS` names
+(colon-separated; a folder of tools or one tool), as NixOS packages them. A Wine or Proton update is dropped as soon as its build is
 on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
+
+The Steam Linux Runtime (`steamRuntime`, run through umu) can be set in the game defaults
+as well as per game. A default reaches every native Linux build except the ROM library's,
+whose emulators are this computer's programs; a ROM's own choice still applies.
+
+A store game's Windows build starts without Wine when its program (the game's own
+program setting, else the store's) is one of this system's, by its first bytes: ELF on
+Linux, Mach-O or an app bundle on macOS, a `#!` script on either. That covers native
+replacements put in the game folder (OpenJK, fallout2-ce). "Don't use Wine"
+(`iroriNoWine`, per game, Wine & Proton section) does the same for a program Irori can't
+recognise and hides the Wine fields; a Windows program is never started that way. Cloud
+saves keep their Windows paths. An AppImage program gets `APPIMAGE_EXTRACT_AND_RUN=1`
+where FUSE can't mount it (inside Irori's Flatpak, or without `/dev/fuse` and
+`fusermount`), unless the game's variables set it.
 
 On Linux, games start with room for 10 GiB of shader cache (`iroriShaderCacheSize`, per
 game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE` for

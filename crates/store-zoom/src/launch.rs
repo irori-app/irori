@@ -82,7 +82,8 @@ pub fn build_plan(
         }
         let cwd = exe.parent().unwrap_or(&install).to_path_buf();
         let windows_exe = is_windows_program(&exe);
-        if record.platform.needs_wine() || (windows_exe && !cfg!(windows)) {
+        // A native replacement program set for the game runs directly.
+        if !env.without_wine && (record.platform.needs_wine() || (windows_exe && !cfg!(windows))) {
             wine_command(request, title, &exe, &cwd, args)?
         } else if bundle {
             CommandSpec::new(&exe).args(args).cwd(cwd)
@@ -127,7 +128,7 @@ fn command_uses_wine(
     if record.is_dosbox && !overridden {
         dosbox.is_none() && request.environment.wine.is_some()
     } else {
-        record.platform.needs_wine()
+        record.platform.needs_wine() && !request.environment.without_wine
     }
 }
 
@@ -211,6 +212,7 @@ mod tests {
                 ..Default::default()
             },
             environment: LaunchEnvironment {
+                without_wine: false,
                 env,
                 wrappers: vec![vec!["gamemoderun".into()]],
                 wine,
