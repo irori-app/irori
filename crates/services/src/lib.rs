@@ -24,6 +24,7 @@ mod download_space;
 mod downloads;
 mod engines;
 mod facts;
+pub mod field_rules;
 pub mod file_achievements;
 mod files;
 mod follow;

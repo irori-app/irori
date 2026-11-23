@@ -285,6 +285,28 @@ impl Backend {
         crate::screenshots::build(&folders, &sessions, &Paths::get().screenshot_index_file())
     }
 
+    /// Make `id`'s playtime `seconds`, or with `None` what Irori counted
+    /// again ("Edit time played"). Sessions played later add to it, and
+    /// sync carries the edit to the other computers without counting time
+    /// twice. Writes the library file; call off the UI thread.
+    pub fn set_playtime(&self, id: &GameId, seconds: Option<u64>) {
+        // Sync sees the edit whole, as it sees a session.
+        let _playtime = self.sync.playtime_guard();
+        self.userdata.set_playtime(id, seconds);
+    }
+
+    /// The folder holding most of the screenshots and clips of `id`'s
+    /// entry (any of its copies); `None` before any was taken. Lists the
+    /// folders; call off the UI thread.
+    pub fn captures_folder(&self, id: &GameId) -> Option<std::path::PathBuf> {
+        let library = self.library();
+        let mut keys: Vec<String> = library.copies_of(id).iter().map(GameId::key).collect();
+        if keys.is_empty() {
+            keys.push(id.key());
+        }
+        self.screenshots().folder_of(&keys)
+    }
+
     /// Refuse to touch the files of a game another launcher manages (Steam),
     /// before anything moves or is deleted.
     fn ensure_managed(id: &GameId) -> Result<()> {
@@ -378,6 +400,30 @@ impl Backend {
         }
         choices.sort_by_key(|c| c.path.to_string_lossy().to_lowercase());
         choices
+    }
+
+    /// The titles of the other installed games whose prefix is `prefix`,
+    /// whose own files deleting it would take. Reads their settings; call
+    /// off the UI thread.
+    pub fn games_sharing_prefix(&self, id: &GameId, prefix: &Path) -> Vec<String> {
+        let app = self.settings.app();
+        let library = self.library();
+        let others = library
+            .all_games()
+            .filter(|g| {
+                !g.is_dlc
+                    && g.is_installed
+                    && g.id() != *id
+                    && Self::target_platform(g).needs_wine()
+            })
+            .map(|g| {
+                let settings = self.settings.game(&g.id());
+                (
+                    g.title.clone(),
+                    irori_runtime::prefix_path(&app, &settings, g),
+                )
+            });
+        titles_in_prefix(others, prefix)
     }
 
     /// The umu database id `id` runs with when umu starts it, and where it
@@ -1105,6 +1151,13 @@ impl Backend {
                 "{} is shared by other games. Keep the prefix when uninstalling.",
                 prefix.display()
             );
+            let sharing = self.games_sharing_prefix(id, &prefix);
+            anyhow::ensure!(
+                sharing.is_empty(),
+                "{} is also the prefix of {}. Keep the prefix when uninstalling.",
+                prefix.display(),
+                sharing.join(", ")
+            );
         }
         store.uninstall(&id.app_name, args).await?;
         // The game is gone from its store now. Each clean-up step runs on its
@@ -1645,6 +1698,18 @@ fn uninstalled_notice(title: &str, problems: &[String]) -> Notice {
     )
 }
 
+/// The titles among `others` (title and prefix of each other installed
+/// game) whose prefix is `prefix`, sorted and each once.
+fn titles_in_prefix(others: impl Iterator<Item = (String, PathBuf)>, prefix: &Path) -> Vec<String> {
+    let mut titles: Vec<String> = others
+        .filter(|(_, theirs)| theirs == prefix)
+        .map(|(title, _)| title)
+        .collect();
+    titles.sort_by_key(|t| t.to_lowercase());
+    titles.dedup();
+    titles
+}
+
 /// Delete a prefix after sanity checks: never the shared prefix root, a
 /// protected folder, or a directory that is not actually a Wine prefix.
 async fn remove_prefix_dir(prefix: &Path, app: &irori_core::AppSettings) -> Result<()> {
@@ -1846,6 +1911,21 @@ mod platform_tests {
         assert!(!dst.exists(), "the partial copy is gone");
         assert!(src.join("data/a.bin").is_file(), "the source is untouched");
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    }
+
+    #[test]
+    fn a_prefix_other_games_play_in_names_them() {
+        let others = vec![
+            ("Hades".to_string(), PathBuf::from("/prefixes/shared")),
+            ("celeste".to_string(), PathBuf::from("/prefixes/shared/")),
+            ("Doom".to_string(), PathBuf::from("/prefixes/doom")),
+            ("Hades".to_string(), PathBuf::from("/prefixes/shared")),
+        ];
+        assert_eq!(
+            titles_in_prefix(others.clone().into_iter(), Path::new("/prefixes/shared")),
+            ["celeste", "Hades"]
+        );
+        assert!(titles_in_prefix(others.into_iter(), Path::new("/prefixes/mine")).is_empty());
     }
 
     #[tokio::test]

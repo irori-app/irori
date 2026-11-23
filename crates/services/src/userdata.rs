@@ -2,8 +2,16 @@
 //! played, custom categories (manual and smart, with their pins and
 //! colours), playtime, play statuses, backlog goals, title/art overrides and
 //! the play journal.
+//!
+//! A game owned on several stores is one library entry, but each copy keeps
+//! its own values. Favourite, hidden, play status and rating describe the
+//! game rather than the copy, so setting one writes every copy of the entry
+//! ([`UserDataService::set_copy_groups`]), and combining copies shares the
+//! values they had ([`UserData::share_between`]): whichever copy is the
+//! default shows the same. Categories, playtime, journal notes and
+//! overrides stay per copy.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -71,6 +79,37 @@ pub struct UserData {
     /// theirs in themselves.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: BTreeMap<String, CategoryLook>,
+    /// Seconds the user added to (or, negative, took from) a game's
+    /// playtime ("Edit time played"), by game key. Its `playtime` record
+    /// already includes them; what was counted (sessions, store totals) is
+    /// the record without them ([`UserData::counted_seconds`]), which is
+    /// what store totals and other computers' time are compared with, so an
+    /// edit is never counted twice.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub playtime_adjust: BTreeMap<String, i64>,
+    /// Genres and companies renamed, merged or removed across the library
+    /// ("Manage genres and companies…").
+    #[serde(
+        default,
+        skip_serializing_if = "crate::field_rules::FieldRules::is_empty"
+    )]
+    pub field_rules: crate::field_rules::FieldRules,
+}
+
+/// A playtime record's length in seconds.
+pub fn record_seconds(r: &PlaytimeRecord) -> u64 {
+    r.total_minutes * 60 + r.extra_seconds
+}
+
+/// Set a record's length to `seconds`.
+fn set_record_seconds(r: &mut PlaytimeRecord, seconds: u64) {
+    r.total_minutes = seconds / 60;
+    r.extra_seconds = seconds % 60;
+}
+
+/// `counted` seconds with the user's `adjust` applied, never below zero.
+pub fn adjusted(counted: u64, adjust: i64) -> u64 {
+    (counted as i64).saturating_add(adjust).max(0) as u64
 }
 
 /// Store `o` as the overrides of `key`, or none when it is empty.
@@ -143,6 +182,9 @@ impl UserData {
                 games.insert(to.to_string());
             }
         }
+        if let Some(adjust) = self.playtime_adjust.remove(from) {
+            *self.playtime_adjust.entry(to.to_string()).or_default() += adjust;
+        }
         if let Some(old) = self.playtime.remove(from) {
             let new = self.playtime.entry(to.to_string()).or_default();
             let seconds = new.extra_seconds + old.extra_seconds;
@@ -188,6 +230,63 @@ impl UserData {
         let notes = std::mem::take(&mut self.journal);
         self.journal = journal::read(notes, legacy);
         self.legacy_journal = journal::mirror(&self.journal);
+    }
+
+    /// Give every copy in `keys` (the copies of one entry, the default
+    /// first) the same favourite, hidden flag, play status and rating: any
+    /// copy's favourite or hidden flag, the status set last, the first
+    /// rating.
+    pub fn share_between(&mut self, keys: &[String]) {
+        for set in [&mut self.favourites, &mut self.hidden] {
+            if keys.iter().any(|k| set.contains(k)) {
+                set.extend(keys.iter().cloned());
+            }
+        }
+        let latest = keys
+            .iter()
+            .filter_map(|k| self.play_status.get(k))
+            .max_by_key(|r| util::parse_rfc3339(&r.since).unwrap_or(i64::MIN))
+            .cloned();
+        if let Some(record) = latest {
+            for key in keys {
+                self.play_status.insert(key.clone(), record.clone());
+            }
+        }
+        if let Some(stars) = keys.iter().find_map(|k| self.ratings.get(k).copied()) {
+            for key in keys {
+                self.ratings.insert(key.clone(), stars);
+            }
+        }
+    }
+
+    /// The time Irori counted for a game (sessions, store totals, other
+    /// computers'), without the user's own edit.
+    pub fn counted_seconds(&self, key: &str) -> u64 {
+        let total = self.playtime.get(key).map_or(0, record_seconds);
+        let adjust = self.playtime_adjust.get(key).copied().unwrap_or(0);
+        (total as i64).saturating_sub(adjust).max(0) as u64
+    }
+
+    /// Make a game's playtime `total` seconds ("Edit time played"), or with
+    /// `None` what was counted again. Sessions played later add to it.
+    pub fn set_playtime(&mut self, key: &str, total: Option<u64>) {
+        let counted = self.counted_seconds(key);
+        let adjust = total.map_or(0, |t| t as i64 - counted as i64);
+        if adjust == 0 {
+            self.playtime_adjust.remove(key);
+        } else {
+            self.playtime_adjust.insert(key.to_string(), adjust);
+        }
+        let seconds = adjusted(counted, adjust);
+        match self.playtime.get_mut(key) {
+            Some(record) => set_record_seconds(record, seconds),
+            None if seconds > 0 => {
+                let mut record = PlaytimeRecord::default();
+                set_record_seconds(&mut record, seconds);
+                self.playtime.insert(key.to_string(), record);
+            }
+            None => {}
+        }
     }
 
     /// The status the user set for a game, if any.
@@ -273,7 +372,11 @@ impl UserData {
 impl UserData {
     /// What `ids` are now, for [`UserData::restore`].
     pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
-        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        self.capture_keys(ids.iter().map(GameId::key).collect())
+    }
+
+    /// [`UserData::capture`] of games by key.
+    fn capture_keys(&self, keys: Vec<String>) -> BulkSnapshot {
         let pick = |set: &BTreeSet<String>| -> BTreeSet<String> {
             keys.iter().filter(|k| set.contains(*k)).cloned().collect()
         };
@@ -420,7 +523,7 @@ fn grown_totals(
     totals
         .iter()
         .map(|(app, minutes)| (GameId::new(runner, app.as_str()).key(), *minutes))
-        .filter(|(key, minutes)| *minutes > data.playtime.get(key).map_or(0, |r| r.total_minutes))
+        .filter(|(key, minutes)| *minutes > data.counted_seconds(key) / 60)
         .collect()
 }
 
@@ -496,6 +599,17 @@ fn set_look(d: &mut UserData, category: &CategoryRef, look: CategoryLook) -> boo
     }
 }
 
+/// Put `keys` in `set` (`on`) or take them out.
+fn toggle(set: &mut BTreeSet<String>, keys: &[String], on: bool) {
+    for key in keys {
+        if on {
+            set.insert(key.clone());
+        } else {
+            set.remove(key);
+        }
+    }
+}
+
 fn rate(d: &mut UserData, key: String, stars: Option<u8>) {
     match stars.filter(|s| *s > 0) {
         Some(s) => {
@@ -564,6 +678,27 @@ impl LibrarySync {
 pub struct UserDataService {
     data: RwLock<Arc<UserData>>,
     bus: EventBus,
+    /// Each copy's key → the keys of every copy of its entry, as the
+    /// library last grouped them.
+    copies: RwLock<Arc<HashMap<String, Arc<[String]>>>>,
+}
+
+/// `keys` with every other copy of their entries (`groups`), each once,
+/// in order.
+fn with_copies(
+    groups: &HashMap<String, Arc<[String]>>,
+    keys: impl IntoIterator<Item = String>,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for key in keys {
+        let group = groups.get(&key).map(|g| g.to_vec());
+        for k in group.unwrap_or_else(|| vec![key]) {
+            if !out.contains(&k) {
+                out.push(k);
+            }
+        }
+    }
+    out
 }
 
 fn file() -> PathBuf {
@@ -579,7 +714,27 @@ impl UserDataService {
                 data
             })),
             bus,
+            copies: RwLock::default(),
         }
+    }
+
+    /// Follow how the library groups copies (each group the copies of one
+    /// entry), so a favourite, hidden flag, play status or rating set on
+    /// one copy is set on all of them.
+    pub fn set_copy_groups(&self, groups: &[Arc<[GameId]>]) {
+        let mut map = HashMap::new();
+        for group in groups {
+            let keys: Arc<[String]> = group.iter().map(GameId::key).collect();
+            for key in keys.iter() {
+                map.insert(key.clone(), keys.clone());
+            }
+        }
+        *self.copies.write() = Arc::new(map);
+    }
+
+    /// The keys of `ids` and of every other copy of their entries.
+    fn keys_with_copies(&self, ids: &[GameId]) -> Vec<String> {
+        with_copies(&self.copies.read(), ids.iter().map(GameId::key))
     }
 
     pub fn snapshot(&self) -> Arc<UserData> {
@@ -617,40 +772,22 @@ impl UserDataService {
         }
     }
 
+    /// Mark or unmark a game (every copy of its entry) as a favourite.
     pub fn set_favourite(&self, id: &GameId, on: bool) {
-        self.update(Some(id), |d| {
-            if on {
-                d.favourites.insert(id.key());
-            } else {
-                d.favourites.remove(&id.key());
-            }
-        });
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| toggle(&mut d.favourites, &keys, on));
     }
 
     /// Mark or unmark several games as favourites in one change.
     pub fn set_favourites(&self, ids: &[GameId], on: bool) {
-        self.update(None, |d| {
-            for id in ids {
-                if on {
-                    d.favourites.insert(id.key());
-                } else {
-                    d.favourites.remove(&id.key());
-                }
-            }
-        });
+        let keys = self.keys_with_copies(ids);
+        self.update(None, |d| toggle(&mut d.favourites, &keys, on));
     }
 
     /// Hide or unhide several games in one change.
     pub fn set_hidden_many(&self, ids: &[GameId], on: bool) {
-        self.update(None, |d| {
-            for id in ids {
-                if on {
-                    d.hidden.insert(id.key());
-                } else {
-                    d.hidden.remove(&id.key());
-                }
-            }
-        });
+        let keys = self.keys_with_copies(ids);
+        self.update(None, |d| toggle(&mut d.hidden, &keys, on));
     }
 
     /// Add several games to `category`, or take them out, in one change.
@@ -670,17 +807,18 @@ impl UserDataService {
     /// Rate a game from 1 to [`MAX_RATING`] stars, or clear its rating with
     /// `None` (or 0). Larger values count as the most stars.
     pub fn set_rating(&self, id: &GameId, stars: Option<u8>) {
-        self.update(Some(id), |d| rate(d, id.key(), stars));
-    }
-
-    pub fn set_hidden(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
         self.update(Some(id), |d| {
-            if on {
-                d.hidden.insert(id.key());
-            } else {
-                d.hidden.remove(&id.key());
+            for key in keys {
+                rate(d, key, stars);
             }
         });
+    }
+
+    /// Hide or unhide a game (every copy of its entry).
+    pub fn set_hidden(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| toggle(&mut d.hidden, &keys, on));
     }
 
     pub fn set_category(&self, id: &GameId, category: &str, on: bool) {
@@ -742,15 +880,14 @@ impl UserDataService {
     /// Set a game's play status, or clear it with `None`.
     pub fn set_play_status(&self, id: &GameId, status: Option<PlayStatus>) {
         let now = util::now_rfc3339();
-        self.update(Some(id), |d| {
-            apply_play_status(d, &[id.key()], status, &now)
-        });
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| apply_play_status(d, &keys, status, &now));
     }
 
     /// Set or clear the play status of several games in one change.
     pub fn set_play_status_many(&self, ids: &[GameId], status: Option<PlayStatus>) {
         let now = util::now_rfc3339();
-        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
+        let keys = self.keys_with_copies(ids);
         self.update(None, |d| apply_play_status(d, &keys, status, &now));
     }
 
@@ -769,7 +906,7 @@ impl UserDataService {
 
     /// The current values of `ids`, to undo a bulk edit with [`Self::restore`].
     pub fn capture(&self, ids: &[GameId]) -> BulkSnapshot {
-        self.snapshot().capture(ids)
+        self.snapshot().capture_keys(self.keys_with_copies(ids))
     }
 
     /// Put games back as [`Self::capture`] saw them.
@@ -865,15 +1002,43 @@ impl UserDataService {
 
     /// Replace a game's title, art and game modes. How it joins other
     /// stores' copies stays: [`UserDataService::combine_copies`] and its
-    /// siblings change that.
+    /// siblings change that; so do its links and details
+    /// ([`UserDataService::set_metadata`]).
     pub fn set_overrides(&self, id: &GameId, mut o: GameOverrides) {
         self.update(Some(id), |d| {
             if let Some(old) = d.overrides.get(&id.key()) {
                 o.copy_of = old.copy_of.clone();
                 o.default_copy = old.default_copy;
                 o.links = old.links.clone();
+                o.developer = old.developer.clone();
+                o.publisher = old.publisher.clone();
+                o.genres = old.genres.clone();
             }
             put_overrides(d, &id.key(), o);
+        });
+    }
+
+    /// Change the developer, publisher or genres of several games at once
+    /// ("Edit details…"); what `edit` leaves out stays.
+    pub fn set_metadata(&self, ids: &[GameId], edit: &irori_core::MetadataEdit) {
+        if ids.is_empty() || edit.is_empty() {
+            return;
+        }
+        // A game's event, so the library is rebuilt with the new details.
+        self.update(ids.first(), |d| {
+            for id in ids {
+                edit_overrides(d, &id.key(), |o| edit.apply(o));
+            }
+        });
+    }
+
+    /// Make `value` of `field` show as `to` across the library (empty
+    /// removes it), or with `None` as itself again.
+    pub fn set_field_rule(&self, field: crate::field_rules::Field, value: &str, to: Option<&str>) {
+        self.update_if(None, |d| {
+            let before = d.field_rules.clone();
+            d.field_rules.set(field, value, to);
+            d.field_rules != before
         });
     }
 
@@ -892,8 +1057,10 @@ impl UserDataService {
         let Some((first, rest)) = ids.split_first() else {
             return;
         };
+        let keys: Vec<String> = ids.iter().map(GameId::key).collect();
         // A game's event, so the library is rebuilt with the new entry.
         self.update(Some(first), |d| {
+            d.share_between(&keys);
             let target = first.key();
             edit_overrides(d, &target, |o| {
                 if o.copy_of.as_deref() == Some("") {
@@ -965,6 +1132,14 @@ impl UserDataService {
         });
     }
 
+    /// Make a game's playtime `total` seconds, or with `None` what Irori
+    /// counted ([`UserData::set_playtime`]). Hold the sync's playtime guard
+    /// around it ([`crate::Backend::set_playtime`]).
+    pub fn set_playtime(&self, id: &GameId, total: Option<u64>) {
+        let key = id.key();
+        self.update(Some(id), |d| d.set_playtime(&key, total));
+    }
+
     /// Record a session start: recent list and first/last played.
     pub fn record_launch(&self, id: &GameId, max_recent: usize) {
         let now = util::now_rfc3339();
@@ -1013,10 +1188,13 @@ impl UserDataService {
         if !grown.is_empty() || !stale.is_empty() {
             self.update(None, |d| {
                 for (key, minutes) in &grown {
-                    d.playtime.entry(key.clone()).or_default().total_minutes = *minutes;
+                    let adjust = d.playtime_adjust.get(key).copied().unwrap_or(0);
+                    let record = d.playtime.entry(key.clone()).or_default();
+                    set_record_seconds(record, adjusted(minutes * 60, adjust));
                 }
                 for key in &stale {
                     d.playtime.remove(key);
+                    d.playtime_adjust.remove(key);
                 }
             });
         }
@@ -1290,6 +1468,88 @@ mod tests {
         ]);
         let grown = grown_totals(&data, Runner::Legendary, &totals);
         assert_eq!(grown, [("legendary:Sugar".to_string(), 600)]);
+    }
+
+    #[test]
+    fn edits_and_combining_reach_every_copy() {
+        let groups = HashMap::from([
+            (
+                "steam:1".to_string(),
+                Arc::from(["steam:1".to_string(), "gog:2".to_string()]),
+            ),
+            (
+                "gog:2".to_string(),
+                Arc::from(["steam:1".to_string(), "gog:2".to_string()]),
+            ),
+        ]);
+        assert_eq!(
+            with_copies(&groups, ["gog:2".to_string(), "epic:3".to_string()]),
+            ["steam:1", "gog:2", "epic:3"]
+        );
+
+        let mut d = UserData::default();
+        d.favourites.insert("gog:2".into());
+        d.ratings.insert("steam:1".into(), 4);
+        d.ratings.insert("gog:2".into(), 2);
+        d.play_status.insert(
+            "steam:1".into(),
+            PlayStatusRecord {
+                status: PlayStatus::Playing,
+                since: "2026-01-01T00:00:00Z".into(),
+            },
+        );
+        d.play_status.insert(
+            "gog:2".into(),
+            PlayStatusRecord {
+                status: PlayStatus::Beaten,
+                since: "2026-03-01T00:00:00Z".into(),
+            },
+        );
+        d.share_between(&["steam:1".to_string(), "gog:2".to_string()]);
+        assert!(d.favourites.contains("steam:1"));
+        assert!(!d.hidden.contains("steam:1"));
+        assert_eq!(d.play_status("steam:1"), Some(PlayStatus::Beaten));
+        assert_eq!(d.ratings["gog:2"], 4, "the default copy's rating");
+    }
+
+    #[test]
+    fn an_edited_playtime_follows_what_was_counted() {
+        let mut data = UserData::default();
+        data.playtime.insert(
+            "legendary:Fowl".into(),
+            PlaytimeRecord {
+                total_minutes: 120,
+                last_played: Some("2026-10-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        // Set lower than counted: the store's own total, still below what
+        // was counted, doesn't bring it back.
+        data.set_playtime("legendary:Fowl", Some(30 * 60));
+        assert_eq!(data.playtime["legendary:Fowl"].total_minutes, 30);
+        assert_eq!(data.counted_seconds("legendary:Fowl"), 120 * 60);
+        assert_eq!(
+            data.playtime["legendary:Fowl"].last_played.as_deref(),
+            Some("2026-10-01T10:00:00Z")
+        );
+        let totals = std::collections::HashMap::from([("Fowl".to_string(), 100u64)]);
+        assert!(grown_totals(&data, Runner::Legendary, &totals).is_empty());
+        // Time played since counts on top of the edit.
+        let totals = std::collections::HashMap::from([("Fowl".to_string(), 150u64)]);
+        assert_eq!(
+            grown_totals(&data, Runner::Legendary, &totals),
+            [("legendary:Fowl".to_string(), 150)]
+        );
+        // A game never played can be given time, and the edit undone.
+        data.set_playtime("gog:2", Some(90));
+        assert_eq!(data.playtime["gog:2"].extra_seconds, 30);
+        data.set_playtime("gog:2", None);
+        assert_eq!(data.counted_seconds("gog:2"), 0);
+        assert!(!data.playtime_adjust.contains_key("gog:2"));
+        // Carried over with the time.
+        data.carry_over("legendary:Fowl", "sideload:x");
+        assert_eq!(data.playtime_adjust["sideload:x"], -90 * 60);
+        assert_eq!(data.counted_seconds("sideload:x"), 120 * 60);
     }
 
     #[test]

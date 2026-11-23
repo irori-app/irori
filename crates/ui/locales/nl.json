@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Bestanden van {launcher} die Irori niet kon lezen",
   "ui.copies.title": "Exemplaren",
   "ui.copies.open": "Exemplaar van {store} openen",
+  "ui.copies.play": "Spelen met {copy}",
+  "ui.copies.install": "Installeren met {copy}",
   "ui.copies.make_default": "Dit exemplaar standaard maken",
   "ui.copies.separate": "Dit exemplaar apart tonen",
   "ui.copies.separate_all": "Elk exemplaar apart tonen",

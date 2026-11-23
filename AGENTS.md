@@ -492,7 +492,21 @@ commands without a window.
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
   `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
   own title when the copies' folded titles differ, else a ROM's file or, for two copies
-  on one store, its folder.
+  on one store, its folder. Each other copy can be played or installed right from the
+  copies menu and the palette ("Play with Steam", `copies::copy_action`; through
+  `irori_ui::hooks::play_game`/`install_game`, the game page's own flows). The game
+  page's Copies card lists every copy with its own time played, Play or Install, the
+  default star, and the copies' time added up (`irori_game` `page/copies.rs`).
+  Favourite, hidden, play status and rating describe the game, not the copy: setting
+  one writes every copy of the entry (`UserDataService::set_copy_groups`, kept by the
+  library rebuild), and combining copies shares them (`UserData::share_between`: any
+  copy's favourite or hidden flag, the latest status, the default copy's rating), so
+  any default copy shows the same. Categories, playtime, notes and overrides stay per
+  copy.
+  Games left apart that are linked to the same Steam app as one of an entry's copies
+  (editions, remasters) are *possible copies* (`copies::possible`,
+  `Backend::possible_copies`, memory only): the game page offers Link (combine) or
+  Keep apart, which stands like a separation.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
@@ -702,7 +716,8 @@ commands without a window.
   search result whose folded name is the title (the release year decides between
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
-  genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
+  genres, release date, screenshots, age ratings, an edition's from its parent game,
+  kept in `store-facts.json` like the stores'; `ExtraInfo::details_from` names IGDB), and the
   art picker offers IGDB's covers and artworks (no square art or logos). With a
   SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
   game named like the search, `pick_game`) and pills filter by source; every picture
@@ -746,7 +761,9 @@ commands without a window.
   request is made for ratings alone. The game page shows the board of the user's region
   (`irori_ui::age_rating`: interface language, then the system locale's region) as a
   text badge, never a board's logo; the library's age filter (`ViewFilter::max_age`)
-  goes by the strictest board.
+  goes by the strictest board. `iroriUi.ageRatingBoard` names the board shown first
+  instead (`age_rating::lead_with`), and `iroriUi.showAgeRatings` off leaves the card
+  off game pages (the filter still works).
 - **Game modes** (`irori_core::game_mode`, `store_facts.rs`): `GameMode` is single,
   co-op, local (split screen, couch), online (LAN included) or MMO; `GameInfo::game_modes`
   holds a normalized list. Sources, none of them asked in the background: Steam's
@@ -763,6 +780,23 @@ commands without a window.
   section per game by `filter::mode_section`) and searches (`mode:coop`,
   `search::ParsedQuery`) by them; the game page shows them as chips that open the
   library filtered by one mode (`GamePageEvent::ShowGameMode`).
+- **Details the user sets** (`GameOverrides::developer`, `publisher`, `genres`;
+  `MetadataEdit`, `UserDataService::set_metadata`): "Developer, publisher and genres…"
+  (`irori_library::open_metadata_dialog`: the library's game menu, the bulk bar's Details
+  menu, the palette for one game or the picked ones) sets them for one game or many at
+  once; they win over the stores', the wikis' and IGDB's at the library rebuild, the game
+  page shows the user's genres over the store page's, the Modify dialog keeps them, and
+  they travel with sync in the overrides register. Emptying one gives it back to the
+  stores.
+- **Field rules** (`field_rules.rs`, `UserData::field_rules`, "Manage genres and
+  companies…": `irori_library::open_fields_dialog`, the bulk bar's Details menu, the
+  palette): a genre, developer or publisher renamed, merged into another (renamed to its
+  name) or removed across the library, matched without case or spacing, laid over every
+  game at the library rebuild before the per-game details above. The manager lists the
+  values as the stores give them (`Backend::field_values`, off the UI thread, virtual
+  list) and suggests merging spellings that fold alike (`field_rules::duplicates`). Each
+  rule is a sync register (`<field>:<value>`), and backups carry them with the library
+  part (a rule made since stays).
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is
@@ -871,7 +905,12 @@ commands without a window.
   and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
-  every session, so nothing counts twice. New user data that should travel needs a
+  every session, so nothing counts twice. "Edit time played" (`Backend::set_playtime`)
+  keeps the user's edit apart (`UserData::playtime_adjust`, seconds added or taken
+  away; the record includes it, `counted_seconds` is without it): shares, store totals
+  and merged totals are counted without it and the merged edit (a register) is applied
+  after, so later sessions add to it and no computer counts it twice; backups carry
+  it. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
   `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and
@@ -953,7 +992,9 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them, and journal notes link them. Video files (mp4, mkv,
+  and its insight card show them, and journal notes link them; "Open screenshots
+  folder" (game menu, palette) opens the folder holding most of a game's captures
+  (`ScreenshotIndex::folder_of`, `Backend::captures_folder`). Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
   read the same way. A clip's `file://` address in the art store is its poster
   (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one
@@ -1003,13 +1044,16 @@ commands without a window.
   (`irori_services::trash`: freedesktop trash, `~/.Trash`, the Recycle Bin) and is only
   deleted where the disk has none. Settings → Storage draws it, with a list of installed
   games by size or last played that opens their folder or uninstalls them
-  (`irori_ui::hooks::uninstall`).
+  (`irori_ui::hooks::uninstall`). A game page whose store gives no install size shows
+  the folder's measured one (`Backend::install_folder_size`, the same cache).
 - **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
   folder, the defaults', the launchers' and the installed games', each with the
   installed games running in it (a launcher's game counts for the prefix holding its
   folder); games uninstalled since are only "was the prefix of". Steam's, native and
   browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
-  deleting stays with Storage's unused-prefix cleanup.
+  deleting stays with Storage's unused-prefix cleanup. Uninstalling never deletes a
+  prefix another installed game plays in (`Backend::games_sharing_prefix`): the dialog
+  names those games and keeps it, and `uninstall` refuses it too.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
@@ -1311,6 +1355,9 @@ measured, never a breakpoint; `auto_layout` switches only on a crossing, so a vi
 by hand holds, and never saves the switch). A click on a grid cover opens the
 drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
 opens the drawer (which then follows clicks).
+The game page's Details leave out the kinds of rows in `iroriUi.hiddenDetailRows`
+("Edit rows…", `irori_game::open_detail_rows_dialog`; ids in `detail_rows.rs` are user
+data).
 
 **Feature crates:**
 

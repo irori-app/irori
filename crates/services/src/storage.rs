@@ -733,6 +733,24 @@ impl Backend {
         .context("measuring disk use")
     }
 
+    /// The size of `id`'s install folder as measured on disk, for a game
+    /// whose store doesn't say; `None` when it has no folder. The storage
+    /// report's cache is used and kept, so a folder measured lately isn't
+    /// walked again.
+    pub async fn install_folder_size(&self, id: &GameId) -> Option<u64> {
+        let path = self.game(id)?.install_path()?;
+        let file = Paths::get().cache.join("storage.json");
+        tokio::task::spawn_blocking(move || {
+            let mut measurer = Measurer::open(file, false);
+            let size = measurer.measure(&path).map(|c| c.bytes);
+            measurer.save();
+            size
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
     /// Delete what `kind` offers among `chosen` (or move it to the trash,
     /// [`CleanupItem::goes_to_trash`]), saying how much went where. The
     /// report is rebuilt first, so only what is still safe to delete goes.

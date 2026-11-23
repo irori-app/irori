@@ -863,6 +863,23 @@ const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     ),
 ];
 
+/// The board shown first (`ageRatingBoard`): the region's, or one by name.
+const AGE_RATING_BOARDS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.age_rating_board.auto"),
+    ),
+    opt(ChoiceValue::Str("PEGI"), Verbatim("PEGI")),
+    opt(ChoiceValue::Str("ESRB"), Verbatim("ESRB")),
+    opt(ChoiceValue::Str("USK"), Verbatim("USK")),
+    opt(ChoiceValue::Str("ACB"), Verbatim("ACB")),
+    opt(ChoiceValue::Str("CERO"), Verbatim("CERO")),
+    opt(ChoiceValue::Str("ClassInd"), Verbatim("ClassInd")),
+    opt(ChoiceValue::Str("GRAC"), Verbatim("GRAC")),
+    opt(ChoiceValue::Str("CSRR"), Verbatim("CSRR")),
+    opt(ChoiceValue::Str("GOG"), Verbatim("GOG")),
+];
+
 const COVER_CORNERS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("square"),
@@ -1314,6 +1331,11 @@ const NEEDS_STORE_BADGES: &[Condition] = &[when(
     "iroriUi.showStoreBadges",
     true,
     "settings.requires.store_badges",
+)];
+const NEEDS_AGE_RATINGS: &[Condition] = &[when(
+    "iroriUi.showAgeRatings",
+    true,
+    "settings.requires.age_ratings",
 )];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
@@ -2639,6 +2661,27 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_group_copies.help")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
+        "iroriUi.showAgeRatings",
+        "settings.field.ui_show_age_ratings.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_show_age_ratings.help")
+    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
+    app(
+        "iroriUi.ageRatingBoard",
+        "settings.field.ui_age_rating_board.label",
+        Appearance,
+        "settings.group.library",
+        Choice(AGE_RATING_BOARDS),
+    )
+    .help("settings.field.ui_age_rating_board.help")
+    .keywords(&[
+        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
+    ])
+    .requires(NEEDS_AGE_RATINGS),
     app(
         "iroriUi.trailerAutoplay",
         "settings.field.ui_trailer_autoplay.label",

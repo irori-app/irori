@@ -26,8 +26,11 @@ impl GamePage {
         game: &GameInfo,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        if !irori_ui::age_rating::shown(cx) {
+            return None;
+        }
         let all = ratings(game, self.extra.ready().map(|e| e.age_ratings.as_slice()));
-        let preferred = irori_ui::age_rating::preferred_systems();
+        let preferred = irori_ui::age_rating::preferred_systems(cx);
         let (first, others) = irori_ui::age_rating::arrange(&all, &preferred)?;
         let ink = self.ink;
         let theme = cx.theme();

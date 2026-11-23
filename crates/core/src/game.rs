@@ -493,6 +493,74 @@ pub struct GameOverrides {
     /// guide), in their order.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<GameLink>,
+    /// The developer as the user wrote it, replacing the store's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub developer: Option<String>,
+    /// The publisher as the user wrote it, replacing the store's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    /// The genres as the user listed them, replacing the store's and the
+    /// store page's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genres: Option<Vec<String>>,
+}
+
+/// A change of several games' details at once ("Edit details…"): each part
+/// `None` leaves that detail as it is, `Some(None)` gives it back to the
+/// store, `Some(Some(_))` sets it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MetadataEdit {
+    pub developer: Option<Option<String>>,
+    pub publisher: Option<Option<String>>,
+    pub genres: Option<Option<Vec<String>>>,
+}
+
+impl MetadataEdit {
+    /// Whether it changes nothing.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Apply it to one game's overrides.
+    pub fn apply(&self, o: &mut GameOverrides) {
+        let text = |v: &Option<String>| {
+            v.as_ref()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        if let Some(v) = &self.developer {
+            o.developer = text(v);
+        }
+        if let Some(v) = &self.publisher {
+            o.publisher = text(v);
+        }
+        if let Some(v) = &self.genres {
+            o.genres = v.as_ref().map(|list| {
+                let mut out: Vec<String> = Vec::new();
+                for g in list.iter().map(|g| g.trim()).filter(|g| !g.is_empty()) {
+                    if !out.iter().any(|o| o.eq_ignore_ascii_case(g)) {
+                        out.push(g.to_string());
+                    }
+                }
+                out
+            });
+        }
+    }
+}
+
+impl GameOverrides {
+    /// Lay the user's details over `game`'s: developer, publisher, genres.
+    pub fn apply_metadata(&self, game: &mut GameInfo) {
+        if let Some(d) = &self.developer {
+            game.developer = Some(d.clone());
+        }
+        if let Some(p) = &self.publisher {
+            game.publisher = Some(p.clone());
+        }
+        if let Some(g) = &self.genres {
+            game.genres = g.clone();
+        }
+    }
 }
 
 /// A web page the user keeps with a game.
@@ -610,6 +678,43 @@ mod tests {
         assert_eq!(sort_key("Rayman I"), "rayman i");
         assert_eq!(sort_key("Mix Tape"), "mix tape");
         assert_eq!(sort_key("Some Game"), "some game");
+    }
+
+    #[test]
+    fn metadata_edits_set_keep_or_give_back_each_detail() {
+        let mut o = GameOverrides {
+            publisher: Some("Old".into()),
+            ..Default::default()
+        };
+        MetadataEdit {
+            developer: Some(Some(" Supergiant ".into())),
+            genres: Some(Some(vec![
+                "Roguelike".into(),
+                "roguelike".into(),
+                " ".into(),
+            ])),
+            ..Default::default()
+        }
+        .apply(&mut o);
+        assert_eq!(o.developer.as_deref(), Some("Supergiant"));
+        assert_eq!(o.publisher.as_deref(), Some("Old"), "left as it was");
+        assert_eq!(o.genres, Some(vec!["Roguelike".to_string()]));
+        MetadataEdit {
+            developer: Some(None),
+            publisher: Some(Some("  ".into())),
+            ..Default::default()
+        }
+        .apply(&mut o);
+        assert!(o.developer.is_none() && o.publisher.is_none());
+
+        let mut game = GameInfo {
+            developer: Some("Store".into()),
+            genres: vec!["Action".into()],
+            ..Default::default()
+        };
+        o.apply_metadata(&mut game);
+        assert_eq!(game.developer.as_deref(), Some("Store"));
+        assert_eq!(game.genres, ["Roguelike"]);
     }
 
     #[test]

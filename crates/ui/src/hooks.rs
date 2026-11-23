@@ -127,6 +127,12 @@ pub struct Hooks {
     /// computer (the management screens draw it, from stores the library
     /// doesn't know).
     pub found_sources: Option<ViewFn>,
+    /// Play one game (its copy) as the game page does: saves conflicts and
+    /// missing files answered there (the game feature).
+    pub play: Option<GameFn>,
+    /// Install one game (its copy): the install sheet, or the store's own
+    /// client for games Irori doesn't install (the game feature).
+    pub install: Option<GameFn>,
 }
 
 impl Global for Hooks {}
@@ -286,6 +292,24 @@ pub fn show_unlocks(id: GameId, unlocks: Vec<irori_core::Achievement>, cx: &mut 
     {
         Some(show) => show(id, unlocks, cx),
         None => false,
+    }
+}
+
+/// Play `id`, as its page does; without the hook, open the page, where
+/// Play is.
+pub fn play_game(id: GameId, window: &mut Window, cx: &mut App) {
+    match cx.try_global::<Hooks>().and_then(|h| h.play.clone()) {
+        Some(play) => play(id, window, cx),
+        None => crate::navigate(crate::Route::Game(id), cx),
+    }
+}
+
+/// Install `id`, as its page does; without the hook, open the page, where
+/// Install is.
+pub fn install_game(id: GameId, window: &mut Window, cx: &mut App) {
+    match cx.try_global::<Hooks>().and_then(|h| h.install.clone()) {
+        Some(install) => install(id, window, cx),
+        None => crate::navigate(crate::Route::Game(id), cx),
     }
 }
 

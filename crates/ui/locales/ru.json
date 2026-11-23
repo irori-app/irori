@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Файлы {launcher}, которые Irori не смог прочитать",
   "ui.copies.title": "Копии",
   "ui.copies.open": "Открыть копию из {store}",
+  "ui.copies.play": "Играть через {copy}",
+  "ui.copies.install": "Установить через {copy}",
   "ui.copies.make_default": "Сделать эту копию основной",
   "ui.copies.separate": "Показывать эту копию отдельно",
   "ui.copies.separate_all": "Показывать каждую копию отдельно",

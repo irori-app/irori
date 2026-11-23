@@ -447,6 +447,29 @@ impl Backend {
             .collect()
     }
 
+    /// Every value of `field` the library's games have before the field
+    /// rules change them, most common first (the field manager's list).
+    /// Walks the stores' games; call off the UI thread.
+    pub fn field_values(
+        &self,
+        field: crate::field_rules::Field,
+    ) -> Vec<crate::field_rules::FieldValue> {
+        let shown = self.settings.app().ui.stores;
+        let games: Vec<Arc<GameInfo>> = self
+            .stores
+            .values()
+            .flat_map(|s| s.games())
+            .filter(|g| !g.is_dlc && shown.shows(g.runner()))
+            .map(|g| {
+                let mut g = (*g).clone();
+                self.facts.complete(&mut g);
+                self.store_facts.complete(&mut g);
+                Arc::new(g)
+            })
+            .collect();
+        crate::field_rules::values(&games, field)
+    }
+
     pub(crate) fn rebuild_library(&self) {
         let user = self.userdata.snapshot();
         let tag_language =
@@ -480,6 +503,9 @@ impl Backend {
                     }
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
+                    user.field_rules.apply(&mut g);
+                    // After what was learned elsewhere: the user's details win.
+                    o.apply_metadata(&mut g);
                     let app = self.steam_links.linked(&g).app_id();
                     self.steam_tags
                         .complete(&mut g, tag_language, app, tag_limit);
@@ -492,6 +518,7 @@ impl Backend {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
+                    user.field_rules.apply(&mut g);
                     let app = self.steam_links.linked(&g).app_id();
                     self.steam_tags
                         .complete(&mut g, tag_language, app, tag_limit);
@@ -527,6 +554,8 @@ impl Backend {
             });
         }
         let mut grouped = crate::copies::group(games, &user, self.settings.app().ui.group_copies);
+        // Edits of a favourite, status or rating reach every copy.
+        self.userdata.set_copy_groups(&grouped.groups);
         grouped.entries.sort_by(|a, b| {
             a.sort_title
                 .cmp(&b.sort_title)

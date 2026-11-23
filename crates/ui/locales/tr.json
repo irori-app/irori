@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Irori’nin okuyamadığı {launcher} dosyaları",
   "ui.copies.title": "Kopyalar",
   "ui.copies.open": "{store} kopyasını aç",
+  "ui.copies.play": "{copy} ile oyna",
+  "ui.copies.install": "{copy} ile yükle",
   "ui.copies.make_default": "Bu kopyayı varsayılan yap",
   "ui.copies.separate": "Bu kopyayı ayrı göster",
   "ui.copies.separate_all": "Her kopyayı ayrı göster",

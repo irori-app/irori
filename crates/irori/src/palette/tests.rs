@@ -200,6 +200,7 @@ fn level(game: &GameInfo, facts: &game::GameFacts) -> Vec<&'static str> {
         .filter_map(|(_, target)| {
             Some(match target {
                 PaletteTarget::Play(_) => "play",
+                PaletteTarget::InstallCopy(_) => "install copy",
                 PaletteTarget::BackToGame(_) => "back to game",
                 PaletteTarget::CancelLaunch(_) => "cancel",
                 PaletteTarget::Open(_) => "show",
@@ -285,9 +286,26 @@ fn a_games_actions_follow_what_it_is_doing() {
         is_installed: false,
         install: None,
         store_url: None,
-        ..installed
+        ..installed.clone()
     };
     assert_eq!(level(&owned, &idle), ["show", "favourite", "hide", "back"]);
+    // Its other copies come right after its own Play.
+    let copy = |app: &str, action| game::CopyRow {
+        id: irori_core::GameId::new(Runner::Steam, app),
+        label: "Play with Steam".into(),
+        action,
+    };
+    let with_copies = game::GameFacts {
+        copies: vec![
+            copy("2", irori_ui::copies::CopyAction::Play),
+            copy("3", irori_ui::copies::CopyAction::Install),
+        ],
+        ..Default::default()
+    };
+    assert_eq!(
+        level(&installed, &with_copies)[..4],
+        ["play", "play", "install copy", "show"]
+    );
 }
 
 /// The palette drawn over a real backend, typed into as a user would.

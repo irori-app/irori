@@ -419,6 +419,48 @@ fn store_totals_and_imports_count_once_beside_sessions() {
 }
 
 #[test]
+fn an_edited_playtime_counts_once_on_every_computer() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    // Both played; then a's user says the game was played for 10 hours.
+    a.play("gog:1", t(0), 3600);
+    b.play("gog:1", t(5), 1800);
+    round(&mut a, &mut b, t(10));
+    assert_eq!(a.seconds("gog:1"), 5400);
+    a.data.set_playtime("gog:1", Some(36_000));
+    a.tick(t(20));
+    assert_eq!(a.seconds("gog:1"), 36_000);
+    round(&mut a, &mut b, t(30));
+    round(&mut a, &mut b, t(40));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 36_000, "{} keeps the edit once", d.id);
+    }
+
+    // Sessions after the edit add to it, wherever they are played.
+    b.play("gog:1", t(50), 600);
+    round(&mut a, &mut b, t(60));
+    round(&mut a, &mut b, t(70));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 36_600);
+    }
+
+    // Setting less than was counted works too, and so does undoing it.
+    b.data.set_playtime("gog:1", Some(1200));
+    b.tick(t(80));
+    round(&mut a, &mut b, t(90));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 1200);
+    }
+    a.data.set_playtime("gog:1", None);
+    a.tick(t(100));
+    round(&mut a, &mut b, t(110));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 3600 + 1800 + 600);
+        assert!(d.data.playtime_adjust.is_empty());
+    }
+}
+
+#[test]
 fn removed_playtime_stays_removed_until_the_game_is_played_again() {
     let mut a = Device::new("a");
     let mut b = Device::new("b");
@@ -506,6 +548,61 @@ fn combined_and_separated_copies_travel_with_the_custom_title() {
     round(&mut b, &mut a, t(10));
     assert_eq!(a.data.overrides["gog:1"].copy_of.as_deref(), Some(""));
     assert!(!a.data.overrides["gog:1"].default_copy);
+}
+
+#[test]
+fn edited_details_travel_with_the_custom_title() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "gog:1".into(),
+        GameOverrides {
+            developer: Some("Supergiant Games".into()),
+            genres: Some(vec!["Roguelike".into()]),
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    let at_b = &b.data.overrides["gog:1"];
+    assert_eq!(at_b.developer.as_deref(), Some("Supergiant Games"));
+    assert_eq!(at_b.genres, Some(vec!["Roguelike".to_string()]));
+    // b gives the developer back to the store; a hears of it.
+    b.data.overrides.get_mut("gog:1").unwrap().developer = None;
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(a.data.overrides["gog:1"].developer, None);
+    assert_eq!(
+        a.data.overrides["gog:1"].genres,
+        Some(vec!["Roguelike".to_string()])
+    );
+}
+
+#[test]
+fn field_rules_travel_and_their_removal_too() {
+    use crate::field_rules::Field;
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data
+        .field_rules
+        .set(Field::Genre, "Role-playing (RPG)", Some("RPG"));
+    a.data.field_rules.set(Field::Company, "Unknown", Some(""));
+    round(&mut a, &mut b, t(0));
+    assert_eq!(
+        b.data.field_rules.rule(Field::Genre, "role-playing (rpg)"),
+        Some("RPG")
+    );
+    assert_eq!(b.data.field_rules.rule(Field::Company, "Unknown"), Some(""));
+    // b takes the genre rule back; a hears of it and keeps the other.
+    b.data
+        .field_rules
+        .set(Field::Genre, "Role-playing (RPG)", None);
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(
+        a.data.field_rules.rule(Field::Genre, "Role-playing (RPG)"),
+        None
+    );
+    assert_eq!(a.data.field_rules.rule(Field::Company, "unknown"), Some(""));
 }
 
 #[test]

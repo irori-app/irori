@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Filer från {launcher} som Irori inte kunde läsa",
   "ui.copies.title": "Kopior",
   "ui.copies.open": "Öppna kopian från {store}",
+  "ui.copies.play": "Spela med {copy}",
+  "ui.copies.install": "Installera med {copy}",
   "ui.copies.make_default": "Gör den här kopian till standard",
   "ui.copies.separate": "Visa den här kopian för sig",
   "ui.copies.separate_all": "Visa varje kopia för sig",

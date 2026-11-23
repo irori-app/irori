@@ -97,7 +97,7 @@ impl GamePage {
                 .child(game.title.clone())
                 .into_any_element(),
         };
-        let meta = self.render_meta_line(game);
+        let meta = self.render_meta_line(game, cx);
         let tags = (!game.tags.is_empty()).then(|| {
             h_flex()
                 .gap_2()
@@ -253,7 +253,7 @@ impl GamePage {
     }
 
     /// "Feb 25, 2022 · Windows, Linux · Role-playing · Adventure".
-    pub(super) fn render_meta_line(&self, game: &GameInfo) -> Option<String> {
+    pub(super) fn render_meta_line(&self, game: &GameInfo, cx: &gpui_kit::App) -> Option<String> {
         let date = self.release_date(game);
         let platforms = match &game.install {
             Some(install) if game.is_installed => {
@@ -268,12 +268,7 @@ impl GamePage {
             ),
         }
         .filter(|p| !p.is_empty() && game.runner() != irori_core::Runner::Emulation);
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
+        let genres = self.shown_genres(game, cx);
         let parts: Vec<String> = date
             .into_iter()
             .chain(platforms)

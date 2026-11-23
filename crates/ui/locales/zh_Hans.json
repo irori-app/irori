@@ -305,6 +305,8 @@
   "ui.import.summary.warnings": "Irori 无法读取的 {launcher} 文件",
   "ui.copies.title": "副本",
   "ui.copies.open": "打开 {store} 上的副本",
+  "ui.copies.play": "通过 {copy} 游玩",
+  "ui.copies.install": "通过 {copy} 安装",
   "ui.copies.make_default": "将此副本设为默认",
   "ui.copies.separate": "单独显示此副本",
   "ui.copies.separate_all": "分别显示每个副本",

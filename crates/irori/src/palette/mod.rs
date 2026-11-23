@@ -60,6 +60,8 @@ pub(crate) enum PaletteTarget {
     Hide(GameId, bool),
     /// Open a game's install folder in the file manager.
     OpenFolder(GameId),
+    /// Open the folder of a game's screenshots and clips.
+    CapturesFolder(GameId),
     Route(Route),
     Refresh,
     /// Choose which games to pick a random one from (a palette level).
@@ -119,6 +121,8 @@ pub(crate) enum PaletteTarget {
     SaveView,
     /// Pick a folder and add the games in it.
     AddFolder,
+    /// Rename, merge or remove genres and companies across the library.
+    ManageFields,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
     /// Sync a game's cloud saves now.
@@ -129,6 +133,10 @@ pub(crate) enum PaletteTarget {
     RemovePicked,
     /// Read the picked games' details again.
     RefreshPicked,
+    /// Edit the developer, publisher and genres of the picked games.
+    EditPickedMetadata,
+    /// Edit the developer, publisher and genres of one game.
+    EditMetadata(GameId),
     /// Link the picked games to Steam by their titles.
     LinkPickedToSteam,
     /// Back up a game's saves with Ludusavi now.
@@ -149,6 +157,12 @@ pub(crate) enum PaletteTarget {
     SteamLink(GameId),
     /// Edit a game's own links.
     GameLinks(GameId),
+    /// Choose which rows the game page's Details show.
+    DetailRows,
+    /// Set a game's time played by hand.
+    EditPlaytime(GameId),
+    /// Install one copy of a game's entry.
+    InstallCopy(GameId),
     /// Turn a ROM library entry into an added PC game.
     PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
@@ -437,6 +451,14 @@ impl Palette {
                 .keywords([t("shell.palette.add_folder_keywords")])
                 .icon(IconName::FolderPlus),
             PaletteTarget::AddFolder,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.manage_fields"))
+                .keywords([t("shell.palette.manage_fields_keywords")])
+                .icon(IconName::ListFilter),
+            PaletteTarget::ManageFields,
             targets,
         );
         push(
@@ -836,6 +858,16 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         targets.push(PaletteTarget::RefreshPicked);
         items.push(
             Entry::new()
+                .label(t_args(
+                    "shell.palette.edit_picked_metadata",
+                    &[("count", &count)],
+                ))
+                .keywords([t("shell.palette.edit_metadata_keywords")])
+                .icon(IconName::Tags),
+        );
+        targets.push(PaletteTarget::EditPickedMetadata);
+        items.push(
+            Entry::new()
                 .label(t_args("shell.palette.link_picked", &[("count", &count)]))
                 .keywords([t("shell.palette.steam_link_keywords")])
                 .icon(IconName::Link),
@@ -934,11 +966,14 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Favourite(id, on) => irori_game::ops::set_favourite(&id, on, cx),
         PaletteTarget::Hide(id, on) => irori_game::ops::set_hidden(&id, on, cx),
         PaletteTarget::OpenFolder(id) => irori_game::ops::open_install_folder(&id, window, cx),
+        PaletteTarget::CapturesFolder(id) => irori_game::ops::open_captures_folder(&id, window, cx),
         // The palette's own levels; its view handles them.
         PaletteTarget::GameActions(_) | PaletteTarget::Back | PaletteTarget::RandomFrom(_) => {}
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::ManageFields => window.defer(cx, irori_library::open_fields_dialog),
         PaletteTarget::SaveView => {
             irori_ui::navigate(Route::Library, cx);
             // After the palette's own dialog has closed.
@@ -949,6 +984,11 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         // After the palette's own dialog has closed.
         PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::RefreshPicked => irori_library::refresh_picked_details(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::EditPickedMetadata => window.defer(cx, irori_library::edit_picked_metadata),
+        PaletteTarget::EditMetadata(id) => window.defer(cx, move |window, cx| {
+            irori_library::open_metadata_dialog(vec![id], window, cx)
+        }),
         PaletteTarget::LinkPickedToSteam => irori_library::link_picked_to_steam(window, cx),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
@@ -969,6 +1009,15 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }),
         PaletteTarget::GameLinks(id) => window.defer(cx, move |window, cx| {
             irori_game::open_links_dialog(id, window, cx)
+        }),
+        // After the palette's own dialog has closed.
+        PaletteTarget::DetailRows => window.defer(cx, irori_game::open_detail_rows_dialog),
+        PaletteTarget::EditPlaytime(id) => window.defer(cx, move |window, cx| {
+            irori_game::open_playtime_dialog(id, window, cx)
+        }),
+        // After the palette's own dialog has closed: the sheet is a dialog.
+        PaletteTarget::InstallCopy(id) => window.defer(cx, move |window, cx| {
+            irori_game::ops::install(&id, window, cx)
         }),
         PaletteTarget::PlayAsPcGame(id) => {
             irori_library::open_play_as_pc_game_dialog(&id, window, cx)

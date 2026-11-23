@@ -65,6 +65,30 @@ impl ScreenshotIndex {
     pub fn for_game<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a Screenshot> {
         self.shots.iter().filter(move |s| s.game == key)
     }
+
+    /// The folder holding most of the captures of a game (`keys`: the keys
+    /// of its copies), the one with the newest capture on a tie; `None`
+    /// before any was taken. A game's captures can be spread over Steam's
+    /// folder, the desktop's and the replay buffer's; the one most of them
+    /// are in is where the user looks for the rest.
+    pub fn folder_of(&self, keys: &[String]) -> Option<PathBuf> {
+        // Shots are newest first, so the first folder seen of a count wins.
+        let mut counts: Vec<(&Path, usize)> = Vec::new();
+        for shot in self.shots.iter().filter(|s| keys.contains(&s.game)) {
+            let Some(parent) = shot.path.parent() else {
+                continue;
+            };
+            match counts.iter_mut().find(|(p, _)| *p == parent) {
+                Some((_, n)) => *n += 1,
+                None => counts.push((parent, 1)),
+            }
+        }
+        let most = counts.iter().map(|(_, n)| *n).max()?;
+        counts
+            .into_iter()
+            .find(|(_, n)| *n == most)
+            .map(|(p, _)| p.to_path_buf())
+    }
 }
 
 /// A folder to look in.
@@ -480,6 +504,43 @@ mod tests {
             let t = UNIX_EPOCH + std::time::Duration::from_secs(t as u64);
             file.set_modified(t).unwrap();
         }
+    }
+
+    #[test]
+    fn a_games_captures_folder_is_where_most_of_them_are() {
+        let shot = |path: &str, game: &str, taken: i64| Screenshot {
+            path: PathBuf::from(path),
+            taken,
+            game: game.into(),
+            video: false,
+        };
+        let index = ScreenshotIndex {
+            // Newest first.
+            shots: vec![
+                shot("/pics/a.png", "steam:1", 50),
+                shot("/clips/Hades/c.mp4", "gog:2", 40),
+                shot("/steam/760/1/b.png", "steam:1", 30),
+                shot("/steam/760/1/d.png", "steam:1", 20),
+                shot("/pics/e.png", "gog:9", 10),
+            ],
+            folders: Vec::new(),
+        };
+        let keys = |k: &[&str]| k.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            index.folder_of(&keys(&["steam:1"])),
+            Some(PathBuf::from("/steam/760/1"))
+        );
+        // A tie goes to the folder of the newest capture; copies count
+        // together.
+        assert_eq!(
+            index.folder_of(&keys(&["gog:2"])),
+            Some(PathBuf::from("/clips/Hades"))
+        );
+        assert_eq!(
+            index.folder_of(&keys(&["gog:2", "steam:1"])),
+            Some(PathBuf::from("/steam/760/1"))
+        );
+        assert_eq!(index.folder_of(&keys(&["epic:3"])), None);
     }
 
     #[test]
