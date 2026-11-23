@@ -63,8 +63,9 @@ fn found_name(key: &str, title: &str) -> Option<String> {
         .map(|f| f.name.clone())
 }
 
-/// Forget this session's matches, as a restart does.
-#[cfg(test)]
+/// Forget this session's matches, as a restart does. Only the Unix test of
+/// emulated games' names uses it (it runs a stand-in shell script).
+#[cfg(all(test, unix))]
 pub(crate) fn forget_matches_for_test() {
     MATCHES.lock().clear();
 }
