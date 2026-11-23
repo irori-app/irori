@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "{name} konnte nicht aktualisiert werden",
   "shell.notice.component_updated": "{name} auf {version} aktualisiert",
   "shell.palette.edit_actions": "Aktionen von {title} bearbeiten",
+  "shell.palette.game_links": "Links von {title}",
+  "shell.palette.game_links_keywords": "links webseite website wiki url hinzufügen",
   "shell.palette.steam_link": "{title} mit einer Steam-App verknüpfen",
   "shell.palette.steam_link_keywords": "steam app id verknüpfen zuordnung tags protondb",
   "shell.palette.storage": "Speicher und Aufräumen",

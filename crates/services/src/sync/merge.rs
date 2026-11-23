@@ -19,6 +19,10 @@
 //! Values set before sync was turned on count as older than any change
 //! made with sync (time 0), except play statuses, which carry their date.
 //!
+//! A game's own links are a register of their own, apart from its custom
+//! title and art, so editing one on a computer and the other elsewhere
+//! keeps both.
+//!
 //! A smart category is one register holding the whole category. It is read
 //! the way it was written, with whatever this version doesn't know kept in
 //! it ([`crate::smart_categories`]), and compared as read: a computer that
@@ -36,7 +40,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use irori_core::game::{GameOverrides, PlaytimeRecord};
+use irori_core::game::{GameLink, GameOverrides, PlaytimeRecord};
 use serde::{Deserialize, Serialize};
 
 use crate::play_status::PlayStatusRecord;
@@ -117,6 +121,9 @@ pub struct Registers {
     /// Pins and colours of manual categories, by name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: Lww<String, Option<CategoryLook>>,
+    /// Each game's own links, whole, by game key.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub links: Lww<String, Option<Vec<GameLink>>>,
 }
 
 impl Registers {
@@ -137,6 +144,7 @@ impl Registers {
             max(&self.playtime_removed),
             max(&self.smart_categories),
             max(&self.category_looks),
+            max(&self.links),
         ]
         .into_iter()
         .max()
@@ -332,6 +340,7 @@ pub fn record(
     changed += note(&mut regs.category_looks, &view.category_looks, me, |_| {
         plain
     });
+    changed += note(&mut regs.links, &view.links, me, |_| plain);
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -393,6 +402,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(backlog_goals, ConflictField::Goal);
     take_all!(playtime_removed, ConflictField::Playtime);
     take_all!(category_looks, ConflictField::Category);
+    take_all!(links, ConflictField::Custom);
     for remote in remotes {
         take(
             &mut regs.smart_categories,
@@ -544,6 +554,7 @@ struct View {
     backlog_goals: BTreeMap<i32, Option<u32>>,
     smart_categories: BTreeMap<String, Option<SmartCategory>>,
     category_looks: BTreeMap<String, Option<CategoryLook>>,
+    links: BTreeMap<String, Option<Vec<GameLink>>>,
 }
 
 fn on(keys: &BTreeSet<String>) -> BTreeMap<String, bool> {
@@ -601,6 +612,12 @@ impl View {
                 .filter(|(name, look)| !look.is_empty() && d.categories.contains_key(*name))
                 .map(|(name, look)| (name.clone(), Some(look.clone())))
                 .collect(),
+            links: d
+                .overrides
+                .iter()
+                .filter(|(_, o)| !o.links.is_empty())
+                .map(|(k, o)| (k.clone(), Some(o.links.clone())))
+                .collect(),
         }
     }
 
@@ -639,6 +656,7 @@ impl View {
             backlog_goals: values(&regs.backlog_goals),
             smart_categories: values(&regs.smart_categories),
             category_looks: values(&regs.category_looks),
+            links: values(&regs.links),
         }
     }
 
@@ -665,6 +683,7 @@ impl View {
             + differing(&self.backlog_goals, &other.backlog_goals)
             + differing(&self.smart_categories, &other.smart_categories)
             + differing(&self.category_looks, &other.category_looks)
+            + differing(&self.links, &other.links)
     }
 
     /// Put these values into `d`, whose values were `before`. Returns how
@@ -689,11 +708,17 @@ impl View {
             .map(|(name, games)| (name.clone(), games.keys().cloned().collect()))
             .collect();
         let mut overrides = BTreeMap::new();
-        let keys: BTreeSet<&String> = d.overrides.keys().chain(self.overrides.keys()).collect();
+        let keys: BTreeSet<&String> = d
+            .overrides
+            .keys()
+            .chain(self.overrides.keys())
+            .chain(self.links.keys())
+            .collect();
         for key in keys {
             let local = d.overrides.get(key).cloned().unwrap_or_default();
             let shared = self.overrides.get(key).cloned().flatten();
-            let o = with_local_art(shared.unwrap_or_default(), &local);
+            let mut o = with_local_art(shared.unwrap_or_default(), &local);
+            o.links = self.links.get(key).cloned().flatten().unwrap_or_default();
             if !o.is_empty() {
                 overrides.insert(key.clone(), o);
             }
@@ -746,6 +771,8 @@ pub fn shared_overrides(o: &GameOverrides) -> Option<GameOverrides> {
         game_modes: o.game_modes.clone(),
         copy_of: o.copy_of.clone(),
         default_copy: o.default_copy,
+        // A register of their own.
+        links: Vec::new(),
     };
     (!shared.is_empty()).then_some(shared)
 }
@@ -766,6 +793,7 @@ fn with_local_art(shared: GameOverrides, local: &GameOverrides) -> GameOverrides
         game_modes: shared.game_modes,
         copy_of: shared.copy_of,
         default_copy: shared.default_copy,
+        links: Vec::new(),
     }
 }
 

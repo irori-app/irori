@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "Не удалось обновить {name}",
   "shell.notice.component_updated": "{name} обновлён до {version}",
   "shell.palette.edit_actions": "Изменить действия игры {title}",
+  "shell.palette.game_links": "Ссылки {title}",
+  "shell.palette.game_links_keywords": "ссылки веб страница сайт вики url добавить",
   "shell.palette.steam_link": "Связать {title} с приложением Steam",
   "shell.palette.steam_link_keywords": "steam приложение id связать соответствие метки protondb",
   "shell.palette.storage": "Хранилище и очистка",

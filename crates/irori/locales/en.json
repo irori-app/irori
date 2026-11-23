@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "{name} failed to update",
   "shell.notice.component_updated": "{name} updated to {version}",
   "shell.palette.edit_actions": "Edit the actions of {title}",
+  "shell.palette.game_links": "Links of {title}",
+  "shell.palette.game_links_keywords": "links web page website wiki url add",
   "shell.palette.steam_link": "Link {title} to a Steam app",
   "shell.palette.steam_link_keywords": "steam app id link match tags protondb",
   "shell.palette.storage": "Storage and cleanup",

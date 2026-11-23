@@ -120,6 +120,41 @@ pub(super) fn tag_chips(tags: &[String], genres: &[String], modes: &[GameMode]) 
         .collect()
 }
 
+/// The pages the Links row offers besides the store page and the user's
+/// own, as name and address: SteamDB for a game with a Steam app, then the
+/// pages the compatibility sources found.
+pub(super) fn known_links(
+    steam_app: Option<u32>,
+    compat: Option<&crate::hooks::CompatibilityInfo>,
+) -> Vec<(String, String)> {
+    let mut links = Vec::new();
+    if let Some(app) = steam_app {
+        links.push(("SteamDB".into(), format!("https://steamdb.info/app/{app}/")));
+    }
+    let Some(info) = compat else {
+        return links;
+    };
+    if let Some(url) = &info.pcgamingwiki_url {
+        links.push(("PCGamingWiki".into(), url.clone()));
+    }
+    // A search page isn't the game's.
+    if let Some(url) = info.protondb_url.as_ref().filter(|u| u.contains("/app/")) {
+        links.push(("ProtonDB".into(), url.clone()));
+    }
+    if let Some(url) = info
+        .scores
+        .iter()
+        .find(|s| s.source == "IGDB")
+        .and_then(|s| s.url.clone())
+    {
+        links.push(("IGDB".into(), url));
+    }
+    if let Some(url) = info.how_long_to_beat.as_ref().and_then(|h| h.url.clone()) {
+        links.push(("HowLongToBeat".into(), url));
+    }
+    links
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -168,6 +203,7 @@ impl GamePage {
             .children(group(install, cx))
             .children(group(compat, cx))
             .children(group(self.steam_rows(muted), cx))
+            .children(group(self.link_rows(game, muted, cx), cx))
             .into_any_element()
     }
 
@@ -337,6 +373,72 @@ impl GamePage {
                 .flex_wrap()
                 .children(chips)
                 .children(toggle),
+            muted,
+        )]
+    }
+
+    /// The Links row: the store page, the pages sources know of and the
+    /// user's own links, each a button opening it, with "Edit links…".
+    fn link_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+        let store_url = game
+            .store_url
+            .clone()
+            .or_else(|| self.extra.ready().and_then(|e| e.store_url.clone()))
+            .filter(|u| !u.is_empty());
+        let mut buttons: Vec<AnyElement> = Vec::new();
+        if let Some(url) = store_url {
+            let runner = self.id.runner;
+            buttons.push(
+                Button::new("link-store-page")
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::Store)
+                    .label(t("game.menu.store_page"))
+                    .on_click(move |_, window, cx| {
+                        irori_ui::hooks::open_store_page(runner, url.clone(), window, cx)
+                    })
+                    .into_any_element(),
+            );
+        }
+        let own = crate::links::of(&self.id, cx);
+        let pages = known_links(self.steam_link.app_id(), self.compat.ready())
+            .into_iter()
+            .chain(own.iter().map(|l| (l.label(), l.url.clone())));
+        for (i, (name, url)) in pages.enumerate() {
+            let Some(url) = irori_ui::web_url(&url) else {
+                continue;
+            };
+            buttons.push(
+                Button::new(("game-link", i))
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::ExternalLink)
+                    .label(name)
+                    .tooltip(url.to_string())
+                    .on_click(move |_, _, cx| cx.open_url(&url))
+                    .into_any_element(),
+            );
+        }
+        let id = self.id.clone();
+        buttons.push(
+            Button::new("game-links-edit")
+                .xsmall()
+                .ghost()
+                .icon(IconName::Pencil)
+                .tooltip(t("game.links.edit"))
+                .on_click(move |_, window, cx| {
+                    crate::links::open_links_dialog(id.clone(), window, cx)
+                })
+                .into_any_element(),
+        );
+        vec![row(
+            t("game.links.title"),
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .gap_1()
+                .flex_wrap()
+                .children(buttons),
             muted,
         )]
     }
@@ -754,6 +856,31 @@ mod tests {
         assert_eq!(
             super::tag_chips(&tags, &[], &[GameMode::Single]),
             ["Roguelike", "Action", "Co-op", "Great Soundtrack"]
+        );
+    }
+
+    #[test]
+    fn links_name_the_pages_sources_found() {
+        use crate::hooks::{CompatibilityInfo, ReviewScore};
+        assert!(super::known_links(None, None).is_empty());
+        let info = CompatibilityInfo {
+            pcgamingwiki_url: Some("https://www.pcgamingwiki.com/wiki/?curid=1".into()),
+            protondb_url: Some("https://www.protondb.com/search?q=Hades".into()),
+            scores: vec![ReviewScore::new(
+                "IGDB",
+                90,
+                Some("https://www.igdb.com/games/hades".into()),
+            )],
+            ..Default::default()
+        };
+        let names: Vec<String> = super::known_links(Some(1145360), Some(&info))
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(
+            names,
+            ["SteamDB", "PCGamingWiki", "IGDB"],
+            "not a search page"
         );
     }
 

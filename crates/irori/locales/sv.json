@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "{name} kunde inte uppdateras",
   "shell.notice.component_updated": "{name} uppdaterad till {version}",
   "shell.palette.edit_actions": "Redigera åtgärderna för {title}",
+  "shell.palette.game_links": "Länkar för {title}",
+  "shell.palette.game_links_keywords": "länkar webb sida webbplats wiki url lägg till",
   "shell.palette.steam_link": "Länka {title} till en Steam-app",
   "shell.palette.steam_link_keywords": "steam app id länka matcha taggar protondb",
   "shell.palette.storage": "Lagring och rensning",

@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "无法更新 {name}",
   "shell.notice.component_updated": "{name} 已更新到 {version}",
   "shell.palette.edit_actions": "编辑 {title} 的操作",
+  "shell.palette.game_links": "{title} 的链接",
+  "shell.palette.game_links_keywords": "链接 网页 网站 wiki url 添加",
   "shell.palette.steam_link": "将 {title} 关联到 Steam 应用",
   "shell.palette.steam_link_keywords": "steam 应用 id 关联 匹配 标签 protondb",
   "shell.palette.storage": "存储空间和清理",

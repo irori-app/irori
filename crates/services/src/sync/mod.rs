@@ -5,8 +5,8 @@
 //! Each device writes one file, `<device id>.json` in the `Irori sync`
 //! folder, with everything it knows, and reads the others'. What is merged
 //! and how is in [`merge`]. Synced: favourites, hidden games, ratings, play
-//! statuses, categories, custom titles and web art, yearly goals, playtime
-//! and sessions. Install paths, per-game and app settings, recently played
+//! statuses, categories, custom titles and web art, games' own links,
+//! yearly goals, playtime and sessions. Install paths, per-game and app settings, recently played
 //! and store sign-ins stay on each device. A device set to send only
 //! playtime (`iroriSync.playtimeOnly`) exchanges playtime and sessions and
 //! keeps its organisation to itself.

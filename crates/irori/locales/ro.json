@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "{name} nu a putut fi actualizat",
   "shell.notice.component_updated": "{name} actualizat la {version}",
   "shell.palette.edit_actions": "Editează acțiunile pentru {title}",
+  "shell.palette.game_links": "Linkurile pentru {title}",
+  "shell.palette.game_links_keywords": "linkuri web pagină site wiki url adaugă",
   "shell.palette.steam_link": "Leagă {title} de o aplicație Steam",
   "shell.palette.steam_link_keywords": "steam aplicație id leagă potrivire etichete protondb",
   "shell.palette.storage": "Spațiu de stocare și curățare",

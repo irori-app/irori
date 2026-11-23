@@ -2,8 +2,8 @@
 //! open, its play status, the user's own actions, troubleshooting, Steam
 //! Play, playing a ROM as a PC game, ReShade and RenoDX, Steam shortcuts and
 //! save backups; and for any game, the level → opens, which adds playing,
-//! stopping, going back to it, its page, its store page, favourite, hiding
-//! and its folder.
+//! stopping, going back to it, its page, its store page, favourite, its
+//! links and Steam link, hiding and its folder.
 
 use super::entry::Entry;
 use gpui_kit::SharedString;
@@ -252,6 +252,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
     for (item, target) in rows(game, facts.status, &facts.actions) {
         push(item, target);
     }
+    push(
+        Entry::new()
+            .label(t_args("shell.palette.game_links", &[("title", title)]))
+            .keywords([t("shell.palette.game_links_keywords")])
+            .icon(IconName::ExternalLink),
+        PaletteTarget::GameLinks(id.clone()),
+    );
     if !matches!(game.runner(), Runner::Steam | Runner::Emulation) {
         push(
             Entry::new()

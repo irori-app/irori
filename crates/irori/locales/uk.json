@@ -17,6 +17,8 @@
   "shell.notice.component_update_failed": "Не вдалося оновити {name}",
   "shell.notice.component_updated": "{name} оновлено до {version}",
   "shell.palette.edit_actions": "Змінити дії гри {title}",
+  "shell.palette.game_links": "Посилання {title}",
+  "shell.palette.game_links_keywords": "посилання веб сторінка сайт вікі url додати",
   "shell.palette.steam_link": "Пов’язати {title} із застосунком Steam",
   "shell.palette.steam_link_keywords": "steam застосунок id пов’язати відповідність мітки protondb",
   "shell.palette.storage": "Сховище й очищення",

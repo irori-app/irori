@@ -569,6 +569,14 @@ commands without a window.
     `smart_categories`, written only while one is picked, and drops ids that
     no longer exist as soon as the user data says so. Every list respects
     hidden games and their PIN like the rest of the library.
+- **Links** (`GameOverrides::links`, `irori_core::GameLink`): web pages the user keeps
+  with a game, set with `UserDataService::set_links` (`set_overrides` keeps them) and
+  synced in a register of their own (`Registers::links`), so a title edited on one
+  computer and links on another both stay. The details panel's Links row shows the
+  store page, SteamDB (with a Steam link), the PCGamingWiki, ProtonDB, IGDB and
+  HowLongToBeat pages the sources found, and the user's links, each opened through
+  `irori_ui::web_url`; "Links…" (`irori_game::open_links_dialog`: the row, the game
+  menu, the palette) adds and removes them.
 - **Journal** (`journal.rs`): one note per game per local calendar day (optional
   title, text, paths of that day's screenshots), written with
   `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the

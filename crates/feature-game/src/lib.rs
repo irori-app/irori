@@ -28,6 +28,7 @@ mod import_installers;
 mod install;
 mod launch_options;
 mod launch_problem;
+mod links;
 mod load;
 mod logs;
 mod manage;
@@ -60,6 +61,7 @@ pub use install::{
 pub use irori_services::troubleshoot::{LaunchHint, game_output_start, launch_hints};
 pub use launch_options::open_launch_options_dialog;
 pub use launch_problem::{open_launch_problem_sheet, open_troubleshooter};
+pub use links::open_links_dialog;
 pub use logs::{LineLevel, LogTail, LogViewer, open_log_sheet, parse_tail};
 pub use manage::{
     ImportForm, UninstallOptions, open_cancel_download_dialog, open_import_dialog,
