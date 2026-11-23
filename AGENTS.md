@@ -1342,7 +1342,11 @@ Microsoft's approval page (`irori_manage::login`).
   gilrs reads Windows.Gaming.Input through the patched `crates/gilrs-core`, which
   never panics (release builds abort on a panic) and reads controllers whose
   `NonRoamableId` fails. PlayStation and Switch Pro controllers that Steam or an SDL
-  program switched to their full HID report still read nothing there.
+  program switched to their full HID report still read nothing there. On Linux the
+  `xpad` driver reports an Xbox pad's X and Y as `BTN_X`/`BTN_Y`, which the kernel
+  also names `BTN_NORTH`/`BTN_WEST`; SDL's database undoes that, so a pad it doesn't
+  list (gilrs' default mapping) gets its top and left buttons swapped back when its
+  event device's driver is `xpad` (`reader::swaps_north_west`).
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
   keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K, Page Up/Down) when the element
