@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Editează acțiunile pentru {title}",
   "shell.palette.game_links": "Linkurile pentru {title}",
   "shell.palette.game_links_keywords": "linkuri web pagină site wiki url adaugă",
+  "shell.palette.edit_playtime": "Editează timpul de joc în {title}",
+  "shell.palette.edit_playtime_keywords": "timp de joc ore editează setează schimbă",
   "shell.palette.detail_rows": "Alege rândurile din Detaliile paginilor de joc",
   "shell.palette.detail_rows_keywords": "detalii rânduri câmpuri ascunde arată informații panou",
   "shell.palette.captures_folder": "Deschide dosarul cu capturi pentru {title}",

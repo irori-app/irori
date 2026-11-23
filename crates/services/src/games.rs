@@ -285,6 +285,16 @@ impl Backend {
         crate::screenshots::build(&folders, &sessions, &Paths::get().screenshot_index_file())
     }
 
+    /// Make `id`'s playtime `seconds`, or with `None` what Irori counted
+    /// again ("Edit time played"). Sessions played later add to it, and
+    /// sync carries the edit to the other computers without counting time
+    /// twice. Writes the library file; call off the UI thread.
+    pub fn set_playtime(&self, id: &GameId, seconds: Option<u64>) {
+        // Sync sees the edit whole, as it sees a session.
+        let _playtime = self.sync.playtime_guard();
+        self.userdata.set_playtime(id, seconds);
+    }
+
     /// The folder holding most of the screenshots and clips of `id`'s
     /// entry (any of its copies); `None` before any was taken. Lists the
     /// folders; call off the UI thread.

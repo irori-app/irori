@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Изменить действия игры {title}",
   "shell.palette.game_links": "Ссылки {title}",
   "shell.palette.game_links_keywords": "ссылки веб страница сайт вики url добавить",
+  "shell.palette.edit_playtime": "Изменить время в игре {title}",
+  "shell.palette.edit_playtime_keywords": "время в игре часы изменить задать",
   "shell.palette.detail_rows": "Выбрать строки в подробностях страниц игр",
   "shell.palette.detail_rows_keywords": "подробности строки поля скрыть показать информация панель",
   "shell.palette.captures_folder": "Открыть папку со скриншотами {title}",

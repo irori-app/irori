@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Edytuj akcje gry {title}",
   "shell.palette.game_links": "Linki gry {title}",
   "shell.palette.game_links_keywords": "linki strona witryna wiki url dodaj",
+  "shell.palette.edit_playtime": "Edytuj czas gry w {title}",
+  "shell.palette.edit_playtime_keywords": "czas gry godziny edytuj ustaw zmień",
   "shell.palette.detail_rows": "Wybierz wiersze w szczegółach stron gier",
   "shell.palette.detail_rows_keywords": "szczegóły wiersze pola ukryj pokaż informacje panel",
   "shell.palette.captures_folder": "Otwórz folder zrzutów ekranu gry {title}",

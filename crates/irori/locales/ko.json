@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "{title}의 동작 편집",
   "shell.palette.game_links": "{title} 링크",
   "shell.palette.game_links_keywords": "링크 웹 페이지 사이트 위키 url 추가",
+  "shell.palette.edit_playtime": "{title} 플레이 시간 편집",
+  "shell.palette.edit_playtime_keywords": "플레이 시간 시간 편집 설정 변경",
   "shell.palette.detail_rows": "게임 페이지 세부 정보에 표시할 행 선택",
   "shell.palette.detail_rows_keywords": "세부 정보 행 항목 숨기기 표시 정보 패널",
   "shell.palette.captures_folder": "{title}의 스크린샷 폴더 열기",

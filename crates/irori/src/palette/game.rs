@@ -261,6 +261,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
     );
     push(
         Entry::new()
+            .label(t_args("shell.palette.edit_playtime", &[("title", title)]))
+            .keywords([t("shell.palette.edit_playtime_keywords")])
+            .icon(IconName::Timer),
+        PaletteTarget::EditPlaytime(id.clone()),
+    );
+    push(
+        Entry::new()
             .label(t("shell.palette.detail_rows"))
             .keywords([t("shell.palette.detail_rows_keywords")])
             .icon(IconName::Settings2),

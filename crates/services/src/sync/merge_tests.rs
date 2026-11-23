@@ -419,6 +419,48 @@ fn store_totals_and_imports_count_once_beside_sessions() {
 }
 
 #[test]
+fn an_edited_playtime_counts_once_on_every_computer() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    // Both played; then a's user says the game was played for 10 hours.
+    a.play("gog:1", t(0), 3600);
+    b.play("gog:1", t(5), 1800);
+    round(&mut a, &mut b, t(10));
+    assert_eq!(a.seconds("gog:1"), 5400);
+    a.data.set_playtime("gog:1", Some(36_000));
+    a.tick(t(20));
+    assert_eq!(a.seconds("gog:1"), 36_000);
+    round(&mut a, &mut b, t(30));
+    round(&mut a, &mut b, t(40));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 36_000, "{} keeps the edit once", d.id);
+    }
+
+    // Sessions after the edit add to it, wherever they are played.
+    b.play("gog:1", t(50), 600);
+    round(&mut a, &mut b, t(60));
+    round(&mut a, &mut b, t(70));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 36_600);
+    }
+
+    // Setting less than was counted works too, and so does undoing it.
+    b.data.set_playtime("gog:1", Some(1200));
+    b.tick(t(80));
+    round(&mut a, &mut b, t(90));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 1200);
+    }
+    a.data.set_playtime("gog:1", None);
+    a.tick(t(100));
+    round(&mut a, &mut b, t(110));
+    for d in [&a, &b] {
+        assert_eq!(d.seconds("gog:1"), 3600 + 1800 + 600);
+        assert!(d.data.playtime_adjust.is_empty());
+    }
+}
+
+#[test]
 fn removed_playtime_stays_removed_until_the_game_is_played_again() {
     let mut a = Device::new("a");
     let mut b = Device::new("b");

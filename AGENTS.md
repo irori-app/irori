@@ -873,7 +873,12 @@ commands without a window.
   and merges the others' (`sync/merge.rs`): every value the user
   sets is a last-writer-wins register with a hybrid-clock time and the device that set
   it, sessions merge as a set, and playtime is the largest total beyond sessions plus
-  every session, so nothing counts twice. New user data that should travel needs a
+  every session, so nothing counts twice. "Edit time played" (`Backend::set_playtime`)
+  keeps the user's edit apart (`UserData::playtime_adjust`, seconds added or taken
+  away; the record includes it, `counted_seconds` is without it): shares, store totals
+  and merged totals are counted without it and the merged edit (a register) is applied
+  after, so later sessions add to it and no computer counts it twice; backups carry
+  it. New user data that should travel needs a
   register there and a test in `sync/merge_tests.rs`; data that differs per computer
   (paths, installs) must stay out. A session's playtime and history are written under
   `SyncService::playtime_guard`. A computer with `iroriSync.playtimeOnly` reads and

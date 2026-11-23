@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "{title} eylemlerini düzenle",
   "shell.palette.game_links": "{title} bağlantıları",
   "shell.palette.game_links_keywords": "bağlantılar web sayfa site wiki url ekle",
+  "shell.palette.edit_playtime": "{title} oynama süresini düzenle",
+  "shell.palette.edit_playtime_keywords": "oynama süresi saat düzenle ayarla değiştir",
   "shell.palette.detail_rows": "Oyun sayfalarının Ayrıntılar satırlarını seç",
   "shell.palette.detail_rows_keywords": "ayrıntılar satırlar alanlar gizle göster bilgi panel",
   "shell.palette.captures_folder": "{title} için ekran görüntüsü klasörünü aç",

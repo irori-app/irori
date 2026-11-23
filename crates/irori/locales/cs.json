@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Upravit akce hry {title}",
   "shell.palette.game_links": "Odkazy hry {title}",
   "shell.palette.game_links_keywords": "odkazy web stránka wiki url přidat",
+  "shell.palette.edit_playtime": "Upravit odehraný čas ve hře {title}",
+  "shell.palette.edit_playtime_keywords": "odehraný čas hodiny upravit nastavit změnit",
   "shell.palette.detail_rows": "Zvolit řádky v podrobnostech stránek her",
   "shell.palette.detail_rows_keywords": "podrobnosti řádky pole skrýt zobrazit informace panel",
   "shell.palette.captures_folder": "Otevřít složku se snímky obrazovky hry {title}",

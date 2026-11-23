@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "編輯 {title} 的動作",
   "shell.palette.game_links": "{title} 的連結",
   "shell.palette.game_links_keywords": "連結 網頁 網站 wiki url 新增",
+  "shell.palette.edit_playtime": "編輯 {title} 的遊玩時間",
+  "shell.palette.edit_playtime_keywords": "遊玩時間 小時 編輯 設定 修改",
   "shell.palette.detail_rows": "選擇遊戲頁面詳細資訊中顯示的列",
   "shell.palette.detail_rows_keywords": "詳細資訊 列 欄位 隱藏 顯示 資訊 面板",
   "shell.palette.captures_folder": "開啟 {title} 的螢幕截圖資料夾",

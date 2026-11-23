@@ -90,6 +90,9 @@ pub struct LibraryBackup {
 pub struct PlaytimeBackup {
     pub records: BTreeMap<String, PlaytimeRecord>,
     pub sessions: Vec<Session>,
+    /// The user's edits of the records' time (`UserData::playtime_adjust`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub adjust: BTreeMap<String, i64>,
 }
 
 /// The contents of a backup file.
@@ -225,6 +228,7 @@ impl Backend {
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
+                adjust: user.playtime_adjust.clone(),
                 sessions: sessions::read_all(),
             }),
         })
@@ -317,8 +321,7 @@ impl Backend {
             && let Some(pt) = &backup.playtime
         {
             let _playtime = self.sync.playtime_guard();
-            self.userdata
-                .update(None, |d| merge_playtime(&mut d.playtime, &pt.records));
+            self.userdata.update(None, |d| merge_playtime(d, pt));
             summary.playtime_games = pt.records.len();
             let merged = merge_sessions(sessions::read_all(), &pt.sessions);
             sessions::replace_all(&merged)?;
@@ -469,17 +472,27 @@ pub(crate) fn later(a: &str, b: &str) -> bool {
     }
 }
 
-/// Keep, per game, the larger total and the widest first/last played span.
-fn merge_playtime(
-    current: &mut BTreeMap<String, PlaytimeRecord>,
-    backup: &BTreeMap<String, PlaytimeRecord>,
-) {
-    for (key, b) in backup {
-        let c = current.entry(key.clone()).or_default();
-        if (b.total_minutes, b.extra_seconds) > (c.total_minutes, c.extra_seconds) {
-            c.total_minutes = b.total_minutes;
-            c.extra_seconds = b.extra_seconds;
+/// Keep, per game, the larger counted time and the widest first/last
+/// played span. The user's own edit of a game's time stays as it is here,
+/// else the backup's comes back; it is applied to the counted time, so it
+/// never counts twice.
+fn merge_playtime(user: &mut crate::userdata::UserData, backup: &PlaytimeBackup) {
+    use crate::userdata::{adjusted, record_seconds};
+    for (key, b) in &backup.records {
+        let backup_adjust = backup.adjust.get(key).copied().unwrap_or(0);
+        let counted_backup = adjusted(record_seconds(b), -backup_adjust);
+        let counted = user.counted_seconds(key).max(counted_backup);
+        let adjust = *user
+            .playtime_adjust
+            .entry(key.clone())
+            .or_insert(backup_adjust);
+        if adjust == 0 {
+            user.playtime_adjust.remove(key);
         }
+        let c = user.playtime.entry(key.clone()).or_default();
+        let seconds = adjusted(counted, adjust);
+        c.total_minutes = seconds / 60;
+        c.extra_seconds = seconds % 60;
         c.last_played = c.last_played.clone().max(b.last_played.clone());
         c.first_played = match (c.first_played.clone(), b.first_played.clone()) {
             (Some(x), Some(y)) => Some(x.min(y)),
@@ -725,7 +738,7 @@ mod tests {
 
     #[test]
     fn playtime_keeps_the_larger_total_and_the_full_span() {
-        let mut current = BTreeMap::from([(
+        let current = BTreeMap::from([(
             "gog:1".to_string(),
             PlaytimeRecord {
                 total_minutes: 120,
@@ -752,12 +765,56 @@ mod tests {
                 },
             ),
         ]);
-        merge_playtime(&mut current, &backup);
-        let one = &current["gog:1"];
+        let mut user = crate::userdata::UserData {
+            playtime: current,
+            ..Default::default()
+        };
+        merge_playtime(
+            &mut user,
+            &PlaytimeBackup {
+                records: backup,
+                ..Default::default()
+            },
+        );
+        let one = &user.playtime["gog:1"];
         assert_eq!(one.total_minutes, 120);
         assert_eq!(one.last_played.as_deref(), Some("2026-10-23T10:00:00Z"));
         assert_eq!(one.first_played.as_deref(), Some("2025-01-01T10:00:00Z"));
-        assert_eq!(current["gog:2"].total_minutes, 5);
+        assert_eq!(user.playtime["gog:2"].total_minutes, 5);
+    }
+
+    #[test]
+    fn an_edited_playtime_restores_without_counting_twice() {
+        // The backup: 60 counted minutes the user set to 600.
+        let mut saved = crate::userdata::UserData::default();
+        saved.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 60,
+                ..Default::default()
+            },
+        );
+        saved.set_playtime("gog:1", Some(600 * 60));
+        let backup = PlaytimeBackup {
+            records: saved.playtime.clone(),
+            adjust: saved.playtime_adjust.clone(),
+            ..Default::default()
+        };
+        // Restored on a computer that counted 90 minutes itself.
+        let mut user = crate::userdata::UserData::default();
+        user.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 90,
+                ..Default::default()
+            },
+        );
+        merge_playtime(&mut user, &backup);
+        assert_eq!(user.playtime["gog:1"].total_minutes, 90 + 540);
+        assert_eq!(user.counted_seconds("gog:1"), 90 * 60);
+        // Restoring twice changes nothing.
+        merge_playtime(&mut user, &backup);
+        assert_eq!(user.playtime["gog:1"].total_minutes, 90 + 540);
     }
 
     #[test]

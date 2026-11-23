@@ -547,9 +547,29 @@ impl GamePage {
         let played = record.as_ref().is_some_and(|r| r.last_played.is_some());
         let mut rows = Vec::new();
         if shows(DetailRow::Playtime) {
+            let id = self.id.clone();
             rows.push(row(
                 t("game.info.playtime"),
-                text(playtime_label(minutes, played)),
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .justify_between()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .child(playtime_label(minutes, played)),
+                    )
+                    .child(
+                        Button::new("details-edit-playtime")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Pencil)
+                            .tooltip(t("game.menu.edit_playtime"))
+                            .on_click(move |_, window, cx| {
+                                crate::playtime_edit::open_playtime_dialog(id.clone(), window, cx)
+                            }),
+                    ),
                 muted,
             ));
         }

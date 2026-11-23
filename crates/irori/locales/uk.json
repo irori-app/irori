@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Змінити дії гри {title}",
   "shell.palette.game_links": "Посилання {title}",
   "shell.palette.game_links_keywords": "посилання веб сторінка сайт вікі url додати",
+  "shell.palette.edit_playtime": "Змінити час у грі {title}",
+  "shell.palette.edit_playtime_keywords": "час у грі години змінити задати",
   "shell.palette.detail_rows": "Вибрати рядки в подробицях сторінок ігор",
   "shell.palette.detail_rows_keywords": "подробиці рядки поля сховати показати інформація панель",
   "shell.palette.captures_folder": "Відкрити теку зі знімками екрана {title}",

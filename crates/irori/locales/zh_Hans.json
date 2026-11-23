@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "编辑 {title} 的操作",
   "shell.palette.game_links": "{title} 的链接",
   "shell.palette.game_links_keywords": "链接 网页 网站 wiki url 添加",
+  "shell.palette.edit_playtime": "编辑 {title} 的游戏时长",
+  "shell.palette.edit_playtime_keywords": "游戏时长 小时 编辑 设置 修改",
   "shell.palette.detail_rows": "选择游戏页面详细信息中显示的行",
   "shell.palette.detail_rows_keywords": "详细信息 行 字段 隐藏 显示 信息 面板",
   "shell.palette.captures_folder": "打开 {title} 的截图文件夹",

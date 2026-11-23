@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Redigera åtgärderna för {title}",
   "shell.palette.game_links": "Länkar för {title}",
   "shell.palette.game_links_keywords": "länkar webb sida webbplats wiki url lägg till",
+  "shell.palette.edit_playtime": "Redigera speltiden i {title}",
+  "shell.palette.edit_playtime_keywords": "speltid timmar redigera ange ändra",
   "shell.palette.detail_rows": "Välj raderna som spelsidornas Detaljer visar",
   "shell.palette.detail_rows_keywords": "detaljer rader fält dölj visa info panel",
   "shell.palette.captures_folder": "Öppna mappen med skärmbilder från {title}",

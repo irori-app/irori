@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "{title} のアクションを編集",
   "shell.palette.game_links": "{title} のリンク",
   "shell.palette.game_links_keywords": "リンク web ページ サイト wiki url 追加",
+  "shell.palette.edit_playtime": "{title} のプレイ時間を編集",
+  "shell.palette.edit_playtime_keywords": "プレイ時間 時間 編集 設定 変更",
   "shell.palette.detail_rows": "ゲームページの詳細に表示する行を選ぶ",
   "shell.palette.detail_rows_keywords": "詳細 行 項目 非表示 表示 情報 パネル",
   "shell.palette.captures_folder": "{title} のスクリーンショットのフォルダーを開く",

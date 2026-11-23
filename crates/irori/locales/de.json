@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Aktionen von {title} bearbeiten",
   "shell.palette.game_links": "Links von {title}",
   "shell.palette.game_links_keywords": "links webseite website wiki url hinzufügen",
+  "shell.palette.edit_playtime": "Spielzeit von {title} bearbeiten",
+  "shell.palette.edit_playtime_keywords": "spielzeit stunden bearbeiten setzen ändern",
   "shell.palette.detail_rows": "Zeilen in den Details der Spielseiten wählen",
   "shell.palette.detail_rows_keywords": "details zeilen felder ausblenden anzeigen info bereich",
   "shell.palette.captures_folder": "Screenshot-Ordner von {title} öffnen",

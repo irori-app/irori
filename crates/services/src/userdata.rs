@@ -71,6 +71,30 @@ pub struct UserData {
     /// theirs in themselves.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: BTreeMap<String, CategoryLook>,
+    /// Seconds the user added to (or, negative, took from) a game's
+    /// playtime ("Edit time played"), by game key. Its `playtime` record
+    /// already includes them; what was counted (sessions, store totals) is
+    /// the record without them ([`UserData::counted_seconds`]), which is
+    /// what store totals and other computers' time are compared with, so an
+    /// edit is never counted twice.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub playtime_adjust: BTreeMap<String, i64>,
+}
+
+/// A playtime record's length in seconds.
+pub fn record_seconds(r: &PlaytimeRecord) -> u64 {
+    r.total_minutes * 60 + r.extra_seconds
+}
+
+/// Set a record's length to `seconds`.
+fn set_record_seconds(r: &mut PlaytimeRecord, seconds: u64) {
+    r.total_minutes = seconds / 60;
+    r.extra_seconds = seconds % 60;
+}
+
+/// `counted` seconds with the user's `adjust` applied, never below zero.
+pub fn adjusted(counted: u64, adjust: i64) -> u64 {
+    (counted as i64).saturating_add(adjust).max(0) as u64
 }
 
 /// Store `o` as the overrides of `key`, or none when it is empty.
@@ -143,6 +167,9 @@ impl UserData {
                 games.insert(to.to_string());
             }
         }
+        if let Some(adjust) = self.playtime_adjust.remove(from) {
+            *self.playtime_adjust.entry(to.to_string()).or_default() += adjust;
+        }
         if let Some(old) = self.playtime.remove(from) {
             let new = self.playtime.entry(to.to_string()).or_default();
             let seconds = new.extra_seconds + old.extra_seconds;
@@ -188,6 +215,36 @@ impl UserData {
         let notes = std::mem::take(&mut self.journal);
         self.journal = journal::read(notes, legacy);
         self.legacy_journal = journal::mirror(&self.journal);
+    }
+
+    /// The time Irori counted for a game (sessions, store totals, other
+    /// computers'), without the user's own edit.
+    pub fn counted_seconds(&self, key: &str) -> u64 {
+        let total = self.playtime.get(key).map_or(0, record_seconds);
+        let adjust = self.playtime_adjust.get(key).copied().unwrap_or(0);
+        (total as i64).saturating_sub(adjust).max(0) as u64
+    }
+
+    /// Make a game's playtime `total` seconds ("Edit time played"), or with
+    /// `None` what was counted again. Sessions played later add to it.
+    pub fn set_playtime(&mut self, key: &str, total: Option<u64>) {
+        let counted = self.counted_seconds(key);
+        let adjust = total.map_or(0, |t| t as i64 - counted as i64);
+        if adjust == 0 {
+            self.playtime_adjust.remove(key);
+        } else {
+            self.playtime_adjust.insert(key.to_string(), adjust);
+        }
+        let seconds = adjusted(counted, adjust);
+        match self.playtime.get_mut(key) {
+            Some(record) => set_record_seconds(record, seconds),
+            None if seconds > 0 => {
+                let mut record = PlaytimeRecord::default();
+                set_record_seconds(&mut record, seconds);
+                self.playtime.insert(key.to_string(), record);
+            }
+            None => {}
+        }
     }
 
     /// The status the user set for a game, if any.
@@ -420,7 +477,7 @@ fn grown_totals(
     totals
         .iter()
         .map(|(app, minutes)| (GameId::new(runner, app.as_str()).key(), *minutes))
-        .filter(|(key, minutes)| *minutes > data.playtime.get(key).map_or(0, |r| r.total_minutes))
+        .filter(|(key, minutes)| *minutes > data.counted_seconds(key) / 60)
         .collect()
 }
 
@@ -965,6 +1022,14 @@ impl UserDataService {
         });
     }
 
+    /// Make a game's playtime `total` seconds, or with `None` what Irori
+    /// counted ([`UserData::set_playtime`]). Hold the sync's playtime guard
+    /// around it ([`crate::Backend::set_playtime`]).
+    pub fn set_playtime(&self, id: &GameId, total: Option<u64>) {
+        let key = id.key();
+        self.update(Some(id), |d| d.set_playtime(&key, total));
+    }
+
     /// Record a session start: recent list and first/last played.
     pub fn record_launch(&self, id: &GameId, max_recent: usize) {
         let now = util::now_rfc3339();
@@ -1013,10 +1078,13 @@ impl UserDataService {
         if !grown.is_empty() || !stale.is_empty() {
             self.update(None, |d| {
                 for (key, minutes) in &grown {
-                    d.playtime.entry(key.clone()).or_default().total_minutes = *minutes;
+                    let adjust = d.playtime_adjust.get(key).copied().unwrap_or(0);
+                    let record = d.playtime.entry(key.clone()).or_default();
+                    set_record_seconds(record, adjusted(minutes * 60, adjust));
                 }
                 for key in &stale {
                     d.playtime.remove(key);
+                    d.playtime_adjust.remove(key);
                 }
             });
         }
@@ -1290,6 +1358,46 @@ mod tests {
         ]);
         let grown = grown_totals(&data, Runner::Legendary, &totals);
         assert_eq!(grown, [("legendary:Sugar".to_string(), 600)]);
+    }
+
+    #[test]
+    fn an_edited_playtime_follows_what_was_counted() {
+        let mut data = UserData::default();
+        data.playtime.insert(
+            "legendary:Fowl".into(),
+            PlaytimeRecord {
+                total_minutes: 120,
+                last_played: Some("2026-10-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        // Set lower than counted: the store's own total, still below what
+        // was counted, doesn't bring it back.
+        data.set_playtime("legendary:Fowl", Some(30 * 60));
+        assert_eq!(data.playtime["legendary:Fowl"].total_minutes, 30);
+        assert_eq!(data.counted_seconds("legendary:Fowl"), 120 * 60);
+        assert_eq!(
+            data.playtime["legendary:Fowl"].last_played.as_deref(),
+            Some("2026-10-01T10:00:00Z")
+        );
+        let totals = std::collections::HashMap::from([("Fowl".to_string(), 100u64)]);
+        assert!(grown_totals(&data, Runner::Legendary, &totals).is_empty());
+        // Time played since counts on top of the edit.
+        let totals = std::collections::HashMap::from([("Fowl".to_string(), 150u64)]);
+        assert_eq!(
+            grown_totals(&data, Runner::Legendary, &totals),
+            [("legendary:Fowl".to_string(), 150)]
+        );
+        // A game never played can be given time, and the edit undone.
+        data.set_playtime("gog:2", Some(90));
+        assert_eq!(data.playtime["gog:2"].extra_seconds, 30);
+        data.set_playtime("gog:2", None);
+        assert_eq!(data.counted_seconds("gog:2"), 0);
+        assert!(!data.playtime_adjust.contains_key("gog:2"));
+        // Carried over with the time.
+        data.carry_over("legendary:Fowl", "sideload:x");
+        assert_eq!(data.playtime_adjust["sideload:x"], -90 * 60);
+        assert_eq!(data.counted_seconds("sideload:x"), 120 * 60);
     }
 
     #[test]

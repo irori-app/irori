@@ -404,6 +404,10 @@ pub(super) fn build_menu(
             .on_click(move |_, window, cx| crate::links::open_links_dialog(i.clone(), window, cx)),
     );
     let i = id.clone();
+    menu = menu.item(item("game.menu.edit_playtime", IconName::Timer).on_click(
+        move |_, window, cx| crate::playtime_edit::open_playtime_dialog(i.clone(), window, cx),
+    ));
+    let i = id.clone();
     menu = menu.item(
         item("game.menu.captures_folder", IconName::Images)
             .on_click(move |_, window, cx| ops::open_captures_folder(&i, window, cx)),
