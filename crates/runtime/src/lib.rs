@@ -1508,6 +1508,8 @@ mod tests {
         assert!(!preview.sandboxed);
     }
 
+    // On Windows every build starts without Wine; the script is a Unix one.
+    #[cfg(unix)]
     #[tokio::test]
     async fn the_preview_of_a_build_started_without_wine_matches_its_launch() {
         // A Windows build whose program is a native script starts it

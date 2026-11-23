@@ -121,10 +121,13 @@ pub fn app_bundle(root: &Path, title: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     fn app(root: &Path, rel: &str) {
         std::fs::create_dir_all(root.join(rel).join("Contents/MacOS")).unwrap();
     }
 
+    // macOS app bundles, named with '/'.
+    #[cfg(unix)]
     #[test]
     fn finds_the_games_app() {
         let dir = tempfile::tempdir().unwrap();

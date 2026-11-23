@@ -981,6 +981,8 @@ mod tests {
 
     /// Heroic #5988: builds Steam itself would find through
     /// `STEAM_EXTRA_COMPAT_TOOLS_PATHS` (a folder of tools, or one tool).
+    // Steam's variable separates folders with ':', as on Linux.
+    #[cfg(unix)]
     #[test]
     fn extra_compat_tool_paths_are_scanned() {
         let dir = tempfile::tempdir().unwrap();

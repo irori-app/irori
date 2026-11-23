@@ -123,7 +123,9 @@ impl SteamLaunch {
     }
 }
 
-#[cfg(test)]
+// These cover a part of Irori that runs only on Linux and macOS, with
+// Unix paths and rules.
+#[cfg(all(test, unix))]
 mod tests {
     use std::collections::HashMap;
 

@@ -207,6 +207,8 @@ mod tests {
         (name.to_string(), dir)
     }
 
+    // Steam's compatibility tools are a Linux part.
+    #[cfg(unix)]
     #[test]
     fn registers_builds_steam_doesnt_have_yet() {
         let dir = tempfile::tempdir().unwrap();

@@ -851,6 +851,7 @@ mod tests {
     use irori_depot::test_server::{Resp, TestServer};
     use sha2::{Digest as _, Sha256};
 
+    #[cfg(unix)]
     fn probe(exe: &str, os: Os) -> Probe<'_> {
         Probe {
             exe: Path::new(exe),
@@ -861,6 +862,8 @@ mod tests {
         }
     }
 
+    // The probes are Unix paths, which Windows reads differently.
+    #[cfg(unix)]
     #[test]
     fn layouts_follow_how_irori_was_unpacked() {
         assert_eq!(
