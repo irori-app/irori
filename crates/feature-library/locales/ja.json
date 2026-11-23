@@ -462,6 +462,7 @@
   "library.stats.album.clips_one": "クリップ 1 本",
   "library.stats.album.clips_other": "クリップ {count} 本",
   "library.stats.album.clip_date": "クリップ · {date}",
+  "library.stats.album.clip_length_date": "クリップ · {length} · {date}",
   "library.stats.achievements.title": "実績",
   "library.stats.achievements.scan": "プレイしたゲームを確認",
   "library.stats.achievements.scanned_one": "{count} 本のゲームで実績が見つかりました",

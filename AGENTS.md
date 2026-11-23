@@ -822,7 +822,11 @@ commands without a window.
   folder's modified time; matching is redone each build. The stats page's Album tab
   and its insight card show them, and journal notes link them. Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
-  read the same way.
+  read the same way. A clip's `file://` address in the art store is its poster
+  (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one
+  decoder thread, keyframes from two thirds in through `thumbnail`), cached in
+  `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
+  modified time; `irori_ui::components::clip_mark` draws the play chip and length.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure

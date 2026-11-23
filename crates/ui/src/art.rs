@@ -385,9 +385,14 @@ fn release_freed_memory(cx: &App) {
     });
 }
 
-/// The original of `url` on disk, downloading it on first use.
+/// The original of `url` on disk, downloading it on first use. A local
+/// clip's original is its poster frame, so clips show like pictures
+/// wherever a screenshot would (missing while the computer has no ffmpeg).
 async fn original(url: &str) -> Result<PathBuf> {
     if let Some(p) = local_path(url) {
+        if irori_services::screenshots::is_video(&p) {
+            return irori_services::media::posters::poster(&p).await;
+        }
         return Ok(p);
     }
     let orig = original_path(url);

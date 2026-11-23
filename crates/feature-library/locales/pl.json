@@ -462,6 +462,7 @@
   "library.stats.album.clips_one": "1 klip",
   "library.stats.album.clips_other": "Klipy: {count}",
   "library.stats.album.clip_date": "Klip · {date}",
+  "library.stats.album.clip_length_date": "Klip · {length} · {date}",
   "library.stats.achievements.title": "Osiągnięcia",
   "library.stats.achievements.scan": "Sprawdź grane gry",
   "library.stats.achievements.scanned_one": "Znaleziono osiągnięcia w grach: {count}",

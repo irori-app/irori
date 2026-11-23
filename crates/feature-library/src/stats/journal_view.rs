@@ -19,7 +19,7 @@ use gpui_kit::{
     Window, div, px, rems, size,
 };
 use irori_services::LibrarySnapshot;
-use irori_ui::components::{EmptyState, GameCover, art_img, physical_width};
+use irori_ui::components::{EmptyState, GameCover, art_img, clip_mark, is_clip, physical_width};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::journal::shot_url;
 use irori_ui::style::KeyboardFocusable as _;
@@ -255,19 +255,20 @@ impl StatsView {
             .iter()
             .take(CARD_SHOTS)
             .map(|path| {
-                let frame = div()
+                let image = art_img(&shot_url(path), width, false, cx)
+                    .map(|img| img.size_full().object_fit(ObjectFit::Cover));
+                let clip = std::path::Path::new(path.as_str());
+                div()
+                    .relative()
                     .w(rems(SHOT_REM))
                     .h(rems(SHOT_REM * 9. / 16.))
                     .flex_shrink_0()
                     .rounded(radius)
                     .overflow_hidden()
-                    .bg(fill);
-                match art_img(&shot_url(path), width, false, cx) {
-                    Some(img) => frame
-                        .child(img.size_full().object_fit(ObjectFit::Cover))
-                        .into_any_element(),
-                    None => frame.into_any_element(),
-                }
+                    .bg(fill)
+                    .children(image)
+                    .when(is_clip(clip), |d| d.child(clip_mark(clip, cx)))
+                    .into_any_element()
             })
             .collect();
         let heading = (!note.entry.title.is_empty()).then(|| note.entry.title.clone());

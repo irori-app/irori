@@ -446,8 +446,11 @@ game) and from the screenshot folders in the table above, where a file counts fo
 the play session it was taken in. Irori never moves, renames or removes them.
 gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
 Steam saves them instead. Videos (mp4, mkv, webm, mov) in those folders and in the
-replay buffer's clip folders show with a play badge over their game's art and open in
-the system's player.
+replay buffer's clip folders show with a play badge and open in the system's player.
+With ffmpeg on the computer (on `PATH`, Homebrew's or MacPorts' folders on macOS, or
+the host's inside the Flatpak; never bundled) a clip shows a poster frame from about
+two thirds in and its length, in the Album and in journal notes; without it, its
+game's art.
 
 ### Replay buffer
 

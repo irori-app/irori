@@ -462,6 +462,7 @@
   "library.stats.album.clips_one": "클립 1개",
   "library.stats.album.clips_other": "클립 {count}개",
   "library.stats.album.clip_date": "클립 · {date}",
+  "library.stats.album.clip_length_date": "클립 · {length} · {date}",
   "library.stats.achievements.title": "업적",
   "library.stats.achievements.scan": "플레이한 게임 확인",
   "library.stats.achievements.scanned_one": "게임 {count}개에서 업적을 찾았습니다",
