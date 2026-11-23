@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "这里没有可选择的游戏",
   "shell.palette.preview_enter_play": "按 Enter 开始游玩，运行中则返回游戏；按 Shift+Enter 在 Irori 中显示；按 → 列出其操作",
   "shell.quick_launch.failed": "无法打开快速启动器",
-  "shell.notice.steam_shortcuts_failed": "未更改 Steam 快捷方式"
+  "shell.notice.steam_shortcuts_failed": "未更改 Steam 快捷方式",
+  "shell.palette.open_launcher": "打开 {launcher}",
+  "shell.palette.launcher_shortcut": "添加打开 {launcher} 的快捷方式",
+  "shell.palette.launcher_shortcut_keywords": "快捷方式 桌面 菜单 启动器 图标",
+  "shell.notice.launcher_open_failed": "{launcher} 未能打开"
 }

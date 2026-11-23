@@ -497,6 +497,23 @@ impl LaunchersStore {
         }
     }
 
+    /// The launchers Irori set up, or whose games it found (on Windows the
+    /// launchers need no setup). Reads no files.
+    pub fn known_launchers(&self) -> Vec<Launcher> {
+        let s = self.state.read();
+        Launcher::ALL
+            .into_iter()
+            .filter(|l| s.setups.contains_key(l) || s.found.iter().any(|g| g.launcher == *l))
+            .collect()
+    }
+
+    /// The launcher's program, when it is installed (its icon makes the
+    /// launcher's shortcuts').
+    pub fn program(&self, launcher: Launcher) -> Option<PathBuf> {
+        let setup = self.state.read().setups.get(&launcher).cloned();
+        launcher_program(launcher, setup.as_ref())
+    }
+
     /// Start the launcher itself (to sign in or install games there).
     pub async fn open(&self, launcher: Launcher) -> Result<()> {
         let setup = self.state.read().setups.get(&launcher).cloned();

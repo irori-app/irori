@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Burada seçilecek oyun yok",
   "shell.palette.preview_enter_play": "Enter oyunu başlatır ya da çalışırken ona döner; Shift+Enter onu Irori’de gösterir; → eylemlerini listeler",
   "shell.quick_launch.failed": "Hızlı başlatıcı açılamadı",
-  "shell.notice.steam_shortcuts_failed": "Steam kısayolları değiştirilmedi"
+  "shell.notice.steam_shortcuts_failed": "Steam kısayolları değiştirilmedi",
+  "shell.palette.open_launcher": "{launcher} uygulamasını aç",
+  "shell.palette.launcher_shortcut": "{launcher} uygulamasını açan bir kısayol ekle",
+  "shell.palette.launcher_shortcut_keywords": "kısayol masaüstü menü başlatıcı simge",
+  "shell.notice.launcher_open_failed": "{launcher} açılmadı"
 }

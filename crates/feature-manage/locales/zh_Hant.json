@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "已變更離線遊玩",
   "manage.xbox.offline.failed": "無法變更離線遊玩",
   "manage.steam_shortcuts.waiting_one": "1 項捷徑變更正在等待 Steam 關閉",
-  "manage.steam_shortcuts.waiting_other": "{count} 項捷徑變更正在等待 Steam 關閉"
+  "manage.steam_shortcuts.waiting_other": "{count} 項捷徑變更正在等待 Steam 關閉",
+  "manage.launchers.more": "更多",
+  "manage.launchers.add_shortcut": "新增捷徑",
+  "manage.launchers.remove_shortcut": "移除捷徑",
+  "manage.launchers.shortcut_added": "已在桌面和應用程式選單中新增開啟 {launcher} 的捷徑",
+  "manage.launchers.shortcut_removed": "已移除開啟 {launcher} 的捷徑",
+  "manage.launchers.shortcut_failed": "無法變更 {launcher} 的捷徑"
 }

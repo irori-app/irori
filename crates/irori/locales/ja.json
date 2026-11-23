@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "ここには選べるゲームがありません",
   "shell.palette.preview_enter_play": "Enter で起動、実行中ならゲームに戻る。Shift+Enter で Irori に表示、→ でアクションを表示",
   "shell.quick_launch.failed": "クイックランチャーを開けませんでした",
-  "shell.notice.steam_shortcuts_failed": "Steam ショートカットは変更されませんでした"
+  "shell.notice.steam_shortcuts_failed": "Steam ショートカットは変更されませんでした",
+  "shell.palette.open_launcher": "{launcher} を開く",
+  "shell.palette.launcher_shortcut": "{launcher} を開くショートカットを追加",
+  "shell.palette.launcher_shortcut_keywords": "ショートカット デスクトップ メニュー ランチャー アイコン",
+  "shell.notice.launcher_open_failed": "{launcher} を開けませんでした"
 }

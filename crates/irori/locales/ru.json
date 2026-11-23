@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Здесь нет игр для выбора",
   "shell.palette.preview_enter_play": "Enter запускает игру или возвращает в неё, пока она идёт; Shift+Enter показывает её в Irori; → — её действия",
   "shell.quick_launch.failed": "Не удалось открыть быстрый запуск",
-  "shell.notice.steam_shortcuts_failed": "Ярлыки Steam не изменены"
+  "shell.notice.steam_shortcuts_failed": "Ярлыки Steam не изменены",
+  "shell.palette.open_launcher": "Открыть {launcher}",
+  "shell.palette.launcher_shortcut": "Добавить ярлык, открывающий {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "ярлык рабочий стол меню лаунчер значок",
+  "shell.notice.launcher_open_failed": "{launcher} не открылся"
 }

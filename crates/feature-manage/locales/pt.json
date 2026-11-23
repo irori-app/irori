@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Jogo offline alterado",
   "manage.xbox.offline.failed": "Não foi possível alterar o jogo offline",
   "manage.steam_shortcuts.waiting_one": "1 alteração de atalhos espera que o Steam feche",
-  "manage.steam_shortcuts.waiting_other": "{count} alterações de atalhos esperam que o Steam feche"
+  "manage.steam_shortcuts.waiting_other": "{count} alterações de atalhos esperam que o Steam feche",
+  "manage.launchers.more": "Mais",
+  "manage.launchers.add_shortcut": "Adicionar atalho",
+  "manage.launchers.remove_shortcut": "Remover atalho",
+  "manage.launchers.shortcut_added": "Foi adicionado um atalho que abre o {launcher} no ambiente de trabalho e no menu de aplicações",
+  "manage.launchers.shortcut_removed": "Os atalhos que abrem o {launcher} foram removidos",
+  "manage.launchers.shortcut_failed": "Não foi possível alterar os atalhos do {launcher}"
 }

@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Nie ma tu gier do wylosowania",
   "shell.palette.preview_enter_play": "Enter uruchamia grę albo do niej wraca, gdy działa; Shift+Enter pokazuje ją w Irori; → pokazuje jej działania",
   "shell.quick_launch.failed": "Nie udało się otworzyć szybkiego programu uruchamiającego",
-  "shell.notice.steam_shortcuts_failed": "Skróty Steam nie zostały zmienione"
+  "shell.notice.steam_shortcuts_failed": "Skróty Steam nie zostały zmienione",
+  "shell.palette.open_launcher": "Otwórz {launcher}",
+  "shell.palette.launcher_shortcut": "Dodaj skrót otwierający {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "skrót pulpit menu launcher ikona",
+  "shell.notice.launcher_open_failed": "{launcher} się nie otworzył"
 }

@@ -4,6 +4,10 @@
 //! (Steam's with `--wait`, so Steam follows the whole session); the
 //! `irori://launch/<runner>/<app>` URL scheme is registered alongside.
 //!
+//! A third-party launcher (Battle.net, the EA app…) gets desktop and menu
+//! shortcuts too ([`launcher_client`]): they open it through Irori with
+//! `irori --open-launcher <id>`, with the icon of the launcher's program.
+//!
 //! [`ShortcutTargets`], [`add`] and [`remove`] are the contract used by
 //! `irori-services`.
 
@@ -17,11 +21,11 @@ pub mod pe_icon;
 pub mod steam;
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use irori_core::{AppSettings, GameId, GameInfo};
+use irori_core::{AppSettings, GameId, GameInfo, InstalledInfo, Runner};
 
 use crate::util;
 
@@ -87,15 +91,58 @@ impl LauncherCommand {
         }
     }
 
-    /// Full argument list (program first) that launches `id`.
+    /// Full argument list (program first) that launches `id`, or opens the
+    /// launcher of a [`launcher_client`] shortcut.
     pub fn launch_args(&self, id: &GameId) -> Vec<String> {
         let mut v = Vec::with_capacity(self.prefix_args.len() + 3);
         v.push(self.program.clone());
         v.extend(self.prefix_args.iter().cloned());
-        v.push("--launch".into());
-        v.push(launch_target(id));
+        match client_of(id) {
+            Some(launcher) => {
+                v.push("--open-launcher".into());
+                v.push(launcher.to_string());
+            }
+            None => {
+                v.push("--launch".into());
+                v.push(launch_target(id));
+            }
+        }
         v
     }
+}
+
+/// App name prefix of a third-party launcher's own shortcut
+/// (`client:battlenet`, under [`Runner::Launchers`]). No game is called
+/// that: the launchers' games are `<launcher>:<id>`.
+pub const CLIENT_PREFIX: &str = "client:";
+
+/// What a shortcut that opens a third-party launcher is made from: the
+/// launcher's id (`battlenet`), its name and its program, whose icon the
+/// shortcut takes.
+pub fn launcher_client(id: &str, name: &str, program: Option<&Path>) -> GameInfo {
+    GameInfo {
+        runner: Some(Runner::Launchers),
+        app_name: format!("{CLIENT_PREFIX}{id}"),
+        title: name.to_string(),
+        is_installed: true,
+        install: program.map(|p| InstalledInfo {
+            install_path: p
+                .parent()
+                .map(|d| d.display().to_string())
+                .unwrap_or_default(),
+            executable: p.display().to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// The launcher a [`launcher_client`] shortcut opens.
+pub fn client_of(id: &GameId) -> Option<&str> {
+    if id.runner != Runner::Launchers {
+        return None;
+    }
+    id.app_name.strip_prefix(CLIENT_PREFIX)
 }
 
 /// `<runner>/<app_name>`, the argument of `--launch`.
@@ -385,6 +432,35 @@ fn is_dlc(game: &GameInfo) -> bool {
 mod tests {
     use super::*;
     use irori_core::Runner;
+
+    #[test]
+    fn launcher_shortcuts_open_the_launcher() {
+        let l = LauncherCommand {
+            program: "/usr/bin/irori".into(),
+            prefix_args: vec![],
+            working_dir: "/".into(),
+        };
+        let client = launcher_client(
+            "battlenet",
+            "Battle.net",
+            Some(Path::new("/p/drive_c/Battle.net/Battle.net Launcher.exe")),
+        );
+        assert_eq!(client_of(&client.id()), Some("battlenet"));
+        assert_eq!(
+            l.launch_args(&client.id()),
+            ["/usr/bin/irori", "--open-launcher", "battlenet"]
+        );
+        assert_eq!(
+            icon::windows_program(&client).as_deref(),
+            Some(Path::new("/p/drive_c/Battle.net/Battle.net Launcher.exe"))
+        );
+        // A launcher's game is a game.
+        assert_eq!(
+            client_of(&GameId::new(Runner::Launchers, "battlenet:wow")),
+            None
+        );
+        assert_eq!(client_of(&GameId::new(Runner::Gog, "client:x")), None);
+    }
 
     #[test]
     fn launch_args() {

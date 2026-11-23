@@ -100,8 +100,13 @@ pub fn game_entry(game: &GameInfo, launcher: &LauncherCommand, icon: Option<&Pat
     let mut s = String::from("[Desktop Entry]\n");
     s.push_str("Type=Application\nVersion=1.0\n");
     s.push_str(&format!("Name={}\n", escape_value(&game.title)));
+    let verb = if super::client_of(&id).is_some() {
+        "Open"
+    } else {
+        "Play"
+    };
     s.push_str(&format!(
-        "Comment=Play {} with Irori\n",
+        "Comment={verb} {} with Irori\n",
         escape_value(&game.title)
     ));
     s.push_str(&format!("Exec={}\n", exec.join(" ")));

@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Hier zijn geen games om uit te kiezen",
   "shell.palette.preview_enter_play": "Enter speelt hem, of gaat ernaar terug terwijl hij draait; Shift+Enter toont hem in Irori; → toont de acties",
   "shell.quick_launch.failed": "De snelstarter kon niet worden geopend",
-  "shell.notice.steam_shortcuts_failed": "Steam-snelkoppelingen zijn niet gewijzigd"
+  "shell.notice.steam_shortcuts_failed": "Steam-snelkoppelingen zijn niet gewijzigd",
+  "shell.palette.open_launcher": "{launcher} openen",
+  "shell.palette.launcher_shortcut": "Snelkoppeling toevoegen die {launcher} opent",
+  "shell.palette.launcher_shortcut_keywords": "snelkoppeling bureaublad menu launcher pictogram",
+  "shell.notice.launcher_open_failed": "{launcher} is niet geopend"
 }

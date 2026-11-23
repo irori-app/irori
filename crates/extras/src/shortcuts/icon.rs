@@ -81,7 +81,11 @@ async fn ensure_exe_icon(game: &GameInfo) -> Option<PathBuf> {
 /// the square and cover art. Returns `Ok(None)` when no source produced an
 /// image.
 pub async fn ensure_icon(game: &GameInfo, from_exe: bool) -> Result<Option<PathBuf>> {
-    if from_exe && let Some(icon) = ensure_exe_icon(game).await {
+    // A launcher's own shortcut has no art: its program's icon is all.
+    let client = super::client_of(&game.id()).is_some();
+    if (from_exe || client)
+        && let Some(icon) = ensure_exe_icon(game).await
+    {
         return Ok(Some(icon));
     }
     let target = icon_path(game);

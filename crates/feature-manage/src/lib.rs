@@ -57,7 +57,7 @@ pub use friends::{
     FriendsSource, friends_available, install_steam_store, open_friends_dialog,
     open_steam_friends_dialog, steam_friends_available, xbox_friends_available,
 };
-pub use launchers::install_launchers_store;
+pub use launchers::{install_launchers_store, known_launchers, launcher_shortcut, open_launcher};
 pub use login::{open_account_login_dialog, open_login_dialog};
 pub use onboarding::found::{FoundSourcesView, found_sources_view};
 pub use onboarding::hub::open_getting_started;

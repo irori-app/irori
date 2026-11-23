@@ -137,6 +137,12 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `start` (`irori_runtime::windows_uri`, `Backend::open_windows_uri`,
   `irori_game::open_windows_uri_dialog`; `docs/PLATFORMS.md`, "Other programs' links").
   Irori registers no such scheme; the user points one at it (`xdg-mime default`).
+- `--open-launcher <id>` and `irori://launcher/<id>` (`battlenet`, `ea`, `ubisoft`,
+  `rockstar`) start a third-party launcher Irori set up, without showing Irori's window
+  when that is all they ask (`Cli::open_launcher_only`); a failure becomes a notice. The
+  launcher card's ⋯ menu and the palette add desktop and menu shortcuts that do this
+  (`irori_manage::launcher_shortcut`, `shortcuts::launcher_client`: app name
+  `client:<id>` under `Runner::Launchers`, the launcher's program icon).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 

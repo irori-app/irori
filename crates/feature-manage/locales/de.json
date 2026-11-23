@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Offline spielen geändert",
   "manage.xbox.offline.failed": "Offline spielen konnte nicht geändert werden",
   "manage.steam_shortcuts.waiting_one": "1 Änderung an Verknüpfungen wartet, bis Steam beendet ist",
-  "manage.steam_shortcuts.waiting_other": "{count} Änderungen an Verknüpfungen warten, bis Steam beendet ist"
+  "manage.steam_shortcuts.waiting_other": "{count} Änderungen an Verknüpfungen warten, bis Steam beendet ist",
+  "manage.launchers.more": "Mehr",
+  "manage.launchers.add_shortcut": "Verknüpfung anlegen",
+  "manage.launchers.remove_shortcut": "Verknüpfung entfernen",
+  "manage.launchers.shortcut_added": "Verknüpfung zum Öffnen von {launcher} auf dem Desktop und im Anwendungsmenü angelegt",
+  "manage.launchers.shortcut_removed": "Verknüpfungen zum Öffnen von {launcher} entfernt",
+  "manage.launchers.shortcut_failed": "Die Verknüpfungen von {launcher} konnten nicht geändert werden"
 }

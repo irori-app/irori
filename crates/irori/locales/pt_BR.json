@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Não há jogos aqui para escolher",
   "shell.palette.preview_enter_play": "Enter joga, ou volta a ele enquanto roda; Shift+Enter mostra no Irori; → mostra suas ações",
   "shell.quick_launch.failed": "Não foi possível abrir o iniciador rápido",
-  "shell.notice.steam_shortcuts_failed": "Os atalhos do Steam não foram alterados"
+  "shell.notice.steam_shortcuts_failed": "Os atalhos do Steam não foram alterados",
+  "shell.palette.open_launcher": "Abrir {launcher}",
+  "shell.palette.launcher_shortcut": "Adicionar um atalho que abre o {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "atalho área de trabalho menu inicializador ícone",
+  "shell.notice.launcher_open_failed": "O {launcher} não abriu"
 }

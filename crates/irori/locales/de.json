@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Hier gibt es keine Spiele zur Auswahl",
   "shell.palette.preview_enter_play": "Eingabe startet es oder kehrt zu ihm zurück, während es läuft; Umschalt+Eingabe zeigt es in Irori; → zeigt seine Aktionen",
   "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden",
-  "shell.notice.steam_shortcuts_failed": "Steam-Verknüpfungen wurden nicht geändert"
+  "shell.notice.steam_shortcuts_failed": "Steam-Verknüpfungen wurden nicht geändert",
+  "shell.palette.open_launcher": "{launcher} öffnen",
+  "shell.palette.launcher_shortcut": "Verknüpfung zum Öffnen von {launcher} anlegen",
+  "shell.palette.launcher_shortcut_keywords": "Verknüpfung Desktop Menü Launcher Symbol",
+  "shell.notice.launcher_open_failed": "{launcher} wurde nicht geöffnet"
 }

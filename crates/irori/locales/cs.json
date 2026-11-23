@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Tady nejsou žádné hry k výběru",
   "shell.palette.preview_enter_play": "Enter hru spustí, nebo se do ní vrátí, když běží; Shift+Enter ji ukáže v Irori; → zobrazí její akce",
   "shell.quick_launch.failed": "Rychlý spouštěč se nepodařilo otevřít",
-  "shell.notice.steam_shortcuts_failed": "Zástupci Steamu se nezměnili"
+  "shell.notice.steam_shortcuts_failed": "Zástupci Steamu se nezměnili",
+  "shell.palette.open_launcher": "Otevřít {launcher}",
+  "shell.palette.launcher_shortcut": "Přidat zástupce, který otevře {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "zástupce plocha nabídka spouštěč ikona",
+  "shell.notice.launcher_open_failed": "{launcher} se neotevřel"
 }

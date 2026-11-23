@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "여기에는 고를 게임이 없습니다",
   "shell.palette.preview_enter_play": "Enter 키로 실행하거나 실행 중이면 돌아가기, Shift+Enter 키로 Irori에서 보기, → 키로 작업 보기",
   "shell.quick_launch.failed": "빠른 실행을 열 수 없습니다",
-  "shell.notice.steam_shortcuts_failed": "Steam 바로 가기를 변경하지 못했습니다"
+  "shell.notice.steam_shortcuts_failed": "Steam 바로 가기를 변경하지 못했습니다",
+  "shell.palette.open_launcher": "{launcher} 열기",
+  "shell.palette.launcher_shortcut": "{launcher}을(를) 여는 바로 가기 추가",
+  "shell.palette.launcher_shortcut_keywords": "바로 가기 바탕 화면 메뉴 런처 아이콘",
+  "shell.notice.launcher_open_failed": "{launcher}이(가) 열리지 않았습니다"
 }

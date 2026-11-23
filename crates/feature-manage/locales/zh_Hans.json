@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "已更改离线游玩",
   "manage.xbox.offline.failed": "无法更改离线游玩",
   "manage.steam_shortcuts.waiting_one": "1 项快捷方式更改正在等待 Steam 关闭",
-  "manage.steam_shortcuts.waiting_other": "{count} 项快捷方式更改正在等待 Steam 关闭"
+  "manage.steam_shortcuts.waiting_other": "{count} 项快捷方式更改正在等待 Steam 关闭",
+  "manage.launchers.more": "更多",
+  "manage.launchers.add_shortcut": "添加快捷方式",
+  "manage.launchers.remove_shortcut": "移除快捷方式",
+  "manage.launchers.shortcut_added": "已在桌面和应用程序菜单中添加打开 {launcher} 的快捷方式",
+  "manage.launchers.shortcut_removed": "已移除打开 {launcher} 的快捷方式",
+  "manage.launchers.shortcut_failed": "无法更改 {launcher} 的快捷方式"
 }

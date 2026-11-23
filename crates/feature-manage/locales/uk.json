@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Гру офлайн змінено",
   "manage.xbox.offline.failed": "Не вдалося змінити гру офлайн",
   "manage.steam_shortcuts.waiting_one": "1 зміна ярликів чекає на закриття Steam",
-  "manage.steam_shortcuts.waiting_other": "Змін ярликів чекають на закриття Steam: {count}"
+  "manage.steam_shortcuts.waiting_other": "Змін ярликів чекають на закриття Steam: {count}",
+  "manage.launchers.more": "Більше",
+  "manage.launchers.add_shortcut": "Додати ярлик",
+  "manage.launchers.remove_shortcut": "Вилучити ярлик",
+  "manage.launchers.shortcut_added": "Ярлик, що відкриває {launcher}, додано на робочий стіл і в меню застосунків",
+  "manage.launchers.shortcut_removed": "Ярлики, що відкривають {launcher}, вилучено",
+  "manage.launchers.shortcut_failed": "Не вдалося змінити ярлики {launcher}"
 }

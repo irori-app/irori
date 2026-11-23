@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Zmieniono granie offline",
   "manage.xbox.offline.failed": "Nie udało się zmienić grania offline",
   "manage.steam_shortcuts.waiting_one": "1 zmiana skrótów czeka na zamknięcie Steama",
-  "manage.steam_shortcuts.waiting_other": "Zmiany skrótów czekające na zamknięcie Steama: {count}"
+  "manage.steam_shortcuts.waiting_other": "Zmiany skrótów czekające na zamknięcie Steama: {count}",
+  "manage.launchers.more": "Więcej",
+  "manage.launchers.add_shortcut": "Dodaj skrót",
+  "manage.launchers.remove_shortcut": "Usuń skrót",
+  "manage.launchers.shortcut_added": "Dodano skrót otwierający {launcher} na pulpicie i w menu aplikacji",
+  "manage.launchers.shortcut_removed": "Usunięto skróty otwierające {launcher}",
+  "manage.launchers.shortcut_failed": "Nie udało się zmienić skrótów {launcher}"
 }

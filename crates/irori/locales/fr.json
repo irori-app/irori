@@ -252,5 +252,9 @@
   "shell.palette.random_empty": "Il n’y a ici aucun jeu parmi lesquels choisir",
   "shell.palette.preview_enter_play": "Entrée le lance, ou y revient pendant qu’il tourne ; Maj+Entrée l’affiche dans Irori ; → affiche ses actions",
   "shell.quick_launch.failed": "Le lanceur rapide n’a pas pu s’ouvrir",
-  "shell.notice.steam_shortcuts_failed": "Les raccourcis Steam n’ont pas été modifiés"
+  "shell.notice.steam_shortcuts_failed": "Les raccourcis Steam n’ont pas été modifiés",
+  "shell.palette.open_launcher": "Ouvrir {launcher}",
+  "shell.palette.launcher_shortcut": "Ajouter un raccourci qui ouvre {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "raccourci bureau menu lanceur icône",
+  "shell.notice.launcher_open_failed": "{launcher} ne s’est pas ouvert"
 }

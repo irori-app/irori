@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Gioco offline modificato",
   "manage.xbox.offline.failed": "Impossibile modificare il gioco offline",
   "manage.steam_shortcuts.waiting_one": "1 modifica ai collegamenti attende la chiusura di Steam",
-  "manage.steam_shortcuts.waiting_other": "{count} modifiche ai collegamenti attendono la chiusura di Steam"
+  "manage.steam_shortcuts.waiting_other": "{count} modifiche ai collegamenti attendono la chiusura di Steam",
+  "manage.launchers.more": "Altro",
+  "manage.launchers.add_shortcut": "Aggiungi collegamento",
+  "manage.launchers.remove_shortcut": "Rimuovi collegamento",
+  "manage.launchers.shortcut_added": "Aggiunto un collegamento che apre {launcher} sul desktop e nel menu delle applicazioni",
+  "manage.launchers.shortcut_removed": "Rimossi i collegamenti che aprono {launcher}",
+  "manage.launchers.shortcut_failed": "Impossibile modificare i collegamenti di {launcher}"
 }

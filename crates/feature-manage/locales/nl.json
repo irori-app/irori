@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Offline spelen gewijzigd",
   "manage.xbox.offline.failed": "Kan offline spelen niet wijzigen",
   "manage.steam_shortcuts.waiting_one": "1 snelkoppelingswijziging wacht tot Steam sluit",
-  "manage.steam_shortcuts.waiting_other": "{count} snelkoppelingswijzigingen wachten tot Steam sluit"
+  "manage.steam_shortcuts.waiting_other": "{count} snelkoppelingswijzigingen wachten tot Steam sluit",
+  "manage.launchers.more": "Meer",
+  "manage.launchers.add_shortcut": "Snelkoppeling toevoegen",
+  "manage.launchers.remove_shortcut": "Snelkoppeling verwijderen",
+  "manage.launchers.shortcut_added": "Snelkoppeling die {launcher} opent toegevoegd aan het bureaublad en het programmamenu",
+  "manage.launchers.shortcut_removed": "Snelkoppelingen die {launcher} openen verwijderd",
+  "manage.launchers.shortcut_failed": "Kan de snelkoppelingen van {launcher} niet wijzigen"
 }

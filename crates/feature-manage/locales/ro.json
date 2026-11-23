@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Jocul offline a fost schimbat",
   "manage.xbox.offline.failed": "Jocul offline nu a putut fi schimbat",
   "manage.steam_shortcuts.waiting_one": "1 modificare a comenzilor rapide așteaptă închiderea Steam",
-  "manage.steam_shortcuts.waiting_other": "Modificări ale comenzilor rapide care așteaptă închiderea Steam: {count}"
+  "manage.steam_shortcuts.waiting_other": "Modificări ale comenzilor rapide care așteaptă închiderea Steam: {count}",
+  "manage.launchers.more": "Mai multe",
+  "manage.launchers.add_shortcut": "Adaugă comandă rapidă",
+  "manage.launchers.remove_shortcut": "Elimină comanda rapidă",
+  "manage.launchers.shortcut_added": "S-a adăugat o comandă rapidă care deschide {launcher} pe desktop și în meniul de aplicații",
+  "manage.launchers.shortcut_removed": "Comenzile rapide care deschid {launcher} au fost eliminate",
+  "manage.launchers.shortcut_failed": "Nu s-au putut modifica comenzile rapide ale {launcher}"
 }

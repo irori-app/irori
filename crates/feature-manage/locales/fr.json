@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Jeu hors ligne modifié",
   "manage.xbox.offline.failed": "Impossible de modifier le jeu hors ligne",
   "manage.steam_shortcuts.waiting_one": "1 modification de raccourci attend la fermeture de Steam",
-  "manage.steam_shortcuts.waiting_other": "{count} modifications de raccourcis attendent la fermeture de Steam"
+  "manage.steam_shortcuts.waiting_other": "{count} modifications de raccourcis attendent la fermeture de Steam",
+  "manage.launchers.more": "Plus",
+  "manage.launchers.add_shortcut": "Ajouter un raccourci",
+  "manage.launchers.remove_shortcut": "Retirer le raccourci",
+  "manage.launchers.shortcut_added": "Un raccourci qui ouvre {launcher} a été ajouté au bureau et au menu des applications",
+  "manage.launchers.shortcut_removed": "Les raccourcis qui ouvrent {launcher} ont été retirés",
+  "manage.launchers.shortcut_failed": "Impossible de modifier les raccourcis de {launcher}"
 }

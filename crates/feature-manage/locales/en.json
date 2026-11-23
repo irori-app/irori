@@ -799,5 +799,11 @@
   "manage.xbox.offline.changed": "Offline play changed",
   "manage.xbox.offline.failed": "Could not change offline play",
   "manage.steam_shortcuts.waiting_one": "1 shortcut change waits for Steam to close",
-  "manage.steam_shortcuts.waiting_other": "{count} shortcut changes wait for Steam to close"
+  "manage.steam_shortcuts.waiting_other": "{count} shortcut changes wait for Steam to close",
+  "manage.launchers.more": "More",
+  "manage.launchers.add_shortcut": "Add shortcut",
+  "manage.launchers.remove_shortcut": "Remove shortcut",
+  "manage.launchers.shortcut_added": "Added a shortcut that opens {launcher} on the desktop and in the application menu",
+  "manage.launchers.shortcut_removed": "Removed the shortcuts that open {launcher}",
+  "manage.launchers.shortcut_failed": "Couldn’t change the shortcuts of {launcher}"
 }
