@@ -110,6 +110,8 @@
   "shell.palette.open_store": "Ouvrir la boutique {store}",
   "shell.palette.lutris_script": "Installer avec un script Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script installation lutris.net communauté",
+  "shell.palette.launchbox": "Télécharger les jaquettes LaunchBox",
+  "shell.palette.launchbox_keywords": "LaunchBox jaquettes couvertures ROM émulation jeux base de données régions mettre à jour",
   "shell.palette.steam_client_library": "Lire la bibliothèque Steam depuis le client Steam",
   "shell.palette.steam_client_library_keywords": "Steam bibliothèque jeux possédés non installés sans connexion client",
   "shell.palette.play_status": "{title} : définir le statut de jeu sur {status}",

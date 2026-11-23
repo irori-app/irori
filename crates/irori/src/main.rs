@@ -185,6 +185,7 @@ fn main() -> Result<()> {
             }
             if let Some(emulation) = stores::EMULATION.get() {
                 irori_library::install_emulation_store(emulation.clone(), cx);
+                irori_settings::install_emulation_store(emulation.clone(), cx);
             }
         }
         actions::bind_keys(cx);

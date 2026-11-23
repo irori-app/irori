@@ -110,6 +110,8 @@
   "shell.palette.open_store": "Abrir a loja {store}",
   "shell.palette.lutris_script": "Instalar com um script do Lutris",
   "shell.palette.lutris_script_keywords": "Lutris script instalador lutris.net comunidade",
+  "shell.palette.launchbox": "Baixar capas do LaunchBox",
+  "shell.palette.launchbox_keywords": "LaunchBox capas ROM emulação jogos banco de dados regiões atualizar",
   "shell.palette.steam_client_library": "Ler a biblioteca da Steam pelo cliente Steam",
   "shell.palette.steam_client_library_keywords": "Steam biblioteca jogos próprios não instalados sem login cliente",
   "shell.palette.play_status": "{title}: definir o status de jogo como {status}",

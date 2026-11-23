@@ -12,6 +12,13 @@
 //! search means, and pills show one source's pictures. Every picture says
 //! its size: SteamGridDB gives it, the others' is read from their first
 //! bytes ([`irori_extras::image_size`]).
+//!
+//! A ROM's cover opens on LaunchBox's box art instead: every region's box of
+//! the game the ROM library matched, its own region first, each labelled
+//! with its region; other searches look through the system's LaunchBox
+//! games, and "All sources" puts its boxes first. Without LaunchBox's game
+//! list yet, it offers to download it, which turns `iroriLaunchBox` on (its
+//! text says so).
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -34,6 +41,9 @@ use gpui_kit::{
     Rems, Render, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _,
     StyledImage as _, Subscription, Task, Window, canvas, div, rems,
 };
+use irori_core::{GameId, Runner};
+use irori_emulation::LaunchBoxStatus;
+use irori_emulation::launchbox::LaunchBoxGame;
 use irori_extras::igdb::{IgdbGame, ImageSize, image_url};
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
 use irori_ui::art_picker::{ArtSlot, OnPicked};
@@ -114,6 +124,8 @@ pub enum ArtSource {
     All,
     SteamGridDb,
     Igdb,
+    /// LaunchBox's box art, for a ROM's cover.
+    LaunchBox,
 }
 
 impl ArtSource {
@@ -123,8 +135,39 @@ impl ArtSource {
             ArtSource::All => t("library.art.source_all"),
             ArtSource::SteamGridDb => "SteamGridDB".into(),
             ArtSource::Igdb => "IGDB".into(),
+            ArtSource::LaunchBox => irori_extras::launchbox::SOURCE_NAME.into(),
         }
     }
+}
+
+/// A LaunchBox game's boxes as pictures, with each one's caption (its
+/// region, as LaunchBox names it).
+pub fn launchbox_images(game: &LaunchBoxGame) -> Vec<(Found, SharedString)> {
+    game.boxes
+        .iter()
+        .map(|art| {
+            let url = art.url();
+            let found = Found {
+                source: ArtSource::LaunchBox,
+                image: SgdbImage {
+                    id: u64::from(game.id),
+                    thumb: url.clone(),
+                    url,
+                    width: None,
+                    height: None,
+                },
+            };
+            let caption = match (&art.region, art.reconstructed) {
+                (Some(region), false) => region.clone().into(),
+                (Some(region), true) => {
+                    t_args("library.art.launchbox.reconstructed", &[("region", region)])
+                }
+                (None, false) => t("library.art.launchbox.no_region"),
+                (None, true) => t("library.art.launchbox.reconstructed_no_region"),
+            };
+            (found, caption)
+        })
+        .collect()
 }
 
 /// A picture found, with where it came from.
@@ -270,6 +313,10 @@ pub enum ArtPickerEvent {
 enum Phase {
     /// No SteamGridDB API key in settings.
     NoKey,
+    /// LaunchBox's game list isn't downloaded yet.
+    NoLaunchBox,
+    /// LaunchBox's game list is being downloaded.
+    Downloading,
     Idle,
     Searching,
     Games,
@@ -290,6 +337,14 @@ pub struct ArtPicker {
     games: Vec<SgdbGame>,
     /// IGDB's records of `games`, which already hold their images.
     igdb_found: Vec<IgdbGame>,
+    /// The ROM library game whose cover is picked: LaunchBox is offered.
+    rom: Option<String>,
+    /// The title the picker opened with: the ROM's own match answers it.
+    first_title: String,
+    /// LaunchBox's records of `games`, which already hold their boxes.
+    launchbox_found: Vec<LaunchBoxGame>,
+    /// Labels under pictures (LaunchBox's regions), by full-size address.
+    captions: HashMap<String, SharedString>,
     _task: Option<Task<()>>,
     /// The one source whose pictures show, when several found some.
     filter: Option<ArtSource>,
@@ -312,13 +367,33 @@ impl EventEmitter<ArtPickerEvent> for ArtPicker {}
 impl ArtPicker {
     /// A picker for `kind`, searching for `title` right away when a key is set.
     pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::for_game(kind, None, title, window, cx)
+    }
+
+    /// A picker for `game`'s `kind`: a ROM's cover starts on LaunchBox's
+    /// box art.
+    pub fn for_game(
+        kind: ArtKind,
+        game: Option<&GameId>,
+        title: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let app = &models(cx).settings.read(cx).app;
         let (key, igdb_on) = (ApiKey::from_settings(app), app.igdb);
-        Self::with_sources(kind, title, key, igdb_on, window, cx)
+        let rom = game
+            .filter(|id| {
+                id.runner == Runner::Emulation
+                    && kind == ArtKind::Cover
+                    && crate::emulation_store(cx).is_some()
+            })
+            .map(|id| id.app_name.to_string());
+        Self::build(kind, title, key, igdb_on, rom, window, cx)
     }
 
     /// A picker with SteamGridDB's `key` and IGDB on or off, whatever the
     /// settings say.
+    #[cfg(test)]
     pub(crate) fn with_sources(
         kind: ArtKind,
         title: &str,
@@ -327,10 +402,24 @@ impl ArtPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        // Both sources at once when both can be searched.
-        let source = match (key.is_some(), igdb_on) {
-            (true, true) => ArtSource::All,
-            (false, true) => ArtSource::Igdb,
+        Self::build(kind, title, key, igdb_on, None, window, cx)
+    }
+
+    fn build(
+        kind: ArtKind,
+        title: &str,
+        key: Option<ApiKey>,
+        igdb_on: bool,
+        rom: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        // A ROM's boxes first; else both sources at once when both can be
+        // searched.
+        let source = match (rom.is_some(), key.is_some(), igdb_on) {
+            (true, _, _) => ArtSource::LaunchBox,
+            (_, true, true) => ArtSource::All,
+            (_, false, true) => ArtSource::Igdb,
             _ => ArtSource::SteamGridDb,
         };
         let query = cx.new(|cx| {
@@ -348,7 +437,7 @@ impl ArtPicker {
             }),
         ];
         let mut this = Self {
-            phase: if key.is_some() || source == ArtSource::Igdb {
+            phase: if key.is_some() || source != ArtSource::SteamGridDb {
                 Phase::Idle
             } else {
                 Phase::NoKey
@@ -360,6 +449,10 @@ impl ArtPicker {
             query,
             games: Vec::new(),
             igdb_found: Vec::new(),
+            rom,
+            first_title: title.trim().to_string(),
+            launchbox_found: Vec::new(),
+            captions: HashMap::new(),
             _task: None,
             filter: None,
             sizes: HashMap::new(),
@@ -370,10 +463,44 @@ impl ArtPicker {
             results_width: Rc::default(),
             _subscriptions: subscriptions,
         };
-        if !title.trim().is_empty() {
+        if !title.trim().is_empty() || this.source == ArtSource::LaunchBox {
             this.search(cx);
         }
         this
+    }
+
+    /// The sources that can be searched now: SteamGridDB with its key, IGDB
+    /// while it is on, LaunchBox for a ROM's cover.
+    fn searchable(&self) -> Vec<ArtSource> {
+        let mut sources = Vec::new();
+        if self.rom.is_some() {
+            sources.push(ArtSource::LaunchBox);
+        }
+        if self.key.is_some() {
+            sources.push(ArtSource::SteamGridDb);
+        }
+        if self.igdb_on {
+            sources.push(ArtSource::Igdb);
+        }
+        sources
+    }
+
+    /// The sources the switcher offers: every one that applies (SteamGridDB
+    /// even without its key, which it then asks for), and all of them at
+    /// once when two or more can be searched.
+    fn offered(&self) -> Vec<ArtSource> {
+        let mut sources = Vec::new();
+        if self.searchable().len() >= 2 {
+            sources.push(ArtSource::All);
+        }
+        if self.rom.is_some() {
+            sources.push(ArtSource::LaunchBox);
+        }
+        sources.push(ArtSource::SteamGridDb);
+        if self.igdb_on {
+            sources.push(ArtSource::Igdb);
+        }
+        sources
     }
 
     pub fn kind(&self) -> ArtKind {
@@ -417,6 +544,19 @@ impl ArtPicker {
         (self.source, matches!(self.phase, Phase::NoKey))
     }
 
+    /// The captions of the pictures shown, and whether it offers to
+    /// download LaunchBox's game list (tests).
+    #[cfg(test)]
+    pub(crate) fn launchbox_view(&self) -> (Vec<SharedString>, bool) {
+        let shown = match &self.phase {
+            Phase::Images(_, found) => shown(found, self.filter)
+                .filter_map(|f| self.captions.get(&f.image.url).cloned())
+                .collect(),
+            _ => Vec::new(),
+        };
+        (shown, matches!(self.phase, Phase::NoLaunchBox))
+    }
+
     /// Search the other source.
     pub fn set_source(&mut self, source: ArtSource, cx: &mut Context<Self>) {
         if source == self.source {
@@ -429,7 +569,12 @@ impl ArtPicker {
         self.cursor = None;
         self.games.clear();
         self.igdb_found.clear();
-        if source != ArtSource::Igdb && self.key.is_none() {
+        self.launchbox_found.clear();
+        // SteamGridDB needs its key, and so does "All sources" when it would
+        // otherwise search one source.
+        let needs_key = source == ArtSource::SteamGridDb
+            || (source == ArtSource::All && self.searchable().len() < 2);
+        if needs_key && self.key.is_none() {
             self.phase = Phase::NoKey;
             cx.notify();
         } else {
@@ -446,6 +591,7 @@ impl ArtPicker {
                 None => return,
             },
             ArtSource::Igdb => None,
+            ArtSource::LaunchBox => return self.search_launchbox(cx),
         };
         let query = self.query.read(cx).value().trim().to_string();
         if query.is_empty() {
@@ -501,12 +647,14 @@ impl ArtPicker {
     }
 
     /// Search every source at once: each takes the game its search means
-    /// ([`pick_game`]), and their pictures show together. A source that
-    /// fails leaves the other's pictures; only both failing says why.
+    /// ([`pick_game`]; a ROM's own LaunchBox match for its title), and their
+    /// pictures show together, LaunchBox's boxes first. A source that fails
+    /// leaves the others' pictures; only all failing says why.
     fn search_all(&mut self, cx: &mut Context<Self>) {
-        let (Some(key), true) = (self.key.clone(), self.igdb_on) else {
+        let searchable = self.searchable();
+        if searchable.len() < 2 {
             return;
-        };
+        }
         let query = self.query.read(cx).value().trim().to_string();
         if query.is_empty() {
             return;
@@ -515,11 +663,31 @@ impl ArtPicker {
         self.cursor = None;
         self.games.clear();
         self.igdb_found.clear();
+        self.launchbox_found.clear();
         self.phase = Phase::Searching;
         cx.notify();
         let (b, kind) = (backend(cx), self.kind);
+        let (key, igdb_on) = (self.key.clone(), self.igdb_on);
+        // LaunchBox takes part once its game list is here; its pill offers
+        // the download otherwise.
+        let launchbox = self
+            .rom
+            .clone()
+            .zip(crate::emulation_store(cx))
+            .filter(|(_, store)| store.launchbox_status() == LaunchBoxStatus::Ready);
+        let own = launchbox
+            .as_ref()
+            .filter(|_| query == self.first_title)
+            .and_then(|(app, store)| store.launchbox_game(app));
+        let attempted = searchable
+            .iter()
+            .filter(|s| **s != ArtSource::LaunchBox || launchbox.is_some())
+            .count();
         let task = irori_ui::run(cx, async move {
             let sgdb = async {
+                let Some(key) = key else {
+                    return anyhow::Ok(None);
+                };
                 let games = steamgrid::search_games(&key, &query).await?;
                 let Some(game) = pick_game(&games, &query).cloned() else {
                     return anyhow::Ok(None);
@@ -532,9 +700,20 @@ impl ArtPicker {
                         steamgrid::grids(&key, game.id, &filter).await?
                     }
                 };
-                Ok(Some((game.name, images)))
+                let found = images
+                    .into_iter()
+                    .take(MAX_IMAGES)
+                    .map(|image| Found {
+                        source: ArtSource::SteamGridDb,
+                        image,
+                    })
+                    .collect::<Vec<_>>();
+                Ok(Some((game.name, found, Vec::new())))
             };
             let igdb = async {
+                if !igdb_on {
+                    return anyhow::Ok(None);
+                }
                 let found = b.search_igdb(&query).await?;
                 let games: Vec<SgdbGame> = found
                     .iter()
@@ -547,35 +726,62 @@ impl ArtPicker {
                     return anyhow::Ok(None);
                 };
                 let record = found.iter().find(|g| g.id == game.id);
-                Ok(record.map(|g| (g.name.clone(), igdb_images(kind, g))))
+                Ok(record.map(|g| {
+                    let found = igdb_images(kind, g)
+                        .into_iter()
+                        .take(MAX_IMAGES)
+                        .map(|image| Found {
+                            source: ArtSource::Igdb,
+                            image,
+                        })
+                        .collect::<Vec<_>>();
+                    (g.name.clone(), found, Vec::new())
+                }))
             };
-            let (sgdb, igdb) = futures::join!(sgdb, igdb);
-            Ok((
-                sgdb.map_err(|e| format!("{e:#}")),
-                igdb.map_err(|e| format!("{e:#}")),
-            ))
+            let boxes = async {
+                let game = match (own, launchbox) {
+                    (Some(own), _) => Some(own),
+                    (None, Some((app, store))) => {
+                        let games = store.search_launchbox(&app, &query).await?;
+                        let named: Vec<SgdbGame> = games
+                            .iter()
+                            .map(|g| SgdbGame {
+                                id: u64::from(g.id),
+                                name: g.name.clone(),
+                            })
+                            .collect();
+                        pick_game(&named, &query)
+                            .and_then(|p| games.iter().find(|g| u64::from(g.id) == p.id))
+                            .cloned()
+                    }
+                    _ => None,
+                };
+                Ok(game.map(|g| {
+                    let (found, captions): (Vec<_>, Vec<_>) =
+                        launchbox_images(&g).into_iter().unzip();
+                    (g.name, found, captions)
+                }))
+            };
+            let (sgdb, igdb, boxes) = futures::join!(sgdb, igdb, boxes);
+            Ok([boxes, sgdb, igdb].map(|answer| answer.map_err(|e| format!("{e:#}"))))
         });
         let query: SharedString = self.query.read(cx).value().trim().to_string().into();
         self._task = Some(cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
                 this.phase = match result {
-                    Ok((sgdb, igdb)) => {
+                    Ok(answers) => {
                         let mut found = Vec::new();
                         let mut name = None;
                         let mut errors = Vec::new();
-                        for (source, answer) in
-                            [(ArtSource::SteamGridDb, sgdb), (ArtSource::Igdb, igdb)]
-                        {
+                        for answer in answers {
                             match answer {
-                                Ok(Some((game, images))) => {
+                                Ok(Some((game, images, captions))) => {
                                     name.get_or_insert(game);
-                                    found.extend(
-                                        images
-                                            .into_iter()
-                                            .take(MAX_IMAGES)
-                                            .map(|image| Found { source, image }),
-                                    );
+                                    for (f, c) in images.iter().zip(captions) {
+                                        this.captions.insert(f.image.url.clone(), c);
+                                    }
+                                    found.extend(images);
                                 }
                                 Ok(None) => {}
                                 Err(e) => errors.push(e),
@@ -583,7 +789,7 @@ impl ArtPicker {
                         }
                         if !found.is_empty() {
                             Phase::Images(name.map(Into::into).unwrap_or(query), found)
-                        } else if errors.len() == 2 {
+                        } else if errors.len() == attempted {
                             Phase::Message(errors.join("\n").into())
                         } else {
                             Phase::Message(kind.none_found(&query))
@@ -592,6 +798,104 @@ impl ArtPicker {
                     Err(e) => Phase::Message(format!("{e:#}").into()),
                 };
                 this.read_sizes(cx);
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// Show the boxes of the game the ROM library matched, or search the
+    /// system's LaunchBox games for what the user typed.
+    fn search_launchbox(&mut self, cx: &mut Context<Self>) {
+        let (Some(store), Some(app)) = (crate::emulation_store(cx), self.rom.clone()) else {
+            return;
+        };
+        match store.launchbox_status() {
+            LaunchBoxStatus::Missing => {
+                self.phase = Phase::NoLaunchBox;
+                cx.notify();
+                return;
+            }
+            // A download already runs: wait for it, then search.
+            LaunchBoxStatus::Downloading => return self.download_launchbox(cx),
+            LaunchBoxStatus::Ready => {}
+        }
+        let query = self.query.read(cx).value().trim().to_string();
+        let own = (query.is_empty() || query == self.first_title)
+            .then(|| store.launchbox_game(&app))
+            .flatten();
+        if query.is_empty() && own.is_none() {
+            self.phase = Phase::Idle;
+            cx.notify();
+            return;
+        }
+        self.filter = None;
+        self.cursor = None;
+        self.phase = Phase::Searching;
+        cx.notify();
+        // The ROM's own match goes straight to its boxes; anything else the
+        // user typed searches the system's games.
+        let task = irori_ui::run(cx, async move {
+            match own {
+                Some(own) => Ok(vec![own]),
+                None => store.search_launchbox(&app, &query).await,
+            }
+        });
+        self._task = Some(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(found) => {
+                        let games: Vec<SgdbGame> = found
+                            .iter()
+                            .map(|g| SgdbGame {
+                                id: u64::from(g.id),
+                                name: g.name.clone(),
+                            })
+                            .collect();
+                        this.launchbox_found = found;
+                        match search_outcome(games) {
+                            SearchOutcome::NoMatch => {
+                                this.games.clear();
+                                this.phase = Phase::Message(t("library.art.no_games"));
+                            }
+                            SearchOutcome::Single(game) => {
+                                this.games = vec![game.clone()];
+                                this.load_images(game, cx);
+                            }
+                            SearchOutcome::Choose(games) => {
+                                this.games = games;
+                                this.phase = Phase::Games;
+                            }
+                        }
+                    }
+                    Err(e) => this.phase = Phase::Message(format!("{e:#}").into()),
+                }
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// Download LaunchBox's game list (the user asked, which turns
+    /// `iroriLaunchBox` on, as the text above the button says), then show
+    /// the boxes.
+    pub(crate) fn download_launchbox(&mut self, cx: &mut Context<Self>) {
+        let Some(task) = crate::launchbox::turn_on_and_download(cx) else {
+            return;
+        };
+        self.phase = Phase::Downloading;
+        cx.notify();
+        self._task = Some(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        this.phase = Phase::Idle;
+                        this.search(cx);
+                    }
+                    Err(e) => this.phase = Phase::Message(format!("{e:#}").into()),
+                }
                 cx.notify();
             })
             .ok();
@@ -645,6 +949,27 @@ impl ArtPicker {
     fn load_images(&mut self, game: SgdbGame, cx: &mut Context<Self>) {
         self.cursor = None;
         let name: SharedString = game.name.clone().into();
+        if self.source == ArtSource::LaunchBox {
+            let boxes = self
+                .launchbox_found
+                .iter()
+                .find(|g| u64::from(g.id) == game.id)
+                .map(launchbox_images)
+                .unwrap_or_default();
+            let mut found = Vec::with_capacity(boxes.len());
+            for (f, caption) in boxes {
+                self.captions.insert(f.image.url.clone(), caption);
+                found.push(f);
+            }
+            self.phase = if found.is_empty() {
+                Phase::Message(self.kind.none_found(&name))
+            } else {
+                Phase::Images(name, found)
+            };
+            self.read_sizes(cx);
+            cx.notify();
+            return;
+        }
         if self.source == ArtSource::Igdb {
             let images: Vec<Found> = self
                 .igdb_found
@@ -786,15 +1111,11 @@ impl ArtPicker {
                 return;
             }
         }
-        if !self.igdb_on {
+        let sources = self.offered();
+        if sources.len() < 2 {
             cx.propagate();
             return;
         }
-        let mut sources = Vec::new();
-        if self.key.is_some() {
-            sources.push(ArtSource::All);
-        }
-        sources.extend([ArtSource::SteamGridDb, ArtSource::Igdb]);
         let next = cycle(&sources, &self.source, forward);
         self.cursor = None;
         self.set_source(next, cx);
@@ -838,6 +1159,23 @@ impl ArtPicker {
                             window.close_dialog(cx);
                             navigate(Route::Settings("advanced".into()), cx);
                         }),
+                ),
+            )
+            .into_any_element()
+    }
+
+    fn render_no_launchbox(&self, cx: &mut Context<Self>) -> AnyElement {
+        v_flex()
+            .gap_3()
+            .text_sm()
+            .child(t("library.art.launchbox.intro"))
+            .child(
+                h_flex().justify_end().child(
+                    Button::new("launchbox-download")
+                        .outline()
+                        .icon(IconName::ArrowDown)
+                        .label(t("library.art.launchbox.download"))
+                        .on_click(cx.listener(|this, _, _, cx| this.download_launchbox(cx))),
                 ),
             )
             .into_any_element()
@@ -897,6 +1235,7 @@ impl ArtPicker {
         for (source, n) in counts {
             let id = match source {
                 ArtSource::Igdb => "art-filter-igdb",
+                ArtSource::LaunchBox => "art-filter-launchbox",
                 _ => "art-filter-sgdb",
             };
             row = row.child(pill(id, Some(source), count(source.name(), n)));
@@ -929,6 +1268,17 @@ impl ArtPicker {
                     &[("width", &w.to_string()), ("height", &h.to_string())],
                 )
             });
+            let caption = self.captions.get(&image.url).cloned();
+            let label = match &caption {
+                Some(c) => t_args(
+                    "library.art.image_label_captioned",
+                    &[("number", &(ix + 1).to_string()), ("caption", c)],
+                ),
+                None => t_args(
+                    "library.art.image_label",
+                    &[("number", &(ix + 1).to_string())],
+                ),
+            };
             // Logos keep their transparency and are shown whole.
             let logo = self.kind == ArtKind::Logo;
             let thumb = art_img(&image.thumb, pixels, logo, cx);
@@ -958,15 +1308,22 @@ impl ArtPicker {
                 .ghost()
                 .p_1()
                 .h_auto()
-                .accessibility_label(t_args(
-                    "library.art.image_label",
-                    &[("number", &(ix + 1).to_string())],
-                ))
+                .accessibility_label(label)
                 .child(
                     v_flex()
                         .w(width)
                         .gap_0p5()
                         .child(frame)
+                        .when_some(caption, |el, c| {
+                            el.child(
+                                div()
+                                    .min_w_0()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .truncate()
+                                    .child(c),
+                            )
+                        })
                         // The line keeps its height before the size is known,
                         // so the grid doesn't shift when it arrives.
                         .child(
@@ -1001,9 +1358,13 @@ impl ArtPicker {
 impl Render for ArtPicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let has_key = self.key.is_some() || self.source == ArtSource::Igdb;
+        let has_key = self.key.is_some() || !matches!(self.phase, Phase::NoKey);
         let source = self.source;
-        let busy = matches!(self.phase, Phase::Searching | Phase::Loading(_));
+        let offered = self.offered();
+        let busy = matches!(
+            self.phase,
+            Phase::Searching | Phase::Loading(_) | Phase::Downloading
+        );
         let can_go_back =
             matches!(self.phase, Phase::Images(..) | Phase::Loading(_)) && self.games.len() > 1;
 
@@ -1049,12 +1410,13 @@ impl Render for ArtPicker {
                     .into_any_element()
             }
             Phase::NoKey => self.render_no_key(cx),
+            Phase::NoLaunchBox => self.render_no_launchbox(cx),
             Phase::Idle => div()
                 .text_sm()
                 .text_color(muted)
                 .child(t("library.art.idle"))
                 .into_any_element(),
-            Phase::Searching | Phase::Loading(_) => h_flex()
+            Phase::Searching | Phase::Loading(_) | Phase::Downloading => h_flex()
                 .gap_2()
                 .py_4()
                 .justify_center()
@@ -1063,6 +1425,7 @@ impl Render for ArtPicker {
                 .child(Spinner::new())
                 .child(match &self.phase {
                     Phase::Loading(name) => t_args("library.art.loading", &[("name", name)]),
+                    Phase::Downloading => t("library.art.launchbox.downloading"),
                     _ => t("library.art.searching"),
                 })
                 .into_any_element(),
@@ -1120,44 +1483,27 @@ impl Render for ArtPicker {
                 }
             }))
             .gap_3()
-            .when(self.igdb_on, |el| {
-                el.child(
-                    h_flex()
-                        .gap_1()
-                        // Both together only when both can be searched.
-                        .when(self.key.is_some(), |el| {
-                            el.child(
-                                Button::new("art-source-all")
-                                    .ghost()
-                                    .small()
-                                    .label(ArtSource::All.name())
-                                    .selected(source == ArtSource::All)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.set_source(ArtSource::All, cx)
-                                    })),
-                            )
-                        })
-                        .child(
-                            Button::new("art-source-sgdb")
-                                .ghost()
-                                .small()
-                                .label("SteamGridDB")
-                                .selected(source == ArtSource::SteamGridDb)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_source(ArtSource::SteamGridDb, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new("art-source-igdb")
-                                .ghost()
-                                .small()
-                                .label("IGDB")
-                                .selected(source == ArtSource::Igdb)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_source(ArtSource::Igdb, cx)
-                                })),
-                        ),
-                )
+            .when(offered.len() > 1, |el| {
+                let mut row = h_flex().gap_1();
+                for option in offered {
+                    let id = match option {
+                        ArtSource::All => "art-source-all",
+                        ArtSource::SteamGridDb => "art-source-sgdb",
+                        ArtSource::Igdb => "art-source-igdb",
+                        ArtSource::LaunchBox => "art-source-launchbox",
+                    };
+                    row = row.child(
+                        Button::new(id)
+                            .ghost()
+                            .small()
+                            .label(option.name())
+                            .selected(source == option)
+                            .on_click(
+                                cx.listener(move |this, _, _, cx| this.set_source(option, cx)),
+                            ),
+                    );
+                }
+                el.child(row)
             })
             .when(has_key, |el| {
                 el.child(
@@ -1195,13 +1541,7 @@ impl Render for ArtPicker {
                             .text_xs()
                             .text_color(muted)
                             .min_w_0()
-                            .when(has_key, |el| {
-                                el.child(match source {
-                                    ArtSource::All => t("library.art.attribution_both"),
-                                    ArtSource::SteamGridDb => t("library.art.attribution"),
-                                    ArtSource::Igdb => t("library.art.attribution_igdb"),
-                                })
-                            }),
+                            .when(has_key, |el| el.child(self.attribution())),
                     )
                     .child(
                         Button::new("sgdb-cancel")
@@ -1215,11 +1555,33 @@ impl Render for ArtPicker {
     }
 }
 
+impl ArtPicker {
+    /// Where the pictures come from, for the line under them.
+    fn attribution(&self) -> SharedString {
+        match self.source {
+            ArtSource::SteamGridDb => t("library.art.attribution"),
+            ArtSource::Igdb => t("library.art.attribution_igdb"),
+            ArtSource::LaunchBox => t("library.art.attribution_launchbox"),
+            ArtSource::All if self.rom.is_none() => t("library.art.attribution_both"),
+            ArtSource::All => {
+                // Source names are never translated; only the sentence is.
+                let names: Vec<SharedString> =
+                    self.searchable().into_iter().map(ArtSource::name).collect();
+                t_args(
+                    "library.art.attribution_sources",
+                    &[("sources", &names.join(", "))],
+                )
+            }
+        }
+    }
+}
+
 /// Open the picker in a dialog of its own (a game's settings, through
 /// `irori_ui::art_picker`); `on_picked` gets the chosen image.
 pub fn open_art_picker_dialog(
     slot: ArtSlot,
     title: &str,
+    game: Option<&GameId>,
     on_picked: OnPicked,
     window: &mut Window,
     cx: &mut App,
@@ -1229,7 +1591,7 @@ pub fn open_art_picker_dialog(
         ArtSlot::Background => ArtKind::Background,
         ArtSlot::Logo => ArtKind::Logo,
     };
-    let picker = cx.new(|cx| ArtPicker::new(kind, title, window, cx));
+    let picker = cx.new(|cx| ArtPicker::for_game(kind, game, title, window, cx));
     window
         .subscribe(&picker, cx, move |_, event: &ArtPickerEvent, window, cx| {
             if let ArtPickerEvent::Picked(url) = event {
@@ -1270,6 +1632,35 @@ mod tests {
             search_outcome(vec![game(1, "Hades"), game(2, "Hades II")]),
             SearchOutcome::Choose(vec![game(1, "Hades"), game(2, "Hades II")])
         );
+    }
+
+    #[test]
+    fn launchbox_boxes_are_captioned_by_region() {
+        use irori_emulation::launchbox::BoxArt;
+        let art = |file: &str, region: Option<&str>, reconstructed| BoxArt {
+            file: file.into(),
+            region: region.map(str::to_string),
+            reconstructed,
+        };
+        let game = LaunchBoxGame {
+            id: 7,
+            name: "Mega Man".into(),
+            alternate: Vec::new(),
+            boxes: vec![
+                art("eu.png", Some("Europe"), false),
+                art("jp.png", Some("Japan"), true),
+                art("x.png", None, false),
+            ],
+        };
+        let boxes = launchbox_images(&game);
+        assert_eq!(boxes.len(), 3);
+        let (first, caption) = &boxes[0];
+        assert_eq!(first.source, ArtSource::LaunchBox);
+        assert_eq!(first.image.url, "https://images.launchbox-app.com/eu.png");
+        assert_eq!(first.image.thumb, first.image.url);
+        assert_eq!(first.image.id, 7);
+        assert_eq!(caption.as_ref(), "Europe");
+        assert!(boxes[1].1.contains("Japan"));
     }
 
     #[test]

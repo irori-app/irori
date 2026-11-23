@@ -78,6 +78,8 @@ pub(crate) enum PaletteTarget {
     LutrisScript,
     /// Read the Steam library from the Steam client.
     SteamClientLibrary,
+    /// Download LaunchBox's game list for the ROM library's box art.
+    LaunchBox,
     /// Set (or with `None` clear) a game's play status.
     PlayStatus(GameId, Option<PlayStatus>),
     /// Group the library by play status (`true`) or stop, and show it.
@@ -771,6 +773,15 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::SteamClientLibrary);
     }
+    if irori_library::offers_launchbox(cx) {
+        items.push(
+            Entry::new()
+                .label(t("shell.palette.launchbox"))
+                .keywords([t("shell.palette.launchbox_keywords")])
+                .icon(IconName::ArrowDown),
+        );
+        targets.push(PaletteTarget::LaunchBox);
+    }
     if irori_manage::xbox_offline_available(cx) {
         items.push(
             Entry::new()
@@ -805,6 +816,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::SteamClientLibrary => irori_manage::open_steam_library_dialog(window, cx),
+        PaletteTarget::LaunchBox => irori_library::download_launchbox(window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
         PaletteTarget::CancelLaunch(id) => {
             irori_ui::backend(cx).cancel_launch(&id);

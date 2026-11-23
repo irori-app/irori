@@ -110,6 +110,8 @@
   "shell.palette.open_store": "{store} mağazasını aç",
   "shell.palette.lutris_script": "Lutris betiğiyle kur",
   "shell.palette.lutris_script_keywords": "Lutris betik kurulum lutris.net topluluk",
+  "shell.palette.launchbox": "LaunchBox kutu görsellerini indir",
+  "shell.palette.launchbox_keywords": "LaunchBox kutu görselleri kapak ROM emülasyon oyun veritabanı bölgeler güncelle",
   "shell.palette.steam_client_library": "Steam kitaplığını Steam istemcisinden oku",
   "shell.palette.steam_client_library_keywords": "Steam kitaplık sahip olunan oyunlar yüklü olmayan oturumsuz istemci",
   "shell.palette.play_status": "{title}: oynama durumunu {status} yap",

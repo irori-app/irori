@@ -1315,3 +1315,115 @@ fn the_art_picker_moves_through_pictures_with_the_arrows(cx: &mut TestAppContext
         .unwrap();
     assert!(in_search);
 }
+
+#[gpui_kit::test]
+fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
+    use irori_extras::launchbox::{BoxArt, IndexState, LaunchBoxGame, SystemIndex, table_key};
+
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let backend = start(cx);
+    let dir = Paths::get().cache.join("ui-launchbox");
+    let rom = dir.join("roms/Super Mario Bros. 3 (Europe).nes");
+    std::fs::create_dir_all(rom.parent().unwrap()).unwrap();
+    std::fs::write(&rom, b"NES\x1a").unwrap();
+    let settings = backend.settings.clone();
+    let make = |cache: &str| {
+        let settings = settings.clone();
+        irori_emulation::EmulationStore::with_dirs(
+            backend.bus.clone(),
+            Arc::new(move || settings.app()),
+            dir.join("config"),
+            dir.join(cache),
+        )
+    };
+
+    // LaunchBox's index as a download leaves it.
+    let index = dir.join("cache/launchbox");
+    let art = |file: &str, region: &str| BoxArt {
+        file: file.into(),
+        region: Some(region.into()),
+        reconstructed: false,
+    };
+    irori_core::json_store::write(
+        &index.join("systems/nes.json"),
+        &SystemIndex {
+            games: vec![LaunchBoxGame {
+                id: 10,
+                name: "Super Mario Bros. 3".into(),
+                alternate: Vec::new(),
+                boxes: vec![art("us.jpg", "North America"), art("eu.jpg", "Europe")],
+            }],
+        },
+    )
+    .unwrap();
+    irori_core::json_store::write(
+        &index.join("state.json"),
+        &IndexState {
+            updated_at: irori_extras::launchbox::now(),
+            systems: vec!["nes".into()],
+            table: table_key(&irori_emulation::launchbox::platforms()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let open = |store: Arc<irori_emulation::EmulationStore>, cx: &mut TestAppContext| {
+        let rt = backend.runtime();
+        rt.block_on(store.init()).unwrap();
+        let id = rt.block_on(store.add_game(&rom, None, None)).unwrap();
+        cx.update(|cx| crate::install_emulation_store(store, cx));
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    ArtPicker::for_game(
+                        ArtKind::Cover,
+                        Some(&id),
+                        "Super Mario Bros. 3",
+                        window,
+                        cx,
+                    )
+                })
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let wait = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            let (captions, offers) = cx.read(|cx| picker.read(cx).launchbox_view());
+            if !captions.is_empty() || offers || Instant::now() > deadline {
+                return (captions, offers);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+
+    // The ROM's own region comes first, each box labelled with its region.
+    let picker = open(make("cache"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert_eq!(
+        cx.read(|cx| picker.read(cx).source().0),
+        ArtSource::LaunchBox
+    );
+    assert!(!offers);
+    let captions: Vec<String> = captions.iter().map(|c| c.to_string()).collect();
+    assert_eq!(captions, ["Europe", "North America"]);
+
+    // Without the game list yet, it offers to download it, and its button
+    // turns LaunchBox box art on (this store has nowhere to download from).
+    let picker = open(make("cache-empty"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert!(captions.is_empty());
+    assert!(offers);
+    assert!(!backend.settings.app().launchbox);
+    cx.update(|cx| picker.update(cx, |p, cx| p.download_launchbox(cx)));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !backend.settings.app().launchbox {
+        assert!(Instant::now() < deadline, "the setting never turned on");
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}

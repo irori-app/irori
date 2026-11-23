@@ -909,6 +909,12 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Box art for the ROM library from the LaunchBox Games Database: its
+    /// game list (about 110 MB) is downloaded, and again once a week while
+    /// the ROM library has games. Off by default; the art picker's and the
+    /// palette's download turn it on. Irori-only.
+    #[serde(rename = "iroriLaunchBox", default)]
+    pub launchbox: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -976,6 +982,7 @@ impl Default for AppSettings {
             achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
+            launchbox: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

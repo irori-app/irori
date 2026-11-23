@@ -32,6 +32,7 @@ pub mod format;
 mod grid;
 mod i18n;
 mod launch;
+mod launchbox;
 mod layouts;
 mod quick;
 mod random;
@@ -60,6 +61,7 @@ pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
+pub use launchbox::{download_launchbox, offers_launchbox};
 pub use random::{
     Pool as RandomPool, open_random_game, pick_from as pick_random_from, pools as random_pools,
 };
