@@ -92,6 +92,19 @@ impl FieldRules {
         }
     }
 
+    /// Take the rules of `other` this has none for (a backup's).
+    pub fn merge_missing(&mut self, other: &FieldRules) {
+        for (field, theirs) in [
+            (Field::Genre, &other.genres),
+            (Field::Company, &other.companies),
+        ] {
+            let mine = self.of_mut(field);
+            for (key, to) in theirs {
+                mine.entry(key.clone()).or_insert_with(|| to.clone());
+            }
+        }
+    }
+
     /// What `value` shows as: `Some(replacement)` (empty for removed) when
     /// a rule names it.
     pub fn rule(&self, field: Field, value: &str) -> Option<&str> {

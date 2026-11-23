@@ -795,7 +795,8 @@ commands without a window.
   game at the library rebuild before the per-game details above. The manager lists the
   values as the stores give them (`Backend::field_values`, off the UI thread, virtual
   list) and suggests merging spellings that fold alike (`field_rules::duplicates`). Each
-  rule is a sync register (`<field>:<value>`).
+  rule is a sync register (`<field>:<value>`), and backups carry them with the library
+  part (a rule made since stays).
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is

@@ -82,6 +82,9 @@ pub struct LibraryBackup {
     /// Pins and colours of manual categories.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: BTreeMap<String, crate::CategoryLook>,
+    /// Genres and companies renamed, merged or removed across the library.
+    #[serde(skip_serializing_if = "crate::field_rules::FieldRules::is_empty")]
+    pub field_rules: crate::field_rules::FieldRules,
 }
 
 /// Playtime totals and the session history.
@@ -225,6 +228,7 @@ impl Backend {
                 legacy_journal: crate::journal::mirror(&user.journal),
                 smart_categories: user.smart_categories.clone(),
                 category_looks: user.category_looks.clone(),
+                field_rules: user.field_rules.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
@@ -460,6 +464,8 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .or_insert_with(|| look.clone());
         }
     }
+    // A rule made since the backup stays as it is now.
+    d.field_rules.merge_missing(&lib.field_rules);
 }
 
 /// Whether RFC 3339 time `a` is after `b`; unreadable times are never later.
@@ -648,6 +654,33 @@ mod tests {
         let again = serde_json::to_value(&d.smart_categories["s-1"]).unwrap();
         assert_eq!(again["sharedWith"][0], "friend");
         assert_eq!(again["rules"][1]["phase"], "full");
+    }
+
+    #[test]
+    fn field_rules_survive_a_backup_and_restore() {
+        use crate::field_rules::Field;
+        let mut user = crate::UserData::default();
+        user.field_rules
+            .set(Field::Genre, "Role-playing (RPG)", Some("RPG"));
+        user.field_rules.set(Field::Company, "Unknown", Some(""));
+        let lib = LibraryBackup {
+            field_rules: user.field_rules.clone(),
+            ..Default::default()
+        };
+        let back: LibraryBackup =
+            serde_json::from_str(&serde_json::to_string(&lib).unwrap()).unwrap();
+        assert_eq!(back, lib);
+
+        let mut d = crate::UserData::default();
+        // A rule changed since the backup keeps its current value.
+        d.field_rules
+            .set(Field::Genre, "Role-playing (RPG)", Some("Role-playing"));
+        merge_library(&mut d, &back);
+        assert_eq!(
+            d.field_rules.rule(Field::Genre, "Role-playing (RPG)"),
+            Some("Role-playing")
+        );
+        assert_eq!(d.field_rules.rule(Field::Company, "unknown"), Some(""));
     }
 
     #[test]
