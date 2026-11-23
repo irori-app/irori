@@ -503,6 +503,14 @@ commands without a window.
   averaged rate, only on progress), filters its history and plays finished installs;
   the title bar's pill and the sidebar's badge are views of their own
   (`downloads/indicator.rs`) that redraw only when what they show changes.
+  "When downloads finish" (`download_power.rs`, `Backend::set_when_downloads_done`:
+  sleep or power off through `power::PowerSystem`, never `sudo`) is off by default,
+  held for the run only and used once: when the worker empties the queue it counts
+  `POWER_COUNTDOWN` (a minute) down, shown with "Keep it on" in the shell's notice,
+  the pill and the downloads page, and never acts while a game runs or a session
+  is ending (`power_when_idle`, unlike `Backend::power`, stops no game). New work
+  in the queue stops the countdown. The palette offers it and pause/resume
+  (`irori_manage::download_commands`).
 - **Updates** (`updates.rs`): the update manager's component side. Wine builds, DXVK,
   VKD3D-Proton, DXVK-NVAPI, umu, the anticheat runtimes, emulators and RetroArch cores are
   checked once a session and daily, from lists cached for a day. Each has a stable id; a

@@ -342,6 +342,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: false,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         let current = p.current.as_ref().unwrap();
@@ -371,6 +372,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: true,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(p.current.as_ref().unwrap().paused);
@@ -395,6 +397,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: true,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(p.current.is_none());
@@ -433,6 +436,7 @@ pub(crate) mod tests {
                 item(Runner::Gog, "c", DownloadState::Canceled),
             ],
             paused: false,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(!p.has_active());

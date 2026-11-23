@@ -44,7 +44,10 @@ mod xbox {
 }
 
 pub use accounts::AccountsView;
-pub use downloads::{DownloadsBadge, DownloadsPanel, DownloadsPill, DownloadsView};
+pub use downloads::{
+    DownloadCommand, DownloadsBadge, DownloadsPanel, DownloadsPill, DownloadsView,
+    download_command_keywords, download_commands, keep_on, run_download_command,
+};
 pub use emulators::{
     EmulatorsView, InstallTarget, choice_name, open_custom_engine_dialog, open_emulation_setup,
     open_engine_settings, start_install,

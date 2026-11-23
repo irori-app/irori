@@ -83,7 +83,10 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 cx.notify();
             }),
-            cx.observe(&m.downloads, |_, _, cx| cx.notify()),
+            cx.observe_in(&m.downloads, window, |this, _, window, cx| {
+                this.sync_power_countdown(window, cx);
+                cx.notify();
+            }),
             cx.observe(&m.components, |_, _, cx| cx.notify()),
             cx.observe(&m.library, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |this, _, cx| {
@@ -224,7 +227,32 @@ impl AppShell {
             if let Some(route) = irori_ui::system_notify::notice_route(&n) {
                 note = note.on_click(move |_, _, cx| nav::navigate(route.clone(), cx));
             }
+            if is_power_countdown(&n) {
+                // Stays until the countdown ends or is cancelled, with the
+                // way to cancel it right there.
+                note = note
+                    .id::<PowerCountdownNote>()
+                    .autohide(false)
+                    .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx))
+                    .action(|_, _, _| {
+                        Button::new("power-countdown-keep-on")
+                            .small()
+                            .primary()
+                            .label(t("shell.notice.keep_on"))
+                            .on_click(|_, window, cx| {
+                                irori_manage::keep_on(cx);
+                                window.remove_notification::<PowerCountdownNote>(cx);
+                            })
+                    });
+            }
             window.push_notification(note, cx);
+        }
+    }
+
+    /// Take the countdown's notice away once the countdown is over.
+    fn sync_power_countdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if models(cx).downloads.read(cx).queue.countdown.is_none() {
+            window.remove_notification::<PowerCountdownNote>(cx);
         }
     }
 
@@ -584,6 +612,20 @@ impl AppShell {
     }
 }
 
+/// Names the notice of a countdown to sleeping or powering off, so it can be
+/// taken away when the countdown ends.
+struct PowerCountdownNote;
+
+/// The notice the backend raises when a finished queue starts counting down
+/// (not the ones saying the computer was left on).
+fn is_power_countdown(n: &irori_core::Notice) -> bool {
+    n.title_key == Some(irori_services::DOWNLOADS_FINISHED_NOTICE)
+        && matches!(
+            n.message_key,
+            Some("shell.notice.sleep_soon" | "shell.notice.power_off_soon")
+        )
+}
+
 /// The title bar's contents: navigation, the search button and the live status
 /// group.
 ///
@@ -876,6 +918,29 @@ mod start_tests {
         assert_eq!(route_once_loaded(&Route::Library, false), None);
         assert_eq!(route_once_loaded(&Route::BigPicture, false), None);
     }
+
+    #[test]
+    fn only_the_countdown_notice_offers_to_keep_the_computer_on() {
+        let notice = |message| {
+            irori_core::Notice::new(NoticeLevel::Info, "Downloads finished").keys(
+                irori_services::DOWNLOADS_FINISHED_NOTICE,
+                Some(message),
+                &[],
+            )
+        };
+        assert!(is_power_countdown(&notice("shell.notice.sleep_soon")));
+        assert!(is_power_countdown(&notice("shell.notice.power_off_soon")));
+        assert!(!is_power_countdown(&notice(
+            "shell.notice.power_off_skipped"
+        )));
+        assert!(!is_power_countdown(
+            &irori_core::Notice::new(NoticeLevel::Info, "x").keys(
+                "shell.notice.installed",
+                Some("shell.notice.sleep_soon"),
+                &[]
+            )
+        ));
+    }
 }
 
 /// The title bar row laid out in a real window, so a change to the flex tracks
@@ -903,11 +968,7 @@ pub(crate) mod title_bar_tests {
 
     impl Render for TitleBarHarness {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            title_bar_content(
-                cx,
-                |_, _, _| {},
-                self.downloads.clone().into_any_element(),
-            )
+            title_bar_content(cx, |_, _, _| {}, self.downloads.clone().into_any_element())
         }
     }
 

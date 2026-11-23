@@ -4,8 +4,12 @@ mod indicator;
 mod queue;
 mod space;
 mod speed;
+mod when_done;
 
 pub use indicator::{DownloadsBadge, DownloadsPanel, DownloadsPill};
+pub use when_done::{
+    DownloadCommand, download_command_keywords, download_commands, keep_on, run_download_command,
+};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
@@ -21,7 +25,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, rems,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::util::unix_now;
 use irori_core::{GameId, GameStatus, StatusKind};
@@ -60,6 +64,9 @@ pub struct DownloadsView {
     /// What the queue still downloads to each disk, and what is free there.
     disks: Vec<irori_services::QueueDisk>,
     images: Entity<LruImageCache>,
+    /// Redraws the countdown to sleeping or powering off every second while
+    /// it runs, and only then.
+    countdown_tick: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -95,6 +102,7 @@ impl DownloadsView {
             space_key: space::SpaceKey::new(),
             disks: Vec::new(),
             images: LruImageCache::new(48, cx),
+            countdown_tick: None,
             _subscriptions: subscriptions,
         };
         view.rebuild(cx);
@@ -418,8 +426,30 @@ impl DownloadsView {
         }
     }
 
+    /// Keep redrawing while a countdown runs; stop when it ends.
+    fn sync_countdown_tick(&mut self, counting: bool, cx: &mut Context<Self>) {
+        if !counting {
+            self.countdown_tick = None;
+        } else if self.countdown_tick.is_none() {
+            self.countdown_tick = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(when_done::COUNTDOWN_TICK)
+                        .await;
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
+    }
+
     fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut header = PageHeader::new(t("manage.downloads.title")).description(self.summary());
+        let queue = models(cx).downloads.read(cx).queue.clone();
+        if let Some(choice) = when_done::choice_button(&queue, cx) {
+            header = header.action(choice);
+        }
         if self.pending_updates > 0 {
             header = header.action(
                 Button::new("update-all")
@@ -893,9 +923,8 @@ impl DownloadsView {
                 .map(|row| (row, statuses.get(&row.item.id).map(|s| s.kind)))
                 .collect()
         };
-        let rows = shown
-            .into_iter()
-            .map(|(row, status)| {
+        let rows =
+            shown.into_iter().map(|(row, status)| {
                 // Launching or already running: Play waits, or is not offered.
                 let launching = status == Some(StatusKind::Launching);
                 let playable = row.is_playable()
@@ -1028,13 +1057,11 @@ impl DownloadsView {
         let filters = ButtonGroup::new("history-filter")
             .small()
             .outline()
-            .children(
-                HistoryFilter::ALL.iter().enumerate().map(|(ix, f)| {
-                    Button::new(ElementId::Name(format!("history-filter-{ix}").into()))
-                        .label(f.label())
-                        .selected(*f == filter)
-                }),
-            )
+            .children(HistoryFilter::ALL.iter().enumerate().map(|(ix, f)| {
+                Button::new(ElementId::Name(format!("history-filter-{ix}").into()))
+                    .label(f.label())
+                    .selected(*f == filter)
+            }))
             .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
                 if let Some(f) = clicked.first().and_then(|ix| HistoryFilter::ALL.get(*ix)) {
                     this.set_history_filter(*f, cx);
@@ -1086,6 +1113,8 @@ impl DownloadsView {
 
 impl Render for DownloadsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let countdown = models(cx).downloads.read(cx).queue.countdown;
+        self.sync_countdown_tick(countdown.is_some(), cx);
         let files = self.render_files(cx);
         let body: AnyElement = if self.queue.is_empty() && files.is_none() {
             EmptyState::new(IconName::Download, t("manage.downloads.empty.title"))
@@ -1112,7 +1141,15 @@ impl Render for DownloadsView {
         v_flex()
             .size_full()
             .min_h_0()
-            .child(div().px_6().pt_6().pb_4().child(self.render_header(cx)))
+            .child(
+                v_flex()
+                    .px_6()
+                    .pt_6()
+                    .pb_4()
+                    .gap_4()
+                    .child(self.render_header(cx))
+                    .children(countdown.map(|c| when_done::countdown_banner(&c, cx))),
+            )
             .child(
                 div()
                     .id("downloads-body")

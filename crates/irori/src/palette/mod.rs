@@ -150,6 +150,9 @@ pub(crate) enum PaletteTarget {
     Sync,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Pause or resume downloads, or choose what the computer does once
+    /// they finish.
+    Downloads(irori_manage::DownloadCommand),
     /// Make the interface larger, smaller or its default size.
     InterfaceSize(SizeStep),
     /// Report a problem, suggest an idea, ask a question or read the
@@ -816,6 +819,15 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::XboxOfflinePlay);
     }
+    for (label, icon, command) in irori_manage::download_commands(cx) {
+        items.push(
+            Entry::new()
+                .label(label)
+                .keywords([irori_manage::download_command_keywords()])
+                .icon(icon),
+        );
+        targets.push(PaletteTarget::Downloads(command));
+    }
     items
         .into_iter()
         .zip(targets)
@@ -879,6 +891,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::UserAction(id, index) => irori_ui::user_actions::run(id, index, window, cx),
         PaletteTarget::EditActions(id) => irori_ui::user_actions::edit(&id, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::Downloads(command) => irori_manage::run_download_command(command, cx),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),

@@ -12,7 +12,8 @@ use irori_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::Backend;
+use crate::download_power::{PowerCountdown, WhenDone};
+use crate::{Backend, PowerAction};
 
 const FINISHED_LIMIT: usize = 100;
 
@@ -66,6 +67,10 @@ pub struct DownloadQueueSnapshot {
     /// Most recent first.
     pub finished: Vec<DownloadItem>,
     pub paused: bool,
+    /// What the computer does once the queue is done (this run only).
+    pub when_done: Option<PowerAction>,
+    /// The countdown to it, once the queue is done.
+    pub countdown: Option<PowerCountdown>,
 }
 
 impl DownloadQueueSnapshot {
@@ -92,11 +97,14 @@ impl DownloadQueueSnapshot {
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct QueueState {
-    active: Vec<DownloadItem>,
+    pub(crate) active: Vec<DownloadItem>,
     finished: Vec<DownloadItem>,
-    paused: bool,
+    pub(crate) paused: bool,
     #[serde(skip)]
     running: Option<Running>,
+    /// Never written: a forgotten "power off" must not outlive the run.
+    #[serde(skip)]
+    pub(crate) when_done: WhenDone,
 }
 
 struct Running {
@@ -138,6 +146,8 @@ impl QueueState {
             active: self.active.clone(),
             finished: self.finished.clone(),
             paused: self.paused,
+            when_done: self.when_done.choice,
+            countdown: self.when_done.countdown(),
         }
     }
 
@@ -190,6 +200,8 @@ impl Backend {
             if q.active.iter().any(|i| i.id == id) {
                 return;
             }
+            // Work again: the computer stays on until this is done too.
+            q.when_done.stop_countdown();
             q.active.push(DownloadItem {
                 id: id.clone(),
                 title,
@@ -358,6 +370,7 @@ impl Backend {
                 Some((item, cancel)) => {
                     self.bus.emit(Event::DownloadQueueChanged);
                     self.run_download(item, cancel).await;
+                    self.queue_ran();
                 }
                 None => self.downloads_wake.notified().await,
             }

@@ -8,6 +8,7 @@
 //! rest of the window doesn't redraw for it.
 
 use std::rc::Rc;
+use std::time::Instant;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -17,13 +18,14 @@ use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, SharedString,
-    Styled as _, Subscription, Window, div,
+    Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::InstallProgress;
-use irori_services::{DownloadQueueSnapshot, DownloadState};
+use irori_services::{DownloadQueueSnapshot, DownloadState, PowerCountdown};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models, navigate};
 
+use super::when_done;
 use crate::format;
 
 /// What the indicators show, derived from the queue and the current
@@ -44,6 +46,8 @@ pub(crate) struct Indicator {
     pub paused: bool,
     /// Downloads waiting after the current one.
     pub waiting: usize,
+    /// The countdown to sleeping or powering off, once the queue is done.
+    pub countdown: Option<PowerCountdown>,
 }
 
 /// The rounding step of [`Indicator::speed`].
@@ -64,11 +68,13 @@ impl Indicator {
                 .download_speed
                 .filter(|s| *s > 0)
                 .map(|s| (s / SPEED_STEP).max(1) * SPEED_STEP),
-            eta: progress.eta_secs.filter(|s| *s > 0).map(|s| {
-                if s > 60 { s.div_ceil(60) * 60 } else { s }
-            }),
+            eta: progress
+                .eta_secs
+                .filter(|s| *s > 0)
+                .map(|s| if s > 60 { s.div_ceil(60) * 60 } else { s }),
             paused,
             waiting: queue.active.len() - usize::from(current.is_some()),
+            countdown: queue.countdown,
         }
     }
 
@@ -103,10 +109,7 @@ impl Indicator {
 
 /// Follow the queue and the statuses, redrawing the view only when its
 /// indicator changed.
-fn follow<V: 'static>(
-    cx: &mut Context<V>,
-    get: fn(&mut V) -> &mut Indicator,
-) -> Vec<Subscription> {
+fn follow<V: 'static>(cx: &mut Context<V>, get: fn(&mut V) -> &mut Indicator) -> Vec<Subscription> {
     let m = models(cx).clone();
     let refresh = move |this: &mut V, cx: &mut Context<V>| {
         let now = Indicator::now(cx);
@@ -127,6 +130,8 @@ fn follow<V: 'static>(
 pub struct DownloadsPill {
     state: Indicator,
     open: bool,
+    /// Redraws the countdown every second while it runs.
+    tick: Option<Task<()>>,
     panel: Entity<DownloadsPanel>,
     _subscriptions: Vec<Subscription>,
 }
@@ -145,14 +150,34 @@ impl DownloadsPill {
         Self {
             state: Indicator::now(cx),
             open: false,
+            tick: None,
             panel,
             _subscriptions: follow(cx, |this: &mut Self| &mut this.state),
         }
     }
 }
 
+/// Keep `tick` redrawing the view every second while `counting`.
+fn sync_tick<V: 'static>(tick: &mut Option<Task<()>>, counting: bool, cx: &mut Context<V>) {
+    if !counting {
+        *tick = None;
+    } else if tick.is_none() {
+        *tick = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(when_done::COUNTDOWN_TICK)
+                    .await;
+                if this.update(cx, |_, cx| cx.notify()).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+}
+
 impl Render for DownloadsPill {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_tick(&mut self.tick, self.state.countdown.is_some(), cx);
         let s = &self.state;
         let muted = cx.theme().muted_foreground;
         let tooltip: SharedString = match (&s.title, s.percent) {
@@ -177,6 +202,20 @@ impl Render for DownloadsPill {
             .flex_shrink(1.)
             .tooltip(tooltip)
             .map(|b| match (s.percent, s.paused, s.title.is_some()) {
+                _ if s.countdown.is_some() => b.child(
+                    h_flex()
+                        .min_w_0()
+                        .gap_1p5()
+                        .text_color(cx.theme().warning)
+                        .child(Icon::new(IconName::Power).xsmall())
+                        .children(s.countdown.map(|c| {
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_xs()
+                                .child(when_done::countdown_text(&c, Instant::now()))
+                        })),
+                ),
                 (Some(p), _, _) => b.child(
                     h_flex()
                         .min_w_0()
@@ -240,6 +279,7 @@ impl Render for DownloadsPill {
 /// many wait, pause or resume, and the downloads page.
 pub struct DownloadsPanel {
     state: Indicator,
+    tick: Option<Task<()>>,
     close: Rc<dyn Fn(&mut App)>,
     _subscriptions: Vec<Subscription>,
 }
@@ -248,6 +288,7 @@ impl DownloadsPanel {
     fn new(close: Rc<dyn Fn(&mut App)>, cx: &mut Context<Self>) -> Self {
         Self {
             state: Indicator::now(cx),
+            tick: None,
             close,
             _subscriptions: follow(cx, |this: &mut Self| &mut this.state),
         }
@@ -256,6 +297,7 @@ impl DownloadsPanel {
 
 impl Render for DownloadsPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_tick(&mut self.tick, self.state.countdown.is_some(), cx);
         let s = self.state.clone();
         let muted = cx.theme().muted_foreground;
         let facts = [
@@ -285,9 +327,11 @@ impl Render for DownloadsPanel {
             }
         });
         let (close_open, paused, active) = (self.close.clone(), s.paused, s.is_active());
+        let countdown = s.countdown.map(|c| when_done::countdown_banner(&c, cx));
         v_flex()
             .w(gpui_kit::rems(18.))
             .gap_3()
+            .children(countdown)
             .child(match &s.title {
                 Some(title) => v_flex()
                     .gap_1()
