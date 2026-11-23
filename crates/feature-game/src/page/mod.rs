@@ -23,6 +23,7 @@ mod journal;
 mod left_off;
 mod menu;
 mod overlay;
+mod pc_check;
 mod reception;
 mod related;
 mod sandbox;
@@ -156,6 +157,11 @@ pub struct GamePage {
     /// How the game's Steam app is received (reviews, players now);
     /// `Ready(None)` for a game Steam doesn't sell.
     reception: Load<Option<irori_services::steam_reception::SteamReception>>,
+    /// This computer's memory, processor and graphics, read once.
+    this_pc: Option<irori_extras::pc_check::ThisPc>,
+    /// The store page's requirements compared with this computer, worked
+    /// out when either changes.
+    pc_check: Option<irori_extras::pc_check::PcCheck>,
     /// The game's Steam app as of the last library change; when it changes
     /// the store details and compatibility data are read again.
     steam_link: irori_services::SteamLink,
@@ -329,6 +335,8 @@ impl GamePage {
             selected_option: None,
             compat: Load::Idle,
             reception: Load::Idle,
+            this_pc: None,
+            pc_check: None,
             steam_link,
             overlay: None,
             setup: None,
@@ -402,6 +410,7 @@ impl GamePage {
         self.load_achievements(window, cx);
         self.load_compat(window, cx);
         self.load_reception(window, cx);
+        self.load_this_pc(window, cx);
         self.load_install_state(window, cx);
         self.load_timeline(window, cx);
     }
@@ -521,6 +530,7 @@ impl GamePage {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.extra = Load::from_result(result);
+                this.refresh_pc_check();
                 this.sync_trailer(cx);
                 cx.notify();
             });
