@@ -43,6 +43,7 @@ pub mod style;
 pub mod system_notify;
 mod text_scale;
 pub mod theme;
+pub mod tour;
 pub mod trailer;
 pub mod user_actions;
 mod wallpaper;

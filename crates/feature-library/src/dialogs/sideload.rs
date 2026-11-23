@@ -12,14 +12,18 @@
 //! installer as its program) so it has settings and a prefix; the prefix
 //! path is pinned so renaming the app later keeps the installed files. If
 //! the dialog is closed without saving, that provisional entry is removed.
+//! While the installer runs its output shows live, and "Find what it
+//! installed" lists the programs it added to the prefix
+//! ([`super::installer_log`]); closing the dialog leaves it running.
 //!
 //! The form asks first for what playing needs (title, platform, program,
 //! and for Windows programs the Wine or Proton build and prefix); the rest
 //! waits under "More details", and Add stays in the dialog's footer.
 
 use std::cell::Cell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
@@ -29,12 +33,14 @@ use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, Textar
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Window, div,
 };
 use irori_core::{GameId, GameInfo, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
@@ -43,6 +49,7 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::wine_choice::{WineChoice, WineSetup};
 use irori_ui::{Route, backend, navigate};
 
+use super::installer_log::{self, InstallerLog};
 use super::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent};
 use super::{dialog_width, optional_text, pick_path, text};
 
@@ -120,6 +127,14 @@ pub struct SideloadDialog {
     /// new app on save and is removed if the dialog closes without saving.
     provisional: Option<String>,
     installer: InstallerState,
+    /// The installer's output while it runs.
+    installer_log: Option<Entity<InstallerLog>>,
+    /// The prefix's programs before the installer ran, to tell what it
+    /// added.
+    programs_before: Option<Arc<HashSet<PathBuf>>>,
+    /// The programs the installer added, once asked.
+    found_programs: Option<Vec<PathBuf>>,
+    finding_programs: bool,
     error: Option<SharedString>,
     /// The Wine or Proton build and prefix of a Windows program; `None` on
     /// Windows, which runs it itself.
@@ -346,6 +361,10 @@ impl SideloadDialog {
             saved: false,
             provisional: None,
             installer: InstallerState::Idle,
+            installer_log: None,
+            programs_before: None,
+            found_programs: None,
+            finding_programs: false,
             error: None,
             wine,
             more,
@@ -484,15 +503,20 @@ impl SideloadDialog {
                     )),
                 );
             }
+            let scan = prefix.clone();
+            let before = b
+                .spawn_blocking(move || installer_log::programs_in(&scan))
+                .await
+                .unwrap_or_default();
             let argv = vec![installer.to_string_lossy().into_owned()];
             let run = b.run_in_prefix(&id, argv).await.map(|_| ());
-            Ok((created, prefix, run))
+            Ok((created, prefix, run, id, before))
         });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             this.update_in(cx, |this, window, cx| {
                 match result {
-                    Ok((created, prefix, run)) => {
+                    Ok((created, prefix, run, id, before)) => {
                         if created.is_some() {
                             this.provisional = created;
                         }
@@ -505,6 +529,11 @@ impl SideloadDialog {
                                 this.installer = InstallerState::Started(
                                     prefix.to_string_lossy().into_owned().into(),
                                 );
+                                this.programs_before = Some(Arc::new(before));
+                                this.found_programs = None;
+                                let log = irori_core::Paths::get().operation_log_file(&id);
+                                this.installer_log =
+                                    Some(cx.new(|cx| InstallerLog::new(log, window, cx)));
                             }
                             Err(e) => {
                                 this.installer = InstallerState::Idle;
@@ -522,6 +551,116 @@ impl SideloadDialog {
             .ok();
         })
         .detach();
+    }
+
+    /// List the programs the installer added to the prefix since it started.
+    fn find_installed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(before), InstallerState::Started(prefix)) =
+            (self.programs_before.clone(), &self.installer)
+        else {
+            return;
+        };
+        let prefix = PathBuf::from(prefix.as_ref());
+        self.finding_programs = true;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            let after = b
+                .spawn_blocking(move || installer_log::programs_in(&prefix))
+                .await?;
+            Ok(installer_log::new_programs(&before, &after))
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let found = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.finding_programs = false;
+                this.found_programs = Some(found.unwrap_or_default());
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Make a program the installer added the app's program.
+    fn use_program(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        let value = path.to_string_lossy().into_owned();
+        self.executable
+            .update(cx, |s, cx| s.set_value(value, window, cx));
+        self.error = None;
+        cx.notify();
+    }
+
+    /// The installer's live output, and what it added once asked.
+    fn render_installer_progress(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+        let log = self.installer_log.clone()?;
+        let muted = cx.theme().muted_foreground;
+        let found: Vec<gpui_kit::AnyElement> = self
+            .found_programs
+            .iter()
+            .flatten()
+            .enumerate()
+            .map(|(ix, path)| {
+                let shown = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let path = path.clone();
+                Button::new(("installed-program", ix))
+                    .ghost()
+                    .small()
+                    .icon(IconName::Play)
+                    .label(shown)
+                    .tooltip(path.to_string_lossy().into_owned())
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| this.use_program(&path, window, cx)),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        let none_found = self.found_programs.as_ref().is_some_and(Vec::is_empty);
+        Some(
+            v_flex()
+                .gap_2()
+                .child(log)
+                .child(
+                    h_flex().child(
+                        Button::new("find-installed")
+                            .outline()
+                            .small()
+                            .icon(IconName::Search)
+                            .label(t("library.sideload.installer_log.find"))
+                            .loading(self.finding_programs)
+                            .disabled(self.finding_programs)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.find_installed(window, cx)),
+                            ),
+                    ),
+                )
+                .when(none_found, |el| {
+                    el.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(t("library.sideload.installer_log.none_found")),
+                    )
+                })
+                .when(!found.is_empty(), |el| {
+                    el.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(t("library.sideload.installer_log.pick")),
+                    )
+                    .child(
+                        v_flex()
+                            .id("installed-programs")
+                            .max_h(gpui_kit::rems(10.))
+                            .overflow_y_scroll()
+                            .children(found),
+                    )
+                })
+                .into_any_element(),
+        )
     }
 
     pub(crate) fn collect(&self, cx: &App) -> SideloadApp {
@@ -1086,6 +1225,12 @@ impl Render for SideloadDialog {
                                         .title(t("library.sideload.installer_started.title")),
                                     ),
                                 )
+                            },
+                        )
+                        .when_some(
+                            self.render_installer_progress(cx),
+                            |form, progress| {
+                                form.child(field().label_indent(false).child(progress))
                             },
                         )
                     })

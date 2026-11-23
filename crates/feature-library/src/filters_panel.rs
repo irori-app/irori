@@ -344,7 +344,8 @@ impl FiltersPanel {
 
 impl FiltersPanel {
     /// Category checkboxes, both kinds (smart ones marked): games in any
-    /// checked category are shown.
+    /// checked category are shown. Each category's "leave out" button
+    /// hides its games instead, whatever else picks them.
     fn render_categories(
         &self,
         f: &ViewFilter,
@@ -368,6 +369,7 @@ impl FiltersPanel {
         }
         for (ix, entry) in categories.iter().enumerate() {
             let category = entry.category.clone();
+            let excluded = f.excludes_category(&category);
             let check = Checkbox::new(SharedString::from(format!("filter-category-{ix}")))
                 .label(entry.name.clone())
                 .checked(f.shows_category(&category))
@@ -375,11 +377,32 @@ impl FiltersPanel {
                     let category = category.clone();
                     this.set(move |f| f.toggle(&category), cx)
                 }));
+            let category = entry.category.clone();
+            let leave_out = Button::new(SharedString::from(format!("filter-category-out-{ix}")))
+                .xsmall()
+                .ghost()
+                .icon(IconName::Ban)
+                .selected(excluded)
+                .tooltip(if excluded {
+                    t("library.filters.categories.stop_leaving_out")
+                } else {
+                    t("library.filters.categories.leave_out")
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let category = category.clone();
+                    this.set(move |f| f.toggle_excluded(&category), cx)
+                }));
             boxes.push(
                 h_flex()
                     .gap_1p5()
                     .min_w_0()
-                    .child(check)
+                    .child(leave_out)
+                    .child(
+                        div()
+                            .min_w_0()
+                            .when(excluded, |el| el.line_through())
+                            .child(check),
+                    )
                     .when(entry.is_smart(), |el| {
                         el.child(
                             Icon::new(irori_ui::categories::icon(&entry.category))
@@ -399,7 +422,7 @@ impl FiltersPanel {
                     .child(
                         h_flex()
                             .gap_1()
-                            .when(f.has_categories(), |el| {
+                            .when(f.has_categories() || f.has_excluded_categories(), |el| {
                                 el.child(
                                     Button::new("filter-categories-clear")
                                         .xsmall()
@@ -519,6 +542,38 @@ impl FiltersPanel {
                                 )
                             }))
                     })),
+            )
+            .into_any_element()
+    }
+
+    /// Controller support: any or full; a second click shows every game.
+    fn render_controller(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
+        use irori_core::ControllerSupport;
+        v_flex()
+            .gap_2()
+            .child(section(t("library.filters.section.controller")))
+            .child(
+                h_flex().flex_wrap().gap_1().children(
+                    [ControllerSupport::Partial, ControllerSupport::Full]
+                        .into_iter()
+                        .map(|level| {
+                            Button::new(SharedString::from(format!("controller-{level:?}")))
+                                .xsmall()
+                                .outline()
+                                .icon(Icon::new(IconName::Gamepad2))
+                                .label(crate::filter::controller_label(level))
+                                .selected(f.controller == Some(level))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.set(
+                                        move |f| {
+                                            f.controller =
+                                                (f.controller != Some(level)).then_some(level)
+                                        },
+                                        cx,
+                                    )
+                                }))
+                        }),
+                ),
             )
             .into_any_element()
     }
@@ -1031,6 +1086,7 @@ impl Render for FiltersPanel {
             )
             .child(self.render_hidden(&f, hidden, hidden_values, cx))
             .child(self.render_modes(&f, cx))
+            .child(self.render_controller(&f, cx))
             .when_some(genres, |el, genres| el.child(genres))
             .when_some(tags, |el, tags| el.child(tags))
             .when_some(developers, |el, d| el.child(d))

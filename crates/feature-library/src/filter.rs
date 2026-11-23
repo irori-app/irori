@@ -560,6 +560,14 @@ pub struct ViewFilter {
     /// leaves no key behind for a deleted category's id to come back from.
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub smart_categories: BTreeSet<String>,
+    /// Games in any of these categories are left out, whatever else picks
+    /// them. A category is picked or left out, never both.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded_categories: BTreeSet<CategoryFilter>,
+    /// Smart categories (by id) whose games are left out, as
+    /// [`ViewFilter::excluded_categories`].
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded_smart_categories: BTreeSet<String>,
     pub released: ReleaseWindow,
     /// Emulated games of these systems only (systems catalog ids); empty
     /// shows every game.
@@ -572,6 +580,14 @@ pub struct ViewFilter {
     pub max_age: Option<u8>,
     /// With an age limit, also show games no board rated.
     pub include_unrated: bool,
+    /// Games a controller plays at least this well; `None` shows every
+    /// game.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "irori_core::controller_support::lenient"
+    )]
+    pub controller: Option<irori_core::ControllerSupport>,
     /// Games with any of these modes; empty shows every game.
     #[serde(deserialize_with = "deserialize_modes")]
     pub modes: BTreeSet<GameMode>,
@@ -656,11 +672,13 @@ impl ViewFilter {
             self.updates_only,
             self.hide_unavailable,
             self.has_categories(),
+            self.has_excluded_categories(),
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
             !self.statuses.is_empty(),
             self.max_age.is_some(),
             !self.modes.is_empty(),
+            self.controller.is_some(),
             !self.genres.is_empty(),
             !self.tags.is_empty(),
             !self.developers.is_empty(),
@@ -815,14 +833,78 @@ impl ViewFilter {
                 t_args("library.filter.describe.categories", &[("names", &heading)]).to_string(),
             ),
         }
+        if let Some(level) = self.controller {
+            out.push(controller_label(level).to_string());
+        }
+        let left_out = self.excluded_names(user);
+        if !left_out.is_empty() {
+            let names = left_out.join(&t("library.filter.list_separator"));
+            out.push(
+                t_args(
+                    "library.filter.describe.not_in_categories",
+                    &[("names", &names)],
+                )
+                .to_string(),
+            );
+        }
         out
     }
 
-    /// Add or remove one category from the selection.
+    /// Add or remove one category from the selection. Picking one that was
+    /// left out stops leaving it out.
     pub fn toggle_category(&mut self, category: CategoryFilter) {
+        self.excluded_categories.remove(&category);
         if !self.categories.remove(&category) {
             self.categories.insert(category);
         }
+    }
+
+    /// Whether any category of either kind is left out.
+    pub fn has_excluded_categories(&self) -> bool {
+        !self.excluded_categories.is_empty() || !self.excluded_smart_categories.is_empty()
+    }
+
+    /// Whether `category` is left out.
+    pub fn excludes_category(&self, category: &CategoryRef) -> bool {
+        match category {
+            CategoryRef::Manual(name) => self
+                .excluded_categories
+                .contains(&CategoryFilter::Named(name.clone())),
+            CategoryRef::Smart(id) => self.excluded_smart_categories.contains(id),
+        }
+    }
+
+    /// Leave a category of either kind out, or stop leaving it out. Leaving
+    /// out a picked category unpicks it.
+    pub fn toggle_excluded(&mut self, category: &CategoryRef) {
+        match category {
+            CategoryRef::Manual(name) => {
+                let entry = CategoryFilter::Named(name.clone());
+                self.categories.remove(&entry);
+                if !self.excluded_categories.remove(&entry) {
+                    self.excluded_categories.insert(entry);
+                }
+            }
+            CategoryRef::Smart(id) => {
+                self.smart_categories.remove(id);
+                if !self.excluded_smart_categories.remove(id) {
+                    self.excluded_smart_categories.insert(id.clone());
+                }
+            }
+        }
+    }
+
+    /// The names of the categories left out, as [`Self::category_names`].
+    fn excluded_names(&self, user: &UserData) -> Vec<String> {
+        self.excluded_categories
+            .iter()
+            .map(CategoryFilter::label)
+            .chain(
+                self.excluded_smart_categories
+                    .iter()
+                    .filter_map(|id| Some(user.smart_categories.get(id)?.name.clone())),
+            )
+            .collect()
     }
 
     /// Whether any category of either kind is picked.
@@ -847,6 +929,7 @@ impl ViewFilter {
                 self.toggle_category(CategoryFilter::Named(name.clone()));
             }
             CategoryRef::Smart(id) => {
+                self.excluded_smart_categories.remove(id);
                 if !self.smart_categories.remove(id) {
                     self.smart_categories.insert(id.clone());
                 }
@@ -865,17 +948,22 @@ impl ViewFilter {
     pub fn clear_categories(&mut self) {
         self.categories.clear();
         self.smart_categories.clear();
+        self.excluded_categories.clear();
+        self.excluded_smart_categories.clear();
     }
 
     /// Drop a deleted smart category from the selection.
     pub fn forget_smart(&mut self, id: &str) {
         self.smart_categories.remove(id);
+        self.excluded_smart_categories.remove(id);
     }
 
     /// Drop smart categories `user` no longer has (deleted here or on
     /// another computer).
     pub fn forget_missing_smart(&mut self, user: &UserData) {
         self.smart_categories
+            .retain(|id| user.smart_categories.contains_key(id));
+        self.excluded_smart_categories
             .retain(|id| user.smart_categories.contains_key(id));
     }
 
@@ -895,12 +983,10 @@ impl ViewFilter {
 
     /// Follow a category rename in the selection.
     pub fn rename_category(&mut self, from: &str, to: &str) {
-        if self
-            .categories
-            .remove(&CategoryFilter::Named(from.to_string()))
-        {
-            self.categories
-                .insert(CategoryFilter::Named(to.to_string()));
+        for set in [&mut self.categories, &mut self.excluded_categories] {
+            if set.remove(&CategoryFilter::Named(from.to_string())) {
+                set.insert(CategoryFilter::Named(to.to_string()));
+            }
         }
     }
 
@@ -908,6 +994,8 @@ impl ViewFilter {
     /// selected, the library returns to every game.
     pub fn forget_category(&mut self, name: &str) {
         self.categories
+            .remove(&CategoryFilter::Named(name.to_string()));
+        self.excluded_categories
             .remove(&CategoryFilter::Named(name.to_string()));
     }
 
@@ -1041,6 +1129,14 @@ pub fn present_systems(library: &LibrarySnapshot) -> Vec<String> {
     present
 }
 
+/// What a controller filter or fact is called.
+pub fn controller_label(level: irori_core::ControllerSupport) -> gpui_kit::SharedString {
+    t(match level {
+        irori_core::ControllerSupport::Partial => "library.controller.any",
+        irori_core::ControllerSupport::Full => "library.controller.full",
+    })
+}
+
 /// The age limits the Filters popover offers, after "Any": PEGI's steps,
 /// which ESRB's, USK's and the others' ages fall between.
 pub const AGE_LIMITS: [u8; 4] = [3, 7, 12, 16];
@@ -1106,6 +1202,18 @@ pub fn apply_in(
                 || smart.iter().any(|s| categories.contains(s, &id))
         });
     }
+    let left_out: Vec<&String> = filter
+        .excluded_smart_categories
+        .iter()
+        .filter(|id| user.smart_categories.contains_key(*id))
+        .collect();
+    if !filter.excluded_categories.is_empty() || !left_out.is_empty() {
+        games.retain(|g| {
+            let id = g.id();
+            !in_categories(&filter.excluded_categories, user, &id.key())
+                && !left_out.iter().any(|s| categories.contains(s, &id))
+        });
+    }
     // `smart:` search terms: in one of the categories each names (the index
     // holds every copy of an entry).
     let terms = irori_services::search::ParsedQuery::new(&filter.query).smart_ids(user);
@@ -1145,6 +1253,9 @@ pub fn apply_in(
     }
     if !filter.modes.is_empty() {
         games.retain(|g| g.game_modes.iter().any(|m| filter.modes.contains(m)));
+    }
+    if let Some(level) = filter.controller {
+        games.retain(|g| g.controller_support.is_some_and(|c| c.meets(level)));
     }
     if !filter.genres.is_empty() {
         let wanted: HashSet<String> = filter.genres.iter().map(|g| genre_key(g)).collect();
@@ -1858,6 +1969,79 @@ pub(crate) mod tests {
             titles(&apply(&f, &stores, &lib, &user, &none, &none)),
             vec!["The Witcher 3", "Alan Wake", "Itch game"]
         );
+    }
+
+    #[test]
+    fn categories_left_out_win_over_what_picks_their_games() {
+        let lib = sample();
+        let mut user = UserData::default();
+        user.categories
+            .entry("RPG".into())
+            .or_default()
+            .insert("gog:1".into());
+        user.categories
+            .entry("Played".into())
+            .or_default()
+            .extend(["gog:1".to_string(), "legendary:b".to_string()]);
+        let none = HashSet::new();
+        let stores = Runner::ALL.to_vec();
+        let rpg = CategoryRef::Manual("RPG".into());
+
+        let mut f = ViewFilter::default();
+        f.toggle_excluded(&rpg);
+        assert!(f.excludes_category(&rpg));
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(
+            titles(&apply(&f, &stores, &lib, &user, &none, &none)),
+            vec!["Alan Wake", "Hades", "Itch game"]
+        );
+        // Picked and left out at once: what is left out wins.
+        f.toggle(&CategoryRef::Manual("Played".into()));
+        assert_eq!(
+            titles(&apply(&f, &stores, &lib, &user, &none, &none)),
+            vec!["Hades"]
+        );
+        // Picking a left-out category stops leaving it out, and back.
+        f.toggle(&rpg);
+        assert!(!f.excludes_category(&rpg) && f.shows_category(&rpg));
+        f.toggle_excluded(&rpg);
+        assert!(f.excludes_category(&rpg) && !f.shows_category(&rpg));
+        // Renames and deletes follow, and the file keeps the choice.
+        f.rename_category("RPG", "Role-playing");
+        assert!(f.excludes_category(&CategoryRef::Manual("Role-playing".into())));
+        let back: ViewFilter = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!(back, f);
+        f.forget_category("Role-playing");
+        assert!(f.excluded_categories.is_empty());
+        f.toggle_excluded(&CategoryRef::Smart("s-1".into()));
+        f.forget_missing_smart(&user);
+        assert!(!f.has_excluded_categories());
+        // Nothing left out writes no key.
+        let text = serde_json::to_string(&ViewFilter::default()).unwrap();
+        assert!(!text.contains("excluded"));
+    }
+
+    #[test]
+    fn the_controller_filter_keeps_games_a_controller_plays() {
+        use irori_core::ControllerSupport;
+        let mut lib = sample();
+        let mut games: Vec<GameInfo> = lib.games.iter().map(|g| (**g).clone()).collect();
+        games[0].controller_support = Some(ControllerSupport::Full);
+        games[2].controller_support = Some(ControllerSupport::Partial);
+        lib.games = games.into_iter().map(Arc::new).collect();
+        let (user, none, stores) = (UserData::default(), HashSet::new(), Runner::ALL.to_vec());
+        let mut f = ViewFilter {
+            controller: Some(ControllerSupport::Partial),
+            ..Default::default()
+        };
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 2);
+        f.controller = Some(ControllerSupport::Full);
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 1);
+        assert_eq!(f.active_count(), 1);
+        let back: ViewFilter = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!(back.controller, Some(ControllerSupport::Full));
+        let unknown: ViewFilter = serde_json::from_str(r#"{"controller": "gyro"}"#).unwrap();
+        assert_eq!(unknown.controller, None);
     }
 
     #[test]

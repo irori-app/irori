@@ -89,6 +89,7 @@ pub enum Kind {
     AgeRating,
     Developer,
     Publisher,
+    Controller,
     Status,
     Favourite,
     Rating,
@@ -98,7 +99,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Kind; 30] = [
+    pub const ALL: [Kind; 31] = [
         Kind::Store,
         Kind::Installed,
         Kind::Update,
@@ -123,6 +124,7 @@ impl Kind {
         Kind::AgeRating,
         Kind::Developer,
         Kind::Publisher,
+        Kind::Controller,
         Kind::Status,
         Kind::Favourite,
         Kind::Rating,
@@ -156,7 +158,8 @@ impl Kind {
             | Kind::Mode
             | Kind::AgeRating
             | Kind::Developer
-            | Kind::Publisher => Group::Details,
+            | Kind::Publisher
+            | Kind::Controller => Group::Details,
             Kind::Status
             | Kind::Favourite
             | Kind::Rating
@@ -198,6 +201,7 @@ impl Kind {
             Rule::Developer { .. } => Kind::Developer,
             Rule::Publisher { .. } => Kind::Publisher,
             Rule::Copies {} => Kind::Copies,
+            Rule::Controller { .. } => Kind::Controller,
         }
     }
 
@@ -233,6 +237,7 @@ impl Kind {
             Kind::Developer => "library.smart.rule.developer",
             Kind::Publisher => "library.smart.rule.publisher",
             Kind::Copies => "library.smart.rule.copies",
+            Kind::Controller => "library.smart.rule.controller",
         })
     }
 
@@ -320,6 +325,7 @@ impl Kind {
             Kind::Developer => Rule::Developer { names: Vec::new() },
             Kind::Publisher => Rule::Publisher { names: Vec::new() },
             Kind::Copies => Rule::Copies {},
+            Kind::Controller => Rule::Controller { full: false },
         }
     }
 
@@ -1004,6 +1010,18 @@ impl SmartEditor {
                     ));
                 }
             }
+            Rule::Controller { full } => {
+                for (v, key) in [
+                    (false, "library.controller.any"),
+                    (true, "library.controller.full"),
+                ] {
+                    options.push((
+                        t(key),
+                        *full == v,
+                        Box::new(move |rule| *rule = Rule::Controller { full: v }),
+                    ));
+                }
+            }
             Rule::Status { statuses } => {
                 for s in EffectiveStatus::ALL {
                     options.push((
@@ -1416,6 +1434,7 @@ mod tests {
                 kind,
                 Kind::Store
                     | Kind::Installed
+                    | Kind::Controller
                     | Kind::Status
                     | Kind::Mode
                     | Kind::AgeRating

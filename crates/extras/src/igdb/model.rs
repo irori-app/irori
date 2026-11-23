@@ -2,7 +2,7 @@
 //! matching a library title to a search result and filling a store page's
 //! gaps with what IGDB knows.
 
-use irori_core::{AgeRating, ExtraInfo, RatingSystem};
+use irori_core::{AgeRating, CriticScore, ExtraInfo, RatingSystem};
 use serde::{Deserialize, Serialize};
 
 use crate::wiki::hltb;
@@ -18,7 +18,8 @@ pub(crate) const GAME_FIELDS: &str = "name,summary,storyline,first_release_date,
      age_ratings.organization.name,age_ratings.rating_category.rating,\
      age_ratings.rating_content_descriptions.description,\
      version_parent.age_ratings.organization.name,\
-     version_parent.age_ratings.rating_category.rating";
+     version_parent.age_ratings.rating_category.rating,aggregated_rating,\
+     aggregated_rating_count";
 
 /// Search results asked for at once.
 pub(crate) const SEARCH_LIMIT: u32 = 10;
@@ -47,6 +48,8 @@ pub struct IgdbGame {
     /// The boards' ratings; an edition without its own has its parent
     /// game's.
     pub age_ratings: Vec<AgeRating>,
+    /// The critics' rating, 0–100, when critics reviewed the game.
+    pub critic_rating: Option<u8>,
 }
 
 impl IgdbGame {
@@ -240,6 +243,8 @@ struct RawGame {
     url: Option<String>,
     age_ratings: Vec<RawRating>,
     version_parent: Option<Parent>,
+    aggregated_rating: Option<f64>,
+    aggregated_rating_count: u32,
 }
 
 fn nonempty(s: Option<String>) -> Option<String> {
@@ -296,6 +301,11 @@ impl From<RawGame> for IgdbGame {
                 .filter(|g| !g.is_empty())
                 .collect(),
             url: nonempty(raw.url).filter(|u| u.starts_with("https://")),
+            critic_rating: raw
+                .aggregated_rating
+                .filter(|_| raw.aggregated_rating_count > 0)
+                .and_then(|r| CriticScore::new(SOURCE_NAME, r))
+                .map(|s| s.score),
             age_ratings: match age_ratings(&raw.age_ratings) {
                 own if !own.is_empty() => own,
                 _ => raw
@@ -375,6 +385,12 @@ pub fn fill_extra(info: &mut ExtraInfo, game: &IgdbGame) -> bool {
     }
     if filled {
         info.details_from = Some(SOURCE_NAME.to_string());
+    }
+    // A score names its own source, so it doesn't make the page IGDB's.
+    if info.score.is_none() {
+        info.score = game
+            .critic_rating
+            .and_then(|r| CriticScore::new(SOURCE_NAME, f64::from(r)));
     }
     filled
 }

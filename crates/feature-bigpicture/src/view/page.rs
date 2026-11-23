@@ -409,6 +409,18 @@ impl BigPictureView {
                 .map(|s| s.name.clone()),
         );
         push("bigpicture.details.developer", game.developer.clone());
+        push(
+            "bigpicture.details.controller",
+            game.controller_support.map(|c| {
+                t(match c {
+                    irori_core::ControllerSupport::Full => "bigpicture.details.controller_full",
+                    irori_core::ControllerSupport::Partial => {
+                        "bigpicture.details.controller_partial"
+                    }
+                })
+                .to_string()
+            }),
+        );
         push("bigpicture.details.publisher", game.publisher.clone());
         push(
             "bigpicture.details.released",

@@ -307,10 +307,24 @@ impl GamePage {
         };
         let mut rows = Vec::new();
         let compat = self.compat.ready();
+        // PCGamingWiki's scores, else the store page's (Steam's
+        // Metacritic, IGDB), else the library's: GamesDB's for GOG and
+        // Epic games, a score learned from the store page for the rest.
         let score = compat
             .and_then(|c| c.scores.first())
             .map(|s| (s.source.clone(), s.score))
-            .or_else(|| game.rating.map(|r| ("GOG".to_string(), r)));
+            .or_else(|| {
+                let s = self.extra.ready()?.score.as_ref()?;
+                Some((s.source.clone(), s.score))
+            })
+            .or_else(|| {
+                let gamesdb = matches!(
+                    game.runner(),
+                    irori_core::Runner::Gog | irori_core::Runner::Legendary
+                );
+                game.rating
+                    .map(|r| (if gamesdb { "GOG" } else { "" }.to_string(), r))
+            });
         if let Some((source, score)) = score {
             let tag = match score {
                 75.. => Tag::success(),

@@ -269,6 +269,31 @@ impl Applied {
     }
 }
 
+/// Why DLSS doesn't go through MetalFX with a build that lacks it.
+const UNAVAILABLE: &str = "This Wine build can't translate DLSS to MetalFX. Use Game Porting Toolkit 3, a recent CrossOver or a DXMT build for it.";
+
+/// What [`apply`] would leave the launch to do with `found`, the build's
+/// translation, when the game asks for it (`enabled`).
+fn planned_with(found: Option<&Translation>, enabled: bool) -> Applied {
+    match found.filter(|_| enabled) {
+        Some(found) => Applied {
+            switch: Some(found.switch()),
+            unavailable: None,
+        },
+        None => Applied {
+            switch: None,
+            unavailable: enabled.then_some(UNAVAILABLE),
+        },
+    }
+}
+
+/// What [`apply`] would leave the launch to do for `wine`, without touching
+/// the prefix (a launch's preview). Blocking: looks in the build's folders.
+pub fn planned(wine: &WineInstallation, enabled: bool) -> Applied {
+    let found = enabled.then(|| translation(wine)).flatten();
+    planned_with(found.as_ref(), enabled)
+}
+
 /// Bring the prefix in line with the game's DLSS-through-MetalFX setting.
 /// A build without the translation takes it back out, and says why when the
 /// game asks for it. macOS only.
@@ -307,12 +332,7 @@ pub async fn apply(
             }
             let _ = tokio::fs::remove_file(record_path(&prefix)).await;
         }
-        return Ok(Applied {
-            switch: None,
-            unavailable: enabled.then_some(
-                "This Wine build can't translate DLSS to MetalFX. Use Game Porting Toolkit 3, a recent CrossOver or a DXMT build for it.",
-            ),
-        });
+        return Ok(planned_with(None, enabled));
     };
     let mut record = blocking({
         let (prefix, found) = (prefix.clone(), found.clone());
@@ -324,10 +344,7 @@ pub async fn apply(
         json_store::write(&record_path(&prefix), &record)?;
         set_registry(app, settings, wc, true, ctx).await?;
     }
-    Ok(Applied {
-        switch: Some(found.switch()),
-        unavailable: None,
-    })
+    Ok(planned_with(Some(&found), true))
 }
 
 #[cfg(test)]

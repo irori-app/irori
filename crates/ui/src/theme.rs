@@ -974,6 +974,16 @@ pub fn modal_dim(_window: &mut Window, _cx: &mut App) -> Option<Hsla> {
     None
 }
 
+/// The theme's dim behind dialogs, for layers that dim the window
+/// themselves (the guided tour), wherever gpui-kit's own dim went.
+pub fn dim_colour(cx: &App) -> Hsla {
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    if let Some(dim) = cx.try_global::<ModalDim>() {
+        return dim.0;
+    }
+    Theme::global(cx).overlay
+}
+
 /// What status colours aim for, a little over WCAG's 4.5:1: alerts tint their
 /// own background with the colour they write in.
 const STATUS_CONTRAST: f32 = 4.8;

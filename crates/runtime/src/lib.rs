@@ -342,44 +342,119 @@ async fn graphics_env(app: &AppSettings, settings: &GameSettings, host: &HostEnv
     .unwrap_or_default()
 }
 
-/// Prepare everything needed to start `target`: create/upgrade the prefix,
-/// auto-install DXVK/VKD3D/NVAPI and anticheat runtimes when enabled, download
-/// umu/Steam runtime when needed, and compute env vars and wrappers.
-///
-/// Environment precedence (lowest first): game identity (`HEROIC_APP_*`,
-/// `STORE`, `GAMEID=umu-0`), generic variables and the user's variables,
-/// the GPU and frame generation options (minus what the user set),
-/// known-fixes variables, Wine/Proton variables, then the umu database
-/// `GAMEID`. Wrappers, outermost first: gamescope, user wrappers, MangoHud
-/// (without gamescope), gamemoderun, and umu-run for native games on the
-/// Steam runtime. For Windows games umu-run is the Wine layer's program
-/// ([`WineLaunch::bin`]), never a wrapper.
-pub async fn prepare_launch(
+/// What a launch's variables are made from, once the system has been
+/// asked: everything [`compose_env`] needs and nothing it looks up itself.
+/// [`prepare_launch`] gathers it while setting the game up; [`preview_launch`]
+/// gathers it without changing anything, so both show one result.
+#[derive(Debug, Clone)]
+pub struct LaunchFacts {
+    pub host: HostEnv,
+    /// The game's settings after the frame limit was resolved: only the
+    /// limiter that applies is switched on ([`frame_limit`]).
+    pub settings: GameSettings,
+    pub limit: Option<frame_limit::FrameLimit>,
+    /// Whether MangoHud loads: when it shows, or when it limits.
+    pub mangohud: bool,
+    pub parts: WrapperParts,
+    /// The GPU and frame generation variables ([`graphics::graphics_env`]).
+    pub graphics: env::EnvMap,
+    /// Known fixes' variables for the game.
+    pub fixes: env::EnvMap,
+    /// The Steam runtime's `PROTONPATH`, for a native game on it.
+    pub runtime: Option<String>,
+    /// The Wine layer of a Windows game.
+    pub wine: Option<WineContext>,
+    /// The umu database's `GAMEID`, for a game under umu.
+    pub umu_game_id: Option<String>,
+    /// A Windows build whose program is one of this system's starts
+    /// without Wine, as a native build does.
+    pub without_wine: bool,
+    /// `APPIMAGE_EXTRACT_AND_RUN` for an AppImage program FUSE can't mount
+    /// here, unless the game's own variables set it.
+    pub appimage: Option<(String, String)>,
+    /// DLSS through MetalFX on macOS: the build's switch and DLL
+    /// preferences.
+    pub metalfx: metalfx::Applied,
+}
+
+/// The variables a launch starts with, MangoHud's and the sandbox's aside,
+/// in [`prepare_launch`]'s precedence. Reads no more than `facts`, so the
+/// launch and its preview can't differ.
+pub fn compose_env(app: &AppSettings, target: Target<'_>, facts: &LaunchFacts) -> env::EnvMap {
+    let mut vars = env::wrapper_env(target.id);
+    let install_path = target.game.install_path();
+    let host = &facts.host;
+    match &facts.wine {
+        None => {
+            env::layer(
+                &mut vars,
+                env::generic_env(
+                    &facts.settings,
+                    install_path.as_deref(),
+                    facts.runtime.as_deref(),
+                    host,
+                ),
+            );
+            env::layer(&mut vars, facts.graphics.clone());
+            env::layer(&mut vars, facts.fixes.clone());
+            // The game's own variables decide when they set it.
+            if let Some((key, value)) = &facts.appimage
+                && !vars.contains_key(key)
+            {
+                vars.insert(key.clone(), value.clone());
+            }
+        }
+        Some(wc) => {
+            let effective = with_wine(&facts.settings, &wc.wine);
+            env::layer(
+                &mut vars,
+                env::generic_env(&effective, install_path.as_deref(), None, host),
+            );
+            env::layer(&mut vars, facts.graphics.clone());
+            env::layer(&mut vars, facts.fixes.clone());
+            env::layer(
+                &mut vars,
+                prefix::wine_env_for(app, &effective, wc, &target.folder_id(), host),
+            );
+            env::layer(&mut vars, env::game_debug_env(&effective, host));
+            env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
+            facts.metalfx.add_to(&mut vars);
+            if wc.uses_umu
+                && let Some(id) = &facts.umu_game_id
+            {
+                vars.insert("GAMEID".into(), id.clone());
+            }
+        }
+    }
+    vars
+}
+
+/// How the facts are gathered: for a launch, setting the game up on the
+/// way; for a preview, only looking.
+#[derive(Clone, Copy)]
+enum Gather<'a> {
+    Launch(&'a OpContext),
+    Preview,
+}
+
+/// Gather what [`compose_env`] needs for `target`. For a launch this also
+/// creates or upgrades the prefix, installs DXVK/VKD3D/NVAPI and anticheat
+/// runtimes when enabled and downloads umu or the Steam runtime; for a
+/// preview nothing is created, downloaded or written.
+async fn gather_facts(
     app: &AppSettings,
     settings: &GameSettings,
     target: Target<'_>,
-    ctx: &OpContext,
-) -> Result<LaunchEnvironment> {
-    anyhow::ensure!(
-        irori_core::HostPlatform::current().supports(target.platform),
-        "{} builds cannot run on this operating system. Install a compatible build instead.",
-        target.platform.label()
-    );
+    how: Gather<'_>,
+) -> Result<LaunchFacts> {
     let host = HostEnv::current();
-    let mut vars = env::wrapper_env(target.id);
-    let install_path = target.game.install_path();
-
-    if target.platform == InstallPlatform::Browser {
-        return Ok(LaunchEnvironment {
-            env: vars,
-            ..Default::default()
-        });
-    }
-
     // A Windows build whose program is one of this system's (a native
     // replacement) starts without Wine, as a native build does.
     let without_wine = target.platform.needs_wine()
-        && without_wine::runs_without_wine(settings, target.game).await?;
+        && match how {
+            Gather::Launch(_) => without_wine::runs_without_wine(settings, target.game).await?,
+            Gather::Preview => without_wine::decides(settings, target.game).await?,
+        };
     let target = if without_wine {
         Target {
             platform: irori_core::HostPlatform::current().native(),
@@ -388,7 +463,6 @@ pub async fn prepare_launch(
     } else {
         target
     };
-
     let deck = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
     let (adjusted, limit, mangohud) = frame_limits(settings, target.platform, deck);
     let settings = &adjusted;
@@ -406,55 +480,109 @@ pub async fn prepare_launch(
             .filter(|r| cfg!(target_os = "linux") && !r.trim().is_empty())
             .map(runtimes::steam_runtime_protonpath);
         if runtime.is_some() {
-            let umu = runtimes::ensure_umu(ctx)
-                .await
-                .context("The Steam runtime needs umu-run")?;
+            let umu = match how {
+                Gather::Launch(ctx) => runtimes::ensure_umu(ctx)
+                    .await
+                    .context("The Steam runtime needs umu-run")?,
+                Gather::Preview => runtimes::umu_path(),
+            };
             parts.steam_runtime = vec![umu.to_string_lossy().into_owned()];
         }
-        env::layer(
-            &mut vars,
-            env::generic_env(settings, install_path.as_deref(), runtime.as_deref(), &host),
-        );
-        env::layer(&mut vars, graphics_env(app, settings, &host).await);
-        env::layer(&mut vars, fixes);
-        if mangohud {
-            mangohud_env(target.id, settings, limit, &mut vars, &host).await;
-        }
-        // The game's own variables decide when they set it.
         let program = without_wine::launch_program(settings, target.game);
-        if !vars.contains_key("APPIMAGE_EXTRACT_AND_RUN")
-            && program.as_deref().is_some_and(|p| {
-                irori_core::program_kind::is_appimage(
-                    &p.file_name().unwrap_or_default().to_string_lossy(),
-                )
-            })
-        {
+        let appimage = if program.as_deref().is_some_and(|p| {
+            irori_core::program_kind::is_appimage(
+                &p.file_name().unwrap_or_default().to_string_lossy(),
+            )
+        }) {
             let fuse = tokio::task::spawn_blocking(without_wine::fuse_usable)
                 .await
                 .unwrap_or(false);
-            if let Some((key, value)) = without_wine::appimage_env(program.as_deref(), fuse) {
-                vars.insert(key, value);
-            }
-        }
-        parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
-        return Ok(LaunchEnvironment {
-            env: vars,
-            wrappers: wrappers::setup_wrappers(settings, &parts),
+            without_wine::appimage_env(program.as_deref(), fuse)
+        } else {
+            None
+        };
+        return Ok(LaunchFacts {
+            graphics: graphics_env(app, settings, &host).await,
+            host,
+            settings: adjusted.clone(),
+            limit,
+            mangohud,
+            parts,
+            fixes,
+            runtime,
             wine: None,
+            umu_game_id: None,
             without_wine,
+            appimage,
+            metalfx: metalfx::Applied::default(),
         });
     }
 
-    let wc = wine_context(app, settings, target.game, ctx, true).await?;
+    let (wc, metalfx) = match how {
+        Gather::Launch(ctx) => {
+            let wc = wine_context(app, settings, target.game, ctx, true).await?;
+            let metalfx = set_up_prefix(app, settings, target, &wc, ctx).await?;
+            (wc, metalfx)
+        }
+        Gather::Preview => {
+            let wc = preview_wine_context(app, settings, target.game).await?;
+            let metalfx = if cfg!(target_os = "macos") {
+                let (wine, enabled) = (wc.wine.clone(), settings.metal_fx_dlss);
+                tokio::task::spawn_blocking(move || metalfx::planned(&wine, enabled))
+                    .await
+                    .unwrap_or_default()
+            } else {
+                metalfx::Applied::default()
+            };
+            (wc, metalfx)
+        }
+    };
+    let effective = with_wine(settings, &wc.wine);
+    let umu_game_id = if wc.uses_umu {
+        umu::resolve(target.id, &target.game.title, &effective)
+            .await
+            .map(|found| found.id)
+    } else {
+        None
+    };
+    Ok(LaunchFacts {
+        graphics: graphics_env(app, &effective, &host).await,
+        host,
+        settings: adjusted.clone(),
+        limit,
+        mangohud,
+        parts,
+        fixes,
+        runtime: None,
+        wine: Some(wc),
+        umu_game_id,
+        without_wine: false,
+        appimage: None,
+        metalfx,
+    })
+}
+
+/// A launch's work in the prefix before the game starts: verify or create
+/// it, Retina mode and DLSS through MetalFX on macOS, record the game,
+/// DXVK/VKD3D/NVAPI and the anticheat runtimes. What can't be done is said
+/// in the status line and doesn't stop the launch, a cancel aside. Returns
+/// what MetalFX leaves the variables to do.
+async fn set_up_prefix(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+    wc: &WineContext,
+    ctx: &OpContext,
+) -> Result<metalfx::Applied> {
     let effective = with_wine(settings, &wc.wine);
     ACTIVE
         .lock()
         .insert(fingerprint(settings), (wc.wine.clone(), wc.prefix.clone()));
 
-    prefix::verify_prefix(app, &effective, &wc, ctx).await?;
+    prefix::verify_prefix(app, &effective, wc, ctx).await?;
     if cfg!(target_os = "macos")
         && let Err(e) =
-            mac_driver::apply_retina_mode(app, &effective, &wc, settings.retina_mode, ctx).await
+            mac_driver::apply_retina_mode(app, &effective, wc, settings.retina_mode, ctx).await
     {
         if is_cancelled(&e) {
             return Err(e);
@@ -462,7 +590,7 @@ pub async fn prepare_launch(
         note(ctx, &format!("Could not change Retina mode: {e:#}"));
     }
     let metalfx = if cfg!(target_os = "macos") {
-        match metalfx::apply(app, &effective, &wc, settings.metal_fx_dlss, ctx).await {
+        match metalfx::apply(app, &effective, wc, settings.metal_fx_dlss, ctx).await {
             Ok(applied) => {
                 if let Some(why) = applied.unavailable {
                     note(ctx, why);
@@ -506,7 +634,7 @@ pub async fn prepare_launch(
         if settings.auto_install_vkd3d {
             wanted.push(DxTool::Vkd3d);
         }
-        if let Err(e) = tools::install_tools(app, &effective, &wc, &wanted, ctx).await {
+        if let Err(e) = tools::install_tools(app, &effective, wc, &wanted, ctx).await {
             if is_cancelled(&e) {
                 return Err(e);
             }
@@ -531,42 +659,185 @@ pub async fn prepare_launch(
             );
         }
     }
+    Ok(metalfx)
+}
 
-    env::layer(
-        &mut vars,
-        env::generic_env(&effective, install_path.as_deref(), None, &host),
-    );
-    env::layer(&mut vars, graphics_env(app, &effective, &host).await);
-    env::layer(&mut vars, fixes);
-    env::layer(
-        &mut vars,
-        prefix::wine_env_for(app, &effective, &wc, &target.folder_id(), &host),
-    );
-    env::layer(&mut vars, env::game_debug_env(&effective, &host));
-    env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
-    metalfx.add_to(&mut vars);
-    if wc.uses_umu
-        && let Some(found) = umu::resolve(target.id, &target.game.title, &effective).await
-    {
-        vars.insert("GAMEID".into(), found.id);
-    }
-    if mangohud {
-        mangohud_env(target.id, &effective, limit, &mut vars, &host).await;
-    }
-    parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
+/// The Wine layer a launch would use, found without downloading a build or
+/// umu and without asking for Rosetta.
+async fn preview_wine_context(
+    app: &AppSettings,
+    settings: &GameSettings,
+    game: &GameInfo,
+) -> Result<WineContext> {
+    let wine = resolve_wine(app, settings, &OpContext::detached(), false).await?;
+    let prefix = if wine.kind == WineKind::Crossover {
+        locations::crossover_bottles_dir(app).join(settings.wine_crossover_bottle.trim())
+    } else {
+        prefix_path(app, settings, game)
+    };
+    let effective = with_wine(settings, &wine);
+    let umu = runtimes::umu_path();
+    let uses_umu = runtimes::is_umu_supported(&effective, false) && umu.is_file();
+    Ok(WineContext::new(wine, prefix, uses_umu, umu))
+}
 
+/// Prepare everything needed to start `target`: create/upgrade the prefix,
+/// auto-install DXVK/VKD3D/NVAPI and anticheat runtimes when enabled, download
+/// umu/Steam runtime when needed, and compute env vars and wrappers.
+///
+/// Environment precedence (lowest first): game identity (`HEROIC_APP_*`,
+/// `STORE`, `GAMEID=umu-0`), generic variables and the user's variables,
+/// the GPU and frame generation options (minus what the user set),
+/// known-fixes variables, Wine/Proton variables, then the umu database
+/// `GAMEID` ([`compose_env`]), then MangoHud's. Wrappers, outermost first:
+/// gamescope, user wrappers, MangoHud (without gamescope), gamemoderun,
+/// and umu-run for native games on the Steam runtime. For Windows games
+/// umu-run is the Wine layer's program ([`WineLaunch::bin`]), never a
+/// wrapper.
+pub async fn prepare_launch(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+    ctx: &OpContext,
+) -> Result<LaunchEnvironment> {
+    anyhow::ensure!(
+        irori_core::HostPlatform::current().supports(target.platform),
+        "{} builds cannot run on this operating system. Install a compatible build instead.",
+        target.platform.label()
+    );
+    if target.platform == InstallPlatform::Browser {
+        return Ok(LaunchEnvironment {
+            env: env::wrapper_env(target.id),
+            ..Default::default()
+        });
+    }
+    let mut facts = gather_facts(app, settings, target, Gather::Launch(ctx)).await?;
+    let target = facts.target(target);
+    let mut vars = compose_env(app, target, &facts);
+    let effective = match &facts.wine {
+        Some(wc) => with_wine(&facts.settings, &wc.wine),
+        None => facts.settings.clone(),
+    };
+    if facts.mangohud {
+        mangohud_env(target.id, &effective, facts.limit, &mut vars, &facts.host).await;
+    }
+    facts.parts.sandbox = sandbox_wrapper(
+        app,
+        &facts.settings,
+        target,
+        facts.wine.as_ref(),
+        &facts.parts,
+        &vars,
+    )
+    .await?;
     Ok(LaunchEnvironment {
-        without_wine: false,
         env: vars,
-        wrappers: wrappers::setup_wrappers(settings, &parts),
-        wine: Some(WineLaunch {
-            bin: wc.runner_bin(),
-            build_bin: PathBuf::from(&wc.wine.bin),
-            kind: wc.wine.kind,
-            prefix: wc.prefix.clone(),
-            uses_umu: wc.uses_umu,
-            proton_verb: "waitforexitandrun",
-        }),
+        wrappers: wrappers::setup_wrappers(&facts.settings, &facts.parts),
+        wine: facts.wine.as_ref().map(wine_launch),
+        without_wine: facts.without_wine,
+    })
+}
+
+/// The Wine layer a store starts a Windows game with.
+fn wine_launch(wc: &WineContext) -> WineLaunch {
+    WineLaunch {
+        bin: wc.runner_bin(),
+        build_bin: PathBuf::from(&wc.wine.bin),
+        kind: wc.wine.kind,
+        prefix: wc.prefix.clone(),
+        uses_umu: wc.uses_umu,
+        proton_verb: "waitforexitandrun",
+    }
+}
+
+impl LaunchFacts {
+    /// `target` as the launch runs it: a Windows build started without
+    /// Wine runs as this system's own.
+    fn target<'a>(&self, target: Target<'a>) -> Target<'a> {
+        if self.without_wine {
+            Target {
+                platform: irori_core::HostPlatform::current().native(),
+                ..target
+            }
+        } else {
+            target
+        }
+    }
+}
+
+/// How a launch would start, worked out without starting anything.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaunchPreview {
+    /// Every variable the game gets from Irori, by name.
+    pub env: Vec<(String, String)>,
+    /// The wrappers, outermost first.
+    pub wrappers: Vec<Vec<String>>,
+    /// The Wine layer's program and verb, for a Windows game.
+    pub runner: Vec<String>,
+    /// The Wine prefix, for a Windows game.
+    pub prefix: Option<PathBuf>,
+    /// The game runs in a bubblewrap sandbox, whose options are worked
+    /// out when it starts.
+    pub sandboxed: bool,
+    /// A Windows build starts its native program without Wine.
+    pub without_wine: bool,
+}
+
+/// What [`prepare_launch`] would hand the store for `target`, from the same
+/// facts and [`compose_env`], without creating the prefix, downloading or
+/// writing anything. MangoHud's session file is named, not written; the
+/// sandbox stands as `bwrap …`.
+pub async fn preview_launch(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+) -> Result<LaunchPreview> {
+    anyhow::ensure!(
+        irori_core::HostPlatform::current().supports(target.platform),
+        "{} builds cannot run on this operating system. Install a compatible build instead.",
+        target.platform.label()
+    );
+    if target.platform == InstallPlatform::Browser {
+        return Ok(LaunchPreview {
+            env: env::wrapper_env(target.id).into_iter().collect(),
+            ..Default::default()
+        });
+    }
+    let mut facts = gather_facts(app, settings, target, Gather::Preview).await?;
+    let target = facts.target(target);
+    let mut vars = compose_env(app, target, &facts);
+    let effective = match &facts.wine {
+        Some(wc) => with_wine(&facts.settings, &wc.wine),
+        None => facts.settings.clone(),
+    };
+    if facts.mangohud {
+        let ours = facts
+            .limit
+            .filter(|l| l.limiter == frame_limit::Limiter::MangoHud);
+        let limits = facts.limit.is_none() || ours.is_some();
+        let hidden = effective.mangohud_hidden || !effective.show_mangohud;
+        let (id, seen, host) = (target.id.clone(), vars.clone(), facts.host.clone());
+        let planned = tokio::task::spawn_blocking(move || {
+            mangohud::plan(&id, &seen, &host, hidden, ours.map(|l| l.fps), limits)
+        })
+        .await?;
+        vars.insert(planned.var.0, planned.var.1);
+    }
+    let sandboxed = facts.settings.sandbox.is_enabled();
+    if sandboxed {
+        facts.parts.sandbox = vec!["bwrap".into(), "…".into()];
+    }
+    Ok(LaunchPreview {
+        env: vars.into_iter().collect(),
+        wrappers: wrappers::setup_wrappers(&facts.settings, &facts.parts),
+        runner: facts
+            .wine
+            .as_ref()
+            .map(|wc| wine_launch(wc).exec_prefix())
+            .unwrap_or_default(),
+        prefix: facts.wine.map(|wc| wc.prefix),
+        sandboxed,
+        without_wine: facts.without_wine,
     })
 }
 
@@ -1203,6 +1474,193 @@ mod tests {
             assert_eq!(le.env["STEAM_COMPAT_INSTALL_PATH"], "/games/my");
         }
         assert!(!le.env.contains_key("WINEPREFIX"));
+    }
+
+    #[tokio::test]
+    async fn the_preview_shows_what_the_launch_gets() {
+        let id = GameId::new(Runner::Gog, "app");
+        let g = game();
+        let gs = GameSettings {
+            wrapper_options: vec![irori_core::Wrapper {
+                exe: "env".into(),
+                args: "-u X".into(),
+            }],
+            environment_options: vec![irori_core::EnvVar {
+                key: "TOKEN".into(),
+                value: "s3cret".into(),
+            }],
+            ..Default::default()
+        };
+        let target = Target {
+            id: &id,
+            game: &g,
+            platform: irori_core::HostPlatform::current().native(),
+        };
+        let app = AppSettings::default();
+        let launch = prepare_launch(&app, &gs, target, &OpContext::detached())
+            .await
+            .unwrap();
+        let preview = preview_launch(&app, &gs, target).await.unwrap();
+        let launch_env: Vec<(String, String)> = launch.env.into_iter().collect();
+        assert_eq!(preview.env, launch_env);
+        assert_eq!(preview.wrappers, launch.wrappers);
+        assert!(preview.runner.is_empty() && preview.prefix.is_none());
+        assert!(!preview.sandboxed);
+    }
+
+    #[tokio::test]
+    async fn the_preview_of_a_build_started_without_wine_matches_its_launch() {
+        // A Windows build whose program is a native script starts it
+        // directly: no Wine layer in either.
+        let dir = std::env::temp_dir().join(format!("irori-no-wine-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("start.sh"), b"#!/bin/sh\nexec true\n").unwrap();
+        let id = GameId::new(Runner::Sideload, "native");
+        let g = GameInfo {
+            app_name: "native".into(),
+            title: "Native".into(),
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.to_string_lossy().into_owned(),
+                executable: "start.sh".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let target = Target {
+            id: &id,
+            game: &g,
+            platform: InstallPlatform::Windows,
+        };
+        let app = AppSettings::default();
+        let gs = GameSettings::default();
+        let launch = prepare_launch(&app, &gs, target, &OpContext::detached())
+            .await
+            .unwrap();
+        let preview = preview_launch(&app, &gs, target).await.unwrap();
+        assert!(launch.without_wine && launch.wine.is_none());
+        assert!(preview.without_wine && preview.runner.is_empty());
+        assert_eq!(preview.env, launch.env.into_iter().collect::<Vec<_>>());
+        assert_eq!(preview.wrappers, launch.wrappers);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn metalfx_is_planned_as_it_is_applied() {
+        let wine = WineInstallation {
+            bin: "/nowhere/bin/wine".into(),
+            ..Default::default()
+        };
+        assert_eq!(metalfx::planned(&wine, false), metalfx::Applied::default());
+        let asked = metalfx::planned(&wine, true);
+        assert!(asked.switch.is_none() && asked.unavailable.is_some());
+    }
+
+    fn facts(wine: Option<WineContext>) -> LaunchFacts {
+        LaunchFacts {
+            host: HostEnv::from_pairs([("HOME", "/home/me")]),
+            settings: GameSettings {
+                environment_options: vec![
+                    irori_core::EnvVar {
+                        key: "SHARED".into(),
+                        value: "user".into(),
+                    },
+                    irori_core::EnvVar {
+                        key: "WINEDLLOVERRIDES".into(),
+                        value: "dinput8=n,b".into(),
+                    },
+                ],
+                ..Default::default()
+            },
+            limit: None,
+            mangohud: false,
+            parts: WrapperParts::default(),
+            graphics: [("SHARED".to_string(), "graphics".to_string())].into(),
+            fixes: [
+                ("SHARED".to_string(), "fix".to_string()),
+                ("FIXED".to_string(), "1".to_string()),
+            ]
+            .into(),
+            runtime: None,
+            wine,
+            umu_game_id: Some("umu-123".into()),
+            without_wine: false,
+            appimage: None,
+            metalfx: metalfx::Applied::default(),
+        }
+    }
+
+    #[test]
+    fn composes_variables_in_the_launch_s_order() {
+        let id = GameId::new(Runner::Gog, "app");
+        let g = game();
+        let target = Target {
+            id: &id,
+            game: &g,
+            platform: InstallPlatform::Linux,
+        };
+        let app = AppSettings::default();
+        // Fixes come after the graphics options and the user's variables.
+        let native = compose_env(&app, target, &facts(None));
+        assert_eq!(native["SHARED"], "fix");
+        assert_eq!(native["FIXED"], "1");
+        assert_eq!(native["HEROIC_APP_RUNNER"], "gog");
+        assert!(!native.contains_key("WINEPREFIX"));
+
+        let wine = |uses_umu| {
+            WineContext::new(
+                WineInstallation {
+                    bin: "/w/proton".into(),
+                    name: "Proton".into(),
+                    kind: WineKind::Proton,
+                    ..Default::default()
+                },
+                PathBuf::from("/prefixes/app"),
+                uses_umu,
+                PathBuf::from("/usr/bin/umu-run"),
+            )
+        };
+        let windows = Target {
+            platform: InstallPlatform::Windows,
+            ..target
+        };
+        let direct = compose_env(&app, windows, &facts(Some(wine(false))));
+        assert_eq!(direct["FIXED"], "1");
+        // The database's GAMEID only goes to umu.
+        assert_ne!(direct.get("GAMEID").map(String::as_str), Some("umu-123"));
+        let umu = compose_env(&app, windows, &facts(Some(wine(true))));
+        assert_eq!(umu["GAMEID"], "umu-123");
+
+        // DLSS through MetalFX: the build's switch and its DLLs after the
+        // user's own overrides.
+        let mut mac = facts(Some(wine(false)));
+        mac.metalfx = metalfx::Applied {
+            switch: Some("D3DM_ENABLE_METALFX"),
+            unavailable: None,
+        };
+        let with_metalfx = compose_env(&app, windows, &mac);
+        assert_eq!(with_metalfx["D3DM_ENABLE_METALFX"], "1");
+        let overrides = &with_metalfx["WINEDLLOVERRIDES"];
+        assert!(overrides.contains("nvngx=n") && overrides.contains("dinput8=n,b"));
+
+        // An AppImage FUSE can't mount unpacks itself, unless the game's
+        // variables say otherwise.
+        let mut appimage = facts(None);
+        appimage.appimage = Some(("APPIMAGE_EXTRACT_AND_RUN".into(), "1".into()));
+        assert_eq!(
+            compose_env(&app, target, &appimage)["APPIMAGE_EXTRACT_AND_RUN"],
+            "1"
+        );
+        appimage
+            .settings
+            .environment_options
+            .push(irori_core::EnvVar {
+                key: "APPIMAGE_EXTRACT_AND_RUN".into(),
+                value: "0".into(),
+            });
+        assert_eq!(
+            compose_env(&app, target, &appimage)["APPIMAGE_EXTRACT_AND_RUN"],
+            "0"
+        );
     }
 
     #[cfg(target_os = "linux")]

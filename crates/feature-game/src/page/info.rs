@@ -608,6 +608,7 @@ impl GamePage {
             );
         v_flex()
             .gap_2()
+            .children(self.render_pc_check(cx))
             .child(header)
             .children(extra.requirements.iter().map(|r| {
                 h_flex()

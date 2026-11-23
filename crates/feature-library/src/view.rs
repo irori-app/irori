@@ -1982,6 +1982,9 @@ impl LibraryView {
             .when(!self.frame.toolbar_in_list, |el| {
                 el.child(self.render_toolbar(&filter, cx))
             })
+            .child(irori_ui::tour::mark(
+                irori_ui::tour::anchors::LIBRARY_HEADER,
+            ))
     }
 
     /// A quiet suggestion, while it would help, to read the whole Steam
@@ -2196,6 +2199,7 @@ impl LibraryView {
                 .child(list)
                 .vertical_scrollbar(&self.scroll)
                 .children(list_toolbar)
+                .child(irori_ui::tour::mark(irori_ui::tour::anchors::LIBRARY_GAMES))
                 .when(layout == LibraryLayout::Focus, |el| {
                     el.child(self.render_focus_handle(cx))
                 });

@@ -194,9 +194,59 @@ fn user_config_path(vars: &EnvMap, host: &HostEnv) -> Option<PathBuf> {
     Some(config.join("MangoHud").join("MangoHud.conf"))
 }
 
-/// Set MangoHud up for the session of `id` in `vars`: its own file when
-/// MangoHud reads one (it may change during play), else the user's
-/// variable. Returns the state it starts with, and whether it can change.
+/// What setting MangoHud up for a session does, worked out without doing
+/// it: the variable it sets and the session file it writes, if any.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MangoPlan {
+    pub state: MangoState,
+    /// The variable and its value.
+    pub var: (String, String),
+    /// The session's own file and what it holds, when MangoHud reads one.
+    pub file: Option<(PathBuf, String)>,
+}
+
+/// [`prepare`]'s plan for `id`: its own file when MangoHud reads one (it
+/// may change during play), else the user's variable. Reads the user's
+/// MangoHud file, writes nothing.
+pub fn plan(
+    id: &GameId,
+    vars: &EnvMap,
+    host: &HostEnv,
+    hidden: bool,
+    limit: Option<u32>,
+    limits: bool,
+) -> MangoPlan {
+    let existing = vars
+        .get("MANGOHUD_CONFIG")
+        .cloned()
+        .or_else(|| host.get("MANGOHUD_CONFIG").map(str::to_owned));
+    if env_only(existing.as_deref()) {
+        let existing = existing.unwrap_or_default();
+        let state = initial_state(&existing.replace(',', "\n"), hidden, limit, limits);
+        return MangoPlan {
+            state,
+            var: ("MANGOHUD_CONFIG".into(), env_config(&existing, state)),
+            file: None,
+        };
+    }
+    let user = user_config_path(vars, host)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default();
+    let state = initial_state(&user, hidden, limit, limits);
+    let path = session_path(id);
+    MangoPlan {
+        state,
+        var: (
+            "MANGOHUD_CONFIGFILE".into(),
+            path.to_string_lossy().into_owned(),
+        ),
+        file: Some((path, session_config(&user, state))),
+    }
+}
+
+/// Set MangoHud up for the session of `id` in `vars` as [`plan`] says,
+/// writing the session's file. Returns the state it starts with, and
+/// whether it can change.
 pub fn prepare(
     id: &GameId,
     vars: &mut EnvMap,
@@ -205,25 +255,15 @@ pub fn prepare(
     limit: Option<u32>,
     limits: bool,
 ) -> (MangoState, bool) {
-    let existing = vars
-        .get("MANGOHUD_CONFIG")
-        .cloned()
-        .or_else(|| host.get("MANGOHUD_CONFIG").map(str::to_owned));
-    if env_only(existing.as_deref()) {
-        let existing = existing.unwrap_or_default();
-        let state = initial_state(&existing.replace(',', "\n"), hidden, limit, limits);
-        vars.insert("MANGOHUD_CONFIG".into(), env_config(&existing, state));
+    let MangoPlan { state, var, file } = plan(id, vars, host, hidden, limit, limits);
+    let Some((path, text)) = file else {
+        vars.insert(var.0, var.1);
         return (state, false);
-    }
-    let user = user_config_path(vars, host)
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .unwrap_or_default();
-    let state = initial_state(&user, hidden, limit, limits);
-    let path = session_path(id);
+    };
     let written = path
         .parent()
         .is_some_and(|dir| std::fs::create_dir_all(dir).is_ok())
-        && std::fs::write(&path, session_config(&user, state)).is_ok();
+        && std::fs::write(&path, text).is_ok();
     if !written {
         tracing::warn!("writing MangoHud's file for {id}: {}", path.display());
         if limit.is_some() || hidden {
@@ -232,10 +272,7 @@ pub fn prepare(
         }
         return (state, false);
     }
-    vars.insert(
-        "MANGOHUD_CONFIGFILE".into(),
-        path.to_string_lossy().into_owned(),
-    );
+    vars.insert(var.0, var.1);
     (state, true)
 }
 

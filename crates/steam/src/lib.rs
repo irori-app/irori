@@ -24,6 +24,7 @@ mod error;
 pub mod friends;
 pub mod library;
 mod proto;
+pub mod reception;
 pub mod search;
 pub mod tags;
 
@@ -43,5 +44,6 @@ pub use library::{
     AppDetails, Category, Genre, Metacritic, Movie, OwnedGame, Platforms, ReleaseDate,
     Requirements, Screenshot, SharedApp, StoreRating,
 };
+pub use reception::ReviewSummary;
 pub use search::{StoreHit, app_id_in};
 pub use tags::TagVotes;

@@ -32,6 +32,7 @@ pub mod feedback;
 mod form;
 mod game_view;
 mod graphics_mods;
+mod how_it_starts;
 mod i18n;
 mod igdb;
 mod launch_presets;

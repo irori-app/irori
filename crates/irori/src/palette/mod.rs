@@ -83,6 +83,14 @@ pub(crate) enum PaletteTarget {
     Duplicates,
     /// The Getting started checklist.
     GettingStarted,
+    /// Show (`true`) or hide the Stores page's deals.
+    Deals(bool),
+    /// The guided tour of the main window.
+    Tour,
+    /// Save the categories of both kinds to a file.
+    ExportCategories,
+    /// Merge the categories of a file.
+    ImportCategories,
     /// The usual ROM folders found on this computer, to add.
     FindRoms,
     /// The Steam friends window.
@@ -437,6 +445,14 @@ impl Palette {
         );
         push(
             Entry::new()
+                .label(t("shell.palette.tour"))
+                .keywords([t("shell.palette.getting_started_keywords")])
+                .icon(IconName::Compass),
+            PaletteTarget::Tour,
+            targets,
+        );
+        push(
+            Entry::new()
                 .label(t("shell.palette.find_roms"))
                 .keywords([t("shell.palette.find_roms_keywords")])
                 .icon(IconName::Search),
@@ -641,6 +657,24 @@ impl Palette {
                 targets,
             );
         }
+        if !categories.is_empty() {
+            push(
+                Entry::new()
+                    .label(t("shell.palette.export_categories"))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Upload),
+                PaletteTarget::ExportCategories,
+                targets,
+            );
+        }
+        push(
+            Entry::new()
+                .label(t("shell.palette.import_categories"))
+                .keywords([t("shell.palette.category_keywords")])
+                .icon(IconName::Download),
+            PaletteTarget::ImportCategories,
+            targets,
+        );
         for entry in categories {
             push(
                 Entry::new()
@@ -871,6 +905,22 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::Trailer(game.id()));
     }
+    let deals = models(cx).settings.read(cx).app.deals;
+    items.push(
+        Entry::new()
+            .label(t(if deals {
+                "shell.palette.hide_deals"
+            } else {
+                "shell.palette.show_deals"
+            }))
+            .keywords([t("shell.palette.deals_keywords"), t("shell.nav.stores")])
+            .icon(if deals {
+                IconName::EyeOff
+            } else {
+                IconName::Eye
+            }),
+    );
+    targets.push(PaletteTarget::Deals(!deals));
     if let Some(count) = irori_library::removable_picks(cx) {
         items.push(
             Entry::new()
@@ -1045,6 +1095,10 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
+        PaletteTarget::Deals(shown) => irori_manage::set_deals_shown(shown, window, cx),
+        PaletteTarget::Tour => irori_ui::tour::start(window, cx),
+        PaletteTarget::ExportCategories => irori_library::export_categories(window, cx),
+        PaletteTarget::ImportCategories => irori_library::import_categories(window, cx),
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),

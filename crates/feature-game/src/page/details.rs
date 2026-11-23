@@ -212,11 +212,14 @@ impl GamePage {
         } else {
             Vec::new()
         };
-        let steam = if shows(DetailRow::Steam) {
+        let mut steam = if shows(DetailRow::Steam) {
             self.steam_rows(muted)
         } else {
             Vec::new()
         };
+        if shows(DetailRow::SteamReception) {
+            steam.extend(self.reception_rows(&|l, v, m| row(l, v, m), muted));
+        }
         let links = if shows(DetailRow::Links) {
             self.link_rows(game, muted, cx)
         } else {

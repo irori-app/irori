@@ -39,12 +39,13 @@ pub(crate) enum DetailRow {
     Launcher,
     HowLongToBeat,
     Steam,
+    SteamReception,
     Links,
 }
 
 impl DetailRow {
     /// Every kind, in the panel's order.
-    pub(crate) const ALL: [DetailRow; 24] = [
+    pub(crate) const ALL: [DetailRow; 25] = [
         DetailRow::Developer,
         DetailRow::Publisher,
         DetailRow::Released,
@@ -68,6 +69,7 @@ impl DetailRow {
         DetailRow::Launcher,
         DetailRow::HowLongToBeat,
         DetailRow::Steam,
+        DetailRow::SteamReception,
         DetailRow::Links,
     ];
 
@@ -97,6 +99,7 @@ impl DetailRow {
             DetailRow::Launcher => "launcher",
             DetailRow::HowLongToBeat => "hltb",
             DetailRow::Steam => "steam",
+            DetailRow::SteamReception => "steam_reception",
             DetailRow::Links => "links",
         }
     }
@@ -127,6 +130,7 @@ impl DetailRow {
             DetailRow::Launcher => t("game.info.launcher"),
             DetailRow::HowLongToBeat => "HowLongToBeat".into(),
             DetailRow::Steam => "Steam".into(),
+            DetailRow::SteamReception => t("game.reception.title"),
             DetailRow::Links => t("game.links.title"),
         }
     }

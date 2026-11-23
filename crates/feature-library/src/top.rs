@@ -32,8 +32,10 @@ pub fn parse_key(key: &str) -> Option<GameId> {
 }
 
 /// Games of the top row. Hidden games are left out unless `show_hidden`;
-/// recently played games keep most-recent-first order, favourites are sorted
-/// by title.
+/// recently played games keep most-recent-first order. Favourites put the
+/// most recently played first, so the row's large first card is the
+/// favourite the user is playing now; favourites never played follow by
+/// title.
 pub fn top_games(
     setting: LibraryTopSection,
     max_recent: usize,
@@ -49,14 +51,7 @@ pub fn top_games(
             // Without Irori's own history (such as right after importing from
             // Heroic), recorded playtime still says what was played last.
             let keys: Vec<String> = if user.recent.is_empty() {
-                let mut played: Vec<(&String, &str)> = user
-                    .playtime
-                    .iter()
-                    .filter_map(|(k, r)| Some((k, r.last_played.as_deref()?)))
-                    .collect();
-                // RFC 3339 timestamps in one offset sort chronologically as text.
-                played.sort_by(|a, b| b.1.cmp(a.1));
-                played.into_iter().map(|(k, _)| k.clone()).collect()
+                played_by_recency(user)
             } else {
                 user.recent.clone()
             };
@@ -78,11 +73,44 @@ pub fn top_games(
                 .filter_map(|id| lookup(&id))
                 .filter(visible)
                 .collect();
-            games.sort_by(|a, b| a.sort_title.cmp(&b.sort_title));
+            let order = recency_ranks(user);
+            games.sort_by(|a, b| {
+                let rank = |g: &Arc<GameInfo>| order.get(&g.id().key()).copied();
+                match (rank(a), rank(b)) {
+                    (Some(x), Some(y)) => x.cmp(&y),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => a.sort_title.cmp(&b.sort_title),
+                }
+            });
             (TopKind::Favourites, games)
         }
     };
     (!games.is_empty()).then_some((kind, games))
+}
+
+/// Games with recorded playtime, the most recently played first.
+fn played_by_recency(user: &UserData) -> Vec<String> {
+    let mut played: Vec<(&String, &str)> = user
+        .playtime
+        .iter()
+        .filter_map(|(k, r)| Some((k, r.last_played.as_deref()?)))
+        .collect();
+    // RFC 3339 timestamps in one offset sort chronologically as text.
+    played.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+    played.into_iter().map(|(k, _)| k.clone()).collect()
+}
+
+/// Each played game's place, most recent first: Irori's own history, then
+/// what recorded playtime says of games the history doesn't hold (such as
+/// those last played before importing from Heroic).
+fn recency_ranks(user: &UserData) -> std::collections::HashMap<String, usize> {
+    let mut ranks = std::collections::HashMap::new();
+    for key in user.recent.iter().cloned().chain(played_by_recency(user)) {
+        let next = ranks.len();
+        ranks.entry(key).or_insert(next);
+    }
+    ranks
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -223,6 +251,51 @@ mod tests {
         assert!(top_games(LibraryTopSection::Disabled, 8, false, &user, &lookup).is_none());
         user.favourites.clear();
         assert!(top_games(LibraryTopSection::Favourites, 8, false, &user, &lookup).is_none());
+    }
+
+    #[test]
+    fn favourites_put_the_last_played_first() {
+        use irori_core::PlaytimeRecord;
+        let games: HashMap<GameId, Arc<GameInfo>> = [
+            game(Runner::Gog, "1", "Witcher", true),
+            game(Runner::Legendary, "a", "Alan Wake", false),
+            game(Runner::Legendary, "b", "Hades", true),
+            game(Runner::Legendary, "c", "Celeste", true),
+            game(Runner::Legendary, "d", "Bastion", true),
+        ]
+        .into_iter()
+        .map(|g| (g.id(), g))
+        .collect();
+        let lookup = |id: &GameId| games.get(id).cloned();
+        let mut user = UserData {
+            recent: vec!["legendary:b".into()],
+            ..Default::default()
+        };
+        user.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 10,
+                last_played: Some("2026-10-01T10:00:00Z".into()),
+                ..Default::default()
+            },
+        );
+        for key in [
+            "gog:1",
+            "legendary:a",
+            "legendary:b",
+            "legendary:c",
+            "legendary:d",
+        ] {
+            user.favourites.insert(key.into());
+        }
+        let (_, favs) = top_games(LibraryTopSection::Favourites, 8, false, &user, &lookup).unwrap();
+        let titles: Vec<_> = favs.iter().map(|g| g.title.as_str()).collect();
+        // Hades from the history, Witcher from playtime, then the never
+        // played by title.
+        assert_eq!(
+            titles,
+            vec!["Hades", "Witcher", "Alan Wake", "Bastion", "Celeste"]
+        );
     }
 
     #[test]

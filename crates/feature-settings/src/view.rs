@@ -640,10 +640,34 @@ impl SettingsView {
     /// Help and feedback: one row per way to reach the project.
     fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let border = cx.theme().border;
+        let tour = h_flex()
+            .gap_3()
+            .px_4()
+            .py_3()
+            .child(Icon::new(IconName::Compass).text_color(cx.theme().muted_foreground))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .child(t("settings.about.tour")),
+                    )
+                    .child(muted(t("settings.about.tour_help"), cx)),
+            )
+            .child(
+                Button::new("about-tour")
+                    .outline()
+                    .small()
+                    .label(t("settings.about.tour"))
+                    .on_click(|_, window, cx| irori_ui::tour::start(window, cx)),
+            );
         Feedback::ALL
             .into_iter()
             .enumerate()
-            .fold(panel(cx), |list, (i, way)| {
+            .fold(panel(cx).child(tour), |list, (_, way)| {
                 let button = if way == Feedback::Report {
                     "settings.about.feedback.report_open"
                 } else {
@@ -654,7 +678,8 @@ impl SettingsView {
                         .gap_3()
                         .px_4()
                         .py_3()
-                        .when(i > 0, |r| r.border_t_1().border_color(border))
+                        .border_t_1()
+                        .border_color(border)
                         .child(Icon::new(way.icon()).text_color(cx.theme().muted_foreground))
                         .child(
                             v_flex()

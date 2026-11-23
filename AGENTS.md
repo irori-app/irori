@@ -657,6 +657,14 @@ commands without a window.
     `smart_categories`, written only while one is picked, and drops ids that
     no longer exist as soon as the user data says so. Every list respects
     hidden games and their PIN like the rest of the library.
+  - A category of either kind can be left out instead (the Filters popover's
+    Leave out button, `ViewFilter::excluded_categories` and
+    `excluded_smart_categories`): its games are hidden whatever else picks
+    them, and a category is picked or left out, never both.
+  - Categories alone travel as a file (`category_file.rs`, the category
+    manager's Export…/Import… and the palette): manual ones with their games,
+    smart ones and looks; an import merges as a restore does and skips a name
+    the other kind uses here. An Irori backup's categories import too.
 - **Links** (`GameOverrides::links`, `irori_core::GameLink`): web pages the user keeps
   with a game, set with `UserDataService::set_links` (`set_overrides` keeps them) and
   synced in a register of their own (`Registers::links`), so a title edited on one
@@ -813,6 +821,12 @@ commands without a window.
   goes by the strictest board. `iroriUi.ageRatingBoard` names the board shown first
   instead (`age_rating::lead_with`), and `iroriUi.showAgeRatings` off leaves the card
   off game pages (the filter still works).
+- **Controller support** (`irori_core::controller_support`, `store_facts.rs`):
+  `GameInfo::controller_support` is full or partial, from Steam's store page, GOG's
+  Controller support feature and PCGamingWiki's Input table (limited or with a fix is
+  partial), the store first, learned when a game's page reads them. The library
+  filters by it (`ViewFilter::controller`), smart categories have a Controller support
+  rule, and Big Picture's details show it; an unknown value reads as unknown.
 - **Game modes** (`irori_core::game_mode`, `store_facts.rs`): `GameMode` is single,
   co-op, local (split screen, couch), online (LAN included) or MMO; `GameInfo::game_modes`
   holds a normalized list. Sources, none of them asked in the background: Steam's
@@ -951,6 +965,25 @@ commands without a window.
   cloud-saves sheet's "Earlier saves" (`irori_game` `save_snapshots.rs`) restores one
   after a confirmation: what is there is snapshotted first, then the snapshot's files
   are copied back; nothing is deleted.
+- **Steam reception** (`steam_reception.rs`): a game's Steam review summary and
+  players now (keyless `/appreviews` and `GetNumberOfCurrentPlayers`) for any game
+  with a Steam app, asked when its page opens and kept ten minutes in memory; the
+  Details panel's Steam reception rows. A store page's critics' score
+  (`ExtraInfo::score`: Steam's Metacritic, IGDB's critics' rating while IGDB is on)
+  is learned in `store-facts.json` and fills `GameInfo::rating` where GamesDB and the
+  store give none.
+- **Can my PC run it?** (`irori_extras::pc_check`, the game page's Requirements tab):
+  the page's memory, graphics and processor needs compared with this computer's
+  (`irori_runtime::sysinfo`). Memory compares exactly; graphics cards and processors
+  by a rough family table, and a name it doesn't know is "can't compare", never a
+  guess. Pure and tested.
+- **How it starts** (`how_it_starts.rs`, the game settings' Launch section):
+  `irori_runtime::preview_launch` gathers the launch's facts without creating,
+  downloading or writing anything and builds the variables with the same
+  `compose_env` that `prepare_launch` uses, so the preview can't differ from the
+  launch; secret values (`process::is_secret_var`) are masked before they reach the
+  screen or "Copy as command". Starting without Wine, MetalFX's variables and
+  Rosetta (`arch -x86_64` for an Intel Mac program) show as the launch does them.
 - **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
@@ -1250,12 +1283,14 @@ commands without a window.
      raises a notice. A save folder Irori worked out itself is stored with the
      prefix it was found in (`iroriSavesPathFound`) and found again when the
      prefix or its Wine/Proton layout changes; one the user chose stays.
-  3. `irori_runtime::prepare_launch`. A Windows build whose program (`targetExe`, else
-     the store's) is this system's by its first bytes (`irori_core::program_kind`), or
-     with `iroriNoWine` on, is prepared as a native build and marked
-     `LaunchEnvironment::without_wine`, which the stores honour (not Xbox's GDK games)
-     (`irori_runtime::without_wine`); AppImages get `APPIMAGE_EXTRACT_AND_RUN=1`
-     where FUSE can't mount them. It also builds the bubblewrap sandbox for a
+  3. `irori_runtime::prepare_launch`: the facts are gathered while the prefix is set
+     up (`gather_facts`), then `compose_env` builds the variables without side
+     effects, then MangoHud's file and the sandbox. A Windows build whose program
+     (`targetExe`, else the store's) is this system's by its first bytes
+     (`irori_core::program_kind`), or with `iroriNoWine` on, is prepared as a native
+     build and marked `LaunchEnvironment::without_wine`, which the stores honour (not
+     Xbox's GDK games) (`irori_runtime::without_wine`); AppImages get
+     `APPIMAGE_EXTRACT_AND_RUN=1` where FUSE can't mount them. It also builds the bubblewrap sandbox for a
      game with `iroriSandbox` on and refuses with `SandboxUnavailable` rather than
      start it without (`docs/PLATFORMS.md`, "Sandboxed games"). For Wine and Proton
      it adds the game's DLL overrides (`iroriDllOverrides`) to the user's
@@ -1452,6 +1487,12 @@ cx.spawn_in(window, async move |this, cx| {
   tiled). Size layouts and window-covering overlays to `style::visible_bounds` /
   `visible_size`, which leave it out, so nothing is drawn over the decorations.
 - The available backdrops differ per platform; see the table in `docs/PLATFORMS.md`.
+
+**Guided tour** (`tour.rs`, "Show me around" in Settings → About, the Getting
+started hub and the palette; never on its own): steps light parts of the window by
+anchor id (`tour::anchors`), which those parts carry with `tour::mark`, an empty
+canvas noting its bounds only while a tour runs. Escape skips it; arrows, Enter
+and a controller move through it.
 
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
 `SectionTitle`, `ProgressSummary`, `StoreBadge`, `StoreLogo`. Stores, launchers and
@@ -1965,7 +2006,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **UI.** The Emulators page (`Route::Emulators`, `irori-manage::emulators`) installs,
   updates and removes versions and cores, and picks each system's default emulator.
   Installs run through `irori_manage::start_install` so any screen can start one and the
-  page shows its progress. Changes emit `Event::EnginesChanged`.
+  page shows its progress. Changes emit `Event::EnginesChanged`. Each card shows how
+  the emulator stands (`Backend::engine_health`): a dot, the ROM library's games that
+  play with it, and a program it was set up with that is gone from the disk.
 - **Lutris install scripts** (`irori-scripts` interprets; `irori_services::scripts`
   hosts Wine, DOSBox, programs and prompts; `irori_library::open_lutris_installer` is
   the window, reached from Add game, the command palette and `irori://lutris/<slug>`).
