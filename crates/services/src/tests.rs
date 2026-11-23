@@ -1057,6 +1057,12 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
     let ids = |b: &Backend, id: &GameId| -> Vec<String> {
         b.library().copies_of(id).iter().map(GameId::key).collect()
     };
+    // The bus's own debounced rebuild may still publish a snapshot of the
+    // user data from before a change: let it finish, then rebuild.
+    let settle = |b: &Backend| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        b.rebuild_library();
+    };
     let (steam, gog) = (
         GameId::new(Runner::Steam, "copies-620"),
         GameId::new(Runner::Gog, "copies-p2"),
@@ -1065,20 +1071,20 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
         GameId::new(Runner::Steam, "copies-1"),
         GameId::new(Runner::Gog, "copies-b"),
     );
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &steam), ["gog:copies-p2", "steam:copies-620"]);
     assert!(ids(&b, &a).is_empty());
 
     // The user's choice leads.
     b.userdata
         .set_default_copy(&steam, &[gog.clone(), steam.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &gog), ["steam:copies-620", "gog:copies-p2"]);
     assert_eq!(b.library().entry_of(&gog).unwrap().id(), steam);
 
     // Games of other titles combine only when the user says so.
     b.userdata.combine_copies(&[a.clone(), other.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &other), ["steam:copies-1", "gog:copies-b"]);
 
     // Separated, each stands alone; editing a game's title keeps that.
@@ -1091,18 +1097,18 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
             ..Default::default()
         },
     );
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &steam).is_empty());
     assert!(ids(&b, &gog).is_empty());
     b.userdata.separate_copies(&[a.clone(), other.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &a).is_empty());
     assert_eq!(b.library().all_games().count(), 4);
 
     // Turned off, nothing is grouped.
     b.userdata.combine_copies(&[a.clone(), other.clone()]);
     b.settings.update_app(|s| s.ui.group_copies = false);
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &a).is_empty());
     b.settings.update_app(|s| s.ui.group_copies = true);
 }
