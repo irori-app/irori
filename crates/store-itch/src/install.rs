@@ -135,10 +135,23 @@ impl ItchStore {
         app: &str,
         platform: InstallPlatform,
     ) -> Result<(OwnedKey, Upload)> {
+        self.choose_upload_preferring(app, platform, 0).await
+    }
+
+    /// Like [`Self::choose_upload`], keeping to upload `installed` (the one
+    /// the installed files came from) while the game still offers it.
+    pub(crate) async fn choose_upload_preferring(
+        &self,
+        app: &str,
+        platform: InstallPlatform,
+        installed: u64,
+    ) -> Result<(OwnedKey, Upload)> {
         let key = self.key_of(app)?;
         let game_id = key.game.as_ref().map_or(key.game_id, |g| g.id);
         let uploads = self.api()?.uploads(game_id, key.id).await?;
-        let upload = irori_itch_api::best_upload(&uploads, os_of(platform)?)
+        let os = os_of(platform)?;
+        let upload = crate::receipt::installed_upload(&uploads, installed)
+            .or_else(|| irori_itch_api::best_upload(&uploads, os))
             .cloned()
             .with_context(|| {
                 let title = key.game.as_ref().map_or("This game", |g| g.title.as_str());
@@ -188,7 +201,13 @@ impl ItchStore {
         ctx: &OpContext,
     ) -> Result<Outcome> {
         (ctx.step)("Fetching file list");
-        let (key, upload) = self.choose_upload(app, platform).await?;
+        let installed = match mode {
+            Mode::Update => self.record(app).map_or(0, |r| r.upload_id),
+            Mode::Install => 0,
+        };
+        let (key, upload) = self
+            .choose_upload_preferring(app, platform, installed)
+            .await?;
         let title = key
             .game
             .as_ref()
