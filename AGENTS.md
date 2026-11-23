@@ -1229,7 +1229,10 @@ launchers found off the UI thread (Lutris, Bottles, Faugus Launcher, Playnite;
 (`onboarding::hub`, `irori_manage::open_getting_started`: onboarding's last page, the
 palette, the empty library) is a checklist of three steps that tick themselves from the
 library and settings (a game; a look other than the defaults; a switch for playing on),
-or that the user marks as fine as they are (`<state>/getting-started.json`), then tips.
+or that the user marks as fine as they are (`<state>/getting-started.json`), then tips. The empty
+library shows `onboarding::found` through `irori_ui::hooks::found_sources`: Steam with
+its state and the one action it needs, emulators and ROM folders found, the other
+launchers, and the stores to log in to.
 
 ### 4.5 Shell (`crates/irori`)
 

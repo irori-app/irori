@@ -1,8 +1,10 @@
 //! First-run onboarding: welcome (with the interface language), import from
 //! Heroic and the other launchers found here ([`launchers`]), connect
 //! stores, choose the install folder. Getting started ([`hub`]) picks up
-//! from its last page.
+//! from its last page, and the empty library shows what was found on this
+//! computer ([`found`]).
 
+pub(crate) mod found;
 pub(crate) mod hub;
 pub(crate) mod launchers;
 

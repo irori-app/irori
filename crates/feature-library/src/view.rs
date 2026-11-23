@@ -2,6 +2,7 @@
 
 mod bulk;
 pub(crate) mod details;
+mod empty;
 mod panel;
 mod quick;
 pub(crate) mod remove;
@@ -178,6 +179,8 @@ pub struct LibraryView {
     images: Entity<LruImageCache>,
     games: FilteredGames,
     top: TopCache,
+    /// What the empty library shows (see `empty.rs`), made once.
+    found_sources: Option<gpui_kit::AnyView>,
     layout: LibraryLayout,
     tile_rem: f32,
     density: Density,
@@ -334,6 +337,7 @@ impl LibraryView {
             images: LruImageCache::new(IMAGE_CACHE_CAPACITY, cx),
             games: FilteredGames::default(),
             top: TopCache::default(),
+            found_sources: None,
             layout: ui.library_layout,
             tile_rem,
             density: ui.density,
@@ -1955,8 +1959,6 @@ impl LibraryView {
             let lib = models(cx).library.read(cx);
             (lib.snapshot.len(), lib.refreshing)
         };
-        let any_logged_in = models(cx).accounts.read(cx).any_logged_in();
-
         if total == 0 {
             if refreshing {
                 return v_flex()
@@ -1973,73 +1975,7 @@ impl LibraryView {
                     )
                     .into_any_element();
             }
-            let state = if any_logged_in {
-                EmptyState::new(IconName::Gamepad2, t("library.empty.title"))
-                    .description(t("library.empty.description"))
-                    .action(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("empty-refresh")
-                                    .icon(IconName::RefreshCw)
-                                    .label(t("library.header.refresh"))
-                                    .on_click(|_, _, cx| {
-                                        irori_ui::models::refresh_library(false, cx)
-                                    }),
-                            )
-                            .child(
-                                Button::new("empty-add")
-                                    .outline()
-                                    .icon(IconName::Plus)
-                                    .label(t("library.header.add_game"))
-                                    .on_click(|_, window, cx| {
-                                        dialogs::sideload::open_add_game_dialog(window, cx)
-                                    }),
-                            )
-                            .child(
-                                Button::new("empty-emulation")
-                                    .outline()
-                                    .icon(IconName::Joystick)
-                                    .label(t("library.empty.set_up_emulation"))
-                                    .on_click(|_, window, cx| {
-                                        irori_ui::hooks::open_emulation_setup(window, cx)
-                                    }),
-                            ),
-                    )
-            } else {
-                EmptyState::new(IconName::LogIn, t("library.empty.no_stores_title"))
-                    .description(t("library.empty.no_stores_description"))
-                    .action(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("empty-accounts")
-                                    .primary()
-                                    .icon(IconName::LogIn)
-                                    .label(t("library.empty.log_in"))
-                                    .on_click(|_, _, cx| navigate(Route::Accounts, cx)),
-                            )
-                            .child(
-                                Button::new("empty-add")
-                                    .outline()
-                                    .icon(IconName::Plus)
-                                    .label(t("library.header.add_game"))
-                                    .on_click(|_, window, cx| {
-                                        dialogs::sideload::open_add_game_dialog(window, cx)
-                                    }),
-                            )
-                            .child(
-                                Button::new("empty-emulation")
-                                    .outline()
-                                    .icon(IconName::Joystick)
-                                    .label(t("library.empty.set_up_emulation"))
-                                    .on_click(|_, window, cx| {
-                                        irori_ui::hooks::open_emulation_setup(window, cx)
-                                    }),
-                            ),
-                    )
-            };
-            return state.into_any_element();
+            return self.render_empty(window, cx);
         }
 
         if self.frame.games.is_empty() {
