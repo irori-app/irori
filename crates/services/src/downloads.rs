@@ -74,6 +74,19 @@ impl DownloadQueueSnapshot {
             .first()
             .filter(|i| matches!(i.state, DownloadState::Running | DownloadState::Paused))
     }
+
+    /// Where a waiting item stands in line, from 1: the place it takes once
+    /// the running download is done. A paused download is first in line;
+    /// the running one, and games not in the queue, have none.
+    pub fn queue_place(&self, id: &GameId) -> Option<usize> {
+        let ix = self.active.iter().position(|i| &i.id == id)?;
+        let running = usize::from(
+            self.active
+                .first()
+                .is_some_and(|i| i.state == DownloadState::Running),
+        );
+        (ix + 1).checked_sub(running).filter(|place| *place > 0)
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -523,6 +536,48 @@ pub(crate) async fn stop_within<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn queued(app: &str, state: DownloadState) -> DownloadItem {
+        DownloadItem {
+            id: GameId::new(irori_core::Runner::Gog, app),
+            title: app.into(),
+            kind: DownloadKind::Update(UpdateRequest::default()),
+            state,
+            added_at: 0,
+            started_at: None,
+            finished_at: None,
+            download_size: 0,
+            error: None,
+            progress: None,
+        }
+    }
+
+    #[test]
+    fn places_in_line() {
+        let id = |app| GameId::new(irori_core::Runner::Gog, app);
+        let running = DownloadQueueSnapshot {
+            active: vec![
+                queued("a", DownloadState::Running),
+                queued("b", DownloadState::Queued),
+                queued("c", DownloadState::Queued),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(running.queue_place(&id("a")), None, "it is downloading");
+        assert_eq!(running.queue_place(&id("b")), Some(1));
+        assert_eq!(running.queue_place(&id("c")), Some(2));
+        assert_eq!(running.queue_place(&id("x")), None);
+        let paused = DownloadQueueSnapshot {
+            active: vec![
+                queued("a", DownloadState::Paused),
+                queued("b", DownloadState::Queued),
+            ],
+            paused: true,
+            ..Default::default()
+        };
+        assert_eq!(paused.queue_place(&id("a")), Some(1), "resumes first");
+        assert_eq!(paused.queue_place(&id("b")), Some(2));
+    }
 
     #[tokio::test]
     async fn gives_up_on_work_that_ignores_a_stop() {

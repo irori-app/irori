@@ -558,6 +558,7 @@
   "library.status.playing": "Запущена",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "В очереди",
+  "library.status.queued_at": "В очереди · №{place}",
   "library.status.redist": "Установка зависимостей",
   "library.status.syncing_saves": "Синхронизация сохранений",
   "library.status.uninstalling": "Удаление",

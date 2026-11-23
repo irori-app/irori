@@ -558,6 +558,7 @@
   "library.status.playing": "Hraje se",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "Ve frontě",
+  "library.status.queued_at": "Ve frontě · #{place}",
   "library.status.redist": "Instalace závislostí",
   "library.status.syncing_saves": "Synchronizace uložených pozic",
   "library.status.uninstalling": "Odinstalace",

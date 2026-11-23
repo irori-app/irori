@@ -558,6 +558,7 @@
   "library.status.playing": "Wordt gespeeld",
   "library.status.progress": "{status} {percent}%",
   "library.status.queued": "In wachtrij",
+  "library.status.queued_at": "In wachtrij · #{place}",
   "library.status.redist": "Afhankelijkheden installeren",
   "library.status.syncing_saves": "Opslagbestanden synchroniseren",
   "library.status.uninstalling": "Verwijderen",

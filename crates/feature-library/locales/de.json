@@ -558,6 +558,7 @@
   "library.status.playing": "Läuft",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "In Warteschlange",
+  "library.status.queued_at": "In Warteschlange · #{place}",
   "library.status.redist": "Abhängigkeiten werden installiert",
   "library.status.syncing_saves": "Spielstände werden synchronisiert",
   "library.status.uninstalling": "Wird deinstalliert",

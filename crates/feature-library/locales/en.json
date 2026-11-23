@@ -558,6 +558,7 @@
   "library.status.playing": "Playing",
   "library.status.progress": "{status} {percent}%",
   "library.status.queued": "Queued",
+  "library.status.queued_at": "Queued · #{place}",
   "library.status.redist": "Installing dependencies",
   "library.status.syncing_saves": "Syncing saves",
   "library.status.uninstalling": "Uninstalling",

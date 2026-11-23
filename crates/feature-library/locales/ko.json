@@ -558,6 +558,7 @@
   "library.status.playing": "플레이 중",
   "library.status.progress": "{status} {percent}%",
   "library.status.queued": "대기 중",
+  "library.status.queued_at": "대기 중 · {place}번째",
   "library.status.redist": "종속 항목 설치 중",
   "library.status.syncing_saves": "저장 파일 동기화 중",
   "library.status.uninstalling": "제거 중",

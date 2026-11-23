@@ -558,6 +558,7 @@
   "library.status.playing": "A jogar",
   "library.status.progress": "{status} {percent}%",
   "library.status.queued": "Na fila",
+  "library.status.queued_at": "Na fila · #{place}",
   "library.status.redist": "A instalar dependências",
   "library.status.syncing_saves": "A sincronizar jogos guardados",
   "library.status.uninstalling": "A desinstalar",

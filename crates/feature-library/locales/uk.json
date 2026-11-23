@@ -558,6 +558,7 @@
   "library.status.playing": "Запущено",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "У черзі",
+  "library.status.queued_at": "У черзі · №{place}",
   "library.status.redist": "Встановлення залежностей",
   "library.status.syncing_saves": "Синхронізація збережень",
   "library.status.uninstalling": "Видалення",
