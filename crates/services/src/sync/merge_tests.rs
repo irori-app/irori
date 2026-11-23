@@ -532,6 +532,60 @@ fn game_modes_the_user_set_travel_with_the_custom_title() {
 }
 
 #[test]
+fn links_travel_apart_from_the_custom_title() {
+    use irori_core::GameLink;
+    let wiki = GameLink::new("Wiki", "https://hades.fandom.com").unwrap();
+    let mods = GameLink::new("", "https://www.nexusmods.com/hades").unwrap();
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "gog:1".into(),
+        GameOverrides {
+            title: Some("Hades".into()),
+            links: vec![wiki.clone()],
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    assert_eq!(b.data.overrides["gog:1"].links, std::slice::from_ref(&wiki));
+
+    // a renames the game while b adds a link, before either syncs: both stay.
+    a.data.overrides.get_mut("gog:1").unwrap().title = Some("Hades (2020)".into());
+    a.tick(t(5));
+    b.data
+        .overrides
+        .get_mut("gog:1")
+        .unwrap()
+        .links
+        .push(mods.clone());
+    b.tick(t(6));
+    round(&mut a, &mut b, t(10));
+    round(&mut b, &mut a, t(11));
+    for device in [&a, &b] {
+        let o = &device.data.overrides["gog:1"];
+        assert_eq!(o.title.as_deref(), Some("Hades (2020)"));
+        assert_eq!(o.links, [wiki.clone(), mods.clone()]);
+    }
+
+    // Removing every link is a change that reaches the other computer, and
+    // a game with only links keeps them.
+    b.data.overrides.get_mut("gog:1").unwrap().links.clear();
+    b.tick(t(20));
+    round(&mut b, &mut a, t(21));
+    assert!(a.data.overrides["gog:1"].links.is_empty());
+    b.data.overrides.insert(
+        "gog:2".into(),
+        GameOverrides {
+            links: vec![mods.clone()],
+            ..Default::default()
+        },
+    );
+    b.tick(t(30));
+    round(&mut b, &mut a, t(31));
+    assert_eq!(a.data.overrides["gog:2"].links, [mods]);
+}
+
+#[test]
 fn a_category_change_lost_to_a_later_one_is_a_conflict() {
     let mut a = Device::new("a");
     let mut b = Device::new("b");

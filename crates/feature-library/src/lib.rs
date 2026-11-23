@@ -68,6 +68,7 @@ pub use random::{
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
+pub use view::details::{link_picked_to_steam, picked_count, refresh_picked_details};
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
@@ -383,6 +384,20 @@ pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
         move |f| {
             f.reset_filters();
             f.modes = [mode].into();
+        },
+        cx,
+    );
+    irori_ui::navigate(irori_ui::Route::Library, cx);
+}
+
+/// Show the library's games with Steam tag `tag` (a game page's tag
+/// chip): the Filters popover's criteria give way to that tag alone, while
+/// the search, store, sort and grouping stay.
+pub fn show_tag(tag: String, cx: &mut App) {
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.tags = [tag].into();
         },
         cx,
     );

@@ -849,6 +849,16 @@ fn a_mode_chosen_before_the_library_opens_filters_it(cx: &mut TestAppContext) {
             .clone()
     });
     assert_eq!(modes, [GameMode::Single].into());
+
+    // A tag chip gives the filters way to that tag alone.
+    cx.update(|cx| crate::show_tag("Roguelike".into(), cx));
+    let (tags, modes) = cx.read(|cx| {
+        let filters = crate::filters_panel::active_filters(cx).expect("the view's filters");
+        let filter = filters.read(cx).filter();
+        (filter.tags.clone(), filter.modes.clone())
+    });
+    assert_eq!(tags, ["Roguelike".to_string()].into());
+    assert!(modes.is_empty());
 }
 
 #[gpui_kit::test]

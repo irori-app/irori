@@ -186,17 +186,34 @@ impl StoreFactsService {
     }
 }
 
+/// Time between two games of "Fetch details again".
+const DETAILS_SPACING: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// How "Fetch details again" went.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DetailsReport {
+    /// Games whose store page or wiki answer was read.
+    pub refreshed: usize,
+    /// Games nothing could be read for.
+    pub failed: usize,
+    /// While IGDB is on: games it has no record of (by title or choice).
+    pub not_on_igdb: usize,
+    /// The first reason a game failed.
+    pub error: Option<String>,
+}
+
 impl Backend {
     /// A game's store-page details. Age ratings and game modes in them are
-    /// kept, so the library knows them from then on. Media the page lacks
-    /// come from the Steam app the game is linked to.
+    /// kept, so the library knows them from then on. What the page lacks
+    /// comes from the Steam app the game is linked to (`steam_link`), then
+    /// from IGDB.
     pub async fn extra_info(&self, id: &GameId) -> Result<irori_core::ExtraInfo> {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner.store_name()))?;
         let mut info = store.extra_info(&id.app_name).await?;
-        self.fill_from_igdb(id, &mut info).await;
         self.fill_from_steam(id, &mut info).await;
+        self.fill_from_igdb(id, &mut info).await;
         if self
             .store_facts
             .learn_store_page(id.key(), &info.age_ratings, &info.game_modes)
@@ -207,13 +224,15 @@ impl Backend {
     }
 
     /// What PCGamingWiki, HowLongToBeat, ProtonDB and the others say about a
-    /// game ([`irori_extras::wiki::game_info`], cached for a month). The
-    /// wiki's game modes are kept, for games whose store names none.
+    /// game ([`irori_extras::wiki::game_info`], cached for a month), with
+    /// ProtonDB and the Steam Deck read for its Steam link. The wiki's game
+    /// modes are kept, for games whose store names none, and the Steam app
+    /// it names becomes the game's Steam link unless the user chose one.
     pub async fn wiki_info(&self, game: &GameInfo) -> Result<Arc<WikiInfo>> {
-        let mut ids = StoreIds::of(game);
-        let chosen = self.settings.game(&game.id()).hltb_id;
-        ids.hltb_id = Some(chosen.trim().to_owned()).filter(|c| !c.is_empty());
+        let ids = self.wiki_ids(game);
+        let chosen = ids.hltb_id.clone().unwrap_or_default();
         let info = wiki::game_info(&game.title, &ids).await?;
+        self.note_wiki_steam_app(game, info.found_steam_app_id());
         let modes = info
             .pcgamingwiki
             .as_ref()
@@ -229,6 +248,68 @@ impl Backend {
             self.rebuild_library();
         }
         Ok(info)
+    }
+
+    /// Read the picked games' details again, forgetting what was kept of
+    /// them: the wikis' answer (PCGamingWiki, HowLongToBeat, ProtonDB…),
+    /// IGDB's record while it is on and the store page of their Steam app.
+    /// The stores' own pages are read again too, and what they say is
+    /// learned as when a page opens. One game at a time, spaced, so a
+    /// large pick doesn't flood the sources.
+    pub async fn refresh_details(&self, ids: &[GameId]) -> DetailsReport {
+        let mut report = DetailsReport::default();
+        let igdb = self.settings.app().igdb;
+        let library = self.library();
+        for (i, id) in ids.iter().enumerate() {
+            let Some(game) = library.get(id).cloned() else {
+                report.failed += 1;
+                continue;
+            };
+            if i > 0 {
+                tokio::time::sleep(DETAILS_SPACING).await;
+            }
+            let wiki_ids = self.wiki_ids(&game);
+            wiki::forget(&wiki_ids).await;
+            if igdb {
+                irori_extras::igdb::forget(
+                    &irori_extras::igdb::cache_dir(),
+                    &self.igdb_lookup(&game),
+                )
+                .await;
+            }
+            self.forget_steam_page(&game).await;
+            let store = self.extra_info(id).await;
+            // ROMs are console games: the PC wikis would name another.
+            let wiki = (id.runner != irori_core::Runner::Emulation)
+                .then_some(self.wiki_info(&game).await.map(|_| ()));
+            let read = store.is_ok() || wiki.as_ref().is_some_and(Result::is_ok);
+            if read {
+                report.refreshed += 1;
+            } else {
+                report.failed += 1;
+                if let Err(e) = store {
+                    report.error.get_or_insert_with(|| format!("{e:#}"));
+                }
+            }
+            if igdb && matches!(self.igdb_game(&game).await, Ok(None)) {
+                report.not_on_igdb += 1;
+            }
+        }
+        report
+    }
+
+    /// Which entry the wikis look up for `game`, with the user's choices.
+    pub(crate) fn wiki_ids(&self, game: &GameInfo) -> StoreIds {
+        let mut ids = StoreIds::of(game);
+        let settings = self.settings.game(&game.id());
+        ids.hltb_id = Some(settings.hltb_id.trim().to_owned()).filter(|c| !c.is_empty());
+        match self.steam_link(game) {
+            crate::SteamLink::Chosen(app) => ids.steam_link = Some(app.to_string()),
+            crate::SteamLink::NoneChosen => ids.steam_link = Some(wiki::STEAM_NONE.into()),
+            crate::SteamLink::Title(app) => ids.steam_guess = Some(app.to_string()),
+            _ => {}
+        }
+        ids
     }
 
     /// HowLongToBeat main-story times known so far, for smart categories.

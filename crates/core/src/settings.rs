@@ -345,9 +345,12 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
-    /// The game's Steam app id for its achievements read from game files,
-    /// when the user chose one; empty finds it in the game's files and
-    /// variables. Per game only. Irori-only.
+    /// The Steam app the game is linked to, when the user chose one, or
+    /// `none` for none: Steam's tags, store details, ProtonDB and the
+    /// achievements read from game files follow it, and umu names the game
+    /// by it. Empty finds it (wikis, the exact title; the game's files for
+    /// achievements). It never changes how the game itself starts. Per game
+    /// only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
     /// The umu database id (`GAMEID`) the game runs with under umu, when the
@@ -915,6 +918,16 @@ pub struct AppSettings {
     /// palette's download turn it on. Irori-only.
     #[serde(rename = "iroriLaunchBox", default)]
     pub launchbox: bool,
+    /// Link games of other stores to the Steam app of their exact title
+    /// (edition words aside, and a release year apart at most), for
+    /// Steam's tags, ProtonDB and screenshots, when no source names their
+    /// Steam app. Off by default. Irori-only.
+    #[serde(rename = "iroriSteamTitleMatch")]
+    pub steam_title_match: bool,
+    /// Steam tags each game keeps, strongest first (5–20); tags far fewer
+    /// players gave than the strongest are left out too. Irori-only.
+    #[serde(rename = "iroriSteamTagLimit")]
+    pub steam_tag_limit: u32,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -983,6 +996,8 @@ impl Default for AppSettings {
             file_achievements: false,
             igdb: false,
             launchbox: false,
+            steam_title_match: false,
+            steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
@@ -1195,6 +1210,9 @@ pub enum CoverHover {
 
 /// The art cache's default cap in MiB.
 pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
+/// [`AppSettings::steam_tag_limit`] by default: every tag Steam names.
+pub const DEFAULT_STEAM_TAG_LIMIT: u32 = 20;
 
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

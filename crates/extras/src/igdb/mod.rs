@@ -316,6 +316,16 @@ fn cache_file(dir: &Path, lookup: &Lookup) -> PathBuf {
     ))
 }
 
+/// Forget the cached answer for `lookup`, so the next one asks IGDB.
+pub async fn forget(dir: &Path, lookup: &Lookup) {
+    match tokio::fs::remove_file(cache_file(dir, lookup)).await {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            tracing::warn!("forgetting an IGDB answer: {e}");
+        }
+        _ => {}
+    }
+}
+
 /// The cached answer for `lookup`, without asking IGDB.
 pub async fn cached(dir: &Path, lookup: &Lookup) -> Option<Option<IgdbGame>> {
     let (found, age) = util::cache_read_entry::<Option<IgdbGame>>(&cache_file(dir, lookup)).await?;

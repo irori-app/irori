@@ -400,6 +400,17 @@ pub(super) fn build_menu(
     }
     let i = id.clone();
     menu = menu.item(
+        item("game.menu.links", IconName::ExternalLink)
+            .on_click(move |_, window, cx| crate::links::open_links_dialog(i.clone(), window, cx)),
+    );
+    if !matches!(id.runner, Runner::Steam | Runner::Emulation) {
+        let i = id.clone();
+        menu = menu.item(item("game.menu.steam_link", IconName::Link).on_click(
+            move |_, window, cx| crate::steam_match::open_steam_link_dialog(i.clone(), window, cx),
+        ));
+    }
+    let i = id.clone();
+    menu = menu.item(
         item(
             if hidden {
                 "game.menu.show_in_library"

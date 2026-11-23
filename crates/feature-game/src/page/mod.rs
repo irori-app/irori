@@ -87,6 +87,9 @@ pub enum GamePageEvent {
     /// A game-mode chip was chosen: show the library's games of that mode
     /// (`irori_library::show_game_mode`).
     ShowGameMode(irori_core::GameMode),
+    /// A Steam tag chip was chosen: show the library's games with that tag
+    /// (`irori_library::show_tag`).
+    ShowTag(SharedString),
 }
 
 /// A small uppercase label over the page ("SCREENSHOTS", "DETAILS"), in
@@ -145,6 +148,9 @@ pub struct GamePage {
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
     compat: Load<CompatibilityInfo>,
+    /// The game's Steam app as of the last library change; when it changes
+    /// the store details and compatibility data are read again.
+    steam_link: irori_services::SteamLink,
     /// EOS overlay controls (Epic Windows installs with a store handle).
     overlay: Option<Entity<EosOverlayPanel>>,
     /// What the game's settings change, from the settings feature (an
@@ -174,6 +180,8 @@ pub struct GamePage {
     changelog_expanded: bool,
     /// The trailer player, made once the store page names trailers.
     trailer: Option<Entity<irori_ui::trailer::TrailerPlayer>>,
+    /// Every Steam tag chip is shown, not just the strongest.
+    tags_expanded: bool,
     /// Index of the screenshot open in the viewer.
     viewer: Option<usize>,
     viewer_focus: FocusHandle,
@@ -275,6 +283,11 @@ impl GamePage {
             window.focus(&focus, cx);
         }
         let was_installed = game.as_ref().is_some_and(|g| g.is_installed);
+        let steam_link = game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
         let mut this = Self {
             id,
             panel,
@@ -292,6 +305,7 @@ impl GamePage {
             launch_select,
             selected_option: None,
             compat: Load::Idle,
+            steam_link,
             overlay: None,
             setup: None,
             mods: None,
@@ -308,6 +322,7 @@ impl GamePage {
             page_width: Rc::new(Cell::new(px(0.))),
             sticky: false,
             changelog_expanded: false,
+            tags_expanded: false,
             viewer: None,
             trailer: None,
             viewer_focus: cx.focus_handle(),
@@ -519,12 +534,13 @@ impl GamePage {
             return;
         };
         // PC compatibility data (ProtonDB, Steam Deck) says nothing about
-        // emulated games, and a title match would be another game.
-        if matches!(
-            game.runner(),
-            irori_core::Runner::Sideload | irori_core::Runner::Emulation
-        ) {
-            return;
+        // emulated games, and for an added game a title match would be
+        // another game, unless the user linked it to its Steam app.
+        let linked = matches!(self.steam_link, irori_services::SteamLink::Chosen(_));
+        match game.runner() {
+            irori_core::Runner::Emulation => return,
+            irori_core::Runner::Sideload if !linked => return,
+            _ => {}
         }
         let Some(task) = hooks::fetch_compatibility(game, cx) else {
             return;
@@ -554,10 +570,24 @@ impl GamePage {
             _ => false,
         };
         self.game = next;
+        let link = self
+            .game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
+        let relinked = std::mem::replace(&mut self.steam_link, link) != link;
         if first {
             self.load_all(window, cx);
-        } else if title_changed && let Some(t) = self.title() {
-            cx.emit(GamePageEvent::TitleChanged(t));
+        } else {
+            if title_changed && let Some(t) = self.title() {
+                cx.emit(GamePageEvent::TitleChanged(t));
+            }
+            // Steam's details and ProtonDB follow the game's Steam app.
+            if relinked {
+                self.load_extra(window, cx);
+                self.reload_compat(window, cx);
+            }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);
         if installed != self.was_installed {

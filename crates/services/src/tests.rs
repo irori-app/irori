@@ -1127,10 +1127,15 @@ fn third_party_launchers_are_rescanned_on_their_own_timer() {
     );
 }
 
+/// Held by tests that turn `iroriIgdb` on: the settings file is shared, so
+/// a backend started meanwhile would read it on.
+static IGDB_SETTING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 #[test]
 fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     use irori_core::GameId;
     use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
     isolate_paths();
     let b = Backend::start_headless(|_, _| {
         vec![ListStore::store(
@@ -1216,7 +1221,7 @@ fn a_linked_steam_app_lends_its_screenshots() {
             Resp::status(404)
         }
     });
-    crate::media::steam::set_endpoints(irori_steam_api::Endpoints {
+    b.set_steam_link_endpoints(irori_steam_api::Endpoints {
         api: server.base(),
         store: server.base(),
         assets: server.base(),
@@ -1240,6 +1245,165 @@ fn a_linked_steam_app_lends_its_screenshots() {
     // Kept for the run: the page is asked once.
     rt.block_on(b.extra_info(&id)).unwrap();
     assert_eq!(server.requests().len(), 1);
+}
+
+#[test]
+fn games_link_to_steam_by_exact_title_or_the_users_choice() {
+    use crate::SteamLink;
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    use irori_steam_api::Endpoints;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Gog,
+            &[
+                ("steam-link-hades", "Hades - Deluxe Edition"),
+                ("steam-link-other", "Nothing Alike"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        if req.path.starts_with("/api/storesearch/?") {
+            if req.path.contains("Hades") {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Hades II", "id": 1145350},
+                    {"type": "app", "name": "Hades", "id": 1145360}
+                ]}))
+            } else {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Nothing Alike 2", "id": 9}
+                ]}))
+            }
+        } else if req.path.starts_with("/api/appdetails?appids=1145360") {
+            Resp::json(serde_json::json!({"1145360": {"success": true, "data": {
+                "name": "Hades", "short_description": "Defy the god of the dead.",
+                "genres": [{"description": "Action"}],
+                "release_date": {"coming_soon": false, "date": "17 Sep, 2020"},
+                "screenshots": [{"path_thumbnail": "https://cdn.example/t.jpg",
+                                 "path_full": "https://cdn.example/1.jpg"}]
+            }}}))
+        } else if req.path.starts_with("/api/appdetails?appids=620") {
+            Resp::json(serde_json::json!({"620": {"success": true, "data": {"name": "Portal 2"}}}))
+        } else {
+            Resp::status(404)
+        }
+    });
+    b.set_steam_link_endpoints(Endpoints {
+        api: server.base(),
+        store: server.base(),
+        assets: server.base(),
+    });
+    b.rebuild_library();
+    let hades = GameId::new(Runner::Gog, "steam-link-hades");
+    let other = GameId::new(Runner::Gog, "steam-link-other");
+    let game = |id: &GameId| b.library().get(id).cloned().unwrap();
+    let rt = b.runtime();
+
+    let report = rt.block_on(b.link_by_title(&[hades.clone(), other.clone()]));
+    assert_eq!((report.linked, report.not_found), (1, 1), "{report:?}");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+    assert_eq!(b.steam_link(&game(&other)), SteamLink::Unknown);
+
+    // The linked app's store page fills what the store's lacks.
+    let info = rt.block_on(b.extra_info(&hades)).unwrap();
+    assert_eq!(info.screenshots, ["https://cdn.example/1.jpg"]);
+    assert_eq!(info.genres, ["Action"]);
+    assert_eq!(info.details_from.as_deref(), Some("Steam"));
+
+    // The user's choice wins, is kept in the game's settings, and "none"
+    // takes the link away.
+    b.set_steam_link(
+        &hades,
+        Some("https://store.steampowered.com/app/620/".into()),
+    );
+    assert_eq!(b.settings.game(&hades).steam_app_id, "620");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Chosen(620));
+    b.set_steam_link(&hades, Some(crate::STEAM_NONE.into()));
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::NoneChosen);
+    assert_eq!(
+        rt.block_on(b.link_by_title(std::slice::from_ref(&hades)))
+            .skipped,
+        1,
+        "the user's choice stays"
+    );
+    b.set_steam_link(&hades, None);
+    assert_eq!(b.settings.game(&hades).steam_app_id, "");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+
+    // A pasted id or store address names its app.
+    let found = rt.block_on(b.search_steam("steam://store/620")).unwrap();
+    assert_eq!((found[0].id, found[0].name.as_str()), (620, "Portal 2"));
+}
+
+#[test]
+fn fetching_details_again_forgets_what_was_kept() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
+    isolate_paths();
+    // ROMs skip the PC wikis, so nothing here reaches the network.
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Emulation,
+            &[
+                ("refetch-a", "Refetch Found"),
+                ("refetch-b", "Refetch Missing"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| match req.path.as_str() {
+        "/token" => Resp::json(serde_json::json!({"access_token": "t", "expires_in": 3600})),
+        "/v4/games" => {
+            let body = String::from_utf8_lossy(&req.body).to_string();
+            if body.contains("Refetch Found") {
+                Resp::json(serde_json::json!([{"id": 3, "name": "Refetch Found"}]))
+            } else {
+                Resp::json(serde_json::json!([]))
+            }
+        }
+        _ => Resp::status(404),
+    });
+    b.set_igdb_endpoints(irori_extras::igdb::Endpoints {
+        token: server.url("/token"),
+        api: server.url("/v4"),
+    });
+    b.rebuild_library();
+    let rt = b.runtime();
+    let creds = irori_extras::igdb::Credentials::new("client", "secret").unwrap();
+    rt.block_on(b.set_igdb_credentials(Some(creds))).unwrap();
+    b.settings.update_app(|s| s.igdb = true);
+    let ids = [
+        GameId::new(Runner::Emulation, "refetch-a"),
+        GameId::new(Runner::Emulation, "refetch-b"),
+        GameId::new(Runner::Emulation, "gone"),
+    ];
+    let searches = || {
+        server
+            .requests()
+            .iter()
+            .filter(|r| r.path == "/v4/games")
+            .count()
+    };
+    let report = rt.block_on(b.refresh_details(&ids));
+    assert_eq!(
+        (report.refreshed, report.failed, report.not_on_igdb),
+        (2, 1, 1)
+    );
+    let asked = searches();
+    assert!(asked >= 2);
+    // A page opened now reads the kept answers…
+    rt.block_on(b.extra_info(&ids[0])).unwrap();
+    assert_eq!(searches(), asked);
+    // …and fetching again asks IGDB again.
+    rt.block_on(b.refresh_details(&ids[..1]));
+    assert!(searches() > asked);
+    rt.block_on(b.set_igdb_credentials(None)).unwrap();
+    b.settings.update_app(|s| s.igdb = false);
 }
 
 #[cfg(unix)]

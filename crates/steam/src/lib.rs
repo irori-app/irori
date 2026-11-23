@@ -8,6 +8,8 @@
 //!   their global unlock rates.
 //! * [`friends`]: the account's friends and what they are playing.
 //! * [`assets`]: store art (covers, heroes, logos) for many apps at once.
+//! * [`search`]: the store's search by name, and app ids in pasted links.
+//! * [`tags`]: the store's user tags of apps, with their votes.
 //! * [`SteamError`]: the refusals callers act on.
 //!
 //! Nothing here knows about Irori: no paths, settings or events.
@@ -22,6 +24,7 @@ mod error;
 pub mod friends;
 pub mod library;
 mod proto;
+pub mod search;
 pub mod tags;
 
 pub use achievements::{
@@ -40,3 +43,5 @@ pub use library::{
     AppDetails, Category, Genre, Metacritic, Movie, OwnedGame, Platforms, ReleaseDate,
     Requirements, Screenshot, SharedApp, StoreRating,
 };
+pub use search::{StoreHit, app_id_in};
+pub use tags::TagVotes;
