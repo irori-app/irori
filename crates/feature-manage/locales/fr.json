@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Retirer le raccourci",
   "manage.launchers.shortcut_added": "Un raccourci qui ouvre {launcher} a été ajouté au bureau et au menu des applications",
   "manage.launchers.shortcut_removed": "Les raccourcis qui ouvrent {launcher} ont été retirés",
-  "manage.launchers.shortcut_failed": "Impossible de modifier les raccourcis de {launcher}"
+  "manage.launchers.shortcut_failed": "Impossible de modifier les raccourcis de {launcher}",
+  "manage.launchers.wine_settings": "Réglages de Wine…",
+  "manage.launchers.wine.title": "Réglages de Wine de {launcher}",
+  "manage.launchers.wine.build": "Version de Wine",
+  "manage.launchers.wine.variables": "Variables d’environnement",
+  "manage.launchers.wine.variables_help": "CLÉ=valeur, séparées par des espaces. Elles s’appliquent au lanceur et à chaque jeu lancé par lui, par-dessus les réglages par défaut des jeux.",
+  "manage.launchers.wine.save": "Enregistrer",
+  "manage.launchers.wine.saved": "{launcher} utilisera ses nouveaux réglages de Wine à son prochain démarrage",
+  "manage.launchers.wine.failed": "Impossible d’enregistrer les réglages de Wine de {launcher}"
 }

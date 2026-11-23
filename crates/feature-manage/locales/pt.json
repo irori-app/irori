@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Remover atalho",
   "manage.launchers.shortcut_added": "Foi adicionado um atalho que abre o {launcher} no ambiente de trabalho e no menu de aplicações",
   "manage.launchers.shortcut_removed": "Os atalhos que abrem o {launcher} foram removidos",
-  "manage.launchers.shortcut_failed": "Não foi possível alterar os atalhos do {launcher}"
+  "manage.launchers.shortcut_failed": "Não foi possível alterar os atalhos do {launcher}",
+  "manage.launchers.wine_settings": "Definições do Wine…",
+  "manage.launchers.wine.title": "Definições do Wine do {launcher}",
+  "manage.launchers.wine.build": "Versão do Wine",
+  "manage.launchers.wine.variables": "Variáveis de ambiente",
+  "manage.launchers.wine.variables_help": "CHAVE=valor, separadas por espaços. Aplicam-se ao iniciador e a cada jogo aberto por ele, por cima das predefinições dos jogos.",
+  "manage.launchers.wine.save": "Guardar",
+  "manage.launchers.wine.saved": "O {launcher} usa as novas definições do Wine a partir do próximo arranque",
+  "manage.launchers.wine.failed": "Não foi possível guardar as definições do Wine do {launcher}"
 }

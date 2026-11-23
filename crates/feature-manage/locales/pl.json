@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Usuń skrót",
   "manage.launchers.shortcut_added": "Dodano skrót otwierający {launcher} na pulpicie i w menu aplikacji",
   "manage.launchers.shortcut_removed": "Usunięto skróty otwierające {launcher}",
-  "manage.launchers.shortcut_failed": "Nie udało się zmienić skrótów {launcher}"
+  "manage.launchers.shortcut_failed": "Nie udało się zmienić skrótów {launcher}",
+  "manage.launchers.wine_settings": "Ustawienia Wine…",
+  "manage.launchers.wine.title": "Ustawienia Wine dla {launcher}",
+  "manage.launchers.wine.build": "Wersja Wine",
+  "manage.launchers.wine.variables": "Zmienne środowiskowe",
+  "manage.launchers.wine.variables_help": "KLUCZ=wartość, oddzielone spacjami. Dotyczą launchera i każdej uruchomionej przez niego gry, ponad domyślnymi ustawieniami gier.",
+  "manage.launchers.wine.save": "Zapisz",
+  "manage.launchers.wine.saved": "{launcher} użyje nowych ustawień Wine od następnego uruchomienia",
+  "manage.launchers.wine.failed": "Nie udało się zapisać ustawień Wine dla {launcher}"
 }

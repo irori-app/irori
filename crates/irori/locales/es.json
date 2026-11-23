@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "acceso directo escritorio menú lanzador icono",
   "shell.notice.launcher_open_failed": "{launcher} no se abrió",
   "shell.notice.launcher_sync_added": "Juegos nuevos de {launcher}",
-  "shell.notice.launcher_sync_added_message": "Añadidos a la biblioteca: {count}"
+  "shell.notice.launcher_sync_added_message": "Añadidos a la biblioteca: {count}",
+  "shell.palette.launcher_wine": "Ajustes de Wine de {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton versión variables entorno lanzador"
 }

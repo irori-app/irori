@@ -62,6 +62,13 @@ pub(crate) fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
     cx.try_global::<LaunchersHandle>().map(|h| h.0.clone())
 }
 
+/// The launchers set up in a prefix of their own, for the command palette.
+pub fn wine_launchers(cx: &App) -> Vec<Launcher> {
+    launchers_store(cx)
+        .map(|s| s.wine_launchers())
+        .unwrap_or_default()
+}
+
 /// The launchers Irori set up or found games of, for the command palette.
 pub fn known_launchers(cx: &App) -> Vec<Launcher> {
     launchers_store(cx)
@@ -144,9 +151,9 @@ pub fn launcher_shortcut(launcher: Launcher, add: bool, window: &mut Window, cx:
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct WineChoice {
-    value: SharedString,
-    title: SharedString,
+pub(crate) struct WineChoice {
+    pub value: SharedString,
+    pub title: SharedString,
 }
 
 impl SelectItem for WineChoice {
@@ -802,6 +809,8 @@ impl LaunchersSection {
                     this.act(launcher, Action::Forget, window, cx)
                 }))
         });
+        // Windows runs the launchers natively.
+        let wine_settings = !cfg!(windows) && status.setup.is_some();
         let actions: AnyElement = if let Some(live) = &live {
             let progress = live.progress.unwrap_or_default();
             v_flex()
@@ -867,6 +876,19 @@ impl LaunchersSection {
                         .accessibility_label(t("manage.launchers.more"))
                         .tooltip(t("manage.launchers.more"))
                         .dropdown_menu(move |menu, _, _| {
+                            let menu = if wine_settings {
+                                menu.item(
+                                    PopupMenuItem::new(t("manage.launchers.wine_settings"))
+                                        .icon(IconName::Wine)
+                                        .on_click(move |_, window, cx| {
+                                            crate::launcher_wine::open_launcher_wine_dialog(
+                                                launcher, window, cx,
+                                            )
+                                        }),
+                                )
+                            } else {
+                                menu
+                            };
                             menu.item(
                                 PopupMenuItem::new(t("manage.launchers.add_shortcut"))
                                     .icon(IconName::Link)

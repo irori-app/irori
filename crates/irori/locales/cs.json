@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "zástupce plocha nabídka spouštěč ikona",
   "shell.notice.launcher_open_failed": "{launcher} se neotevřel",
   "shell.notice.launcher_sync_added": "Nové hry z {launcher}",
-  "shell.notice.launcher_sync_added_message": "Přidáno do knihovny: {count}"
+  "shell.notice.launcher_sync_added_message": "Přidáno do knihovny: {count}",
+  "shell.palette.launcher_wine": "Nastavení Wine pro {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton sestavení proměnné prostředí spouštěč"
 }

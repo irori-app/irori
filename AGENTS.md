@@ -1913,6 +1913,11 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   started from its folder); "Remove from Irori" forgets it and leaves the prefix and
   games on disk. The user signs in and installs games inside the launcher. A Proton
   prefix keeps `drive_c` in `pfx/`; read the launcher's files there.
+- **A launcher's own Wine settings** (`LaunchersStore::set_wine_settings`,
+  `irori_manage::open_launcher_wine_dialog`: the card's ⋯ menu and the palette; not on
+  Windows): the Wine build, which can change after setup, and environment variables, kept
+  in its setup as sparse overrides (`Setup::settings`) laid over the game defaults for the
+  launcher and every game started through it.
 - **Wine-friendly settings at setup** (`irori_launchers_data::wine_config`, before the
   installer first starts the launcher in a new prefix; never on Windows or for an adopted
   prefix): Battle.net with `Client.HardwareAcceleration` off in `Battle.net.config`,

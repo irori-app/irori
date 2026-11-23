@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Snelkoppeling verwijderen",
   "manage.launchers.shortcut_added": "Snelkoppeling die {launcher} opent toegevoegd aan het bureaublad en het programmamenu",
   "manage.launchers.shortcut_removed": "Snelkoppelingen die {launcher} openen verwijderd",
-  "manage.launchers.shortcut_failed": "Kan de snelkoppelingen van {launcher} niet wijzigen"
+  "manage.launchers.shortcut_failed": "Kan de snelkoppelingen van {launcher} niet wijzigen",
+  "manage.launchers.wine_settings": "Wine-instellingen…",
+  "manage.launchers.wine.title": "Wine-instellingen van {launcher}",
+  "manage.launchers.wine.build": "Wine-versie",
+  "manage.launchers.wine.variables": "Omgevingsvariabelen",
+  "manage.launchers.wine.variables_help": "SLEUTEL=waarde, gescheiden door spaties. Ze gelden voor de launcher en elke game die ermee start, boven de standaardinstellingen.",
+  "manage.launchers.wine.save": "Opslaan",
+  "manage.launchers.wine.saved": "{launcher} gebruikt de nieuwe Wine-instellingen vanaf de volgende start",
+  "manage.launchers.wine.failed": "Kan de Wine-instellingen van {launcher} niet opslaan"
 }

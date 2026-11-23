@@ -77,6 +77,8 @@ pub(crate) enum PaletteTarget {
     OpenLauncher(irori_launchers::LauncherKind),
     /// Add desktop and menu shortcuts that open a third-party launcher.
     LauncherShortcut(irori_launchers::LauncherKind),
+    /// A set-up launcher's Wine build and variables.
+    LauncherWine(irori_launchers::LauncherKind),
     /// The Getting started checklist.
     GettingStarted,
     /// The usual ROM folders found on this computer, to add.
@@ -913,6 +915,20 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::LauncherShortcut(launcher));
     }
+    if !cfg!(windows) {
+        for launcher in irori_manage::wine_launchers(cx) {
+            items.push(
+                Entry::new()
+                    .label(t_args(
+                        "shell.palette.launcher_wine",
+                        &[("launcher", launcher.display_name())],
+                    ))
+                    .keywords([t("shell.palette.launcher_wine_keywords")])
+                    .icon(IconName::Wine),
+            );
+            targets.push(PaletteTarget::LauncherWine(launcher));
+        }
+    }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
         items.push(
             Entry::new()
@@ -968,6 +984,9 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::OpenLauncher(launcher) => irori_manage::open_launcher(launcher, window, cx),
         PaletteTarget::LauncherShortcut(launcher) => {
             irori_manage::launcher_shortcut(launcher, true, window, cx)
+        }
+        PaletteTarget::LauncherWine(launcher) => {
+            irori_manage::open_launcher_wine_dialog(launcher, window, cx)
         }
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),

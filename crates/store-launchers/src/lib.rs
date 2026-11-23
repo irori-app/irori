@@ -35,11 +35,11 @@ use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
 use irori_core::process::{self, CommandSpec};
 use irori_core::{
-    Achievement, ClientAction, Event, EventBus, ExtraInfo, GameInfo, GameSettings, GameWatch,
-    InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo, LaunchPlan,
-    LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome, Paths, RemoveArgs, Runner,
-    SessionExpired, SettingsFn, Store, StoreAccount, UpdateRequest, UserInfo, WineInstallation,
-    WineKind, json_store, util,
+    Achievement, ClientAction, EnvVar, Event, EventBus, ExtraInfo, GameInfo, GameSettings,
+    GameWatch, InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, InstalledInfo,
+    LaunchPlan, LaunchRequest, LoginFlow, Notice, NoticeLevel, OpContext, Outcome, Paths,
+    RemoveArgs, Runner, SessionExpired, SettingsFn, Store, StoreAccount, UpdateRequest, UserInfo,
+    WineInstallation, WineKind, json_store, util,
 };
 use irori_launchers_data::xbox::{self, XboxGame};
 use irori_launchers_data::{InstalledGame, Launcher, Registry, ScanReport, SignIn, rockstar};
@@ -89,6 +89,10 @@ pub struct Setup {
     /// RFC 3339.
     #[serde(default)]
     pub set_up_at: String,
+    /// The launcher's own settings, laid over the game defaults as a
+    /// game's sparse overrides are (environment variables so far).
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub settings: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -377,6 +381,7 @@ impl LaunchersStore {
             },
             wine,
             set_up_at: util::now_rfc3339(),
+            settings: Default::default(),
         };
         self.run_installer(launcher, &setup, &installer, ctx)
             .await
@@ -408,7 +413,7 @@ impl LaunchersStore {
             CommandSpec::new(installer)
         } else {
             let app = (self.settings)();
-            let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
+            let settings = game_settings(&app.game, setup);
             let umu = if irori_runtime::runtimes::is_umu_supported(&settings, false) {
                 match irori_runtime::runtimes::ensure_umu(ctx).await {
                     Ok(path) => Some(path),
@@ -497,6 +502,12 @@ impl LaunchersStore {
         }
     }
 
+    /// The launchers set up in a prefix of their own, whose Wine settings
+    /// Irori keeps (none on Windows). Reads no files.
+    pub fn wine_launchers(&self) -> Vec<Launcher> {
+        self.state.read().setups.keys().copied().collect()
+    }
+
     /// The launchers Irori set up, or whose games it found (on Windows the
     /// launchers need no setup). Reads no files.
     pub fn known_launchers(&self) -> Vec<Launcher> {
@@ -550,6 +561,7 @@ impl LaunchersStore {
                 prefix,
                 wine,
                 set_up_at: util::now_rfc3339(),
+                settings: Default::default(),
             },
         );
         self.save().await?;
@@ -580,6 +592,45 @@ impl LaunchersStore {
         Ok(())
     }
 
+    /// A set-up launcher's Wine build and its own environment variables.
+    pub fn wine_settings(&self, launcher: Launcher) -> Option<(WineInstallation, Vec<EnvVar>)> {
+        let s = self.state.read();
+        let setup = s.setups.get(&launcher)?;
+        let variables = setup
+            .settings
+            .get(VARIABLES)
+            .and_then(|v| serde_json::from_value::<Vec<EnvVar>>(v.clone()).ok())
+            .unwrap_or_default();
+        Some((setup.wine.clone(), variables))
+    }
+
+    /// Change a set-up launcher's Wine build and environment variables; the
+    /// launcher and its games run with them from their next start.
+    pub async fn set_wine_settings(
+        &self,
+        launcher: Launcher,
+        wine: WineInstallation,
+        variables: Vec<EnvVar>,
+    ) -> Result<()> {
+        anyhow::ensure!(wine.is_set(), "Choose a Wine build for the launcher");
+        {
+            let mut s = self.state.write();
+            let setup = s
+                .setups
+                .get_mut(&launcher)
+                .with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
+            setup.wine = wine;
+            if variables.is_empty() {
+                setup.settings.remove(VARIABLES);
+            } else {
+                setup
+                    .settings
+                    .insert(VARIABLES.into(), serde_json::to_value(&variables)?);
+            }
+        }
+        self.save().await
+    }
+
     /// Forget a launcher's setup. Its prefix and games stay on disk.
     pub async fn forget(&self, launcher: Launcher) -> Result<()> {
         self.state.write().setups.remove(&launcher);
@@ -602,7 +653,7 @@ impl LaunchersStore {
         let setup =
             setup.with_context(|| format!("{} isn't set up yet", launcher.display_name()))?;
         let app = (self.settings)();
-        let settings = game_settings(&app.game, &setup.wine, &setup.prefix);
+        let settings = game_settings(&app.game, setup);
         let umu = irori_runtime::runtimes::is_umu_supported(&settings, true)
             .then(irori_runtime::runtimes::umu_path);
         let wc = wine_context(setup, umu);
@@ -850,13 +901,17 @@ impl GameWatch for XboxWatch {
 }
 
 /// Launch settings for a launcher's prefix and Wine build.
-fn game_settings(defaults: &GameSettings, wine: &WineInstallation, prefix: &Path) -> GameSettings {
+fn game_settings(defaults: &GameSettings, setup: &Setup) -> GameSettings {
+    let own = irori_core::GameSettingsOverrides(setup.settings.clone()).apply(defaults);
     GameSettings {
-        wine_version: wine.clone(),
-        wine_prefix: prefix.display().to_string(),
-        ..defaults.clone()
+        wine_version: setup.wine.clone(),
+        wine_prefix: setup.prefix.display().to_string(),
+        ..own
     }
 }
+
+/// The settings key of the launcher's environment variables (Heroic's).
+const VARIABLES: &str = "enviromentOptions";
 
 /// The Wine layer a launcher's prefix runs with. Proton goes through `umu`
 /// when there is one, as games do: run directly, outside the Steam Linux
@@ -1376,6 +1431,43 @@ mod tests {
     use irori_core::AppSettings;
     use irori_launchers_data::LaunchSpec;
 
+    #[test]
+    fn a_launchers_own_variables_lay_over_the_defaults() {
+        let var = |k: &str, v: &str| EnvVar {
+            key: k.into(),
+            value: v.into(),
+        };
+        let defaults = GameSettings {
+            environment_options: vec![var("A", "1"), var("B", "1")],
+            ..Default::default()
+        };
+        let mut setup = Setup {
+            prefix: "/p".into(),
+            wine: WineInstallation {
+                bin: "/w/bin/wine".into(),
+                ..Default::default()
+            },
+            set_up_at: String::new(),
+            settings: Default::default(),
+        };
+        let plain = game_settings(&defaults, &setup);
+        assert_eq!(plain.environment_options, defaults.environment_options);
+        setup.settings.insert(
+            VARIABLES.into(),
+            serde_json::to_value([var("B", "2"), var("C", "3")]).unwrap(),
+        );
+        let own = game_settings(&defaults, &setup);
+        assert_eq!(own.wine_version.bin, "/w/bin/wine");
+        assert_eq!(own.wine_prefix, "/p");
+        let mut vars: Vec<_> = own
+            .environment_options
+            .iter()
+            .map(|v| (v.key.as_str(), v.value.as_str()))
+            .collect();
+        vars.sort();
+        assert_eq!(vars, [("A", "1"), ("B", "2"), ("C", "3")]);
+    }
+
     fn store(dir: &Path, enabled: bool) -> Arc<LaunchersStore> {
         let app = Arc::new(AppSettings {
             third_party_launchers: enabled,
@@ -1551,6 +1643,7 @@ mod tests {
                 ..Default::default()
             },
             set_up_at: String::new(),
+            settings: Default::default(),
         };
         let wc = wine_context(&setup, Some(PathBuf::from("/umu/umu-run")));
         assert!(wc.uses_umu);
@@ -1583,6 +1676,7 @@ mod tests {
                         ..Default::default()
                     },
                     set_up_at: String::new(),
+                    settings: Default::default(),
                 },
             )]),
         };
@@ -1643,6 +1737,7 @@ fi
             prefix: store.default_prefix(Launcher::BattleNet),
             wine: fake_wine(dir, installs),
             set_up_at: String::new(),
+            settings: Default::default(),
         };
         let installer = dir.join("setup.exe");
         std::fs::write(&installer, b"").unwrap();

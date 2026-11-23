@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Elimină comanda rapidă",
   "manage.launchers.shortcut_added": "S-a adăugat o comandă rapidă care deschide {launcher} pe desktop și în meniul de aplicații",
   "manage.launchers.shortcut_removed": "Comenzile rapide care deschid {launcher} au fost eliminate",
-  "manage.launchers.shortcut_failed": "Nu s-au putut modifica comenzile rapide ale {launcher}"
+  "manage.launchers.shortcut_failed": "Nu s-au putut modifica comenzile rapide ale {launcher}",
+  "manage.launchers.wine_settings": "Setări Wine…",
+  "manage.launchers.wine.title": "Setări Wine pentru {launcher}",
+  "manage.launchers.wine.build": "Versiune Wine",
+  "manage.launchers.wine.variables": "Variabile de mediu",
+  "manage.launchers.wine.variables_help": "CHEIE=valoare, separate prin spații. Se aplică lansatorului și fiecărui joc pornit prin el, peste setările implicite ale jocurilor.",
+  "manage.launchers.wine.save": "Salvează",
+  "manage.launchers.wine.saved": "{launcher} folosește noile setări Wine de la următoarea pornire",
+  "manage.launchers.wine.failed": "Nu s-au putut salva setările Wine pentru {launcher}"
 }

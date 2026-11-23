@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Quitar acceso directo",
   "manage.launchers.shortcut_added": "Se añadió un acceso directo que abre {launcher} en el escritorio y en el menú de aplicaciones",
   "manage.launchers.shortcut_removed": "Se quitaron los accesos directos que abren {launcher}",
-  "manage.launchers.shortcut_failed": "No se pudieron cambiar los accesos directos de {launcher}"
+  "manage.launchers.shortcut_failed": "No se pudieron cambiar los accesos directos de {launcher}",
+  "manage.launchers.wine_settings": "Ajustes de Wine…",
+  "manage.launchers.wine.title": "Ajustes de Wine de {launcher}",
+  "manage.launchers.wine.build": "Versión de Wine",
+  "manage.launchers.wine.variables": "Variables de entorno",
+  "manage.launchers.wine.variables_help": "CLAVE=valor, separadas por espacios. Se aplican al lanzador y a cada juego iniciado con él, por encima de los valores predeterminados.",
+  "manage.launchers.wine.save": "Guardar",
+  "manage.launchers.wine.saved": "{launcher} usará los nuevos ajustes de Wine desde su próximo inicio",
+  "manage.launchers.wine.failed": "No se pudieron guardar los ajustes de Wine de {launcher}"
 }

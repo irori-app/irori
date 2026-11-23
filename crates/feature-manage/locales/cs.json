@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Odebrat zástupce",
   "manage.launchers.shortcut_added": "Na plochu a do nabídky aplikací byl přidán zástupce, který otevře {launcher}",
   "manage.launchers.shortcut_removed": "Zástupci, kteří otevírají {launcher}, byli odebráni",
-  "manage.launchers.shortcut_failed": "Zástupce aplikace {launcher} se nepodařilo změnit"
+  "manage.launchers.shortcut_failed": "Zástupce aplikace {launcher} se nepodařilo změnit",
+  "manage.launchers.wine_settings": "Nastavení Wine…",
+  "manage.launchers.wine.title": "Nastavení Wine pro {launcher}",
+  "manage.launchers.wine.build": "Sestavení Wine",
+  "manage.launchers.wine.variables": "Proměnné prostředí",
+  "manage.launchers.wine.variables_help": "KLÍČ=hodnota, oddělené mezerami. Platí pro spouštěč a každou hru spuštěnou přes něj, nad výchozím nastavením her.",
+  "manage.launchers.wine.save": "Uložit",
+  "manage.launchers.wine.saved": "{launcher} použije nové nastavení Wine od příštího spuštění",
+  "manage.launchers.wine.failed": "Nastavení Wine pro {launcher} se nepodařilo uložit"
 }

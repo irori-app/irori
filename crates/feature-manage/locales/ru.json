@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Удалить ярлык",
   "manage.launchers.shortcut_added": "Ярлык, открывающий {launcher}, добавлен на рабочий стол и в меню приложений",
   "manage.launchers.shortcut_removed": "Ярлыки, открывающие {launcher}, удалены",
-  "manage.launchers.shortcut_failed": "Не удалось изменить ярлыки {launcher}"
+  "manage.launchers.shortcut_failed": "Не удалось изменить ярлыки {launcher}",
+  "manage.launchers.wine_settings": "Настройки Wine…",
+  "manage.launchers.wine.title": "Настройки Wine для {launcher}",
+  "manage.launchers.wine.build": "Сборка Wine",
+  "manage.launchers.wine.variables": "Переменные окружения",
+  "manage.launchers.wine.variables_help": "КЛЮЧ=значение через пробел. Действуют для лаунчера и каждой запущенной через него игры, поверх настроек игр по умолчанию.",
+  "manage.launchers.wine.save": "Сохранить",
+  "manage.launchers.wine.saved": "{launcher} будет использовать новые настройки Wine со следующего запуска",
+  "manage.launchers.wine.failed": "Не удалось сохранить настройки Wine для {launcher}"
 }

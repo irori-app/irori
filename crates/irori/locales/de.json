@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "Verknüpfung Desktop Menü Launcher Symbol",
   "shell.notice.launcher_open_failed": "{launcher} wurde nicht geöffnet",
   "shell.notice.launcher_sync_added": "Neue Spiele aus {launcher}",
-  "shell.notice.launcher_sync_added_message": "Zur Bibliothek hinzugefügt: {count}"
+  "shell.notice.launcher_sync_added_message": "Zur Bibliothek hinzugefügt: {count}",
+  "shell.palette.launcher_wine": "Wine-Einstellungen von {launcher}",
+  "shell.palette.launcher_wine_keywords": "Wine Proton Version Variablen Umgebung Launcher"
 }

@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "atalho área de trabalho menu inicializador ícone",
   "shell.notice.launcher_open_failed": "O {launcher} não abriu",
   "shell.notice.launcher_sync_added": "Jogos novos do {launcher}",
-  "shell.notice.launcher_sync_added_message": "Adicionados à biblioteca: {count}"
+  "shell.notice.launcher_sync_added_message": "Adicionados à biblioteca: {count}",
+  "shell.palette.launcher_wine": "Configurações do Wine do {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton versão variáveis ambiente inicializador"
 }

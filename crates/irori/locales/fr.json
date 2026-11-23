@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "raccourci bureau menu lanceur icône",
   "shell.notice.launcher_open_failed": "{launcher} ne s’est pas ouvert",
   "shell.notice.launcher_sync_added": "Nouveaux jeux de {launcher}",
-  "shell.notice.launcher_sync_added_message": "Ajoutés à la bibliothèque : {count}"
+  "shell.notice.launcher_sync_added_message": "Ajoutés à la bibliothèque : {count}",
+  "shell.palette.launcher_wine": "Réglages de Wine de {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton version variables environnement lanceur"
 }

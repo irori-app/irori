@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Ta bort genväg",
   "manage.launchers.shortcut_added": "En genväg som öppnar {launcher} har lagts till på skrivbordet och i programmenyn",
   "manage.launchers.shortcut_removed": "Genvägarna som öppnar {launcher} har tagits bort",
-  "manage.launchers.shortcut_failed": "Det gick inte att ändra genvägarna till {launcher}"
+  "manage.launchers.shortcut_failed": "Det gick inte att ändra genvägarna till {launcher}",
+  "manage.launchers.wine_settings": "Wine-inställningar…",
+  "manage.launchers.wine.title": "Wine-inställningar för {launcher}",
+  "manage.launchers.wine.build": "Wine-version",
+  "manage.launchers.wine.variables": "Miljövariabler",
+  "manage.launchers.wine.variables_help": "NYCKEL=värde, åtskilda med mellanslag. De gäller startprogrammet och varje spel som startas genom det, ovanpå spelens standardvärden.",
+  "manage.launchers.wine.save": "Spara",
+  "manage.launchers.wine.saved": "{launcher} använder de nya Wine-inställningarna från nästa start",
+  "manage.launchers.wine.failed": "Det gick inte att spara Wine-inställningarna för {launcher}"
 }

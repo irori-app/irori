@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "ショートカットを削除",
   "manage.launchers.shortcut_added": "{launcher} を開くショートカットをデスクトップとアプリケーションメニューに追加しました",
   "manage.launchers.shortcut_removed": "{launcher} を開くショートカットを削除しました",
-  "manage.launchers.shortcut_failed": "{launcher} のショートカットを変更できませんでした"
+  "manage.launchers.shortcut_failed": "{launcher} のショートカットを変更できませんでした",
+  "manage.launchers.wine_settings": "Wine の設定…",
+  "manage.launchers.wine.title": "{launcher} の Wine の設定",
+  "manage.launchers.wine.build": "Wine のビルド",
+  "manage.launchers.wine.variables": "環境変数",
+  "manage.launchers.wine.variables_help": "KEY=value をスペースで区切って入力します。ランチャーとそこから起動するすべてのゲームに、ゲームの既定値より優先して適用されます。",
+  "manage.launchers.wine.save": "保存",
+  "manage.launchers.wine.saved": "{launcher} は次回の起動から新しい Wine の設定を使います",
+  "manage.launchers.wine.failed": "{launcher} の Wine の設定を保存できませんでした"
 }

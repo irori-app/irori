@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "shortcut desktop menu launcher icon",
   "shell.notice.launcher_open_failed": "{launcher} didn’t open",
   "shell.notice.launcher_sync_added": "New games from {launcher}",
-  "shell.notice.launcher_sync_added_message": "Added to the library: {count}"
+  "shell.notice.launcher_sync_added_message": "Added to the library: {count}",
+  "shell.palette.launcher_wine": "Wine settings of {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton build variables environment launcher"
 }

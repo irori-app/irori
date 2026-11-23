@@ -805,5 +805,13 @@
   "manage.launchers.remove_shortcut": "Verknüpfung entfernen",
   "manage.launchers.shortcut_added": "Verknüpfung zum Öffnen von {launcher} auf dem Desktop und im Anwendungsmenü angelegt",
   "manage.launchers.shortcut_removed": "Verknüpfungen zum Öffnen von {launcher} entfernt",
-  "manage.launchers.shortcut_failed": "Die Verknüpfungen von {launcher} konnten nicht geändert werden"
+  "manage.launchers.shortcut_failed": "Die Verknüpfungen von {launcher} konnten nicht geändert werden",
+  "manage.launchers.wine_settings": "Wine-Einstellungen…",
+  "manage.launchers.wine.title": "Wine-Einstellungen von {launcher}",
+  "manage.launchers.wine.build": "Wine-Version",
+  "manage.launchers.wine.variables": "Umgebungsvariablen",
+  "manage.launchers.wine.variables_help": "SCHLÜSSEL=Wert, durch Leerzeichen getrennt. Sie gelten für den Launcher und jedes darüber gestartete Spiel, über den Spielvorgaben.",
+  "manage.launchers.wine.save": "Speichern",
+  "manage.launchers.wine.saved": "{launcher} verwendet die neuen Wine-Einstellungen ab dem nächsten Start",
+  "manage.launchers.wine.failed": "Die Wine-Einstellungen von {launcher} konnten nicht gespeichert werden"
 }

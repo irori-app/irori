@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "ярлик робочий стіл меню лаунчер значок",
   "shell.notice.launcher_open_failed": "{launcher} не відкрився",
   "shell.notice.launcher_sync_added": "Нові ігри з {launcher}",
-  "shell.notice.launcher_sync_added_message": "Додано до бібліотеки: {count}"
+  "shell.notice.launcher_sync_added_message": "Додано до бібліотеки: {count}",
+  "shell.palette.launcher_wine": "Налаштування Wine для {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton збірка змінні середовище лаунчер"
 }

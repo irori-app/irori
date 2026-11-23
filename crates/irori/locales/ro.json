@@ -258,5 +258,7 @@
   "shell.palette.launcher_shortcut_keywords": "comandă rapidă desktop meniu lansator pictogramă",
   "shell.notice.launcher_open_failed": "{launcher} nu s-a deschis",
   "shell.notice.launcher_sync_added": "Jocuri noi din {launcher}",
-  "shell.notice.launcher_sync_added_message": "Adăugate în bibliotecă: {count}"
+  "shell.notice.launcher_sync_added_message": "Adăugate în bibliotecă: {count}",
+  "shell.palette.launcher_wine": "Setări Wine pentru {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton versiune variabile mediu lansator"
 }
