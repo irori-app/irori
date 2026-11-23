@@ -86,6 +86,13 @@ fn main() -> Result<()> {
             args.into_iter().skip(1),
         ));
     }
+    // Started by "Restart to update" to put the downloaded update in once
+    // the Irori that started it has quit (`irori_services::self_update`).
+    if args.first().map(String::as_str) == Some(irori_services::self_update::HELPER_FLAG) {
+        std::process::exit(irori_services::self_update::helper_main(
+            args.into_iter().skip(1),
+        ));
+    }
     irori_secrets::use_os_keyring();
     let args = match std::env::current_dir() {
         Ok(cwd) => cli::absolute_file_args(args, &cwd),

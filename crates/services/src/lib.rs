@@ -55,6 +55,7 @@ mod running;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
+pub mod self_update;
 pub mod sessions;
 pub mod settings;
 mod settings_migration;
@@ -89,7 +90,7 @@ pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
 pub use achievements::{
     AchievementIndex, AchievementTotals, GameAchievements, Unlock, unlock_notice,
 };
-pub use app_update::{AppUpdateStatus, InstallKind, Release};
+pub use app_update::{AppUpdateStatus, InstallKind, Release, SelfInstall};
 pub use audio::{GameAudio, Volume, VolumeTarget};
 pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
 pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
@@ -591,6 +592,86 @@ impl Backend {
         self.app_update.set_checking(false);
         self.bus.emit(Event::AppUpdateChanged);
         result.map(|()| self.app_update())
+    }
+
+    /// Download the newer Irori, check it against the release's checksums
+    /// and unpack it beside this install, to go in at the next restart
+    /// ([`self_update`]). Only for installs no package manager updates.
+    pub async fn install_app_update(&self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        use std::sync::atomic::AtomicU8;
+        let status = self.app_update();
+        let Some(release) = status.available else {
+            anyhow::bail!("There is no newer Irori to install");
+        };
+        let Some(layout) = self.app_update.layout().cloned() else {
+            anyhow::bail!("This copy of Irori is updated another way");
+        };
+        if matches!(
+            self.app_update.install_state(),
+            SelfInstall::Downloading { .. }
+        ) {
+            return Ok(());
+        }
+        self.app_update
+            .set_install(SelfInstall::Downloading { percent: None });
+        self.bus.emit(Event::AppUpdateChanged);
+        // Only whole percents reach the UI.
+        let shown = Arc::new(AtomicU8::new(u8::MAX));
+        let (b, seen) = (self.clone(), shown.clone());
+        let progress: irori_core::install::ProgressSink = Arc::new(move |p| {
+            let Some(percent) = p.percent.map(|p| p.clamp(0., 100.) as u8) else {
+                return;
+            };
+            if seen.swap(percent, Ordering::Relaxed) != percent {
+                b.app_update.set_install(SelfInstall::Downloading {
+                    percent: Some(percent),
+                });
+                b.bus.emit(Event::AppUpdateChanged);
+            }
+        });
+        let staged = self_update::stage(
+            &self_update::Source::default(),
+            &layout,
+            self.app_update.current(),
+            &release.version,
+            std::env::consts::ARCH,
+            &progress,
+            &irori_core::process::CancellationToken::new(),
+        )
+        .await
+        .and_then(|staged| {
+            irori_core::json_store::write(self.app_update.staged_record(), &staged)
+                .context("Couldn't save the update")?;
+            Ok(staged)
+        });
+        let result = match staged {
+            Ok(staged) => {
+                self.app_update.set_install(SelfInstall::Ready {
+                    version: staged.version,
+                });
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("installing Irori {}: {e:#}", release.version);
+                self.app_update.set_install(SelfInstall::Failed {
+                    error: format!("{e:#}"),
+                });
+                Err(e)
+            }
+        };
+        self.bus.emit(Event::AppUpdateChanged);
+        result
+    }
+
+    /// Start what puts the downloaded update in once Irori has quit; the
+    /// caller quits right after. Blocking: it may copy the helper.
+    pub fn restart_into_app_update(&self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        let record = self.app_update.staged_record().to_path_buf();
+        let staged: self_update::Staged =
+            irori_core::json_store::read(&record)?.context("No update is waiting for a restart")?;
+        self_update::start_helper(&staged, &record)
     }
 
     /// Stop announcing `version` of Irori; a later one is announced again.

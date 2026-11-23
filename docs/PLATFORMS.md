@@ -952,7 +952,7 @@ how it was installed when it starts:
 | Homebrew | `Caskroom/irori` under `/opt/homebrew` or `/usr/local` | Checks; offers `brew upgrade --cask irori` |
 | Scoop | `scoop/apps/irori` in the program's path, or `apps/irori` with Scoop's `manifest.json` and `install.json` beside the program (a moved `SCOOP` root) | Checks; offers `scoop update irori` |
 | winget | `install.ini` beside the program says `Channel=winget` (the `/CHANNEL=winget` switch in Irori's winget manifest) | Checks; offers `winget upgrade Irori.Irori` |
-| Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; links to the release page |
+| Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; installs the update at the next restart, or links to the release page |
 
 The check asks GitHub's `releases/latest` for `irori-app/irori` (which leaves out drafts
 and pre-releases) at most once a day, only while online and only in the app, never in the
@@ -962,7 +962,31 @@ version that ran last. A newer release shows a notice that stays until closed; c
 it, or using its button, dismisses that version. Settings › About shows the state and
 "Check now", and Settings › General › Updates turns the check off
 (`iroriCheckForAppUpdates`). The first start of a new version says so, with a link to its
-release notes. Irori never downloads or installs itself.
+release notes.
+
+The installs no package manager updates (the last row) can also install the update:
+"Install update" in Settings › About, the notice's Install button or the palette. Irori
+asks GitHub for that release's assets and installs only what it can check: the release's
+`SHA256SUMS` (which `release.yml` writes over every file it publishes) must list the
+package for this install and computer (`Irori-X.Y.Z-linux.tar.gz`, `…-x86_64.AppImage`,
+`…-macos-arm64.zip`, `…-windows.zip`, `…-windows-portable.zip`, `…-windows-setup.exe`,
+and the arm64 ones), GitHub's own digest of the asset must agree with it, and the
+download must match. On macOS the new app's signature must verify, and come from the
+same team as the running app when that one is signed by a team. A release without
+checksums is never installed; the release page stays offered.
+
+The check passed, the package is unpacked into `.irori-update` beside the install (the
+AppImage's folder, the program's folder, or the folder holding `Irori.app`), and nothing
+of the install changes until a restart: "Restart to update" starts `irori --apply-update`
+(from the AppImage itself, or for the setup from a copy in `.irori-update`) and quits.
+Once Irori has quit, it renames each replaced file to `<name>.irori-old` (kept until the
+next update, to go back by hand) and moves the new one in: the AppImage file, the
+tarball's `irori` and `irori-sign-in`, the zip's programs and libraries, or the whole
+`Irori.app`. Then it starts the new Irori; if that one exits with an error within 15
+seconds, the old files go back, the old Irori starts and Settings › About says so. The
+Windows setup is run silently instead (`/VERYSILENT`), keeping its channel, and Irori
+starts again after it. A folder Irori can't write to (an app in a protected place)
+keeps the release page as the way to update.
 
 Packagers who build Irori themselves set `IRORI_UPDATE_EXPLANATION` (for example
 "Update Irori with your distribution's package manager.") when building.

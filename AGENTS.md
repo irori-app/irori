@@ -141,6 +141,9 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 - `--gpu-helper` is internal too: on Windows, started elevated, it hides a graphics card
   from a game for its session (`irori_services::gpu_hide`) and does nothing else.
+- `--apply-update <pid> <record>` is internal: started by "Restart to update", it waits
+  for that Irori to quit, puts the staged update in and starts it
+  (`irori_services::self_update`).
 
 Environment variables:
 
@@ -2572,6 +2575,15 @@ building and the release checklist.
   variable is `true`; `release.yml` checks each on pull requests (`packaging/copr/build.sh`,
   `packaging/arch/build.sh`). Installs from a channel are updated by its package manager
   (`irori-services::app_update`), never by Irori.
+- The installs no channel updates (AppImage, tarball, macOS zip, Windows zip, portable
+  zip and setup) can install their update (`irori-services::self_update`): the
+  package is checked against the release's `SHA256SUMS` (and GitHub's own asset
+  digest; on macOS also the signature and its team), unpacked into `.irori-update`
+  beside the install and swapped in by `irori --apply-update` after Irori quits, the
+  replaced files kept as `*.irori-old`; a new version that doesn't start is rolled back.
+  The Windows setup runs silently instead. So every release must keep publishing
+  `SHA256SUMS` over all its packages under `package.py`'s names; a test in
+  `self_update.rs` reads `release.yml` for it.
 
 **Desktop behaviour to keep working**
 
