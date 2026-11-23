@@ -275,6 +275,8 @@ impl LibraryView {
                 cx.notify();
             }),
             cx.observe(&m.statuses, |_, _, cx| cx.notify()),
+            // A reordered queue moves the places queued covers show.
+            cx.observe(&m.downloads, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&art, |_, _, cx| cx.notify()),
             cx.observe(&filters, |_, _, cx| cx.notify()),
@@ -2320,6 +2322,7 @@ impl LibraryView {
         // The game the drawer or the Focus page shows keeps its ring.
         let selected =
             !in_recent && self.panel_kind().is_some() && self.focused.as_ref() == Some(&id);
+        let queue_place = models(cx).downloads.read(cx).queue.queue_place(&id);
         let busy = status.as_ref().filter(|s| {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
@@ -2385,7 +2388,11 @@ impl LibraryView {
                     .absolute()
                     .bottom_2()
                     .left_2()
-                    .child(Tag::secondary().xsmall().child(t("library.status.queued")))
+                    .child(
+                        Tag::secondary()
+                            .xsmall()
+                            .child(crate::i18n::queued_label(queue_place)),
+                    )
                     .into_any_element(),
             ),
             kind if kind.is_busy() => {
@@ -2978,6 +2985,7 @@ impl LibraryView {
             self.focused.as_ref() == Some(&id) && self.grid_focus.contains_focused(window, cx);
         let active =
             keyboard || self.hovered.as_ref() == Some(&id) || self.menu_open.as_ref() == Some(&id);
+        let queue_place = models(cx).downloads.read(cx).queue.queue_place(&id);
         let theme = cx.theme();
         let (muted, border, hover_bg, active_bg, ring) = (
             theme.muted_foreground,
@@ -3010,7 +3018,7 @@ impl LibraryView {
                 .into_any_element(),
             Some(s) if s.kind == StatusKind::Queued => Tag::secondary()
                 .xsmall()
-                .child(t("library.status.queued"))
+                .child(crate::i18n::queued_label(queue_place))
                 .into_any_element(),
             _ => div()
                 .text_xs()

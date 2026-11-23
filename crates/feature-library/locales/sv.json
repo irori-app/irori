@@ -598,6 +598,7 @@
   "library.status.playing": "Spelas",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "I kö",
+  "library.status.queued_at": "I kö · #{place}",
   "library.status.redist": "Installerar beroenden",
   "library.status.syncing_saves": "Synkroniserar sparfiler",
   "library.status.uninstalling": "Avinstallerar",

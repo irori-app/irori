@@ -598,6 +598,7 @@
   "library.status.playing": "Oynanıyor",
   "library.status.progress": "{status} %{percent}",
   "library.status.queued": "Sırada",
+  "library.status.queued_at": "Sırada · #{place}",
   "library.status.redist": "Bağımlılıklar kuruluyor",
   "library.status.syncing_saves": "Kayıtlar eşitleniyor",
   "library.status.uninstalling": "Kaldırılıyor",

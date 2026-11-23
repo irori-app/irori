@@ -598,6 +598,7 @@
   "library.status.playing": "În joc",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "În coadă",
+  "library.status.queued_at": "În coadă · #{place}",
   "library.status.redist": "Se instalează dependențele",
   "library.status.syncing_saves": "Se sincronizează salvările",
   "library.status.uninstalling": "Se dezinstalează",

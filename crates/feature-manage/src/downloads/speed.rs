@@ -73,6 +73,20 @@ impl SpeedHistory {
         self.samples.iter()
     }
 
+    /// Mean download rate over the kept window, steadier than the latest
+    /// reading; `None` until a nonzero rate was seen. Estimates use it so a
+    /// passing dip doesn't swing them.
+    pub fn average_download(&self) -> Option<u64> {
+        let (sum, n) = self
+            .samples
+            .iter()
+            .filter(|s| s.download > 0)
+            .fold((0u64, 0u64), |(sum, n), s| {
+                (sum.saturating_add(s.download), n + 1)
+            });
+        (n > 0).then(|| sum / n)
+    }
+
     pub fn len(&self) -> usize {
         self.samples.len()
     }
@@ -122,6 +136,18 @@ mod tests {
         assert!(h.record(None, None));
         assert_eq!(h.len(), 0);
         assert!(!h.record(None, None));
+    }
+
+    #[test]
+    fn averages_nonzero_download_rates() {
+        let a = GameId::new(Runner::Gog, "a");
+        let mut h = SpeedHistory::new(10);
+        assert_eq!(h.average_download(), None);
+        h.record(Some(&a), p(0, 5));
+        assert_eq!(h.average_download(), None, "a stall alone says nothing");
+        h.record(Some(&a), p(100, 5));
+        h.record(Some(&a), p(300, 5));
+        assert_eq!(h.average_download(), Some(200));
     }
 
     #[test]

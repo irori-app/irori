@@ -3,7 +3,6 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, TitleBar,
     WindowExt as _, h_flex, v_flex,
@@ -17,7 +16,7 @@ use gpui_kit::{
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
 use irori_ui::components::BrandMark;
 use irori_ui::glass::{self, Glass};
-use irori_ui::i18n::{t, t_args};
+use irori_ui::i18n::t;
 use irori_ui::models::{self, models};
 use irori_ui::nav::{self, Route, navigator};
 
@@ -39,6 +38,10 @@ pub struct AppShell {
     narrow_expanded: bool,
     recent: Entity<sidebar::RecentGames>,
     saved_views: Entity<sidebar::SavedViewsNav>,
+    /// The title bar's downloads pill and the sidebar's Downloads badge,
+    /// each redrawn on its own as progress arrives.
+    downloads_pill: Entity<irori_manage::DownloadsPill>,
+    downloads_badge: Entity<irori_manage::DownloadsBadge>,
     /// "Keep holding to open Big Picture" while a controller button is held.
     hold_hint: Entity<irori_bigpicture::gamepad::HoldHintView>,
     /// The start-with-system choice last written to the system.
@@ -80,7 +83,10 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 cx.notify();
             }),
-            cx.observe(&m.downloads, |_, _, cx| cx.notify()),
+            cx.observe_in(&m.downloads, window, |this, _, window, cx| {
+                this.sync_power_countdown(window, cx);
+                cx.notify();
+            }),
             cx.observe(&m.components, |_, _, cx| cx.notify()),
             cx.observe(&m.library, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |this, _, cx| {
@@ -165,6 +171,8 @@ impl AppShell {
             narrow_expanded: false,
             recent: cx.new(sidebar::RecentGames::new),
             saved_views: cx.new(sidebar::SavedViewsNav::new),
+            downloads_pill: cx.new(irori_manage::DownloadsPill::new),
+            downloads_badge: cx.new(irori_manage::DownloadsBadge::new),
             hold_hint: irori_bigpicture::gamepad::HoldHintView::new(window, cx),
             autostart,
             minimized_for: None,
@@ -219,7 +227,32 @@ impl AppShell {
             if let Some(route) = irori_ui::system_notify::notice_route(&n) {
                 note = note.on_click(move |_, _, cx| nav::navigate(route.clone(), cx));
             }
+            if is_power_countdown(&n) {
+                // Stays until the countdown ends or is cancelled, with the
+                // way to cancel it right there.
+                note = note
+                    .id::<PowerCountdownNote>()
+                    .autohide(false)
+                    .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx))
+                    .action(|_, _, _| {
+                        Button::new("power-countdown-keep-on")
+                            .small()
+                            .primary()
+                            .label(t("shell.notice.keep_on"))
+                            .on_click(|_, window, cx| {
+                                irori_manage::keep_on(cx);
+                                window.remove_notification::<PowerCountdownNote>(cx);
+                            })
+                    });
+            }
             window.push_notification(note, cx);
+        }
+    }
+
+    /// Take the countdown's notice away once the countdown is over.
+    fn sync_power_countdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if models(cx).downloads.read(cx).queue.countdown.is_none() {
+            window.remove_notification::<PowerCountdownNote>(cx);
         }
     }
 
@@ -364,7 +397,11 @@ impl AppShell {
         let open_palette = cx.listener(|this, _, window, cx| {
             this.palette.open(window, cx);
         });
-        let content = title_bar_content(cx, open_palette);
+        let content = title_bar_content(
+            cx,
+            open_palette,
+            self.downloads_pill.clone().into_any_element(),
+        );
         // The desktop's own button layout, where Irori draws the buttons.
         let desktop = cx
             .button_layout()
@@ -420,7 +457,9 @@ impl AppShell {
                     .into_any_element()
             })
         };
-        let download_count = count_badge(downloads);
+        // The running download's percent, else how many are queued.
+        let download_count =
+            (downloads > 0).then(|| self.downloads_badge.clone().into_any_element());
         let update_count = count_badge(updates);
 
         v_flex()
@@ -573,6 +612,20 @@ impl AppShell {
     }
 }
 
+/// Names the notice of a countdown to sleeping or powering off, so it can be
+/// taken away when the countdown ends.
+struct PowerCountdownNote;
+
+/// The notice the backend raises when a finished queue starts counting down
+/// (not the ones saying the computer was left on).
+fn is_power_countdown(n: &irori_core::Notice) -> bool {
+    n.title_key == Some(irori_services::DOWNLOADS_FINISHED_NOTICE)
+        && matches!(
+            n.message_key,
+            Some("shell.notice.sleep_soon" | "shell.notice.power_off_soon")
+        )
+}
+
 /// The title bar's contents: navigation, the search button and the live status
 /// group.
 ///
@@ -584,20 +637,10 @@ impl AppShell {
 fn title_bar_content(
     cx: &mut App,
     open_palette: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    downloads: AnyElement,
 ) -> AnyElement {
     let nav = navigator(cx).read(cx);
     let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
-    let downloads = &models(cx).downloads.read(cx).queue;
-    let statuses = models(cx).statuses.read(cx);
-    let current = downloads.current().map(|item| {
-        let pct = statuses
-            .get(&item.id)
-            .and_then(|s| s.progress)
-            .and_then(|p| p.percent)
-            .unwrap_or(0.0);
-        (item.title.clone(), pct)
-    });
-    let queued = downloads.active.len();
     let online = models(cx).accounts.read(cx).online;
     let playing = crate::playing::pill(cx);
 
@@ -674,28 +717,11 @@ fn title_bar_content(
                     )
                 })
                 .child(
-                    Button::new("title-downloads")
+                    div()
                         .debug_selector(|| "title-downloads".into())
-                        .ghost()
-                        .small()
-                        .map(|b| match &current {
-                            Some((title, pct)) => b
-                                .child(
-                                    ProgressCircle::new("title-download-progress")
-                                        .value(*pct)
-                                        .xsmall(),
-                                )
-                                .tooltip(t_args(
-                                    "shell.downloads.progress",
-                                    &[("title", title), ("percent", &format!("{pct:.0}"))],
-                                )),
-                            None => b.icon(IconName::Download).tooltip(if queued > 0 {
-                                t("shell.downloads.paused")
-                            } else {
-                                t("shell.nav.downloads")
-                            }),
-                        })
-                        .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx)),
+                        .min_w_0()
+                        .flex_shrink(1.)
+                        .child(downloads),
                 ),
         )
         .into_any_element()
@@ -892,6 +918,29 @@ mod start_tests {
         assert_eq!(route_once_loaded(&Route::Library, false), None);
         assert_eq!(route_once_loaded(&Route::BigPicture, false), None);
     }
+
+    #[test]
+    fn only_the_countdown_notice_offers_to_keep_the_computer_on() {
+        let notice = |message| {
+            irori_core::Notice::new(NoticeLevel::Info, "Downloads finished").keys(
+                irori_services::DOWNLOADS_FINISHED_NOTICE,
+                Some(message),
+                &[],
+            )
+        };
+        assert!(is_power_countdown(&notice("shell.notice.sleep_soon")));
+        assert!(is_power_countdown(&notice("shell.notice.power_off_soon")));
+        assert!(!is_power_countdown(&notice(
+            "shell.notice.power_off_skipped"
+        )));
+        assert!(!is_power_countdown(
+            &irori_core::Notice::new(NoticeLevel::Info, "x").keys(
+                "shell.notice.installed",
+                Some("shell.notice.sleep_soon"),
+                &[]
+            )
+        ));
+    }
 }
 
 /// The title bar row laid out in a real window, so a change to the flex tracks
@@ -913,11 +962,13 @@ pub(crate) mod title_bar_tests {
     /// The title bar's right padding, `pr_2` in rems.
     const RIGHT_PADDING: f32 = 8.;
 
-    struct TitleBarHarness;
+    struct TitleBarHarness {
+        downloads: Entity<irori_manage::DownloadsPill>,
+    }
 
     impl Render for TitleBarHarness {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            title_bar_content(cx, |_, _, _| {})
+            title_bar_content(cx, |_, _, _| {}, self.downloads.clone().into_any_element())
         }
     }
 
@@ -1019,7 +1070,9 @@ pub(crate) mod title_bar_tests {
     /// Draw the production title bar row in a window `width` wide and report
     /// what the layout engine placed.
     fn measure(cx: &mut TestAppContext, width: f32) -> BarLayout {
-        let window = cx.open_window(size(px(width), px(34.)), |_, _| TitleBarHarness);
+        let window = cx.open_window(size(px(width), px(34.)), |_, cx| TitleBarHarness {
+            downloads: cx.new(irori_manage::DownloadsPill::new),
+        });
         let mut cx = VisualTestContext::from_window(window.into(), cx);
         cx.update(|window, cx| {
             window.refresh();

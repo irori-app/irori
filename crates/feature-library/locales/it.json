@@ -598,6 +598,7 @@
   "library.status.playing": "In gioco",
   "library.status.progress": "{status} {percent}%",
   "library.status.queued": "In coda",
+  "library.status.queued_at": "In coda · #{place}",
   "library.status.redist": "Installazione delle dipendenze",
   "library.status.syncing_saves": "Sincronizzazione dei salvataggi",
   "library.status.uninstalling": "Disinstallazione",

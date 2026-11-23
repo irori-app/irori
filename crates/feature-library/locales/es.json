@@ -598,6 +598,7 @@
   "library.status.playing": "Jugando",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "En cola",
+  "library.status.queued_at": "En cola · #{place}",
   "library.status.redist": "Instalando dependencias",
   "library.status.syncing_saves": "Sincronizando partidas guardadas",
   "library.status.uninstalling": "Desinstalando",

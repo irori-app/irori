@@ -5537,6 +5537,7 @@ name = "irori-manage"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures",
  "gpui-kit",
  "gpui-pre",

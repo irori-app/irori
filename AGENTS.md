@@ -504,7 +504,22 @@ commands without a window.
   no name is whole. A smart category's own search rule can't use `smart:` (unknown).
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
-  cancel go through a `CancellationToken`.
+  cancel go through a `CancellationToken`. `DownloadQueueSnapshot::queue_place` is a
+  waiting item's place in line (covers read "Queued · #2"); `Backend::download_disks`
+  (`download_space.rs`, blocking) adds up what the queue still downloads per disk
+  against its free space. The downloads page (`irori_manage` `downloads/`) derives
+  finish and start times from the speed history it keeps (`queue::estimate`, at the
+  averaged rate, only on progress), filters its history and plays finished installs;
+  the title bar's pill and the sidebar's badge are views of their own
+  (`downloads/indicator.rs`) that redraw only when what they show changes.
+  "When downloads finish" (`download_power.rs`, `Backend::set_when_downloads_done`:
+  sleep or power off through `power::PowerSystem`, never `sudo`) is off by default,
+  held for the run only and used once: when the worker empties the queue it counts
+  `POWER_COUNTDOWN` (a minute) down, shown with "Keep it on" in the shell's notice,
+  the pill and the downloads page, and never acts while a game runs or a session
+  is ending (`power_when_idle`, unlike `Backend::power`, stops no game). New work
+  in the queue stops the countdown. The palette offers it and pause/resume
+  (`irori_manage::download_commands`).
 - **Updates** (`updates.rs`): the update manager's component side. Wine builds, DXVK,
   VKD3D-Proton, DXVK-NVAPI, umu, the anticheat runtimes, emulators and RetroArch cores are
   checked once a session and daily, from lists cached for a day. Each has a stable id; a

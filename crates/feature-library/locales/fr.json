@@ -598,6 +598,7 @@
   "library.status.playing": "En cours",
   "library.status.progress": "{status} {percent} %",
   "library.status.queued": "En file d’attente",
+  "library.status.queued_at": "En file d’attente · n° {place}",
   "library.status.redist": "Installation des dépendances",
   "library.status.syncing_saves": "Synchronisation des sauvegardes",
   "library.status.uninstalling": "Désinstallation",
