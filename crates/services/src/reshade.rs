@@ -66,8 +66,7 @@ pub fn supports_reshade(game: &GameInfo) -> bool {
                 game.installed_platform() != Some(InstallPlatform::Linux)
             }
             irori_core::HostPlatform::Linux => {
-                game.installed_platform() == Some(InstallPlatform::Windows)
-                    || !game.is_linux_native
+                game.installed_platform() == Some(InstallPlatform::Windows) || !game.is_linux_native
             }
             irori_core::HostPlatform::Mac => false,
         },
