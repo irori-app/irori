@@ -715,7 +715,10 @@ commands without a window.
   shown unfiltered there, never lost. Developer and publisher (`ViewFilter::developers`,
   `publishers`, compared by `filter::company_key`) offer the library's commonest 30
   plus any picked; smart categories have no rule for them, so `smart_from_view` names
-  them as left over.
+  them as left over. Group by also offers a game's facts (`irori-library`'s
+  `groups.rs`: store, platform as it would run here, developer, publisher, release
+  year, playtime and size bands), each game in one section; the palette offers them
+  through `Grouping::BY_FACT`.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
   (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock

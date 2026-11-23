@@ -30,6 +30,7 @@ mod filter;
 mod filters_panel;
 pub mod format;
 mod grid;
+mod groups;
 mod i18n;
 mod launch;
 mod launchbox;
@@ -344,6 +345,21 @@ pub fn set_groups_by_category(on: bool, cx: &mut App) {
         } else {
             Grouping::None
         };
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
+/// How the library splits its games into sections; `None` until a library
+/// view exists.
+pub fn grouping(cx: &App) -> Option<Grouping> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group)
+}
+
+/// Group the library by `group` (the palette's rows for a game's facts).
+/// Does nothing until a library view exists.
+pub fn set_grouping(group: Grouping, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
         model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
     }
 }

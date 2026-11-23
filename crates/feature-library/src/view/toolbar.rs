@@ -125,17 +125,17 @@ impl LibraryView {
                     .dropdown_menu({
                         let model = self.filters.clone();
                         move |menu, _, _| {
-                            let options = [
-                                (Grouping::None, "library.toolbar.group.none"),
-                                (Grouping::Status, "library.toolbar.group.status"),
-                                (Grouping::Mode, "library.toolbar.group.mode"),
-                                (Grouping::Genre, "library.toolbar.group.genre"),
-                                (Grouping::Category, "library.toolbar.group.category"),
-                            ];
-                            options.into_iter().fold(menu, |menu, (option, key)| {
+                            Grouping::ALL.into_iter().fold(menu, |menu, option| {
                                 let model = model.clone();
+                                // The groupings by a game's facts follow
+                                // the user's own after a line.
+                                let menu = if option == Grouping::Store {
+                                    menu.separator()
+                                } else {
+                                    menu
+                                };
                                 menu.item(
-                                    PopupMenuItem::new(t(key))
+                                    PopupMenuItem::new(option.label())
                                         .checked(option == group)
                                         .on_click(move |_, _, cx| {
                                             model.update(cx, |m, cx| {

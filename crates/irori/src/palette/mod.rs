@@ -19,7 +19,7 @@ use gpui_kit::{
 };
 use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, Runner};
-use irori_library::InstallFilter;
+use irori_library::{Grouping, InstallFilter};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::SizeStep;
@@ -100,6 +100,9 @@ pub(crate) enum PaletteTarget {
     GroupByGenre(bool),
     /// Group the library by category (`true`) or stop, and show it.
     GroupByCategory(bool),
+    /// Group the library by one of a game's facts (store, year…), or stop
+    /// with `Grouping::None`, and show it.
+    GroupBy(Grouping),
     /// Show the library's games in one category of either kind.
     Category(irori_services::CategoryRef),
     /// Make a smart category.
@@ -169,6 +172,9 @@ struct LibraryCommands<'a> {
     grouped_by_genre: Option<bool>,
     /// Whether the library groups by category, while a library view exists.
     grouped_by_category: Option<bool>,
+    /// How the library groups its games, while a library view exists: the
+    /// groupings by a game's facts are offered from it.
+    grouping: Option<Grouping>,
     /// Every category of both kinds, to show one.
     categories: &'a [irori_ui::categories::CategoryEntry],
     /// The saved library views, to show one.
@@ -215,6 +221,7 @@ impl Palette {
             grouped_by_mode,
             grouped_by_genre,
             grouped_by_category,
+            grouping,
             categories,
             views,
             layout,
@@ -543,6 +550,26 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(current) = grouping {
+            for group in Grouping::BY_FACT {
+                let Some(label) = group.palette_label(current) else {
+                    continue;
+                };
+                let target = if current == group {
+                    Grouping::None
+                } else {
+                    group
+                };
+                push(
+                    Entry::new()
+                        .label(label)
+                        .keywords([group.label()])
+                        .icon(IconName::Rows3),
+                    PaletteTarget::GroupBy(target),
+                    targets,
+                );
+            }
+        }
         if grouped_by_category.is_some() {
             push(
                 Entry::new()
@@ -705,6 +732,7 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         grouped_by_mode: irori_library::groups_by_mode(cx),
         grouped_by_genre: irori_library::groups_by_genre(cx),
         grouped_by_category: irori_library::groups_by_category(cx),
+        grouping: irori_library::grouping(cx),
         categories: &categories,
         views: &views,
         layout: irori_library::library_layout(cx),
@@ -926,6 +954,10 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::GroupByCategory(on) => {
             irori_library::set_groups_by_category(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupBy(group) => {
+            irori_library::set_grouping(group, cx);
             irori_ui::navigate(Route::Library, cx);
         }
         PaletteTarget::Category(category) => irori_library::show_category(category, cx),

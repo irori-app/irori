@@ -7,9 +7,9 @@
 //! missing). The result
 //! is cached by library revision, user-data identity, category-index
 //! identity, update-set identity, availability identity and filter, so
-//! rendering never refilters an unchanged library. Grouping by play status,
-//! game mode, genre or category reorders that result into sections
-//! ([`StatusGroup`]) in the same pass.
+//! rendering never refilters an unchanged library. Grouping (by play status,
+//! game mode, genre, category, or a game's facts in [`crate::groups`])
+//! reorders that result into sections ([`StatusGroup`]) in the same pass.
 //!
 //! Saved views and the persisted view keep criteria this version doesn't
 //! know ([`ViewFilter::unknown`]), so a view a newer Irori saved keeps its
@@ -28,6 +28,8 @@ use irori_services::{
 };
 use irori_ui::i18n::{t, t_args};
 use serde::{Deserialize, Serialize};
+
+use crate::groups;
 
 /// Which install states to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -97,6 +99,95 @@ pub enum Grouping {
     /// name: each game in the section of its first category, games in none
     /// last ([`crate::categories::group_by_category`]).
     Category,
+    /// A section per store, in the store switcher's order.
+    Store,
+    /// A section per platform: the build installed, else the one that
+    /// would be installed here ([`crate::groups::platform_section`]).
+    Platform,
+    /// A section per developer by name, games whose store names none last.
+    Developer,
+    /// A section per publisher, as [`Grouping::Developer`].
+    Publisher,
+    /// A section per release year, newest first.
+    Year,
+    /// Sections of playtime ([`crate::groups::PlaytimeBand`]), most played
+    /// first.
+    Playtime,
+    /// Sections of size on disk ([`crate::groups::SizeBand`]), largest
+    /// first, games not installed last.
+    Size,
+}
+
+impl Grouping {
+    /// Every grouping, in the order the Group by menu offers them.
+    pub const ALL: [Grouping; 12] = [
+        Grouping::None,
+        Grouping::Status,
+        Grouping::Mode,
+        Grouping::Genre,
+        Grouping::Category,
+        Grouping::Store,
+        Grouping::Platform,
+        Grouping::Developer,
+        Grouping::Publisher,
+        Grouping::Year,
+        Grouping::Playtime,
+        Grouping::Size,
+    ];
+
+    /// The groupings by a game's facts that the command palette offers by
+    /// name ([`Grouping::palette_label`]); the others have rows of their
+    /// own there.
+    pub const BY_FACT: [Grouping; 7] = [
+        Grouping::Store,
+        Grouping::Platform,
+        Grouping::Developer,
+        Grouping::Publisher,
+        Grouping::Year,
+        Grouping::Playtime,
+        Grouping::Size,
+    ];
+
+    /// The Group by menu's name for it.
+    pub fn label(self) -> String {
+        t(match self {
+            Grouping::None => "library.toolbar.group.none",
+            Grouping::Status => "library.toolbar.group.status",
+            Grouping::Mode => "library.toolbar.group.mode",
+            Grouping::Genre => "library.toolbar.group.genre",
+            Grouping::Category => "library.toolbar.group.category",
+            Grouping::Store => "library.toolbar.group.store",
+            Grouping::Platform => "library.toolbar.group.platform",
+            Grouping::Developer => "library.toolbar.group.developer",
+            Grouping::Publisher => "library.toolbar.group.publisher",
+            Grouping::Year => "library.toolbar.group.year",
+            Grouping::Playtime => "library.toolbar.group.playtime",
+            Grouping::Size => "library.toolbar.group.size",
+        })
+        .to_string()
+    }
+
+    /// The command palette's row for grouping by it: "Group the library by
+    /// store", or "Stop grouping the library" while it groups by it.
+    /// `None` for the groupings that have rows of their own.
+    pub fn palette_label(self, current: Grouping) -> Option<String> {
+        if !Grouping::BY_FACT.contains(&self) {
+            return None;
+        }
+        if current == self {
+            return Some(t("library.group.palette.stop").to_string());
+        }
+        let key = match self {
+            Grouping::Store => "library.group.palette.store",
+            Grouping::Platform => "library.group.palette.platform",
+            Grouping::Developer => "library.group.palette.developer",
+            Grouping::Publisher => "library.group.palette.publisher",
+            Grouping::Year => "library.group.palette.year",
+            Grouping::Playtime => "library.group.palette.playtime",
+            _ => "library.group.palette.size",
+        };
+        Some(t(key).to_string())
+    }
 }
 
 /// Order of the game-mode sections: playing together on one screen first,
@@ -154,6 +245,15 @@ pub enum GroupKind {
     /// Games whose first category is this one, with its name; `None` for
     /// games in no category.
     Category(Option<(CategoryRef, Arc<str>)>),
+    Store(Runner),
+    Platform(InstallPlatform),
+    /// Games of this developer or publisher (as the library spells it
+    /// first); `None` for games whose store names none.
+    Company(Company, Option<Arc<str>>),
+    /// Games released this year; `None` for games of no known date.
+    Year(Option<i32>),
+    Playtime(crate::groups::PlaytimeBand),
+    Size(crate::groups::SizeBand),
 }
 
 /// How genres compare: stores spell the same one differently ("Action",
@@ -1120,6 +1220,20 @@ impl FilteredGames {
                 Grouping::Category => {
                     crate::categories::group_by_category(&mut games, user, categories).into()
                 }
+                Grouping::Store => groups::group_by_store(&mut games).into(),
+                Grouping::Platform => {
+                    let host = irori_core::HostPlatform::current().native();
+                    groups::group_by_platform(&mut games, host).into()
+                }
+                Grouping::Developer => {
+                    groups::group_by_company(&mut games, Company::Developer).into()
+                }
+                Grouping::Publisher => {
+                    groups::group_by_company(&mut games, Company::Publisher).into()
+                }
+                Grouping::Year => groups::group_by_year(&mut games).into(),
+                Grouping::Playtime => groups::group_by_playtime(&mut games, user).into(),
+                Grouping::Size => groups::group_by_size(&mut games).into(),
             };
             let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();

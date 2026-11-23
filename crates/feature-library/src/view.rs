@@ -388,7 +388,7 @@ impl LibraryView {
             .iter()
             .filter_map(|g| match g.kind {
                 GroupKind::Status(s) => Some(s),
-                GroupKind::Mode(_) | GroupKind::Genre(_) | GroupKind::Category(_) => None,
+                _ => None,
             })
             .collect()
     }
@@ -1381,9 +1381,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Status => Grouping::None,
-                    Grouping::None | Grouping::Mode | Grouping::Genre | Grouping::Category => {
-                        Grouping::Status
-                    }
+                    _ => Grouping::Status,
                 }
             },
             cx,
@@ -1396,9 +1394,7 @@ impl LibraryView {
             |f| {
                 f.group = match f.group {
                     Grouping::Mode => Grouping::None,
-                    Grouping::None | Grouping::Status | Grouping::Genre | Grouping::Category => {
-                        Grouping::Mode
-                    }
+                    _ => Grouping::Mode,
                 }
             },
             cx,
@@ -2238,6 +2234,61 @@ impl LibraryView {
                     || t("library.group.no_genre"),
                     |g| SharedString::from(g.to_string()),
                 ),
+            ),
+            GroupKind::Store(runner) => (
+                Icon::new(IconName::Store)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                SharedString::from(runner.store_name()),
+            ),
+            GroupKind::Platform(platform) => (
+                Icon::new(IconName::Monitor)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                filter::platform_label(platform).into(),
+            ),
+            GroupKind::Company(company, name) => {
+                let (icon, unknown) = match company {
+                    filter::Company::Developer => {
+                        (IconName::Building2, "library.group.no_developer")
+                    }
+                    filter::Company::Publisher => {
+                        (IconName::Megaphone, "library.group.no_publisher")
+                    }
+                };
+                (
+                    Icon::new(icon)
+                        .small()
+                        .text_color(theme.muted_foreground)
+                        .into_any_element(),
+                    name.map_or_else(|| t(unknown), |n| SharedString::from(n.to_string())),
+                )
+            }
+            GroupKind::Year(year) => (
+                Icon::new(IconName::CalendarDays)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                year.map_or_else(
+                    || t("library.group.no_year"),
+                    |y| SharedString::from(y.to_string()),
+                ),
+            ),
+            GroupKind::Playtime(band) => (
+                Icon::new(IconName::Clock)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                band.label().into(),
+            ),
+            GroupKind::Size(band) => (
+                Icon::new(IconName::HardDrive)
+                    .small()
+                    .text_color(theme.muted_foreground)
+                    .into_any_element(),
+                band.label().into(),
             ),
             GroupKind::Category(None) => (
                 Icon::new(IconName::Tag)
