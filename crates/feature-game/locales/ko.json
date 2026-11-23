@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "게임 이름, Steam 앱 ID 또는 상점 주소",
   "game.steam_link.searching": "Steam 검색 중…",
   "game.steam_link.title": "“{title}”의 Steam 앱",
-  "game.steam_link.unknown": "Steam 앱에 연결되지 않음"
+  "game.steam_link.unknown": "Steam 앱에 연결되지 않음",
+  "game.saves.snapshots": "이전 저장 데이터",
+  "game.saves.snapshots_help": "동기화가 저장 데이터를 바꾸기 전에 Irori가 여기에 복사해 두므로, 잘못된 동기화를 되돌릴 수 있습니다.",
+  "game.saves.snapshots_loading": "이전 저장 데이터를 읽는 중…",
+  "game.saves.snapshots_none": "아직 없습니다. 이곳의 저장 데이터를 바꿀 수 있는 동기화 전마다 하나씩 보관됩니다.",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "{reason} 전 · {size}",
+  "game.saves.snapshot_reason.download": "다운로드",
+  "game.saves.snapshot_reason.auto": "동기화",
+  "game.saves.snapshot_reason.force_download": "강제 다운로드",
+  "game.saves.snapshot_reason.force_upload": "강제 업로드",
+  "game.saves.snapshot_reason.restore": "이전 저장 데이터 복원",
+  "game.saves.snapshot_restore": "복원",
+  "game.saves.snapshot_restore_title": "“{title}”의 {date} 저장 데이터를 복원할까요?",
+  "game.saves.snapshot_restore_description": "지금 저장 데이터는 먼저 또 하나의 이전 저장 데이터로 보관되므로 되돌릴 수 있습니다. 그 뒤에 저장되어 여기에 없는 파일은 남습니다.",
+  "game.saves.snapshot_restored_one": "“{title}”의 파일 {count}개를 복원했습니다",
+  "game.saves.snapshot_restored_other": "“{title}”의 파일 {count}개를 복원했습니다",
+  "game.saves.snapshot_restore_failed": "이전 저장 데이터를 복원하지 못했습니다"
 }

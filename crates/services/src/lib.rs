@@ -53,6 +53,7 @@ pub mod renodx;
 pub mod replay;
 pub mod reshade;
 mod running;
+pub mod save_snapshots;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;

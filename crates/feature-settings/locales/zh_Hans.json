@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "立即备份、选择 Ludusavi 识别此游戏所用的名称，以及恢复备份。",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi 可以备份来自所有商店的游戏存档，包括你添加的游戏。Irori 会运行你安装的 Ludusavi。",
+  "settings.field.save_snapshots.label": "每个游戏保留的较早存档",
+  "settings.field.save_snapshots.help": "在云同步可能替换游戏存档之前，Irori 会先复制它们，以便在该游戏的云存档中恢复。保留数量为 0（不保留）到 50；未变化的存档不会重复复制。",
   "settings.field.ludusavi_path.label": "Ludusavi 程序",
   "settings.field.ludusavi_path.help": "留空即可在 PATH、常用安装文件夹或 Flathub 中查找。",
   "settings.field.ludusavi_path.placeholder": "自动查找",

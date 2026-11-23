@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Zálohuj teď, vyber název, pod kterým hru zná Ludusavi, a obnov zálohu.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi zálohuje uložené pozice her ze všech obchodů, i těch, které jsi přidal. Irori spouští kopii, kterou sis nainstaloval.",
+  "settings.field.save_snapshots.label": "Uchovávané dřívější pozice na hru",
+  "settings.field.save_snapshots.help": "Než cloudová synchronizace nahradí uložené pozice hry, Irori je zkopíruje, takže je lze v cloudových pozicích hry vrátit. Kolik jich uchovat, od 0 (žádné) do 50; nezměněné pozice se nekopírují dvakrát.",
   "settings.field.ludusavi_path.label": "Program Ludusavi",
   "settings.field.ludusavi_path.help": "Nech prázdné a Irori ho najde v PATH, v obvyklých instalačních složkách nebo na Flathubu.",
   "settings.field.ludusavi_path.placeholder": "Najít automaticky",

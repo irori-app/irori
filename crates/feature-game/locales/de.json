@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Spielname, Steam-App-ID oder Shop-Adresse",
   "game.steam_link.searching": "Steam wird durchsucht…",
   "game.steam_link.title": "Steam-App für „{title}“",
-  "game.steam_link.unknown": "Mit keiner Steam-App verknüpft"
+  "game.steam_link.unknown": "Mit keiner Steam-App verknüpft",
+  "game.saves.snapshots": "Frühere Spielstände",
+  "game.saves.snapshots_help": "Irori kopiert die Spielstände hierher, bevor eine Synchronisierung sie ersetzen könnte, damit sich eine falsch gelaufene Synchronisierung rückgängig machen lässt.",
+  "game.saves.snapshots_loading": "Frühere Spielstände werden gelesen …",
+  "game.saves.snapshots_none": "Noch keine. Vor jeder Synchronisierung, die die Spielstände hier ersetzen könnte, wird einer aufbewahrt.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Vor: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "Herunterladen",
+  "game.saves.snapshot_reason.auto": "Synchronisierung",
+  "game.saves.snapshot_reason.force_download": "Erzwungenes Herunterladen",
+  "game.saves.snapshot_reason.force_upload": "Erzwungenes Hochladen",
+  "game.saves.snapshot_reason.restore": "Wiederherstellen früherer Spielstände",
+  "game.saves.snapshot_restore": "Wiederherstellen",
+  "game.saves.snapshot_restore_title": "Spielstände von „{title}“ vom {date} wiederherstellen?",
+  "game.saves.snapshot_restore_description": "Die jetzigen Spielstände werden zuerst als weiterer früherer Spielstand aufbewahrt, sodass sich das rückgängig machen lässt. Seitdem gespeicherte Dateien, die nicht darin sind, bleiben.",
+  "game.saves.snapshot_restored_one": "{count} Datei von „{title}“ wurde wiederhergestellt",
+  "game.saves.snapshot_restored_other": "{count} Dateien von „{title}“ wurden wiederhergestellt",
+  "game.saves.snapshot_restore_failed": "Die früheren Spielstände konnten nicht wiederhergestellt werden"
 }

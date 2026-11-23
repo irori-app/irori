@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Numele jocului, ID-ul aplicației Steam sau adresa din magazin",
   "game.steam_link.searching": "Se caută pe Steam…",
   "game.steam_link.title": "Aplicația Steam pentru „{title}”",
-  "game.steam_link.unknown": "Nelegat de o aplicație Steam"
+  "game.steam_link.unknown": "Nelegat de o aplicație Steam",
+  "game.saves.snapshots": "Salvări anterioare",
+  "game.saves.snapshots_help": "Irori copiază aici salvările înainte ca o sincronizare să le poată înlocui, ca o sincronizare greșită să poată fi anulată.",
+  "game.saves.snapshots_loading": "Se citesc salvările anterioare…",
+  "game.saves.snapshots_none": "Încă niciuna. Se păstrează una înainte de fiecare sincronizare care ar putea înlocui salvările de aici.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Înainte de: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "o descărcare",
+  "game.saves.snapshot_reason.auto": "o sincronizare",
+  "game.saves.snapshot_reason.force_download": "o descărcare forțată",
+  "game.saves.snapshot_reason.force_upload": "o încărcare forțată",
+  "game.saves.snapshot_reason.restore": "restaurarea salvărilor anterioare",
+  "game.saves.snapshot_restore": "Restaurează",
+  "game.saves.snapshot_restore_title": "Restaurezi salvările „{title}” din {date}?",
+  "game.saves.snapshot_restore_description": "Salvările de acum se păstrează mai întâi ca altă salvare anterioară, deci poți anula. Fișierele salvate între timp care nu sunt în ea rămân.",
+  "game.saves.snapshot_restored_one": "A fost restaurat {count} fișier al „{title}”",
+  "game.saves.snapshot_restored_other": "Au fost restaurate {count} fișiere ale „{title}”",
+  "game.saves.snapshot_restore_failed": "Salvările anterioare nu au putut fi restaurate"
 }

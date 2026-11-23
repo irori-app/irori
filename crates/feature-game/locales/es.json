@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Nombre del juego, ID de app de Steam o dirección de la tienda",
   "game.steam_link.searching": "Buscando en Steam…",
   "game.steam_link.title": "App de Steam para «{title}»",
-  "game.steam_link.unknown": "Sin vincular con una app de Steam"
+  "game.steam_link.unknown": "Sin vincular con una app de Steam",
+  "game.saves.snapshots": "Partidas guardadas anteriores",
+  "game.saves.snapshots_help": "Irori copia aquí las partidas antes de que una sincronización pueda reemplazarlas, para poder deshacer una sincronización que salió mal.",
+  "game.saves.snapshots_loading": "Leyendo partidas anteriores…",
+  "game.saves.snapshots_none": "Aún no hay. Se guarda una antes de cada sincronización que pueda reemplazar las partidas de aquí.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Antes de: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "una descarga",
+  "game.saves.snapshot_reason.auto": "una sincronización",
+  "game.saves.snapshot_reason.force_download": "una descarga forzada",
+  "game.saves.snapshot_reason.force_upload": "una subida forzada",
+  "game.saves.snapshot_reason.restore": "restaurar partidas anteriores",
+  "game.saves.snapshot_restore": "Restaurar",
+  "game.saves.snapshot_restore_title": "¿Restaurar las partidas de «{title}» del {date}?",
+  "game.saves.snapshot_restore_description": "Primero se guardan las partidas actuales como otra anterior, así que se puede deshacer. Los archivos guardados desde entonces que no estén en ella se quedan.",
+  "game.saves.snapshot_restored_one": "Se restauró {count} archivo de «{title}»",
+  "game.saves.snapshot_restored_other": "Se restauraron {count} archivos de «{title}»",
+  "game.saves.snapshot_restore_failed": "No se pudieron restaurar las partidas anteriores"
 }

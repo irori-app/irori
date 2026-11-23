@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "游戏名称、Steam 应用 ID 或商店地址",
   "game.steam_link.searching": "正在搜索 Steam…",
   "game.steam_link.title": "“{title}”的 Steam 应用",
-  "game.steam_link.unknown": "未关联到 Steam 应用"
+  "game.steam_link.unknown": "未关联到 Steam 应用",
+  "game.saves.snapshots": "较早的存档",
+  "game.saves.snapshots_help": "Irori 会在同步可能替换存档之前把它们复制到这里，以便撤销出错的同步。",
+  "game.saves.snapshots_loading": "正在读取较早的存档…",
+  "game.saves.snapshots_none": "暂无。每次可能替换此处存档的同步之前都会保留一份。",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "{reason}之前 · {size}",
+  "game.saves.snapshot_reason.download": "下载",
+  "game.saves.snapshot_reason.auto": "同步",
+  "game.saves.snapshot_reason.force_download": "强制下载",
+  "game.saves.snapshot_reason.force_upload": "强制上传",
+  "game.saves.snapshot_reason.restore": "恢复较早的存档",
+  "game.saves.snapshot_restore": "恢复",
+  "game.saves.snapshot_restore_title": "要恢复“{title}”于 {date} 的存档吗？",
+  "game.saves.snapshot_restore_description": "当前的存档会先保留为另一份较早的存档，因此可以撤销。之后保存且不在其中的文件会保留。",
+  "game.saves.snapshot_restored_one": "已恢复“{title}”的 {count} 个文件",
+  "game.saves.snapshot_restored_other": "已恢复“{title}”的 {count} 个文件",
+  "game.saves.snapshot_restore_failed": "无法恢复较早的存档"
 }

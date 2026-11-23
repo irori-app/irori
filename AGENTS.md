@@ -905,6 +905,15 @@ commands without a window.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
+- **Save snapshots** (`save_snapshots.rs`, `iroriSaveSnapshots`, 5 by default, 0 = off):
+  before every cloud sync but a plain upload (the launch's download, a manual one, a
+  forced one), the save locations are copied to
+  `<data>/save-snapshots/<runner>/<app>/<time>/` with a SHA-256 of their contents; the
+  same saves as the newest snapshot aren't copied again, saves over 1 GiB aren't
+  copied, and only the newest N stay. A snapshot that fails never stops the sync. The
+  cloud-saves sheet's "Earlier saves" (`irori_game` `save_snapshots.rs`) restores one
+  after a confirmation: what is there is snapshotted first, then the snapshot's files
+  are copied back; nothing is deleted.
 - **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and

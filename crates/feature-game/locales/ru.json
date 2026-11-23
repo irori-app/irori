@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Название игры, ID приложения Steam или адрес в магазине",
   "game.steam_link.searching": "Поиск в Steam…",
   "game.steam_link.title": "Приложение Steam для «{title}»",
-  "game.steam_link.unknown": "Не связано с приложением Steam"
+  "game.steam_link.unknown": "Не связано с приложением Steam",
+  "game.saves.snapshots": "Прежние сохранения",
+  "game.saves.snapshots_help": "Irori копирует сюда сохранения, прежде чем синхронизация сможет их заменить, чтобы неудачную синхронизацию можно было отменить.",
+  "game.saves.snapshots_loading": "Чтение прежних сохранений…",
+  "game.saves.snapshots_none": "Пока нет. Копия сохраняется перед каждой синхронизацией, которая может заменить здешние сохранения.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Перед: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "загрузка",
+  "game.saves.snapshot_reason.auto": "синхронизация",
+  "game.saves.snapshot_reason.force_download": "принудительная загрузка",
+  "game.saves.snapshot_reason.force_upload": "принудительная выгрузка",
+  "game.saves.snapshot_reason.restore": "восстановление прежних сохранений",
+  "game.saves.snapshot_restore": "Восстановить",
+  "game.saves.snapshot_restore_title": "Восстановить сохранения «{title}» от {date}?",
+  "game.saves.snapshot_restore_description": "Текущие сохранения сначала сохраняются как ещё одна прежняя копия, так что это можно отменить. Файлы, сохранённые позже и отсутствующие в ней, остаются.",
+  "game.saves.snapshot_restored_one": "Восстановлен {count} файл «{title}»",
+  "game.saves.snapshot_restored_other": "Восстановлено файлов «{title}»: {count}",
+  "game.saves.snapshot_restore_failed": "Не удалось восстановить прежние сохранения"
 }

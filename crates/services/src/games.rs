@@ -542,6 +542,8 @@ impl Backend {
                 // not the cloud's; the game page's cloud saves say so.
                 Err(e) => tracing::warn!("pre-launch save sync of {id}: {e:#}"),
                 Ok(saves) => {
+                    self.snapshot_saves(id, &saves, SyncDirection::Download)
+                        .await;
                     let synced = launch_step(&cancel, async {
                         Ok(self
                             .sync_saves_limited(
@@ -1292,8 +1294,55 @@ impl Backend {
         let _guard = self.statuses.guard(id, StatusKind::SyncingSaves);
         let saves = self.save_locations(id).await?;
         let store = self.store(id.runner).context("store not available")?;
+        self.snapshot_saves(id, &saves, direction).await;
         let ctx = self.op_context(id, CancellationToken::new());
         store.sync_saves(&id.app_name, direction, &saves, ctx).await
+    }
+
+    /// Snapshot the saves before a sync that could replace them: every
+    /// direction but a plain upload, which leaves this computer's saves as
+    /// they are. A snapshot that can't be taken never stops the sync.
+    async fn snapshot_saves(&self, id: &GameId, saves: &str, direction: SyncDirection) {
+        let reason = match direction {
+            SyncDirection::Upload => return,
+            SyncDirection::Download => "download",
+            SyncDirection::Auto => "auto",
+            SyncDirection::ForceDownload => "force-download",
+            SyncDirection::ForceUpload => "force-upload",
+        };
+        let keep = self.settings.app().save_snapshots;
+        let (id, saves) = (id.clone(), saves.to_string());
+        let taken = self
+            .spawn_blocking(move || {
+                crate::save_snapshots::take(&id, &saves, reason, keep)
+                    .with_context(|| format!("snapshot of {id}'s saves"))
+            })
+            .await;
+        match taken {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => tracing::warn!("{e:#}"),
+            Err(e) => tracing::warn!("snapshot of saves: {e}"),
+        }
+    }
+
+    /// The snapshots of a game's saves, newest first. Reads the disk.
+    pub async fn save_snapshots(&self, id: &GameId) -> Vec<crate::save_snapshots::SaveSnapshot> {
+        let id = id.clone();
+        self.spawn_blocking(move || crate::save_snapshots::list(&id))
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Put a snapshot of a game's saves back (see `save_snapshots`). Not
+    /// while the game runs, which would write over them again.
+    pub async fn restore_save_snapshot(&self, id: &GameId, snapshot: &str) -> Result<u64> {
+        if self.running_games().contains(id) {
+            bail!("Close the game before restoring its saves");
+        }
+        let keep = self.settings.app().save_snapshots;
+        let (id, snapshot) = (id.clone(), snapshot.to_string());
+        self.spawn_blocking(move || crate::save_snapshots::restore(&id, &snapshot, keep))
+            .await?
     }
 
     /// Whether a forced upload of `id`'s saves would delete cloud saves: a

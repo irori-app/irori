@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Oyun adı, Steam uygulama kimliği veya mağaza adresi",
   "game.steam_link.searching": "Steam’de aranıyor…",
   "game.steam_link.title": "“{title}” için Steam uygulaması",
-  "game.steam_link.unknown": "Bir Steam uygulamasına bağlı değil"
+  "game.steam_link.unknown": "Bir Steam uygulamasına bağlı değil",
+  "game.saves.snapshots": "Önceki kayıtlar",
+  "game.saves.snapshots_help": "Irori, bir eşitleme kayıtların yerine geçmeden önce onları buraya kopyalar; böylece ters giden bir eşitleme geri alınabilir.",
+  "game.saves.snapshots_loading": "Önceki kayıtlar okunuyor…",
+  "game.saves.snapshots_none": "Henüz yok. Buradaki kayıtların yerine geçebilecek her eşitlemeden önce bir tane saklanır.",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "Önce: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "indirme",
+  "game.saves.snapshot_reason.auto": "eşitleme",
+  "game.saves.snapshot_reason.force_download": "zorunlu indirme",
+  "game.saves.snapshot_reason.force_upload": "zorunlu yükleme",
+  "game.saves.snapshot_reason.restore": "önceki kayıtları geri yükleme",
+  "game.saves.snapshot_restore": "Geri yükle",
+  "game.saves.snapshot_restore_title": "“{title}” oyununun {date} tarihli kayıtları geri yüklensin mi?",
+  "game.saves.snapshot_restore_description": "Şu anki kayıtlar önce başka bir önceki kayıt olarak saklanır, yani bu geri alınabilir. O zamandan beri kaydedilmiş ve içinde olmayan dosyalar kalır.",
+  "game.saves.snapshot_restored_one": "“{title}” oyununun {count} dosyası geri yüklendi",
+  "game.saves.snapshot_restored_other": "“{title}” oyununun {count} dosyası geri yüklendi",
+  "game.saves.snapshot_restore_failed": "Önceki kayıtlar geri yüklenemedi"
 }

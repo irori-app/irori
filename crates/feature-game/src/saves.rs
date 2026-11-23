@@ -216,6 +216,8 @@ pub struct CloudSavesPanel {
     detecting: bool,
     syncing: bool,
     output: Option<SharedString>,
+    /// The saves kept from before syncs, to put back.
+    snapshots: Entity<crate::save_snapshots::SaveSnapshotsSection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -278,6 +280,10 @@ impl CloudSavesPanel {
             cx.observe(&settings_model, |_, _, cx| cx.notify()),
         ];
         let is_gog = id.runner == Runner::Gog;
+        let snapshots = {
+            let (id, title) = (id.clone(), SharedString::from(game.title.clone()));
+            cx.new(|cx| crate::save_snapshots::SaveSnapshotsSection::new(id, title, cx))
+        };
         let mut this = Self {
             id,
             game,
@@ -289,6 +295,7 @@ impl CloudSavesPanel {
             detecting: false,
             syncing: false,
             output: None,
+            snapshots,
             _subscriptions: subscriptions,
         };
         let initial = if !is_gog {
@@ -618,6 +625,8 @@ impl CloudSavesPanel {
                 this.syncing = false;
                 match result {
                     Ok(out) => {
+                        // The sync may have kept a snapshot first.
+                        this.snapshots.update(cx, |s, cx| s.reload(cx));
                         let out = out.trim();
                         this.output = Some(if out.is_empty() {
                             t("game.saves.in_sync")
@@ -895,6 +904,7 @@ impl Render for CloudSavesPanel {
                         )
                     }),
             )
+            .child(self.snapshots.clone())
             .child(
                 v_flex()
                     .gap_1()

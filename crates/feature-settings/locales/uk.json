@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Створіть копію зараз, виберіть назву, під якою гру знає Ludusavi, і відновіть копію.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi копіює збереження ігор з будь-яких крамниць, зокрема доданих вами. Irori запускає встановлену вами копію.",
+  "settings.field.save_snapshots.label": "Зберігати попередніх збережень на гру",
+  "settings.field.save_snapshots.help": "Перш ніж хмарна синхронізація зможе замінити збереження гри, Irori копіює їх, щоб їх можна було повернути в хмарних збереженнях гри. Скільки зберігати, від 0 (жодного) до 50; незмінені збереження не копіюються двічі.",
   "settings.field.ludusavi_path.label": "Програма Ludusavi",
   "settings.field.ludusavi_path.help": "Залиште порожнім, щоб знайти її в PATH, у звичайних теках встановлення або у Flathub.",
   "settings.field.ludusavi_path.placeholder": "Знаходиться автоматично",

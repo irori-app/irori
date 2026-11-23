@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Nom du jeu, ID d’app Steam ou adresse de la boutique",
   "game.steam_link.searching": "Recherche sur Steam…",
   "game.steam_link.title": "App Steam pour « {title} »",
-  "game.steam_link.unknown": "Lié à aucune app Steam"
+  "game.steam_link.unknown": "Lié à aucune app Steam",
+  "game.saves.snapshots": "Sauvegardes précédentes",
+  "game.saves.snapshots_help": "Irori copie ici les sauvegardes avant qu’une synchronisation ne puisse les remplacer, pour annuler une synchronisation qui a mal tourné.",
+  "game.saves.snapshots_loading": "Lecture des sauvegardes précédentes…",
+  "game.saves.snapshots_none": "Aucune pour l’instant. Une copie est gardée avant chaque synchronisation qui pourrait remplacer les sauvegardes d’ici.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Avant : {reason} · {size}",
+  "game.saves.snapshot_reason.download": "un téléchargement",
+  "game.saves.snapshot_reason.auto": "une synchronisation",
+  "game.saves.snapshot_reason.force_download": "un téléchargement forcé",
+  "game.saves.snapshot_reason.force_upload": "un envoi forcé",
+  "game.saves.snapshot_reason.restore": "la restauration de sauvegardes précédentes",
+  "game.saves.snapshot_restore": "Restaurer",
+  "game.saves.snapshot_restore_title": "Restaurer les sauvegardes de « {title} » du {date} ?",
+  "game.saves.snapshot_restore_description": "Les sauvegardes actuelles sont d’abord gardées comme une autre sauvegarde précédente : c’est réversible. Les fichiers enregistrés depuis qui n’y sont pas restent.",
+  "game.saves.snapshot_restored_one": "{count} fichier de « {title} » a été restauré",
+  "game.saves.snapshot_restored_other": "{count} fichiers de « {title} » ont été restaurés",
+  "game.saves.snapshot_restore_failed": "Impossible de restaurer les sauvegardes précédentes"
 }

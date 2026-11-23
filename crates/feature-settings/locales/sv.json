@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Säkerhetskopiera nu, välj titeln som Ludusavi känner spelet under och återställ en säkerhetskopia.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi säkerhetskopierar sparfiler för spel från alla butiker, även spel du har lagt till. Irori kör den kopia du har installerat.",
+  "settings.field.save_snapshots.label": "Sparade tidigare sparfiler per spel",
+  "settings.field.save_snapshots.help": "Innan en molnsynkronisering kan ersätta ett spels sparfiler kopierar Irori dem, så att de kan återställas från spelets molnsparningar. Hur många som sparas, från 0 (inga) till 50; oförändrade sparfiler kopieras inte två gånger.",
   "settings.field.ludusavi_path.label": "Ludusavi-program",
   "settings.field.ludusavi_path.help": "Lämna tomt för att hitta det i din PATH, i de vanliga installationsmapparna eller på Flathub.",
   "settings.field.ludusavi_path.placeholder": "Hittas automatiskt",

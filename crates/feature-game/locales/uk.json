@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Назва гри, ID застосунку Steam або адреса в крамниці",
   "game.steam_link.searching": "Пошук у Steam…",
   "game.steam_link.title": "Застосунок Steam для «{title}»",
-  "game.steam_link.unknown": "Не пов’язано із застосунком Steam"
+  "game.steam_link.unknown": "Не пов’язано із застосунком Steam",
+  "game.saves.snapshots": "Попередні збереження",
+  "game.saves.snapshots_help": "Irori копіює сюди збереження, перш ніж синхронізація зможе їх замінити, щоб невдалу синхронізацію можна було скасувати.",
+  "game.saves.snapshots_loading": "Читання попередніх збережень…",
+  "game.saves.snapshots_none": "Поки немає. Копія зберігається перед кожною синхронізацією, що може замінити тутешні збереження.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Перед: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "завантаження",
+  "game.saves.snapshot_reason.auto": "синхронізація",
+  "game.saves.snapshot_reason.force_download": "примусове завантаження",
+  "game.saves.snapshot_reason.force_upload": "примусове вивантаження",
+  "game.saves.snapshot_reason.restore": "відновлення попередніх збережень",
+  "game.saves.snapshot_restore": "Відновити",
+  "game.saves.snapshot_restore_title": "Відновити збереження «{title}» від {date}?",
+  "game.saves.snapshot_restore_description": "Поточні збереження спершу зберігаються як ще одна попередня копія, тож це можна скасувати. Файли, збережені пізніше й відсутні в ній, лишаються.",
+  "game.saves.snapshot_restored_one": "Відновлено {count} файл «{title}»",
+  "game.saves.snapshot_restored_other": "Відновлено файлів «{title}»: {count}",
+  "game.saves.snapshot_restore_failed": "Не вдалося відновити попередні збереження"
 }

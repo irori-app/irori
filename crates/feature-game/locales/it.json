@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Nome del gioco, ID dell’app di Steam o indirizzo del negozio",
   "game.steam_link.searching": "Ricerca su Steam…",
   "game.steam_link.title": "App di Steam per «{title}»",
-  "game.steam_link.unknown": "Non collegato a un’app di Steam"
+  "game.steam_link.unknown": "Non collegato a un’app di Steam",
+  "game.saves.snapshots": "Salvataggi precedenti",
+  "game.saves.snapshots_help": "Irori copia qui i salvataggi prima che una sincronizzazione possa sostituirli, così una sincronizzazione andata male si può annullare.",
+  "game.saves.snapshots_loading": "Lettura dei salvataggi precedenti…",
+  "game.saves.snapshots_none": "Ancora nessuno. Ne viene conservato uno prima di ogni sincronizzazione che potrebbe sostituire i salvataggi qui.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Prima di: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "un download",
+  "game.saves.snapshot_reason.auto": "una sincronizzazione",
+  "game.saves.snapshot_reason.force_download": "un download forzato",
+  "game.saves.snapshot_reason.force_upload": "un caricamento forzato",
+  "game.saves.snapshot_reason.restore": "il ripristino di salvataggi precedenti",
+  "game.saves.snapshot_restore": "Ripristina",
+  "game.saves.snapshot_restore_title": "Ripristinare i salvataggi di “{title}” del {date}?",
+  "game.saves.snapshot_restore_description": "I salvataggi attuali vengono prima conservati come un altro salvataggio precedente, quindi si può annullare. I file salvati da allora che non vi sono restano.",
+  "game.saves.snapshot_restored_one": "È stato ripristinato {count} file di “{title}”",
+  "game.saves.snapshot_restored_other": "Sono stati ripristinati {count} file di “{title}”",
+  "game.saves.snapshot_restore_failed": "Impossibile ripristinare i salvataggi precedenti"
 }

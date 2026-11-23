@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Nome do jogo, ID do app da Steam ou endereço da loja",
   "game.steam_link.searching": "Pesquisando na Steam…",
   "game.steam_link.title": "App da Steam para “{title}”",
-  "game.steam_link.unknown": "Não vinculado a um app da Steam"
+  "game.steam_link.unknown": "Não vinculado a um app da Steam",
+  "game.saves.snapshots": "Salvamentos anteriores",
+  "game.saves.snapshots_help": "O Irori copia os salvamentos aqui antes que uma sincronização possa substituí-los, para desfazer uma sincronização que deu errado.",
+  "game.saves.snapshots_loading": "Lendo salvamentos anteriores…",
+  "game.saves.snapshots_none": "Nenhum ainda. Um é guardado antes de cada sincronização que possa substituir os salvamentos daqui.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Antes de: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "um download",
+  "game.saves.snapshot_reason.auto": "uma sincronização",
+  "game.saves.snapshot_reason.force_download": "um download forçado",
+  "game.saves.snapshot_reason.force_upload": "um envio forçado",
+  "game.saves.snapshot_reason.restore": "restaurar salvamentos anteriores",
+  "game.saves.snapshot_restore": "Restaurar",
+  "game.saves.snapshot_restore_title": "Restaurar os salvamentos de “{title}” de {date}?",
+  "game.saves.snapshot_restore_description": "Os salvamentos atuais são guardados primeiro como outro anterior, então isso pode ser desfeito. Arquivos salvos depois que não estejam nele permanecem.",
+  "game.saves.snapshot_restored_one": "{count} arquivo de “{title}” foi restaurado",
+  "game.saves.snapshot_restored_other": "{count} arquivos de “{title}” foram restaurados",
+  "game.saves.snapshot_restore_failed": "Não foi possível restaurar os salvamentos anteriores"
 }

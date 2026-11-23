@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Spelnaam, Steam-app-ID of winkeladres",
   "game.steam_link.searching": "Steam doorzoeken…",
   "game.steam_link.title": "Steam-app voor ‘{title}’",
-  "game.steam_link.unknown": "Niet gekoppeld aan een Steam-app"
+  "game.steam_link.unknown": "Niet gekoppeld aan een Steam-app",
+  "game.saves.snapshots": "Eerdere opslagbestanden",
+  "game.saves.snapshots_help": "Irori kopieert de opslagbestanden hierheen voordat een synchronisatie ze kan vervangen, zodat een verkeerd gelopen synchronisatie ongedaan kan worden gemaakt.",
+  "game.saves.snapshots_loading": "Eerdere opslagbestanden lezen…",
+  "game.saves.snapshots_none": "Nog geen. Vóór elke synchronisatie die de opslagbestanden hier kan vervangen, wordt er een bewaard.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Vóór: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "een download",
+  "game.saves.snapshot_reason.auto": "een synchronisatie",
+  "game.saves.snapshot_reason.force_download": "een geforceerde download",
+  "game.saves.snapshot_reason.force_upload": "een geforceerde upload",
+  "game.saves.snapshot_reason.restore": "het terugzetten van eerdere opslagbestanden",
+  "game.saves.snapshot_restore": "Terugzetten",
+  "game.saves.snapshot_restore_title": "Opslagbestanden van ‘{title}’ van {date} terugzetten?",
+  "game.saves.snapshot_restore_description": "De huidige opslagbestanden worden eerst als nog een eerder opslagbestand bewaard, dus dit is ongedaan te maken. Bestanden die sindsdien zijn opgeslagen en er niet in zitten, blijven.",
+  "game.saves.snapshot_restored_one": "{count} bestand van ‘{title}’ is teruggezet",
+  "game.saves.snapshot_restored_other": "{count} bestanden van ‘{title}’ zijn teruggezet",
+  "game.saves.snapshot_restore_failed": "De eerdere opslagbestanden konden niet worden teruggezet"
 }

@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Back up now, choose the title Ludusavi knows the game by, and restore a backup.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi backs up the saves of games from every store, including games you added. Irori runs the copy you installed.",
+  "settings.field.save_snapshots.label": "Earlier saves kept per game",
+  "settings.field.save_snapshots.help": "Before a cloud sync could replace a game’s saves, Irori copies them, so the game’s cloud saves can put them back. How many to keep, from 0 (none) to 50; unchanged saves aren’t copied twice.",
   "settings.field.ludusavi_path.label": "Ludusavi program",
   "settings.field.ludusavi_path.help": "Leave empty to find it on your PATH, in the usual install folders or on Flathub.",
   "settings.field.ludusavi_path.placeholder": "Found automatically",

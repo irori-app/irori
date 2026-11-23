@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Şimdi yedekle, Ludusavi’nin oyunu tanıdığı adı seç ve bir yedeği geri yükle.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi, eklediklerin dâhil her mağazadaki oyunların kayıtlarını yedekler. Irori senin yüklediğin kopyayı çalıştırır.",
+  "settings.field.save_snapshots.label": "Oyun başına saklanan önceki kayıtlar",
+  "settings.field.save_snapshots.help": "Bir bulut eşitlemesi oyunun kayıtlarının yerine geçmeden önce Irori onları kopyalar; böylece oyunun bulut kayıtlarından geri getirilebilirler. Kaç tane saklanacağı, 0 (hiç) ile 50 arası; değişmemiş kayıtlar iki kez kopyalanmaz.",
   "settings.field.ludusavi_path.label": "Ludusavi programı",
   "settings.field.ludusavi_path.help": "PATH’te, olağan kurulum klasörlerinde ya da Flathub’da bulunması için boş bırak.",
   "settings.field.ludusavi_path.placeholder": "Otomatik bulunur",

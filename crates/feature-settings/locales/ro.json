@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Fă o copie acum, alege titlul după care Ludusavi cunoaște jocul și restaurează o copie.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi face copii salvărilor jocurilor din orice magazin, inclusiv ale celor adăugate de tine. Irori pornește copia instalată de tine.",
+  "settings.field.save_snapshots.label": "Salvări anterioare păstrate per joc",
+  "settings.field.save_snapshots.help": "Înainte ca o sincronizare în cloud să poată înlocui salvările unui joc, Irori le copiază, ca să poată fi readuse din salvările cloud ale jocului. Câte să păstreze, de la 0 (niciuna) la 50; salvările neschimbate nu se copiază de două ori.",
   "settings.field.ludusavi_path.label": "Programul Ludusavi",
   "settings.field.ludusavi_path.help": "Lasă gol ca să fie găsit în PATH, în folderele de instalare obișnuite sau pe Flathub.",
   "settings.field.ludusavi_path.placeholder": "Găsit automat",

@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "遊戲名稱、Steam 應用程式 ID 或商店網址",
   "game.steam_link.searching": "正在搜尋 Steam…",
   "game.steam_link.title": "「{title}」的 Steam 應用程式",
-  "game.steam_link.unknown": "未連結到 Steam 應用程式"
+  "game.steam_link.unknown": "未連結到 Steam 應用程式",
+  "game.saves.snapshots": "較早的存檔",
+  "game.saves.snapshots_help": "Irori 會在同步可能取代存檔之前把它們複製到這裡，以便還原出錯的同步。",
+  "game.saves.snapshots_loading": "正在讀取較早的存檔…",
+  "game.saves.snapshots_none": "尚無。每次可能取代此處存檔的同步之前都會保留一份。",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "{reason}之前 · {size}",
+  "game.saves.snapshot_reason.download": "下載",
+  "game.saves.snapshot_reason.auto": "同步",
+  "game.saves.snapshot_reason.force_download": "強制下載",
+  "game.saves.snapshot_reason.force_upload": "強制上傳",
+  "game.saves.snapshot_reason.restore": "還原較早的存檔",
+  "game.saves.snapshot_restore": "還原",
+  "game.saves.snapshot_restore_title": "要還原「{title}」於 {date} 的存檔嗎？",
+  "game.saves.snapshot_restore_description": "目前的存檔會先保留為另一份較早的存檔，因此可以還原。之後儲存且不在其中的檔案會保留。",
+  "game.saves.snapshot_restored_one": "已還原「{title}」的 {count} 個檔案",
+  "game.saves.snapshot_restored_other": "已還原「{title}」的 {count} 個檔案",
+  "game.saves.snapshot_restore_failed": "無法還原較早的存檔"
 }

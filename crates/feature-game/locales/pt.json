@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Nome do jogo, ID da app da Steam ou endereço da loja",
   "game.steam_link.searching": "A pesquisar na Steam…",
   "game.steam_link.title": "App da Steam para «{title}»",
-  "game.steam_link.unknown": "Não ligado a uma app da Steam"
+  "game.steam_link.unknown": "Não ligado a uma app da Steam",
+  "game.saves.snapshots": "Gravações anteriores",
+  "game.saves.snapshots_help": "O Irori copia aqui as gravações antes de uma sincronização as poder substituir, para se poder desfazer uma sincronização que correu mal.",
+  "game.saves.snapshots_loading": "A ler gravações anteriores…",
+  "game.saves.snapshots_none": "Ainda nenhuma. É guardada uma antes de cada sincronização que possa substituir as gravações daqui.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Antes de: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "uma transferência",
+  "game.saves.snapshot_reason.auto": "uma sincronização",
+  "game.saves.snapshot_reason.force_download": "uma transferência forçada",
+  "game.saves.snapshot_reason.force_upload": "um envio forçado",
+  "game.saves.snapshot_reason.restore": "repor gravações anteriores",
+  "game.saves.snapshot_restore": "Repor",
+  "game.saves.snapshot_restore_title": "Repor as gravações de “{title}” de {date}?",
+  "game.saves.snapshot_restore_description": "As gravações atuais são primeiro guardadas como outra anterior, por isso pode desfazer. Os ficheiros gravados desde então que não estejam nela ficam.",
+  "game.saves.snapshot_restored_one": "Foi reposto {count} ficheiro de “{title}”",
+  "game.saves.snapshot_restored_other": "Foram repostos {count} ficheiros de “{title}”",
+  "game.saves.snapshot_restore_failed": "Não foi possível repor as gravações anteriores"
 }

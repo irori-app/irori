@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "今すぐバックアップし、Ludusavi でのゲームのタイトルを選び、バックアップを復元します。",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi は、追加したゲームを含むすべてのストアのゲームのセーブデータをバックアップします。Irori はインストール済みの Ludusavi を実行します。",
+  "settings.field.save_snapshots.label": "ゲームごとに保持する以前のセーブデータ",
+  "settings.field.save_snapshots.help": "クラウド同期でゲームのセーブデータが置き換わる前に Irori がコピーし、ゲームのクラウドセーブから戻せるようにします。保持する数は 0（なし）〜50 です。変わっていないセーブデータは重ねてコピーしません。",
   "settings.field.ludusavi_path.label": "Ludusavi のプログラム",
   "settings.field.ludusavi_path.help": "空欄にすると、PATH、一般的なインストール先、Flathub から探します。",
   "settings.field.ludusavi_path.placeholder": "自動で検出",

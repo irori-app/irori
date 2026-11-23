@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Spelnamn, Steam-app-id eller butiksadress",
   "game.steam_link.searching": "Söker på Steam…",
   "game.steam_link.title": "Steam-app för ”{title}”",
-  "game.steam_link.unknown": "Inte länkat till någon Steam-app"
+  "game.steam_link.unknown": "Inte länkat till någon Steam-app",
+  "game.saves.snapshots": "Tidigare sparfiler",
+  "game.saves.snapshots_help": "Irori kopierar sparfilerna hit innan en synkronisering kan ersätta dem, så att en synkronisering som gick fel kan ångras.",
+  "game.saves.snapshots_loading": "Läser tidigare sparfiler …",
+  "game.saves.snapshots_none": "Inga än. En sparas före varje synkronisering som kan ersätta sparfilerna här.",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "Före: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "en nedladdning",
+  "game.saves.snapshot_reason.auto": "en synkronisering",
+  "game.saves.snapshot_reason.force_download": "en tvingad nedladdning",
+  "game.saves.snapshot_reason.force_upload": "en tvingad uppladdning",
+  "game.saves.snapshot_reason.restore": "återställning av tidigare sparfiler",
+  "game.saves.snapshot_restore": "Återställ",
+  "game.saves.snapshot_restore_title": "Återställa sparfilerna för ”{title}” från {date}?",
+  "game.saves.snapshot_restore_description": "Sparfilerna som finns nu behålls först som ytterligare en tidigare sparfil, så detta kan ångras. Filer som sparats sedan dess och inte finns i den ligger kvar.",
+  "game.saves.snapshot_restored_one": "{count} fil för ”{title}” återställdes",
+  "game.saves.snapshot_restored_other": "{count} filer för ”{title}” återställdes",
+  "game.saves.snapshot_restore_failed": "Det gick inte att återställa de tidigare sparfilerna"
 }

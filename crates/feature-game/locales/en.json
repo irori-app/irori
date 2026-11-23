@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Game name, Steam app id or store address",
   "game.steam_link.searching": "Searching Steam…",
   "game.steam_link.title": "Steam app for “{title}”",
-  "game.steam_link.unknown": "Not linked to a Steam app"
+  "game.steam_link.unknown": "Not linked to a Steam app",
+  "game.saves.snapshots": "Earlier saves",
+  "game.saves.snapshots_help": "Irori copies the saves here before a sync could replace them, so a sync that went the wrong way can be undone.",
+  "game.saves.snapshots_loading": "Reading earlier saves…",
+  "game.saves.snapshots_none": "None yet. One is kept before each sync that could replace the saves here.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Before {reason} · {size}",
+  "game.saves.snapshot_reason.download": "a download",
+  "game.saves.snapshot_reason.auto": "a sync",
+  "game.saves.snapshot_reason.force_download": "a forced download",
+  "game.saves.snapshot_reason.force_upload": "a forced upload",
+  "game.saves.snapshot_reason.restore": "restoring earlier saves",
+  "game.saves.snapshot_restore": "Restore",
+  "game.saves.snapshot_restore_title": "Restore the saves of “{title}” from {date}?",
+  "game.saves.snapshot_restore_description": "The saves there now are kept as another earlier save first, so this can be undone. Files saved since that aren’t in it stay.",
+  "game.saves.snapshot_restored_one": "{count} file of “{title}” was restored",
+  "game.saves.snapshot_restored_other": "{count} files of “{title}” were restored",
+  "game.saves.snapshot_restore_failed": "Couldn’t restore the earlier saves"
 }

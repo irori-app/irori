@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Jetzt sichern, den Titel wählen, unter dem Ludusavi das Spiel kennt, und eine Sicherung wiederherstellen.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi sichert die Spielstände von Spielen aus jedem Store, auch von hinzugefügten Spielen. Irori startet die Kopie, die du installiert hast.",
+  "settings.field.save_snapshots.label": "Aufbewahrte frühere Spielstände pro Spiel",
+  "settings.field.save_snapshots.help": "Bevor eine Cloud-Synchronisierung die Spielstände eines Spiels ersetzen könnte, kopiert Irori sie, damit sie sich unter den Cloud-Spielständen des Spiels zurückholen lassen. Wie viele aufbewahrt werden, von 0 (keine) bis 50; unveränderte Spielstände werden nicht doppelt kopiert.",
   "settings.field.ludusavi_path.label": "Ludusavi-Programm",
   "settings.field.ludusavi_path.help": "Leer lassen, um es im PATH, in den üblichen Installationsordnern oder auf Flathub zu finden.",
   "settings.field.ludusavi_path.placeholder": "Automatisch gefunden",

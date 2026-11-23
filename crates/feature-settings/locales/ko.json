@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "지금 백업하고, Ludusavi에서 쓰는 게임 제목을 고르고, 백업을 복원합니다.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi는 직접 추가한 게임을 포함해 모든 스토어 게임의 세이브를 백업합니다. Irori는 설치된 Ludusavi를 실행합니다.",
+  "settings.field.save_snapshots.label": "게임별로 보관할 이전 저장 데이터",
+  "settings.field.save_snapshots.help": "클라우드 동기화가 게임의 저장 데이터를 바꾸기 전에 Irori가 복사해 두므로, 게임의 클라우드 저장에서 되돌릴 수 있습니다. 보관할 개수는 0(없음)부터 50까지이며, 바뀌지 않은 저장 데이터는 두 번 복사하지 않습니다.",
   "settings.field.ludusavi_path.label": "Ludusavi 프로그램",
   "settings.field.ludusavi_path.help": "비워 두면 PATH, 일반적인 설치 폴더, Flathub에서 찾습니다.",
   "settings.field.ludusavi_path.placeholder": "자동으로 찾음",

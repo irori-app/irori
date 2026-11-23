@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "Název hry, ID aplikace Steam nebo adresa obchodu",
   "game.steam_link.searching": "Hledání na Steamu…",
   "game.steam_link.title": "Aplikace Steam pro „{title}“",
-  "game.steam_link.unknown": "Není propojeno s aplikací Steam"
+  "game.steam_link.unknown": "Není propojeno s aplikací Steam",
+  "game.saves.snapshots": "Dřívější uložené pozice",
+  "game.saves.snapshots_help": "Irori sem zkopíruje uložené pozice dřív, než je synchronizace může nahradit, takže synchronizaci, která se nepovedla, lze vrátit.",
+  "game.saves.snapshots_loading": "Načítají se dřívější uložené pozice…",
+  "game.saves.snapshots_none": "Zatím žádné. Jedna se uloží před každou synchronizací, která by mohla nahradit zdejší uložené pozice.",
+  "game.saves.snapshot_when": "{date}, {time}",
+  "game.saves.snapshot_details": "Před: {reason} · {size}",
+  "game.saves.snapshot_reason.download": "stažení",
+  "game.saves.snapshot_reason.auto": "synchronizace",
+  "game.saves.snapshot_reason.force_download": "vynucené stažení",
+  "game.saves.snapshot_reason.force_upload": "vynucené nahrání",
+  "game.saves.snapshot_reason.restore": "obnovení dřívějších pozic",
+  "game.saves.snapshot_restore": "Obnovit",
+  "game.saves.snapshot_restore_title": "Obnovit uložené pozice hry „{title}“ z {date}?",
+  "game.saves.snapshot_restore_description": "Současné uložené pozice se nejdřív uchovají jako další dřívější pozice, takže to lze vrátit. Soubory uložené od té doby, které v ní nejsou, zůstanou.",
+  "game.saves.snapshot_restored_one": "Obnoven {count} soubor hry „{title}“",
+  "game.saves.snapshot_restored_other": "Obnoveno souborů hry „{title}“: {count}",
+  "game.saves.snapshot_restore_failed": "Dřívější uložené pozice se nepodařilo obnovit"
 }

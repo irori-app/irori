@@ -748,6 +748,9 @@ pub enum LibraryTopSection {
     Favourites,
 }
 
+/// Snapshots of each game's saves kept by default (`iroriSaveSnapshots`).
+pub const DEFAULT_SAVE_SNAPSHOTS: u32 = 5;
+
 /// Application-wide settings. Heroic stores these next to the default game
 /// settings in one object; `game` is flattened to keep that shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -902,6 +905,10 @@ pub struct AppSettings {
     /// connections; 0 keeps Irori's own timeouts. Irori-only.
     #[serde(rename = "iroriNetworkTimeout")]
     pub network_timeout: u32,
+    /// Snapshots of a game's saves kept from before cloud syncs that could
+    /// replace them (0–50); 0 takes none. Irori-only.
+    #[serde(rename = "iroriSaveSnapshots")]
+    pub save_snapshots: u32,
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
@@ -1005,6 +1012,7 @@ impl Default for AppSettings {
             deals: true,
             network_mode: crate::net::NetworkMode::Auto,
             network_timeout: 0,
+            save_snapshots: DEFAULT_SAVE_SNAPSHOTS,
             show_log_on_launch: false,
             achievement_notices: false,
             achievement_toast: AchievementToastPrefs::default(),
@@ -2113,6 +2121,14 @@ mod tests {
                 .unwrap();
         assert_eq!(app.network_mode, crate::net::NetworkMode::Offline);
         assert_eq!(app.network_timeout, 180);
+    }
+
+    #[test]
+    fn save_snapshots_are_kept_unless_turned_off() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.save_snapshots, DEFAULT_SAVE_SNAPSHOTS);
+        let app: AppSettings = serde_json::from_str(r#"{"iroriSaveSnapshots": 0}"#).unwrap();
+        assert_eq!(app.save_snapshots, 0);
     }
 
     #[test]

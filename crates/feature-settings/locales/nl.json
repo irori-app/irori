@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Maak nu een back-up, kies de titel waaronder Ludusavi de game kent en herstel een back-up.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "Ludusavi maakt back-ups van saves van games uit elke store, ook van games die je hebt toegevoegd. Irori start de versie die je hebt geïnstalleerd.",
+  "settings.field.save_snapshots.label": "Bewaarde eerdere opslagbestanden per game",
+  "settings.field.save_snapshots.help": "Voordat een cloudsynchronisatie de opslagbestanden van een game kan vervangen, kopieert Irori ze, zodat ze via de cloudopslag van de game terug te zetten zijn. Hoeveel er bewaard worden, van 0 (geen) tot 50; ongewijzigde opslagbestanden worden niet twee keer gekopieerd.",
   "settings.field.ludusavi_path.label": "Ludusavi-programma",
   "settings.field.ludusavi_path.help": "Laat leeg om het te vinden in je PATH, in de gebruikelijke installatiemappen of op Flathub.",
   "settings.field.ludusavi_path.placeholder": "Automatisch gevonden",

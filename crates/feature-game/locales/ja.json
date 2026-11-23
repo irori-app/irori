@@ -937,5 +937,22 @@
   "game.steam_link.search_placeholder": "ゲーム名、Steam のアプリ ID、またはストアのアドレス",
   "game.steam_link.searching": "Steam を検索中…",
   "game.steam_link.title": "「{title}」の Steam アプリ",
-  "game.steam_link.unknown": "Steam のアプリにリンクされていません"
+  "game.steam_link.unknown": "Steam のアプリにリンクされていません",
+  "game.saves.snapshots": "以前のセーブデータ",
+  "game.saves.snapshots_help": "同期でセーブデータが置き換わる前に Irori がここへコピーするので、うまくいかなかった同期を元に戻せます。",
+  "game.saves.snapshots_loading": "以前のセーブデータを読み込んでいます…",
+  "game.saves.snapshots_none": "まだありません。ここのセーブデータが置き換わる可能性のある同期の前に、毎回保存されます。",
+  "game.saves.snapshot_when": "{date} {time}",
+  "game.saves.snapshot_details": "{reason}の前 · {size}",
+  "game.saves.snapshot_reason.download": "ダウンロード",
+  "game.saves.snapshot_reason.auto": "同期",
+  "game.saves.snapshot_reason.force_download": "強制ダウンロード",
+  "game.saves.snapshot_reason.force_upload": "強制アップロード",
+  "game.saves.snapshot_reason.restore": "以前のセーブデータの復元",
+  "game.saves.snapshot_restore": "復元",
+  "game.saves.snapshot_restore_title": "「{title}」の {date} のセーブデータを復元しますか？",
+  "game.saves.snapshot_restore_description": "今あるセーブデータは先に別の以前のセーブデータとして保存されるので、元に戻せます。その後に保存され、ここに含まれないファイルは残ります。",
+  "game.saves.snapshot_restored_one": "「{title}」のファイル {count} 個を復元しました",
+  "game.saves.snapshot_restored_other": "「{title}」のファイル {count} 個を復元しました",
+  "game.saves.snapshot_restore_failed": "以前のセーブデータを復元できませんでした"
 }

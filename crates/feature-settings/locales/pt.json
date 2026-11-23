@@ -649,6 +649,8 @@
   "settings.field.panel_save_backups.help": "Faz uma cópia agora, escolhe o título com que o Ludusavi conhece o jogo e restaura uma cópia.",
   "settings.field.panel_ludusavi.label": "Ludusavi",
   "settings.field.panel_ludusavi.help": "O Ludusavi faz cópia dos jogos guardados de jogos de todas as lojas, incluindo os que adicionaste. O Irori usa a cópia que instalaste.",
+  "settings.field.save_snapshots.label": "Gravações anteriores guardadas por jogo",
+  "settings.field.save_snapshots.help": "Antes de uma sincronização na nuvem poder substituir as gravações de um jogo, o Irori copia-as, para as poder repor nas gravações na nuvem do jogo. Quantas guardar, de 0 (nenhuma) a 50; gravações sem alterações não são copiadas duas vezes.",
   "settings.field.ludusavi_path.label": "Programa Ludusavi",
   "settings.field.ludusavi_path.help": "Deixa vazio para o encontrar no PATH, nas pastas de instalação habituais ou no Flathub.",
   "settings.field.ludusavi_path.placeholder": "Encontrado automaticamente",

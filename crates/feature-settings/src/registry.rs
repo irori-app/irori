@@ -4386,6 +4386,17 @@ pub static FIELDS: &[FieldSpec] = &[
     ]),
     // ---- Saves ----
     app(
+        "iroriSaveSnapshots",
+        "settings.field.save_snapshots.label",
+        Saves,
+        "settings.group.save_sync",
+        Text(TextKind::Number { min: 0, max: 50 }),
+    )
+    .help("settings.field.save_snapshots.help")
+    .keywords(&[
+        "save", "snapshot", "cloud", "sync", "restore", "undo", "keep",
+    ]),
+    app(
         "panel.ludusavi",
         "settings.field.panel_ludusavi.label",
         Saves,
