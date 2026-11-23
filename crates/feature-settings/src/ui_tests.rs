@@ -369,6 +369,48 @@ fn steam_compat_panel_shows_the_tools_and_the_games_choice(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn steam_launch_panel_shows_the_games_line(cx: &mut TestAppContext) {
+    let steam = tempfile::tempdir().expect("temp dir").keep();
+    let user = steam.join("userdata/1234/config");
+    std::fs::create_dir_all(&user).unwrap();
+    std::fs::write(
+        user.join("localconfig.vdf"),
+        "\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { \"620\" { \"LaunchOptions\" \"-novid %command%\" } } } } } }",
+    )
+    .unwrap();
+    let id = GameId::new(Runner::Steam, "620");
+    let data = steam.join("irori");
+    let (handle, panel) = open(cx, move |window, cx| {
+        let backend = irori_ui::backend(cx);
+        let settings = backend.settings.clone();
+        let store = irori_steam::SteamStore::with_layout(
+            backend.bus.clone(),
+            std::sync::Arc::new(move || settings.app()),
+            steam,
+            &data,
+            irori_steam_api::Endpoints::default(),
+        );
+        crate::steam_launch::SteamLaunchPanel::new(id, store, window, cx)
+    });
+    for _ in 0..200 {
+        cx.run_until_parked();
+        if cx.update(|cx| panel.read(cx).state_for_test().is_some()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    cx.update(|cx| {
+        let state = panel.read(cx).state_for_test().expect("line read");
+        assert_eq!(state.line.as_deref(), Some("-novid %command%"));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
     use crate::game_view::{GameSection, GameSettingsView};
     let id = GameId::new(Runner::Steam, "620");
@@ -462,6 +504,7 @@ fn sample_displays() -> irori_services::displays::DisplayReport {
         ],
         hdr_on: Some(false),
         hdr_capable: Some(true),
+        ..Default::default()
     };
     let off = Display {
         connector: "HDMI-A-1".into(),

@@ -648,6 +648,56 @@ pub async fn output(spec: &CommandSpec) -> Result<String> {
     Ok(run(spec, RunOptions::default()).await?.check()?.stdout)
 }
 
+/// How long [`open_detached`] waits for the opener to say whether it opened
+/// the link. Some openers run the handler in the foreground (`xdg-open` on
+/// Hyprland, sway and i3 when no desktop's own opener is there): one still
+/// running by then has started what opens the link.
+const OPEN_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Hand something to another program, as `xdg-open`, `open` or `rundll32`
+/// do with a link, and let what it starts live on its own: no standard input
+/// or output of Irori's (a program the opener starts, Steam among them,
+/// would keep a pipe and die writing to it once Irori is gone), a process
+/// group of its own (stopping a game never reaches it), and no waiting for
+/// it to end. The opener's own exit status still counts: a refusal (no
+/// program for the link, or the program failed) is an error naming it.
+pub async fn open_detached(spec: &CommandSpec) -> Result<()> {
+    open_detached_within(spec, OPEN_WAIT).await
+}
+
+async fn open_detached_within(spec: &CommandSpec, wait: std::time::Duration) -> Result<()> {
+    tracing::info!(command = %spec, "open");
+    let mut cmd = spec.to_command(Start::Run)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("failed to start {}", spec.program.display()))?;
+    match tokio::time::timeout(wait, child.wait()).await {
+        Ok(status) => {
+            let status = status?;
+            if !status.success() {
+                anyhow::bail!(
+                    "{} couldn't open it ({status})",
+                    spec.program
+                        .file_name()
+                        .unwrap_or(spec.program.as_os_str())
+                        .to_string_lossy()
+                );
+            }
+        }
+        Err(_) => {
+            // Still running: it is the program the link opened, or holds
+            // it. Reap it whenever it ends.
+            tokio::spawn(async move {
+                let _ = child.wait().await;
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Whether a process's command line or program is in the install folder
 /// `folder` (a Windows path as a launcher stores it, or a Unix path). Games
 /// under Wine show their Windows path, so both spellings match.
@@ -1328,5 +1378,41 @@ mod tests {
             .await
             .unwrap();
         assert!(res.aborted);
+    }
+    /// What an opener starts may outlive it and hold whatever it was given:
+    /// Irori neither waits for that nor hands it a pipe, and it runs in a
+    /// process group of its own.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn opens_detached_without_pipes_or_waiting() {
+        let started = std::time::Instant::now();
+        let holds_output = CommandSpec::new("sh").args(["-c", "sleep 30 & exit 0"]);
+        open_detached(&holds_output).await.unwrap();
+        assert!(started.elapsed() < Duration::from_secs(10));
+
+        let no_pipes = CommandSpec::new("sh").args([
+            "-c",
+            "for fd in 0 1 2; do [ -p /dev/fd/$fd ] && exit 9; done; \
+             [ \"$(ps -o pgid= -p $$ | tr -d ' ')\" = \"$$\" ] || exit 8; exit 0",
+        ]);
+        open_detached(&no_pipes).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_opener_that_refuses_is_an_error() {
+        let refuses = CommandSpec::new("sh").args(["-c", "exit 4"]);
+        let e = open_detached(&refuses).await.unwrap_err();
+        assert!(format!("{e:#}").contains('4'), "{e:#}");
+        assert!(
+            open_detached(&CommandSpec::new("/nonexistent/opener"))
+                .await
+                .is_err()
+        );
+        // One still running when the wait ends started what opens the link.
+        let foreground = CommandSpec::new("sh").args(["-c", "sleep 30"]);
+        open_detached_within(&foreground, Duration::from_millis(200))
+            .await
+            .unwrap();
     }
 }

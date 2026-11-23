@@ -15,6 +15,8 @@ use super::*;
 
 const CODE: &str = "0123456789abcdef0123456789abcdef";
 const APP: &str = "Sugar";
+/// The cloud save the stand-in lists.
+const CLOUD_SAVE: &str = "2024.01.31-12.00.05.manifest";
 
 fn exe() -> Vec<u8> {
     vec![1u8; 100_000]
@@ -184,6 +186,15 @@ async fn fixture() -> Fixture {
                 },
                 None => Resp::status(404),
             };
+        }
+        // One cloud save; DELETE takes it (the listing doesn't change).
+        if p == format!("/api/v1/access/egstore/savesync/acc/{APP}/manifests/") {
+            return Resp::json(json!({"files": {
+                format!("x/acc/{APP}/manifests/{CLOUD_SAVE}"):
+                    {"readLink": format!("{base}/cloud/{CLOUD_SAVE}")}}}));
+        }
+        if req.method == "DELETE" && p.starts_with("/api/v1/data/egstore/") {
+            return Resp::status(204);
         }
         Resp::status(404)
     });
@@ -442,8 +453,11 @@ async fn imports_existing_installs() {
     assert!(format!("{err:#}").contains("No files"), "{err:#}");
     std::fs::create_dir_all(dir.join("Bin")).unwrap();
     std::fs::write(dir.join("Bin/Game.exe"), exe()).unwrap();
+    // The game's bundle, as macOS offers it, stands for its folder.
+    let bundle = dir.join("Game.app");
+    std::fs::create_dir_all(bundle.join("Contents")).unwrap();
     f.store
-        .import(APP, &dir, InstallPlatform::Windows)
+        .import(APP, &bundle, InstallPlatform::Windows)
         .await
         .unwrap();
     let g = f.store.installed_entry(APP).unwrap();
@@ -496,4 +510,163 @@ async fn converts_files_left_by_legendary() {
     assert!(!s.is_available("Sugar").await);
     assert!(s.is_available("EaGame").await);
     assert_eq!(s.updatable_games().await.unwrap_or_default().len(), 0);
+}
+
+/// Heronite #347: a game the Epic Games Launcher updated stops showing an
+/// update on the next refresh, without EGL sync, while EGL's record of an
+/// older build never lowers the version Irori knows.
+#[tokio::test]
+async fn takes_builds_the_epic_games_launcher_installed() {
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    f.store
+        .install(APP, &InstallRequest::default(), OpContext::detached())
+        .await
+        .unwrap();
+    let dir = f.root.join(INSTALL_BASE).join("SugarDir");
+    let egstore = dir.join(".egstore");
+    std::fs::create_dir_all(&egstore).unwrap();
+
+    f.version.store(2, Ordering::SeqCst);
+    // A record of the installed build changes nothing.
+    std::fs::write(egstore.join("OLD.manifest"), build(1).0).unwrap();
+    assert_eq!(f.store.updatable_games().await.unwrap(), [APP]);
+
+    // EGL updated the game: its manifest of the current build is taken.
+    std::fs::write(egstore.join("NEW.manifest"), build(2).0).unwrap();
+    std::fs::write(dir.join("Data/a.pak"), pak(2)).unwrap();
+    assert!(f.store.updatable_games().await.unwrap().is_empty());
+    let g = f.store.installed_entry(APP).unwrap();
+    assert_eq!(g.version, "v2");
+    assert_eq!(
+        std::fs::read(f.store.layout.build_manifest(APP)).unwrap(),
+        build(2).0
+    );
+    // Its manifest is Irori's base from now on: a repair finds nothing to do.
+    let before = fetches(&f, "ChunksV4");
+    let outcome = f.store.repair(APP, OpContext::detached()).await.unwrap();
+    assert_eq!(outcome, Outcome::Done);
+    assert_eq!(std::fs::read(dir.join("Data/a.pak")).unwrap(), pak(2));
+    assert_eq!(fetches(&f, "ChunksV4"), before);
+}
+
+/// Heroic #6001: a game imported from the Epic Games Launcher's prefix
+/// plays in that prefix, where its saves are; a game Irori installed itself
+/// stays in its own when EGL updates it.
+#[cfg(unix)]
+#[tokio::test]
+async fn games_imported_from_egl_get_its_prefix() {
+    use irori_epic_api::egl;
+
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    let prefix = f.root.join("egl prefix");
+    std::fs::create_dir_all(&prefix).unwrap();
+    std::fs::write(prefix.join("user.reg"), "").unwrap();
+    let game_dir = f.root.join("EGL Games/Sugar");
+    std::fs::create_dir_all(game_dir.join(".egstore")).unwrap();
+    std::fs::write(game_dir.join(".egstore/G1.manifest"), build(1).0).unwrap();
+    let location = format!("Z:{}", game_dir.to_string_lossy().replace('/', "\\"));
+    let item = egl::EglItem::from_export(&egl::ExportInfo {
+        app_name: APP,
+        title: "Sugar Game",
+        version: "v1",
+        namespace: "ns",
+        catalog_item_id: "cat",
+        folder_name: "Sugar",
+        install_location: &location,
+        install_size: 1,
+        install_tags: &[],
+        installation_guid: "G1",
+        launch_command: "",
+        executable: "Bin/Game.exe",
+        can_run_offline: true,
+        requires_ownership_token: false,
+        base_urls: &[],
+    });
+    egl::write_item(&egl::manifests_dir(&prefix), &item).unwrap();
+
+    f.store.egl_sync(Some(&prefix)).await.unwrap();
+    let install = f.store.game(APP).unwrap().install.clone().unwrap();
+    assert_eq!(install.install_path, game_dir.to_string_lossy());
+    assert_eq!(
+        install.store_prefix.as_deref(),
+        Some(prefix.to_string_lossy().as_ref())
+    );
+
+    // Irori's own install, updated in EGL, keeps the prefix it played in.
+    f.store
+        .update_installed(|map| {
+            if let Some(g) = map.get_mut(APP) {
+                g.wine_prefix.clear();
+                g.version = "v0".into();
+            }
+        })
+        .await
+        .unwrap();
+    f.store.egl_sync(Some(&prefix)).await.unwrap();
+    let install = f.store.game(APP).unwrap().install.clone().unwrap();
+    assert_eq!(install.version, "v1");
+    assert_eq!(install.store_prefix, None);
+}
+
+/// Heroic #5968: a confirmed forced upload from an empty save folder
+/// deletes the cloud saves, so they don't come back; nothing else does.
+#[tokio::test]
+async fn forced_upload_of_no_saves_deletes_cloud_saves() {
+    let f = fixture().await;
+    f.store.init().await.unwrap();
+    f.store
+        .login(&format!(r#"{{"authorizationCode":"{CODE}"}}"#))
+        .await
+        .unwrap();
+    f.store.refresh(false).await.unwrap();
+    f.store
+        .install(APP, &InstallRequest::default(), OpContext::detached())
+        .await
+        .unwrap();
+    let saves = f.root.join("saves");
+    let path = saves.to_string_lossy().into_owned();
+    let deletes = || {
+        f.server
+            .requests()
+            .iter()
+            .filter(|r| r.method == "DELETE")
+            .map(|r| r.path.clone())
+            .collect::<Vec<_>>()
+    };
+
+    f.store
+        .sync_saves(APP, SyncDirection::Upload, &path, OpContext::detached())
+        .await
+        .unwrap();
+    assert!(deletes().is_empty(), "an upload never deletes");
+
+    let log = f
+        .store
+        .sync_saves(
+            APP,
+            SyncDirection::ForceUpload,
+            &path,
+            OpContext::detached(),
+        )
+        .await
+        .unwrap();
+    assert!(log.contains("deleted 1 cloud saves"), "{log}");
+    assert_eq!(
+        deletes(),
+        [format!(
+            "/api/v1/data/egstore/x/acc/{APP}/manifests/{CLOUD_SAVE}"
+        )]
+    );
 }

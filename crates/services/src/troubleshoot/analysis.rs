@@ -1,7 +1,9 @@
 //! Why a game didn't start, worked out from what Irori can read: the game's
 //! log, its program's imports, the winetricks components in its prefix, its
-//! anticheat entry and the kernel's memory-map limit. Pure functions of
-//! those facts, so every rule is tested without a display or a game.
+//! anticheat entry, the game's graphics and sync settings, the kernel's
+//! memory-map limit and, for a missing Vulkan driver, the distribution and
+//! GPU. Pure functions of those facts, so every rule is tested without a
+//! display or a game.
 
 use std::collections::HashSet;
 
@@ -22,12 +24,20 @@ pub const MAP_COUNT_RECOMMENDED: u64 = 2_147_483_642;
 pub enum LaunchHint {
     MissingExecutable,
     WrongWineBuild,
+    /// A wineserver of another Wine version still runs for the prefix.
+    WineserverMismatch,
     AntiCheat,
     MissingLibrary,
     MissingNativeLibrary,
     DotNet,
     Vulkan,
+    /// Direct3D 12 failed under plain Wine with VKD3D-Proton off.
+    Direct3D12,
+    /// Wine's own Direct3D (wined3d) failed with DXVK off.
+    Wined3d,
     BrokenPrefix,
+    /// esync ran out of file descriptors.
+    EsyncLimit,
     PermissionDenied,
     /// A program started alongside the game didn't start.
     ProgramFailed,
@@ -39,15 +49,19 @@ pub enum LaunchHint {
 
 impl LaunchHint {
     /// The hints a log line can show, in order.
-    const FROM_LOG: [LaunchHint; 11] = [
+    const FROM_LOG: [LaunchHint; 15] = [
         LaunchHint::MissingExecutable,
         LaunchHint::WrongWineBuild,
+        LaunchHint::WineserverMismatch,
         LaunchHint::AntiCheat,
         LaunchHint::MissingLibrary,
         LaunchHint::MissingNativeLibrary,
         LaunchHint::DotNet,
         LaunchHint::Vulkan,
+        LaunchHint::Direct3D12,
+        LaunchHint::Wined3d,
         LaunchHint::BrokenPrefix,
+        LaunchHint::EsyncLimit,
         LaunchHint::PermissionDenied,
         LaunchHint::ProgramFailed,
         LaunchHint::Crash,
@@ -69,11 +83,11 @@ impl LaunchHint {
                         || lower.starts_with("bash:")
                         || lower.contains("exec")))
             }
-            LaunchHint::WrongWineBuild => any(&[
-                "cannot support 64-bit applications",
-                "version mismatch",
-                "wrong elf class",
-            ]),
+            LaunchHint::WrongWineBuild => {
+                any(&["cannot support 64-bit applications", "wrong elf class"])
+                    || (lower.contains("version mismatch") && !is_server_clash(lower))
+            }
+            LaunchHint::WineserverMismatch => is_server_clash(lower),
             LaunchHint::AntiCheat => any(&["easyanticheat", "battleye", "eac_launcher"]),
             LaunchHint::MissingLibrary => is_missing_dll_line(lower) && !lower.contains("mscoree"),
             LaunchHint::MissingNativeLibrary => any(&["error while loading shared libraries"]),
@@ -85,7 +99,26 @@ impl LaunchHint {
                 "no vulkan",
                 "dxvk: no adapters",
             ]),
-            LaunchHint::BrokenPrefix => any(&["could not load kernel32.dll", "wine client error"]),
+            LaunchHint::Direct3D12 => {
+                lower.contains("err:d3d12")
+                    || lower.contains("d3d12createdevice")
+                    || ((lower.contains("d3d12")
+                        || lower.contains("directx 12")
+                        || lower.contains("dx12"))
+                        && any(&["failed", "not supported", "unsupported", "required"]))
+            }
+            LaunchHint::Wined3d => {
+                lower.contains("err:wined3d")
+                    || (lower.contains("wined3d") && any(&["failed", "unsupported", "no suitable"]))
+            }
+            LaunchHint::BrokenPrefix => {
+                lower.contains("could not load kernel32.dll")
+                    || (lower.contains("wine client error") && !is_server_clash(lower))
+            }
+            LaunchHint::EsyncLimit => {
+                (lower.contains("esync") || lower.contains("eventfd"))
+                    && (lower.contains("too many open files") || lower.contains("emfile"))
+            }
             LaunchHint::PermissionDenied => any(&["permission denied"]),
             // Irori's own line when a program alongside fails to start.
             LaunchHint::ProgramFailed => lower.starts_with("could not start "),
@@ -99,6 +132,16 @@ impl LaunchHint {
             ]),
         }
     }
+}
+
+/// Wine's client meeting a wineserver of another version: `wine client
+/// error:0: version mismatch 768/824. Your wineserver binary was not upgraded
+/// correctly, … Or maybe the wrong wineserver is still running?`
+fn is_server_clash(lower: &str) -> bool {
+    (lower.contains("version mismatch")
+        && (lower.contains("wine client error") || lower.contains("wineserver")))
+        || lower.contains("wrong wineserver is still running")
+        || lower.contains("wineserver binary was not upgraded")
 }
 
 /// A line where Wine's loader says a DLL, or a function of one, is missing.
@@ -271,6 +314,13 @@ pub enum Detail {
     },
     /// `vm.max_map_count`'s value.
     MapCount { current: u64 },
+    /// The program uses this graphics API (`d3d12.dll`, `d3d11.dll`, …) and
+    /// the translation layer that runs it well is off.
+    ProgramGraphics { dll: String },
+    /// The command that installs this system's Vulkan driver, when known.
+    VulkanDriver { command: Option<String> },
+    /// Fsync is already on, so the kernel lacks what it needs.
+    EsyncWithFsync,
 }
 
 /// A one-click fix.
@@ -291,6 +341,17 @@ pub enum Fix {
     /// Show how to raise `vm.max_map_count`. Irori never runs `sudo`; the
     /// user runs the commands.
     MapCount,
+    /// Turn on DXVK for the game, then try again.
+    EnableDxvk,
+    /// Turn on VKD3D-Proton for the game, then try again.
+    EnableVkd3d,
+    /// Turn esync off and fsync on for the game, then try again.
+    UseFsync,
+    /// Stop the wineserver still running for the prefix, then try again.
+    StopWineserver,
+    /// Copy the command that installs the Vulkan driver. Irori never runs
+    /// `sudo`; the user runs it.
+    VulkanDriver(String),
 }
 
 impl Fix {
@@ -304,6 +365,11 @@ impl Fix {
             Fix::SteamRuntime => "steam-runtime".into(),
             Fix::ProgramSettings => "programs".into(),
             Fix::MapCount => "map-count".into(),
+            Fix::EnableDxvk => "dxvk".into(),
+            Fix::EnableVkd3d => "vkd3d".into(),
+            Fix::UseFsync => "fsync".into(),
+            Fix::StopWineserver => "wineserver".into(),
+            Fix::VulkanDriver(_) => "vulkan-driver".into(),
         }
     }
 }
@@ -365,6 +431,16 @@ pub struct FixContext {
     pub exe_missing: bool,
     /// A native Linux build running without the Steam runtime.
     pub native_without_runtime: bool,
+    /// The game runs through plain Wine on Linux, where Irori installs DXVK
+    /// and VKD3D-Proton into the prefix when they are on (Proton brings its
+    /// own).
+    pub plain_wine: bool,
+    pub dxvk_on: bool,
+    pub vkd3d_on: bool,
+    /// esync and fsync can be switched here (Linux).
+    pub sync_switchable: bool,
+    pub esync_on: bool,
+    pub fsync_on: bool,
 }
 
 /// Everything the diagnosis reads.
@@ -380,6 +456,9 @@ pub struct Facts {
     pub anticheat: Option<AntiCheatInfo>,
     /// `vm.max_map_count` (Linux).
     pub map_count: Option<u64>,
+    /// The command that installs the Vulkan driver for this distribution and
+    /// GPU ([`vulkan_driver_command`]).
+    pub vulkan_command: Option<String>,
     pub context: FixContext,
 }
 
@@ -463,6 +542,13 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
     if ctx.target_exe_missing || ctx.exe_missing {
         ensure(&mut findings, LaunchHint::MissingExecutable);
     }
+    // A Direct3D failure only points at the translation layer when it is
+    // off; with it on (or under Proton) the log line means something else.
+    findings.retain(|f| match f.hint {
+        LaunchHint::Direct3D12 => ctx.plain_wine && !ctx.vkd3d_on,
+        LaunchHint::Wined3d => ctx.plain_wine && !ctx.dxvk_on,
+        _ => true,
+    });
 
     let lines = || facts.lines.iter().map(String::as_str);
     let verbs = runtime_verbs(lines());
@@ -530,6 +616,27 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
                 f.fixes.push(Fix::SteamRuntime);
             }
             LaunchHint::ProgramFailed => f.fixes.push(Fix::ProgramSettings),
+            LaunchHint::Direct3D12 => f.fixes.push(Fix::EnableVkd3d),
+            LaunchHint::Wined3d => f.fixes.push(Fix::EnableDxvk),
+            LaunchHint::EsyncLimit => {
+                if ctx.fsync_on {
+                    f.detail = Some(Detail::EsyncWithFsync);
+                }
+                if ctx.sync_switchable && ctx.esync_on {
+                    f.fixes.push(Fix::UseFsync);
+                }
+            }
+            LaunchHint::WineserverMismatch if ctx.needs_wine => {
+                f.fixes.push(Fix::StopWineserver);
+            }
+            LaunchHint::Vulkan => {
+                f.detail = Some(Detail::VulkanDriver {
+                    command: facts.vulkan_command.clone(),
+                });
+                if let Some(command) = &facts.vulkan_command {
+                    f.fixes.push(Fix::VulkanDriver(command.clone()));
+                }
+            }
             _ => {}
         }
     }
@@ -593,6 +700,37 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
             f.fixes.push(Fix::Winetricks(wanted));
             findings.push(f);
         }
+        // The graphics API the program imports, when the layer that runs it
+        // well is off.
+        let imports = |names: &[&str]| {
+            program
+                .imports
+                .iter()
+                .find(|d| names.contains(&d.as_str()))
+                .cloned()
+        };
+        if ctx.plain_wine
+            && !ctx.vkd3d_on
+            && !findings.iter().any(|f| f.hint == LaunchHint::Direct3D12)
+            && let Some(dll) = imports(&["d3d12.dll"])
+        {
+            let mut f = Finding::new(LaunchHint::Direct3D12);
+            f.confirmed = false;
+            f.detail = Some(Detail::ProgramGraphics { dll });
+            f.fixes.push(Fix::EnableVkd3d);
+            findings.push(f);
+        }
+        if ctx.plain_wine
+            && !ctx.dxvk_on
+            && !findings.iter().any(|f| f.hint == LaunchHint::Wined3d)
+            && let Some(dll) = imports(&["d3d11.dll", "d3d10.dll", "d3d10_1.dll", "d3d10core.dll"])
+        {
+            let mut f = Finding::new(LaunchHint::Wined3d);
+            f.confirmed = false;
+            f.detail = Some(Detail::ProgramGraphics { dll });
+            f.fixes.push(Fix::EnableDxvk);
+            findings.push(f);
+        }
         let has_dotnet = installed.iter().any(|v| v.starts_with("dotnet4"));
         if program.dotnet && !has_dotnet && !findings.iter().any(|f| f.hint == LaunchHint::DotNet) {
             let mut f = Finding::new(LaunchHint::DotNet);
@@ -633,4 +771,131 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
         findings,
         fixes,
     }
+}
+
+/// Graphics vendors a Vulkan driver is chosen for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuVendor {
+    Amd,
+    Intel,
+    Nvidia,
+}
+
+impl GpuVendor {
+    /// The vendor of a PCI vendor id (`1002`, `8086`, `10de`).
+    pub fn from_pci(id: &str) -> Option<Self> {
+        match id
+            .trim()
+            .trim_start_matches("0x")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "1002" => Some(Self::Amd),
+            "8086" => Some(Self::Intel),
+            "10de" => Some(Self::Nvidia),
+            _ => None,
+        }
+    }
+}
+
+/// The distribution families whose package names are known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Family {
+    Arch,
+    Debian,
+    Ubuntu,
+    Fedora,
+    Suse,
+}
+
+/// An os-release document's `ID` and `ID_LIKE`, lower case, `ID` first.
+pub fn distro_ids(os_release: &str) -> Vec<String> {
+    let value = |key: &str| {
+        os_release.lines().find_map(|l| {
+            let v = l.trim().strip_prefix(key)?.strip_prefix('=')?;
+            Some(v.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+        })
+    };
+    let mut ids: Vec<String> = Vec::new();
+    for v in [value("ID"), value("ID_LIKE")].into_iter().flatten() {
+        for id in v.split_whitespace() {
+            if !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    ids
+}
+
+fn family(ids: &[String]) -> Option<Family> {
+    // Image-based systems (SteamOS, Bazzite, Silverblue) ship their drivers
+    // and install packages differently, so no command is offered there.
+    const IMAGE_BASED: &[&str] = &["steamos", "bazzite", "silverblue", "kinoite", "nixos"];
+    if ids.iter().any(|i| IMAGE_BASED.contains(&i.as_str())) {
+        return None;
+    }
+    ids.iter().find_map(|id| match id.as_str() {
+        "arch" | "manjaro" | "endeavouros" | "cachyos" | "garuda" => Some(Family::Arch),
+        "ubuntu" | "pop" | "linuxmint" | "elementary" | "zorin" => Some(Family::Ubuntu),
+        "debian" => Some(Family::Debian),
+        "fedora" | "nobara" | "ultramarine" => Some(Family::Fedora),
+        "suse" | "opensuse" | "opensuse-tumbleweed" | "opensuse-leap" => Some(Family::Suse),
+        _ => None,
+    })
+}
+
+/// The command that installs the 64- and 32-bit Vulkan drivers for `vendors`
+/// on the distribution `ids` names ([`distro_ids`]); `None` when the
+/// distribution or a GPU isn't one whose packages are known. Irori shows it
+/// to copy and never runs it.
+pub fn vulkan_driver_command(ids: &[String], vendors: &[GpuVendor]) -> Option<String> {
+    let family = family(ids)?;
+    if vendors.is_empty() {
+        return None;
+    }
+    let mut packages: Vec<&str> = Vec::new();
+    let mut add = |names: &[&'static str]| {
+        for n in names {
+            if !packages.contains(n) {
+                packages.push(n);
+            }
+        }
+    };
+    for vendor in vendors {
+        match (family, vendor) {
+            (Family::Arch, GpuVendor::Amd) => add(&["vulkan-radeon", "lib32-vulkan-radeon"]),
+            (Family::Arch, GpuVendor::Intel) => add(&["vulkan-intel", "lib32-vulkan-intel"]),
+            (Family::Arch, GpuVendor::Nvidia) => add(&["nvidia-utils", "lib32-nvidia-utils"]),
+            (Family::Debian | Family::Ubuntu, GpuVendor::Amd | GpuVendor::Intel) => {
+                add(&["mesa-vulkan-drivers", "mesa-vulkan-drivers:i386"])
+            }
+            // Ubuntu picks the NVIDIA driver itself; Debian's carries its
+            // Vulkan driver in a package of its own.
+            (Family::Ubuntu, GpuVendor::Nvidia) => {
+                return Some("sudo ubuntu-drivers install".into());
+            }
+            (Family::Debian, GpuVendor::Nvidia) => add(&["nvidia-driver", "nvidia-vulkan-icd"]),
+            (Family::Fedora, GpuVendor::Amd | GpuVendor::Intel) => {
+                add(&["mesa-vulkan-drivers", "mesa-vulkan-drivers.i686"])
+            }
+            // From RPM Fusion, which Fedora's NVIDIA driver comes from.
+            (Family::Fedora, GpuVendor::Nvidia) => {
+                add(&["akmod-nvidia", "xorg-x11-drv-nvidia-libs.i686"])
+            }
+            (Family::Suse, GpuVendor::Amd) => add(&["libvulkan_radeon", "libvulkan_radeon-32bit"]),
+            (Family::Suse, GpuVendor::Intel) => add(&["libvulkan_intel", "libvulkan_intel-32bit"]),
+            (Family::Suse, GpuVendor::Nvidia) => return None,
+        }
+    }
+    let list = packages.join(" ");
+    Some(match family {
+        Family::Arch => format!("sudo pacman -S --needed {list}"),
+        Family::Debian | Family::Ubuntu => {
+            format!(
+                "sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install {list}"
+            )
+        }
+        Family::Fedora => format!("sudo dnf install {list}"),
+        Family::Suse => format!("sudo zypper install {list}"),
+    })
 }

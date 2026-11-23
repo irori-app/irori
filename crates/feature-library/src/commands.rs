@@ -39,6 +39,9 @@ pub enum GameCommand {
     /// Choose where an added game's program went (owned by the game
     /// feature).
     Locate,
+    /// Turn a ROM library entry into an added PC game, keeping what the
+    /// user keeps about it.
+    PlayAsPcGame,
 }
 
 /// Facts about a game that decide which commands apply.
@@ -70,6 +73,8 @@ pub struct GameState {
     pub shortcut: Option<bool>,
     /// Installed, but its files were not found.
     pub unavailable: bool,
+    /// An entry of the ROM library.
+    pub rom: bool,
 }
 
 impl GameState {
@@ -140,6 +145,9 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     }
 
     let mut library = vec![ToggleFavourite, ToggleHidden, Edit];
+    if state.rom && !busy && !playing {
+        library.push(PlayAsPcGame);
+    }
     if state.in_recent {
         library.push(RemoveFromRecent);
     }
@@ -206,6 +214,7 @@ impl GameCommand {
             Uninstall if state.sideload => "library.command.remove_app",
             Uninstall => "library.command.uninstall",
             Locate => "library.command.locate_program",
+            PlayAsPcGame => "library.command.play_as_pc_game",
         };
         t(key).to_string()
     }
@@ -237,6 +246,7 @@ impl GameCommand {
             Verify => IconName::ShieldCheck,
             Uninstall => IconName::Trash,
             Locate => IconName::FolderSearch,
+            PlayAsPcGame => IconName::Monitor,
         }
     }
 }
@@ -352,6 +362,25 @@ mod tests {
         s.status = Some(StatusKind::Queued);
         assert!(flat(&s).contains(&RemoveFromQueue));
         assert!(!flat(&s).contains(&Update));
+    }
+
+    #[test]
+    fn roms_can_be_played_as_pc_games() {
+        crate::i18n::register();
+        let mut s = GameState {
+            installed: true,
+            rom: true,
+            ..Default::default()
+        };
+        assert!(flat(&s).contains(&PlayAsPcGame));
+        assert_eq!(PlayAsPcGame.label(&s), "Play as a PC game…");
+        s.status = Some(StatusKind::Playing);
+        assert!(!flat(&s).contains(&PlayAsPcGame));
+        let pc = GameState {
+            installed: true,
+            ..Default::default()
+        };
+        assert!(!flat(&pc).contains(&PlayAsPcGame));
     }
 
     #[test]

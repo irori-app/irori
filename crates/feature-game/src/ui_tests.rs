@@ -347,6 +347,46 @@ fn an_emulator_without_a_build_here_is_explained(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn a_launch_being_prepared_is_cancelled_with_escape_or_its_button(cx: &mut TestAppContext) {
+    let id = test_game().id();
+    let (b, handle, page) = open_page(cx, id.clone());
+    // Escape on an idle page goes on to whatever else takes it.
+    cx.dispatch_keystroke(handle, Keystroke::parse("escape").expect("keystroke"));
+    cx.run_until_parked();
+
+    let (guard, token) = b.statuses.launch_guard(&id);
+    settle();
+    cx.run_until_parked();
+    assert_eq!(primary(cx, &page), Some(PrimaryAction::Launching));
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .expect("window");
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(
+        vcx.debug_bounds("cancel-launch").is_some(),
+        "a Cancel button"
+    );
+
+    cx.dispatch_keystroke(handle, Keystroke::parse("escape").expect("keystroke"));
+    cx.run_until_parked();
+    assert!(token.is_cancelled());
+    drop(guard);
+
+    // The launch then ends with an error nobody needs to see.
+    let quiet = cx
+        .update_window(handle, |_, window, cx| {
+            let e = anyhow::Error::new(irori_services::LaunchCancelled);
+            irori_ui::save_conflict::resolve_launch_error(&id, Default::default(), &e, window, cx)
+                && !window.has_active_dialog(cx)
+        })
+        .expect("window");
+    assert!(quiet);
+}
+
+#[gpui_kit::test]
 fn the_settings_shortcut_reaches_a_steam_games_steam_play_choice(cx: &mut TestAppContext) {
     let id = steam_game().id();
     let (_b, handle, page) = open_page(cx, id.clone());

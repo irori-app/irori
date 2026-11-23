@@ -1,84 +1,136 @@
-//! Signing in to Steam in Irori's own dialog: with a QR code the Steam
-//! mobile app scans, or with the account name, password and Steam Guard.
-//! Irori never keeps the password: Steam answers with tokens, which the
-//! dialog passes to [`irori_core::Store::login`] through [`login_input`].
+//! Connecting a Steam account to Irori.
+//!
+//! Two safe connection paths are offered:
+//!
+//! 1. Valve's official web sign-in page (`https://store.steampowered.com/login/`)
+//!    in Irori's sign-in window. Irori never sees the password or submits
+//!    credentials to `IAuthenticationService`.
+//! 2. A personal Steam Web API key from `https://steamcommunity.com/dev/apikey`
+//!    plus the user's `SteamID64`, creating no Steam login session at all.
 
-use anyhow::Result;
-use irori_core::{Paths, Runner};
-use irori_steam_api::{Client, DeviceInfo};
+use anyhow::{Result, bail};
+use irori_core::AppSettings;
 
-pub use crate::account::login_input;
-pub use irori_steam_api::{
-    Confirmation, CredentialsSession, GuardKind, Poll, QrSession, SteamError, Tokens,
-};
+pub use crate::account::{api_key_login_input, web_login_input};
+pub use irori_steam_api::SteamError;
 
-use crate::account::{self, AccountFiles};
+/// Official Steam store web sign-in page.
+pub const STEAM_LOGIN_URL: &str = "https://store.steampowered.com/login/";
 
-/// One sign-in attempt's connection to Steam, as this computer.
-#[derive(Clone)]
-pub struct SignIn {
-    client: Client,
-    device: DeviceInfo,
-    /// Steam Guard's remembered approval of this device, from an earlier
-    /// sign-in.
-    guard_data: Option<String>,
-    remembered_account: Option<String>,
+/// Official page where users register or view their personal Steam Web API key.
+pub const STEAM_API_KEY_URL: &str = "https://steamcommunity.com/dev/apikey";
+
+/// Official Steam privacy settings page (Game Details must be Public for API keys).
+pub const STEAM_PRIVACY_URL: &str = "https://steamcommunity.com/my/edit/settings";
+
+const MIN_STEAMID64: u64 = 76_561_197_960_265_728;
+
+/// Auto-detect the most recent SteamID64 from Steam's local
+/// `config/loginusers.vdf` on this computer. Blocking filesystem read.
+pub fn detected_local_steamid(settings: &AppSettings) -> Option<String> {
+    let steam_dir = irori_runtime::locations::steam_path(settings);
+    crate::scan::most_recent_steamid(&steam_dir)
 }
 
-impl SignIn {
-    /// Blocking: reads (and on first use writes) this device's identity.
-    pub fn new() -> Result<Self> {
-        let paths = Paths::get();
-        let files = AccountFiles::new(
-            &paths.store_config_dir(Runner::Steam),
-            &paths.store_cache_dir(Runner::Steam),
+/// Parse a user-entered `SteamID64` or Steam numeric profile URL
+/// (`https://steamcommunity.com/profiles/<steamid64>/`).
+pub fn parse_steamid_input(raw: &str) -> Result<u64> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        bail!("Enter your 17-digit SteamID64.");
+    }
+    let candidate = if let Some(rest) = trimmed
+        .strip_prefix("https://steamcommunity.com/profiles/")
+        .or_else(|| trimmed.strip_prefix("http://steamcommunity.com/profiles/"))
+        .or_else(|| trimmed.strip_prefix("steamcommunity.com/profiles/"))
+    {
+        rest.split(['/', '?', '#']).next().unwrap_or("")
+    } else {
+        trimmed
+    };
+    let Ok(id) = candidate.parse::<u64>() else {
+        bail!("Enter a 17-digit SteamID64 (or a steamcommunity.com/profiles/... link).");
+    };
+    if id < MIN_STEAMID64 {
+        bail!("That doesn't look like a valid SteamID64.");
+    }
+    Ok(id)
+}
+
+/// Trim and validate a 32-character hexadecimal Steam Web API key.
+pub fn validate_api_key(raw: &str) -> Result<String> {
+    let trimmed = raw.trim();
+    if trimmed.len() != 32 || !trimmed.bytes().all(|b| b.is_ascii_hexdigit()) {
+        bail!("Steam Web API keys are 32 hexadecimal characters (0-9, A-F).");
+    }
+    Ok(trimmed.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_steamid64_and_profile_urls() {
+        assert_eq!(
+            parse_steamid_input("76561197960265729").unwrap(),
+            76561197960265729
         );
-        let saved = files.read_session();
-        Ok(Self {
-            client: Client::new()?,
-            device: account::device(&files),
-            guard_data: saved.as_ref().and_then(|s| s.guard_data.clone()),
-            remembered_account: saved.map(|s| s.account_name),
-        })
+        assert_eq!(
+            parse_steamid_input("  https://steamcommunity.com/profiles/76561197960265729/  ")
+                .unwrap(),
+            76561197960265729
+        );
+        assert_eq!(
+            parse_steamid_input("steamcommunity.com/profiles/76561197960265729?l=english").unwrap(),
+            76561197960265729
+        );
+        assert!(parse_steamid_input("").is_err());
+        assert!(parse_steamid_input("12345").is_err());
+        assert!(parse_steamid_input("https://steamcommunity.com/id/gaben").is_err());
     }
 
-    /// Start a QR sign-in; show [`QrSession::challenge_url`] as a QR code.
-    pub async fn begin_qr(&self) -> Result<QrSession> {
-        self.client.begin_qr(&self.device).await
+    #[test]
+    fn validates_32_hex_api_keys() {
+        let key = "0123456789abcdef0123456789ABCDEF";
+        assert_eq!(validate_api_key(&format!("  {key}\n")).unwrap(), key);
+        assert!(validate_api_key("").is_err());
+        assert!(validate_api_key("short").is_err());
+        assert!(validate_api_key("0123456789abcdef0123456789ABCDEG").is_err());
     }
 
-    /// Start a sign-in with the account name and password. The answer says
-    /// which Steam Guard confirmations Steam accepts.
-    pub async fn begin_password(
-        &self,
-        account_name: &str,
-        password: &str,
-    ) -> Result<CredentialsSession> {
-        let same_account = self
-            .remembered_account
-            .as_deref()
-            .is_some_and(|a| a.eq_ignore_ascii_case(account_name));
-        let guard = self.guard_data.as_deref().filter(|_| same_account);
-        self.client
-            .begin_credentials(account_name, password, &self.device, guard)
-            .await
-    }
-
-    /// Send the Steam Guard code from the email or the mobile app.
-    pub async fn submit_code(
-        &self,
-        session: &CredentialsSession,
-        code: &str,
-        kind: GuardKind,
-    ) -> Result<()> {
-        self.client
-            .submit_guard_code(session.client_id, session.steamid, code, kind)
-            .await
-    }
-
-    /// Ask whether the sign-in finished. Call it every
-    /// [`QrSession::interval`] (or the credentials session's).
-    pub async fn poll(&self, client_id: u64, request_id: &[u8]) -> Result<Poll> {
-        self.client.poll(client_id, request_id).await
+    #[test]
+    fn detects_most_recent_local_steamid() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::create_dir_all(dir.path().join("steamapps")).unwrap();
+        std::fs::write(
+            config.join("loginusers.vdf"),
+            r#"
+            "users"
+            {
+                "76561197960265729"
+                {
+                    "PersonaName" "First"
+                    "MostRecent" "0"
+                }
+                "76561197960265730"
+                {
+                    "PersonaName" "Second"
+                    "MostRecent" "1"
+                }
+            }
+            "#,
+        )
+        .unwrap();
+        let settings = AppSettings {
+            default_steam_path: dir.path().display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            detected_local_steamid(&settings).as_deref(),
+            Some("76561197960265730")
+        );
     }
 }

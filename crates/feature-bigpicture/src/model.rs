@@ -481,6 +481,8 @@ pub enum GameAction {
     /// Play with verbose Wine/Proton logs for this session, showing the log.
     PlayWithLog,
     Stop,
+    /// Stop the launch being prepared; the game doesn't start.
+    CancelLaunch,
     Install,
     CancelDownload,
     Update,
@@ -494,6 +496,7 @@ impl GameAction {
             GameAction::Play => "bigpicture.action.play",
             GameAction::PlayWithLog => "bigpicture.action.play_with_log",
             GameAction::Stop => "bigpicture.action.stop",
+            GameAction::CancelLaunch => "bigpicture.action.cancel_launch",
             GameAction::Install => "bigpicture.action.install",
             GameAction::CancelDownload => "bigpicture.action.cancel_download",
             GameAction::Update => "bigpicture.action.update",
@@ -506,6 +509,7 @@ impl GameAction {
             GameAction::Play => IconName::Play,
             GameAction::PlayWithLog => IconName::ScrollText,
             GameAction::Stop => IconName::CircleStop,
+            GameAction::CancelLaunch => IconName::X,
             GameAction::Install => IconName::Download,
             GameAction::CancelDownload => IconName::X,
             GameAction::Update => IconName::CircleArrowUp,
@@ -514,11 +518,14 @@ impl GameAction {
     }
 }
 
-/// The game's main command: Stop while it runs, else Play, Cancel download
-/// while it downloads, else Install.
+/// The game's main command: Stop while it runs, Cancel launch while its
+/// launch is prepared, else Play, Cancel download while it downloads, else
+/// Install.
 pub fn main_action(state: GameState) -> GameAction {
     if state.playing {
         GameAction::Stop
+    } else if state.busy == Some(StatusKind::Launching) {
+        GameAction::CancelLaunch
     } else if state.installed {
         GameAction::Play
     } else if state.in_queue {
@@ -553,6 +560,7 @@ impl PageRow {
             PageRow::Action(GameAction::Play) => "bp-row-play",
             PageRow::Action(GameAction::PlayWithLog) => "bp-row-play-with-log",
             PageRow::Action(GameAction::Stop) => "bp-row-stop",
+            PageRow::Action(GameAction::CancelLaunch) => "bp-row-cancel-launch",
             PageRow::Action(GameAction::Install) => "bp-row-install",
             PageRow::Action(GameAction::CancelDownload) => "bp-row-cancel-download",
             PageRow::Action(GameAction::Update) => "bp-row-update",
@@ -1246,6 +1254,17 @@ mod tests {
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::PlayWithLog)));
         assert!(page_rows(playing, 1, false).contains(&PageRow::Log));
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::Uninstall)));
+        // A launch being prepared can be cancelled from the page's first row.
+        let launching = GameState {
+            busy: Some(StatusKind::Launching),
+            ..installed
+        };
+        assert_eq!(
+            page_rows(launching, 1, false)[0],
+            PageRow::Action(GameAction::CancelLaunch)
+        );
+        assert!(disabled_reason(GameAction::CancelLaunch, launching).is_none());
+        assert_eq!(cover_action(launching), None);
         let not_installed = GameState {
             installable: true,
             ..Default::default()

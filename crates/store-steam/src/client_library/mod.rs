@@ -528,13 +528,10 @@ impl SteamStore {
 
     /// Start the Steam client (its window opens on the library).
     async fn start_steam(&self) -> Result<()> {
-        let command = crate::client::open_url("steam://open/games");
-        irori_core::process::run(&command, Default::default())
+        self.opener
+            .open_link(&self.steam_dir(), "steam://open/games")
             .await
-            .context("Steam didn't start")?
-            .check()
-            .context("Steam didn't start")?;
-        Ok(())
+            .context("Steam didn't start")
     }
 
     /// Read the client once it has come up, trying every [`START_POLL`]

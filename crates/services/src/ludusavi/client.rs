@@ -1,5 +1,5 @@
 //! Ludusavi's command line in `--api` mode: finding the program, matching
-//! titles, and backing up, listing and restoring one game's saves.
+//! titles, and backing up, listing, editing and restoring one game's saves.
 //!
 //! Irori never bundles Ludusavi; it runs the copy the user installed. Every
 //! command reads Ludusavi's own configuration, so backups made here also
@@ -118,6 +118,23 @@ impl Ludusavi {
         self.finish(self.base(shared).arg("--try-manifest-update").args(args))
     }
 
+    /// [`Self::spec`] with the configuration in `config` (a copy Irori
+    /// made). Its manifest is a copy too, so it isn't updated there.
+    fn spec_with_config(
+        &self,
+        config: &Path,
+        args: impl IntoIterator<Item = OsString>,
+        shared: &[Shared],
+    ) -> CommandSpec {
+        self.finish(
+            self.base(shared)
+                .arg("--config")
+                .arg(config.as_os_str())
+                .arg("--no-manifest-update")
+                .args(args),
+        )
+    }
+
     /// Run with `args` and return the JSON it printed. Ludusavi exits with
     /// an error for unknown titles and failed files but still reports them,
     /// so only a run without JSON counts as a failure.
@@ -127,7 +144,14 @@ impl Ludusavi {
         shared: &[Shared<'_>],
         cancel: Option<CancellationToken>,
     ) -> Result<String> {
-        let spec = self.spec(args, shared);
+        self.call_spec(self.spec(args, shared), cancel).await
+    }
+
+    async fn call_spec(
+        &self,
+        spec: CommandSpec,
+        cancel: Option<CancellationToken>,
+    ) -> Result<String> {
         let mut opts = RunOptions::default();
         if let Some(cancel) = cancel {
             opts = opts.cancel(cancel);
@@ -175,16 +199,81 @@ impl Ludusavi {
         parse_find(&json)
     }
 
+    /// Where Ludusavi's configuration file is (`config.yaml`).
+    pub async fn config_path(&self) -> Result<PathBuf> {
+        let spec = self.finish(self.base(&[]).args(os(&["config", "path"])));
+        let out = process::run(&spec, RunOptions::default())
+            .await
+            .with_context(|| format!("Couldn’t start Ludusavi ({})", self.display()))?;
+        match last_line(&out.stdout) {
+            Some(path) if out.success() => Ok(PathBuf::from(path)),
+            _ => bail!(
+                "Ludusavi didn’t say where its settings are: {}",
+                last_line(&out.stderr).unwrap_or_else(|| "no answer".into())
+            ),
+        }
+    }
+
+    /// Lock or unlock a backup (`lock`), or set its comment (empty clears
+    /// it), as Ludusavi's own window does.
+    pub async fn edit_backup(
+        &self,
+        title: &str,
+        backup: &str,
+        folder: Option<&Path>,
+        lock: Option<bool>,
+        comment: Option<&str>,
+    ) -> Result<()> {
+        let mut args = os(&["backups", "edit", "--backup", backup]);
+        if let Some(folder) = folder {
+            args.push("--path".into());
+            args.push(folder.into());
+        }
+        match lock {
+            Some(true) => args.push("--lock".into()),
+            Some(false) => args.push("--unlock".into()),
+            None => {}
+        }
+        if let Some(comment) = comment {
+            args.push("--comment".into());
+            args.push(comment.into());
+        }
+        args.push("--".into());
+        args.push(title.into());
+        let spec = self.spec(args, &shared(None, folder));
+        let out = process::run(&spec, RunOptions::default())
+            .await
+            .with_context(|| format!("Couldn’t start Ludusavi ({})", self.display()))?;
+        if !out.success() {
+            bail!(
+                "Ludusavi couldn’t change the backup: {}",
+                last_line(&out.stderr)
+                    .or_else(|| last_line(&out.stdout))
+                    .unwrap_or_else(|| "no answer".into())
+            );
+        }
+        Ok(())
+    }
+
     /// Back up `title`'s saves, looking in `wine_prefix` too, into `folder`
-    /// (Ludusavi's own backup folder when `None`).
+    /// (Ludusavi's own backup folder when `None`), keeping `limits`.
     pub async fn backup(
         &self,
         title: &str,
         wine_prefix: Option<&Path>,
         folder: Option<&Path>,
+        limits: Retention,
         cancel: CancellationToken,
     ) -> Result<Operation> {
         let mut args = os(&["backup", "--api", "--force"]);
+        if let Some(full) = limits.full {
+            args.push("--full-limit".into());
+            args.push(full.to_string().into());
+        }
+        if let Some(differential) = limits.differential {
+            args.push("--differential-limit".into());
+            args.push(differential.to_string().into());
+        }
         if let Some(prefix) = wine_prefix {
             args.push("--wine-prefix".into());
             args.push(prefix.into());
@@ -217,13 +306,15 @@ impl Ludusavi {
 
     /// Restore `backup` (an id from [`Backups`]; the newest when `None`) of
     /// `title` to where its files came from. `preview` only reports what
-    /// would be written.
+    /// would be written. With `config`, Ludusavi reads the configuration in
+    /// that folder (a copy holding redirects) instead of its own.
     pub async fn restore(
         &self,
         title: &str,
         backup: Option<&str>,
         folder: Option<&Path>,
         preview: bool,
+        config: Option<&Path>,
     ) -> Result<Operation> {
         let mut args = os(&["restore", "--api", "--force"]);
         if preview {
@@ -239,9 +330,30 @@ impl Ludusavi {
         }
         args.push("--".into());
         args.push(title.into());
-        let json = self.call(args, &shared(None, folder), None).await?;
+        let mut shared = shared(None, folder);
+        let spec = match config {
+            Some(config) => {
+                shared.push(Shared {
+                    path: config,
+                    create: false,
+                });
+                self.spec_with_config(config, args, &shared)
+            }
+            None => self.spec(args, &shared),
+        };
+        let json = self.call_spec(spec, None).await?;
         parse_operation(&json, title)
     }
+}
+
+/// How many backups Ludusavi keeps of a game; `None` defers to Ludusavi's
+/// own setting.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Retention {
+    /// Full backups, 1–255.
+    pub full: Option<u8>,
+    /// Differential backups per full one, 0–255.
+    pub differential: Option<u8>,
 }
 
 /// The folders a command reads or writes besides Ludusavi's own.
@@ -892,6 +1004,7 @@ case "$2" in
     "files": {{"/p/pfx/drive_c/users/steamuser/Saved/a.sav": {{"bytes": 12,
     "change": "New", "failed": false, "ignored": false, "duplicatedBy": []}}}},
     "registry": {{}}}}}}}}' ;;
+  backups) [ "$3" = edit ] && exit 0 ;;
   *) echo "error: unrecognized subcommand" >&2; exit 2 ;;
 esac
 "#,
@@ -913,7 +1026,13 @@ esac
 
         let prefix = Path::new("/p/pfx");
         let op = ludusavi
-            .backup("Hades", Some(prefix), None, CancellationToken::new())
+            .backup(
+                "Hades",
+                Some(prefix),
+                None,
+                Retention::default(),
+                CancellationToken::new(),
+            )
             .await
             .unwrap();
         assert_eq!((op.title.as_deref(), op.bytes()), (Some("Hades"), 12));
@@ -932,8 +1051,45 @@ esac
             ]
         );
 
+        // Retention, then naming and locking a backup.
+        ludusavi
+            .backup(
+                "Hades",
+                None,
+                None,
+                Retention {
+                    full: Some(3),
+                    differential: Some(0),
+                },
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+        let passed = std::fs::read_to_string(&args).unwrap();
+        assert!(passed.contains("--full-limit\n3\n--differential-limit\n0\n"));
+        ludusavi
+            .edit_backup("Hades", "backup-1", None, Some(true), Some("Boss"))
+            .await
+            .unwrap();
+        let passed = std::fs::read_to_string(&args).unwrap();
+        assert_eq!(
+            passed.lines().collect::<Vec<_>>(),
+            [
+                "--try-manifest-update",
+                "backups",
+                "edit",
+                "--backup",
+                "backup-1",
+                "--lock",
+                "--comment",
+                "Boss",
+                "--",
+                "Hades"
+            ]
+        );
+
         let err = ludusavi
-            .restore("Hades", None, None, true)
+            .restore("Hades", None, None, true, None)
             .await
             .unwrap_err();
         assert!(

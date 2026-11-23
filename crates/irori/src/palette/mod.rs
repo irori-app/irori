@@ -1,5 +1,5 @@
-//! Command palette (Ctrl+K): jump to any game, play installed games, pick a
-//! random one, set the play status of the game whose page is open, group the
+//! Command palette (Ctrl+K): jump to any game, play installed games, cancel
+//! a launch being prepared, pick a random one, set the play status of the game whose page is open, group the
 //! library by play status, show only installed games or favourites, turn the
 //! library header's quick controls on or off, show or save a library view, switch its view
 //! (grid, list, Focus), back up, sync, save a clip while the replay buffer
@@ -29,6 +29,8 @@ use irori_ui::{Route, models};
 enum PaletteTarget {
     Open(GameId),
     Play(GameId),
+    /// Cancel the launch being prepared.
+    CancelLaunch(GameId),
     Route(Route),
     Refresh,
     Random,
@@ -90,6 +92,8 @@ enum PaletteTarget {
     GraphicsMods(GameId),
     /// Show a Steam game's Steam Play choice (Linux).
     SteamPlay(GameId),
+    /// Turn a ROM library entry into an added PC game.
+    PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
     AddToSteam(GameId),
     /// Remove Irori's Steam shortcut of a game.
@@ -735,6 +739,29 @@ impl Palette {
             );
             targets.push(PaletteTarget::XboxOfflinePlay);
         }
+        // A launch being prepared comes first: it is what the user waits on.
+        let b = irori_ui::backend(cx);
+        let launching: Vec<GameId> = models(cx)
+            .statuses
+            .read(cx)
+            .all()
+            .filter(|s| s.kind == irori_core::StatusKind::Launching && !b.concealed(&s.id))
+            .map(|s| s.id.clone())
+            .collect();
+        for id in launching {
+            let title = b
+                .game(&id)
+                .map(|g| g.title.clone())
+                .unwrap_or_else(|| id.app_name.to_string());
+            items.insert(
+                0,
+                CommandItem::new()
+                    .label(t_args("shell.palette.cancel_launch", &[("title", &title)]))
+                    .keywords([t("shell.palette.cancel_launch_keywords")])
+                    .icon(IconName::X),
+            );
+            targets.insert(0, PaletteTarget::CancelLaunch(id));
+        }
         let items = Rc::new(items);
         *self.targets.borrow_mut() = targets;
         self.state.update(cx, |s, cx| s.set_query("", window, cx));
@@ -800,6 +827,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::LutrisScript => irori_library::open_lutris_installer(None, window, cx),
         PaletteTarget::SteamClientLibrary => irori_manage::open_steam_library_dialog(window, cx),
         PaletteTarget::Play(id) => crate::shell::launch_game(id, window, cx),
+        PaletteTarget::CancelLaunch(id) => {
+            irori_ui::backend(cx).cancel_launch(&id);
+        }
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
@@ -820,6 +850,9 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
+        PaletteTarget::PlayAsPcGame(id) => {
+            irori_library::open_play_as_pc_game_dialog(&id, window, cx)
+        }
         PaletteTarget::AddToSteam(id) => {
             irori_game::ops::add_shortcuts(&id, true, window, cx).detach()
         }

@@ -7,7 +7,8 @@
 //! private-branch passwords, and passes the concrete Epic and GOG stores to
 //! [`install_store_handles`] (EOS overlay, REDmod). A game's mods live in
 //! the Mods tab ([`ModsPanel`]); the shell hands `nxm://` links to
-//! [`open_nxm_dialog`], Windows files opened with Irori to
+//! [`open_nxm_dialog`] and `ror2mm://` links to
+//! [`open_thunderstore_link_dialog`], Windows files opened with Irori to
 //! [`open_windows_file_dialog`], and other programs' links pointed at Irori
 //! to [`open_windows_uri_dialog`]. It routes
 //! [`GamePageEvent::RequestEdit`] and [`GamePageEvent::RequestCategories`]
@@ -63,7 +64,7 @@ pub use manage::{
     ImportForm, UninstallOptions, open_cancel_download_dialog, open_import_dialog,
     open_move_dialog, open_uninstall_dialog,
 };
-pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog};
+pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog, open_thunderstore_link_dialog};
 pub use page::{AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu};
 pub use play_with::open_play_with_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};
@@ -85,6 +86,8 @@ gpui_kit::actions!(
         OpenGameSettingsAction,
         /// Check why the last run failed ("Troubleshoot launch").
         TroubleshootLaunch,
+        /// Cancel the launch being prepared (Escape while "Launching…").
+        CancelLaunch,
     ]
 );
 
@@ -99,5 +102,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-shift-l", OpenGameLog, ctx),
         KeyBinding::new("ctrl-shift-s", OpenGameSettingsAction, ctx),
         KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
+        KeyBinding::new("escape", CancelLaunch, ctx),
     ]);
 }

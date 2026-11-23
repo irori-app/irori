@@ -907,6 +907,28 @@ fn scan_packages_into(
     }
 }
 
+/// The game's own folder for a package folder: `<root>\<game>` when the
+/// package is the `Content` folder of the gaming root layout, else the
+/// package folder itself. The GDK keeps more of the game beside `Content`
+/// (`Shaders`, the shader cache it compiles, update staging), so sizes and
+/// names come from the whole folder, the way Windows' Settings counts it.
+pub fn game_folder(install_dir: &Path) -> &Path {
+    let is_content = install_dir
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(CONTENT));
+    match install_dir.parent() {
+        // A `Content` folder at a drive's root is no game folder's.
+        Some(parent) if is_content && parent.parent().is_some() => parent,
+        _ => install_dir,
+    }
+}
+
+/// The disk space a game takes: everything in its [`game_folder`].
+/// Blocking; can take a while on a large game.
+pub fn game_size(install_dir: &Path) -> u64 {
+    folder_size(game_folder(install_dir))
+}
+
 /// The total size of the files under `dir`, without following links.
 /// Blocking; can take a while on a large game.
 pub fn folder_size(dir: &Path) -> u64 {
@@ -1509,6 +1531,13 @@ mod tests {
             folder_size(&sky),
             (CONFIG.len() + MANIFEST.len() + 12) as u64
         );
+        // The GDK's shaders beside Content count as the game's.
+        write(&games.join("Sky Racer/Shaders/cache.bin"), b"0123");
+        assert_eq!(game_folder(&sky), games.join("Sky Racer"));
+        assert_eq!(
+            game_size(&sky),
+            (CONFIG.len() + MANIFEST.len() + 12 + 4) as u64
+        );
 
         // Gaming Services packages: a UWP game, a gone folder, and the same
         // game as the gaming root (kept once when merged).
@@ -1528,6 +1557,18 @@ mod tests {
             &no_strings,
         );
         assert_eq!(merged.games.len(), 1);
+    }
+
+    #[test]
+    fn a_package_outside_the_gaming_layout_is_its_own_folder() {
+        let uwp = Path::new("/WindowsApps/Solitaire");
+        assert_eq!(game_folder(uwp), uwp);
+        // `Content` at a drive's root stays itself.
+        assert_eq!(game_folder(Path::new("/Content")), Path::new("/Content"));
+        assert_eq!(
+            game_folder(Path::new("/XboxGames/Halo/content")),
+            Path::new("/XboxGames/Halo")
+        );
     }
 
     #[cfg(not(windows))]

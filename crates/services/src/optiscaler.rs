@@ -957,13 +957,17 @@ mod tests {
             ..Default::default()
         }
         .finalize();
-        assert!(crate::supports_reshade(&win));
+        // Steam on macOS runs only Mac builds.
+        let mac = irori_core::HostPlatform::current() == irori_core::HostPlatform::Mac;
+        assert_eq!(crate::supports_reshade(&win), !mac);
 
+        // As Steam's entries mark a game it runs without Proton.
         let native = GameInfo {
             runner: Some(Runner::Steam),
             app_name: "400".into(),
             title: "Portal".into(),
             is_installed: true,
+            is_linux_native: true,
             install: Some(InstalledInfo {
                 install_path: "/games/Portal".into(),
                 platform: InstallPlatform::Linux,

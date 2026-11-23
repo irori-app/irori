@@ -14,7 +14,7 @@ use tokio::io::AsyncWriteExt as _;
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 
-use crate::adapt::{self, Gate, Hosts, Signals, Tuner, Watchdog, Window, classify};
+use crate::adapt::{self, Gate, Hosts, Signals, Slump, Tuner, Watchdog, Window, classify};
 use crate::hash::{Digest, hash_file};
 use crate::path;
 use crate::plan::{Chunk, Codec, FileEntry, Part};
@@ -106,6 +106,9 @@ enum Error {
     /// The connection stalled or closed early.
     #[error("{0}")]
     Interrupted(String),
+    /// Stopped to continue on a new connection ([`Ctx::replace_connections`]).
+    #[error("continuing on a new connection")]
+    Recycled,
     #[error("{0}")]
     Corrupt(String),
     #[error(transparent)]
@@ -130,6 +133,8 @@ enum Kind {
     Corrupt,
     /// Retrying cannot help.
     Fatal,
+    /// Stopped on purpose: continued right away, not the server's fault.
+    Recycled,
 }
 
 impl Error {
@@ -145,6 +150,7 @@ impl Error {
             Error::Network(e) if e.is_builder() || e.is_redirect() => Kind::Fatal,
             Error::Network(_) | Error::Interrupted(_) => Kind::Transient,
             Error::Corrupt(_) => Kind::Corrupt,
+            Error::Recycled => Kind::Recycled,
             Error::Status { .. } | Error::Cancelled | Error::Io(_) | Error::Other(_) => Kind::Fatal,
         }
     }
@@ -236,6 +242,7 @@ pub async fn download(
             .as_ref()
             .map(|s| Signing::new(s.0.clone(), job.files)),
         prefetch: (max / 4).clamp(4, 8),
+        recycle: Recycle::default(),
     });
 
     // Owned items keep the future `Send` (borrowing closures trip up
@@ -369,6 +376,7 @@ async fn tune(ctx: &Ctx, mut tuner: Tuner, limit: Option<u64>) {
     let mut last = (Instant::now(), snapshot());
     // A verdict shows once two windows in a row agree.
     let mut candidate = None;
+    let mut slump = Slump::default();
     loop {
         tokio::time::sleep(TUNE_EVERY).await;
         let now = (Instant::now(), snapshot());
@@ -405,6 +413,14 @@ async fn tune(ctx: &Ctx, mut tuner: Tuner, limit: Option<u64>) {
                 capped: tuner.capped(),
             })
         };
+        let steady = !throttled && verdict != Some(irori_core::Bottleneck::Disk);
+        if slump.observe(now.0, rate, ctx.requests.active(), steady) {
+            tracing::info!(
+                "the download slowed down to {:.0} KiB/s; continuing on new connections",
+                rate / 1024.0
+            );
+            ctx.replace_connections(n);
+        }
         if verdict == candidate {
             stats.set_bottleneck(verdict);
         }
@@ -427,6 +443,17 @@ struct Ctx {
     signing: Option<Signing>,
     /// Chunks fetched ahead of the one being written, per file.
     prefetch: usize,
+    recycle: Recycle,
+}
+
+/// Connections being replaced after the download slumped ([`Slump`]).
+#[derive(Default)]
+struct Recycle {
+    /// Bumped per replacement: a stream begun before it stops and resumes.
+    generation: std::sync::atomic::AtomicU64,
+    /// Requests still to ask the server to close their connection after
+    /// answering, so the pool opens new ones.
+    to_close: std::sync::atomic::AtomicU64,
 }
 
 /// Where the bytes of one part come from.
@@ -436,6 +463,23 @@ enum PartData {
 }
 
 impl Ctx {
+    /// Move the download to new connections: streams stop and resume on
+    /// one, the next `connections` requests close theirs after answering
+    /// (HTTP/2 keeps its one connection: the header doesn't apply there),
+    /// and every server is measured again. Requests in flight finish.
+    fn replace_connections(&self, connections: usize) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.recycle.to_close.store(connections as u64, Relaxed);
+        self.recycle.generation.fetch_add(1, Relaxed);
+        self.hosts.forget_rates();
+    }
+
+    fn generation(&self) -> u64 {
+        self.recycle
+            .generation
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     fn check_cancel(&self) -> Result<(), Error> {
         if self.cancel.is_cancelled() {
             Err(Error::Cancelled)
@@ -560,6 +604,9 @@ impl Ctx {
                 Err(e) => e,
             };
             let kind = e.kind();
+            if kind == Kind::Recycled && !self.cancel.is_cancelled() {
+                continue;
+            }
             if self.cancel.is_cancelled()
                 || kind == Kind::Fatal
                 || (kind == Kind::Corrupt && corrupt >= self.retries)
@@ -806,6 +853,7 @@ impl Ctx {
         let mut out = tokio::io::BufWriter::with_capacity(1 << 20, file);
         let mut body = resp.bytes_stream();
         let mut watch = Watchdog::new(STALL, Instant::now());
+        let generation = self.generation();
         loop {
             let waited = Instant::now();
             let next = tokio::select! {
@@ -850,6 +898,11 @@ impl Ctx {
                 out.flush().await?;
                 return Err(Error::Interrupted(format!("{}: {e}", redact(url))));
             }
+            if have < size && self.generation() != generation {
+                // Keep what arrived; the rest comes on a new connection.
+                out.flush().await?;
+                return Err(Error::Recycled);
+            }
         }
         out.flush().await?;
         if have != size {
@@ -863,9 +916,21 @@ impl Ctx {
     /// Send `req`, giving up on a server that does not answer in time.
     async fn send(
         &self,
-        req: reqwest::RequestBuilder,
+        mut req: reqwest::RequestBuilder,
         url: &str,
     ) -> Result<reqwest::Response, Error> {
+        let close = self
+            .recycle
+            .to_close
+            .try_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |n| n.checked_sub(1),
+            )
+            .is_ok();
+        if close {
+            req = req.header(reqwest::header::CONNECTION, "close");
+        }
         tokio::select! {
             _ = self.cancel.cancelled() => Err(Error::Cancelled),
             r = tokio::time::timeout(STALL * 2, req.send()) => match r {
@@ -1040,6 +1105,8 @@ impl Ctx {
                     next += 1;
                     self.backoff(corrupt).await?;
                 }
+                // Chunk requests finish on their connection; never stopped.
+                Kind::Recycled => {}
                 Kind::Transient => {
                     failures += 1;
                     tracing::warn!("chunk {} (failure {failures}): {e}", chunk.key);
@@ -1201,6 +1268,78 @@ mod redact_tests {
         ] {
             assert_eq!(redact(url), "https://cdn.example.org");
         }
+    }
+}
+
+#[cfg(test)]
+mod recycle_tests {
+    use std::sync::atomic::Ordering::Relaxed;
+
+    use super::*;
+    use crate::test_server::{TestServer, serve_bytes};
+
+    /// Heroic #6018: after a slump, a stream stops and resumes where it was
+    /// on a new connection, without counting as a failure, and the next
+    /// requests close their connections.
+    #[tokio::test]
+    async fn streams_continue_on_new_connections() {
+        let body: Vec<u8> = (0..512 * 1024u32).map(|i| (i % 251) as u8).collect();
+        let served = body.clone();
+        let server = TestServer::start(move |req| {
+            let mut resp = serve_bytes(req, &served, true);
+            resp.chunk_delay = Some(Duration::from_millis(15));
+            resp
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let digest = {
+            use sha2::Digest as _;
+            crate::Digest::new(
+                crate::Algorithm::Sha256,
+                sha2::Sha256::digest(&body).to_vec(),
+            )
+        };
+        let file = FileEntry::whole(
+            "big.bin".into(),
+            body.len() as u64,
+            Some(digest),
+            vec![server.url("/big.bin")],
+        );
+        let files = [file.clone()];
+        let ctx = Arc::new(Ctx {
+            client: reqwest::Client::new(),
+            root: dir.path().to_path_buf(),
+            requests: Gate::new(4),
+            hosts: Hosts::default(),
+            limiter: None,
+            cache: ChunkCache::new(&files, 1 << 20),
+            stats: Arc::new(Stats::new(body.len() as u64)),
+            cancel: CancellationToken::new(),
+            journal: None,
+            retries: 1,
+            signing: None,
+            prefetch: 4,
+            recycle: Recycle::default(),
+        });
+        let task = {
+            let ctx = ctx.clone();
+            tokio::spawn(async move { ctx.process_file(&file).await })
+        };
+        while ctx.stats.received.load(Relaxed) < 64 * 1024 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        ctx.replace_connections(4);
+        task.await.unwrap().unwrap();
+
+        assert_eq!(std::fs::read(dir.path().join("big.bin")).unwrap(), body);
+        assert_eq!(ctx.stats.failures.load(Relaxed), 0);
+        let requests = server.requests();
+        assert_eq!(requests.len(), 2, "{requests:?}");
+        assert!(requests[0].header("range").is_none());
+        let range = requests[1].header("range").unwrap();
+        let from: usize = range["bytes=".len()..range.len() - 1].parse().unwrap();
+        assert!(from >= 64 * 1024 && from < body.len(), "{range}");
+        assert_eq!(requests[1].header("connection"), Some("close"));
+        assert_eq!(ctx.recycle.to_close.load(Relaxed), 3);
     }
 }
 

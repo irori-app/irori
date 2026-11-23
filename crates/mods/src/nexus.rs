@@ -1,4 +1,6 @@
-//! Nexus Mods: the public API v1 with the user's personal API key.
+//! Nexus Mods: the public API v1 with the user's personal API key, and its
+//! documented GraphQL API v2 (`/v2/graphql`) for finding a game's mods by
+//! name, which v1 can't.
 //!
 //! Premium accounts may ask for download links directly. Free accounts get
 //! one from the site's "Mod manager download" button: it opens an `nxm://`
@@ -149,6 +151,123 @@ impl ModFile {
     }
 }
 
+/// A mod found by [`Client::search`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModSummary {
+    pub mod_id: u64,
+    pub name: String,
+    pub summary: String,
+    pub author: String,
+    pub version: String,
+    pub downloads: u64,
+    pub endorsements: u64,
+    pub thumbnail: Option<String>,
+}
+
+/// One page of [`Client::search`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SearchPage {
+    pub mods: Vec<ModSummary>,
+    pub total: u64,
+}
+
+/// Mods per search page.
+pub const SEARCH_PAGE: u32 = 20;
+
+const SEARCH_QUERY: &str = "query IroriSearch($filter: ModsFilter, $sort: [ModsSort!], $offset: Int, $count: Int) { \
+     mods(filter: $filter, sort: $sort, offset: $offset, count: $count) { \
+     totalCount nodes { modId name summary author version downloads endorsements thumbnailUrl adultContent } } }";
+
+/// The GraphQL request for a game's mods whose name holds `query` (every
+/// mod of the game, most endorsed first, when it is empty), from `offset`.
+/// The text travels as a variable, never inside the query.
+pub fn search_request(domain: &str, query: &str, offset: u32) -> Value {
+    let words: Vec<&str> = query.split_whitespace().collect();
+    let mut filter = serde_json::json!({
+        "gameDomainName": [{ "value": domain, "op": "EQUALS" }],
+    });
+    let sort = if words.is_empty() {
+        serde_json::json!([{ "endorsements": { "direction": "DESC" } }])
+    } else {
+        // Wildcards are the API's own; strip the user's so a search stays a
+        // search for words.
+        let text: String = words
+            .join(" ")
+            .chars()
+            .filter(|c| !matches!(c, '*' | '?'))
+            .take(100)
+            .collect();
+        filter["nameStemmed"] = serde_json::json!([{ "value": text, "op": "MATCHES" }]);
+        serde_json::json!([{ "relevance": { "direction": "DESC" } }])
+    };
+    serde_json::json!({
+        "query": SEARCH_QUERY,
+        "variables": {
+            "filter": filter,
+            "sort": sort,
+            "offset": offset,
+            "count": SEARCH_PAGE,
+        },
+    })
+}
+
+/// A GraphQL answer to [`search_request`]. Mods for adults are left out.
+pub fn parse_search(v: &Value) -> Result<SearchPage> {
+    if let Some(message) = v
+        .get("errors")
+        .and_then(Value::as_array)
+        .and_then(|e| e.first())
+        .and_then(|e| e.get("message"))
+        .and_then(Value::as_str)
+    {
+        bail!("Nexus Mods couldn't search: {message}");
+    }
+    let page = v
+        .pointer("/data/mods")
+        .context("Nexus Mods' search answer was not understood")?;
+    let s = |m: &Value, k: &str| {
+        m.get(k)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let n = |m: &Value, k: &str| {
+        m.get(k)
+            .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
+            .unwrap_or(0)
+    };
+    let mods = page
+        .get("nodes")
+        .and_then(Value::as_array)
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|m| m.get("adultContent").and_then(Value::as_bool) != Some(true))
+                .filter_map(|m| {
+                    Some(ModSummary {
+                        mod_id: m.get("modId").and_then(Value::as_u64)?,
+                        name: s(m, "name"),
+                        summary: s(m, "summary"),
+                        author: s(m, "author"),
+                        version: s(m, "version"),
+                        downloads: n(m, "downloads"),
+                        endorsements: n(m, "endorsements"),
+                        thumbnail: m
+                            .get("thumbnailUrl")
+                            .and_then(Value::as_str)
+                            .filter(|u| u.starts_with("https://"))
+                            .map(str::to_string),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(SearchPage {
+        mods,
+        total: page.get("totalCount").and_then(Value::as_u64).unwrap_or(0),
+    })
+}
+
 /// Calls the API with one key.
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -207,6 +326,32 @@ impl Client {
                 .to_string(),
             is_premium: v.get("is_premium").and_then(Value::as_bool) == Some(true),
         })
+    }
+
+    /// A page of the game's mods whose name holds `query`, through the
+    /// GraphQL API v2.
+    pub async fn search(&self, domain: &str, query: &str, offset: u32) -> Result<SearchPage> {
+        check_domain(domain)?;
+        let response = irori_core::http::client()
+            .post(format!("{}/v2/graphql", self.base))
+            .header("apikey", &self.key.0)
+            .header("Application-Name", "Irori")
+            .header("Application-Version", env!("CARGO_PKG_VERSION"))
+            .json(&search_request(domain, query, offset))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Nexus Mods could not be reached: {}", e.without_url()))?;
+        let status = response.status();
+        match status.as_u16() {
+            200..=299 => {}
+            401 => bail!("Nexus Mods refused the API key"),
+            429 => bail!("Nexus Mods' hourly limit is reached; try again later"),
+            _ => bail!("Nexus Mods answered {status}"),
+        }
+        let v: Value = response.json().await.map_err(|e| {
+            anyhow::anyhow!("Nexus Mods' answer was not understood: {}", e.without_url())
+        })?;
+        parse_search(&v)
     }
 
     pub async fn mod_info(&self, domain: &str, mod_id: u64) -> Result<ModInfo> {

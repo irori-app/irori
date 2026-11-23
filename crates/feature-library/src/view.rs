@@ -812,6 +812,7 @@ impl LibraryView {
             launching: self.launching.contains(&id),
             shortcut: self.shortcuts.get(&id).map(|(exists, _)| *exists),
             unavailable: game.is_installed && self.availability.missing().contains(&id),
+            rom: id.runner == Runner::Emulation,
         }
     }
 
@@ -1067,6 +1068,9 @@ impl LibraryView {
             }
             GameCommand::Uninstall => cx.emit(LibraryEvent::RequestUninstall(id)),
             GameCommand::Locate => cx.emit(LibraryEvent::RequestLocate(id)),
+            GameCommand::PlayAsPcGame => {
+                dialogs::sideload::open_play_as_pc_game_dialog(&id, window, cx)
+            }
         }
     }
 

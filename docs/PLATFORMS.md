@@ -7,7 +7,7 @@ different native OS is rejected before launch.
 
 | Host | Native game builds | Windows game builds | Runtime manager |
 | --- | --- | --- | --- |
-| Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wine-GE, Kron4ek |
+| Linux x86-64 | Linux, browser | Wine / Proton / umu | GE-Proton, CachyOS, Wineland, DW-Proton, UMU-Proton, Proton-EM, Proton-Sarek, Wine-GE, Kron4ek |
 | Linux arm64 | Linux, browser | Wine / Proton / umu | The arm64 builds of GE-Proton and CachyOS |
 | macOS Intel | macOS, browser | macOS Wine / CrossOver | Wine-Crossover, Wine-Staging-macOS |
 | macOS Apple silicon | macOS, browser | macOS Wine / CrossOver / Whisky / GPTK | Game-Porting-Toolkit, Wine-Crossover, Wine-Staging-macOS |

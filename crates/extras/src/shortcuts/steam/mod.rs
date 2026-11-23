@@ -595,6 +595,19 @@ mod tests {
     }
 
     #[test]
+    fn art_of_an_appid_of_zero_uses_the_computed_id() {
+        let exe = "\"/usr/bin/irori\"";
+        let zero = vdf::Map::new()
+            .with("appid", vdf::Value::Int32(0))
+            .with("AppName", vdf::Value::String("Hades".into()))
+            .with("Exe", vdf::Value::String(exe.into()));
+        assert_eq!(
+            grid_ids(ShortcutEntry(&zero)),
+            GridIds::from_exe_name(exe, "Hades")
+        );
+    }
+
+    #[test]
     fn flatpak_launch_options() {
         let l = LauncherCommand {
             program: "flatpak".into(),

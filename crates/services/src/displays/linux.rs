@@ -55,7 +55,7 @@ async fn compositor() -> Option<(&'static str, Vec<Display>, bool)> {
     }
     // On X11 only: under Wayland, xrandr sees Xwayland's outputs.
     if var("DISPLAY").is_some()
-        && let Some(text) = run("xrandr", &["--query"]).await
+        && let Some(text) = run("xrandr", &["--query", "--props"]).await
     {
         let displays = parse::xrandr(&text);
         if !displays.is_empty() {
@@ -112,7 +112,10 @@ pub(super) fn connectors(drm: &Path) -> Vec<Display> {
                         .map(|m| parse::sysfs_modes(&m))
                         .unwrap_or_default(),
                     hdr_on: None,
-                    hdr_capable: edid.map(|e| e.hdr),
+                    hdr_capable: edid.as_ref().map(|e| e.hdr),
+                    vrr_on: None,
+                    vrr_capable: edid.as_ref().and_then(parse::Edid::vrr),
+                    vrr_range: edid.and_then(|e| e.refresh_range),
                 },
             ))
         })

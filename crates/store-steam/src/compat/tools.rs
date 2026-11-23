@@ -76,7 +76,8 @@ pub(crate) fn installed_tools(steam_dir: &Path) -> Vec<CompatTool> {
 /// Valve's Proton builds installed in any Steam library.
 fn valve_tools(steam_dir: &Path) -> Vec<CompatTool> {
     let mut tools = Vec::new();
-    for library in scan::libraries(steam_dir) {
+    // Only this Steam's own libraries: it runs its games with those.
+    for library in scan::libraries(&[steam_dir.to_path_buf()]) {
         let Ok(entries) = std::fs::read_dir(library.join("steamapps")) else {
             continue;
         };

@@ -42,6 +42,8 @@ fn str_at<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
 
 /// KDE Plasma's `kscreen-doctor -j`. `hdr` (Plasma 6) says whether HDR is
 /// on; whether the display could comes from its EDID ([`super::merge`]).
+/// `capabilities` holds libkscreen's flags (VRR is `0x2`) and `vrrPolicy`
+/// the user's choice: never, always or automatic (full-screen programs).
 pub fn kscreen(json: &str) -> Option<Vec<Display>> {
     let root: Value = serde_json::from_str(json).ok()?;
     let outputs = root.get("outputs")?.as_array()?;
@@ -86,6 +88,11 @@ pub fn kscreen(json: &str) -> Option<Vec<Display>> {
                 .get("hdr")
                 .or_else(|| o.get("hdrEnabled"))
                 .and_then(Value::as_bool);
+            let vrr_capable = o
+                .get("capabilities")
+                .and_then(Value::as_u64)
+                .map(|caps| caps & KSCREEN_VRR != 0);
+            let vrr_on = kscreen_vrr(vrr_capable, o.get("vrrPolicy"));
             Display {
                 connector: str_at(o, "name").unwrap_or_default().to_string(),
                 name: None,
@@ -99,14 +106,42 @@ pub fn kscreen(json: &str) -> Option<Vec<Display>> {
                 hdr_on: if enabled { hdr_on } else { None },
                 // HDR on shows it can; off says nothing about the display.
                 hdr_capable: hdr_on.filter(|on| *on),
+                vrr_on: vrr_on.filter(|_| enabled),
+                vrr_capable,
+                vrr_range: None,
             }
         })
         .collect();
     Some(displays)
 }
 
+/// libkscreen's `Output::Capability::Vrr`.
+const KSCREEN_VRR: u64 = 0x2;
+
+/// Whether KDE runs a display with variable refresh: never when it can't or
+/// the policy is "never"; on for "always" and "automatic" (which turns it on
+/// for full-screen games) when it can; unknown when either isn't said.
+fn kscreen_vrr(capable: Option<bool>, policy: Option<&Value>) -> Option<bool> {
+    let policy = match policy? {
+        Value::Number(n) => n.as_u64()?,
+        Value::String(s) => match s.to_ascii_lowercase().as_str() {
+            "never" => 0,
+            "always" => 1,
+            "automatic" => 2,
+            _ => return None,
+        },
+        _ => return None,
+    };
+    match (capable, policy) {
+        (Some(false), _) | (_, 0) => Some(false),
+        (Some(true), 1 | 2) => Some(true),
+        _ => None,
+    }
+}
+
 /// Hyprland's `hyprctl -j monitors all`. Newer versions name the colour
-/// management preset (`hdr`, `hdredid`) the monitor runs with.
+/// management preset (`hdr`, `hdredid`) the monitor runs with, and `vrr`
+/// says whether variable refresh is active.
 pub fn hyprctl(json: &str) -> Option<Vec<Display>> {
     let root: Value = serde_json::from_str(json).ok()?;
     let displays = root
@@ -147,6 +182,9 @@ pub fn hyprctl(json: &str) -> Option<Vec<Display>> {
                     .filter(|_| enabled)
                     .map(|p| p.to_ascii_lowercase().contains("hdr")),
                 hdr_capable: None,
+                vrr_on: m.get("vrr").and_then(Value::as_bool).filter(|_| enabled),
+                vrr_capable: None,
+                vrr_range: None,
             }
         })
         .collect();
@@ -154,7 +192,7 @@ pub fn hyprctl(json: &str) -> Option<Vec<Display>> {
 }
 
 /// `wlr-randr --json` (sway and other wlroots compositors). It says
-/// nothing about HDR.
+/// nothing about HDR; `adaptive_sync` is whether variable refresh is on.
 pub fn wlr_randr(json: &str) -> Option<Vec<Display>> {
     let root: Value = serde_json::from_str(json).ok()?;
     let displays = root
@@ -201,13 +239,22 @@ pub fn wlr_randr(json: &str) -> Option<Vec<Display>> {
                 modes,
                 hdr_on: None,
                 hdr_capable: None,
+                vrr_on: o
+                    .get("adaptive_sync")
+                    .and_then(Value::as_bool)
+                    .filter(|_| enabled),
+                vrr_capable: None,
+                vrr_range: None,
             }
         })
         .collect();
     Some(displays)
 }
 
-/// `xrandr --query` on X11, which has no HDR: every display reports it off.
+/// `xrandr --query --props` on X11, which has no HDR: every display reports
+/// it off. Drivers that can vary the refresh rate (amdgpu, nouveau) list a
+/// `vrr_capable` property; whether it is on is a driver option X11 doesn't
+/// show.
 pub fn xrandr(text: &str) -> Vec<Display> {
     let mut displays: Vec<Display> = Vec::new();
     let mut in_connected = false;
@@ -237,6 +284,9 @@ pub fn xrandr(text: &str) -> Vec<Display> {
                 modes: Vec::new(),
                 hdr_on: Some(false),
                 hdr_capable: None,
+                vrr_on: None,
+                vrr_capable: None,
+                vrr_range: None,
             });
             continue;
         }
@@ -246,6 +296,14 @@ pub fn xrandr(text: &str) -> Vec<Display> {
         let Some(display) = displays.last_mut() else {
             continue;
         };
+        if let Some(value) = line.trim().strip_prefix("vrr_capable:") {
+            display.vrr_capable = match value.trim() {
+                "1" => Some(true),
+                "0" => Some(false),
+                _ => None,
+            };
+            continue;
+        }
         let mut words = line.split_whitespace();
         let Some(size) = words.next().and_then(mode_text) else {
             continue;
@@ -294,6 +352,22 @@ pub struct Edid {
     /// The CTA extension's HDR static metadata block lists the PQ (ST 2084)
     /// or HLG transfer function.
     pub hdr: bool,
+    /// The vertical refresh range of an EDID 1.4 display announcing
+    /// continuous frequencies (DisplayPort Adaptive-Sync), in hertz.
+    pub refresh_range: Option<(u32, u32)>,
+    /// The CTA extension holds AMD's vendor block (FreeSync, over HDMI too).
+    pub freesync: bool,
+}
+
+impl Edid {
+    /// Whether the display can vary its refresh rate: AMD's block, or a
+    /// continuous range wider than 10 Hz (the kernel's amdgpu rule; a
+    /// narrower one is a fixed-rate panel's tolerance). `None`, not `false`,
+    /// otherwise: G-Sync modules and HDMI 2.1 VRR announce it elsewhere.
+    pub fn vrr(&self) -> Option<bool> {
+        let wide = self.refresh_range.is_some_and(|(min, max)| max > min + 10);
+        (self.freesync || wide).then_some(true)
+    }
 }
 
 /// Read an EDID: the 128-byte base block and its CTA-861 extensions. Every
@@ -313,8 +387,19 @@ pub fn edid(bytes: &[u8]) -> Option<Edid> {
         })
         .collect();
     out.manufacturer = letters;
+    // EDID 1.4's "continuous frequency" feature bit: the range limits
+    // descriptor is then a range the display follows, not just limits.
+    let continuous = (bytes[18], bytes[19]) >= (1, 4) && bytes[24] & 0x1 != 0;
     for start in [54usize, 72, 90, 108] {
         let d = &bytes[start..start + 18];
+        if continuous && d[0] == 0 && d[1] == 0 && d[3] == 0xfd {
+            // Rates over 255 Hz carry an offset of 255 (byte 4's low bits).
+            let min = u32::from(d[5]) + if d[4] & 0x1 != 0 { 255 } else { 0 };
+            let max = u32::from(d[6]) + if d[4] & 0x2 != 0 { 255 } else { 0 };
+            if min > 0 && max >= min {
+                out.refresh_range = Some((min, max));
+            }
+        }
         if d[0] == 0 && d[1] == 0 && d[3] == 0xfc {
             let text: String = d[5..]
                 .iter()
@@ -347,6 +432,10 @@ pub fn edid(bytes: &[u8]) -> Option<Edid> {
                 if eotf & 0b1100 != 0 {
                     out.hdr = true;
                 }
+            }
+            // A vendor block (tag 3) with AMD's IEEE OUI, least byte first.
+            if tag == 3 && len >= 3 && ext[i + 1..i + 4] == [0x1a, 0x00, 0x00] {
+                out.freesync = true;
             }
             i += 1 + len;
         }
@@ -384,6 +473,7 @@ pub fn system_profiler(json: &str) -> Option<Vec<Display>> {
                 modes: Vec::new(),
                 hdr_on: None,
                 hdr_capable: kind.then_some(true),
+                ..Default::default()
             }
         })
         .collect();
@@ -457,6 +547,7 @@ mod tests {
 
     const KSCREEN: &str = r#"{"outputs": [
         {"name": "DP-2", "connected": true, "enabled": true, "priority": 1,
+         "capabilities": 27, "vrrPolicy": 2,
          "currentModeId": "72", "hdr": true, "wcg": true, "sdr-brightness": 200,
          "modes": [
             {"id": "72", "name": "2560x1440@165", "refreshRate": 164.958,
@@ -464,7 +555,7 @@ mod tests {
             {"id": "73", "name": "1920x1080@60", "refreshRate": 60.0,
              "size": {"width": 1920, "height": 1080}}]},
         {"name": "HDMI-A-1", "connected": true, "enabled": false, "priority": 0,
-         "currentModeId": "", "hdr": false, "modes": [],
+         "capabilities": 1, "vrrPolicy": 1, "currentModeId": "", "hdr": false, "modes": [],
          "future": {"x": 1}},
         {"name": "DP-3", "connected": false, "modes": []}
     ], "screen": {}}"#;
@@ -478,7 +569,9 @@ mod tests {
         assert_eq!(d[0].current, Some(mode(2560, 1440, Some(164_958))));
         assert_eq!(d[0].modes.len(), 2);
         assert_eq!((d[0].hdr_on, d[0].hdr_capable), (Some(true), Some(true)));
+        assert_eq!((d[0].vrr_on, d[0].vrr_capable), (Some(true), Some(true)));
         assert!(!d[1].enabled && d[1].current.is_none());
+        assert_eq!((d[1].vrr_on, d[1].vrr_capable), (None, Some(false)));
         assert_eq!((d[1].hdr_on, d[1].hdr_capable), (None, None));
         // Plasma 5: no HDR keys, numeric mode ids, `primary`.
         let old = r#"{"outputs": [{"name": "eDP-1", "connected": true, "enabled": true,
@@ -492,9 +585,24 @@ mod tests {
     }
 
     #[test]
+    fn kscreen_vrr_policies() {
+        let n = |v: u64| Value::from(v);
+        let s = |v: &str| Value::from(v);
+        assert_eq!(kscreen_vrr(Some(true), Some(&n(0))), Some(false));
+        assert_eq!(kscreen_vrr(Some(true), Some(&n(1))), Some(true));
+        assert_eq!(kscreen_vrr(Some(true), Some(&s("Automatic"))), Some(true));
+        assert_eq!(kscreen_vrr(Some(false), Some(&n(1))), Some(false));
+        // A policy without the capability flags can't say it is on.
+        assert_eq!(kscreen_vrr(None, Some(&n(2))), None);
+        assert_eq!(kscreen_vrr(None, Some(&n(0))), Some(false));
+        assert_eq!(kscreen_vrr(Some(true), None), None);
+        assert_eq!(kscreen_vrr(Some(true), Some(&s("sometimes"))), None);
+    }
+
+    #[test]
     fn hyprland() {
         let json = r#"[{"id": 0, "name": "DP-1", "make": "Dell Inc.", "model": "DELL U2720Q",
-            "width": 3840, "height": 2160, "refreshRate": 59.997, "disabled": false,
+            "width": 3840, "height": 2160, "refreshRate": 59.997, "disabled": false, "vrr": true,
             "colorManagementPreset": "hdr",
             "availableModes": ["3840x2160@60.00Hz", "2560x1440@59.95Hz"]},
             {"id": 1, "name": "HDMI-A-1", "width": 1920, "height": 1080,
@@ -505,13 +613,15 @@ mod tests {
         assert_eq!(d[0].current, Some(mode(3840, 2160, Some(59_997))));
         assert_eq!(d[0].modes[1], mode(2560, 1440, Some(59_950)));
         assert_eq!(d[0].hdr_on, Some(true));
+        assert_eq!(d[0].vrr_on, Some(true));
         assert!(!d[1].enabled && d[1].current.is_none() && d[1].hdr_on.is_none());
+        assert_eq!(d[1].vrr_on, None);
     }
 
     #[test]
     fn wlroots() {
         let json = r#"[{"name": "DP-1", "make": "Unknown", "model": "XG27AQ",
-            "enabled": true, "modes": [
+            "enabled": true, "adaptive_sync": false, "modes": [
               {"width": 2560, "height": 1440, "refresh": 170.0, "preferred": true, "current": true},
               {"width": 2560, "height": 1440, "refresh": 59.951, "preferred": false, "current": false}]}]"#;
         let d = wlr_randr(json).unwrap();
@@ -519,6 +629,7 @@ mod tests {
         assert_eq!(d[0].current, Some(mode(2560, 1440, Some(170_000))));
         assert_eq!(d[0].modes.len(), 2);
         assert_eq!(d[0].hdr_on, None);
+        assert_eq!(d[0].vrr_on, Some(false));
     }
 
     #[test]
@@ -526,6 +637,11 @@ mod tests {
         let text = "\
 Screen 0: minimum 320 x 200, current 4480 x 1440, maximum 16384 x 16384
 DisplayPort-0 connected primary 2560x1440+0+0 (normal left inverted right x axis y axis) 597mm x 336mm
+	EDID: 
+		00ffffffffffff0010ac
+	vrr_capable: 1 
+		range: (0, 1)
+	TearFree: auto 
    2560x1440    164.96*+ 143.97   59.95
    1920x1080     60.00    50.00
    1920x1080i    60.00
@@ -541,6 +657,8 @@ DVI-D-0 connected (normal left inverted right x axis y axis)
         assert_eq!(d[0].current, Some(mode(2560, 1440, Some(164_960))));
         assert_eq!(d[0].modes.len(), 6);
         assert_eq!(d[0].hdr_on, Some(false));
+        assert_eq!((d[0].vrr_on, d[0].vrr_capable), (None, Some(true)));
+        assert_eq!(d[1].vrr_capable, None);
         assert_eq!(d[1].current, Some(mode(1920, 1080, Some(60_000))));
         assert!(!d[1].primary);
         assert!(!d[2].enabled && d[2].current.is_none());
@@ -606,6 +724,43 @@ DVI-D-0 connected (normal left inverted right x axis y axis)
         assert!(!edid(&broken).unwrap().hdr);
         assert_eq!(edid(&[0u8; 64]), None);
         assert_eq!(edid(&[1u8; 128]), None);
+    }
+
+    #[test]
+    fn edid_refresh_ranges() {
+        let with_range = |version: u8, continuous: bool, min: u8, max: u8, offsets: u8| {
+            let mut b = edid_bytes("VRR", false);
+            b[18] = 1;
+            b[19] = version;
+            b[24] = u8::from(continuous);
+            let d = &mut b[72..90];
+            d[3] = 0xfd;
+            d[4] = offsets;
+            d[5] = min;
+            d[6] = max;
+            edid(&b).unwrap()
+        };
+        let e = with_range(4, true, 48, 144, 0);
+        assert_eq!(e.refresh_range, Some((48, 144)));
+        assert_eq!(e.vrr(), Some(true));
+        // 48–300 Hz: the maximum carries the 255 offset.
+        assert_eq!(
+            with_range(4, true, 48, 45, 0b10).refresh_range,
+            Some((48, 300))
+        );
+        // Fixed-rate panels: limits only, or a tolerance of a few hertz.
+        assert_eq!(with_range(4, false, 48, 144, 0).refresh_range, None);
+        assert_eq!(with_range(3, true, 48, 144, 0).refresh_range, None);
+        assert_eq!(with_range(4, true, 56, 61, 0).vrr(), None);
+
+        let mut amd = edid_bytes("AMD", false);
+        let ext = &mut amd[128..];
+        ext[11] = (3 << 5) | 3;
+        ext[12..15].copy_from_slice(&[0x1a, 0x00, 0x00]);
+        ext[2] = 15;
+        let e = edid(&amd).unwrap();
+        assert!(e.freesync);
+        assert_eq!(e.vrr(), Some(true));
     }
 
     #[test]

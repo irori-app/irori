@@ -54,7 +54,11 @@ use account::{AccountFiles, LibraryCache, Session};
 use client::ClientLink;
 use client_library::{ClientCache, ClientFiles, ClientSettings};
 pub use client_library::{ClientLibraryError, ClientLibraryMode, ClientLibraryState};
-pub use compat::{CompatTool, CompatToolState, SteamRunning, ToolSource};
+pub use compat::{
+    COMMAND as LAUNCH_COMMAND, CompatTool, CompatToolState, LaunchOptionsState, SteamRunning,
+    ToolSource, variable as launch_variable, with_dll_overrides,
+    with_variable as with_launch_variable, without_dll_overrides,
+};
 pub use friends::{FriendLink, FriendState, Friends, SteamFriend};
 use scan::{InstalledApp, LocalArt};
 
@@ -136,6 +140,8 @@ pub struct SteamStore {
     client_marker: RwLock<bool>,
     /// One read of the Steam client at a time.
     client_reading: tokio::sync::Mutex<()>,
+    /// Hands links and launches to Steam.
+    opener: client::Opener,
 }
 
 impl SteamStore {
@@ -152,11 +158,13 @@ impl SteamStore {
             AccountFiles::new(&config, &cache),
             ClientFiles::new(&config, &cache),
             Endpoints::default(),
+            client::Opener::System,
         )
     }
 
     /// A store reading the Steam installation at `steam_dir`, keeping its
     /// own files under `data` and talking to Steam at `endpoints` (tests).
+    /// Links and launches are recorded, never handed to a Steam.
     pub fn with_layout(
         bus: EventBus,
         settings: SettingsFn,
@@ -171,6 +179,7 @@ impl SteamStore {
             AccountFiles::new(&data.join("config"), &data.join("cache")),
             ClientFiles::new(&data.join("config"), &data.join("cache")),
             endpoints,
+            client::Opener::Recorded(Mutex::new(Vec::new())),
         )
     }
 
@@ -181,6 +190,7 @@ impl SteamStore {
         files: AccountFiles,
         client_files: ClientFiles,
         endpoints: Endpoints,
+        opener: client::Opener,
     ) -> Arc<Self> {
         let client = Client::with_endpoints(endpoints)
             .inspect_err(|e| tracing::warn!("Steam's web client: {e:#}"))
@@ -211,6 +221,7 @@ impl SteamStore {
             client_cache: RwLock::new(Arc::default()),
             client_marker: RwLock::new(false),
             client_reading: tokio::sync::Mutex::new(()),
+            opener,
         })
     }
 
@@ -220,6 +231,15 @@ impl SteamStore {
         self.steam_dir
             .clone()
             .unwrap_or_else(|| irori_runtime::locations::steam_path(&(self.settings)()))
+    }
+
+    /// Every Steam install whose libraries are read ([`scan::steam_installs`]):
+    /// only the given folder for a test store.
+    fn steam_installs(&self) -> Vec<PathBuf> {
+        match &self.steam_dir {
+            Some(dir) => vec![dir.clone()],
+            None => scan::steam_installs(&self.steam_dir(), &irori_runtime::locations::home()),
+        }
     }
 
     /// The signed-in account with an access token that still works, renewed
@@ -262,6 +282,7 @@ impl SteamStore {
     /// the account's. Reports whether the library changed.
     async fn scan(&self) -> Result<bool> {
         let dir = self.steam_dir();
+        let installs = self.steam_installs();
         let account = self.account_library.read().clone();
         let client = self.client_games();
         let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
@@ -269,7 +290,7 @@ impl SteamStore {
             let found = dir.join("steamapps").is_dir();
             let hidden =
                 hidden::user_dir(&dir, steamid.as_deref()).and_then(|u| hidden::hidden_apps(&u));
-            let apps = scan::installed_apps(&dir);
+            let apps = scan::installed_apps(&installs);
             let ids = apps
                 .iter()
                 .map(|a| a.app_id.as_str())
@@ -447,8 +468,7 @@ impl SteamStore {
     /// show without a refresh. Re-armed when the libraries change.
     fn watch_libraries(&self) {
         use notify::{RecursiveMode, Watcher as _};
-        let dir = self.steam_dir();
-        let folders: Vec<PathBuf> = scan::libraries(&dir)
+        let folders: Vec<PathBuf> = scan::libraries(&self.steam_installs())
             .into_iter()
             .map(|l| l.join("steamapps"))
             .collect();
@@ -518,10 +538,14 @@ impl SteamStore {
     }
 
     /// The signed-in account's name as Steam shows it on this computer, else
-    /// its account name.
+    /// its remembered persona name, else its SteamID64.
     fn display_name(&self, session: &Session) -> String {
         scan::persona_name(&self.steam_dir(), &session.steamid)
-            .unwrap_or_else(|| session.account_name.clone())
+            .or_else(|| {
+                let name = session.account_name.trim();
+                (!name.is_empty()).then(|| name.to_string())
+            })
+            .unwrap_or_else(|| session.steamid.clone())
     }
 
     /// The Steam Play compatibility tools installed and the one Steam runs
@@ -537,6 +561,21 @@ impl SteamStore {
     /// [`SteamRunning`] while Steam runs: Steam would overwrite the change.
     pub async fn set_compat_tool(&self, app_name: &str, tool: Option<&str>) -> Result<()> {
         compat::set_compat_tool(&self.steam_dir(), app_name, tool).await
+    }
+
+    /// The game's launch options in Steam (the account's `localconfig.vdf`)
+    /// and whether they can be changed now.
+    pub async fn launch_options(&self, app_name: &str) -> Result<LaunchOptionsState> {
+        let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
+        compat::launch_options_state(&self.steam_dir(), steamid, app_name).await
+    }
+
+    /// Set the game's launch options in Steam to `line`, or clear them for
+    /// `None`. Only that value of Steam's account settings changes. Fails
+    /// with [`SteamRunning`] while Steam runs: Steam would overwrite it.
+    pub async fn set_launch_options(&self, app_name: &str, line: Option<String>) -> Result<()> {
+        let steamid = self.session.read().as_ref().map(|s| s.steamid.clone());
+        compat::set_launch_options(&self.steam_dir(), steamid, app_name, line).await
     }
 
     /// Ask the Steam client to close, and wait until it has. Games Steam
@@ -565,11 +604,13 @@ impl SteamStore {
             .live_session()
             .await
             .context("Steam couldn't renew your sign-in. Check your connection and try again.")?;
+        let auth = session
+            .auth()
+            .context("Steam sign-in changed. Sign in to Steam again.")?;
         let client = self.client()?;
-        let token = &session.access_token;
         let read = async {
-            let ids = client.friend_list(token, session.steamid()?).await?;
-            client.player_summaries(token, &ids).await
+            let ids = client.friend_list(auth, session.steamid()?).await?;
+            client.player_summaries(auth, &ids).await
         };
         let players = read.await.map_err(|e| {
             if e.downcast_ref() == Some(&irori_steam_api::SteamError::NotShared) {
@@ -587,12 +628,10 @@ impl SteamStore {
 
     /// Open `link` in the Steam client.
     pub async fn open_friend_link(&self, link: FriendLink) -> Result<()> {
-        irori_core::process::run(&client::open_url(&link.url()), Default::default())
+        self.opener
+            .open_link(&self.steam_dir(), &link.url())
             .await
-            .context("Steam didn't open")?
-            .check()
-            .context("Steam didn't open")?;
-        Ok(())
+            .context("Steam didn't open")
     }
 }
 
@@ -662,15 +701,24 @@ impl Store for SteamStore {
         LoginFlow::InApp
     }
 
-    /// Completes a sign-in with the tokens [`signin::login_input`] made:
-    /// reads the account's games (which proves the tokens work), then keeps
-    /// the tokens.
+    /// Completes a connection with the payload [`signin::web_login_input`] or
+    /// [`signin::api_key_login_input`] built: reads the account's games (which
+    /// proves the credentials work), then keeps them.
     async fn login(&self, input: &str) -> Result<UserInfo> {
         let session = account::parse_login_input(input)?;
         let client = self.client()?;
         let session = account::fresh(client, &session).await?.unwrap_or(session);
         let (games, renewed) = account::fetch_library_renewing(client, &session).await?;
-        let session = renewed.unwrap_or(session);
+        let mut session = renewed.unwrap_or(session);
+        if session.account_name.trim().is_empty()
+            && let Some(auth) = session.auth()
+            && let Ok(steamid) = session.steamid()
+            && let Ok(players) = client.player_summaries(auth, &[steamid]).await
+            && let Some(me) = players.into_iter().next()
+            && !me.personaname.trim().is_empty()
+        {
+            session.account_name = me.personaname;
+        }
         let files = self.files.clone();
         let mut cache = (*self.account_library.read().clone()).clone();
         cache.steamid = session.steamid.clone();
@@ -685,7 +733,8 @@ impl Store for SteamStore {
         *self.account_library.write() = Arc::new(cache);
         *self.fetched.lock() = Some(Instant::now());
         self.scan().await?;
-        // Store art for the games new to the library.
+        // Store art for the games new to the library (fetched is already fresh,
+        // so this only queries public store assets without re-reading the account).
         let _ = self.refresh_account(false).await;
         let _ = self.scan().await;
         self.bus.emit(Event::AccountChanged(Runner::Steam));
@@ -698,15 +747,6 @@ impl Store for SteamStore {
 
     /// Forgets the account and the games it added; installed games stay.
     async fn logout(&self) -> Result<()> {
-        // Best effort: logging out works offline, like Epic's and Amazon's.
-        let session = self.session.read().clone();
-        if let (Some(session), Ok(client)) = (session, self.client())
-            && let Err(e) = client
-                .revoke_refresh_token(&session.refresh_token, &session.access_token)
-                .await
-        {
-            tracing::warn!("ending the Steam sign-in: {e:#}");
-        }
         let files = self.files.clone();
         let art = self.account_library.read().art.clone();
         let cache = LibraryCache {
@@ -871,8 +911,18 @@ impl Store for SteamStore {
             cfg!(windows) || windows_build,
         );
         let install_path = game.install.as_ref().map(|i| i.install_path.clone());
+        // Steam is handed the game here, detached, rather than started as the
+        // session's program: a Steam this starts must not end with the
+        // session or depend on Irori.
+        let commands = client::launch_commands(&self.steam_dir(), &game.app_name, &args).await;
+        let command = self
+            .opener
+            .hand_over(commands)
+            .await
+            .context("Steam didn't open")?;
+        client::log_handover(&request.log_file, &command).await;
         Ok(LaunchPlan {
-            command: client::launch_command(&self.steam_dir(), &game.app_name, &args).await,
+            command: client::handed_over(),
             track_wineserver: false,
             watch: Some(Arc::new(watch::SteamGameWatch::new(
                 game.app_name.to_string(),
@@ -890,13 +940,10 @@ impl Store for SteamStore {
             ClientAction::Verify => ClientLink::Verify,
             ClientAction::Show => ClientLink::Details,
         };
-        let command = client::open_url(&link.url(app_name));
-        irori_core::process::run(&command, Default::default())
+        self.opener
+            .open_link(&self.steam_dir(), &link.url(app_name))
             .await
-            .context("Steam didn't open")?
-            .check()
-            .context("Steam didn't open")?;
-        Ok(())
+            .context("Steam didn't open")
     }
 
     /// The larger of what Steam recorded on this computer and what the
@@ -956,6 +1003,7 @@ mod tests {
         Endpoints {
             api: dead.clone(),
             store: dead.clone(),
+            login: dead.clone(),
             assets: dead,
         }
     }
@@ -1012,6 +1060,10 @@ mod tests {
                         "library_capsule": "library_capsule.jpg"
                     }}
                 ]}}))
+            } else if path.starts_with("/IPlayerService/GetPlayerLinkDetails/") {
+                Resp::json(serde_json::json!({"response": {"accounts": [{
+                    "public_data": {"steamid": "76561197960265729", "persona_name": "player"}
+                }]}}))
             } else {
                 Resp::status(404)
             }
@@ -1022,6 +1074,7 @@ mod tests {
         let endpoints = Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         };
         let s = store_at(&steam, AppSettings::default(), endpoints.clone());
@@ -1030,10 +1083,12 @@ mod tests {
         assert!(s.accounts().is_empty());
         assert_eq!(s.login_flow(), LoginFlow::InApp);
 
-        let input = format!(
-            r#"{{"accountName":"player","steamid":"76561197960265729","refreshToken":"r","accessToken":"{}"}}"#,
+        let input = account::web_login_input(&format!(
+            r#"{{"steamid":"76561197960265729","accessToken":"{}","refreshCookie":"76561197960265729%7C%7C{}"}}"#,
+            token(76561197960265729),
             token(76561197960265729)
-        );
+        ))
+        .unwrap();
         let user = s.login(&input).await.unwrap();
         assert_eq!(user.account_id, "76561197960265729");
         assert_eq!(user.display_name, "player");
@@ -1087,11 +1142,14 @@ mod tests {
         assert!(s.login("a pasted code").await.is_err());
     }
 
-    /// The arguments after `-applaunch <id>` of a launch plan, or those of
-    /// Steam's `run` link when Steam's program isn't found.
-    fn launched_args(plan: &LaunchPlan) -> Vec<String> {
-        let argv: Vec<String> = plan
-            .command
+    /// The arguments after `-applaunch <id>` of what Steam was last handed,
+    /// or those of Steam's `run` link when Steam's program isn't found.
+    fn launched_args(s: &SteamStore) -> Vec<String> {
+        let argv: Vec<String> = s
+            .opener
+            .opened()
+            .last()
+            .expect("Steam was handed the game")
             .args
             .iter()
             .map(|a| a.to_string_lossy().into_owned())
@@ -1137,12 +1195,11 @@ mod tests {
             skip_version_check: false,
             log_file: dir.path().join("log"),
         };
-        let plan = s
-            .launch("620", &request, OpContext::detached())
+        s.launch("620", &request, OpContext::detached())
             .await
             .unwrap();
         assert_eq!(
-            launched_args(&plan),
+            launched_args(&s),
             [
                 "-savedir",
                 r"C:\Users\me\saves",
@@ -1212,9 +1269,9 @@ mod tests {
         // A signed-in account never takes another user's hidden games.
         write_hidden("620");
         *s.session.write() = Some(
-            account::parse_login_input(&format!(
-                r#"{{"accountName":"a","steamid":"{}","refreshToken":"r","accessToken":"x"}}"#,
-                76_561_197_960_265_728u64 + 9
+            account::parse_login_input(&account::api_key_login_input(
+                76_561_197_960_265_728u64 + 9,
+                "0123456789abcdef0123456789abcdef",
             ))
             .unwrap(),
         );
@@ -1256,6 +1313,7 @@ mod tests {
         let endpoints = Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         };
         let s = store_at(&steam, AppSettings::default(), endpoints);
@@ -1270,10 +1328,11 @@ mod tests {
         };
         assert_eq!(asked(&server), 0, "no account, no request");
 
-        let input = format!(
-            r#"{{"accountName":"player","steamid":"76561197960265729","refreshToken":"r","accessToken":"{}"}}"#,
+        let input = account::web_login_input(&format!(
+            r#"{{"steamid":"76561197960265729","accessToken":"{}"}}"#,
             token(76561197960265729)
-        );
+        ))
+        .unwrap();
         s.login(&input).await.unwrap();
         let friends = s.friends(false).await.unwrap().unwrap();
         assert_eq!(friends.list.len(), 1);
@@ -1296,8 +1355,8 @@ mod tests {
     }
 
     /// The Web API refusing an access token whose claims still look valid
-    /// renews it with the refresh token instead of asking to sign in again
-    /// (issue #165), and a refresh token Steam replaced is kept.
+    /// renews it with the web refresh cookie instead of asking to sign in again
+    /// (issue #165), and a refresh cookie Steam replaced is kept.
     #[tokio::test]
     async fn renews_a_refused_access_token_instead_of_signing_out() {
         use irori_depot::test_server::{Resp, TestServer};
@@ -1305,25 +1364,33 @@ mod tests {
         let old = token(steamid);
         // Another token: same claims, another signature.
         let new = old.replace(".sig", ".renewed");
-        let (old_t, new_t) = (old.clone(), new.clone());
+        let rotated_jwt = old.replace(".sig", ".rot");
+        let rotated_cookie = format!("{steamid}%7C%7C{rotated_jwt}");
+        let (old_t, new_t, rot_c) = (old.clone(), new.clone(), rotated_cookie.clone());
         let server = TestServer::start(move |req| {
             let path = req.path.as_str();
-            if path == "/IAuthenticationService/GenerateAccessTokenForApp/v1" {
-                // GenerateAccessTokenForAppResponse { access_token, refresh_token }.
-                let mut body = vec![0x0a];
-                let mut len = new_t.len();
-                while len >= 0x80 {
-                    body.push((len as u8 & 0x7f) | 0x80);
-                    len >>= 7;
-                }
-                body.push(len as u8);
-                body.extend(new_t.as_bytes());
-                body.extend([0x12, 7]);
-                body.extend(b"rotated");
+            if path.starts_with("/jwt/refresh") {
                 Resp {
-                    status: 200,
-                    headers: vec![("x-eresult".into(), "1".into())],
-                    body,
+                    status: 302,
+                    headers: vec![
+                        ("location".into(), "/login/settoken?nonce=1".into()),
+                        (
+                            "set-cookie".into(),
+                            format!("steamRefresh_steam={rot_c}; Path=/; HttpOnly"),
+                        ),
+                    ],
+                    ..Default::default()
+                }
+            } else if path.starts_with("/login/settoken") {
+                Resp {
+                    status: 302,
+                    headers: vec![
+                        ("location".into(), "/".into()),
+                        (
+                            "set-cookie".into(),
+                            format!("steamLoginSecure={steamid}%7C%7C{new_t}; Path=/; HttpOnly"),
+                        ),
+                    ],
                     ..Default::default()
                 }
             } else if path.starts_with("/IPlayerService/GetOwnedGames/") {
@@ -1336,6 +1403,10 @@ mod tests {
                 }
             } else if path.starts_with("/IFamilyGroupsService/GetFamilyGroupForUser/") {
                 Resp::json(serde_json::json!({"response": {}}))
+            } else if path.starts_with("/IPlayerService/GetPlayerLinkDetails/") {
+                Resp::json(serde_json::json!({"response": {"accounts": [{
+                    "public_data": {"steamid": steamid.to_string(), "persona_name": "player"}
+                }]}}))
             } else {
                 Resp::status(404)
             }
@@ -1346,23 +1417,37 @@ mod tests {
         let endpoints = Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         };
         let s = store_at(&steam, AppSettings::default(), endpoints.clone());
         s.init().await.unwrap();
-        let input = format!(
-            r#"{{"accountName":"player","steamid":"{steamid}","refreshToken":"r","accessToken":"{old}"}}"#
-        );
+        let initial_refresh = format!("{steamid}%7C%7C{old}");
+        let input = account::web_login_input(&format!(
+            r#"{{"steamid":"{steamid}","accessToken":"{old}","refreshCookie":"{initial_refresh}"}}"#
+        ))
+        .unwrap();
         s.login(&input).await.unwrap();
         assert_eq!(s.account_library.read().games.len(), 1);
         let saved = s.files.read_session().unwrap();
-        assert_eq!(saved.access_token, new);
-        assert_eq!(saved.refresh_token, "rotated");
+        assert_eq!(
+            saved.auth(),
+            Some(irori_steam_api::SteamAuth::WebSession(&new))
+        );
+        match &saved.auth {
+            account::SessionAuth::WebSession { refresh_cookie, .. } => {
+                assert_eq!(refresh_cookie.as_deref(), Some(rotated_cookie.as_str()));
+            }
+            other => panic!("expected WebSession, got {other:?}"),
+        }
 
         // After a restart, the saved (now refused) token is renewed too.
         s.files
             .write_session(&Session {
-                access_token: old.clone(),
+                auth: account::SessionAuth::WebSession {
+                    access_token: old.clone(),
+                    refresh_cookie: Some(rotated_cookie.clone()),
+                },
                 ..saved
             })
             .unwrap();
@@ -1370,7 +1455,89 @@ mod tests {
         again.init().await.unwrap();
         again.refresh(true).await.unwrap();
         assert!(again.has_account());
-        assert_eq!(again.files.read_session().unwrap().access_token, new);
+        assert_eq!(
+            again.files.read_session().unwrap().auth(),
+            Some(irori_steam_api::SteamAuth::WebSession(&new))
+        );
+    }
+
+    #[tokio::test]
+    async fn connects_with_api_key_and_reads_library_and_friends() {
+        use irori_depot::test_server::{Resp, TestServer};
+        let steamid = 76561197960265729u64;
+        let key = "0123456789ABCDEF0123456789ABCDEF";
+        let server = TestServer::start(move |req| {
+            let path = req.path.as_str();
+            if path.starts_with("/IPlayerService/GetOwnedGames/")
+                && path.contains(&format!("key={key}"))
+            {
+                Resp::json(serde_json::json!({"response": {"game_count": 1, "games": [
+                    {"appid": 620, "name": "Portal 2", "playtime_forever": 120}
+                ]}}))
+            } else if path.starts_with("/ISteamUser/GetFriendList/v1/") {
+                Resp::json(serde_json::json!({"friendslist": {"friends": [
+                    {"steamid": "76561197960265730", "relationship": "friend"}
+                ]}}))
+            } else if path.starts_with("/ISteamUser/GetPlayerSummaries/v2/") {
+                if path.contains("76561197960265730") {
+                    Resp::json(serde_json::json!({"response": {"players": [{
+                        "steamid": "76561197960265730",
+                        "personaname": "Ada",
+                        "personastate": 1,
+                        "gameid": "620",
+                        "gameextrainfo": "Portal 2"
+                    }]}}))
+                } else {
+                    Resp::json(serde_json::json!({"response": {"players": [{
+                        "steamid": steamid.to_string(),
+                        "personaname": "KeyPlayer",
+                        "personastate": 1
+                    }]}}))
+                }
+            } else {
+                Resp::status(404)
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+        let endpoints = Endpoints {
+            api: server.base(),
+            store: server.base(),
+            login: server.base(),
+            assets: server.base(),
+        };
+        let s = store_at(&steam, AppSettings::default(), endpoints);
+        s.init().await.unwrap();
+
+        let input = account::api_key_login_input(steamid, key);
+        let user = s.login(&input).await.unwrap();
+        assert_eq!(user.display_name, "KeyPlayer");
+        assert_eq!(s.games().len(), 1);
+        assert_eq!(s.games()[0].title, "Portal 2");
+
+        let friends = s.friends(false).await.unwrap().unwrap();
+        assert_eq!(friends.list.len(), 1);
+        assert_eq!(friends.list[0].name, "Ada");
+        assert_eq!(friends.playing(620).count(), 1);
+    }
+
+    #[tokio::test]
+    async fn legacy_session_expires_cleanly_on_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let steam = dir.path().join("Steam");
+        std::fs::create_dir_all(steam.join("steamapps")).unwrap();
+        let s = store(&steam, AppSettings::default());
+        std::fs::create_dir_all(s.files.session.parent().unwrap()).unwrap();
+        std::fs::write(
+            &s.files.session,
+            r#"{"accountName":"legacy","steamid":"76561197960265729","refreshToken":"old","accessToken":"old"}"#,
+        )
+        .unwrap();
+        s.init().await.unwrap();
+        assert!(s.has_account());
+        let err = s.refresh(true).await.unwrap_err();
+        assert!(err.downcast_ref::<irori_core::SessionExpired>().is_some());
     }
 
     #[tokio::test]
@@ -1429,12 +1596,19 @@ mod tests {
             .launch("620", &request, OpContext::detached())
             .await
             .unwrap();
-        let args: Vec<String> = plan
-            .command
-            .args
-            .iter()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
+        let opened = |s: &SteamStore| -> Vec<String> {
+            s.opener
+                .opened()
+                .last()
+                .unwrap()
+                .args
+                .iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let args = opened(&s);
+        // Steam was handed the game; the plan's own command only exits.
+        assert_eq!(plan.command.to_string(), client::handed_over().to_string());
         // Arguments go through `-applaunch`, or Steam's `run` link when its
         // program isn't found.
         assert!(
@@ -1451,10 +1625,8 @@ mod tests {
             .launch("620", &plain, OpContext::detached())
             .await
             .unwrap();
-        assert_eq!(
-            plan.command.args.last().unwrap().to_string_lossy(),
-            "steam://rungameid/620"
-        );
+        assert_eq!(opened(&s).last().unwrap(), "steam://rungameid/620");
+        assert_eq!(plan.command.to_string(), client::handed_over().to_string());
         assert!(
             s.launch("1", &request, OpContext::detached())
                 .await
@@ -1481,6 +1653,25 @@ mod tests {
         ));
         assert!(s.updatable_games().await.unwrap().is_empty());
         assert!(s.game("400").unwrap().is_installed);
+    }
+
+    /// Client links go through the opener, which starts them detached from
+    /// Irori, never through a run that waits on Steam's output.
+    #[tokio::test]
+    async fn client_links_go_through_the_opener() {
+        let dir = tempfile::tempdir().unwrap();
+        write_manifest(dir.path(), "400", "Portal");
+        let s = store(dir.path(), AppSettings::default());
+        s.init().await.unwrap();
+        s.client_action("400", ClientAction::Verify).await.unwrap();
+        s.open_friend_link(FriendLink::FriendsList).await.unwrap();
+        let links: Vec<String> = s
+            .opener
+            .opened()
+            .iter()
+            .map(|c| c.args.last().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(links, ["steam://validate/400", "steam://open/friends"]);
     }
 
     #[tokio::test]

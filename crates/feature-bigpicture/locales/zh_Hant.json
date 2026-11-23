@@ -9,6 +9,7 @@
   "bigpicture.action.play": "開始遊戲",
   "bigpicture.action.play_with_log": "附記錄遊玩",
   "bigpicture.action.stop": "停止",
+  "bigpicture.action.cancel_launch": "取消啟動",
   "bigpicture.action.install": "安裝",
   "bigpicture.action.cancel_download": "取消下載",
   "bigpicture.action.update": "更新",

@@ -200,7 +200,7 @@ impl GameSettingsView {
         };
         let reshade = {
             let id = id.clone();
-            cx.new(|_| ReshadePanel::new(id))
+            cx.new(|cx| ReshadePanel::new(id, cx))
         };
         let renodx = {
             let id = id.clone();
@@ -314,8 +314,8 @@ impl GameSettingsView {
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
     /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
-    /// keeps the replay buffer (Linux) and Performance HUD (Linux and macOS),
-    /// and Tools is shown for installed Windows games (ReShade, RenoDX,
+    /// keeps the replay buffer (Linux) and the in-game stats (Linux and
+    /// macOS), and Tools is shown for a Windows build (ReShade, RenoDX,
     /// OptiScaler).
     fn sections(&self, cx: &Context<Self>) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
@@ -538,6 +538,7 @@ impl GameSettingsView {
 
     fn render_tools(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.id.runner == Runner::Steam {
+            // Steam runs the game, so only what goes into its folder applies.
             return v_flex()
                 .w_full()
                 .child(crate::widgets::group_heading(

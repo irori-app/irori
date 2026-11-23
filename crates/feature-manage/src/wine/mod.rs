@@ -3,7 +3,6 @@
 //! system with the user's custom Wine paths.
 
 mod installed;
-mod ops;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -14,6 +13,7 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
@@ -31,6 +31,7 @@ use gpui_kit::{
 };
 use irori_core::{Event, Paths, WineInstallation};
 use irori_runtime::manager::{self, Release, ReleaseKind};
+use irori_runtime::release_checks;
 use irori_ui::components::{EmptyState, PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -38,13 +39,23 @@ use irori_ui::{backend, models};
 use crate::common::{backend_op, notify_error};
 use crate::format;
 use installed::{WineOrigin, group, kind_label};
-use ops::{OpLive, WineOps, cancel_install, release_key, start_install, wine_ops};
+use irori_ui::wine_installs::{
+    OpLive, WineOps, cancel_install, release_key, start_install, wine_ops,
+};
 
 /// Repaint interval while installs report progress.
 const PROGRESS_TICK: Duration = Duration::from_millis(300);
 
 fn source_label(kind: ReleaseKind) -> &'static str {
     kind.type_str()
+}
+
+/// Why a check didn't reach GitHub, and in how long it can.
+fn rate_limited_text(limited: release_checks::RateLimited, now: u64) -> SharedString {
+    t_args(
+        "manage.wine.rate_limited",
+        &[("minutes", &limited.minutes_left(now).to_string())],
+    )
 }
 
 fn source_description(kind: ReleaseKind) -> SharedString {
@@ -55,6 +66,10 @@ fn source_description(kind: ReleaseKind) -> SharedString {
         ReleaseKind::WineGe => t("manage.wine.source.wine_ge"),
         ReleaseKind::WineKron4ek => t("manage.wine.source.wine_kron4ek"),
         ReleaseKind::NexusRuntime => t("manage.wine.source.nexus_runtime"),
+        ReleaseKind::DwProton => t("manage.wine.source.dw_proton"),
+        ReleaseKind::UmuProton => t("manage.wine.source.umu_proton"),
+        ReleaseKind::ProtonEm => t("manage.wine.source.proton_em"),
+        ReleaseKind::ProtonSarek => t("manage.wine.source.proton_sarek"),
         ReleaseKind::WineCrossover
         | ReleaseKind::WineStagingMac
         | ReleaseKind::GamePortingToolkit => kind.type_str().into(),
@@ -80,6 +95,8 @@ pub struct WineManagerView {
     tab_ix: usize,
     lists: HashMap<ReleaseKind, ListState>,
     refreshing: bool,
+    /// GitHub's API budget is used up until this unix time.
+    limited_until: Option<u64>,
     search: Entity<InputState>,
     system: Option<SystemState>,
     ops: Entity<WineOps>,
@@ -123,6 +140,7 @@ impl WineManagerView {
             tab_ix: 0,
             lists: HashMap::new(),
             refreshing: false,
+            limited_until: None,
             search,
             system: None,
             ops,
@@ -178,25 +196,51 @@ impl WineManagerView {
         }
         cx.notify();
         let task = irori_ui::run(cx, async move {
-            if fetch {
-                manager::update_releases(true, &[kind]).await?;
+            let list = async {
+                if fetch {
+                    manager::update_releases(true, &[kind]).await?;
+                }
+                manager::available_releases(kind).await
             }
-            manager::available_releases(kind).await
+            .await;
+            let now = irori_core::util::unix_now();
+            Ok((list, release_checks::exhausted_until(now)))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
+            let Ok((result, limited_until)) = task.await else {
+                return;
+            };
             let _ = this.update_in(cx, |this, window, cx| {
                 if fetch {
                     this.refreshing = false;
                 }
+                this.limited_until = limited_until;
                 match result {
                     Ok(list) => {
                         this.lists.insert(kind, ListState::Loaded(list));
                     }
                     Err(e) => {
-                        let message =
-                            t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))]);
+                        let now = irori_core::util::unix_now();
+                        let limited = release_checks::rate_limited(&e);
+                        let message = match limited {
+                            Some(l) => rate_limited_text(l, now),
+                            None => {
+                                t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))])
+                            }
+                        };
+                        if let Some(l) = limited {
+                            this.limited_until = Some(l.reset);
+                        }
                         match this.lists.get(&kind) {
+                            Some(ListState::Loaded(_)) if limited.is_some() => {
+                                window.push_notification(
+                                    Notification::warning(message).title(t_args(
+                                        "manage.wine.refresh_failed",
+                                        &[("source", source_label(kind))],
+                                    )),
+                                    cx,
+                                );
+                            }
                             Some(ListState::Loaded(_)) => notify_error(
                                 t_args(
                                     "manage.wine.refresh_failed",
@@ -413,7 +457,9 @@ impl WineManagerView {
                                 .small()
                                 .icon(IconName::RefreshCw)
                                 .label(t("manage.wine.update"))
-                                .on_click(move |_, _, cx| start_install(upd.clone(), cx)),
+                                .on_click(move |_, _, cx| {
+                                    start_install(upd.clone(), false, cx);
+                                }),
                         )
                     })
                     .child(
@@ -433,7 +479,9 @@ impl WineManagerView {
                     .small()
                     .icon(IconName::Download)
                     .label(t("manage.wine.install"))
-                    .on_click(move |_, _, cx| start_install(r.clone(), cx))
+                    .on_click(move |_, _, cx| {
+                        start_install(r.clone(), false, cx);
+                    })
                     .into_any_element()
             }
         };
@@ -554,6 +602,20 @@ impl WineManagerView {
                             .child(Input::new(&self.search).small()),
                     ),
             )
+            .when_some(
+                self.limited_until.filter(|reset| {
+                    *reset > irori_core::util::unix_now() && release_checks::is_github(kind.url())
+                }),
+                |col, reset| {
+                    let limited = release_checks::RateLimited { reset };
+                    col.child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(rate_limited_text(limited, irori_core::util::unix_now())),
+                    )
+                },
+            )
             .child(body)
             .into_any_element()
     }
@@ -661,10 +723,7 @@ impl WineManagerView {
 /// Inline progress of a running install.
 fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
     let progress = live.progress.unwrap_or_default();
-    let extracting = live
-        .step
-        .as_deref()
-        .is_some_and(|s| s.starts_with("Extracting"));
+    let extracting = live.extracting();
     let detail = if extracting {
         t("manage.wine.progress.extracting").to_string()
     } else {
@@ -767,8 +826,11 @@ impl Render for WineManagerView {
                             ),
                     )
                     .child(
+                        // Ten sources and the system tab don't fit a narrow
+                        // window; the menu reaches the ones scrolled away.
                         TabBar::new("wine-tabs")
                             .underline()
+                            .menu(true)
                             .selected_index(self.tab_ix)
                             .children(tabs)
                             .on_click(cx.listener(|this, ix: &usize, window, cx| {
