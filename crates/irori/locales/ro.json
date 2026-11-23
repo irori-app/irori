@@ -213,5 +213,10 @@
   "shell.palette.back": "Înapoi",
   "shell.palette.actions": "Acțiuni",
   "shell.palette.actions_placeholder": "Acțiuni pentru {title}…",
-  "shell.palette.game_actions": "Toate acțiunile pentru {title}"
+  "shell.palette.game_actions": "Toate acțiunile pentru {title}",
+  "shell.palette.random_placeholder": "Alege un joc la întâmplare din…",
+  "shell.palette.picked_placeholder": "Ales: {title}",
+  "shell.palette.pick_another": "Alege altul",
+  "shell.palette.pick_other_games": "Alege din alte jocuri",
+  "shell.palette.random_empty": "Aici nu sunt jocuri din care să alegi"
 }

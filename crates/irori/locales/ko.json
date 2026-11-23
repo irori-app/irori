@@ -213,5 +213,10 @@
   "shell.palette.back": "뒤로",
   "shell.palette.actions": "작업",
   "shell.palette.actions_placeholder": "{title} 작업…",
-  "shell.palette.game_actions": "{title}의 모든 작업"
+  "shell.palette.game_actions": "{title}의 모든 작업",
+  "shell.palette.random_placeholder": "무작위로 고를 게임…",
+  "shell.palette.picked_placeholder": "선택됨: {title}",
+  "shell.palette.pick_another": "다른 게임 고르기",
+  "shell.palette.pick_other_games": "다른 게임 중에서 고르기",
+  "shell.palette.random_empty": "여기에는 고를 게임이 없습니다"
 }

@@ -213,5 +213,10 @@
   "shell.palette.back": "Voltar",
   "shell.palette.actions": "Ações",
   "shell.palette.actions_placeholder": "Ações de {title}…",
-  "shell.palette.game_actions": "Todas as ações de {title}"
+  "shell.palette.game_actions": "Todas as ações de {title}",
+  "shell.palette.random_placeholder": "Escolher um jogo aleatório de…",
+  "shell.palette.picked_placeholder": "Escolhido: {title}",
+  "shell.palette.pick_another": "Escolher outro",
+  "shell.palette.pick_other_games": "Escolher entre outros jogos",
+  "shell.palette.random_empty": "Não há jogos aqui para escolher"
 }

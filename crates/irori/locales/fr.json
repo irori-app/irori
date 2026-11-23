@@ -213,5 +213,10 @@
   "shell.palette.back": "Retour",
   "shell.palette.actions": "Actions",
   "shell.palette.actions_placeholder": "Actions pour {title}…",
-  "shell.palette.game_actions": "Toutes les actions pour {title}"
+  "shell.palette.game_actions": "Toutes les actions pour {title}",
+  "shell.palette.random_placeholder": "Choisir un jeu au hasard parmi…",
+  "shell.palette.picked_placeholder": "Choisi : {title}",
+  "shell.palette.pick_another": "En choisir un autre",
+  "shell.palette.pick_other_games": "Choisir parmi d’autres jeux",
+  "shell.palette.random_empty": "Il n’y a ici aucun jeu parmi lesquels choisir"
 }

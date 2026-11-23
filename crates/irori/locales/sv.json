@@ -213,5 +213,10 @@
   "shell.palette.back": "Tillbaka",
   "shell.palette.actions": "Åtgärder",
   "shell.palette.actions_placeholder": "Åtgärder för {title} …",
-  "shell.palette.game_actions": "Alla åtgärder för {title}"
+  "shell.palette.game_actions": "Alla åtgärder för {title}",
+  "shell.palette.random_placeholder": "Välj ett slumpat spel från …",
+  "shell.palette.picked_placeholder": "Valt: {title}",
+  "shell.palette.pick_another": "Välj ett annat",
+  "shell.palette.pick_other_games": "Välj bland andra spel",
+  "shell.palette.random_empty": "Det finns inga spel att välja bland här"
 }

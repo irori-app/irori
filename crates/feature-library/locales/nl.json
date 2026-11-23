@@ -894,5 +894,11 @@
   "library.bulk.done.combined": "{count} games zijn nu één item",
   "library.steam_hint.text": "Alleen de Steam-games die hier zijn geïnstalleerd worden getoond. Irori kan je hele Steam-bibliotheek uit de Steam-client lezen, zonder in te loggen.",
   "library.steam_hint.action": "Steam-bibliotheek lezen",
-  "library.steam_hint.dismiss": "Niet nu"
+  "library.steam_hint.dismiss": "Niet nu",
+  "library.random.pool_shown": "Uit de getoonde games",
+  "library.random.pool_installed": "Uit geïnstalleerde games",
+  "library.random.pool_never_played": "Uit nooit gespeelde games",
+  "library.random.pool_favourites": "Uit favorieten",
+  "library.random.pool_all": "Uit de hele bibliotheek",
+  "library.random.pool_category": "Uit ‘{name}’"
 }

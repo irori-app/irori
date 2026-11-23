@@ -353,5 +353,52 @@ mod ui {
         );
         cx.simulate_keystrokes("escape");
         assert_eq!(cx.read(|cx| view.read(cx).level().clone()), Level::Root);
+
+        // A random pick from the installed games stays on the pick, with
+        // "Pick another".
+        let confirm = |target: PaletteTarget, cx: &mut VisualTestContext| {
+            let row = cx
+                .read(|cx| {
+                    view.read(cx)
+                        .shown_rows()
+                        .iter()
+                        .find(|r| same(&r.target, &target))
+                        .cloned()
+                })
+                .expect("the row is listed");
+            cx.update(|window, cx| PaletteView::confirm(&view, Host::Dialog, row, window, cx));
+            cx.run_until_parked();
+        };
+        let random = cx.read(|cx| {
+            view.read(cx)
+                .shown_rows()
+                .iter()
+                .any(|r| matches!(r.target, PaletteTarget::Random))
+        });
+        assert!(random, "the first level offers a random pick");
+        confirm(PaletteTarget::Random, cx);
+        assert_eq!(cx.read(|cx| view.read(cx).level().clone()), Level::Random);
+        let pool = irori_library::RandomPool::Installed;
+        confirm(PaletteTarget::RandomFrom(pool.clone()), cx);
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Picked(pool.clone(), id.clone()),
+            "the only installed game is picked"
+        );
+        // With one game, "Pick another" picks it again rather than nothing.
+        confirm(PaletteTarget::RandomFrom(pool.clone()), cx);
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Picked(pool, id.clone())
+        );
+    }
+
+    /// Whether two rows do the same thing, for the targets this test uses.
+    fn same(a: &PaletteTarget, b: &PaletteTarget) -> bool {
+        match (a, b) {
+            (PaletteTarget::Random, PaletteTarget::Random) => true,
+            (PaletteTarget::RandomFrom(a), PaletteTarget::RandomFrom(b)) => a == b,
+            _ => false,
+        }
     }
 }

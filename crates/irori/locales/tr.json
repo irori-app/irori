@@ -213,5 +213,10 @@
   "shell.palette.back": "Geri",
   "shell.palette.actions": "Eylemler",
   "shell.palette.actions_placeholder": "{title} için eylemler…",
-  "shell.palette.game_actions": "{title} için tüm eylemler"
+  "shell.palette.game_actions": "{title} için tüm eylemler",
+  "shell.palette.random_placeholder": "Rastgele bir oyun seç…",
+  "shell.palette.picked_placeholder": "Seçilen: {title}",
+  "shell.palette.pick_another": "Başkasını seç",
+  "shell.palette.pick_other_games": "Başka oyunlardan seç",
+  "shell.palette.random_empty": "Burada seçilecek oyun yok"
 }

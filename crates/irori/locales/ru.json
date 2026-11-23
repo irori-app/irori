@@ -213,5 +213,10 @@
   "shell.palette.back": "Назад",
   "shell.palette.actions": "Действия",
   "shell.palette.actions_placeholder": "Действия для {title}…",
-  "shell.palette.game_actions": "Все действия для {title}"
+  "shell.palette.game_actions": "Все действия для {title}",
+  "shell.palette.random_placeholder": "Выбрать случайную игру из…",
+  "shell.palette.picked_placeholder": "Выбрано: {title}",
+  "shell.palette.pick_another": "Выбрать другую",
+  "shell.palette.pick_other_games": "Выбирать из других игр",
+  "shell.palette.random_empty": "Здесь нет игр для выбора"
 }

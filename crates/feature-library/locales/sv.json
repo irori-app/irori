@@ -894,5 +894,11 @@
   "library.bulk.done.combined": "{count} spel är nu en post",
   "library.steam_hint.text": "Bara Steam-spelen som är installerade här visas. Irori kan läsa hela ditt Steam-bibliotek från Steam-klienten, utan inloggning.",
   "library.steam_hint.action": "Läs Steam-biblioteket",
-  "library.steam_hint.dismiss": "Inte nu"
+  "library.steam_hint.dismiss": "Inte nu",
+  "library.random.pool_shown": "Bland spelen som visas",
+  "library.random.pool_installed": "Bland installerade spel",
+  "library.random.pool_never_played": "Bland spel som aldrig spelats",
+  "library.random.pool_favourites": "Bland favoriter",
+  "library.random.pool_all": "Från hela biblioteket",
+  "library.random.pool_category": "Från ”{name}”"
 }

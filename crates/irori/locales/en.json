@@ -213,5 +213,10 @@
   "shell.palette.back": "Back",
   "shell.palette.actions": "Actions",
   "shell.palette.actions_placeholder": "Actions for {title}…",
-  "shell.palette.game_actions": "All actions for {title}"
+  "shell.palette.game_actions": "All actions for {title}",
+  "shell.palette.random_placeholder": "Pick a random game from…",
+  "shell.palette.picked_placeholder": "Picked: {title}",
+  "shell.palette.pick_another": "Pick another",
+  "shell.palette.pick_other_games": "Pick from other games",
+  "shell.palette.random_empty": "There are no games here to pick from"
 }

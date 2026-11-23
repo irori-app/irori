@@ -1170,7 +1170,10 @@ Other parts:
   → on a game row (or the preview's Actions button) lists that game's
   actions (`game::level_rows`: play, back to it or cancel, its page, store
   page, favourite, status, folder, hide, Stop last); ←, Escape and Back
-  return.
+  return. "Pick a random game" asks which games to pick from
+  (`irori_library::random_pools`: shown, installed, never played,
+  favourites, all, any category) and stays on the pick with "Pick another";
+  `random.rs` leaves the run's last five picks out while others remain.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362

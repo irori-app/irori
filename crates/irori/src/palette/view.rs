@@ -14,6 +14,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::actions::Cancel;
 use gpui_kit::component::command::{Command, CommandItem, CommandState};
 use gpui_kit::component::input::{Escape as InputEscape, MoveLeft, MoveRight};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -184,6 +185,93 @@ pub(super) enum Level {
     Root,
     /// One game's actions.
     Game(GameId),
+    /// Which games to pick a random one from.
+    Random,
+    /// A random pick from a pool, with "Pick another".
+    Picked(irori_library::RandomPool, GameId),
+}
+
+/// The rows of the random pick levels: the pools, or what to do with the
+/// game picked.
+fn random_rows(level: &Level, cx: &mut App) -> Vec<Row> {
+    match level {
+        Level::Random => {
+            let mut rows: Vec<Row> = irori_library::random_pools(cx)
+                .into_iter()
+                .map(|(pool, label)| {
+                    Row::command(
+                        Entry::new()
+                            .label(label)
+                            .keywords([t("shell.palette.random_keywords")])
+                            .icon(IconName::Dices),
+                        PaletteTarget::RandomFrom(pool),
+                    )
+                })
+                .collect();
+            rows.push(back_row());
+            rows
+        }
+        Level::Picked(pool, id) => {
+            let Some(game) = models(cx).library.read(cx).snapshot.get(id).cloned() else {
+                return vec![back_row()];
+            };
+            let kind = models(cx).statuses.read(cx).kind(id);
+            let title = game.title.as_str();
+            let mut rows = Vec::new();
+            match kind {
+                Some(StatusKind::Playing) => rows.push(Row::command(
+                    Entry::new()
+                        .label(t_args("shell.palette.back_to_game", &[("title", title)]))
+                        .icon(IconName::AppWindow),
+                    PaletteTarget::BackToGame(id.clone()),
+                )),
+                Some(kind) if kind.is_busy() => {}
+                _ if game.is_installed => rows.push(Row::command(
+                    Entry::new()
+                        .label(t_args("shell.palette.play", &[("title", title)]))
+                        .icon(IconName::Play),
+                    PaletteTarget::Play(id.clone()),
+                )),
+                _ => {}
+            }
+            rows.push(Row::command(
+                Entry::new()
+                    .label(t_args("shell.palette.show_game", &[("title", title)]))
+                    .icon(IconName::Gamepad2),
+                PaletteTarget::Open(id.clone()),
+            ));
+            rows.push(Row::command(
+                Entry::new()
+                    .label(t("shell.palette.pick_another"))
+                    .icon(IconName::Dices),
+                PaletteTarget::RandomFrom(pool.clone()),
+            ));
+            rows.push(Row::command(
+                Entry::new()
+                    .label(t("shell.palette.pick_other_games"))
+                    .icon(IconName::ListFilter),
+                PaletteTarget::Random,
+            ));
+            rows.push(back_row());
+            rows.into_iter()
+                .map(|row| Row {
+                    about: Some(game.clone()),
+                    ..row
+                })
+                .collect()
+        }
+        Level::Root | Level::Game(_) => Vec::new(),
+    }
+}
+
+/// The row back to the palette's first level.
+fn back_row() -> Row {
+    Row::command(
+        Entry::new()
+            .label(t("shell.palette.back"))
+            .icon(IconName::ArrowLeft),
+        PaletteTarget::Back,
+    )
 }
 
 /// The facts the level of `game`'s actions is built from.
@@ -235,7 +323,7 @@ impl PaletteView {
             }),
             // A game's actions follow its favourite, hidden and status marks.
             cx.observe(&m.library, |this, _, cx| {
-                if matches!(this.level, Level::Game(_)) {
+                if this.level != Level::Root {
                     this.rebuild(cx);
                 }
             }),
@@ -329,6 +417,13 @@ impl PaletteView {
                 .collect();
             return self.show_rows(rows, cx);
         }
+        if matches!(self.level, Level::Random | Level::Picked(..)) {
+            let rows = random_rows(&self.level, cx)
+                .into_iter()
+                .filter(|r| r.entry.matches(&query))
+                .collect();
+            return self.show_rows(rows, cx);
+        }
         let games = self.game_rows(&query, cx);
         // A running game's rows come along when its game is found, typo and
         // all, not only when their own words hold the query.
@@ -419,13 +514,32 @@ impl PaletteView {
     }
 
     /// Run the confirmed row; the palette's own rows change its level.
-    fn confirm(view: &Entity<Self>, host: Host, row: Row, window: &mut Window, cx: &mut App) {
+    pub(super) fn confirm(
+        view: &Entity<Self>,
+        host: Host,
+        row: Row,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
         match row.target {
             PaletteTarget::GameActions(id) => {
                 return view.update(cx, |v, cx| v.enter_game(id, window, cx));
             }
             PaletteTarget::Back => {
                 return view.update(cx, |v, cx| v.set_level(Level::Root, window, cx));
+            }
+            PaletteTarget::Random => {
+                return view.update(cx, |v, cx| v.set_level(Level::Random, window, cx));
+            }
+            PaletteTarget::RandomFrom(pool) => {
+                match irori_library::pick_random_from(&pool, cx) {
+                    Some(id) => {
+                        view.update(cx, |v, cx| v.set_level(Level::Picked(pool, id), window, cx))
+                    }
+                    None => window
+                        .push_notification(Notification::info(t("shell.palette.random_empty")), cx),
+                }
+                return;
             }
             _ => {}
         }
@@ -475,6 +589,14 @@ impl Render for PaletteView {
                     .map(|g| g.title.clone())
                     .unwrap_or_default();
                 t_args("shell.palette.actions_placeholder", &[("title", &title)])
+            }
+            Level::Random => t("shell.palette.random_placeholder"),
+            Level::Picked(_, id) => {
+                let title = irori_ui::backend(cx)
+                    .game(id)
+                    .map(|g| g.title.clone())
+                    .unwrap_or_default();
+                t_args("shell.palette.picked_placeholder", &[("title", &title)])
             }
         };
         let list = Command::new(&self.state)

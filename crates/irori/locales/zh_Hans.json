@@ -213,5 +213,10 @@
   "shell.palette.back": "返回",
   "shell.palette.actions": "操作",
   "shell.palette.actions_placeholder": "{title} 的操作…",
-  "shell.palette.game_actions": "{title} 的全部操作"
+  "shell.palette.game_actions": "{title} 的全部操作",
+  "shell.palette.random_placeholder": "随机选择游戏，范围…",
+  "shell.palette.picked_placeholder": "已选中：{title}",
+  "shell.palette.pick_another": "换一个",
+  "shell.palette.pick_other_games": "从其他游戏中选择",
+  "shell.palette.random_empty": "这里没有可选择的游戏"
 }

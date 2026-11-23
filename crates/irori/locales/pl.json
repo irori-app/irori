@@ -213,5 +213,10 @@
   "shell.palette.back": "Wstecz",
   "shell.palette.actions": "Działania",
   "shell.palette.actions_placeholder": "Działania dla {title}…",
-  "shell.palette.game_actions": "Wszystkie działania dla {title}"
+  "shell.palette.game_actions": "Wszystkie działania dla {title}",
+  "shell.palette.random_placeholder": "Wylosuj grę spośród…",
+  "shell.palette.picked_placeholder": "Wylosowano: {title}",
+  "shell.palette.pick_another": "Wylosuj inną",
+  "shell.palette.pick_other_games": "Losuj spośród innych gier",
+  "shell.palette.random_empty": "Nie ma tu gier do wylosowania"
 }

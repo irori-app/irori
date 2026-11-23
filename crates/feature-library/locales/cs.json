@@ -894,5 +894,11 @@
   "library.bulk.done.combined": "Počet her spojených do jedné položky: {count}",
   "library.steam_hint.text": "Zobrazují se jen hry ze Steamu nainstalované na tomto počítači. Irori umí načíst celou vaši knihovnu Steamu z klienta Steam, bez přihlášení.",
   "library.steam_hint.action": "Načíst knihovnu Steamu",
-  "library.steam_hint.dismiss": "Teď ne"
+  "library.steam_hint.dismiss": "Teď ne",
+  "library.random.pool_shown": "Ze zobrazených her",
+  "library.random.pool_installed": "Z nainstalovaných her",
+  "library.random.pool_never_played": "Z her, které jste nehráli",
+  "library.random.pool_favourites": "Z oblíbených",
+  "library.random.pool_all": "Z celé knihovny",
+  "library.random.pool_category": "Z kategorie „{name}“"
 }

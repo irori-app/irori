@@ -213,5 +213,10 @@
   "shell.palette.back": "返回",
   "shell.palette.actions": "動作",
   "shell.palette.actions_placeholder": "{title} 的動作…",
-  "shell.palette.game_actions": "{title} 的所有動作"
+  "shell.palette.game_actions": "{title} 的所有動作",
+  "shell.palette.random_placeholder": "隨機挑選遊戲，範圍…",
+  "shell.palette.picked_placeholder": "已選中：{title}",
+  "shell.palette.pick_another": "換一個",
+  "shell.palette.pick_other_games": "從其他遊戲中挑選",
+  "shell.palette.random_empty": "這裡沒有可挑選的遊戲"
 }

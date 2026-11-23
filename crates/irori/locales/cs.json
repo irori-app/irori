@@ -213,5 +213,10 @@
   "shell.palette.back": "Zpět",
   "shell.palette.actions": "Akce",
   "shell.palette.actions_placeholder": "Akce pro {title}…",
-  "shell.palette.game_actions": "Všechny akce pro {title}"
+  "shell.palette.game_actions": "Všechny akce pro {title}",
+  "shell.palette.random_placeholder": "Vybrat náhodnou hru z…",
+  "shell.palette.picked_placeholder": "Vybráno: {title}",
+  "shell.palette.pick_another": "Vybrat jinou",
+  "shell.palette.pick_other_games": "Vybírat z jiných her",
+  "shell.palette.random_empty": "Tady nejsou žádné hry k výběru"
 }

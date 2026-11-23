@@ -61,7 +61,10 @@ enum PaletteTarget {
     OpenFolder(GameId),
     Route(Route),
     Refresh,
+    /// Choose which games to pick a random one from (a palette level).
     Random,
+    /// Pick a random game from these games.
+    RandomFrom(irori_library::RandomPool),
     SetUpEmulation,
     /// Add an emulator of the user's own.
     AddEmulator,
@@ -798,7 +801,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::Hide(id, on) => irori_game::ops::set_hidden(&id, on, cx),
         PaletteTarget::OpenFolder(id) => irori_game::ops::open_install_folder(&id, window, cx),
         // The palette's own levels; its view handles them.
-        PaletteTarget::GameActions(_) | PaletteTarget::Back => {}
+        PaletteTarget::GameActions(_) | PaletteTarget::Back | PaletteTarget::RandomFrom(_) => {}
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),

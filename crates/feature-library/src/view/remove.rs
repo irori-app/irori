@@ -106,6 +106,12 @@ pub(crate) fn set_active_library(view: WeakEntity<LibraryView>, cx: &mut App) {
     cx.set_global(ActiveLibrary(view));
 }
 
+/// The games the library view shows now, in its order, once one exists.
+pub(crate) fn shown_games(cx: &App) -> Option<Arc<[Arc<GameInfo>]>> {
+    let view = cx.try_global::<ActiveLibrary>()?.0.upgrade()?;
+    Some(view.read(cx).visible_games())
+}
+
 /// How many picked games "Remove from library" would take out, while the
 /// library is in selection mode with any.
 pub fn removable_picks(cx: &App) -> Option<usize> {

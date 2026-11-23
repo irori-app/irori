@@ -213,5 +213,10 @@
   "shell.palette.back": "戻る",
   "shell.palette.actions": "アクション",
   "shell.palette.actions_placeholder": "{title} のアクション…",
-  "shell.palette.game_actions": "{title} のすべてのアクション"
+  "shell.palette.game_actions": "{title} のすべてのアクション",
+  "shell.palette.random_placeholder": "ランダムに選ぶ対象…",
+  "shell.palette.picked_placeholder": "選ばれたゲーム: {title}",
+  "shell.palette.pick_another": "別のゲームを選ぶ",
+  "shell.palette.pick_other_games": "別のゲームの中から選ぶ",
+  "shell.palette.random_empty": "ここには選べるゲームがありません"
 }
