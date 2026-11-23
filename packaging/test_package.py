@@ -81,6 +81,10 @@ class LinuxPackagingTests(unittest.TestCase):
         write_elf(lib / "libxkbcommon.so.0.0.0", ["libc.so.6"])
         if os.name != "nt":
             (lib / "libxkbcommon.so.0").symlink_to("libxkbcommon.so.0.0.0")
+        else:
+            # Windows can't make the soname link without privileges; a copy
+            # stands in for it.
+            write_elf(lib / "libxkbcommon.so.0", ["libc.so.6"])
         write_elf(lib / "libxkbcommon-x11.so.0", ["libxcb.so.1", "libxcb-xkb.so.1", "libxkbcommon.so.0", "libc.so.6"])
         write_elf(self.system / "lib/x86_64-linux-gnu/libxcb-xkb.so.1", ["libxcb.so.1", "libc.so.6"])
         write_elf(lib / "libudev.so.1", ["libc.so.6"])
