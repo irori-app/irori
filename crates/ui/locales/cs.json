@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Z Irori se nemusíte odhlašovat.",
   "ui.xbox.open_wine_manager": "Otevřít správce Wine",
   "ui.xbox.game_settings": "Nastavení Wine",
-  "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu"
+  "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu",
+  "ui.game_window.no_window": "Hra zatím nemá okno, které by šlo přenést do popředí",
+  "ui.game_window.unsupported": "Toto prostředí nedovolí Irori přenést okno hry do popředí; přepněte se do něj z panelu úloh",
+  "ui.game_window.failed": "Okno hry nešlo přenést do popředí"
 }

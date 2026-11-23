@@ -863,5 +863,7 @@
   "game.related.publisher": "Också utgivet av {name}",
   "game.related.genres": "Samma genrer: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "Tillbaka till spelet",
+  "game.hero.back_to_game_tooltip": "Lägg spelets fönster överst"
 }

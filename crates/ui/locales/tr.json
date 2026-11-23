@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Irori'den çıkış yapmanız gerekmez.",
   "ui.xbox.open_wine_manager": "Wine yöneticisini aç",
   "ui.xbox.game_settings": "Wine ayarları",
-  "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç"
+  "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç",
+  "ui.game_window.no_window": "Oyunun öne getirilecek bir penceresi henüz yok",
+  "ui.game_window.unsupported": "Bu masaüstü Irori’nin oyun penceresini öne getirmesine izin vermiyor; görev çubuğundan ona geçin",
+  "ui.game_window.failed": "Oyun penceresi öne getirilemedi"
 }

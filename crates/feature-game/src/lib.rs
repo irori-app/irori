@@ -88,6 +88,8 @@ gpui_kit::actions!(
         TroubleshootLaunch,
         /// Cancel the launch being prepared (Escape while "Launching…").
         CancelLaunch,
+        /// Bring the running game's window to the front.
+        BackToGame,
     ]
 );
 
@@ -103,5 +105,6 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-shift-s", OpenGameSettingsAction, ctx),
         KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
         KeyBinding::new("escape", CancelLaunch, ctx),
+        KeyBinding::new("ctrl-shift-enter", BackToGame, ctx),
     ]);
 }

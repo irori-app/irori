@@ -685,6 +685,19 @@ impl GamePage {
                 )
                 .into_any_element(),
             PrimaryAction::Stop => row
+                .child({
+                    let id = id.clone();
+                    Button::new("back-to-game")
+                        .debug_selector(|| "back-to-game".into())
+                        .primary()
+                        .large()
+                        .icon(IconName::AppWindow)
+                        .label(t("game.hero.back_to_game"))
+                        .tooltip(t("game.hero.back_to_game_tooltip"))
+                        .on_click(move |_, window, cx| {
+                            irori_ui::game_window::back_to_game(id.clone(), window, cx)
+                        })
+                })
                 .child(
                     Button::new("primary-action")
                         .large()

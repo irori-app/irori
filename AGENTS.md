@@ -1384,7 +1384,9 @@ Microsoft's approval page (`irori_manage::login`).
   turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
   (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
   `overlay/level.rs`, a surface that exists only while it shows. "Back to the game"
-  (overlay row, palette) is `Backend::focus_game_window` (`services/src/game_window/`:
+  (overlay row; the palette, the game page's button and Ctrl+Shift+Enter, the library's
+  game menus and Big Picture's page through `irori_ui::game_window::back_to_game`) is
+  `Backend::focus_game_window` (`services/src/game_window/`:
   Hyprland, sway, X11, Windows, macOS; `Raised::Unsupported` on GNOME/KDE Wayland,
   where nothing is done). Home's rows come from `model::home_rows`. On Windows
   Back + Start opens it while a game runs (`gamepad/xinput.rs`, XInput read only then;

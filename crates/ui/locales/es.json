@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "No necesitas cerrar sesión en Irori.",
   "ui.xbox.open_wine_manager": "Abrir el gestor de Wine",
   "ui.xbox.game_settings": "Ajustes de Wine",
-  "ui.xbox.open_devices": "Abrir la página de dispositivos de Microsoft"
+  "ui.xbox.open_devices": "Abrir la página de dispositivos de Microsoft",
+  "ui.game_window.no_window": "El juego aún no tiene una ventana que traer al frente",
+  "ui.game_window.unsupported": "Este escritorio no deja que Irori traiga al frente la ventana del juego; cambia a ella desde la barra de tareas",
+  "ui.game_window.failed": "No se pudo traer al frente la ventana del juego"
 }

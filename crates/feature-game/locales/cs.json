@@ -863,5 +863,7 @@
   "game.related.publisher": "Také vydal {name}",
   "game.related.genres": "Společné žánry: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "Zpět do hry",
+  "game.hero.back_to_game_tooltip": "Přenést okno hry do popředí"
 }

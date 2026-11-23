@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Du musst dich nicht von Irori abmelden.",
   "ui.xbox.open_wine_manager": "Wine-Verwaltung öffnen",
   "ui.xbox.game_settings": "Wine-Einstellungen",
-  "ui.xbox.open_devices": "Microsofts Geräteseite öffnen"
+  "ui.xbox.open_devices": "Microsofts Geräteseite öffnen",
+  "ui.game_window.no_window": "Das Spiel hat noch kein Fenster, das nach vorne geholt werden kann",
+  "ui.game_window.unsupported": "Dieser Desktop lässt Irori das Spielfenster nicht nach vorne holen; wechsle über die Taskleiste dorthin",
+  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden"
 }

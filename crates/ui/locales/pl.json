@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Nie musisz wylogowywać się z Irori.",
   "ui.xbox.open_wine_manager": "Otwórz menedżera Wine",
   "ui.xbox.game_settings": "Ustawienia Wine",
-  "ui.xbox.open_devices": "Otwórz stronę urządzeń Microsoftu"
+  "ui.xbox.open_devices": "Otwórz stronę urządzeń Microsoftu",
+  "ui.game_window.no_window": "Gra nie ma jeszcze okna do przeniesienia na pierwszy plan",
+  "ui.game_window.unsupported": "To środowisko nie pozwala Irori przenieść okna gry na pierwszy plan; przełącz się na nie z paska zadań",
+  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan"
 }

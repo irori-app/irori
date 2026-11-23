@@ -900,5 +900,6 @@
   "library.random.pool_never_played": "Din jocurile niciodată jucate",
   "library.random.pool_favourites": "Din favorite",
   "library.random.pool_all": "Din toată biblioteca",
-  "library.random.pool_category": "Din „{name}”"
+  "library.random.pool_category": "Din „{name}”",
+  "library.command.back_to_game": "Înapoi la joc"
 }

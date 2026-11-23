@@ -387,6 +387,30 @@ fn a_launch_being_prepared_is_cancelled_with_escape_or_its_button(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn a_running_game_offers_back_to_game_beside_stop(cx: &mut TestAppContext) {
+    let id = test_game().id();
+    let (b, handle, page) = open_page(cx, id.clone());
+    let drawn = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .expect("window");
+        let mut vcx = VisualTestContext::from_window(handle, cx);
+        vcx.run_until_parked();
+        vcx.debug_bounds("back-to-game").is_some()
+    };
+    assert!(!drawn(cx), "nothing to go back to while it isn't running");
+
+    b.statuses.set(&id, irori_core::StatusKind::Playing);
+    settle();
+    cx.run_until_parked();
+    assert_eq!(primary(cx, &page), Some(PrimaryAction::Stop));
+    assert!(drawn(cx), "Back to game sits beside Stop");
+    b.statuses.clear(&id);
+}
+
+#[gpui_kit::test]
 fn the_settings_shortcut_reaches_a_steam_games_steam_play_choice(cx: &mut TestAppContext) {
     let id = steam_game().id();
     let (_b, handle, page) = open_page(cx, id.clone());

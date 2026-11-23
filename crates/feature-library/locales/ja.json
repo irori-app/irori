@@ -900,5 +900,6 @@
   "library.random.pool_never_played": "未プレイのゲームから",
   "library.random.pool_favourites": "お気に入りから",
   "library.random.pool_all": "ライブラリ全体から",
-  "library.random.pool_category": "「{name}」から"
+  "library.random.pool_category": "「{name}」から",
+  "library.command.back_to_game": "ゲームに戻る"
 }

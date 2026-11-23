@@ -863,5 +863,7 @@
   "game.related.publisher": "同为 {name} 发行",
   "game.related.genres": "相同类型：{genres}",
   "game.related.separator": "、",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "返回游戏",
+  "game.hero.back_to_game_tooltip": "将游戏窗口置于前台"
 }

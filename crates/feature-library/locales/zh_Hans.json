@@ -900,5 +900,6 @@
   "library.random.pool_never_played": "从从未玩过的游戏中",
   "library.random.pool_favourites": "从收藏中",
   "library.random.pool_all": "从整个游戏库中",
-  "library.random.pool_category": "从“{name}”中"
+  "library.random.pool_category": "从“{name}”中",
+  "library.command.back_to_game": "返回游戏"
 }

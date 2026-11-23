@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Вибір дня",
   "bigpicture.shelf.stores": "По одній на крамницю",
   "bigpicture.hint.undo": "Скасувати",
-  "bigpicture.hint.redo": "Повторити"
+  "bigpicture.hint.redo": "Повторити",
+  "bigpicture.action.back_to_game": "Повернутися до гри"
 }

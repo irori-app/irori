@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Irori에서 로그아웃할 필요는 없습니다.",
   "ui.xbox.open_wine_manager": "Wine 관리자 열기",
   "ui.xbox.game_settings": "Wine 설정",
-  "ui.xbox.open_devices": "Microsoft 장치 페이지 열기"
+  "ui.xbox.open_devices": "Microsoft 장치 페이지 열기",
+  "ui.game_window.no_window": "게임에 아직 앞으로 가져올 창이 없습니다",
+  "ui.game_window.unsupported": "이 데스크톱에서는 Irori가 게임 창을 앞으로 가져올 수 없습니다. 작업 표시줄에서 전환하세요",
+  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다"
 }

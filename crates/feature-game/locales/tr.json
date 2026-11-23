@@ -863,5 +863,7 @@
   "game.related.publisher": "Yine {name} yayını",
   "game.related.genres": "Ortak türler: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "Oyuna dön",
+  "game.hero.back_to_game_tooltip": "Oyunun penceresini öne getir"
 }

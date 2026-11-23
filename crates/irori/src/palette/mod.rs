@@ -792,7 +792,7 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
         PaletteTarget::CancelLaunch(id) => {
             irori_ui::backend(cx).cancel_launch(&id);
         }
-        PaletteTarget::BackToGame(id) => back_to_game(id, window, cx),
+        PaletteTarget::BackToGame(id) => irori_ui::game_window::back_to_game(id, window, cx),
         PaletteTarget::Stop(id) => irori_game::ops::stop(&id, window, cx).detach(),
         PaletteTarget::StorePage(runner, url) => {
             irori_ui::hooks::open_store_page(runner, url, window, cx)
@@ -902,30 +902,6 @@ fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
 }
 
 /// Tell how a command run in the background went.
-/// Bring the running game `id`'s window to the front; say so when the
-/// desktop can't, or the game has no window.
-fn back_to_game(id: GameId, window: &mut Window, cx: &mut App) {
-    use irori_services::game_window::Raised;
-    let b = irori_ui::backend(cx);
-    let task = irori_ui::run(cx, async move { b.focus_game_window(&id).await });
-    window
-        .spawn(cx, async move |cx| {
-            let note = match task.await {
-                Ok(Raised::Raised) => return,
-                Ok(Raised::NoWindow) => {
-                    Notification::info(t("shell.palette.back_to_game_no_window"))
-                }
-                Ok(Raised::Unsupported) => {
-                    Notification::info(t("shell.palette.back_to_game_unsupported"))
-                }
-                Err(e) => Notification::error(format!("{e:#}"))
-                    .title(t("shell.palette.back_to_game_failed")),
-            };
-            let _ = cx.update(|window, cx| window.push_notification(note, cx));
-        })
-        .detach();
-}
-
 fn report(
     task: gpui_kit::Task<anyhow::Result<()>>,
     done: &'static str,

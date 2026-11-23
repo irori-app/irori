@@ -863,5 +863,7 @@
   "game.related.publisher": "{name} の発売タイトル",
   "game.related.genres": "共通のジャンル：{genres}",
   "game.related.separator": "、",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "ゲームに戻る",
+  "game.hero.back_to_game_tooltip": "ゲームのウィンドウを前面に表示"
 }

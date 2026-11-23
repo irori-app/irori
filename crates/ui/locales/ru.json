@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Выходить из Irori не нужно.",
   "ui.xbox.open_wine_manager": "Открыть менеджер Wine",
   "ui.xbox.game_settings": "Настройки Wine",
-  "ui.xbox.open_devices": "Открыть страницу устройств Microsoft"
+  "ui.xbox.open_devices": "Открыть страницу устройств Microsoft",
+  "ui.game_window.no_window": "У игры пока нет окна, которое можно вывести вперёд",
+  "ui.game_window.unsupported": "Это окружение не позволяет Irori вывести окно игры вперёд; переключитесь на него через панель задач",
+  "ui.game_window.failed": "Не удалось вывести окно игры вперёд"
 }
