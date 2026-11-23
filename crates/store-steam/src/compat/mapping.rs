@@ -50,23 +50,27 @@ pub(crate) fn set_compat_tool(text: &str, app_id: &str, tool: Option<&str>) -> R
     let edit = plan(text, &root, app_id, tool, newline)?;
     let edited = match edit {
         None => return Ok(text.to_string()),
-        Some(Splice { start, end, with }) => {
-            let mut out = String::with_capacity(text.len() + with.len());
-            out.push_str(&text[..start]);
-            out.push_str(&with);
-            out.push_str(&text[end..]);
-            out
-        }
+        Some(splice) => splice.apply(text),
     };
     verify(text, &edited, app_id, tool)?;
     Ok(edited)
 }
 
 /// Replace `start..end` of the text with `with`.
-struct Splice {
-    start: usize,
-    end: usize,
-    with: String,
+pub(super) struct Splice {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) with: String,
+}
+
+impl Splice {
+    pub(super) fn apply(&self, text: &str) -> String {
+        let mut out = String::with_capacity(text.len() + self.with.len());
+        out.push_str(&text[..self.start]);
+        out.push_str(&self.with);
+        out.push_str(&text[self.end..]);
+        out
+    }
 }
 
 fn plan(
@@ -187,7 +191,7 @@ fn set_name(
 
 /// Take an entry out along with the line it stands on, when nothing else
 /// shares that line.
-fn remove_entry(text: &str, entry: &Node) -> Splice {
+pub(super) fn remove_entry(text: &str, entry: &Node) -> Splice {
     let mut start = entry.key_start;
     let mut end = entry.end();
     let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
@@ -209,7 +213,13 @@ fn remove_entry(text: &str, entry: &Node) -> Splice {
 
 /// Insert `block` (whole lines) as the last child of the object closing at
 /// `close`, which is `depth` deep.
-fn insert_before_close(text: &str, close: usize, block: String, depth: usize, nl: &str) -> Splice {
+pub(super) fn insert_before_close(
+    text: &str,
+    close: usize,
+    block: String,
+    depth: usize,
+    nl: &str,
+) -> Splice {
     let line_start = text[..close].rfind('\n').map_or(0, |i| i + 1);
     if text[line_start..close].trim().is_empty() {
         Splice {
@@ -227,20 +237,20 @@ fn insert_before_close(text: &str, close: usize, block: String, depth: usize, nl
     }
 }
 
-fn tabs(depth: usize) -> String {
+pub(super) fn tabs(depth: usize) -> String {
     "\t".repeat(depth)
 }
 
 /// Quoted as Steam writes strings: `\` and `"` escaped.
-fn quote(s: &str) -> String {
+pub(super) fn quote(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn leaf(key: &str, value: &str, depth: usize, nl: &str) -> String {
+pub(super) fn leaf(key: &str, value: &str, depth: usize, nl: &str) -> String {
     format!("{}{}\t\t{}{nl}", tabs(depth), quote(key), quote(value))
 }
 
-fn object_block(key: &str, inner: &str, depth: usize, nl: &str) -> String {
+pub(super) fn object_block(key: &str, inner: &str, depth: usize, nl: &str) -> String {
     let indent = tabs(depth);
     format!(
         "{indent}{}{nl}{indent}{{{nl}{inner}{indent}}}{nl}",
@@ -319,15 +329,15 @@ fn prune_empty_path(doc: &mut Vdf) {
 // ---- a parser that remembers where everything is ----
 
 #[derive(Debug)]
-struct Node {
-    key: String,
+pub(super) struct Node {
+    pub(super) key: String,
     /// Byte offset of the key's first character (its opening quote).
-    key_start: usize,
-    value: Value,
+    pub(super) key_start: usize,
+    pub(super) value: Value,
 }
 
 #[derive(Debug)]
-enum Value {
+pub(super) enum Value {
     /// A string value: its token's span, quotes included, and its text.
     Str {
         start: usize,
@@ -340,7 +350,7 @@ enum Value {
 
 impl Node {
     /// The offset just past the entry.
-    fn end(&self) -> usize {
+    pub(super) fn end(&self) -> usize {
         match &self.value {
             Value::Str { end, .. } => *end,
             Value::Obj { close, .. } => close + 1,
@@ -349,7 +359,7 @@ impl Node {
 }
 
 /// First node with `key`, ignoring case as Steam does.
-fn find<'a>(nodes: &'a [Node], key: &str) -> Option<&'a Node> {
+pub(super) fn find<'a>(nodes: &'a [Node], key: &str) -> Option<&'a Node> {
     nodes.iter().find(|n| n.key.eq_ignore_ascii_case(key))
 }
 
@@ -432,7 +442,7 @@ fn tokenize(text: &str) -> Result<Vec<(Tok, usize, usize)>> {
     Ok(out)
 }
 
-fn parse_strict(text: &str) -> Result<Vec<Node>> {
+pub(super) fn parse_strict(text: &str) -> Result<Vec<Node>> {
     let tokens = tokenize(text)?;
     let mut pos = 0;
     let nodes = parse_children(&tokens, &mut pos, false)?;

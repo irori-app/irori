@@ -769,6 +769,28 @@ impl Store for SideloadStore {
             irori_core::HostPlatform::current().supports(app.platform.install_platform()),
             "This app was built for a different operating system"
         );
+        // The alternative executable setting wins over the command, as it
+        // wins over the app's own program.
+        if request.settings.target_exe.trim().is_empty()
+            && let Some((program, command_args)) = app.command_line()
+        {
+            let dir = app.install_dir();
+            if let Some(dir) = &dir {
+                anyhow::ensure!(
+                    tokio::fs::try_exists(dir).await.unwrap_or(false),
+                    "{} was not found",
+                    dir.display()
+                );
+            }
+            let args = launch::launch_args(app, request);
+            return Ok(launch::command_plan(
+                &program,
+                command_args,
+                args,
+                dir.as_deref(),
+                &request.environment,
+            ));
+        }
         let exe = launch::resolve_executable(app, &request.settings.target_exe)
             .context("This app has no executable; edit it and choose one")?;
         ensure_file(&exe).await?;

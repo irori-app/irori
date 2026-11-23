@@ -52,14 +52,37 @@ fn version_key(v: &str) -> Vec<u32> {
     v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
 }
 
-/// Whether Irori can put ReShade or OptiScaler into the game: an installed
-/// Windows build whose files Irori manages, or an installed Steam Windows build
-/// (loaded via Proton's native overrides and `[Software\\Wine\\DllOverrides]`).
+/// Whether Irori can put ReShade, RenoDX or OptiScaler into the game: an
+/// installed Windows build whose files Irori manages, or a Steam game's
+/// Windows build, natively on Windows and through Proton on Linux (Steam's
+/// entry says so by not being Linux-native). Steam on
+/// macOS runs only Mac builds. Steam starts its games itself, so under
+/// Proton the DLL overrides go into Steam's launch options rather than
+/// Irori's launch.
 pub fn supports_reshade(game: &GameInfo) -> bool {
-    (game.runner().manages_installs() || game.runner() == Runner::Steam)
-        && game.is_installed
-        && game.installed_platform() == Some(InstallPlatform::Windows)
-        && game.install_path().is_some()
+    let windows_build = match game.runner() {
+        Runner::Steam => match irori_core::HostPlatform::current() {
+            irori_core::HostPlatform::Windows => {
+                game.installed_platform() != Some(InstallPlatform::Linux)
+            }
+            // Steam's entries carry this system's platform; a build Proton
+            // runs is the one not marked Linux-native.
+            irori_core::HostPlatform::Linux => !game.is_linux_native,
+            irori_core::HostPlatform::Mac => false,
+        },
+        runner => {
+            runner.manages_installs() && game.installed_platform() == Some(InstallPlatform::Windows)
+        }
+    };
+    windows_build && game.is_installed && game.install_path().is_some()
+}
+
+/// Whether Steam starts the game through Proton, so ReShade's DLL overrides
+/// belong in Steam's launch options.
+pub fn reshade_needs_steam_overrides(game: &GameInfo) -> bool {
+    game.runner() == Runner::Steam
+        && irori_core::HostPlatform::current() == irori_core::HostPlatform::Linux
+        && supports_reshade(game)
 }
 
 /// Games with a graphics mod operation running.
@@ -92,7 +115,7 @@ pub(crate) async fn anticheat_of(game: &GameInfo) -> Vec<String> {
     let query = AntiCheatQuery {
         title: &game.title,
         epic_namespace: game.namespace.as_deref().filter(|n| !n.is_empty()),
-        steam_app_id: None,
+        steam_app_id: (game.runner() == Runner::Steam).then_some(game.app_name.as_str()),
     };
     anticheat::lookup(&query)
         .await
@@ -114,7 +137,7 @@ impl Backend {
         let game = self.installed_game(id)?;
         if !supports_reshade(&game) {
             bail!(
-                "{} can only be installed into Windows games Irori installed",
+                "{} can only be installed into the Windows builds of games Irori installs or Steam runs",
                 kind.name()
             );
         }
@@ -203,17 +226,20 @@ impl Backend {
     /// (keeping the files the user changed). `chosen_exe` overrides the
     /// program found in the game folder. A ReShade with add-on support
     /// stays one.
+    /// With `adopt`, a ReShade installed by hand
+    /// (`ReshadeError::ManualInstall`) is taken over.
     pub async fn install_reshade(
         &self,
         id: &GameId,
         chosen_exe: Option<PathBuf>,
+        adopt: bool,
         step: Arc<dyn Fn(Step) + Send + Sync>,
         progress: ProgressSink,
         cancel: CancellationToken,
     ) -> Result<Manifest> {
         let game = self.reshade_game(id)?;
         let _busy = self.graphics_mod_ready(id, GraphicsMod::Reshade)?;
-        self.install_reshade_build(id, &game, chosen_exe, false, step, progress, cancel)
+        self.install_reshade_build(id, &game, chosen_exe, false, adopt, step, progress, cancel)
             .await
     }
 
@@ -226,6 +252,7 @@ impl Backend {
         game: &GameInfo,
         chosen_exe: Option<PathBuf>,
         addon: bool,
+        adopt: bool,
         step: Arc<dyn Fn(Step) + Send + Sync>,
         progress: ProgressSink,
         cancel: CancellationToken,
@@ -244,9 +271,11 @@ impl Backend {
             game_root: root,
             configured_exe: self.configured_exe(id, game),
             chosen_exe: chosen,
+            // Steam's Windows builds run through Proton everywhere but Windows.
             wine: irori_core::HostPlatform::current().needs_wine(InstallPlatform::Windows),
             journal,
             addon,
+            adopt,
         };
         let manifest = irori_reshade::install(request, step, progress, cancel).await?;
         self.sync_steam_user_reg(id, &manifest.overrides, &[]).await;
@@ -343,6 +372,78 @@ impl Backend {
         Ok(report)
     }
 
+    /// Put back the files of the game's graphics mods that its folder lost
+    /// since they were installed: a store's update or file check deletes
+    /// what it doesn't know, which would quietly leave the game without
+    /// ReShade. Only ReShade's own downloads (its DLL, the compiler, the
+    /// shaders) come back, from the cache or their official source, and
+    /// only when they match what was installed. Never fails the launch.
+    pub(crate) async fn restore_graphics_mods(&self, id: &GameId) {
+        let manifest = match load(GraphicsMod::Reshade, id).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::warn!("ReShade record of {id}: {e:#}");
+                return;
+            }
+        };
+        let missing = {
+            let m = manifest.clone();
+            tokio::task::spawn_blocking(move || journal::missing(&m))
+                .await
+                .unwrap_or_default()
+        };
+        if missing.is_empty() {
+            return;
+        }
+        let mut bytes: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+        let progress = irori_core::install::ignore_progress();
+        let cancel = CancellationToken::new();
+        for file in &missing {
+            let name = file.path.to_string_lossy();
+            let got = if file.path == Path::new(&manifest.dll) {
+                irori_reshade::download::reshade_dll(
+                    &manifest.version,
+                    manifest.machine,
+                    manifest.addon,
+                    &progress,
+                    &cancel,
+                )
+                .await
+                .map(Some)
+            } else if name.eq_ignore_ascii_case("d3dcompiler_47.dll") {
+                irori_reshade::download::d3dcompiler(manifest.machine, &progress, &cancel)
+                    .await
+                    .map(Some)
+            } else {
+                Ok(None)
+            };
+            match got {
+                Ok(Some(b)) => bytes.push((file.path.clone(), b)),
+                Ok(None) => {}
+                Err(e) => tracing::info!("putting ReShade back into {id}: {e:#}"),
+            }
+        }
+        if missing
+            .iter()
+            .any(|f| f.path.starts_with("reshade-shaders"))
+        {
+            match irori_reshade::download::shaders(&progress, &cancel).await {
+                Ok(files) => bytes.extend(files),
+                Err(e) => tracing::info!("putting ReShade's shaders back into {id}: {e:#}"),
+            }
+        }
+        let restored = tokio::task::spawn_blocking(move || journal::restore(&manifest, &bytes))
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|r| r);
+        match restored {
+            Ok(0) => {}
+            Ok(n) => tracing::info!("put {n} of ReShade's files back into {id}"),
+            Err(e) => tracing::warn!("putting ReShade back into {id}: {e:#}"),
+        }
+    }
+
     /// Add the overrides an installed, enabled ReShade needs to a Wine
     /// launch's `WINEDLLOVERRIDES`. A missing or broken record adds nothing.
     pub(crate) async fn reshade_launch_env(
@@ -433,6 +534,37 @@ mod tests {
         let mut empty = BTreeMap::new();
         add_overrides(&manifest(), true, &mut empty);
         assert_eq!(empty["WINEDLLOVERRIDES"], "dxgi=n,b;d3dcompiler_47=n,b");
+    }
+
+    #[test]
+    fn steam_games_take_reshade_when_they_are_windows_builds() {
+        let game = |linux_native: bool| GameInfo {
+            runner: Some(Runner::Steam),
+            app_name: "620".into(),
+            is_installed: true,
+            is_linux_native: linux_native,
+            install: Some(irori_core::InstalledInfo {
+                install_path: "/games/Portal 2".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let expected = |linux_native: bool| match irori_core::HostPlatform::current() {
+            irori_core::HostPlatform::Windows => true,
+            irori_core::HostPlatform::Linux => !linux_native,
+            irori_core::HostPlatform::Mac => false,
+        };
+        for native in [true, false] {
+            assert_eq!(supports_reshade(&game(native)), expected(native));
+        }
+        let mut gone = game(false);
+        gone.is_installed = false;
+        assert!(!supports_reshade(&gone));
+        assert_eq!(
+            reshade_needs_steam_overrides(&game(false)),
+            cfg!(target_os = "linux")
+        );
+        assert!(!reshade_needs_steam_overrides(&game(true)));
     }
 
     #[test]

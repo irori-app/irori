@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "Read the Steam library from the Steam client",
   "shell.palette.steam_client_library_keywords": "Steam library owned games uninstalled without sign-in client",
   "shell.palette.play_status": "{title}: set play status to {status}",
+  "shell.palette.play_as_pc_game": "Play “{title}” as a PC game…",
+  "shell.palette.play_as_pc_game_keywords": "rom emulator program windows linux added game",
   "shell.palette.clear_play_status": "{title}: clear play status",
   "shell.palette.group_by_status": "Group the library by play status",
   "shell.palette.ungroup_by_status": "Stop grouping the library by play status",

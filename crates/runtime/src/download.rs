@@ -1,5 +1,6 @@
-//! Streaming downloads with progress, cancellation and SHA-512 hashing, and
-//! archive extraction (tar.gz / tar.xz / tar.zst / plain tar) in Rust.
+//! Streaming downloads with progress, cancellation and SHA-512 or SHA-256
+//! hashing, and archive extraction (tar.gz / tar.xz / tar.zst / plain tar)
+//! in Rust.
 
 use std::fmt;
 use std::io::{BufReader, Read};
@@ -12,7 +13,7 @@ use irori_core::archive_guard;
 use irori_core::install::ProgressSink;
 use irori_core::process::CancellationToken;
 use once_cell::sync::Lazy;
-use sha2::{Digest, Sha512};
+use sha2::{Digest, Sha256, Sha512};
 use tokio::io::AsyncWriteExt;
 
 /// Error returned when an operation was cancelled by the user.
@@ -68,6 +69,17 @@ pub async fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
         .with_context(|| format!("unexpected response from {}", host_of(url)))
 }
 
+/// GET an API address with a short timeout, leaving the status and headers
+/// to the caller (rate limits are read from them).
+pub async fn api_get(url: &str) -> Result<reqwest::Response> {
+    API_CLIENT
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .with_context(|| format!("could not reach {}", host_of(url)))
+}
+
 /// GET a small text document with a short timeout.
 pub async fn get_text(url: &str) -> Result<String> {
     API_CLIENT
@@ -89,23 +101,97 @@ fn host_of(url: &str) -> &str {
         .unwrap_or(url)
 }
 
+/// The digest a release publishes beside its archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DigestKind {
+    /// `.sha512sum` files (GE-Proton, Proton-CachyOS and most others).
+    #[default]
+    Sha512,
+    /// `.sha256sum` files (Proton-EM).
+    Sha256,
+}
+
+impl DigestKind {
+    /// The kind a checksum file's name says, by its extension.
+    pub fn of_checksum_file(name: &str) -> Option<Self> {
+        let name = name.split(['?', '#']).next().unwrap_or(name);
+        if name.ends_with(".sha512sum") || name.ends_with(".sha512") {
+            Some(Self::Sha512)
+        } else if name.ends_with(".sha256sum") || name.ends_with(".sha256") {
+            Some(Self::Sha256)
+        } else {
+            None
+        }
+    }
+
+    /// Hex characters in a digest of this kind.
+    fn hex_len(self) -> usize {
+        match self {
+            Self::Sha512 => 128,
+            Self::Sha256 => 64,
+        }
+    }
+}
+
+/// A running hash of one [`DigestKind`].
+enum Hasher {
+    Sha512(Sha512),
+    Sha256(Sha256),
+}
+
+impl Hasher {
+    fn new(kind: DigestKind) -> Self {
+        match kind {
+            DigestKind::Sha512 => Self::Sha512(Sha512::new()),
+            DigestKind::Sha256 => Self::Sha256(Sha256::new()),
+        }
+    }
+
+    fn update(&mut self, bytes: &[u8]) {
+        match self {
+            Self::Sha512(h) => h.update(bytes),
+            Self::Sha256(h) => h.update(bytes),
+        }
+    }
+
+    fn hex(self) -> String {
+        match self {
+            Self::Sha512(h) => hex::encode(h.finalize()),
+            Self::Sha256(h) => hex::encode(h.finalize()),
+        }
+    }
+}
+
 /// Result of a completed download.
 #[derive(Debug, Clone)]
 pub struct Downloaded {
     pub path: PathBuf,
     pub bytes: u64,
-    /// Lower-case hex SHA-512 of the file.
-    pub sha512: String,
+    /// Lower-case hex digest of the file, of [`Downloaded::digest_kind`].
+    pub digest: String,
+    pub digest_kind: DigestKind,
 }
 
-/// Download `url` to `dest`, reporting progress and hashing on the fly. Data
-/// goes to `<dest>.part` first and is renamed on success, so an interrupted
-/// download never leaves a truncated file at `dest`.
+/// Download `url` to `dest`, reporting progress and hashing (SHA-512) on the
+/// fly. Data goes to `<dest>.part` first and is renamed on success, so an
+/// interrupted download never leaves a truncated file at `dest`.
 pub async fn download(
     url: &str,
     dest: &Path,
     progress: &ProgressSink,
     cancel: &CancellationToken,
+) -> Result<Downloaded> {
+    download_hashed(url, dest, progress, cancel, DigestKind::Sha512).await
+}
+
+/// [`download`], hashing with `kind`: only the digest the source publishes is
+/// computed, so a large build isn't hashed twice.
+pub async fn download_hashed(
+    url: &str,
+    dest: &Path,
+    progress: &ProgressSink,
+    cancel: &CancellationToken,
+    kind: DigestKind,
 ) -> Result<Downloaded> {
     if let Some(dir) = dest.parent() {
         tokio::fs::create_dir_all(dir)
@@ -113,16 +199,17 @@ pub async fn download(
             .with_context(|| format!("creating {}", dir.display()))?;
     }
     let part = PathBuf::from(format!("{}.part", dest.display()));
-    let result = download_inner(url, &part, progress, cancel).await;
+    let result = download_inner(url, &part, progress, cancel, kind).await;
     match result {
-        Ok((bytes, sha512)) => {
+        Ok((bytes, digest)) => {
             tokio::fs::rename(&part, dest)
                 .await
                 .with_context(|| format!("saving {}", dest.display()))?;
             Ok(Downloaded {
                 path: dest.to_path_buf(),
                 bytes,
-                sha512,
+                digest,
+                digest_kind: kind,
             })
         }
         Err(e) => {
@@ -137,6 +224,7 @@ async fn download_inner(
     part: &Path,
     progress: &ProgressSink,
     cancel: &CancellationToken,
+    kind: DigestKind,
 ) -> Result<(u64, String)> {
     let request = DOWNLOAD_CLIENT.get(url).send();
     let response = tokio::select! {
@@ -150,7 +238,7 @@ async fn download_inner(
     let mut file = tokio::fs::File::create(part)
         .await
         .with_context(|| format!("creating {}", part.display()))?;
-    let mut hasher = Sha512::new();
+    let mut hasher = Hasher::new(kind);
     let mut done = 0u64;
     let started = Instant::now();
     let mut last_report = Instant::now() - Duration::from_secs(1);
@@ -185,7 +273,7 @@ async fn download_inner(
         total.or(Some(done)),
         started.elapsed(),
     ));
-    Ok((done, hex::encode(hasher.finalize())))
+    Ok((done, hasher.hex()))
 }
 
 /// Progress values for a transfer of `done` of `total` bytes after `elapsed`.
@@ -224,7 +312,15 @@ pub fn sha512_file(path: &Path) -> Result<String> {
 /// Extract the expected SHA-512 for `file_name` from a `.sha512sum` document
 /// (`<hex>  <name>`, `<hex> *<name>`, or a lone hex digest).
 pub fn parse_sha512sum(text: &str, file_name: &str) -> Option<String> {
-    let is_digest = |s: &str| s.len() == 128 && s.chars().all(|c| c.is_ascii_hexdigit());
+    parse_checksum(text, file_name, DigestKind::Sha512)
+}
+
+/// Extract the expected digest of `kind` for `file_name` from a checksum
+/// document in `sha512sum`/`sha256sum` format. A digest of the other length
+/// never matches, so a mislabelled file fails verification instead of
+/// passing it.
+pub fn parse_checksum(text: &str, file_name: &str, kind: DigestKind) -> Option<String> {
+    let is_digest = |s: &str| s.len() == kind.hex_len() && s.chars().all(|c| c.is_ascii_hexdigit());
     let mut lone = Vec::new();
     for line in text.lines() {
         let mut parts = line.split_whitespace();
@@ -832,6 +928,70 @@ mod tests {
         assert!(checksum_matches(&digest, &digest.to_uppercase()));
         let longer = format!("{digest}{other}");
         assert!(!checksum_matches(&longer, &digest));
+    }
+
+    #[test]
+    fn sha256_checksum_files() {
+        let digest = "c".repeat(64);
+        let text = format!("{digest}  proton-EM-10.0-37-HDR.tar.xz\n");
+        assert_eq!(
+            parse_checksum(&text, "proton-EM-10.0-37-HDR.tar.xz", DigestKind::Sha256),
+            Some(digest.clone())
+        );
+        // A SHA-256 line is no SHA-512 digest, and the other way round.
+        assert_eq!(parse_sha512sum(&text, "proton-EM-10.0-37-HDR.tar.xz"), None);
+        let long = format!("{}  x.tar.xz", "d".repeat(128));
+        assert_eq!(parse_checksum(&long, "x.tar.xz", DigestKind::Sha256), None);
+        assert_eq!(
+            DigestKind::of_checksum_file("https://x/a.sha256sum"),
+            Some(DigestKind::Sha256)
+        );
+        assert_eq!(
+            DigestKind::of_checksum_file("a.sha512sum"),
+            Some(DigestKind::Sha512)
+        );
+        assert_eq!(DigestKind::of_checksum_file("a.tar.xz"), None);
+    }
+
+    #[tokio::test]
+    async fn a_download_is_hashed_with_the_published_kind() {
+        use std::io::Write as _;
+        use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let mut reply = Vec::new();
+                write!(
+                    reply,
+                    "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello"
+                )
+                .unwrap();
+                sock.write_all(&reply).await.unwrap();
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let progress: ProgressSink = std::sync::Arc::new(|_| {});
+        let cancel = CancellationToken::new();
+        let url = format!("http://{addr}/a.tar.xz");
+        let got = download_hashed(
+            &url,
+            &dir.path().join("a"),
+            &progress,
+            &cancel,
+            DigestKind::Sha256,
+        )
+        .await
+        .unwrap();
+        assert_eq!(got.digest_kind, DigestKind::Sha256);
+        assert_eq!(got.digest, hex::encode(Sha256::digest(b"hello")));
+        let got = download(&url, &dir.path().join("b"), &progress, &cancel)
+            .await
+            .unwrap();
+        assert_eq!(got.digest, hex::encode(Sha512::digest(b"hello")));
     }
 
     #[test]

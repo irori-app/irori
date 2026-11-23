@@ -98,6 +98,68 @@ impl BulkSnapshot {
 }
 
 impl UserData {
+    /// Move what the user keeps about the game `from` to the game `to`, for
+    /// one game that now has another library entry (a ROM played as a PC
+    /// game): favourite, hidden, recents, categories, playtime, title and
+    /// art, date added, play status, rating and journal. What `to` already
+    /// has wins; playtime adds up. Copy links stay with `from`, as they
+    /// name the entries the user combined.
+    pub fn carry_over(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        for set in [&mut self.favourites, &mut self.hidden] {
+            if set.remove(from) {
+                set.insert(to.to_string());
+            }
+        }
+        if self.recent.iter().any(|k| k == from) {
+            self.recent.retain(|k| k != to);
+            if let Some(at) = self.recent.iter().position(|k| k == from) {
+                self.recent[at] = to.to_string();
+            }
+        }
+        for games in self.categories.values_mut() {
+            if games.remove(from) {
+                games.insert(to.to_string());
+            }
+        }
+        if let Some(old) = self.playtime.remove(from) {
+            let new = self.playtime.entry(to.to_string()).or_default();
+            let seconds = new.extra_seconds + old.extra_seconds;
+            new.total_minutes += old.total_minutes + seconds / 60;
+            new.extra_seconds = seconds % 60;
+            new.last_played = new.last_played.take().max(old.last_played);
+            new.first_played = match (new.first_played.take(), old.first_played) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+        }
+        if let Some(mut o) = self.overrides.remove(from) {
+            o.copy_of = None;
+            o.default_copy = Default::default();
+            if !self.overrides.contains_key(to) && o != GameOverrides::default() {
+                self.overrides.insert(to.to_string(), o);
+            }
+        }
+        fn take<V>(map: &mut BTreeMap<String, V>, from: &str, to: &str) {
+            if let Some(v) = map.remove(from)
+                && !map.contains_key(to)
+            {
+                map.insert(to.to_string(), v);
+            }
+        }
+        take(&mut self.first_seen, from, to);
+        take(&mut self.play_status, from, to);
+        take(&mut self.ratings, from, to);
+        if let Some(days) = self.journal.remove(from) {
+            let mine = self.journal.entry(to.to_string()).or_default();
+            for (day, entry) in days {
+                mine.entry(day).or_insert(entry);
+            }
+        }
+    }
+
     /// The status the user set for a game, if any.
     pub fn play_status(&self, key: &str) -> Option<PlayStatus> {
         self.play_status.get(key).map(|r| r.status)
@@ -855,6 +917,12 @@ impl UserDataService {
         self.update(None, |d| plan.apply(d, &now));
     }
 
+    /// Move what the user keeps about `from` to `to` ([`UserData::carry_over`]).
+    pub fn carry_over(&self, from: &GameId, to: &GameId) {
+        let (from_key, to_key) = (from.key(), to.key());
+        self.update(Some(to), |d| d.carry_over(&from_key, &to_key));
+    }
+
     /// Forget everything about a game except playtime (uninstall).
     pub fn forget(&self, id: &GameId) {
         self.update(Some(id), |d| {
@@ -868,6 +936,68 @@ impl UserDataService {
 mod tests {
     use super::*;
     use irori_core::Runner;
+
+    #[test]
+    fn carrying_a_game_over_moves_what_the_user_keeps() {
+        let (rom, pc) = ("emulation:abc", "sideload:xyz");
+        let mut d = UserData::default();
+        d.favourites.insert(rom.into());
+        d.recent = vec!["gog:1".into(), rom.into(), pc.into()];
+        d.categories
+            .entry("RPG".into())
+            .or_default()
+            .insert(rom.into());
+        d.playtime.insert(
+            rom.into(),
+            PlaytimeRecord {
+                total_minutes: 90,
+                extra_seconds: 50,
+                last_played: Some("2026-05-01T10:00:00+00:00".into()),
+                first_played: Some("2025-01-01T10:00:00+00:00".into()),
+            },
+        );
+        d.playtime.insert(
+            pc.into(),
+            PlaytimeRecord {
+                total_minutes: 10,
+                extra_seconds: 20,
+                last_played: Some("2026-06-01T10:00:00+00:00".into()),
+                first_played: None,
+            },
+        );
+        d.overrides.insert(
+            rom.into(),
+            GameOverrides {
+                title: Some("Mine".into()),
+                copy_of: Some("gog:1".into()),
+                ..Default::default()
+            },
+        );
+        d.ratings.insert(rom.into(), 4);
+        d.ratings.insert(pc.into(), 2);
+        d.carry_over(rom, pc);
+
+        assert!(d.favourites.contains(pc) && !d.favourites.contains(rom));
+        assert_eq!(d.recent, vec!["gog:1".to_string(), pc.to_string()]);
+        assert!(d.categories["RPG"].contains(pc));
+        let time = &d.playtime[pc];
+        assert_eq!((time.total_minutes, time.extra_seconds), (101, 10));
+        assert_eq!(
+            time.last_played.as_deref(),
+            Some("2026-06-01T10:00:00+00:00")
+        );
+        assert_eq!(
+            time.first_played.as_deref(),
+            Some("2025-01-01T10:00:00+00:00")
+        );
+        assert!(!d.playtime.contains_key(rom));
+        let o = &d.overrides[pc];
+        assert_eq!(o.title.as_deref(), Some("Mine"));
+        assert_eq!(o.copy_of, None);
+        // What the new entry already had wins.
+        assert_eq!(d.ratings.get(pc), Some(&2));
+        assert!(!d.ratings.contains_key(rom));
+    }
 
     #[test]
     fn restoring_a_capture_undoes_bulk_edits_exactly() {

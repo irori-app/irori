@@ -107,6 +107,8 @@
   "shell.palette.steam_client_library": "從 Steam 用戶端讀取 Steam 遊戲庫",
   "shell.palette.steam_client_library_keywords": "Steam 遊戲庫 已擁有遊戲 未安裝 不必登入 用戶端",
   "shell.palette.play_status": "{title}：將遊玩狀態設為「{status}」",
+  "shell.palette.play_as_pc_game": "將「{title}」作為 PC 遊戲玩…",
+  "shell.palette.play_as_pc_game_keywords": "ROM 模擬器 程式 Windows Linux 加入的遊戲",
   "shell.palette.clear_play_status": "{title}：清除遊玩狀態",
   "shell.palette.group_by_status": "依遊玩狀態將遊戲庫分組",
   "shell.palette.ungroup_by_status": "取消依遊玩狀態將遊戲庫分組",

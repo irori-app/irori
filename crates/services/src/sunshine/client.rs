@@ -1,8 +1,9 @@
-//! The web API of Sunshine (or Apollo) on this computer: its applications
-//! and covers.
+//! The web API of Sunshine (or Apollo): its applications and covers.
 //!
-//! Both serve it over HTTPS with a certificate they made themselves, so this
-//! client accepts any certificate, and only ever talks to `127.0.0.1`.
+//! Both serve it over HTTPS with a certificate they made themselves. On this
+//! computer the client accepts any certificate and talks to `127.0.0.1`; on
+//! another computer the certificate must be the one trusted on first use
+//! (`remote::PinVerifier`).
 //! Requests carry no `Origin` or `Referer`, which Sunshine needs no CSRF
 //! token for.
 //!
@@ -21,6 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::detect::StreamHost;
+use super::remote::{CertificateChanged, PinVerifier};
+use std::sync::Arc;
 
 /// The web UI's login, kept with `irori_secrets`.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,11 +49,22 @@ enum Auth {
     Session(String),
 }
 
+/// How the web UI's certificate is checked.
+#[derive(Clone)]
+pub(crate) enum Tls {
+    /// Sunshine on this computer: any certificate.
+    Local,
+    /// Sunshine on another computer: the pinned certificate, or any on
+    /// first use.
+    Pinned(Arc<PinVerifier>),
+}
+
 pub(crate) struct Client {
     http: reqwest::Client,
     base: String,
     login: SunshineLogin,
     auth: Auth,
+    tls: Tls,
 }
 
 /// Where an application sits in the host's list.
@@ -60,29 +74,26 @@ pub(crate) struct Place<'a> {
 }
 
 impl Client {
-    /// Connect to the host whose web UI listens on `port`; `session` is an
-    /// Apollo session from an earlier sync.
+    /// Connect to the web UI at `base` (`https://host:port`), checking its
+    /// certificate as `tls` says; `session` is an Apollo session from an
+    /// earlier sync.
     pub(crate) async fn connect(
-        port: u16,
-        login: SunshineLogin,
-        session: Option<String>,
-    ) -> Result<Self> {
-        Self::connect_at(format!("https://127.0.0.1:{port}"), login, session).await
-    }
-
-    /// [`Self::connect`] to `base` (tests point it at a plain HTTP server).
-    pub(crate) async fn connect_at(
         base: String,
+        tls: Tls,
         login: SunshineLogin,
         session: Option<String>,
     ) -> Result<Self> {
-        let http = reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .user_agent(irori_core::http::USER_AGENT)
-            .danger_accept_invalid_certs(true)
             // A browser without a login is sent to the welcome page.
             .redirect(redirect::Policy::none())
             .connect_timeout(Duration::from_secs(3))
-            .timeout(Duration::from_secs(20))
+            .timeout(Duration::from_secs(20));
+        let builder = match &tls {
+            Tls::Local => builder.danger_accept_invalid_certs(true),
+            Tls::Pinned(verifier) => builder.use_preconfigured_tls(verifier.tls_config()?),
+        };
+        let http = builder
             .build()
             .context("Could not prepare a connection to Sunshine")?;
         let mut client = Self {
@@ -90,6 +101,7 @@ impl Client {
             base,
             login,
             auth: Auth::Basic,
+            tls,
         };
         if let Some(session) = session {
             client.auth = Auth::Session(session);
@@ -106,6 +118,46 @@ impl Client {
             }
             status => Err(status_error(status, &Value::Null)),
         }
+    }
+
+    /// Sunshine on this computer at `base`: tests point it at a plain HTTP
+    /// server.
+    #[cfg(test)]
+    pub(crate) async fn connect_at(
+        base: String,
+        login: SunshineLogin,
+        session: Option<String>,
+    ) -> Result<Self> {
+        Self::connect(base, Tls::Local, login, session).await
+    }
+
+    /// The fingerprint of the certificate the last handshake met, on
+    /// another computer.
+    pub(crate) fn certificate(&self) -> Option<String> {
+        match &self.tls {
+            Tls::Local => None,
+            Tls::Pinned(verifier) => verifier.seen().fingerprint,
+        }
+    }
+
+    /// Why a request didn't reach the host, in words for the user.
+    fn unreachable(&self, e: reqwest::Error) -> anyhow::Error {
+        if let Tls::Pinned(verifier) = &self.tls {
+            let seen = verifier.seen();
+            if seen.changed
+                && let Some(fingerprint) = seen.fingerprint
+            {
+                return CertificateChanged { fingerprint }.into();
+            }
+            if e.is_connect() || e.is_timeout() {
+                return anyhow!(
+                    "Sunshine doesn't answer at {}: is that computer on, and Sunshine \
+                     running there?",
+                    self.base.trim_start_matches("https://")
+                );
+            }
+        }
+        unreachable(e)
     }
 
     /// Which host this is.
@@ -138,7 +190,7 @@ impl Client {
             .request(Method::GET, "/api/apps")
             .send()
             .await
-            .map_err(unreachable)?;
+            .map_err(|e| self.unreachable(e))?;
         Ok(response.status())
     }
 
@@ -153,7 +205,7 @@ impl Client {
             }))
             .send()
             .await
-            .map_err(unreachable)?;
+            .map_err(|e| self.unreachable(e))?;
         let status = response.status();
         if !status.is_success() {
             // Sunshine has no such page: it refused the Basic login above.
@@ -180,7 +232,7 @@ impl Client {
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().await.map_err(unreachable)?;
+        let response = request.send().await.map_err(|e| self.unreachable(e))?;
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
         let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);

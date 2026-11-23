@@ -8,9 +8,15 @@
 //! - Files are written through [`json_store::write_bytes`] (a temporary
 //!   sibling renamed into place), so each is either absent or complete.
 //! - A file that already exists is never replaced: the mod's own file (the
-//!   ReShade DLL) refuses the install ([`ReshadeError::DllTaken`]);
-//!   `ReShade.ini`, `d3dcompiler_47.dll` and shaders the folder already has
-//!   are left as they are and stay out of the manifest.
+//!   ReShade DLL) refuses the install ([`ReshadeError::DllTaken`]), or, when
+//!   it is a ReShade installed by hand, [`ReshadeError::ManualInstall`],
+//!   which the user may answer by letting Irori take it over
+//!   ([`Existing::Adopt`]); `ReShade.ini`, `d3dcompiler_47.dll` and shaders
+//!   the folder already has are left as they are and stay out of the
+//!   manifest.
+//! - [`missing`] and [`restore`] put back recorded files the game folder
+//!   lost (a store's update or file check deletes what it doesn't know),
+//!   only from bytes that match the record.
 //! - [`set_enabled`] turns a mod off by renaming its one switch file
 //!   ([`Manifest::dll`]) with [`DISABLED_SUFFIX`], and on by renaming it
 //!   back.
@@ -154,6 +160,32 @@ pub enum Existing {
     Refuse,
     /// Leave the file and don't record it.
     Keep,
+    /// Replace the file when it is a ReShade DLL installed without Irori
+    /// (the user agreed); refuse anything else, as [`Existing::Refuse`].
+    Adopt,
+}
+
+/// Whether the file at `path` is a ReShade DLL: a Windows DLL whose version
+/// information names ReShade. Reads at most 64 MiB.
+pub fn is_reshade_dll(path: &Path) -> bool {
+    use std::io::Read as _;
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut bytes = Vec::new();
+    if file.take(64 << 20).read_to_end(&mut bytes).is_err() {
+        return false;
+    }
+    is_reshade_bytes(&bytes)
+}
+
+fn is_reshade_bytes(bytes: &[u8]) -> bool {
+    // Version resources hold UTF-16LE strings: ProductName "ReShade".
+    let needle: Vec<u8> = "ReShade"
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    crate::pe::read_bytes(bytes).is_ok() && bytes.windows(needle.len()).any(|w| w == needle)
 }
 
 /// A file to write.
@@ -380,11 +412,25 @@ pub fn update_staged(
                     to_write.push((rel, file.source, None));
                 }
             } else {
+                // A file no earlier install wrote: the same rules as a first
+                // install, a ReShade put there by hand taken over only when
+                // the user agreed.
+                let name = rel.to_string_lossy().into_owned();
+                let reshade = !exists(&disabled) && is_reshade_dll(&target);
                 match file.existing {
-                    Existing::Refuse => bail!(ReshadeError::DllTaken {
-                        name: rel.to_string_lossy().into_owned()
-                    }),
                     Existing::Keep => continue,
+                    Existing::Adopt if reshade => {
+                        records.push(FileRecord {
+                            path: rel.clone(),
+                            sha256: new_sha,
+                            size: new_size,
+                        });
+                        new_paths.insert(rel.clone());
+                        to_write.push((rel, file.source, None));
+                        continue;
+                    }
+                    _ if reshade => bail!(ReshadeError::ManualInstall { name }),
+                    _ => bail!(ReshadeError::DllTaken { name }),
                 }
             }
         } else if prev_is_disabled_switch {
@@ -539,12 +585,15 @@ pub fn apply_staged(
             "{}{DISABLED_SUFFIX}",
             rel.file_name().unwrap_or_default().to_string_lossy()
         ));
-        if exists(&target) || (file.existing == Existing::Refuse && exists(&disabled)) {
+        let refuses = file.existing != Existing::Keep;
+        if exists(&target) || (refuses && exists(&disabled)) {
+            let name = rel.to_string_lossy().into_owned();
+            let reshade = exists(&target) && !exists(&disabled) && is_reshade_dll(&target);
             match file.existing {
-                Existing::Refuse => bail!(ReshadeError::DllTaken {
-                    name: rel.to_string_lossy().into_owned()
-                }),
                 Existing::Keep => continue,
+                Existing::Adopt if reshade => {}
+                _ if reshade => bail!(ReshadeError::ManualInstall { name }),
+                _ => bail!(ReshadeError::DllTaken { name }),
             }
         }
         let (sha256, size) = match &file.source {
@@ -608,6 +657,61 @@ pub fn apply_staged(
     base.complete = true;
     save(journal, &base)?;
     Ok(base)
+}
+
+/// The recorded files that are gone from the game folder, the switch file
+/// under its current name. Empty for an install that never completed.
+/// Blocking.
+pub fn missing(manifest: &Manifest) -> Vec<FileRecord> {
+    if !manifest.complete || manifest.checked().is_err() {
+        return Vec::new();
+    }
+    manifest
+        .files
+        .iter()
+        .filter(|f| {
+            let path = if f.path == Path::new(&manifest.dll) {
+                manifest.dll_path()
+            } else {
+                manifest.dir.join(&f.path)
+            };
+            !exists(&path)
+        })
+        .cloned()
+        .collect()
+}
+
+/// Write back recorded files the game folder lost, each from `bytes` only
+/// when they hash to its record and nothing took its place meanwhile.
+/// Returns how many were put back. Blocking.
+pub fn restore(manifest: &Manifest, bytes: &[(PathBuf, Vec<u8>)]) -> Result<usize> {
+    manifest.checked()?;
+    let mut restored = 0;
+    for file in missing(manifest) {
+        let Some((_, data)) = bytes.iter().find(|(p, _)| *p == file.path) else {
+            continue;
+        };
+        if data.len() as u64 != file.size || sha256_of(data) != file.sha256 {
+            continue;
+        }
+        let rel = relative_entry_path(&file.path)
+            .with_context(|| format!("unsafe path {}", file.path.display()))?;
+        ensure_no_symlinks(&manifest.dir, &rel)?;
+        let path = if file.path == Path::new(&manifest.dll) {
+            manifest.dll_path()
+        } else {
+            manifest.dir.join(&rel)
+        };
+        // Only into folders that are still there: a folder that went away
+        // with the update means the game moved on.
+        if !path.parent().is_some_and(Path::is_dir) {
+            continue;
+        }
+        json_store::write_bytes(&path, data)
+            .with_context(|| format!("Could not write {}", path.display()))?;
+        restored += 1;
+    }
+    Ok(restored)
 }
 
 /// Rename the switch file to turn the mod on or off. Blocking.
@@ -819,6 +923,100 @@ mod tests {
         );
         assert!(!game.path().join("ReShade.ini").exists());
         assert!(!journal.exists());
+    }
+
+    /// Bytes that pass for a ReShade DLL: a PE header and the product name
+    /// in UTF-16LE.
+    fn fake_reshade() -> Vec<u8> {
+        let mut bytes = crate::pe::tests::build_pe(0x8664, &[], &[]);
+        bytes.extend("ReShade".encode_utf16().flat_map(u16::to_le_bytes));
+        bytes
+    }
+
+    #[test]
+    fn a_reshade_installed_by_hand_can_be_taken_over() {
+        let game = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let journal = state.path().join("g.json");
+        std::fs::write(game.path().join("dxgi.dll"), fake_reshade()).unwrap();
+        std::fs::write(game.path().join("ReShade.ini"), b"mine").unwrap();
+        assert!(is_reshade_dll(&game.path().join("dxgi.dll")));
+
+        let err = apply(&journal, base(game.path()), plan(), &|| false).unwrap_err();
+        assert!(matches!(
+            ReshadeError::of(&err),
+            Some(ReshadeError::ManualInstall { name }) if name == "dxgi.dll"
+        ));
+        assert!(!journal.exists());
+
+        let mut adopt = plan();
+        adopt[0].existing = Existing::Adopt;
+        let m = apply(&journal, base(game.path()), adopt, &|| false).unwrap();
+        assert!(m.switch_record().is_some());
+        assert_eq!(
+            std::fs::read(game.path().join("dxgi.dll")).unwrap(),
+            b"reshade"
+        );
+        // The user's settings stay theirs.
+        assert_eq!(
+            std::fs::read(game.path().join("ReShade.ini")).unwrap(),
+            b"mine"
+        );
+
+        // Taking over never reaches a DLL that isn't ReShade.
+        let other = tempfile::tempdir().unwrap();
+        std::fs::write(other.path().join("dxgi.dll"), b"dxvk").unwrap();
+        let mut adopt = plan();
+        adopt[0].existing = Existing::Adopt;
+        let err = apply(
+            &state.path().join("o.json"),
+            base(other.path()),
+            adopt,
+            &|| false,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            ReshadeError::of(&err),
+            Some(ReshadeError::DllTaken { .. })
+        ));
+    }
+
+    #[test]
+    fn files_an_update_deleted_are_put_back() {
+        let game = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let journal = state.path().join("g.json");
+        let mut m = apply(&journal, base(game.path()), plan(), &|| false).unwrap();
+        assert!(missing(&m).is_empty());
+        // The store's file check removed the files it doesn't know.
+        std::fs::remove_file(game.path().join("dxgi.dll")).unwrap();
+        std::fs::remove_file(game.path().join("d3dcompiler_47.dll")).unwrap();
+        let gone: Vec<PathBuf> = missing(&m).into_iter().map(|f| f.path).collect();
+        assert_eq!(
+            gone,
+            [
+                PathBuf::from("dxgi.dll"),
+                PathBuf::from("d3dcompiler_47.dll")
+            ]
+        );
+        let bytes = vec![
+            (PathBuf::from("dxgi.dll"), b"reshade".to_vec()),
+            // Not what was installed: left out.
+            (PathBuf::from("d3dcompiler_47.dll"), b"another".to_vec()),
+        ];
+        assert_eq!(restore(&m, &bytes).unwrap(), 1);
+        assert_eq!(
+            std::fs::read(game.path().join("dxgi.dll")).unwrap(),
+            b"reshade"
+        );
+        assert!(!game.path().join("d3dcompiler_47.dll").exists());
+
+        // A turned-off install comes back turned off.
+        set_enabled(&journal, &mut m, false).unwrap();
+        std::fs::remove_file(m.dll_path()).unwrap();
+        assert_eq!(restore(&m, &bytes).unwrap(), 1);
+        assert!(m.dll_path().exists());
+        assert!(!game.path().join("dxgi.dll").exists());
     }
 
     #[test]

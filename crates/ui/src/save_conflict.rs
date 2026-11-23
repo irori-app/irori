@@ -15,8 +15,8 @@ use crate::state::{backend, run};
 
 /// When `error` is a save conflict, ask which saves of `id` to keep, then
 /// sync that way and start the game with `params`. A missing emulator, core,
-/// BIOS or launcher gets its fix offered instead, and a sandbox that can't
-/// start its explanation. A launch the user cancelled needs nothing.
+/// BIOS or launcher gets its fix offered instead, a sandbox that can't
+/// start its explanation, and missing game files the way to find them. A launch the user cancelled needs nothing.
 /// Returns whether it took care of the error; otherwise the caller reports
 /// it as usual.
 pub fn resolve_launch_error(
@@ -29,7 +29,8 @@ pub fn resolve_launch_error(
     if irori_services::LaunchCancelled::of(error) {
         return true;
     }
-    if crate::engine_problem::resolve(id, &params, error, window, cx)
+    if crate::missing_files::resolve(id, &params, error, window, cx)
+        || crate::engine_problem::resolve(id, &params, error, window, cx)
         || crate::launcher_problem::resolve(id, &params, error, window, cx)
         || crate::sandbox_problem::resolve(id, error, window, cx)
         || crate::xbox_problem::resolve(id, error, window, cx)
@@ -120,7 +121,13 @@ fn open_download_failed(
 
 /// Start the game again with `params`; a launch error goes through
 /// [`resolve_launch_error`] once more (the download may fail again).
-fn play_again(id: GameId, params: LaunchParams, title: &str, window: &mut Window, cx: &mut App) {
+pub(crate) fn play_again(
+    id: GameId,
+    params: LaunchParams,
+    title: &str,
+    window: &mut Window,
+    cx: &mut App,
+) {
     let b = backend(cx);
     let failed = t_args("ui.saves.start_failed", &[("title", title)]);
     let task = {

@@ -24,7 +24,10 @@ use anyhow::{Context as _, Result, bail};
 use irori_core::{AppSettings, archive_guard, fs_guard, json_store};
 use serde::{Deserialize, Serialize};
 
-use crate::fsutil::{CaseAligner, join_rel, modified_ns, move_file, same_file, walk_files};
+use crate::fsutil::{
+    CaseAligner, LOCK_BUDGET, copy_whole, is_locked, join_rel, modified_ns, move_file,
+    retry_locked, same_file, walk_files,
+};
 
 /// Suffix of a game file set aside while a mod replaces it.
 pub const BACKUP_SUFFIX: &str = ".irori-original";
@@ -49,6 +52,10 @@ pub struct Deployment {
     pub dirs: Vec<String>,
     #[serde(default)]
     pub created_at: String,
+    /// Why the last attempt to take the mods out stopped before it changed
+    /// anything (files still in use), for the next attempt's report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,6 +153,7 @@ pub(crate) fn deploy_links_using(
         files: Vec::new(),
         dirs: Vec::new(),
         created_at: irori_core::util::now_rfc3339(),
+        blocked: None,
     };
     let mut new_dirs: BTreeSet<String> = BTreeSet::new();
     for (rel, (ix, layer_rel)) in plan(game_dir, layers)? {
@@ -224,9 +232,7 @@ fn link_one(source: &Path, target: &Path, kinds: &[LinkKind]) -> Result<LinkKind
             #[cfg(not(unix))]
             LinkKind::Symbolic => false,
             LinkKind::Copy => {
-                std::fs::copy(source, target).with_context(|| {
-                    format!("copying {} to {}", source.display(), target.display())
-                })?;
+                copy_whole(source, target)?;
                 true
             }
         };
@@ -258,17 +264,60 @@ pub struct Undeployed {
 /// Take a links deployment back out of its game folder and remove its
 /// manifest. Safe to run again after a failure; files the game wrote into
 /// mod files or created folders move to `written`.
+///
+/// Every file it will touch is checked first: when one stays in use (a
+/// game that hasn't quite exited, an antivirus scan) past a short wait,
+/// nothing is changed, the reason is recorded in the manifest and the
+/// error names the file, so a later attempt finds the folder as it was.
 pub fn undeploy(manifest: &Path, written: &Path, app: &AppSettings) -> Result<Undeployed> {
-    let Some(deployment) = json_store::read::<Deployment>(manifest)? else {
+    // One wait for the whole folder: a game holding many files open must
+    // not keep Irori waiting once per file.
+    let deadline = std::time::Instant::now() + LOCK_BUDGET;
+    undeploy_checking(manifest, written, app, |path| {
+        file_in_use(
+            path,
+            deadline.saturating_duration_since(std::time::Instant::now()),
+        )
+    })
+}
+
+/// [`undeploy`] with the check for files in use given.
+pub(crate) fn undeploy_checking(
+    manifest: &Path,
+    written: &Path,
+    app: &AppSettings,
+    in_use: impl Fn(&Path) -> bool,
+) -> Result<Undeployed> {
+    let Some(mut deployment) = json_store::read::<Deployment>(manifest)? else {
         return Ok(Undeployed::default());
     };
     if deployment.applied != Applied::Links {
         bail!("an overlay is unmounted, not undeployed");
     }
-    let game_dir = &deployment.game_dir;
+    let game_dir = deployment.game_dir.clone();
     let mut report = Undeployed::default();
     if game_dir.is_dir() {
-        fs_guard::ensure_deletable(game_dir, app)?;
+        fs_guard::ensure_deletable(&game_dir, app)?;
+        let busy: Vec<&str> = deployment
+            .files
+            .iter()
+            .filter(|f| archive_guard::relative_entry_path(Path::new(&f.rel)).is_some())
+            .filter(|f| in_use(&join_rel(&game_dir, &f.rel)))
+            .map(|f| f.rel.as_str())
+            .collect();
+        if let Some(first) = busy.first() {
+            let reason = format!(
+                "{} is still in use{}; close the game and try again",
+                join_rel(&game_dir, first).display(),
+                match busy.len() {
+                    1 => String::new(),
+                    n => format!(" (and {} more files)", n - 1),
+                }
+            );
+            deployment.blocked = Some(reason.clone());
+            json_store::write(manifest, &deployment)?;
+            bail!(reason);
+        }
         report = remove_links(&deployment, written)?;
     }
     std::fs::remove_file(manifest).with_context(|| format!("removing {}", manifest.display()))?;
@@ -299,7 +348,7 @@ fn remove_links(deployment: &Deployment, written: &Path) -> Result<Undeployed> {
             State::Original => continue,
         }
         if file.backup && backup.symlink_metadata().is_ok() {
-            std::fs::rename(&backup, &target)
+            retry_locked(LOCK_BUDGET, || std::fs::rename(&backup, &target))
                 .with_context(|| format!("restoring {}", target.display()))?;
             report.restored += 1;
         }
@@ -368,7 +417,8 @@ fn state_of(file: &DeployedFile, target: &Path) -> State {
 }
 
 fn remove(path: &Path) -> Result<()> {
-    std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))
+    retry_locked(LOCK_BUDGET, || std::fs::remove_file(path))
+        .with_context(|| format!("removing {}", path.display()))
 }
 
 /// Remove `dir` and the folders in it, as long as they hold no files.
@@ -382,6 +432,19 @@ fn remove_empty_tree(dir: &Path) {
         }
     }
     let _ = std::fs::remove_dir(dir);
+}
+
+/// Whether another program holds `path` open so it can't be removed or
+/// replaced, after waiting up to `wait` for it to let go. A file that can't
+/// be opened for other reasons (gone, read-only) isn't in use.
+fn file_in_use(path: &Path, wait: std::time::Duration) -> bool {
+    if std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir() || m.file_type().is_symlink()) {
+        return false;
+    }
+    match retry_locked(wait, || std::fs::OpenOptions::new().write(true).open(path)) {
+        Ok(_) => false,
+        Err(e) => is_locked(&e),
+    }
 }
 
 /// Whether a deployment is recorded at `manifest`.

@@ -30,6 +30,9 @@
 //! time it knows of beyond its sessions (store totals, imports): its total
 //! minus its sessions. The merged total is the largest of those plus every
 //! session, so time played anywhere counts once.
+//!
+//! A computer set to send only playtime ([`Scope::PlaytimeOnly`]) reads and
+//! publishes only the playtime part of every file.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -158,6 +161,37 @@ pub struct Shared {
     pub registers: Registers,
     pub playtime: BTreeMap<String, PlaytimeShare>,
     pub sessions: Vec<Session>,
+}
+
+/// What a computer exchanges with the others.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Scope {
+    /// Everything: the organisation (favourites, categories, statuses…),
+    /// playtime and sessions.
+    #[default]
+    Everything,
+    /// Only playtime and sessions (`iroriSync.playtimeOnly`), for a computer
+    /// the user doesn't keep organised: what it sets is never sent, and what
+    /// the others set never changes it. Playtime removals travel, being part
+    /// of playtime.
+    PlaytimeOnly,
+}
+
+impl Scope {
+    /// The part of `shared` this computer takes from, or sends to, another.
+    pub fn filter(self, shared: &Shared) -> Shared {
+        match self {
+            Scope::Everything => shared.clone(),
+            Scope::PlaytimeOnly => Shared {
+                registers: Registers {
+                    playtime_removed: shared.registers.playtime_removed.clone(),
+                    ..Default::default()
+                },
+                playtime: shared.playtime.clone(),
+                sessions: shared.sessions.clone(),
+            },
+        }
+    }
 }
 
 /// Which value a conflict is about.

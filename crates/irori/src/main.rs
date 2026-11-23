@@ -394,6 +394,18 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             });
         }
     }
+    if let Some(link) = &cli.thunderstore {
+        open_main_window(app, cx);
+        let window = app.lock().window;
+        if let Some(handle) = window {
+            let link = link.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    irori_game::open_thunderstore_link_dialog(&link, window, cx)
+                })
+            });
+        }
+    }
     if let Some(file) = &cli.windows_file {
         open_main_window(app, cx);
         let window = app.lock().window;
