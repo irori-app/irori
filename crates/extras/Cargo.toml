@@ -29,6 +29,10 @@ serde_yaml_ng.workspace = true
 sysinfo.workspace = true
 image = { workspace = true, features = ["ico"] }
 thiserror.workspace = true
+zip.workspace = true
+# LaunchBox's games database is one large XML file, read as a stream; the
+# version is already in Cargo.lock (irori-launchers reads XML with it).
+quick-xml = "0.42"
 
 [target.'cfg(windows)'.dependencies]
 # Playnite's `playnite://` link names its program; the version is already in

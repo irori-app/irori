@@ -308,6 +308,9 @@ build Irori yourself, see [Building](#building).
 - **ROM folders** scanned and watched, with each game's system, region and revision
   from its file name, a generated cover, and the BIOS files each system needs checked
   before you play.
+- **Box art of your region** from the LaunchBox Games Database: a European ROM gets
+  the European box, and the cover picker lists every region's box. Its game list
+  (about 110 MB) is downloaded at most once a week, and only while you have ROMs.
 
 <p align="center">
   <picture>

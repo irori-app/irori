@@ -12,6 +12,7 @@ irori-core.workspace = true
 irori-engines.workspace = true
 irori-retroachievements-api.workspace = true
 irori-secrets.workspace = true
+irori-extras.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -30,3 +31,4 @@ notify.workspace = true
 irori-engines = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
+zip.workspace = true

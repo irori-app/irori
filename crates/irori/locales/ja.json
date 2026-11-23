@@ -110,6 +110,8 @@
   "shell.palette.open_store": "{store} のストアを開く",
   "shell.palette.lutris_script": "Lutris スクリプトでインストール",
   "shell.palette.lutris_script_keywords": "Lutris スクリプト インストーラー lutris.net コミュニティ",
+  "shell.palette.launchbox": "LaunchBox のパッケージ画像をダウンロード",
+  "shell.palette.launchbox_keywords": "LaunchBox パッケージ カバー ROM エミュレーション ゲーム データベース 地域 更新",
   "shell.palette.steam_client_library": "Steam クライアントから Steam ライブラリを読み込む",
   "shell.palette.steam_client_library_keywords": "Steam ライブラリ 所有ゲーム 未インストール サインインなし クライアント",
   "shell.palette.play_status": "{title}：プレイ状況を「{status}」にする",

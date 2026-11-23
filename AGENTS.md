@@ -246,7 +246,7 @@ irori-core                        (depends on nothing internal)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   │                   irori-steam, irori-sideload, irori-xbox (+ runtime, irori-msstore-api,
   │                   irori-msixvc, irori-xbox-api), irori-emulation (+ engines,
-  │                   irori-retroachievements-api),
+  │                   irori-retroachievements-api, extras for LaunchBox's box art),
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
@@ -1538,6 +1538,20 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   way, version pin (typed `EngineMissing`), then the command. `GameInfo.system` and
   `GameInfo.tags` (region, revision) drive the system filter, badges, the generated
   cover and Big Picture's per-system shelves.
+- **LaunchBox box art** (`irori-extras::launchbox` downloads and reads,
+  `irori-emulation::launchbox` matches). LaunchBox offers other programs its whole
+  database as one file, `gamesdb.launchbox-app.com/Metadata.zip`, and serves images by
+  file name from `images.launchbox-app.com`; Irori uses only those, never its pages.
+  The file (about 110 MB) downloads at most weekly, `If-None-Match`, only while the ROM
+  library has games or when the user asks (the art picker, the palette), never from
+  `init` or the test constructors (`EmulationStore::with_dirs` has no address). It is
+  read as a stream (quick-xml over the zip entry; capped fields, lists and text runs),
+  kept as one `<cache>/stores/emulation/launchbox/systems/<system>.json` per system
+  (front boxes with their regions), then deleted. Games match by system
+  (`launchbox::PLATFORMS`) and folded title (Roman numerals only as a fallback); the
+  cover is the box of the ROM's region badge, else libretro's thumbnail, and the
+  user's own art wins. A ROM's cover picker opens on its LaunchBox boxes, every
+  region's, its own first and each captioned with its region.
 - **Lutris import** (`irori-extras::lutris_import` reads; `crates/irori/src/lutris.rs`
   applies; Bottles and Faugus Launcher plans from `irori-extras::wine_launchers` use
   the same shapes and apply step). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is
