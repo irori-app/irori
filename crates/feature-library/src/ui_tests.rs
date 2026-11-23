@@ -1030,6 +1030,90 @@ fn a_dropped_file_opens_add_game_filled_in(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn installer_detection_fills_single_executable_and_asks_for_multiple(cx: &mut TestAppContext) {
+    use crate::dialogs::sideload::InstallerRun;
+    use irori_sideload::scan::{DetectionOutcome, InstalledCandidate, PrefixSnapshot};
+
+    let _backend = start(cx);
+    let prefill = SideloadApp {
+        title: "Skyrim".into(),
+        platform: SideloadPlatform::Windows,
+        ..Default::default()
+    };
+    let (window, dialog) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| SideloadDialog::with_app(None, Some(prefill), window, cx))
+            })
+        })
+        .expect("window opens");
+    cx.run_until_parked();
+
+    let run = InstallerRun {
+        prefix: "/pfx".into(),
+        snapshot: Arc::new(PrefixSnapshot::default()),
+        installer: "/tmp/setup.exe".into(),
+        extra_dir: None,
+    };
+
+    // 1. Single detected executable fills Executable, Install folder and Arguments automatically.
+    let single = InstalledCandidate {
+        executable: "/pfx/drive_c/Games/Skyrim/SkyrimSE.exe".into(),
+        args: "-fullscreen".into(),
+        install_folder: Some("/pfx/drive_c/Games/Skyrim".into()),
+        label: None,
+        from_shortcut: false,
+    };
+    cx.update_window(window, |_, window, cx| {
+        dialog.update(cx, |d, cx| {
+            d.apply_detection(
+                run.clone(),
+                DetectionOutcome::Picked(single.clone()),
+                window,
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    let app = cx.read(|cx| dialog.read(cx).collect(cx));
+    assert_eq!(
+        app.executable.as_deref(),
+        Some(Path::new("/pfx/drive_c/Games/Skyrim/SkyrimSE.exe"))
+    );
+    assert_eq!(
+        app.install_folder.as_deref(),
+        Some(Path::new("/pfx/drive_c/Games/Skyrim"))
+    );
+    assert_eq!(app.launcher_args, "-fullscreen");
+
+    // 2. Multiple detected executables wait for the user to choose one.
+    let launcher = InstalledCandidate {
+        executable: "/pfx/drive_c/Games/Skyrim/SkyrimSELauncher.exe".into(),
+        args: String::new(),
+        install_folder: Some("/pfx/drive_c/Games/Skyrim".into()),
+        label: None,
+        from_shortcut: false,
+    };
+    cx.update_window(window, |_, window, cx| {
+        dialog.update(cx, |d, cx| {
+            d.apply_detection(
+                run.clone(),
+                DetectionOutcome::Ambiguous(vec![single.clone(), launcher.clone()]),
+                window,
+                cx,
+            );
+            d.choose_installer_candidate(1, window, cx);
+        });
+    })
+    .unwrap();
+    let chosen = cx.read(|cx| dialog.read(cx).collect(cx));
+    assert_eq!(
+        chosen.executable.as_deref(),
+        Some(Path::new("/pfx/drive_c/Games/Skyrim/SkyrimSELauncher.exe"))
+    );
+}
+
+#[gpui_kit::test]
 fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
     use crate::quick::QuickControl;
 

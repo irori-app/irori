@@ -757,15 +757,23 @@ pub async fn run_in_prefix(
     cmd.env = env::wrapper_env(target.id);
     cmd.install_path = target.game.install_path();
     cmd.game_id = target.folder_id();
-    if let Some(first) = cmd.argv.first() {
-        let p = Path::new(first);
-        if p.is_absolute() && p.is_file() {
-            cmd.cwd = p.parent().map(Path::to_path_buf);
-        }
+    if let Some(file) = cmd.argv.iter().find_map(|arg| {
+        let p = Path::new(arg);
+        (p.is_absolute() && p.is_file()).then_some(p)
+    }) {
+        cmd.cwd = file.parent().map(Path::to_path_buf);
     }
     if wait {
         cmd.wait = true;
         cmd.verb = "waitforexitandrun";
+        // Point Proton's game drive (`S:`) at the prefix's `drive_c` while an
+        // installer runs so installers that default to `S:\Games\<Title>` (such
+        // as FitGirl repacks) install into `<prefix>/drive_c/Games/<Title>`
+        // instead of root-owned `/home` on Btrfs `/home` subvolumes.
+        let drive_c = wc.wine_prefix_dir().join("drive_c");
+        let dc = drive_c.to_string_lossy().into_owned();
+        cmd.install_path = Some(drive_c);
+        cmd.env.insert("STEAM_COMPAT_LIBRARY_PATHS".into(), dc);
     } else {
         cmd.detach = true;
     }

@@ -245,7 +245,9 @@ pub async fn steam_app_id(game: &GameInfo) -> Option<String> {
 }
 
 /// Steam's cover and hero art for a game known only by its title (one
-/// added from a folder), through the Steam app ID PCGamingWiki gives it.
+/// added manually or from a folder), through PCGamingWiki or Steam's store
+/// search and `IStoreBrowseService/GetItems/v1/` (so newer games with
+/// hashed asset URLs also resolve).
 pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
     const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
     let game = GameInfo {
@@ -253,11 +255,139 @@ pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
         runner: Some(Runner::Sideload),
         ..Default::default()
     };
-    let id = steam_app_id(&game).await?;
+    let id = match steam_app_id(&game).await {
+        Some(id) => id,
+        None => steam_search_app_id(title).await?,
+    };
+    if let Some(hashed) = steam_store_hashed_art(&id).await {
+        return Some(hashed);
+    }
     Some((
         format!("{STEAM_CDN}/{id}/library_600x900_2x.jpg"),
         format!("{STEAM_CDN}/{id}/library_hero.jpg"),
     ))
+}
+
+/// Clean a game title for Steam's `storesearch` endpoint: Windows folder
+/// names replace `:` with ` - ` (e.g. `Shambles - Sons of Apocalypse`),
+/// which Steam's literal search returns 0 results for unless punctuation is
+/// normalised to spaces.
+fn steam_search_query(title: &str) -> String {
+    let cleaned: String = title
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '\'' || c == '&' {
+                c
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+async fn steam_storesearch_items(query: &str) -> Option<Vec<serde_json::Value>> {
+    if query.is_empty() {
+        return None;
+    }
+    let mut url = url::Url::parse("https://store.steampowered.com/api/storesearch/").ok()?;
+    url.query_pairs_mut()
+        .append_pair("term", query)
+        .append_pair("l", "english")
+        .append_pair("cc", "US");
+    let json: serde_json::Value = util::get_json(url.as_str(), std::time::Duration::from_secs(6))
+        .await
+        .ok()?;
+    json.get("items")?.as_array().cloned()
+}
+
+/// Find a game's Steam app ID via Steam's public `storesearch` endpoint.
+async fn steam_search_app_id(title: &str) -> Option<String> {
+    let query = steam_search_query(title);
+    if query.is_empty() {
+        return None;
+    }
+    let mut items = steam_storesearch_items(&query).await?;
+    if items.is_empty()
+        && let Some((prefix, _)) = title.split_once(" - ").or_else(|| title.split_once(": "))
+    {
+        let prefix_query = steam_search_query(prefix);
+        if !prefix_query.is_empty() && prefix_query != query {
+            items = steam_storesearch_items(&prefix_query).await?;
+        }
+    }
+    let squash = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let wanted = squash(title);
+    if wanted.is_empty() {
+        return None;
+    }
+    let picked = items
+        .iter()
+        .find(|item| {
+            item.get("name")
+                .and_then(|n| n.as_str())
+                .is_some_and(|n| squash(n) == wanted)
+        })
+        .or_else(|| {
+            items.iter().find(|item| {
+                item.get("name").and_then(|n| n.as_str()).is_some_and(|n| {
+                    let s = squash(n);
+                    let lower = n.to_ascii_lowercase();
+                    !lower.contains("soundtrack")
+                        && !lower.contains(" demo")
+                        && (s.contains(&wanted) || wanted.contains(&s))
+                })
+            })
+        })?;
+    picked
+        .get("id")
+        .and_then(|v| v.as_u64())
+        .map(|id| id.to_string())
+}
+
+/// Resolve the hashed library capsule and hero URLs of a Steam app from
+/// `IStoreBrowseService/GetItems/v1/`.
+async fn steam_store_hashed_art(app_id: &str) -> Option<(String, String)> {
+    const ASSETS_BASE: &str = "https://shared.akamai.steamstatic.com/store_item_assets";
+    let id: u64 = app_id.parse().ok()?;
+    let input = serde_json::json!({
+        "ids": [{"appid": id}],
+        "context": {"language": "english", "country_code": "US"},
+        "data_request": {"include_assets": true}
+    });
+    let mut url =
+        url::Url::parse("https://api.steampowered.com/IStoreBrowseService/GetItems/v1/").ok()?;
+    url.query_pairs_mut()
+        .append_pair("input_json", &input.to_string());
+    let json: serde_json::Value = util::get_json(url.as_str(), std::time::Duration::from_secs(6))
+        .await
+        .ok()?;
+    let assets = json.pointer("/response/store_items/0/assets")?;
+    let fmt = assets.get("asset_url_format")?.as_str()?;
+    let build = |key_2x: &str, key_1x: &str| -> Option<String> {
+        let file = assets
+            .get(key_2x)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                assets
+                    .get(key_1x)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+            })?;
+        let rel = fmt.replace("${FILENAME}", file);
+        Some(format!("{ASSETS_BASE}/{}", rel.trim_start_matches('/')))
+    };
+    let cover = build("library_capsule_2x", "library_capsule")?;
+    let hero = build("library_hero_2x", "library_hero")
+        .or_else(|| build("header_2x", "header"))
+        .unwrap_or_else(|| cover.clone());
+    Some((cover, hero))
 }
 
 /// umu ID of a store game, for `GAMEID`. Found IDs are cached forever;
@@ -345,5 +475,13 @@ mod tests {
         let ids = StoreIds::of(&game);
         assert_eq!(ids.store_url.as_deref(), Some("https://www.gog.com/game/x"));
         assert!(cache_file(&ids).ends_with("wiki/gog-1.json"));
+    }
+
+    #[test]
+    fn steam_search_normalizes_windows_folder_separators() {
+        assert_eq!(
+            steam_search_query("Shambles - Sons of Apocalypse"),
+            "Shambles Sons of Apocalypse"
+        );
     }
 }

@@ -1391,6 +1391,27 @@ impl Backend {
         irori_runtime::run_in_prefix(&app, &settings, target, argv, false, ctx).await
     }
 
+    /// Run a Windows installer in the game's prefix and wait for it (and any
+    /// child processes in the prefix) to finish.
+    pub async fn run_installer_in_prefix(
+        &self,
+        id: &GameId,
+        installer: &Path,
+        cancel: CancellationToken,
+    ) -> Result<ExecResult> {
+        let game = self.game(id).context("unknown game")?;
+        let app = self.settings.app();
+        let settings = self.settings.game(id);
+        let target = Target {
+            id,
+            game: &game,
+            platform: InstallPlatform::Windows,
+        };
+        let argv = irori_runtime::windows_file::installer_command(installer);
+        let ctx = self.op_context(id, cancel);
+        irori_runtime::run_in_prefix(&app, &settings, target, argv, true, ctx).await
+    }
+
     /// Install the launcher a game starts through ([`irori_core::LauncherMissing`],
     /// from its launch) in the game's Wine prefix: download the vendor's
     /// installer, then run it there and wait while the user follows it.

@@ -144,7 +144,7 @@ pub fn game_of_file(path: &Path) -> Option<FoundGame> {
     })
 }
 
-fn read_dir(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> {
+fn read_dir(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> + use<> {
     std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -242,10 +242,11 @@ fn is_ignored_program(lower_name: &str) -> bool {
         "updater",
         "patcher",
         "dxsetup",
+        "quicksfv",
     ];
     const WHOLE: &[&str] = &[
         "python", "pythonw", "java", "javaw", "7z", "unrar", "unzip", "zsync", "dosbox", "scummvm",
-        "wine",
+        "wine", "sfv", "md5sum",
     ];
     let stem = lower_name
         .rsplit_once('.')
@@ -522,7 +523,8 @@ fn windows_path(target: &str, near: &Path) -> Option<PathBuf> {
     if cfg!(windows) {
         return Some(PathBuf::from(target));
     }
-    let (drive, rest) = target.split_once(":\\")?;
+    let normalized = target.replace('/', "\\");
+    let (drive, rest) = normalized.split_once(":\\")?;
     let drive = drive.to_lowercase();
     let prefix = near
         .ancestors()
@@ -530,9 +532,24 @@ fn windows_path(target: &str, near: &Path) -> Option<PathBuf> {
     let root = if drive == "c" {
         prefix.join("drive_c")
     } else {
-        prefix.join("dosdevices").join(format!("{drive}:"))
+        let dev = prefix.join("dosdevices").join(format!("{drive}:"));
+        std::fs::canonicalize(&dev).unwrap_or(dev)
     };
-    Some(rest.split('\\').fold(root, |p, part| p.join(part)))
+    let mut current = root;
+    for part in rest.split('\\').filter(|s| !s.is_empty()) {
+        let direct = current.join(part);
+        if direct.exists() {
+            current = direct;
+        } else if let Some(matched) = read_dir(&current)
+            .map(|e| e.path())
+            .find(|p| file_name(p).eq_ignore_ascii_case(part))
+        {
+            current = matched;
+        } else {
+            current = direct;
+        }
+    }
+    Some(current)
 }
 
 /// What Irori reads from a shortcut.
@@ -630,7 +647,7 @@ fn parse_lnk(b: &[u8]) -> Option<LnkTarget> {
             at += count;
             raw.iter().map(|c| char::from(*c)).collect()
         };
-        Some(Some(text))
+        Some(Some(text.trim_matches('\0').trim().to_string()))
     };
     let _name = read_string(flags & HAS_NAME != 0)?;
     let relative = read_string(flags & HAS_RELATIVE_PATH != 0)?;
@@ -639,7 +656,7 @@ fn parse_lnk(b: &[u8]) -> Option<LnkTarget> {
     let target = target.or(relative)?;
     Some(LnkTarget {
         target,
-        arguments: arguments.filter(|a| !a.trim().is_empty()),
+        arguments: arguments.filter(|a| !a.is_empty()),
         working_dir: working_dir.filter(|d| !d.is_empty()),
     })
 }
@@ -681,6 +698,606 @@ pub fn pretty_title(name: &str) -> String {
         })
         .collect();
     words.join(" ")
+}
+
+/// One executable candidate found after running an installer in a prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstalledCandidate {
+    pub executable: PathBuf,
+    pub args: String,
+    pub install_folder: Option<PathBuf>,
+    pub label: Option<String>,
+    pub from_shortcut: bool,
+}
+
+/// Snapshot of executables, shortcuts and registry install locations present
+/// in a prefix before running an installer.
+#[derive(Debug, Default, Clone)]
+pub struct PrefixSnapshot {
+    shortcuts: std::collections::HashSet<PathBuf>,
+    executables: std::collections::HashSet<PathBuf>,
+    reg_dirs: std::collections::HashSet<PathBuf>,
+}
+
+/// Result of scanning a prefix after an installer finishes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DetectionOutcome {
+    /// No game executable was found.
+    None,
+    /// Exactly one game executable was found.
+    Picked(InstalledCandidate),
+    /// Multiple plausible game executables were found, ordered best-first.
+    Ambiguous(Vec<InstalledCandidate>),
+}
+
+/// How deep inside a game container folder (`Games`, `Program Files`, …)
+/// post-install scanning looks for `.exe` files.
+const INSTALL_SCAN_DEPTH: usize = 6;
+
+impl PrefixSnapshot {
+    /// Record the shortcuts, executables and registry install directories
+    /// currently in `prefix` (and `extra_dir` when given). Reads the disk:
+    /// call it off the async runtime.
+    pub fn capture(prefix: &Path, extra_dir: Option<&Path>) -> Self {
+        let mut shortcuts = std::collections::HashSet::new();
+        let mut executables = std::collections::HashSet::new();
+        let mut reg_dirs = std::collections::HashSet::new();
+        if let Some(root) = wine_root(prefix) {
+            for lnk in prefix_shortcut_files(&root) {
+                shortcuts.insert(canonical_or_self(&lnk));
+                if let Some(found) = shortcut(&lnk) {
+                    executables.insert(canonical_or_self(&found.executable));
+                }
+            }
+            for dir in reg_install_dirs(&root) {
+                let canon = canonical_or_self(&dir);
+                if reg_dirs.insert(canon) {
+                    let mut exes = Vec::new();
+                    collect_windows_exes(&dir, &dir, 0, &mut exes);
+                    for (exe, _, _) in exes {
+                        executables.insert(canonical_or_self(&exe));
+                    }
+                }
+            }
+            for (exe, _, _) in drive_c_executables(&root.join("drive_c")) {
+                executables.insert(canonical_or_self(&exe));
+            }
+        }
+        if let Some(dir) = extra_dir.filter(|d| d.is_dir()) {
+            let mut exes = Vec::new();
+            collect_windows_exes(dir, dir, 0, &mut exes);
+            for (exe, _, _) in exes {
+                executables.insert(canonical_or_self(&exe));
+            }
+        }
+        Self {
+            shortcuts,
+            executables,
+            reg_dirs,
+        }
+    }
+}
+
+/// Find the game executable(s) installed into `prefix` (or referenced by its
+/// shortcuts / registry / `extra_dir`) compared against `before`.
+///
+/// Works even when the user unchecked Desktop and Start Menu shortcuts in
+/// the installer by walking `drive_c` directly and filtering out Wine's own
+/// system files, uninstallers, redistributables and crash handlers.
+pub fn detect_installed_executables(
+    prefix: &Path,
+    title: &str,
+    installer: &Path,
+    extra_dir: Option<&Path>,
+    before: &PrefixSnapshot,
+) -> DetectionOutcome {
+    let mut candidates = collect_installed_candidates(prefix, installer, extra_dir, before);
+    // If the user re-ran an installer in a prefix where the game was already
+    // installed before the snapshot, fall back to scanning without the
+    // snapshot filter so the installed game is still found.
+    if candidates.is_empty() && (!before.executables.is_empty() || !before.shortcuts.is_empty()) {
+        candidates =
+            collect_installed_candidates(prefix, installer, extra_dir, &PrefixSnapshot::default());
+    }
+    rank_and_decide(candidates, title)
+}
+
+#[derive(Debug, Clone)]
+struct RawCandidate {
+    candidate: InstalledCandidate,
+    depth: usize,
+}
+
+fn collect_installed_candidates(
+    prefix: &Path,
+    installer: &Path,
+    extra_dir: Option<&Path>,
+    before: &PrefixSnapshot,
+) -> Vec<RawCandidate> {
+    let installer_canon = canonical_or_self(installer);
+    let mut by_exe: Vec<(PathBuf, RawCandidate)> = Vec::new();
+    let mut upsert = |raw: RawCandidate| {
+        let key = canonical_or_self(&raw.candidate.executable);
+        if key == installer_canon || before.executables.contains(&key) {
+            return;
+        }
+        if let Some((_, existing)) = by_exe.iter_mut().find(|(k, _)| *k == key) {
+            if raw.candidate.from_shortcut && !existing.candidate.from_shortcut {
+                existing.candidate.from_shortcut = true;
+                if !raw.candidate.args.is_empty() {
+                    existing.candidate.args = raw.candidate.args;
+                }
+                if raw.candidate.label.is_some() {
+                    existing.candidate.label = raw.candidate.label;
+                }
+                if raw.candidate.install_folder.is_some() {
+                    existing.candidate.install_folder = raw.candidate.install_folder;
+                }
+            }
+            existing.depth = existing.depth.min(raw.depth);
+        } else {
+            by_exe.push((key, raw));
+        }
+    };
+
+    if let Some(root) = wine_root(prefix) {
+        let drive_c = root.join("drive_c");
+        for (exe, install_folder, depth) in drive_c_executables(&drive_c) {
+            upsert(RawCandidate {
+                candidate: InstalledCandidate {
+                    executable: exe,
+                    args: String::new(),
+                    install_folder: Some(install_folder),
+                    label: None,
+                    from_shortcut: false,
+                },
+                depth,
+            });
+        }
+        for dir in reg_install_dirs(&root) {
+            let canon = canonical_or_self(&dir);
+            if before.reg_dirs.contains(&canon) {
+                continue;
+            }
+            let mut exes = Vec::new();
+            collect_windows_exes(&dir, &dir, 0, &mut exes);
+            for (exe, folder, depth) in exes {
+                upsert(RawCandidate {
+                    candidate: InstalledCandidate {
+                        executable: exe,
+                        args: String::new(),
+                        install_folder: Some(folder),
+                        label: None,
+                        from_shortcut: false,
+                    },
+                    depth,
+                });
+            }
+        }
+        for lnk in prefix_shortcut_files(&root) {
+            let lnk_canon = canonical_or_self(&lnk);
+            if before.shortcuts.contains(&lnk_canon) {
+                continue;
+            }
+            if let Some(found) = shortcut(&lnk) {
+                let folder = found
+                    .install_folder
+                    .or_else(|| found.executable.parent().map(Path::to_path_buf));
+                let depth = folder
+                    .as_deref()
+                    .and_then(|f| found.executable.strip_prefix(f).ok())
+                    .map_or(0, |rel| rel.components().count().saturating_sub(1));
+                upsert(RawCandidate {
+                    candidate: InstalledCandidate {
+                        executable: found.executable,
+                        args: found.args,
+                        install_folder: folder,
+                        label: Some(found.title).filter(|t| !t.is_empty()),
+                        from_shortcut: true,
+                    },
+                    depth,
+                });
+            }
+        }
+    }
+
+    if let Some(dir) = extra_dir.filter(|d| d.is_dir()) {
+        let mut exes = Vec::new();
+        collect_windows_exes(dir, dir, 0, &mut exes);
+        for (exe, folder, depth) in exes {
+            upsert(RawCandidate {
+                candidate: InstalledCandidate {
+                    executable: exe,
+                    args: String::new(),
+                    install_folder: Some(folder),
+                    label: None,
+                    from_shortcut: false,
+                },
+                depth,
+            });
+        }
+    }
+
+    by_exe.into_iter().map(|(_, raw)| raw).collect()
+}
+
+fn rank_and_decide(mut candidates: Vec<RawCandidate>, title: &str) -> DetectionOutcome {
+    if candidates.is_empty() {
+        return DetectionOutcome::None;
+    }
+    let wanted = squash(title);
+    let score = |raw: &RawCandidate| {
+        let c = &raw.candidate;
+        let exe_stem = stem(&c.executable);
+        let name = squash(&exe_stem);
+        let label = c.label.as_deref().map(squash).unwrap_or_default();
+        let folder_name = c
+            .install_folder
+            .as_deref()
+            .map(|f| squash(&file_name(f)))
+            .unwrap_or_default();
+        let sim = |target: &str, candidate: &str| -> u8 {
+            if target.is_empty() || candidate.is_empty() {
+                0
+            } else if candidate == target {
+                3
+            } else if target.contains(candidate) || candidate.contains(target) {
+                2
+            } else if target.len() >= 3
+                && candidate.len() >= 3
+                && target.chars().take(3).eq(candidate.chars().take(3))
+            {
+                1
+            } else {
+                0
+            }
+        };
+        let title_sim = sim(&wanted, &name)
+            .max(sim(&wanted, &label))
+            .max(sim(&folder_name, &name));
+        let tool = [
+            "launcher",
+            "config",
+            "settings",
+            "editor",
+            "server",
+            "benchmark",
+            "handler",
+            "reporter",
+            "browser",
+        ]
+        .iter()
+        .any(|t| name.contains(t) && !wanted.contains(t));
+        let bits = c.executable.to_string_lossy().to_lowercase().contains("64");
+        let size = std::fs::metadata(&c.executable).map_or(0, |m| m.len()) / (1 << 20);
+        (
+            !tool,
+            title_sim,
+            c.from_shortcut,
+            std::cmp::Reverse(raw.depth),
+            bits,
+            size,
+        )
+    };
+    // Sort highest score first; tie-break alphabetically by path for determinism.
+    candidates.sort_by(|a, b| {
+        score(b)
+            .cmp(&score(a))
+            .then_with(|| a.candidate.executable.cmp(&b.candidate.executable))
+    });
+    let mut out: Vec<InstalledCandidate> = candidates.into_iter().map(|r| r.candidate).collect();
+    if out.len() == 1 {
+        DetectionOutcome::Picked(out.remove(0))
+    } else {
+        DetectionOutcome::Ambiguous(out)
+    }
+}
+
+fn canonical_or_self(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// The folder inside `prefix` that holds `drive_c` and the registry (`prefix`
+/// itself for Wine and umu where `pfx` is a symlink to `.`, or `pfx` for
+/// direct Proton prefixes).
+fn wine_root(prefix: &Path) -> Option<PathBuf> {
+    if prefix.join("drive_c").is_dir() {
+        return Some(prefix.to_path_buf());
+    }
+    let pfx = prefix.join("pfx");
+    if pfx.join("drive_c").is_dir() {
+        Some(pfx)
+    } else {
+        None
+    }
+}
+
+/// Every `.lnk` file in the prefix's Start Menu and Desktop folders.
+fn prefix_shortcut_files(wine_root: &Path) -> Vec<PathBuf> {
+    let drive = wine_root.join("drive_c");
+    let mut roots = vec![
+        drive.join("ProgramData/Microsoft/Windows/Start Menu/Programs"),
+        drive.join("users/Public/Desktop"),
+    ];
+    for entry in read_dir(&drive.join("users")) {
+        let user = entry.path();
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            roots.push(user.join("Desktop"));
+            roots.push(user.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs"));
+            roots.push(user.join("Start Menu/Programs"));
+        }
+    }
+    let mut lnks = Vec::new();
+    for root in roots {
+        collect_lnks(&root, 0, &mut lnks);
+    }
+    lnks
+}
+
+fn collect_lnks(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+    if depth > 3 || !dir.is_dir() {
+        return;
+    }
+    for entry in read_dir(dir) {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            collect_lnks(&path, depth + 1, out);
+        } else if kind.is_file() && file_name(&path).to_lowercase().ends_with(".lnk") {
+            out.push(path);
+        }
+    }
+}
+
+/// Folders recorded by Inno Setup, NSIS or MSI under `Uninstall` registry
+/// keys (`InstallLocation` and `Inno Setup: App Path`), resolved to host
+/// paths. Captures games installed outside `drive_c` (via `Z:\`) even when
+/// the user unchecked Desktop and Start Menu shortcuts.
+fn reg_install_dirs(wine_root: &Path) -> Vec<PathBuf> {
+    const KEYS: &[&str] = &[
+        "\"InstallLocation\"=\"",
+        "\"Inno Setup: App Path\"=\"",
+        "\"InstallPath\"=\"",
+    ];
+    let mut dirs = Vec::new();
+    for file in ["system.reg", "user.reg"] {
+        let path = wine_root.join(file);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for line in text.lines().map(str::trim) {
+            let Some(rest) = KEYS.iter().find_map(|k| line.strip_prefix(k)) else {
+                continue;
+            };
+            let Some(raw) = rest.strip_suffix('"') else {
+                continue;
+            };
+            let unescaped = raw.replace("\\\\", "\\");
+            if unescaped.is_empty() {
+                continue;
+            }
+            if let Some(resolved) = windows_path(&unescaped, &path)
+                && resolved.is_dir()
+                && !is_wine_system_path(&resolved, &wine_root.join("drive_c"))
+            {
+                dirs.push(resolved);
+            }
+        }
+    }
+    dirs
+}
+
+fn is_wine_system_path(path: &Path, drive_c: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(drive_c) else {
+        return false;
+    };
+    let mut comps = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_lowercase());
+    let Some(first) = comps.next() else {
+        return true;
+    };
+    if matches!(
+        first.as_str(),
+        "windows" | "programdata" | "openxr" | "vrclient"
+    ) {
+        return true;
+    }
+    if matches!(first.as_str(), "program files" | "program files (x86)")
+        && let Some(second) = comps.next()
+    {
+        return is_wine_builtin_program_dir(&second);
+    }
+    false
+}
+
+/// Built-in folders inside `Program Files` and `Program Files (x86)` that
+/// `wineboot --init` creates in every prefix.
+fn is_wine_builtin_program_dir(lower_name: &str) -> bool {
+    matches!(
+        lower_name,
+        "common files"
+            | "internet explorer"
+            | "windows media player"
+            | "windows mail"
+            | "windows nt"
+            | "windows defender"
+            | "windows photo viewer"
+            | "windows portable devices"
+            | "windows sidebar"
+            | "msbuild"
+            | "reference assemblies"
+            | "wine"
+    )
+}
+
+/// Every non-system game executable inside `drive_c`, paired with its
+/// inferred game root folder and depth below that folder.
+fn drive_c_executables(drive_c: &Path) -> Vec<(PathBuf, PathBuf, usize)> {
+    let mut out = Vec::new();
+    for entry in read_dir(drive_c) {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if !kind.is_dir() || kind.is_symlink() {
+            continue;
+        }
+        let lower = file_name(&path).to_lowercase();
+        if matches!(
+            lower.as_str(),
+            "windows" | "programdata" | "openxr" | "vrclient"
+        ) || is_ignored_dir(&lower)
+        {
+            continue;
+        }
+        if matches!(lower.as_str(), "program files" | "program files (x86)") {
+            for sub in read_dir(&path) {
+                let sub_path = sub.path();
+                let Ok(sub_kind) = sub.file_type() else {
+                    continue;
+                };
+                if !sub_kind.is_dir() || sub_kind.is_symlink() {
+                    continue;
+                }
+                let sub_lower = file_name(&sub_path).to_lowercase();
+                if is_wine_builtin_program_dir(&sub_lower) || is_ignored_dir(&sub_lower) {
+                    continue;
+                }
+                collect_container_game_exes(&sub_path, &mut out);
+            }
+        } else if matches!(lower.as_str(), "games" | "gog games") {
+            for sub in read_dir(&path) {
+                let sub_path = sub.path();
+                let Ok(sub_kind) = sub.file_type() else {
+                    continue;
+                };
+                if sub_kind.is_dir() && !sub_kind.is_symlink() {
+                    let sub_lower = file_name(&sub_path).to_lowercase();
+                    if !is_ignored_dir(&sub_lower) {
+                        collect_container_game_exes(&sub_path, &mut out);
+                    }
+                } else if sub_kind.is_file()
+                    && sub_path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+                    && !is_ignored_program(&file_name(&sub_path).to_lowercase())
+                {
+                    out.push((sub_path, path.clone(), 0));
+                }
+            }
+        } else if lower == "users" {
+            collect_user_executables(&path, &mut out);
+        } else {
+            collect_container_game_exes(&path, &mut out);
+        }
+    }
+    out
+}
+
+/// Collect executables inside a top-level folder under `Program Files` or
+/// `Games`. When the folder is a publisher directory containing a single
+/// game subfolder and no direct `.exe`s (`Program Files/Publisher/Game`),
+/// the inner folder becomes the `install_folder`.
+fn collect_container_game_exes(dir: &Path, out: &mut Vec<(PathBuf, PathBuf, usize)>) {
+    let mut subdirs = Vec::new();
+    let mut has_direct_exe = false;
+    for entry in read_dir(dir) {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_symlink() {
+            continue;
+        }
+        let lower = file_name(&path).to_lowercase();
+        if kind.is_dir() && !is_ignored_dir(&lower) {
+            subdirs.push(path);
+        } else if kind.is_file() && lower.ends_with(".exe") && !is_ignored_program(&lower) {
+            has_direct_exe = true;
+        }
+    }
+    let root = if !has_direct_exe && subdirs.len() == 1 {
+        &subdirs[0]
+    } else {
+        dir
+    };
+    collect_windows_exes(root, root, 0, out);
+}
+
+fn collect_user_executables(users_dir: &Path, out: &mut Vec<(PathBuf, PathBuf, usize)>) {
+    const IGNORED_APPDATA: &[&str] = &[
+        "temp",
+        "microsoft",
+        "connecteddevicesplatform",
+        "d3dscache",
+        "fontconfig",
+        "packages",
+        "publishers",
+        "virtualstore",
+        "wine",
+        "cef",
+        "crashdumps",
+    ];
+    for user in read_dir(users_dir) {
+        let user_path = user.path();
+        if !user.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let programs = user_path.join("AppData/Local/Programs");
+        for app in read_dir(&programs) {
+            let app_path = app.path();
+            if app.file_type().is_ok_and(|t| t.is_dir()) {
+                let lower = file_name(&app_path).to_lowercase();
+                if !is_ignored_dir(&lower) {
+                    collect_windows_exes(&app_path, &app_path, 0, out);
+                }
+            }
+        }
+        let local = user_path.join("AppData/Local");
+        for app in read_dir(&local) {
+            let app_path = app.path();
+            if app.file_type().is_ok_and(|t| t.is_dir()) {
+                let lower = file_name(&app_path).to_lowercase();
+                if lower != "programs"
+                    && !IGNORED_APPDATA.contains(&lower.as_str())
+                    && !is_ignored_dir(&lower)
+                {
+                    collect_windows_exes(&app_path, &app_path, 0, out);
+                }
+            }
+        }
+    }
+}
+
+fn collect_windows_exes(
+    dir: &Path,
+    install_root: &Path,
+    depth: usize,
+    out: &mut Vec<(PathBuf, PathBuf, usize)>,
+) {
+    if depth > INSTALL_SCAN_DEPTH {
+        return;
+    }
+    for entry in read_dir(dir) {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_symlink() {
+            continue;
+        }
+        let lower = file_name(&path).to_lowercase();
+        if kind.is_dir() {
+            if !is_ignored_dir(&lower) {
+                collect_windows_exes(&path, install_root, depth + 1, out);
+            }
+        } else if kind.is_file() && lower.ends_with(".exe") && !is_ignored_program(&lower) {
+            out.push((path, install_root.to_path_buf(), depth));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -933,5 +1550,151 @@ mod tests {
             games[0].install_folder.as_deref(),
             Some(&*prefix.join("drive_c/Games/Hades"))
         );
+    }
+
+    #[test]
+    fn detects_single_installed_repack_without_shortcuts_and_ignores_wine_system_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("prefix");
+        let installer = dir.path().join("setup.exe");
+        write(&installer, &[0; 16]);
+
+        // Snapshot taken before prefix creation (empty prefix).
+        let before = PrefixSnapshot::capture(&prefix, None);
+
+        // `wineboot --init` creates Wine's system executables.
+        let drive_c = prefix.join("pfx/drive_c");
+        std::fs::create_dir_all(prefix.join("pfx/dosdevices")).unwrap();
+        write(&drive_c.join("windows/explorer.exe"), &[0; 64]);
+        write(&drive_c.join("windows/system32/wineboot.exe"), &[0; 64]);
+        write(
+            &drive_c.join("Program Files/Internet Explorer/iexplore.exe"),
+            &[0; 64],
+        );
+        write(
+            &drive_c.join("Program Files/Windows Media Player/wmplayer.exe"),
+            &[0; 64],
+        );
+        write(
+            &drive_c.join("Program Files/Windows NT/Accessories/wordpad.exe"),
+            &[0; 64],
+        );
+        write(
+            &drive_c.join("ProgramData/Package Cache/{123}/VC_redist.x64.exe"),
+            &[0; 64],
+        );
+
+        // Repack installs into drive_c/Games/Hollow Knight without any .lnk shortcuts.
+        let game_dir = drive_c.join("Games/Hollow Knight");
+        let exe = game_dir.join("hollow_knight.exe");
+        write(&exe, &[0; 4096]);
+        write(&game_dir.join("UnityCrashHandler64.exe"), &[0; 1024]);
+        write(&game_dir.join("unins000.exe"), &[0; 2048]);
+        write(&game_dir.join("QuickSFV.exe"), &[0; 512]);
+        write(
+            &game_dir.join("_CommonRedist/vcredist/vc_redist.x64.exe"),
+            &[0; 512],
+        );
+
+        let outcome =
+            detect_installed_executables(&prefix, "Hollow Knight", &installer, None, &before);
+        assert_eq!(
+            outcome,
+            DetectionOutcome::Picked(InstalledCandidate {
+                executable: exe,
+                args: String::new(),
+                install_folder: Some(game_dir),
+                label: None,
+                from_shortcut: false,
+            })
+        );
+    }
+
+    #[test]
+    fn asks_when_multiple_game_executables_are_installed_and_ranks_main_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("prefix");
+        let installer = dir.path().join("setup.exe");
+        write(&installer, &[0; 16]);
+        let before = PrefixSnapshot::capture(&prefix, None);
+
+        let game_dir = prefix.join("drive_c/Games/Skyrim Special Edition");
+        std::fs::create_dir_all(prefix.join("dosdevices")).unwrap();
+        let main_exe = game_dir.join("SkyrimSE.exe");
+        let launcher_exe = game_dir.join("SkyrimSELauncher.exe");
+        write(&main_exe, &[0; 4096]);
+        write(&launcher_exe, &[0; 8192]);
+        write(&game_dir.join("unins000.exe"), &[0; 1024]);
+
+        let outcome = detect_installed_executables(
+            &prefix,
+            "Skyrim Special Edition",
+            &installer,
+            None,
+            &before,
+        );
+        let DetectionOutcome::Ambiguous(candidates) = outcome else {
+            panic!("expected Ambiguous, got {outcome:?}");
+        };
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].executable, main_exe);
+        assert_eq!(candidates[1].executable, launcher_exe);
+    }
+
+    #[test]
+    fn ignores_games_already_present_in_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("prefix");
+        let installer = dir.path().join("setup.exe");
+        write(&installer, &[0; 16]);
+        std::fs::create_dir_all(prefix.join("dosdevices")).unwrap();
+        write(&prefix.join("drive_c/Games/OldGame/OldGame.exe"), &[0; 512]);
+
+        let before = PrefixSnapshot::capture(&prefix, None);
+
+        let new_exe = prefix.join("drive_c/Games/Celeste/Celeste.exe");
+        write(&new_exe, &[0; 512]);
+
+        let outcome = detect_installed_executables(&prefix, "Celeste", &installer, None, &before);
+        match outcome {
+            DetectionOutcome::Picked(c) => assert_eq!(c.executable, new_exe),
+            other => panic!("expected Picked(Celeste.exe), got {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn detects_external_repack_from_registry_install_location_without_shortcuts() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = dir.path().join("prefix");
+        let external = dir.path().join("external/Cyberpunk 2077");
+        let installer = dir.path().join("setup.exe");
+        write(&installer, &[0; 16]);
+        std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+        std::fs::create_dir_all(prefix.join("dosdevices")).unwrap();
+        std::os::unix::fs::symlink("/", prefix.join("dosdevices/z:")).unwrap();
+
+        let before = PrefixSnapshot::capture(&prefix, None);
+
+        let exe = external.join("bin/x64/Cyberpunk2077.exe");
+        write(&exe, &[0; 2048]);
+        let win_ext = format!("Z:{}", external.to_string_lossy().replace('/', "\\\\"));
+        write(
+            &prefix.join("system.reg"),
+            format!(
+                "[Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\Cyberpunk_is1]\n\"Inno Setup: App Path\"=\"{win_ext}\"\n"
+            )
+            .as_bytes(),
+        );
+
+        let outcome =
+            detect_installed_executables(&prefix, "Cyberpunk 2077", &installer, None, &before);
+        match outcome {
+            DetectionOutcome::Picked(c) => {
+                assert_eq!(c.executable, exe);
+                assert_eq!(c.install_folder, Some(external));
+            }
+            other => panic!("expected Picked, got {other:?}"),
+        }
     }
 }
