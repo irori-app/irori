@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Acties van {title} bewerken",
   "shell.palette.game_links": "Links van {title}",
   "shell.palette.game_links_keywords": "links web pagina website wiki url toevoegen",
+  "shell.palette.detail_rows": "Kies de rijen die Details op gamepagina’s toont",
+  "shell.palette.detail_rows_keywords": "details rijen velden verbergen tonen info paneel",
   "shell.palette.link_picked": "{count} gekozen spellen op Steam vinden op titel",
   "shell.palette.refresh_picked": "Gegevens van {count} gekozen spellen opnieuw ophalen",
   "shell.palette.refresh_picked_keywords": "gegevens metadata vernieuwen ophalen igdb wiki opnieuw",

@@ -1313,6 +1313,9 @@ measured, never a breakpoint; `auto_layout` switches only on a crossing, so a vi
 by hand holds, and never saves the switch). A click on a grid cover opens the
 drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
 opens the drawer (which then follows clicks).
+The game page's Details leave out the kinds of rows in `iroriUi.hiddenDetailRows`
+("Edit rows…", `irori_game::open_detail_rows_dialog`; ids in `detail_rows.rs` are user
+data).
 
 **Feature crates:**
 

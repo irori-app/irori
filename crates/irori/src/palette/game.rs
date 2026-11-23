@@ -259,6 +259,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
             .icon(IconName::ExternalLink),
         PaletteTarget::GameLinks(id.clone()),
     );
+    push(
+        Entry::new()
+            .label(t("shell.palette.detail_rows"))
+            .keywords([t("shell.palette.detail_rows_keywords")])
+            .icon(IconName::Settings2),
+        PaletteTarget::DetailRows,
+    );
     if !matches!(game.runner(), Runner::Steam | Runner::Emulation) {
         push(
             Entry::new()

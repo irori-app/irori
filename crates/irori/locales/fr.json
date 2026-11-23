@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Modifier les actions de {title}",
   "shell.palette.game_links": "Liens de {title}",
   "shell.palette.game_links_keywords": "liens web page site wiki url ajouter",
+  "shell.palette.detail_rows": "Choisir les lignes des détails des pages de jeu",
+  "shell.palette.detail_rows_keywords": "détails lignes champs masquer afficher infos panneau",
   "shell.palette.link_picked": "Trouver {count} jeux choisis sur Steam par le titre",
   "shell.palette.refresh_picked": "Récupérer à nouveau les détails de {count} jeux choisis",
   "shell.palette.refresh_picked_keywords": "détails métadonnées actualiser récupérer igdb wiki",

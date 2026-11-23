@@ -1691,6 +1691,9 @@ pub struct UiPrefs {
     /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
     /// the board of the user's region.
     pub age_rating_board: String,
+    /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
+    /// ids such as `publisher`); ids a later Irori adds stay as written.
+    pub hidden_detail_rows: Vec<String>,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1901,6 +1904,7 @@ impl Default for UiPrefs {
             store_badges_one_store: false,
             show_age_ratings: true,
             age_rating_board: String::new(),
+            hidden_detail_rows: Vec::new(),
         }
     }
 }

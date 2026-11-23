@@ -19,6 +19,7 @@
 
 mod choice;
 mod compat_source;
+mod detail_rows;
 mod dlc;
 mod hltb_match;
 mod hooks;
@@ -48,6 +49,7 @@ mod windows_file;
 
 use gpui_kit::{App, KeyBinding};
 
+pub use detail_rows::open_detail_rows_dialog;
 pub use hooks::{
     AnticheatReport, AnticheatStatus, BranchPasswordFn, CompatibilityFn, CompatibilityInfo,
     GameHooks, HowLongToBeat, ReviewScore, SteamDeckStatus, install_hooks, install_store_handles,

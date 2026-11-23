@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "{title}의 동작 편집",
   "shell.palette.game_links": "{title} 링크",
   "shell.palette.game_links_keywords": "링크 웹 페이지 사이트 위키 url 추가",
+  "shell.palette.detail_rows": "게임 페이지 세부 정보에 표시할 행 선택",
+  "shell.palette.detail_rows_keywords": "세부 정보 행 항목 숨기기 표시 정보 패널",
   "shell.palette.link_picked": "선택한 게임 {count}개를 제목으로 Steam에서 찾기",
   "shell.palette.refresh_picked": "선택한 게임 {count}개의 정보 다시 가져오기",
   "shell.palette.refresh_picked_keywords": "정보 메타데이터 새로 고침 가져오기 igdb 위키",

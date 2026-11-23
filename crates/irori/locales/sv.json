@@ -19,6 +19,8 @@
   "shell.palette.edit_actions": "Redigera åtgärderna för {title}",
   "shell.palette.game_links": "Länkar för {title}",
   "shell.palette.game_links_keywords": "länkar webb sida webbplats wiki url lägg till",
+  "shell.palette.detail_rows": "Välj raderna som spelsidornas Detaljer visar",
+  "shell.palette.detail_rows_keywords": "detaljer rader fält dölj visa info panel",
   "shell.palette.link_picked": "Hitta {count} valda spel på Steam via titeln",
   "shell.palette.refresh_picked": "Hämta detaljerna igen för {count} valda spel",
   "shell.palette.refresh_picked_keywords": "detaljer metadata uppdatera hämta igdb wiki igen",
