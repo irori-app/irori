@@ -128,7 +128,7 @@ pub(crate) fn volume_step(cx: &App) -> i32 {
 }
 
 /// The game the overlay is for: the one Irori started last that runs.
-fn running_game(cx: &App) -> Option<GameId> {
+pub(crate) fn running_game(cx: &App) -> Option<GameId> {
     let models = cx.try_global::<irori_ui::Models>()?;
     let backend = irori_ui::backend(cx);
     models

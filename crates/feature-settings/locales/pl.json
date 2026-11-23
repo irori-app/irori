@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "Prawa krawędź",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB robi zrzut ekranu",
   "settings.field.overlay_screenshot_chord.help": "Działa, gdy okno ma gra, bez otwierania nakładki.",
+  "settings.field.overlay_screenshot_key.label": "Klawisz zrzutu ekranu",
+  "settings.field.overlay_screenshot_key.help": "Gdy działa gra uruchomiona przez Irori, Ctrl+Shift+S (⌃⇧S na Macu) robi jej zrzut ekranu, z nakładką lub bez.",
   "settings.field.overlay_moment_chord.label": "Guide + Y zaznacza chwilę",
   "settings.field.overlay_moment_chord.help": "Robi zrzut ekranu i dodaje do dziennika gry notatkę do uzupełnienia później, bez otwierania nakładki.",
   "settings.field.overlay_volume_chords.label": "Guide + góra lub dół zmienia głośność",

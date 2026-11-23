@@ -717,7 +717,8 @@ Per system (`irori_bigpicture::overlay::support` holds the same table):
 | Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no, but the overlay takes the foreground |
 | System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
 | Game volume | its streams | not available | its audio sessions (Core Audio) |
-| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
+| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | Desktop Duplication of the game's monitor (HDR tone mapped to SDR), else a GDI copy |
+| Screenshot key | `irori --screenshot` bound in the desktop (see "Clip and screenshot keys") | ⌃⇧S while a game runs | Ctrl+Shift+S while a game runs |
 
 On macOS the overlay is GPUI's pop-up window: a non-activating `NSPanel` at the pop-up
 menu level that joins every Space and may sit over fullscreen apps, so it shows over a
@@ -757,9 +758,21 @@ regardless still do. Volumes
 are Core Audio's: the system volume is the default output's endpoint volume, and the
 game's are its audio sessions (as in the volume mixer) on every active output, matched to
 the process Irori started and its descendants started since the session began (Windows
-reuses process ids and has no process groups). Screenshots copy the monitor of the
-foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
-the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
+reuses process ids and has no process groups). Screenshots read the monitor of the
+foreground window through DXGI Desktop Duplication into `Videos\Captures`, next to the
+Game Bar's: what the compositor shows, flip-model and most fullscreen games included. On
+an HDR display the picture is asked for in half floats (scRGB) and tone mapped to SDR at
+the display's SDR content brightness (`DISPLAYCONFIG_SDR_WHITE_LEVEL`): up to 80 % of
+SDR white nothing changes, brighter highlights roll off so the brightest lands on white
+(`irori_services::capture::tone_map_scrgb`, pure and tested). Where duplication isn't
+available (a remote session, a rotated display, a driver that refuses) GDI copies the
+desktop instead, and a game in exclusive fullscreen may come out black there.
+
+The screenshot key, Ctrl+Shift+S on Windows and ⌃⇧S on macOS
+(`iroriOverlay.screenshotKey`, on by default), is registered like the overlay's
+shortcut, only while a game Irori started runs, and works with the overlay off; it
+takes the same screenshot as the overlay's row and Guide + RB. Linux binds
+`irori --screenshot` in the desktop instead.
 
 ### Frame rate limit and MangoHud
 

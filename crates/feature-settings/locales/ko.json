@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "오른쪽 가장자리",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB로 스크린샷 찍기",
   "settings.field.overlay_screenshot_chord.help": "오버레이를 열지 않고 게임 창에서 바로 작동합니다.",
+  "settings.field.overlay_screenshot_key.label": "스크린샷 키",
+  "settings.field.overlay_screenshot_key.help": "Irori가 시작한 게임이 실행 중일 때 Ctrl+Shift+S(Mac에서는 ⌃⇧S)로 스크린샷을 찍습니다. 오버레이를 켜지 않아도 됩니다.",
   "settings.field.overlay_moment_chord.label": "Guide + Y로 순간 표시",
   "settings.field.overlay_moment_chord.help": "오버레이를 열지 않고 스크린샷을 찍고 나중에 쓸 메모를 게임 일지에 추가합니다.",
   "settings.field.overlay_volume_chords.label": "Guide + 위 또는 아래로 볼륨 조절",

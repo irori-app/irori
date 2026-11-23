@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "У правого края",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB делает снимок экрана",
   "settings.field.overlay_screenshot_chord.help": "Работает, пока окно у игры, без открытия оверлея.",
+  "settings.field.overlay_screenshot_key.label": "Клавиша снимка экрана",
+  "settings.field.overlay_screenshot_key.help": "Пока работает игра, запущенная Irori, Ctrl+Shift+S (⌃⇧S на Mac) делает её снимок экрана — с оверлеем или без него.",
   "settings.field.overlay_moment_chord.label": "Guide + Y отмечает момент",
   "settings.field.overlay_moment_chord.help": "Делает снимок экрана и добавляет в дневник игры запись, чтобы дописать позже, не открывая оверлей.",
   "settings.field.overlay_volume_chords.label": "Guide + вверх или вниз меняет громкость",

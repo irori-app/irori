@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "右側邊緣",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB 擷取螢幕畫面",
   "settings.field.overlay_screenshot_chord.help": "無需開啟疊加層，在遊戲視窗中即可使用。",
+  "settings.field.overlay_screenshot_key.label": "截圖快捷鍵",
+  "settings.field.overlay_screenshot_key.help": "Irori 啟動的遊戲執行時，按 Ctrl+Shift+S（Mac 上為 ⌃⇧S）擷取遊戲畫面，無論是否開啟遊戲內覆蓋。",
   "settings.field.overlay_moment_chord.label": "Guide + Y 標記此刻",
   "settings.field.overlay_moment_chord.help": "無需開啟疊加層即可擷取畫面，並在遊戲日誌中新增一則稍後再寫的筆記。",
   "settings.field.overlay_volume_chords.label": "Guide + 上或下調整音量",

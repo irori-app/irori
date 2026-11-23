@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "Pravý okraj",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB pořídí snímek obrazovky",
   "settings.field.overlay_screenshot_chord.help": "Funguje, i když má okno hra, bez otevření překryvu.",
+  "settings.field.overlay_screenshot_key.label": "Klávesa pro snímek obrazovky",
+  "settings.field.overlay_screenshot_key.help": "Když běží hra spuštěná Irori, Ctrl+Shift+S (⌃⇧S na Macu) z ní pořídí snímek obrazovky, s překryvem i bez něj.",
   "settings.field.overlay_moment_chord.label": "Guide + Y označí okamžik",
   "settings.field.overlay_moment_chord.help": "Pořídí snímek obrazovky a přidá do deníku hry poznámku k pozdějšímu dopsání, bez otevření překryvu.",
   "settings.field.overlay_volume_chords.label": "Guide + nahoru nebo dolů mění hlasitost",

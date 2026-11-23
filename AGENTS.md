@@ -1653,7 +1653,10 @@ Microsoft's approval page (`irori_manage::login`).
   panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
-  `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
+  `screencapture`; Core Audio and DXGI Desktop Duplication, HDR tone mapped by the
+  pure `capture::tone_map_scrgb`, else GDI). Both also take Ctrl+Shift+S (⌃⇧S) while
+  a game runs, overlay on or off (`iroriOverlay.screenshotKey`, the same
+  `overlay/hotkey/` registration). Windows doesn't open it over a game in
   exclusive fullscreen. The microphone is `GameAudio::microphone`,
   `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
   turns a Bluetooth pad off through `Backend::disconnect_bluetooth`

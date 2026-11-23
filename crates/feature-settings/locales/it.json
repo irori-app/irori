@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "Bordo destro",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB cattura uno screenshot",
   "settings.field.overlay_screenshot_chord.help": "Funziona mentre il gioco ha la finestra, senza aprire l’overlay.",
+  "settings.field.overlay_screenshot_key.label": "Tasto per gli screenshot",
+  "settings.field.overlay_screenshot_key.help": "Mentre è in esecuzione un gioco avviato da Irori, Ctrl+Maiusc+S (⌃⇧S su un Mac) ne cattura uno screenshot, con o senza l’overlay.",
   "settings.field.overlay_moment_chord.label": "Guide + Y segna il momento",
   "settings.field.overlay_moment_chord.help": "Fa uno screenshot e aggiunge al diario del gioco una nota da scrivere dopo, senza aprire l’overlay.",
   "settings.field.overlay_volume_chords.label": "Guide + su o giù cambia il volume",

@@ -1448,6 +1448,9 @@ pub struct OverlayPrefs {
     pub side: OverlaySide,
     /// Guide + RB (R1) takes a screenshot.
     pub screenshot_chord: bool,
+    /// Windows and macOS: Ctrl+Shift+S (⌃⇧S) takes a screenshot while a game
+    /// Irori started runs, with or without the overlay.
+    pub screenshot_key: bool,
     /// Guide + Up/Down change the system's volume.
     pub volume_chords: bool,
     /// Guide + Y (Triangle) marks the moment: a screenshot and a journal
@@ -1469,6 +1472,7 @@ impl Default for OverlayPrefs {
             enabled: false,
             side: OverlaySide::Center,
             screenshot_chord: true,
+            screenshot_key: true,
             volume_chords: true,
             moment_chord: true,
             volume_step: 5,

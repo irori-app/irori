@@ -564,6 +564,7 @@ impl FieldSpec {
         // there, which only Linux can apply.
         match self.path {
             "iroriWindowsGpu" | "iroriOverlay.backStart" => return host == HostPlatform::Windows,
+            "iroriOverlay.screenshotKey" => return host != HostPlatform::Linux,
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -2418,6 +2419,17 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.overlay_screenshot_chord.help")
     .keywords(&["overlay", "guide", "rb", "r1", "screenshot", "shortcut"])
     .requires(NEEDS_OVERLAY),
+    // Its own key, so it needs no overlay: Windows and macOS (Linux binds
+    // `irori --screenshot` through the replay buffer's shortcuts).
+    app(
+        "iroriOverlay.screenshotKey",
+        "settings.field.overlay_screenshot_key.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_screenshot_key.help")
+    .keywords(&["screenshot", "shortcut", "hotkey", "key", "capture"]),
     app(
         "iroriOverlay.volumeChords",
         "settings.field.overlay_volume_chords.label",

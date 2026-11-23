@@ -11,7 +11,9 @@
 //! opens the overlay, or closes it when it is open.
 //!
 //! The same registration gives the shell the quick launcher's Ctrl+Alt+K
-//! (⌃⌥K) on these systems ([`register_quick_launch`]); each key has an id of
+//! (⌃⌥K) on these systems ([`register_quick_launch`]), and a screenshot key
+//! of its own, Ctrl+Shift+S (⌃⇧S), while a game Irori started runs, with or
+//! without the overlay (`iroriOverlay.screenshotKey`). Each key has an id of
 //! its own, which a press is told apart by.
 
 #[cfg(target_os = "macos")]
@@ -58,6 +60,14 @@ const QUICK_LAUNCH: Key = Key {
     alt: true,
 };
 
+/// The screenshot key, Ctrl+Shift+S: S as in screenshot.
+const SCREENSHOT: Key = Key {
+    id: 3,
+    windows_key: 'S' as u32,
+    mac_key: 0x01,
+    alt: false,
+};
+
 /// The quick launcher's keys as the settings name them.
 pub const QUICK_LAUNCH_LABEL: &str = if cfg!(target_os = "macos") {
     "⌃⌥K"
@@ -81,6 +91,9 @@ struct HotkeyState {
     /// The last registration failed (another program has the shortcut);
     /// said once in the log, not on every status change.
     failed: bool,
+    /// The screenshot key while a game runs, and whether taking it failed.
+    screenshot: Option<platform::Registration>,
+    screenshot_failed: bool,
 }
 
 impl Global for HotkeyState {}
@@ -103,21 +116,60 @@ pub(crate) fn install(cx: &mut App) {
         }
     })
     .detach();
+    let (shot_tx, mut shot_rx) = futures::channel::mpsc::unbounded::<()>();
+    cx.spawn(async move |cx| {
+        while shot_rx.next().await.is_some() {
+            cx.update(screenshot);
+        }
+    })
+    .detach();
+    let senders = Senders {
+        overlay: tx,
+        screenshot: shot_tx,
+    };
     {
-        let tx = tx.clone();
-        cx.observe(&settings, move |_, cx| sync(&tx, cx)).detach();
+        let senders = senders.clone();
+        cx.observe(&settings, move |_, cx| sync(&senders, cx))
+            .detach();
     }
     {
-        let tx = tx.clone();
-        cx.observe(&statuses, move |_, cx| sync(&tx, cx)).detach();
+        let senders = senders.clone();
+        cx.observe(&statuses, move |_, cx| sync(&senders, cx))
+            .detach();
     }
-    sync(&tx, cx);
+    sync(&senders, cx);
 }
 
-/// Register or give back the shortcut as the overlay is wanted or not.
-fn sync(tx: &UnboundedSender<()>, cx: &mut App) {
+/// Where each shortcut's presses go.
+#[derive(Clone)]
+struct Senders {
+    overlay: UnboundedSender<()>,
+    screenshot: UnboundedSender<()>,
+}
+
+/// Register or give back the shortcuts as the overlay and the screenshot
+/// key are wanted or not.
+fn sync(senders: &Senders, cx: &mut App) {
     let wanted = super::wanted(cx) || super::is_open(cx);
+    let shots = super::running_game(cx).is_some() && super::prefs(cx).screenshot_key;
     let state = cx.default_global::<HotkeyState>();
+    match (shots, state.screenshot.is_some()) {
+        (true, false) => match platform::register(SCREENSHOT, senders.screenshot.clone()) {
+            Ok(registration) => {
+                state.screenshot = Some(registration);
+                state.screenshot_failed = false;
+            }
+            Err(e) => {
+                if !state.screenshot_failed {
+                    tracing::warn!("the screenshot key isn't available: {e:#}");
+                }
+                state.screenshot_failed = true;
+            }
+        },
+        (false, true) => state.screenshot = None,
+        _ => {}
+    }
+    let tx = &senders.overlay;
     match (wanted, state.registration.is_some()) {
         (true, false) => match platform::register(OVERLAY, tx.clone()) {
             Ok(registration) => {
@@ -134,6 +186,18 @@ fn sync(tx: &UnboundedSender<()>, cx: &mut App) {
         (false, true) => state.registration = None,
         _ => {}
     }
+}
+
+/// The screenshot key was pressed: a screenshot of the game Irori started
+/// last (the overlay closes first when it is open, so it isn't in it).
+fn screenshot(cx: &mut App) {
+    let Some(game) = super::running_game(cx) else {
+        return;
+    };
+    if super::is_open(cx) {
+        super::close(cx);
+    }
+    irori_ui::backend(cx).take_screenshot(Some(game));
 }
 
 /// The shortcut was pressed.

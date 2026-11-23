@@ -498,6 +498,8 @@
   "settings.option.overlay_side.right": "Borde derecho",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB hace una captura de pantalla",
   "settings.field.overlay_screenshot_chord.help": "Funciona mientras el juego tiene la ventana, sin abrir la superposición.",
+  "settings.field.overlay_screenshot_key.label": "Tecla de captura",
+  "settings.field.overlay_screenshot_key.help": "Mientras se ejecuta un juego que inició Irori, Ctrl+Mayús+S (⌃⇧S en un Mac) toma una captura de pantalla, con o sin el overlay.",
   "settings.field.overlay_moment_chord.label": "Guide + Y marca el momento",
   "settings.field.overlay_moment_chord.help": "Hace una captura y añade al diario del juego una nota para escribir después, sin abrir la superposición.",
   "settings.field.overlay_volume_chords.label": "Guide + arriba o abajo cambia el volumen",
