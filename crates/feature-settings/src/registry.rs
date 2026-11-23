@@ -925,6 +925,21 @@ const FOCUS_COLUMNS: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(3), Verbatim("3")),
 ];
 
+const FOCUS_COVER_SIZE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("small"),
+        Key("settings.option.focus_cover_size.small"),
+    ),
+    opt(
+        ChoiceValue::Str("medium"),
+        Key("settings.option.focus_cover_size.medium"),
+    ),
+    opt(
+        ChoiceValue::Str("large"),
+        Key("settings.option.focus_cover_size.large"),
+    ),
+];
+
 const DENSITY: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("compact"),
@@ -2653,6 +2668,14 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_focus_columns.help")
     .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryFocusCoverSize",
+        "settings.field.ui_focus_cover_size.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COVER_SIZE),
+    )
+    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
     app(
         "iroriUi.libraryOpenDetailsOnSelect",
         "settings.field.ui_open_details_on_select.label",

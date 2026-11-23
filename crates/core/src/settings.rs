@@ -1197,6 +1197,19 @@ pub enum CoverFit {
     Whole,
 }
 
+/// How large the covers in the Focus view's column are
+/// (`libraryFocusCoverSize`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusCoverSize {
+    Small,
+    Large,
+    /// Last, so a size a newer Irori writes reads as this one.
+    #[default]
+    #[serde(other)]
+    Medium,
+}
+
 /// How a cover answers the pointer and the keyboard focus (`coverHover`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1613,6 +1626,8 @@ pub struct UiPrefs {
     /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
     /// 1 to 3); 0 fits as many as the window allows.
     pub library_focus_columns: u32,
+    /// How large the Focus view's covers are (`libraryFocusCoverSize`).
+    pub library_focus_cover_size: FocusCoverSize,
     /// A click on a cover in the grid opens the drawer about the game
     /// (`libraryOpenDetailsOnSelect`, on unless turned off); off, it only
     /// selects it, and `I`, Enter or a double click go further.
@@ -1826,6 +1841,7 @@ impl Default for UiPrefs {
             cover_fit: CoverFit::Crop,
             cover_favourite: true,
             library_focus_columns: 0,
+            library_focus_cover_size: FocusCoverSize::Medium,
             library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
@@ -2046,6 +2062,21 @@ mod tests {
         assert!(UiPrefs::default().library_open_details_on_select);
         let ui: UiPrefs = serde_json::from_str(r#"{"libraryOpenDetailsOnSelect":false}"#).unwrap();
         assert!(!ui.library_open_details_on_select);
+    }
+
+    #[test]
+    fn focus_covers_are_medium_unless_chosen() {
+        assert_eq!(
+            UiPrefs::default().library_focus_cover_size,
+            FocusCoverSize::Medium
+        );
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryFocusCoverSize":"large"}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Large);
+        // A size a newer Irori writes doesn't lose the other settings.
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"libraryFocusCoverSize":"huge","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Medium);
+        assert_eq!(ui.tile_size, 9.0);
     }
 
     #[test]

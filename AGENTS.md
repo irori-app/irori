@@ -1220,7 +1220,9 @@ library is sorted by, `format::sort_value`), `coverHover` (rise or ring only)
 and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
 the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
 row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
-dragging its edge or with the arrow keys on it. A click on a grid cover opens the
+dragging its edge or with the arrow keys on it; its covers are small, medium or large
+(`libraryFocusCoverSize`, `layouts::focus_tile_rem`, laid out by `grid::focus_metrics`
+outside the grid slider's range). A click on a grid cover opens the
 drawer unless `libraryOpenDetailsOnSelect` is off; then it only selects, and `I`
 opens the drawer (which then follows clicks).
 

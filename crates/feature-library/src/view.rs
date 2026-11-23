@@ -156,7 +156,7 @@ impl Default for Frame {
             heading: SharedString::default(),
             metrics: grid::grid_metrics(60.0, 11.0),
             list_columns: [true; 6],
-            focus_rem: layouts::focus_column_rem(2),
+            focus_rem: layouts::focus_column_rem(2, layouts::FOCUS_TILE_REM),
             items: Rc::default(),
             sizes: Rc::default(),
             one_store: false,
@@ -625,10 +625,11 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_rem = layouts::focus_column_rem(layouts::focus_columns_for(
-            self.ui_prefs.library_focus_columns,
-            body_rem,
-        ));
+        let focus_tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        let focus_rem = layouts::focus_column_rem(
+            layouts::focus_columns_for(self.ui_prefs.library_focus_columns, body_rem, focus_tile),
+            focus_tile,
+        );
         let list_rem = match self.layout {
             LibraryLayout::Grid if self.panels.drawer_open => {
                 body_rem - layouts::drawer_width(self.panels.drawer_rem, body_rem)
@@ -639,12 +640,7 @@ impl LibraryView {
         let available = list_rem - 2.0 * grid::EDGE_REM;
         let caption = self.ui_prefs.cover_caption;
         let metrics = match self.layout {
-            LibraryLayout::Focus => grid::grid_metrics_for(
-                available,
-                layouts::FOCUS_TILE_REM,
-                Density::Comfortable,
-                caption,
-            ),
+            LibraryLayout::Focus => grid::focus_metrics(available, focus_tile, caption),
             _ => grid::grid_metrics_for(available, self.tile_rem, self.density, caption),
         };
         // The top row isn't filtered, so the controls that filter sit under

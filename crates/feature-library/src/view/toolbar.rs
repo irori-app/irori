@@ -18,7 +18,8 @@ use gpui_kit::{
 };
 use irori_core::Runner;
 use irori_core::settings::{
-    CoverCaption, CoverCorners, CoverFit, CoverHover, LibraryBackground, LibraryLayout, UiPrefs,
+    CoverCaption, CoverCorners, CoverFit, CoverHover, FocusCoverSize, LibraryBackground,
+    LibraryLayout, UiPrefs,
 };
 use irori_services::StoreFilter;
 use irori_ui::i18n::{t, t_args};
@@ -557,6 +558,21 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
     ];
     for (value, key, f) in corners {
         menu = menu.item(set(t(key), ui.cover_corners == value, f));
+    }
+    menu = menu.separator().label(t("library.look.focus_size"));
+    let focus_sizes: [LookRow<FocusCoverSize>; 3] = [
+        (FocusCoverSize::Small, "library.look.focus_small", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Small
+        }),
+        (FocusCoverSize::Medium, "library.look.focus_medium", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Medium
+        }),
+        (FocusCoverSize::Large, "library.look.focus_large", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Large
+        }),
+    ];
+    for (value, key, f) in focus_sizes {
+        menu = menu.item(set(t(key), ui.library_focus_cover_size == value, f));
     }
     let rises = ui.cover_hover == CoverHover::Lift;
     menu.separator()

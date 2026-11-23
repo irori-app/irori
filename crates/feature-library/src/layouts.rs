@@ -3,7 +3,7 @@
 //! list; and Focus, a column of covers beside the selected game's page.
 //! Pure rules over rem sizes and indices, so they can be unit-tested.
 
-use irori_core::settings::LibraryLayout;
+use irori_core::settings::{FocusCoverSize, LibraryLayout};
 
 use crate::grid;
 
@@ -45,27 +45,38 @@ pub fn drawer_width(requested: f32, available: f32) -> f32 {
     }
 }
 
-/// Cover width in the Focus view's column, in rem.
+/// Cover width in the Focus view's column at the medium size, in rem.
 pub const FOCUS_TILE_REM: f32 = 7.5;
+
+/// Cover width in the Focus view's column at `size`
+/// (`libraryFocusCoverSize`), in rem.
+pub fn focus_tile_rem(size: FocusCoverSize) -> f32 {
+    match size {
+        FocusCoverSize::Small => 6.0,
+        FocusCoverSize::Medium => FOCUS_TILE_REM,
+        FocusCoverSize::Large => 9.5,
+    }
+}
 /// Most covers in a row of the Focus view's column.
 const FOCUS_MAX_COLUMNS: usize = 3;
 /// Room the game page keeps beside the Focus view's column, in rem: the
 /// width at which the page sets its cover beside its content.
 pub const FOCUS_PAGE_MIN_REM: f32 = 50.0;
 
-/// Width of the Focus view's column with `columns` covers to a row, in rem.
-pub fn focus_column_rem(columns: usize) -> f32 {
+/// Width of the Focus view's column with `columns` covers `tile` rem wide
+/// to a row, in rem.
+pub fn focus_column_rem(columns: usize, tile: f32) -> f32 {
     let n = columns.max(1) as f32;
-    2.0 * grid::EDGE_REM + n * FOCUS_TILE_REM + (n - 1.0) * grid::GAP_REM
+    2.0 * grid::EDGE_REM + n * tile + (n - 1.0) * grid::GAP_REM
 }
 
 /// Covers to a row in the Focus view's column for a library `width` rem
 /// wide: as many as fit (up to three) while the page keeps
 /// [`FOCUS_PAGE_MIN_REM`], and always one.
-pub fn focus_columns(width: f32) -> usize {
+pub fn focus_columns(width: f32, tile: f32) -> usize {
     (1..=FOCUS_MAX_COLUMNS)
         .rev()
-        .find(|n| width - focus_column_rem(*n) >= FOCUS_PAGE_MIN_REM)
+        .find(|n| width - focus_column_rem(*n, tile) >= FOCUS_PAGE_MIN_REM)
         .unwrap_or(1)
 }
 
@@ -73,8 +84,8 @@ pub fn focus_columns(width: f32) -> usize {
 /// wide when the user asked for `requested` (`libraryFocusColumns`, 0 for
 /// as many as fit): their number while the page beside keeps
 /// [`FOCUS_PAGE_MIN_REM`], fewer in a window too narrow for it.
-pub fn focus_columns_for(requested: u32, width: f32) -> usize {
-    let fit = focus_columns(width);
+pub fn focus_columns_for(requested: u32, width: f32, tile: f32) -> usize {
+    let fit = focus_columns(width, tile);
     match requested {
         0 => fit,
         n => (n as usize).clamp(1, FOCUS_MAX_COLUMNS).min(fit),
@@ -82,12 +93,12 @@ pub fn focus_columns_for(requested: u32, width: f32) -> usize {
 }
 
 /// The column count nearest to a column dragged to `width` rem, from one to
-/// [`FOCUS_MAX_COLUMNS`].
-pub fn focus_columns_near(width: f32) -> usize {
+/// [`FOCUS_MAX_COLUMNS`], for covers `tile` rem wide.
+pub fn focus_columns_near(width: f32, tile: f32) -> usize {
     if !width.is_finite() {
         return 1;
     }
-    let per = FOCUS_TILE_REM + grid::GAP_REM;
+    let per = tile + grid::GAP_REM;
     let n = ((width - 2.0 * grid::EDGE_REM + grid::GAP_REM) / per).round();
     (n.max(1.0) as usize).min(FOCUS_MAX_COLUMNS)
 }
@@ -161,26 +172,33 @@ mod tests {
 
     #[test]
     fn the_focus_column_keeps_the_asked_count_while_the_page_fits() {
-        let wide = 200.0;
-        assert_eq!(focus_columns_for(0, wide), 3);
-        assert_eq!(focus_columns_for(1, wide), 1);
-        assert_eq!(focus_columns_for(2, wide), 2);
-        assert_eq!(focus_columns_for(9, wide), 3);
+        let (wide, t) = (200.0, FOCUS_TILE_REM);
+        assert_eq!(focus_columns_for(0, wide, t), 3);
+        assert_eq!(focus_columns_for(1, wide, t), 1);
+        assert_eq!(focus_columns_for(2, wide, t), 2);
+        assert_eq!(focus_columns_for(9, wide, t), 3);
         // Too narrow for two beside the page: one, whatever was asked.
-        let narrow = focus_column_rem(1) + FOCUS_PAGE_MIN_REM + 1.0;
-        assert_eq!(focus_columns_for(3, narrow), 1);
-        assert_eq!(focus_columns_for(0, narrow), 1);
+        let narrow = focus_column_rem(1, t) + FOCUS_PAGE_MIN_REM + 1.0;
+        assert_eq!(focus_columns_for(3, narrow, t), 1);
+        assert_eq!(focus_columns_for(0, narrow, t), 1);
     }
 
     #[test]
     fn a_dragged_column_snaps_to_the_nearest_count() {
-        for n in 1..=3 {
-            assert_eq!(focus_columns_near(focus_column_rem(n)), n);
-            assert_eq!(focus_columns_near(focus_column_rem(n) + 2.0), n);
+        for size in [
+            FocusCoverSize::Small,
+            FocusCoverSize::Medium,
+            FocusCoverSize::Large,
+        ] {
+            let t = focus_tile_rem(size);
+            for n in 1..=3 {
+                assert_eq!(focus_columns_near(focus_column_rem(n, t), t), n);
+                assert_eq!(focus_columns_near(focus_column_rem(n, t) + 2.0, t), n);
+            }
+            assert_eq!(focus_columns_near(0.0, t), 1);
+            assert_eq!(focus_columns_near(500.0, t), 3);
+            assert_eq!(focus_columns_near(f32::NAN, t), 1);
         }
-        assert_eq!(focus_columns_near(0.0), 1);
-        assert_eq!(focus_columns_near(500.0), 3);
-        assert_eq!(focus_columns_near(f32::NAN), 1);
     }
 
     #[test]
@@ -199,15 +217,28 @@ mod tests {
 
     #[test]
     fn the_focus_column_gives_way_to_the_page() {
-        assert_eq!(focus_column_rem(1), 10.5);
-        assert_eq!(focus_column_rem(3), 3.0 + 22.5 + 2.5);
+        let t = FOCUS_TILE_REM;
+        assert_eq!(focus_column_rem(1, t), 10.5);
+        assert_eq!(focus_column_rem(3, t), 3.0 + 22.5 + 2.5);
         // A wide library (a 1920 px window at 16 px rem, less the sidebar).
-        assert_eq!(focus_columns(104.0), 3);
+        assert_eq!(focus_columns(104.0, t), 3);
         // A 1440 px window: two covers keep the page beside them.
-        assert_eq!(focus_columns(74.0), 2);
-        assert_eq!(focus_columns(FOCUS_PAGE_MIN_REM + focus_column_rem(2)), 2);
-        assert_eq!(focus_columns(40.0), 1);
-        assert_eq!(focus_columns(0.0), 1);
+        assert_eq!(focus_columns(74.0, t), 2);
+        assert_eq!(
+            focus_columns(FOCUS_PAGE_MIN_REM + focus_column_rem(2, t), t),
+            2
+        );
+        assert_eq!(focus_columns(40.0, t), 1);
+        assert_eq!(focus_columns(0.0, t), 1);
+        // Larger covers leave room for fewer beside the page.
+        let large = focus_tile_rem(FocusCoverSize::Large);
+        assert!(focus_column_rem(2, large) > focus_column_rem(2, t));
+        assert_eq!(focus_columns(72.0, t), 2);
+        assert_eq!(focus_columns(72.0, large), 1);
+        assert_eq!(
+            focus_columns(90.0, focus_tile_rem(FocusCoverSize::Small)),
+            3
+        );
     }
 
     #[test]

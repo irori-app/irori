@@ -117,6 +117,21 @@ pub fn grid_metrics_for(
     }
 }
 
+/// The Focus view's column: covers exactly `tile_rem` wide (its own sizes,
+/// not the grid slider's range) at comfortable spacing, as many to a row as
+/// `available_rem` holds.
+pub fn focus_metrics(available_rem: f32, tile_rem: f32, caption: CoverCaption) -> GridMetrics {
+    let gap = GAP_REM;
+    let columns = (((available_rem + gap) / (tile_rem + gap) + 1e-4).floor() as usize).max(1);
+    GridMetrics {
+        columns,
+        tile_rem,
+        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + caption_rem(caption) + gap,
+        gap_rem: gap,
+        list_row_rem: LIST_ROW_REM,
+    }
+}
+
 /// Height over width from which a picture counts as a tall box: boxes of a
 /// row share one height. Squarer art (handheld and disc boxes) and wide art
 /// keep their own.
@@ -291,6 +306,23 @@ mod tests {
         assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
         assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
         assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
+    }
+
+    #[test]
+    fn focus_covers_keep_their_own_size() {
+        // Smaller than the grid slider allows, and exactly as wide as asked.
+        for tile in [6.0, 7.5, 9.5] {
+            let two = 2.0 * tile + GAP_REM;
+            let m = focus_metrics(two, tile, CoverCaption::Full);
+            assert_eq!((m.columns, m.tile_rem), (2, tile));
+            assert_eq!(
+                focus_metrics(two - 0.5, tile, CoverCaption::Full).columns,
+                1
+            );
+        }
+        // The medium size lays out as the column always did.
+        let old = grid_metrics_for(16.25, 7.5, Density::Comfortable, CoverCaption::Title);
+        assert_eq!(focus_metrics(16.25, 7.5, CoverCaption::Title), old);
     }
 
     #[test]
