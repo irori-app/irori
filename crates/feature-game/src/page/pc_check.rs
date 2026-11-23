@@ -61,7 +61,10 @@ fn fit_text(part: &PartCheck) -> (SharedString, Option<IconName>) {
         ),
         (Fit::Meets, _) => (t("game.pc_check.fit.minimum"), Some(IconName::CircleCheck)),
         (Fit::NotGiven, Fit::Short) => (t("game.pc_check.fit.below_recommended"), None),
-        _ => (t("game.pc_check.fit.unknown"), Some(IconName::CircleQuestionMark)),
+        _ => (
+            t("game.pc_check.fit.unknown"),
+            Some(IconName::CircleQuestionMark),
+        ),
     }
 }
 

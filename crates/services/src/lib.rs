@@ -39,6 +39,7 @@ pub mod gpu_hide;
 pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
+pub mod how_it_starts;
 mod igdb;
 mod inhibit;
 pub mod journal;

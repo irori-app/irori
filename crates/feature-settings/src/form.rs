@@ -869,6 +869,16 @@ impl SettingsForm {
                 }
                 _ => None,
             },
+            PanelKind::HowItStarts => match &self.target {
+                FormTarget::Game(id) if id.runner.manages_installs() => {
+                    let id = id.clone();
+                    Some(
+                        cx.new(|cx| crate::how_it_starts::HowItStartsPanel::new(id, window, cx))
+                            .into(),
+                    )
+                }
+                _ => None,
+            },
             PanelKind::Umu => match &self.target {
                 FormTarget::Game(id) => {
                     let id = id.clone();

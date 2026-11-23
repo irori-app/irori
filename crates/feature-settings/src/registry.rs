@@ -273,6 +273,8 @@ pub enum PanelKind {
     LaunchBox,
     /// A Steam game's launch options in Steam itself.
     SteamLaunchOptions,
+    /// How a game's next launch starts: command, wrappers, variables.
+    HowItStarts,
     /// One game's umu id: the one used, its source, a database search.
     Umu,
     /// What each controller button does, drawn on the controller, with the
@@ -4197,6 +4199,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.launcher_args.help")
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
+    game_only(
+        "panel.howItStarts",
+        "settings.field.panel_how_it_starts.label",
+        Launch,
+        "settings.group.command",
+        Panel(PanelKind::HowItStarts),
+    )
+    .help("settings.field.panel_how_it_starts.help")
+    .keywords(&[
+        "how it starts",
+        "command",
+        "preview",
+        "variables",
+        "environment",
+        "wrappers",
+        "copy",
+    ]),
     game_only(
         "panel.steamLaunchOptions",
         "settings.field.panel_steam_launch.label",

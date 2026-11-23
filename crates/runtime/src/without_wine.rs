@@ -63,6 +63,17 @@ pub fn decide(forced: bool, kind: ProgramKind, program: Option<&Path>) -> Result
 /// [`decide`] for a game about to start (reads the program's first bytes on
 /// a blocking thread).
 pub async fn runs_without_wine(settings: &GameSettings, game: &GameInfo) -> Result<bool> {
+    let starts = decides(settings, game).await?;
+    if starts && let Some(p) = launch_program(settings, game) {
+        make_executable(&p);
+    }
+    Ok(starts)
+}
+
+/// [`decide`] for a game, reading only its program's first bytes: what
+/// [`runs_without_wine`] decides, without readying the program to run (a
+/// launch's preview).
+pub async fn decides(settings: &GameSettings, game: &GameInfo) -> Result<bool> {
     let program = launch_program(settings, game);
     let kind = match program.clone() {
         Some(p) => tokio::task::spawn_blocking(move || program_kind::of_file(&p))
@@ -70,11 +81,7 @@ pub async fn runs_without_wine(settings: &GameSettings, game: &GameInfo) -> Resu
             .unwrap_or(ProgramKind::Unknown),
         None => ProgramKind::Unknown,
     };
-    let starts = decide(settings.no_wine, kind, program.as_deref())?;
-    if starts && let Some(p) = &program {
-        make_executable(p);
-    }
-    Ok(starts)
+    decide(settings.no_wine, kind, program.as_deref())
 }
 
 /// A native program unpacked from a Windows build's archive may lack its
