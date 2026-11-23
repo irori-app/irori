@@ -121,7 +121,6 @@ pub fn app_bundle(root: &Path, title: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     fn app(root: &Path, rel: &str) {
         std::fs::create_dir_all(root.join(rel).join("Contents/MacOS")).unwrap();
     }
