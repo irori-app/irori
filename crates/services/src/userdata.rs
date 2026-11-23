@@ -55,7 +55,9 @@ pub struct UserData {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub left_off: BTreeMap<String, LeftOff>,
     /// Notes as Irori kept them before several a day (one per game and
-    /// day), read from older files and moved into `journal` on load.
+    /// day): read from older files (and from files an older Irori rewrote
+    /// or edited) and moved into `journal` on load, and written beside
+    /// `journal_notes` as their mirror so an older Irori keeps every note.
     #[serde(
         default,
         rename = "journal",
@@ -178,10 +180,14 @@ impl UserData {
     }
 
     /// Bring data written by older versions into today's shape: the
-    /// one-note-a-day journal becomes whole-day notes.
+    /// one-note-a-day journal becomes whole-day notes, and a day an older
+    /// Irori edited is kept beside the notes ([`journal::read`]). The
+    /// older key then holds the mirror of the notes again.
     pub fn migrate(&mut self) {
         let legacy = std::mem::take(&mut self.legacy_journal);
-        journal::migrate(&mut self.journal, legacy);
+        let notes = std::mem::take(&mut self.journal);
+        self.journal = journal::read(notes, legacy);
+        self.legacy_journal = journal::mirror(&self.journal);
     }
 
     /// The status the user set for a game, if any.
@@ -597,6 +603,8 @@ impl UserDataService {
             if !f(&mut next) {
                 return;
             }
+            // An older Irori reads the notes from their mirror.
+            next.legacy_journal = journal::mirror(&next.journal);
             *guard = Arc::new(next);
             guard.clone()
         };
@@ -1494,8 +1502,63 @@ mod tests {
         assert_eq!(d.journal_day("gog:1", day)[0].text, "Old note");
         assert!(d.journal_note("gog:1", "day-2026-11-01").is_some());
         let written = serde_json::to_value(&d).unwrap();
-        assert!(written.get("journal").is_none(), "{written}");
         assert!(written["journal_notes"]["gog:1"]["2026-11-01"].is_array());
+        // The older key stays, for an older Irori.
+        assert_eq!(
+            written["journal"]["gog:1"]["2026-11-01"]["text"],
+            "Old note"
+        );
         assert_eq!(written["favourites"][0], "gog:1");
+    }
+
+    #[test]
+    fn a_library_file_round_trips_and_keeps_what_an_older_irori_edited() {
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap();
+        let mut d = UserData::default();
+        for (time, text) in [((20, 5), "Found the lift"), ((21, 40), "Beat the knight")] {
+            journal::put(
+                &mut d.journal,
+                "gog:1",
+                day,
+                JournalEntry {
+                    time: chrono::NaiveTime::from_hms_opt(time.0, time.1, 0),
+                    text: text.into(),
+                    ..Default::default()
+                },
+                "2026-11-02T22:00:00Z",
+            );
+        }
+        // As `UserDataService::update_if` writes it.
+        d.legacy_journal = journal::mirror(&d.journal);
+        let mut file = serde_json::to_value(&d).unwrap();
+        // An older Irori sees one note with both texts.
+        let older: LegacyJournal = serde_json::from_value(file["journal"].clone()).unwrap();
+        assert_eq!(
+            older["gog:1"][&day].text,
+            "20:05\nFound the lift\n\n21:40\nBeat the knight"
+        );
+        // Read back unchanged.
+        let mut back: UserData = serde_json::from_value(file.clone()).unwrap();
+        back.migrate();
+        assert_eq!(back.journal, d.journal);
+
+        // An older Irori edits the day. Whether `journal_notes` (which it
+        // doesn't know) is still there or its rewrite dropped it, the edit
+        // is kept.
+        file["journal"]["gog:1"]["2026-11-02"]["text"] =
+            "Found the lift; beat the knight twice".into();
+        let mut edited: UserData = serde_json::from_value(file.clone()).unwrap();
+        edited.migrate();
+        let notes = edited.journal_day("gog:1", day);
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].text, "Found the lift; beat the knight twice");
+        assert_eq!(notes[1].text, "Found the lift");
+        file.as_object_mut().unwrap().remove("journal_notes");
+        let mut rewritten: UserData = serde_json::from_value(file).unwrap();
+        rewritten.migrate();
+        assert_eq!(
+            rewritten.journal_day("gog:1", day)[0].text,
+            "Found the lift; beat the knight twice"
+        );
     }
 }

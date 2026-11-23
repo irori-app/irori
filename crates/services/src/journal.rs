@@ -7,9 +7,14 @@
 //! found by [`search`].
 //!
 //! Irori before several notes a day kept one note per day under the
-//! library file's `journal` key. Those notes are read from there and become
-//! whole-day notes ([`migrate`]); the new shape is written under
-//! `journal_notes`, so an older Irori still reads the rest of the file.
+//! library file's `journal` key. The notes are written under
+//! `journal_notes`, and that older key is still written beside them
+//! ([`mirror`]: each day's notes joined in time order), so an older Irori
+//! still shows every note's text and, rewriting the file, keeps it. Reading
+//! ([`read`]) takes `journal_notes` when there are any, else migrates the
+//! older key into whole-day notes; a day an older Irori edited (its text no
+//! longer what the mirror would be) is kept as a whole-day note beside the
+//! notes, so nothing either version wrote is lost.
 
 use std::collections::BTreeMap;
 
@@ -237,6 +242,137 @@ pub(crate) fn migrate(journal: &mut Journal, legacy: LegacyJournal) {
             }
         }
     }
+}
+
+/// Prefix of the ids of whole-day notes an older Irori wrote over a day's
+/// mirror, followed by the day and a hash of the text.
+const OLDER_NOTE_ID: &str = "older-";
+
+/// The day's notes as an older Irori keeps one note a day: a lone note
+/// about the whole day as it is, otherwise every note's time, title and
+/// text in the day's order, paragraph by paragraph; the pictures of them
+/// all (captures first) up to [`MAX_LINKED_SCREENSHOTS`]. `None` for a day
+/// with nothing to show.
+fn day_mirror(notes: &[JournalEntry]) -> Option<JournalEntry> {
+    let mut pictures: Vec<String> = Vec::new();
+    for note in notes {
+        for p in note.pictures() {
+            if !pictures.contains(p) {
+                pictures.push(p.clone());
+            }
+        }
+    }
+    pictures.truncate(MAX_LINKED_SCREENSHOTS);
+    let updated = notes.iter().map(|n| n.updated.as_str()).max().unwrap_or("");
+    let (title, text) = match notes {
+        [one] if one.time.is_none() => (one.title.trim().to_string(), one.text.trim().to_string()),
+        _ => {
+            let paragraphs: Vec<String> = notes
+                .iter()
+                .filter_map(|n| {
+                    let head: Vec<String> = n
+                        .time
+                        .map(|t| t.format("%H:%M").to_string())
+                        .into_iter()
+                        .chain(Some(n.title.trim().to_string()).filter(|t| !t.is_empty()))
+                        .collect();
+                    let body = n.text.trim();
+                    if n.title.trim().is_empty() && body.is_empty() {
+                        return None;
+                    }
+                    let head = head.join(" ");
+                    Some(match (head.is_empty(), body.is_empty()) {
+                        (true, _) => body.to_string(),
+                        (false, true) => head,
+                        (false, false) => format!("{head}\n{body}"),
+                    })
+                })
+                .collect();
+            (String::new(), paragraphs.join("\n\n"))
+        }
+    };
+    let entry = JournalEntry {
+        title,
+        text,
+        screenshots: pictures,
+        updated: updated.to_string(),
+        ..Default::default()
+    };
+    (!entry.is_empty()).then_some(entry)
+}
+
+/// The journal as an older Irori reads it (see [`day_mirror`]).
+pub fn mirror(journal: &Journal) -> LegacyJournal {
+    journal
+        .iter()
+        .map(|(key, days)| {
+            let days: BTreeMap<NaiveDate, JournalEntry> = days
+                .iter()
+                .filter_map(|(day, notes)| Some((*day, day_mirror(notes)?)))
+                .collect();
+            (key.clone(), days)
+        })
+        .filter(|(_, days)| !days.is_empty())
+        .collect()
+}
+
+/// Whether two one-note-a-day notes say the same (their dates aside).
+fn same_words(a: &JournalEntry, b: &JournalEntry) -> bool {
+    a.title.trim() == b.title.trim()
+        && a.text.trim() == b.text.trim()
+        && a.screenshots == b.screenshots
+}
+
+/// A hash of a note's words that is the same on every computer and build
+/// (FNV-1a), for the id of a note an older Irori wrote.
+fn words_hash(note: &JournalEntry) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let parts = [note.title.as_str(), note.text.as_str()]
+        .into_iter()
+        .chain(note.screenshots.iter().map(String::as_str));
+    for part in parts {
+        for byte in part.bytes().chain([0]) {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    hash
+}
+
+/// The journal read from a file (or backup) holding `notes` under
+/// `journal_notes` and `legacy` under the older `journal` key. Without
+/// notes, the older key is all there is (an older Irori rewrote the file):
+/// its days become whole-day notes. With both, a day whose older note no
+/// longer says what [`mirror`] writes was edited by an older Irori: its
+/// text is kept as a whole-day note beside that day's notes.
+pub(crate) fn read(mut notes: Journal, legacy: LegacyJournal) -> Journal {
+    if notes.is_empty() {
+        migrate(&mut notes, legacy);
+        return notes;
+    }
+    let written = mirror(&notes);
+    for (key, days) in legacy {
+        for (day, mut entry) in days {
+            let unchanged = written
+                .get(&key)
+                .and_then(|d| d.get(&day))
+                .is_some_and(|w| same_words(w, &entry));
+            if unchanged || entry.is_empty() {
+                continue;
+            }
+            entry.id = format!("{OLDER_NOTE_ID}{day}-{:016x}", words_hash(&entry));
+            entry.time = None;
+            entry.capture = None;
+            entry.marked = false;
+            let days = notes.entry(key.clone()).or_default();
+            if !days.values().flatten().any(|n| n.id == entry.id) {
+                let list = days.entry(day).or_default();
+                list.push(entry);
+                list.sort_by(order);
+            }
+        }
+    }
+    notes
 }
 
 /// Add a backup's notes: a note from the backup is taken when the current
@@ -642,6 +778,95 @@ mod tests {
         ];
         assert_eq!(day_note(&notes).id, "d");
         assert_eq!(day_note(&notes[..1]), JournalEntry::default());
+    }
+
+    #[test]
+    fn an_older_irori_reads_every_notes_text_and_the_mirror_reads_back_unchanged() {
+        let mut j = Journal::new();
+        let d = day("2026-11-02");
+        put(
+            &mut j,
+            "gog:1",
+            d,
+            note("Whole day", "2026-11-02T22:00:00Z"),
+            "t1",
+        );
+        put(
+            &mut j,
+            "gog:1",
+            d,
+            JournalEntry {
+                time: at("21:40"),
+                title: "Boss".into(),
+                capture: Some("/c.png".into()),
+                ..note("Beat the knight", "")
+            },
+            "t2",
+        );
+        put(
+            &mut j,
+            "gog:1",
+            d,
+            JournalEntry {
+                time: at("22:10"),
+                marked: true,
+                ..Default::default()
+            },
+            "t3",
+        );
+        put(&mut j, "gog:2", d, note("Alone", ""), "t4");
+        let old = mirror(&j);
+        let day_of = &old["gog:1"][&d];
+        assert_eq!(day_of.text, "Whole day\n\n21:40 Boss\nBeat the knight");
+        assert_eq!(day_of.screenshots, ["/c.png"]);
+        // A lone whole-day note is written as it is.
+        assert_eq!(old["gog:2"][&d].text, "Alone");
+        // The older shape is what an older Irori parses.
+        let text = serde_json::to_string(&old).unwrap();
+        let back: LegacyJournal = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, old);
+        // Reading both back changes nothing.
+        assert_eq!(read(j.clone(), old), j);
+    }
+
+    #[test]
+    fn a_day_an_older_irori_edited_is_kept_beside_the_notes() {
+        let mut j = Journal::new();
+        let d = day("2026-11-02");
+        put(
+            &mut j,
+            "gog:1",
+            d,
+            JournalEntry {
+                time: at("21:40"),
+                ..note("Beat the knight", "")
+            },
+            "t1",
+        );
+        let mut old = mirror(&j);
+        old.get_mut("gog:1").unwrap().get_mut(&d).unwrap().text =
+            "21:40\nBeat the knight, then the dragon".into();
+        // A day only the older Irori wrote.
+        old.get_mut("gog:1")
+            .unwrap()
+            .insert(day("2026-11-03"), note("Written in the old version", "t9"));
+        let read_back = read(j.clone(), old.clone());
+        let notes = &read_back["gog:1"][&d];
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].text, "21:40\nBeat the knight, then the dragon");
+        assert_eq!(notes[0].time, None);
+        assert_eq!(notes[1].text, "Beat the knight");
+        assert_eq!(
+            read_back["gog:1"][&day("2026-11-03")][0].text,
+            "Written in the old version"
+        );
+        // Reading the same file again adds nothing twice, and once the
+        // mirror is written again it matches.
+        assert_eq!(read(read_back.clone(), old), read_back);
+        assert_eq!(read(read_back.clone(), mirror(&read_back)), read_back);
+        // A file an older Irori rewrote holds only the older key.
+        let only_old = read(Journal::new(), mirror(&j));
+        assert_eq!(only_old["gog:1"][&d][0].text, "21:40\nBeat the knight");
     }
 
     #[test]
