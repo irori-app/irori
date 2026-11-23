@@ -474,7 +474,12 @@ commands without a window.
   cloud saves and Wine operations.
 - **Library:** store games without DLC, plus user overrides (title, art), become a
   sorted `Arc<LibrarySnapshot>` with a revision number. Rebuilds are debounced (30 ms)
-  after `LibraryChanged`/`GameChanged`.
+  after `LibraryChanged`/`GameChanged`. Titles sort by `irori_core::sort_key`, in
+  natural order (numbers by value, Roman numerals II–XX after the first word as
+  numbers), recomputed at every rebuild. Sorting by times played (and smart
+  categories on plays) reads `sessions::stats()`: per-game session counts and
+  seconds, read from `sessions.jsonl` once at start and kept in step by `append` and
+  `replace_all`, never read on the UI thread.
 - **Copies** (`copies.rs`): one game owned on several stores is one library entry
   (`iroriUi.groupCopies`, on by default). Irori matches copies itself only by folded
   title on different stores, never with two of one title on a store, release years

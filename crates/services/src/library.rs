@@ -159,13 +159,19 @@ pub enum LibrarySort {
     DateAdded,
     /// Highest review score first.
     Score,
+    /// Most sessions first.
+    TimesPlayed,
+    /// The user's highest-rated first.
+    Rating,
 }
 
 impl LibrarySort {
-    pub const ALL: [LibrarySort; 8] = [
+    pub const ALL: [LibrarySort; 10] = [
         LibrarySort::Title,
         LibrarySort::LastPlayed,
         LibrarySort::Playtime,
+        LibrarySort::TimesPlayed,
+        LibrarySort::Rating,
         LibrarySort::DateAdded,
         LibrarySort::ReleaseDate,
         LibrarySort::Score,
@@ -183,6 +189,8 @@ impl LibrarySort {
             LibrarySort::ReleaseDate => "Release date",
             LibrarySort::DateAdded => "Date added",
             LibrarySort::Score => "Score",
+            LibrarySort::TimesPlayed => "Times played",
+            LibrarySort::Rating => "Your rating",
         }
     }
 }
@@ -216,6 +224,17 @@ impl LibraryFilter {
         library: &LibrarySnapshot,
         user: &UserData,
         updates: &std::collections::HashSet<GameId>,
+    ) -> Vec<Arc<GameInfo>> {
+        self.apply_with(library, user, updates, &crate::sessions::stats())
+    }
+
+    /// [`LibraryFilter::apply`] counting plays from `plays`.
+    pub fn apply_with(
+        &self,
+        library: &LibrarySnapshot,
+        user: &UserData,
+        updates: &std::collections::HashSet<GameId>,
+        plays: &crate::sessions::SessionStats,
     ) -> Vec<Arc<GameInfo>> {
         let category = self.category.as_ref().and_then(|c| user.categories.get(c));
         let mut out: Vec<(i64, Arc<GameInfo>)> = Vec::with_capacity(library.games.len());
@@ -347,6 +366,17 @@ impl LibraryFilter {
             LibrarySort::ReleaseDate => return known_first(games, self.descending, released),
             LibrarySort::DateAdded => return known_first(games, self.descending, added),
             LibrarySort::Score => return known_first(games, self.descending, |g| g.rating),
+            // Never played and unrated games come last either way.
+            LibrarySort::TimesPlayed => {
+                return known_first(games, self.descending, |g| {
+                    plays.get(&g.id().key()).map(|p| p.count).filter(|n| *n > 0)
+                });
+            }
+            LibrarySort::Rating => {
+                return known_first(games, self.descending, |g| {
+                    user.ratings.get(&g.id().key()).copied()
+                });
+            }
         }
         if self.descending {
             games.reverse();
@@ -454,11 +484,9 @@ impl Backend {
                     let app = self.steam_links.linked(&g).app_id();
                     self.steam_tags
                         .complete(&mut g, tag_language, app, tag_limit);
-                    Arc::new(if g.sort_title.is_empty() {
-                        g.finalize()
-                    } else {
-                        g
-                    })
+                    // Always again: a store's cache may hold a key made
+                    // by an older Irori.
+                    Arc::new(g.finalize())
                 }
             })
             .collect();
@@ -587,6 +615,64 @@ mod tests {
         assert_eq!(
             shown(StoreFilter::Store(Runner::Legendary)),
             ["legendary:p2"]
+        );
+    }
+
+    #[test]
+    fn sorts_by_times_played_and_rating_unknown_last() {
+        use crate::sessions::{Session, SessionStats};
+        let mut games = vec![
+            game(Runner::Gog, "1", "Game 10", true),
+            game(Runner::Gog, "2", "Game 2", true),
+            game(Runner::Gog, "3", "Game 1", true),
+        ];
+        // As the library is built.
+        games.sort_by(|a, b| a.sort_title.cmp(&b.sort_title));
+        let lib = snapshot(games);
+        let session = |game: &str| Session {
+            game: game.into(),
+            started: "2026-10-23T10:00:00Z".into(),
+            seconds: 60,
+            crashed: false,
+            exit_code: None,
+        };
+        let plays =
+            SessionStats::from_sessions(&[session("gog:1"), session("gog:1"), session("gog:2")]);
+        let mut user = UserData::default();
+        user.ratings.insert("gog:3".into(), 5);
+        user.ratings.insert("gog:2".into(), 3);
+        let none = HashSet::new();
+        let order = |sort, descending| -> Vec<String> {
+            LibraryFilter {
+                sort,
+                descending,
+                ..Default::default()
+            }
+            .apply_with(&lib, &user, &none, &plays)
+            .iter()
+            .map(|g| g.title.clone())
+            .collect()
+        };
+        // Titles in number order.
+        assert_eq!(
+            order(LibrarySort::Title, false),
+            ["Game 1", "Game 2", "Game 10"]
+        );
+        assert_eq!(
+            order(LibrarySort::TimesPlayed, false),
+            ["Game 10", "Game 2", "Game 1"]
+        );
+        assert_eq!(
+            order(LibrarySort::TimesPlayed, true),
+            ["Game 2", "Game 10", "Game 1"]
+        );
+        assert_eq!(
+            order(LibrarySort::Rating, false),
+            ["Game 1", "Game 2", "Game 10"]
+        );
+        assert_eq!(
+            order(LibrarySort::Rating, true),
+            ["Game 2", "Game 1", "Game 10"]
         );
     }
 

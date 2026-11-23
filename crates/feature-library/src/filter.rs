@@ -418,6 +418,7 @@ pub struct ViewFilter {
     /// Games with any of these store tags (Steam's), as shown when picked
     /// and compared by `tag_key`; empty shows every game.
     pub tags: BTreeSet<String>,
+    #[serde(deserialize_with = "deserialize_sort")]
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -436,6 +437,24 @@ where
     D: serde::Deserializer<'de>,
 {
     Ok(irori_core::game_mode::lenient(d)?.into_iter().collect())
+}
+
+/// A sort order; one this version doesn't know sorts by title, and the
+/// rest of the view still reads.
+fn deserialize_sort<'de, D>(d: D) -> Result<LibrarySort, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Known(LibrarySort),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Repr::deserialize(d)? {
+        Repr::Known(s) => s,
+        Repr::Other(_) => LibrarySort::Title,
+    })
 }
 
 /// A grouping; one this version doesn't know shows one list.
@@ -959,6 +978,8 @@ struct CacheKey {
     categories: usize,
     updates: usize,
     missing: usize,
+    /// The play history's revision, for sorting by times played.
+    plays: u64,
     stores: Vec<Runner>,
     filter: ViewFilter,
 }
@@ -1014,6 +1035,7 @@ impl FilteredGames {
             categories: Arc::as_ptr(categories) as usize,
             updates: Arc::as_ptr(updates) as usize,
             missing: Arc::as_ptr(missing) as usize,
+            plays: irori_services::sessions::stats().revision,
             stores: stores.to_vec(),
             filter: filter.clone(),
         };
@@ -1303,9 +1325,13 @@ pub(crate) mod tests {
         // A view a newer Irori saved: a facet and a mode this one doesn't
         // know, and a grouping it doesn't have.
         let json = r#"{"favourites_only": true, "modes": ["coop", "vr"],
-            "group": "decade", "price": {"max": 10}, "moods": ["cozy"]}"#;
+            "group": "decade", "sort": "Metacritic", "price": {"max": 10},
+            "moods": ["cozy"]}"#;
         let f: ViewFilter = serde_json::from_str(json).unwrap();
         assert!(f.favourites_only);
+        assert_eq!(f.sort, LibrarySort::Title);
+        let times: ViewFilter = serde_json::from_str(r#"{"sort": "TimesPlayed"}"#).unwrap();
+        assert_eq!(times.sort, LibrarySort::TimesPlayed);
         assert_eq!(f.modes, [GameMode::Coop].into());
         assert_eq!(f.group, Grouping::None);
         assert_eq!(f.unknown.len(), 2);

@@ -370,6 +370,9 @@ impl Backend {
         // Initialise stores from disk, then build the library.
         let b = self.clone();
         self.spawn(async move {
+            // Read beside the stores: sorting and smart categories count
+            // plays from the first library on.
+            let plays = b.spawn_blocking(crate::sessions::load_stats);
             let inits = b.stores.values().map(|s| {
                 let s = s.clone();
                 async move {
@@ -379,6 +382,7 @@ impl Backend {
                 }
             });
             futures::future::join_all(inits).await;
+            let _ = plays.await;
             // Before anything that may wait on the network: the first screen
             // depends on this.
             b.rebuild_library();

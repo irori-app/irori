@@ -893,7 +893,6 @@ impl Backend {
         {
             // Sync sees both or neither.
             let _playtime = self.sync.playtime_guard();
-            self.userdata.record_session(&id, seconds);
             let session = crate::sessions::Session {
                 game: id.key(),
                 started: started_at,
@@ -904,6 +903,9 @@ impl Backend {
             if let Err(e) = crate::sessions::append(&session) {
                 tracing::warn!("recording the session of {id}: {e:#}");
             }
+            // After the history, so screens redrawn for the new playtime
+            // also count the new session.
+            self.userdata.record_session(&id, seconds);
         }
         if let Some(store) = self.store(id.runner)
             && let Err(e) = store.after_exit(&id.app_name, seconds).await

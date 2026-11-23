@@ -159,15 +159,76 @@ impl GameInfo {
     }
 }
 
-/// Lowercase title with leading English articles removed, for natural sorting.
+/// Lowercase title with leading English articles removed, for natural
+/// sorting: numbers compare by value ("Game 2" before "Game 10") and Roman
+/// numerals after the first word count as their numbers ("Final Fantasy
+/// IX" before "Final Fantasy X"). Plain text order of the keys is that
+/// order.
 pub fn sort_key(title: &str) -> String {
     let lower = title.trim().to_lowercase();
-    for article in ["the ", "a ", "an "] {
-        if let Some(rest) = lower.strip_prefix(article) {
-            return rest.to_string();
+    let bare = ["the ", "a ", "an "]
+        .iter()
+        .find_map(|article| lower.strip_prefix(article))
+        .unwrap_or(&lower);
+    natural(bare)
+}
+
+/// Width numbers are padded to in sort keys; longer ones stay as they are.
+const NUMBER_WIDTH: usize = 10;
+
+/// `text` with each run of digits, and each Roman numeral word, written as
+/// a number zero-padded to [`NUMBER_WIDTH`].
+fn natural(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut word_index = 0;
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if c.is_ascii_digit() {
+            let end = rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            push_number(&mut out, rest[..end].trim_start_matches('0'));
+            rest = &rest[end..];
+            word_index += 1;
+        } else if c.is_alphanumeric() {
+            let end = rest
+                .find(|c: char| !c.is_alphanumeric())
+                .unwrap_or(rest.len());
+            let word = &rest[..end];
+            match roman(word, word_index) {
+                Some(n) => push_number(&mut out, &n.to_string()),
+                None => out.push_str(word),
+            }
+            rest = &rest[end..];
+            word_index += 1;
+        } else {
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
         }
     }
-    lower
+    out
+}
+
+fn push_number(out: &mut String, digits: &str) {
+    for _ in digits.len()..NUMBER_WIDTH {
+        out.push('0');
+    }
+    out.push_str(digits);
+}
+
+/// The value of a Roman numeral word from II to XX, the numbering of game
+/// series. A lone letter that starts the title is a word ("X-Men", "V
+/// Rising"), and "I" alone is too often the pronoun.
+fn roman(word: &str, word_index: usize) -> Option<u32> {
+    const ROMAN: [&str; 21] = [
+        "", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii",
+        "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx",
+    ];
+    let n = ROMAN.iter().position(|r| *r == word)?;
+    if n < 2 || (word.len() == 1 && word_index == 0) {
+        return None;
+    }
+    Some(n as u32)
 }
 
 /// State of an installed game.
@@ -508,6 +569,48 @@ pub type PlaytimeMap = BTreeMap<String, PlaytimeRecord>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn titles_sort_in_natural_order() {
+        let mut titles = vec![
+            "Game 10",
+            "The Game 2",
+            "Final Fantasy X",
+            "Final Fantasy IX",
+            "Final Fantasy VII",
+            "Final Fantasy XIII-2",
+            "Half-Life 2",
+            "Half-Life",
+            "Game 02",
+            "V Rising",
+            "Mega Man X",
+            "Mega Man 2",
+        ];
+        titles.sort_by_key(|t| sort_key(t));
+        assert_eq!(
+            titles,
+            [
+                "Final Fantasy VII",
+                "Final Fantasy IX",
+                "Final Fantasy X",
+                "Final Fantasy XIII-2",
+                "The Game 2",
+                "Game 02",
+                "Game 10",
+                "Half-Life",
+                "Half-Life 2",
+                "Mega Man 2",
+                "Mega Man X",
+                "V Rising",
+            ]
+        );
+        // Words aren't numbers, a leading lone letter or "I" stays a word.
+        assert_eq!(sort_key("Civilization VI"), sort_key("Civilization 6"));
+        assert_eq!(sort_key("X-Men"), "x-men");
+        assert_eq!(sort_key("Rayman I"), "rayman i");
+        assert_eq!(sort_key("Mix Tape"), "mix tape");
+        assert_eq!(sort_key("Some Game"), "some game");
+    }
 
     #[test]
     fn links_take_web_addresses_only() {

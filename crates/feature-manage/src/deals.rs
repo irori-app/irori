@@ -512,8 +512,10 @@ mod tests {
             deal("Unrelated Game", DealStore::Humble, "-90%"),
             deal("Witchery", DealStore::Gog, "-10%"),
         ];
-        let owned: HashSet<String> = ["witcher 3: wild hunt".to_string(), "hades".to_string()]
+        // Keyed as the library's titles are (`owned_titles`).
+        let owned: HashSet<String> = ["The Witcher 3: Wild Hunt", "Hades"]
             .into_iter()
+            .map(sort_key)
             .collect();
         assert_eq!(
             filter_deals(&products, None, "", false, &owned),
