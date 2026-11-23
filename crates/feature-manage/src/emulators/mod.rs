@@ -5,7 +5,8 @@
 //! ([`retro`]), starting an emulator without a game ([`open`]), and the
 //! usual ROM folders found on this computer ([`found`]). Each emulator's
 //! card says how it stands: a dot (ready, a program gone, not installed),
-//! how many games play with it and which program is gone.
+//! its mark where Irori has one (`StoreLogo::of_engine`), how many games
+//! play with it and which program is gone.
 
 mod configure;
 mod custom;
@@ -790,6 +791,10 @@ impl EmulatorsView {
                                     .gap_2()
                                     .flex_wrap()
                                     .child(health_dot(status, health, cx))
+                                    .children(
+                                        irori_ui::components::StoreLogo::of_engine(&m.id)
+                                            .map(|logo| logo.icon().text_color(muted)),
+                                    )
                                     .child(div().text_lg().font_semibold().child(m.name.clone()))
                                     .child(if status.is_installed() {
                                         Tag::success()
