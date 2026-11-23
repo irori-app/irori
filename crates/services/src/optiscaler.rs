@@ -957,7 +957,9 @@ mod tests {
             ..Default::default()
         }
         .finalize();
-        assert!(crate::supports_reshade(&win));
+        // Steam on macOS runs only Mac builds.
+        let mac = irori_core::HostPlatform::current() == irori_core::HostPlatform::Mac;
+        assert_eq!(crate::supports_reshade(&win), !mac);
 
         let native = GameInfo {
             runner: Some(Runner::Steam),
