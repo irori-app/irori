@@ -44,6 +44,17 @@ const FORMAT: &str = "irori-sync";
 const VERSION: u32 = 1;
 /// How often other devices' changes are fetched while nothing changes here.
 const INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+/// Whether sync may reach its target now: it is on, and a target on the
+/// network (WebDAV, rclone) waits while Irori works offline. A folder is
+/// written as files, whatever keeps it in sync.
+pub(crate) fn syncs_now(mode: SyncMode, working_offline: bool) -> bool {
+    match mode {
+        SyncMode::Off => false,
+        SyncMode::Folder => true,
+        SyncMode::Webdav | SyncMode::Rclone => !working_offline,
+    }
+}
 /// Conflicts kept for the user to read.
 const MAX_CONFLICTS: usize = 30;
 
@@ -310,6 +321,11 @@ impl Backend {
 
     async fn sync_target(&self) -> Result<Option<Target>> {
         let prefs = self.settings.app().sync.clone();
+        // Every sync and cloud copy starts here; rclone is a program of its
+        // own, which the shared clients' resolver can't hold back.
+        if !matches!(prefs.mode, SyncMode::Off | SyncMode::Folder) {
+            self.ensure_online()?;
+        }
         if prefs.mode == SyncMode::Rclone {
             let remote = prefs.rclone_remote.trim().to_string();
             if !rclone::is_remote(&remote) {
@@ -348,7 +364,7 @@ impl Backend {
     /// Note changes made here, and sync when they or the interval call for
     /// it. Runs on the periodic tick.
     pub(crate) async fn sync_when_due(&self) {
-        if self.settings.app().sync.mode == SyncMode::Off {
+        if !syncs_now(self.settings.app().sync.mode, self.working_offline()) {
             return;
         }
         let noted_changes = self.note_sync_changes();

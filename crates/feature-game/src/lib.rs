@@ -39,6 +39,7 @@ mod page;
 mod play_with;
 mod playtime_edit;
 mod redmod;
+mod save_snapshots;
 mod saves;
 pub mod sizes;
 pub mod state;

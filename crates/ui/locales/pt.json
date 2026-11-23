@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Não foi possível mover alguns jogos",
   "ui.library_folders.nothing_to_move": "Nenhum destes jogos pode ser movido para lá",
   "ui.library_folders.moved_one": "{count} jogo movido para «{folder}»",
-  "ui.library_folders.moved_other": "{count} jogos movidos para «{folder}»"
+  "ui.library_folders.moved_other": "{count} jogos movidos para «{folder}»",
+  "ui.date.day": "{day} de {month}",
+  "ui.date.day_year": "{day} de {month} de {year}",
+  "ui.month.1": "jan",
+  "ui.month.2": "fev",
+  "ui.month.3": "mar",
+  "ui.month.4": "abr",
+  "ui.month.5": "mai",
+  "ui.month.6": "jun",
+  "ui.month.7": "jul",
+  "ui.month.8": "ago",
+  "ui.month.9": "set",
+  "ui.month.10": "out",
+  "ui.month.11": "nov",
+  "ui.month.12": "dez"
 }

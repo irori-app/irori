@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Sommige spellen konden niet worden verplaatst",
   "ui.library_folders.nothing_to_move": "Geen van deze spellen kan daarheen worden verplaatst",
   "ui.library_folders.moved_one": "{count} spel verplaatst naar ‘{folder}’",
-  "ui.library_folders.moved_other": "{count} spellen verplaatst naar ‘{folder}’"
+  "ui.library_folders.moved_other": "{count} spellen verplaatst naar ‘{folder}’",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "jan",
+  "ui.month.2": "feb",
+  "ui.month.3": "mrt",
+  "ui.month.4": "apr",
+  "ui.month.5": "mei",
+  "ui.month.6": "jun",
+  "ui.month.7": "jul",
+  "ui.month.8": "aug",
+  "ui.month.9": "sep",
+  "ui.month.10": "okt",
+  "ui.month.11": "nov",
+  "ui.month.12": "dec"
 }

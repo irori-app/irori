@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Unele jocuri nu au putut fi mutate",
   "ui.library_folders.nothing_to_move": "Niciunul dintre aceste jocuri nu poate fi mutat acolo",
   "ui.library_folders.moved_one": "{count} joc mutat în „{folder}”",
-  "ui.library_folders.moved_other": "{count} jocuri mutate în „{folder}”"
+  "ui.library_folders.moved_other": "{count} jocuri mutate în „{folder}”",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "ian.",
+  "ui.month.2": "feb.",
+  "ui.month.3": "mar.",
+  "ui.month.4": "apr.",
+  "ui.month.5": "mai",
+  "ui.month.6": "iun.",
+  "ui.month.7": "iul.",
+  "ui.month.8": "aug.",
+  "ui.month.9": "sept.",
+  "ui.month.10": "oct.",
+  "ui.month.11": "nov.",
+  "ui.month.12": "dec."
 }

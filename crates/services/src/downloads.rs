@@ -344,7 +344,8 @@ impl Backend {
         loop {
             let next = {
                 let mut q = self.downloads.lock();
-                if q.paused || q.running.is_some() {
+                // Working offline holds the queue; switching back wakes it.
+                if q.paused || q.running.is_some() || self.working_offline() {
                     None
                 } else if let Some(item) = q
                     .active

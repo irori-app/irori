@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Nie udało się przenieść niektórych gier",
   "ui.library_folders.nothing_to_move": "Żadnej z tych gier nie można tam przenieść",
   "ui.library_folders.moved_one": "Przeniesiono {count} grę do „{folder}”",
-  "ui.library_folders.moved_other": "Przeniesiono gry ({count}) do „{folder}”"
+  "ui.library_folders.moved_other": "Przeniesiono gry ({count}) do „{folder}”",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "sty",
+  "ui.month.2": "lut",
+  "ui.month.3": "mar",
+  "ui.month.4": "kwi",
+  "ui.month.5": "maj",
+  "ui.month.6": "cze",
+  "ui.month.7": "lip",
+  "ui.month.8": "sie",
+  "ui.month.9": "wrz",
+  "ui.month.10": "paź",
+  "ui.month.11": "lis",
+  "ui.month.12": "gru"
 }

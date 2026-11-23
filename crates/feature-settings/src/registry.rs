@@ -779,6 +779,21 @@ const TOP_SECTION: &[ChoiceOption] = &[
     ),
 ];
 
+const NETWORK_MODE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.network_mode.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("online"),
+        Key("settings.option.network_mode.online"),
+    ),
+    opt(
+        ChoiceValue::Str("offline"),
+        Key("settings.option.network_mode.offline"),
+    ),
+];
+
 const THEME_MODE: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("system"),
@@ -1621,6 +1636,31 @@ pub static FIELDS: &[FieldSpec] = &[
     .placeholder(Verbatim("~/Library/Application Support/CrossOver/Bottles"))
     .keywords(&["crossover", "bottle", "bottles", "path", "mac"]),
     app(
+        "iroriNetworkMode",
+        "settings.field.network_mode.label",
+        General,
+        "settings.group.network",
+        Choice(NETWORK_MODE),
+    )
+    .help("settings.field.network_mode.help")
+    .keywords(&[
+        "offline",
+        "online",
+        "network",
+        "internet",
+        "connection",
+        "airplane",
+    ]),
+    app(
+        "iroriNetworkTimeout",
+        "settings.field.network_timeout.label",
+        General,
+        "settings.group.network",
+        Text(TextKind::Number { min: 0, max: 600 }),
+    )
+    .help("settings.field.network_timeout.help")
+    .keywords(&["timeout", "slow", "network", "connection", "seconds"]),
+    app(
         "iroriCheckForAppUpdates",
         "settings.field.check_for_app_updates.label",
         General,
@@ -1929,6 +1969,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_stores.help")
     .keywords(&["store", "hide", "amazon", "prime", "nile"]),
+    app(
+        "iroriDeals",
+        "settings.field.deals.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.deals.help")
+    .keywords(&["deals", "sale", "discount", "price", "offers"]),
     app(
         "maxRecentGames",
         "settings.field.max_recent_games.label",
@@ -4473,6 +4522,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "refresh",
     ]),
     // ---- Saves ----
+    app(
+        "iroriSaveSnapshots",
+        "settings.field.save_snapshots.label",
+        Saves,
+        "settings.group.save_sync",
+        Text(TextKind::Number { min: 0, max: 50 }),
+    )
+    .help("settings.field.save_snapshots.help")
+    .keywords(&[
+        "save", "snapshot", "cloud", "sync", "restore", "undo", "keep",
+    ]),
     app(
         "panel.ludusavi",
         "settings.field.panel_ludusavi.label",

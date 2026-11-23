@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Einige Spiele konnten nicht verschoben werden",
   "ui.library_folders.nothing_to_move": "Keines dieser Spiele kann dorthin verschoben werden",
   "ui.library_folders.moved_one": "{count} Spiel nach „{folder}“ verschoben",
-  "ui.library_folders.moved_other": "{count} Spiele nach „{folder}“ verschoben"
+  "ui.library_folders.moved_other": "{count} Spiele nach „{folder}“ verschoben",
+  "ui.date.day": "{day}. {month}",
+  "ui.date.day_year": "{day}. {month} {year}",
+  "ui.month.1": "Jan.",
+  "ui.month.2": "Feb.",
+  "ui.month.3": "März",
+  "ui.month.4": "Apr.",
+  "ui.month.5": "Mai",
+  "ui.month.6": "Juni",
+  "ui.month.7": "Juli",
+  "ui.month.8": "Aug.",
+  "ui.month.9": "Sept.",
+  "ui.month.10": "Okt.",
+  "ui.month.11": "Nov.",
+  "ui.month.12": "Dez."
 }

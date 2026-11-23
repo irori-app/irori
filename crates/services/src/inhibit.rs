@@ -22,7 +22,18 @@ pub struct Inhibitor {
 impl Inhibitor {
     /// Ask the desktop not to blank, lock or suspend while `reason` holds.
     pub async fn acquire(reason: &str) -> Option<Self> {
-        match tokio::time::timeout(PORTAL_TIMEOUT, Self::request(reason)).await {
+        Self::acquire_with(reason, true).await
+    }
+
+    /// Ask the computer not to sleep while `reason` holds, leaving the
+    /// display to blank and lock as the desktop is set to (downloads with
+    /// the screen off).
+    pub async fn acquire_system(reason: &str) -> Option<Self> {
+        Self::acquire_with(reason, false).await
+    }
+
+    async fn acquire_with(reason: &str, display: bool) -> Option<Self> {
+        match tokio::time::timeout(PORTAL_TIMEOUT, Self::request(reason, display)).await {
             Ok(Ok(inhibitor)) => Some(inhibitor),
             Ok(Err(e)) => {
                 tracing::info!("cannot keep the screen awake: {e:#}");
@@ -36,23 +47,27 @@ impl Inhibitor {
     }
 
     #[cfg(target_os = "linux")]
-    async fn request(reason: &str) -> anyhow::Result<Self> {
+    async fn request(reason: &str, display: bool) -> anyhow::Result<Self> {
         use ashpd::desktop::inhibit::{InhibitFlags, InhibitOptions, InhibitProxy};
         let proxy = InhibitProxy::new().await?;
+        let flags = if display {
+            InhibitFlags::Idle | InhibitFlags::Suspend
+        } else {
+            InhibitFlags::Suspend.into()
+        };
         let request = proxy
-            .inhibit(
-                None,
-                InhibitFlags::Idle | InhibitFlags::Suspend,
-                InhibitOptions::default().set_reason(reason),
-            )
+            .inhibit(None, flags, InhibitOptions::default().set_reason(reason))
             .await?;
         Ok(Self { request })
     }
 
     #[cfg(target_os = "macos")]
-    async fn request(_reason: &str) -> anyhow::Result<Self> {
+    async fn request(_reason: &str, display: bool) -> anyhow::Result<Self> {
+        // `-d` keeps the display awake too, `-i` the system.
+        let flags: &[&str] = if display { &["-d", "-i"] } else { &["-i"] };
         let child = tokio::process::Command::new("/usr/bin/caffeinate")
-            .args(["-d", "-i", "-w", &std::process::id().to_string()])
+            .args(flags)
+            .args(["-w", &std::process::id().to_string()])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -62,7 +77,7 @@ impl Inhibitor {
     }
 
     #[cfg(windows)]
-    async fn request(_reason: &str) -> anyhow::Result<Self> {
+    async fn request(_reason: &str, display: bool) -> anyhow::Result<Self> {
         use windows_sys::Win32::System::Power::{
             ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED, SetThreadExecutionState,
         };
@@ -73,11 +88,13 @@ impl Inhibitor {
             .spawn(move || {
                 // This API is thread-scoped: hold the request and release it on the
                 // same dedicated thread, never on a migrating async worker.
-                let ok = unsafe {
-                    SetThreadExecutionState(
-                        ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED,
-                    )
-                } != 0;
+                let flags = if display {
+                    ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED
+                } else {
+                    ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+                };
+                // SAFETY: a plain flag word; released below on this thread.
+                let ok = unsafe { SetThreadExecutionState(flags) } != 0;
                 let _ = ready.send(ok);
                 if ok {
                     let _ = released.recv();

@@ -318,3 +318,54 @@ async fn turned_off_means_no_login_or_install() {
     assert!(store.games().is_empty());
     assert!(store.user().is_none());
 }
+
+#[tokio::test]
+async fn a_folder_the_itch_app_installed_keeps_its_updates() {
+    use std::io::Write as _;
+    let f = fixture();
+    let s = &f.store;
+    s.init().await.unwrap();
+    s.login(KEY).await.unwrap();
+    s.refresh(false).await.unwrap();
+    let receipt = |dir: &Path, json: &[u8]| {
+        std::fs::create_dir_all(dir.join("Game")).unwrap();
+        std::fs::write(dir.join("Game/Game.exe"), b"MZ game v1").unwrap();
+        std::fs::create_dir_all(dir.join(".itch")).unwrap();
+        let file = std::fs::File::create(dir.join(".itch/receipt.json.gz")).unwrap();
+        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        gz.write_all(json).unwrap();
+        gz.finish().unwrap();
+    };
+
+    // Another game's receipt (a folder copied over) says nothing here.
+    let copied = f.games.join("Copied");
+    receipt(
+        &copied,
+        br#"{"game":{"id":99},"upload":{"id":3,"buildId":12}}"#,
+    );
+    s.import("7", &copied, InstallPlatform::Windows)
+        .await
+        .unwrap();
+    f.version.store(2, Ordering::SeqCst);
+    assert!(
+        s.updatable_games().await.unwrap().is_empty(),
+        "without a receipt of its own, no updates are offered"
+    );
+    s.uninstall("7", RemoveArgs::default()).await.unwrap();
+    f.version.store(1, Ordering::SeqCst);
+
+    // As the itch app writes it: Go's time, without fractions.
+    let dir = f.games.join("From the itch app");
+    receipt(
+        &dir,
+        br#"{"game":{"id":7},"upload":{"id":3,"updatedAt":"2024-04-01T00:00:00Z"},"build":null}"#,
+    );
+    s.import("7", &dir, InstallPlatform::Windows).await.unwrap();
+    assert!(s.game("7").unwrap().is_installed);
+    assert!(
+        s.updatable_games().await.unwrap().is_empty(),
+        "the installed upload is the newest"
+    );
+    f.version.store(2, Ordering::SeqCst);
+    assert_eq!(s.updatable_games().await.unwrap(), ["7"]);
+}

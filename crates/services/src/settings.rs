@@ -11,6 +11,10 @@ use serde_json::Value;
 
 pub struct SettingsService {
     app: RwLock<Arc<AppSettings>>,
+    /// Whether these settings drive the process-wide network policy
+    /// (`irori_core::net`): the app's and the command line's do; tests'
+    /// backends don't, so one test working offline can't reach another.
+    network_policy: std::sync::atomic::AtomicBool,
     /// Loaded lazily per game; absent key = not loaded yet.
     overrides: RwLock<HashMap<GameId, GameSettingsOverrides>>,
     bus: EventBus,
@@ -28,9 +32,26 @@ impl SettingsService {
             &app.game,
         );
         Self {
+            network_policy: std::sync::atomic::AtomicBool::new(false),
             app: RwLock::new(Arc::new(app)),
             overrides: RwLock::new(HashMap::new()),
             bus,
+        }
+    }
+
+    /// Make these settings drive the process-wide network policy from now on.
+    pub fn drive_network_policy(&self) {
+        self.network_policy
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.apply_network_policy(&self.app());
+    }
+
+    fn apply_network_policy(&self, app: &AppSettings) {
+        if self
+            .network_policy
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            irori_core::net::configure(app.network_mode, app.network_timeout);
         }
     }
 
@@ -51,6 +72,8 @@ impl SettingsService {
             *guard = Arc::new(next);
             guard.clone()
         };
+        // Before anyone hears of the change: what is asked next follows it.
+        self.apply_network_policy(&snapshot);
         if let Err(e) = json_store::write(&Paths::get().settings_file(), &*snapshot) {
             tracing::error!("saving settings: {e:#}");
         }

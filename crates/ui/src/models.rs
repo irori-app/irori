@@ -502,6 +502,20 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
     }
 }
 
+/// Whether the user asked Irori to work offline (`iroriNetworkMode`).
+pub fn working_offline(cx: &App) -> bool {
+    models(cx).settings.read(cx).app.network_mode == irori_core::net::NetworkMode::Offline
+}
+
+/// Work offline, or follow the connection again. Writing the setting is a
+/// file write, so it runs off the UI thread.
+pub fn set_working_offline(offline: bool, cx: &mut App) {
+    let b = backend(cx);
+    let setter = b.clone();
+    // Detached: the settings event tells every view once it is written.
+    drop(b.spawn_blocking(move || setter.set_working_offline(offline)));
+}
+
 /// Mark the library as refreshing while `refresh_all` runs.
 pub fn refresh_library(full: bool, cx: &mut App) {
     let m = models(cx).library.clone();

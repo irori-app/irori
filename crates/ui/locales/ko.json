@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "일부 게임을 옮기지 못했습니다",
   "ui.library_folders.nothing_to_move": "이 게임들은 그곳으로 옮길 수 없습니다",
   "ui.library_folders.moved_one": "게임 {count}개를 “{folder}”(으)로 옮겼습니다",
-  "ui.library_folders.moved_other": "게임 {count}개를 “{folder}”(으)로 옮겼습니다"
+  "ui.library_folders.moved_other": "게임 {count}개를 “{folder}”(으)로 옮겼습니다",
+  "ui.date.day": "{month} {day}일",
+  "ui.date.day_year": "{year}년 {month} {day}일",
+  "ui.month.1": "1월",
+  "ui.month.2": "2월",
+  "ui.month.3": "3월",
+  "ui.month.4": "4월",
+  "ui.month.5": "5월",
+  "ui.month.6": "6월",
+  "ui.month.7": "7월",
+  "ui.month.8": "8월",
+  "ui.month.9": "9월",
+  "ui.month.10": "10월",
+  "ui.month.11": "11월",
+  "ui.month.12": "12월"
 }

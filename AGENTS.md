@@ -190,7 +190,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-gog` | `irori-gog` | GOG `Store` |
 | `crates/store-amazon` | `irori-amazon` | Amazon `Store` (`Runner::Nile`) |
 | `crates/store-zoom` | `irori-zoom` | ZOOM Platform `Store`, opt-in through a setting |
-| `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo` |
+| `crates/store-itch` | `irori-itch` | itch.io `Store` (`Runner::Itch`), opt-in through `iroriItchIo`: zip, tar, 7-Zip and RAR uploads, macOS disk images, Windows setup programs (Inno Setup, NSIS, MSI) run silently into the install folder, and the itch app's install receipts on import |
 | `crates/msstore` | `irori-msstore-api` | Microsoft Store and Xbox Live protocol (port of Xodus): device registration, RST2 with XML-DSig, CLEP and SPLicense secrets, SISU and XSTS, the display catalog and Store browsing, package plans, content licences and offline leases, entitlements, Game Pass, offline PC |
 | `crates/msixvc` | `irori-msixvc` | MSIXVC packages (port of Xodus): XVD and its NTFS volume, AES-XTS, hash tree, streaming downloads with resume checkpoints |
 | `crates/store-xbox` | `irori-xbox` | Xbox `Store` (`Runner::Xbox`, Linux), opt-in through `iroriXbox`: Microsoft Store and PC Game Pass installs, licensed launches through a decrypted launch view, the in-game account service |
@@ -248,7 +248,8 @@ irori-core                        (depends on nothing internal)
   │                   irori-steam-api, irori-retroachievements-api, irori-xbox-api,
   │                   irori-msstore-api, irori-msixvc
   │                   (depot and secrets only, not core)
-  ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
+  ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch (+ runtime
+  │                   for setup programs, mods for 7-Zip and RAR uploads),
   │                   irori-steam, irori-sideload, irori-xbox (+ runtime, irori-msstore-api,
   │                   irori-msixvc, irori-xbox-api), irori-emulation (+ engines,
   │                   irori-retroachievements-api, extras for LaunchBox's box art),
@@ -446,6 +447,17 @@ and `launch.rs` before changing anything below the UI.
 - Use `irori_core::http::client()`: shared, rustls, `Irori/<version>` user agent,
   10 s connect and 60 s total timeout. It must run inside the Tokio runtime.
 - Large downloads use `download_client()` (no total timeout) or `irori-depot`.
+- Both follow the network policy (`irori_core::net`, set from `iroriNetworkMode` and
+  `iroriNetworkTimeout` by the app's `SettingsService`, never by tests' backends):
+  the user's timeout replaces the 60 s ones, and while working offline their resolver
+  (`net::OfflineAwareResolver`) refuses every host but this computer with the typed
+  `net::WorkingOffline`. A new client of your own takes `.dns_resolver(net::resolver())`
+  and `net::request_timeout()`; protocol crates can't, so services gate their calls
+  (`Backend::working_offline`, `is_online`), and store crates check
+  `net::working_offline()` before their network parts (Steam's account, the Xbox
+  account). Working offline, `refresh_all` refreshes only Steam, launchers, ROMs and
+  added games, the download queue holds, WebDAV and rclone sync wait, and Epic's client
+  takes the timeout too.
 
 **Host programs** (`host.rs`): inside Irori's Flatpak the host's `/usr`, processes
 and other apps' `~/.var/app` folders are hidden. A program the user installed on the
@@ -529,7 +541,12 @@ commands without a window.
   no name is whole. A smart category's own search rule can't use `smart:` (unknown).
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
-  cancel go through a `CancellationToken`. `DownloadQueueSnapshot::queue_place` is a
+  cancel go through a `CancellationToken`. "Turn the screen off" (Downloads page, palette;
+  `screen.rs`) asks the desktop's own display power interface (`kscreen-doctor`, GNOME's
+  `PowerSaveMode`, X11 DPMS, `pmset displaysleepnow`, Windows' `SC_MONITORPOWER`), which
+  wakes at the next input; never root, never offered where nothing would wake it (sway,
+  Hyprland, gamescope), and the computer is kept from sleeping (display not) until the
+  queue is done. `DownloadQueueSnapshot::queue_place` is a
   waiting item's place in line (covers read "Queued · #2"); `Backend::download_disks`
   (`download_space.rs`, blocking) adds up what the queue still downloads per disk
   against its free space. The downloads page (`irori_manage` `downloads/`) derives
@@ -915,11 +932,30 @@ commands without a window.
   The UI is `irori_ui::save_backups`. Inside Irori's Flatpak it is found and run on
   the host (`irori_core::host`), and the Ludusavi Flatpak is given the prefix and the
   backup folder with `--filesystem`.
+- **Save snapshots** (`save_snapshots.rs`, `iroriSaveSnapshots`, 5 by default, 0 = off):
+  before every cloud sync but a plain upload (the launch's download, a manual one, a
+  forced one), the save locations are copied to
+  `<data>/save-snapshots/<runner>/<app>/<time>/` with a SHA-256 of their contents; the
+  same saves as the newest snapshot aren't copied again, saves over 1 GiB aren't
+  copied, and only the newest N stay. A snapshot that fails never stops the sync. The
+  cloud-saves sheet's "Earlier saves" (`irori_game` `save_snapshots.rs`) restores one
+  after a confirmation: what is there is snapshotted first, then the snapshot's files
+  are copied back; nothing is deleted.
 - **Backups** (`backup.rs`, `backup_schedule.rs`): a backup is one JSON file of
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
   before a new version first runs, and prune only their own files. Store sign-ins and the
-  `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
+  `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in. A backup also holds
+  where store games were installed (`installs`, not Steam's, the launchers', ROMs or
+  added games) and where the computer that made it kept its home and Irori folders
+  (`origin`). Every restore rewrites the settings' paths from those roots to this
+  computer's (`backup_paths.rs`: another user, system, or Flatpak ↔ native) and leaves
+  out paths of another system so the defaults apply; Settings → Backup's restore
+  (`restore_backup_with`, `backup_restore.rs`) also checks install folders, prefixes and
+  Wine builds here (`plan_restore`), takes folders the user locates
+  (`remap_from_located`: the shared tail of the old and found path is the same folder,
+  so what is before it moved), swaps a missing Wine build for an installed one of its
+  name and attaches the installs it finds through `Backend::import`.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
   WebDAV or an rclone remote (`sync/target.rs`; `sync/rclone.rs` runs the user's own
   rclone, found on `PATH` or on the host from the Flatpak, never bundled or downloaded:

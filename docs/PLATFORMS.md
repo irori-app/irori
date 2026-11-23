@@ -1235,6 +1235,15 @@ mounted) fails the backup instead of being created. `state/backups.json` keeps t
 result and the version that ran last. Store sign-ins never go in, nor do the backup and
 sync settings, which belong to each computer.
 
+A backup records where the computer that made it kept its home folder and Irori's
+folders, and where store games were installed. Restored on another computer, another
+user, another system, or between the Flatpak (`~/.var/app/…`) and a native install, its
+paths are moved to this computer's; a path that can only belong to another system (a drive
+letter on Linux and macOS, `/home/…` on Windows) is left out so the default applies. The
+restore panel checks install folders, prefixes and Wine builds here first and lets the user
+locate a moved folder, which moves everything beside it too; installed games found again
+are attached to their stores.
+
 Sync shares favourites, hidden games, ratings, play statuses, categories, custom titles
 and web art, yearly goals, playtime and the play history between computers. Each
 computer writes one file, `Irori sync/<device id>.json`, into a folder another program
@@ -1321,6 +1330,24 @@ same systems; a running game's sound moves along. The outputs are read when Big
 Picture and its menu open, never polled. Where outputs can't be switched or read
 (`pactl` missing, another system), the entry says "Not available" and A explains
 why; with one output it says there is nothing to switch to.
+
+### Turning the screen off while downloading
+
+The Downloads page and the palette offer "Turn the screen off" while downloads run. The
+desktop's own display power interface does it, and turns the screen on again at the next
+key press or mouse move; nothing needs root (`irori_services::screen`):
+
+| System | Done with |
+| --- | --- |
+| KDE Plasma | `kscreen-doctor --dpms off` |
+| GNOME | Mutter's `org.gnome.Mutter.DisplayConfig` `PowerSaveMode` set to 3 (`gdbus`) |
+| Other X11 desktops | `xset dpms force off` |
+| macOS | `pmset displaysleepnow` |
+| Windows | the `SC_MONITORPOWER` broadcast |
+
+sway, Hyprland and gamescope keep an output off until told otherwise, so the button isn't
+offered there. Inside the Flatpak the program runs on the host. While the screen is off and
+downloads run, the computer is kept from sleeping (the display isn't) until they are done.
 
 ### Power off, restart, sleep and log out (Big Picture)
 

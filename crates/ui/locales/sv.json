@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Vissa spel kunde inte flyttas",
   "ui.library_folders.nothing_to_move": "Inget av de här spelen kan flyttas dit",
   "ui.library_folders.moved_one": "{count} spel flyttat till ”{folder}”",
-  "ui.library_folders.moved_other": "{count} spel flyttade till ”{folder}”"
+  "ui.library_folders.moved_other": "{count} spel flyttade till ”{folder}”",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year}",
+  "ui.month.1": "jan.",
+  "ui.month.2": "feb.",
+  "ui.month.3": "mars",
+  "ui.month.4": "apr.",
+  "ui.month.5": "maj",
+  "ui.month.6": "juni",
+  "ui.month.7": "juli",
+  "ui.month.8": "aug.",
+  "ui.month.9": "sep.",
+  "ui.month.10": "okt.",
+  "ui.month.11": "nov.",
+  "ui.month.12": "dec."
 }

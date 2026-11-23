@@ -447,8 +447,13 @@ impl WineManagerView {
             release.downsize
         };
         let meta = [
-            (!release.date.is_empty())
-                .then(|| t_args("manage.wine.released", &[("date", &release.date)]).to_string()),
+            (!release.date.is_empty()).then(|| {
+                t_args(
+                    "manage.wine.released",
+                    &[("date", &irori_ui::dates::localized_date(&release.date))],
+                )
+                .to_string()
+            }),
             format::size(size),
         ]
         .into_iter()

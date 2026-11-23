@@ -5436,6 +5436,8 @@ dependencies = [
  "irori-core",
  "irori-depot",
  "irori-itch-api",
+ "irori-mods",
+ "irori-runtime",
  "irori-secrets",
  "once_cell",
  "parking_lot",

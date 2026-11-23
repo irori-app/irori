@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Некоторые игры не удалось переместить",
   "ui.library_folders.nothing_to_move": "Ни одну из этих игр нельзя туда переместить",
   "ui.library_folders.moved_one": "{count} игра перемещена в «{folder}»",
-  "ui.library_folders.moved_other": "Игры ({count}) перемещены в «{folder}»"
+  "ui.library_folders.moved_other": "Игры ({count}) перемещены в «{folder}»",
+  "ui.date.day": "{day} {month}",
+  "ui.date.day_year": "{day} {month} {year} г.",
+  "ui.month.1": "янв.",
+  "ui.month.2": "февр.",
+  "ui.month.3": "мар.",
+  "ui.month.4": "апр.",
+  "ui.month.5": "мая",
+  "ui.month.6": "июн.",
+  "ui.month.7": "июл.",
+  "ui.month.8": "авг.",
+  "ui.month.9": "сент.",
+  "ui.month.10": "окт.",
+  "ui.month.11": "нояб.",
+  "ui.month.12": "дек."
 }

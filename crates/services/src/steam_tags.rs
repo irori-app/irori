@@ -154,6 +154,9 @@ impl SteamTagsService {
     }
 
     async fn ask(&self, missing: &[u32], languages: &[String], now: u64) -> bool {
+        if irori_core::net::working_offline() {
+            return false;
+        }
         let client = match Client::new() {
             Ok(c) => c,
             Err(e) => {

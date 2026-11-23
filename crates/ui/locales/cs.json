@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "Některé hry nešlo přesunout",
   "ui.library_folders.nothing_to_move": "Žádnou z těchto her tam nelze přesunout",
   "ui.library_folders.moved_one": "Přesunuta {count} hra do „{folder}“",
-  "ui.library_folders.moved_other": "Přesunuto her: {count} do „{folder}“"
+  "ui.library_folders.moved_other": "Přesunuto her: {count} do „{folder}“",
+  "ui.date.day": "{day}. {month}",
+  "ui.date.day_year": "{day}. {month} {year}",
+  "ui.month.1": "led",
+  "ui.month.2": "úno",
+  "ui.month.3": "bře",
+  "ui.month.4": "dub",
+  "ui.month.5": "kvě",
+  "ui.month.6": "čvn",
+  "ui.month.7": "čvc",
+  "ui.month.8": "srp",
+  "ui.month.9": "zář",
+  "ui.month.10": "říj",
+  "ui.month.11": "lis",
+  "ui.month.12": "pro"
 }

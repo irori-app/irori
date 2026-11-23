@@ -367,5 +367,19 @@
   "ui.library_folders.move_failed": "一部のゲームを移動できませんでした",
   "ui.library_folders.nothing_to_move": "これらのゲームはどれもそこへ移動できません",
   "ui.library_folders.moved_one": "{count} 本のゲームを「{folder}」に移動しました",
-  "ui.library_folders.moved_other": "{count} 本のゲームを「{folder}」に移動しました"
+  "ui.library_folders.moved_other": "{count} 本のゲームを「{folder}」に移動しました",
+  "ui.date.day": "{month}{day}日",
+  "ui.date.day_year": "{year}年{month}{day}日",
+  "ui.month.1": "1月",
+  "ui.month.2": "2月",
+  "ui.month.3": "3月",
+  "ui.month.4": "4月",
+  "ui.month.5": "5月",
+  "ui.month.6": "6月",
+  "ui.month.7": "7月",
+  "ui.month.8": "8月",
+  "ui.month.9": "9月",
+  "ui.month.10": "10月",
+  "ui.month.11": "11月",
+  "ui.month.12": "12月"
 }

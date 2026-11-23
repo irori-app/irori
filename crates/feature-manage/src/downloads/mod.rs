@@ -450,6 +450,9 @@ impl DownloadsView {
         if let Some(choice) = when_done::choice_button(&queue, cx) {
             header = header.action(choice);
         }
+        if let Some(screen_off) = when_done::screen_off_button(&queue, cx) {
+            header = header.action(screen_off);
+        }
         if self.pending_updates > 0 {
             header = header.action(
                 Button::new("update-all")

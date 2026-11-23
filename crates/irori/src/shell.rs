@@ -642,6 +642,7 @@ fn title_bar_content(
     let nav = navigator(cx).read(cx);
     let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
     let online = models(cx).accounts.read(cx).online;
+    let working_offline = irori_ui::models::working_offline(cx);
     let playing = crate::playing::pill(cx);
 
     h_flex()
@@ -697,7 +698,21 @@ fn title_bar_content(
                 .gap_1()
                 .justify_end()
                 .children(playing)
-                .when(!online, |this| {
+                .when(working_offline, |this| {
+                    // The user's choice, so it is a button that undoes it.
+                    this.child(
+                        Button::new("working-offline")
+                            .debug_selector(|| "working-offline".into())
+                            .ghost()
+                            .small()
+                            .min_w_0()
+                            .icon(IconName::WifiOff)
+                            .label(t("shell.working_offline"))
+                            .tooltip(t("shell.working_offline.tooltip"))
+                            .on_click(|_, _, cx| irori_ui::models::set_working_offline(false, cx)),
+                    )
+                })
+                .when(!online && !working_offline, |this| {
                     this.child(
                         h_flex()
                             .id("offline")

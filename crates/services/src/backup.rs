@@ -1,24 +1,33 @@
 //! Backups of what the user set up in Irori, as one JSON file, and exports of
 //! the game list.
 //!
-//! A backup holds up to four parts: the app settings, per-game settings,
+//! A backup holds up to five parts: the app settings, per-game settings,
 //! library data (favourites, hidden games, categories, play statuses,
-//! backlog goals, custom titles and art, journal notes) and playtime with the session history. Store sign-ins are never
-//! included, nor are the backup and sync settings, which belong to each
-//! computer. Restoring replaces settings, but merges library data and
-//! playtime into what is already there, so an older backup never erases
+//! backlog goals, custom titles and art, journal notes), playtime with the
+//! session history, and where store games were installed. Store sign-ins
+//! are never included, nor are the backup and sync settings, which belong
+//! to each computer. Restoring replaces settings, but merges library data
+//! and playtime into what is already there, so an older backup never erases
 //! newer progress.
+//!
+//! A backup also records where the computer that made it kept its folders,
+//! so a restore on another computer, user or system rewrites the paths it
+//! holds (`backup_paths`), checks each one on this computer and attaches
+//! the installed games it finds again.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use irori_core::game::{GameOverrides, PlaytimeRecord};
-use irori_core::{AppSettings, GameId, GameSettingsOverrides, Runner, json_store, util};
+use irori_core::{
+    AppSettings, GameId, GameSettingsOverrides, InstallPlatform, Runner, json_store, util,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Backend;
+use crate::backup_paths::{self, BackupOrigin, Remap};
 use crate::journal::Journal;
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::{self, Session};
@@ -35,6 +44,8 @@ pub struct BackupParts {
     pub game_settings: bool,
     pub library: bool,
     pub playtime: bool,
+    /// Where store games were installed, to attach them again.
+    pub installs: bool,
 }
 
 impl BackupParts {
@@ -43,11 +54,47 @@ impl BackupParts {
         game_settings: true,
         library: true,
         playtime: true,
+        installs: true,
     };
 
     pub fn any(self) -> bool {
-        self.settings || self.game_settings || self.library || self.playtime
+        self.settings || self.game_settings || self.library || self.playtime || self.installs
     }
+}
+
+/// A store game installed when the backup was made.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InstallRecord {
+    /// `GameId::key()`.
+    pub game: String,
+    pub title: String,
+    pub path: String,
+    pub platform: InstallPlatform,
+}
+
+/// What a path a restore needs is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathKind {
+    /// A game's install folder.
+    Install,
+    /// A game's (or the defaults') Wine prefix.
+    Prefix,
+    /// A game's (or the defaults') Wine or Proton build.
+    WineBuild,
+}
+
+/// One path a restore needs, checked on this computer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathCheck {
+    pub kind: PathKind,
+    /// The game it belongs to; `None` for the defaults.
+    pub game: Option<GameId>,
+    pub title: String,
+    /// As the backup wrote it.
+    pub original: String,
+    /// After the remaps (for a Wine build, its name).
+    pub path: String,
+    pub found: bool,
 }
 
 /// Favourites, hidden games, categories, play statuses, backlog goals,
@@ -117,6 +164,13 @@ pub struct Backup {
     pub merged_lists: bool,
     pub library: Option<LibraryBackup>,
     pub playtime: Option<PlaytimeBackup>,
+    /// Where the computer that made it kept its folders; `None` in backups
+    /// made before Irori recorded it, which restore their paths as written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<BackupOrigin>,
+    /// Store games installed then.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub installs: Vec<InstallRecord>,
 }
 
 impl Backup {
@@ -127,18 +181,58 @@ impl Backup {
             game_settings: !self.game_settings.is_empty(),
             library: self.library.is_some(),
             playtime: self.playtime.is_some(),
+            installs: !self.installs.is_empty(),
         }
+    }
+
+    /// The folders that moved between the computer that made this backup
+    /// and this one, which every restore applies.
+    pub fn automatic_remaps(&self) -> Vec<Remap> {
+        self.origin
+            .as_ref()
+            .map(|origin| backup_paths::automatic_remaps(origin, &BackupOrigin::here()))
+            .unwrap_or_default()
+    }
+
+    /// This backup with every path rewritten through `remaps` and the ones
+    /// that belong to another system left out (`windows` says which this
+    /// one is). Returns how many were left out.
+    pub(crate) fn rewritten(&self, remaps: &[Remap], windows: bool) -> (Backup, usize) {
+        let mut out = self.clone();
+        let mut dropped = 0;
+        if let Some(Value::Object(map)) = &mut out.settings {
+            for value in map.values_mut() {
+                backup_paths::remap_value(value, remaps, windows);
+            }
+            dropped += backup_paths::drop_foreign(map, false, windows).len();
+        }
+        for value in out.game_settings.values_mut() {
+            backup_paths::remap_value(value, remaps, windows);
+            if let Value::Object(map) = value {
+                dropped += backup_paths::drop_foreign(map, true, windows).len();
+            }
+        }
+        for record in &mut out.installs {
+            record.path = backup_paths::remap_path(&record.path, remaps, windows);
+        }
+        (out, dropped)
     }
 }
 
 /// What a restore changed, for telling the user.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RestoreSummary {
     pub settings: bool,
     pub game_settings: usize,
     pub favourites_added: usize,
     pub categories: usize,
     pub playtime_games: usize,
+    /// Installed games attached again from where the backup says they were.
+    pub installs_attached: usize,
+    /// Paths of another system left out, so the defaults apply.
+    pub paths_dropped: usize,
+    /// Paths the restore needs that aren't on this computer.
+    pub missing: Vec<PathCheck>,
 }
 
 /// File format of a game list export.
@@ -169,7 +263,7 @@ pub struct ExportedGame {
 }
 
 /// The game a `GameId::key()` names.
-fn game_id(key: &str) -> Option<GameId> {
+pub(crate) fn game_id(key: &str) -> Option<GameId> {
     let (runner, app) = key.split_once(':')?;
     Some(GameId::new(Runner::from_id(runner)?, app))
 }
@@ -214,6 +308,12 @@ impl Backend {
             settings: parts.settings.then(|| self.backup_settings()).transpose()?,
             game_settings,
             merged_lists: true,
+            origin: Some(BackupOrigin::here()),
+            installs: if parts.installs {
+                self.install_records()
+            } else {
+                Vec::new()
+            },
             library: parts.library.then(|| LibraryBackup {
                 favourites: user.favourites.clone(),
                 hidden: user.hidden.clone(),
@@ -278,9 +378,40 @@ impl Backend {
         Ok(backup)
     }
 
+    /// The store games installed now, for a backup. Steam's and the
+    /// launchers' games are their clients', ROMs are found by the folder
+    /// scan, and added games keep their own records.
+    pub(crate) fn install_records(&self) -> Vec<InstallRecord> {
+        self.library()
+            .all_games()
+            .filter(|g| !g.is_dlc && crate::backup_restore::reattachable(g.runner()))
+            .filter_map(|g| {
+                let install = g.install.as_ref().filter(|_| g.is_installed)?;
+                Some(InstallRecord {
+                    game: g.id().key(),
+                    title: g.title.clone(),
+                    path: install.install_path.clone(),
+                    platform: install.platform,
+                })
+            })
+            .collect()
+    }
+
     /// Restore the chosen parts of `backup` (see the module notes on what is
-    /// replaced and what is merged).
+    /// replaced and what is merged), with its paths moved to this computer
+    /// by the automatic remaps.
     pub fn restore_backup(&self, backup: &Backup, parts: BackupParts) -> Result<RestoreSummary> {
+        let (rewritten, dropped) = backup.rewritten(&backup.automatic_remaps(), cfg!(windows));
+        let mut summary = self.restore_rewritten(&rewritten, parts)?;
+        summary.paths_dropped = dropped;
+        Ok(summary)
+    }
+
+    pub(crate) fn restore_rewritten(
+        &self,
+        backup: &Backup,
+        parts: BackupParts,
+    ) -> Result<RestoreSummary> {
         let mut summary = RestoreSummary::default();
         if parts.settings
             && let Some(value) = &backup.settings
