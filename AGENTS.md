@@ -915,6 +915,12 @@ commands without a window.
   decoder thread, keyframes from two thirds in through `thumbnail`), cached in
   `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
   modified time; `irori_ui::components::clip_mark` draws the play chip and length.
+- **Stats Journeys** (`irori-library::stats::journeys`, `journeys_view`): a lane per
+  game played in the period on one axis (a dot per day sized by its time, started
+  here or from before, beaten and abandoned days from the status history), games
+  played per day, and per game its time, sessions, days to beat and hours a week;
+  filters (beaten, ongoing, abandoned, started here) and orders are pills; a lane
+  opens the game sheet. A week shows its month. One virtual list.
 - **Stats Discoveries** (`irori-library::stats::discoveries`, `discoveries_view`): the
   period's findings (comeback, marathon, streak, new favourite, busiest day, night
   owl, early bird, weekends, one game, variety, beaten), each scored by how unusual it

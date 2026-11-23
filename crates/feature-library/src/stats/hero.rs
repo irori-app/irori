@@ -139,6 +139,11 @@ impl StatsView {
                     IconName::ChartColumn,
                     t("library.stats.tab.overview"),
                 ),
+                (
+                    Tab::Journeys,
+                    IconName::Route,
+                    t("library.stats.tab.journeys"),
+                ),
                 (Tab::Backlog, IconName::Flag, t("library.stats.tab.backlog")),
                 (
                     Tab::Discoveries,
@@ -173,6 +178,7 @@ impl StatsView {
             Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 text::period(&self.period())
             }
+            Tab::Journeys => text::period(&super::journeys::shown_period(self.period())),
             Tab::Backlog => self.year().to_string().into(),
         };
         let stepper = (self.tab == Tab::Backlog || self.span != Span::All).then(|| {

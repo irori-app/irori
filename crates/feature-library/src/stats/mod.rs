@@ -6,6 +6,9 @@
 //!   picked up again, new games); the most played games as covers.
 //! - **Backlog**: the games beaten and abandoned in a year on a timeline, the
 //!   yearly goal and its pace, and the library grouped by play status.
+//! - **Journeys**: a lane per game over the period (days played, where it
+//!   started, beaten or abandoned), games played at once, days to beat and
+//!   pace; a week shows its month.
 //! - **Discoveries**: the period in sentences scored by how unusual they are
 //!   (pin or hide each kind), milestones reached and next, a year ago, and
 //!   "Copy summary".
@@ -38,6 +41,8 @@ mod discoveries_view;
 mod hero;
 pub(crate) mod journal;
 mod journal_view;
+pub(crate) mod journeys;
+mod journeys_view;
 pub(crate) mod model;
 pub(crate) mod overview;
 mod overview_view;
@@ -85,6 +90,7 @@ use storage::{DriveUsage, InstalledGame};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
     Overview,
+    Journeys,
     Backlog,
     Discoveries,
     Album,
@@ -117,6 +123,12 @@ pub struct StatsView {
     history: Option<Arc<History>>,
     overview: Option<Overview>,
     backlog: Option<Backlog>,
+    /// The period's journeys; `None` until the history is first read.
+    journeys: Option<Arc<journeys::Journeys>>,
+    lane_filter: journeys::LaneFilter,
+    lane_sort: journeys::LaneSort,
+    journey_sizes: Rc<Vec<Size<Pixels>>>,
+    journey_scroll: VirtualListScrollHandle,
     /// What stood out in the period, its milestones and a year ago.
     discoveries: Option<Arc<discoveries::Discoveries>>,
     /// The discoveries pinned and hidden, kept between runs.
@@ -196,6 +208,11 @@ impl StatsView {
             backlog_extras: None,
             discoveries: None,
             prefs: StatsPrefs::default(),
+            journeys: None,
+            lane_filter: journeys::LaneFilter::default(),
+            lane_sort: journeys::LaneSort::default(),
+            journey_sizes: Rc::default(),
+            journey_scroll: VirtualListScrollHandle::new(),
             screenshots: None,
             album: None,
             album_game: None,
@@ -350,6 +367,13 @@ impl StatsView {
             |id| snapshot.get(id).is_some(),
             today,
         ));
+        self.journeys = Some(Arc::new(journeys::compute(
+            &history,
+            self.period(),
+            &user,
+            |id| snapshot.get(id).is_some(),
+            today,
+        )));
         self.discoveries = self.overview.as_ref().map(|o| {
             Arc::new(discoveries::compute(
                 &history,
@@ -418,7 +442,7 @@ impl StatsView {
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let today = Self::today();
         match self.tab {
-            Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Journeys | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let to = if by < 0 {
                     period.previous()
@@ -458,7 +482,7 @@ impl StatsView {
                 .min();
         }
         match self.tab {
-            Tab::Overview | Tab::Discoveries | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Journeys | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let back = period
                     .previous()
@@ -550,6 +574,14 @@ impl Render for StatsView {
                 .image_cache(self.images.clone())
                 .child(self.render_album_page(window, cx));
         }
+        // So are the journeys.
+        if self.tab == Tab::Journeys && self.history.is_some() && !self.is_blank(cx) {
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .image_cache(self.images.clone())
+                .child(self.render_journeys(window, cx));
+        }
         // So is a journal with notes.
         let journal_page = self.tab == Tab::Journal
             && self.history.is_some()
@@ -586,6 +618,7 @@ impl Render for StatsView {
                     .into_any_element(),
                 Tab::Backlog => self.render_backlog(window, cx),
                 Tab::Discoveries => self.render_discoveries(window, cx),
+                Tab::Journeys => self.render_journeys(window, cx),
                 Tab::Album => self.render_album(window, cx),
                 Tab::Journal => self.render_journal(window, cx),
             }
