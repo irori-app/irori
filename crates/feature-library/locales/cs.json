@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Vyberte další kopie hry „{title}“ a pak zvolte Spojit do jedné hry.",
   "library.bulk.combine": "Spojit do jedné hry",
   "library.bulk.combine_tooltip": "Zobrazovat vybrané hry jako kopie jedné hry z jejich obchodů",
+  "library.bulk.move": "Přesunout do",
+  "library.bulk.move_tooltip": "Přesunout vybrané nainstalované hry do složky knihovny",
   "library.bulk.details.failed_one": "{count} hru nelze načíst.",
   "library.bulk.details.failed_other": "Některé hry nelze načíst ({count}).",
   "library.bulk.details.link_failed": "Na Steamu nelze hledat",

@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "取消",
   "ui.rosetta.installing": "正在安裝 Rosetta",
   "ui.rosetta.installing_detail": "Apple 的軟體更新正在安裝 Rosetta 2。完成後遊戲就會啟動。",
-  "ui.rosetta.install_failed": "無法安裝 Rosetta"
+  "ui.rosetta.install_failed": "無法安裝 Rosetta",
+  "ui.library_folders.default": "預設",
+  "ui.library_folders.move_title_one": "將 {count} 個遊戲移到「{folder}」？",
+  "ui.library_folders.move_title_other": "將 {count} 個遊戲移到「{folder}」？",
+  "ui.library_folders.move_description": "每個遊戲的資料夾會逐一移到 {path}。正在執行或忙碌的遊戲保持不動。",
+  "ui.library_folders.move_confirm": "移動",
+  "ui.library_folders.cancel": "取消",
+  "ui.library_folders.move_failed": "部分遊戲無法移動",
+  "ui.library_folders.nothing_to_move": "這些遊戲都無法移到那裡",
+  "ui.library_folders.moved_one": "已將 {count} 個遊戲移到「{folder}」",
+  "ui.library_folders.moved_other": "已將 {count} 個遊戲移到「{folder}」"
 }

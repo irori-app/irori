@@ -38,6 +38,9 @@ pub struct LaunchParams {
     pub verbose: bool,
     /// The streaming client the session is for (Sunshine's Moonlight).
     pub stream: Option<crate::sunshine::StreamClient>,
+    /// What Steam set when it started the game through its non-Steam
+    /// shortcut, for its overlay (`iroriSteamOverlay`).
+    pub steam: Option<crate::steam_overlay::SteamLaunch>,
     /// Play without the cloud-save download first: the user chose to play
     /// on this device's saves after it failed ([`SaveDownloadFailed`]).
     pub skip_save_download: bool,
@@ -48,6 +51,16 @@ pub struct LaunchParams {
 /// game from starting, or the session from ending, for good; three minutes
 /// is far longer than syncing a game's saves takes on a working connection.
 pub const SAVE_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+/// What moving several games into a library folder did
+/// ([`Backend::move_installs`]).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MoveReport {
+    /// Games now in the folder.
+    pub moved: usize,
+    /// Games that weren't moved: their title and why.
+    pub failed: Vec<(String, String)>,
+}
 
 /// A game process Irori started and is tracking.
 #[derive(Debug, Clone)]
@@ -489,6 +502,7 @@ impl Backend {
             skip_version_check,
             verbose,
             stream,
+            steam,
             skip_save_download,
         } = params;
         if self.is_running(id) {
@@ -543,6 +557,13 @@ impl Backend {
         }
         if let Some(client) = &stream {
             client.apply(&mut settings, app.sunshine.match_client);
+        }
+        // After the stream, which may turn gamescope on.
+        if let Some(steam) = &steam
+            && let Err(skipped) = steam.apply(id.runner, &mut settings)
+            && skipped != crate::steam_overlay::Skipped::Off
+        {
+            tracing::info!("{id} starts without Steam's overlay: {skipped:?}");
         }
         let ctx = self.op_context(id, cancel.clone());
         let target = Target {
@@ -1247,6 +1268,59 @@ impl Backend {
 
     /// Move an installed game to another directory (`new_base/<folder>`).
     pub async fn move_install(&self, id: &GameId, new_base: PathBuf) -> Result<()> {
+        if self.move_install_quietly(id, &new_base).await? {
+            let title = self.game(id).map(|g| g.title.clone()).unwrap_or_default();
+            let dest = new_base.display().to_string();
+            self.bus.notice(
+                Notice::new(NoticeLevel::Success, format!("{title} moved to {dest}")).keys(
+                    "shell.notice.moved",
+                    None,
+                    &[("title", &title), ("path", &dest)],
+                ),
+            );
+        }
+        Ok(())
+    }
+
+    /// Move each of `ids` into the library folder `folder` (into its store's
+    /// own folder there with `iroriInstallPerStore`), one game at a time, as
+    /// [`Self::move_install`] does but without a notice per game: the caller
+    /// says how it went. Games running or busy stay where they are; games
+    /// there already count as neither moved nor failed.
+    pub async fn move_installs(
+        &self,
+        ids: &[GameId],
+        folder: &irori_core::settings::LibraryFolder,
+    ) -> MoveReport {
+        let mut report = MoveReport::default();
+        for id in ids {
+            let title = self
+                .game(id)
+                .map(|g| g.title.clone())
+                .unwrap_or_else(|| id.app_name.to_string());
+            let base = irori_core::paths::expand_home(
+                &self
+                    .settings
+                    .app()
+                    .install_folder_in(&folder.path, id.runner),
+            );
+            let moved = if self.is_running(id) || self.statuses.is_busy(id) {
+                Err(anyhow::anyhow!("{title} is running or busy"))
+            } else {
+                self.move_install_quietly(id, &base).await
+            };
+            match moved {
+                Ok(true) => report.moved += 1,
+                Ok(false) => {}
+                Err(e) => report.failed.push((title, format!("{e:#}"))),
+            }
+        }
+        report
+    }
+
+    /// Move one game; `false` when it was there already. Announces nothing
+    /// but leftovers.
+    async fn move_install_quietly(&self, id: &GameId, new_base: &Path) -> Result<bool> {
         Self::ensure_managed(id)?;
         let game = self.installed_game(id)?;
         let store = self.store(id.runner).context("store not available")?;
@@ -1254,7 +1328,7 @@ impl Backend {
         let folder = src.file_name().context("invalid install path")?.to_owned();
         let dst = new_base.join(folder);
         if dst == src {
-            return Ok(());
+            return Ok(false);
         }
         if dst.exists() {
             bail!("{} already exists", dst.display());
@@ -1298,19 +1372,7 @@ impl Backend {
             }
         }
         self.bus.emit(Event::LibraryChanged(id.runner));
-        let dest = new_base.display().to_string();
-        self.bus.notice(
-            Notice::new(
-                NoticeLevel::Success,
-                format!("{} moved to {dest}", game.title),
-            )
-            .keys(
-                "shell.notice.moved",
-                None,
-                &[("title", &game.title), ("path", &dest)],
-            ),
-        );
-        Ok(())
+        Ok(true)
     }
 
     pub async fn repair(&self, id: &GameId) -> Result<()> {

@@ -1,0 +1,68 @@
+{
+  "id": "vita3k",
+  "name": "Vita3K",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://vita3k.org",
+  "kind": "standalone",
+  "systems": [
+    "psvita"
+  ],
+  "sources": [
+    {
+      "type": "github",
+      "repo": "Vita3K/Vita3K",
+      "assets": {
+        "linux-x86_64": "^Vita3K-x86_64\\.AppImage$",
+        "linux-aarch64": "^Vita3K-aarch64\\.AppImage$",
+        "macos-aarch64": "^macos-arm64-latest\\.dmg$",
+        "macos-x86_64": "^macos-latest\\.dmg$",
+        "windows-x86_64": "^windows-latest\\.zip$"
+      }
+    },
+    {
+      "type": "path",
+      "names": [
+        "Vita3K",
+        "vita3k"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "Vita3K.app"
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "Vita3K-x86_64.AppImage",
+      "Vita3K-aarch64.AppImage",
+      "Vita3K"
+    ],
+    "macos": [
+      "Vita3K.app"
+    ],
+    "windows": [
+      "Vita3K.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "--fullscreen"
+        ]
+      },
+      "--installed-path",
+      "{rom_dir_name}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    }
+  ],
+  "exitHotkey": "Alt+F4",
+  "experimental": true
+}

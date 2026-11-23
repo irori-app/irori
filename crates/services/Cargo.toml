@@ -94,6 +94,13 @@ windows = { version = "0.62", features = [
     # The sound outputs' names, for switching the output.
     "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
+    # Screenshots through Desktop Duplication (Direct3D 11 and DXGI).
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    # An output's description names its monitor (`HMONITOR`).
+    "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_System_Com",

@@ -233,6 +233,10 @@ pub fn command(input: &LaunchInput) -> Result<CommandSpec> {
     let vars = Vars {
         rom: game.path.display().to_string(),
         rom_dir: rom_dir.display().to_string(),
+        rom_dir_name: rom_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         home: dirs::home_dir().unwrap_or_default().display().to_string(),
         engine_home: home.display().to_string(),
         engine_dir: engine_dir.display().to_string(),
@@ -446,6 +450,9 @@ fn flag(values: &BTreeMap<String, Value>, id: &str) -> bool {
 pub(crate) struct Vars {
     pub(crate) rom: String,
     pub(crate) rom_dir: String,
+    /// The game folder's own name: a PS Vita game's title id, which Vita3K
+    /// runs an installed game by.
+    pub(crate) rom_dir_name: String,
     pub(crate) home: String,
     pub(crate) engine_home: String,
     pub(crate) engine_dir: String,
@@ -454,7 +461,8 @@ pub(crate) struct Vars {
 
 impl Vars {
     pub(crate) fn expand(&self, s: &str) -> String {
-        s.replace("{rom_dir}", &self.rom_dir)
+        s.replace("{rom_dir_name}", &self.rom_dir_name)
+            .replace("{rom_dir}", &self.rom_dir)
             .replace("{rom}", &self.rom)
             .replace("{engine_home}", &self.engine_home)
             .replace("{engine_dir}", &self.engine_dir)
@@ -758,6 +766,37 @@ mod tests {
     }
 
     #[test]
+    fn dreamcast_vita_and_switch_engines_follow_their_templates() {
+        let root = crate::test_root("launch-dc-vita-switch");
+        let gdi = root.join("dreamcast/Shenmue (USA)/Shenmue.gdi");
+        let vita = root.join("ux0/app/PCSE00000/eboot.bin");
+        let nsp = root.join("switch/Game [0100000000010000].nsp");
+        for file in [&gdi, &vita, &nsp] {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, b"x").unwrap();
+        }
+        assert_eq!(
+            args_of("flycast", "dreamcast", &gdi, &[]),
+            ["-config", "window:fullscreen=yes", gdi.to_str().unwrap()]
+        );
+        // Vita3K runs an installed game by its title id, the folder's name;
+        // the game is never passed as a path, which would install it again.
+        assert_eq!(
+            args_of(
+                "vita3k",
+                "psvita",
+                &vita,
+                &[("fullscreen", Value::Bool(false))]
+            ),
+            ["--installed-path", "PCSE00000"]
+        );
+        assert_eq!(
+            args_of("ryujinx", "switch", &nsp, &[]),
+            ["--fullscreen", nsp.to_str().unwrap()]
+        );
+    }
+
+    #[test]
     fn n64_ds_and_ps1_engines_follow_their_templates() {
         let root = crate::test_root("launch-more-engines");
         let n64 = root.join("n64/Game (USA).z64");
@@ -839,6 +878,7 @@ mod tests {
         let vars = Vars {
             rom: "r".into(),
             rom_dir: String::new(),
+            rom_dir_name: String::new(),
             home: String::new(),
             engine_home: String::new(),
             engine_dir: String::new(),

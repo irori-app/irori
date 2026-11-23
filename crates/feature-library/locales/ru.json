@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Выберите другие копии «{title}», затем «Объединить в одну игру».",
   "library.bulk.combine": "Объединить в одну игру",
   "library.bulk.combine_tooltip": "Показывать выбранные игры как копии одной игры из разных магазинов",
+  "library.bulk.move": "Переместить в",
+  "library.bulk.move_tooltip": "Переместить выбранные установленные игры в папку библиотеки",
   "library.bulk.details.failed_one": "Не удалось прочитать: {count} игра.",
   "library.bulk.details.failed_other": "Не удалось прочитать: игр — {count}.",
   "library.bulk.details.link_failed": "Не удалось выполнить поиск в Steam",

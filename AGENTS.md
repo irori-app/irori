@@ -692,6 +692,17 @@ commands without a window.
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
   Picture's options, the palette, `visible_sessions` (stats, Year in review),
   `Backend::concealed` (CLI, Discord). New screens that list games must too.
+- **Library folders** (`iroriLibraryFolders`, `irori_core::settings::LibraryFolder`):
+  named folders games install into beside `defaultInstallPath`, which
+  `AppSettings::library_folders` lists first (unnamed); `iroriInstallPerStore` applies
+  in each (`install_folder_in`), and `library_folder_of` says which holds a game. The
+  install sheet offers them as "Library folder" (it fills the path field); Settings →
+  General → Folders lists them with their installed games and moves all of a folder's
+  games into another; the library's selection bar moves the picked ones ("Move to").
+  Both ask through `irori_ui::library_folders::confirm_move` and move with
+  `Backend::move_installs` (one game at a time, running or busy games skipped, one
+  summary instead of a notice per game). Removing a folder from the list leaves its
+  games where they are.
 - **Removing games from the library** (`irori-library` `view/remove.rs`): the bulk bar,
   a picked game's context menu, the palette and Delete take the picked added games
   and ROMs out through `Backend::uninstall` after one confirmation; store games,
@@ -986,6 +997,13 @@ commands without a window.
   adds or updates every installed game (not Steam's own, DLCs, or hidden games while
   locked) and removes Irori's entries of games that left the library, except games of a
   signed-out store; with games named, only those; `--remove` takes them out.
+  Steam's overlay (`steam_overlay.rs`, per game `iroriSteamOverlay`, Linux, off by
+  default): the waiting invocation a shortcut runs reads what Steam set for it
+  (`SteamLaunch::from_env`: only `gameoverlayrenderer.so` entries of `LD_PRELOAD`,
+  absolute, and a numeric `SteamOverlayGameId`) and passes it through the instance
+  channel (`instance::Caller`) to `LaunchParams::steam`; the game gets it unless it runs
+  in gamescope or the sandbox or is Steam's. Irori never finds or preloads the overlay
+  by itself.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of
@@ -1678,7 +1696,10 @@ Microsoft's approval page (`irori_manage::login`).
   panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
-  `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
+  `screencapture`; Core Audio and DXGI Desktop Duplication, HDR tone mapped by the
+  pure `capture::tone_map_scrgb`, else GDI). Both also take Ctrl+Shift+S (⌃⇧S) while
+  a game runs, overlay on or off (`iroriOverlay.screenshotKey`, the same
+  `overlay/hotkey/` registration). Windows doesn't open it over a game in
   exclusive fullscreen. The microphone is `GameAudio::microphone`,
   `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
   turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
@@ -1737,11 +1758,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   pickers and "Play with…" like any engine; removing one deletes only its manifest, and
   a game or system still naming it plays with the system's default. Any engine can also
   use a program the user picks ("Use a program on this computer…", `Origin::Custom`).
-- **Engines shipped:** RetroArch (12 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
-  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Gopher64, MAME, Mupen64Plus, M64Py,
-  DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
-  experimental Cemu, RPCS3, xemu, shadPS4 and AnyPS5 (never a system's default while
-  another engine plays it). Systems may be `folderOnly` (arcade zips, Xbox images) and
+- **Engines shipped:** RetroArch (13 cores), DuckStation, PPSSPP, Dolphin, ScummVM,
+  DOSBox Staging, PCSX2, melonDS, mGBA, Azahar, Flycast, Gopher64, MAME, Mupen64Plus,
+  M64Py, DeSmuME and ePSXe (these five detected only; ePSXe is closed source), and the
+  experimental Cemu, RPCS3, xemu, shadPS4, AnyPS5, Vita3K and Ryujinx (never a system's
+  default while another engine plays it; Ryujinx detected only, never downloaded, see
+  `docs/design/engines.md` 3.2.4). Vita3K runs a game it installed by its title id, the
+  game folder's name (`{rom_dir_name}`), so the ROM folder is its `ux0/app`. Systems may be `folderOnly` (arcade zips, Xbox images) and
   folder games may name the file engines open (`folderMain`), the files naming them
   (`folderTitle`: PS5 `param.json`, PS3/PS4 `PARAM.SFO` through `irori_engines::sfo`)
   and the folders of their own layout that never name them (`layoutFolders`). A disc
@@ -2578,8 +2601,11 @@ building and the release checklist.
   architecture suffix (they predate arm64 packages), arm64 ones add `-arm64`.
 - Linux: a tarball with the desktop entry and icon. `--appimage` adds an
   AppImage for the binaries' architecture (appimagetool, zsync update
-  information) that bundles no libraries and refuses an `irori` linking
-  WebKitGTK.
+  information) that refuses an `irori` linking WebKitGTK. It sets no
+  `LD_LIBRARY_PATH`; the few libraries `irori` links beyond AppImage's
+  excludelist (xkbcommon, xkbcommon-x11, xcb-xkb, udev: `APPIMAGE_BUNDLED`) go
+  into `usr/lib` behind a patchelf `RUNPATH`, and any other library fails the
+  build.
 - macOS: `Irori.app` with the `irori://` scheme.
   - Rejects any dylib outside the system paths.
   - Signs the helper before the bundle (`IRORI_SIGN_IDENTITY`, ad-hoc by default).

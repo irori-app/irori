@@ -181,6 +181,11 @@ pub struct GameSettings {
     /// Irori-only; set per game.
     #[serde(rename = "iroriDiscordPresence")]
     pub discord_presence: bool,
+    /// Linux: when Steam starts the game through its non-Steam shortcut,
+    /// pass Steam's overlay on to the game (off under gamescope and the
+    /// sandbox). Irori-only; set per game.
+    #[serde(rename = "iroriSteamOverlay")]
+    pub steam_overlay: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -576,6 +581,7 @@ impl Default for GameSettings {
             dll_overrides: Vec::new(),
             in_sunshine: true,
             discord_presence: true,
+            steam_overlay: false,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),
@@ -805,6 +811,10 @@ pub struct AppSettings {
     /// `defaultInstallPath` (`Games/Irori/GOG/<game>`). Irori-only.
     #[serde(rename = "iroriInstallPerStore")]
     pub install_per_store: bool,
+    /// More folders games install into beside `defaultInstallPath`, each
+    /// with a name (another drive, an SD card). Irori-only.
+    #[serde(rename = "iroriLibraryFolders")]
+    pub library_folders: Vec<LibraryFolder>,
     pub default_steam_path: String,
     pub default_wine_prefix_dir: String,
     pub disable_controller: bool,
@@ -1059,6 +1069,7 @@ impl Default for AppSettings {
             dark_tray_icon: false,
             default_install_path: games.to_string_lossy().into_owned(),
             install_per_store: false,
+            library_folders: Vec::new(),
             default_steam_path: crate::platform::steam_dir().to_string_lossy().into_owned(),
             default_wine_prefix_dir: games.join("Prefixes").to_string_lossy().into_owned(),
             disable_controller: false,
@@ -1478,6 +1489,9 @@ pub struct OverlayPrefs {
     pub side: OverlaySide,
     /// Guide + RB (R1) takes a screenshot.
     pub screenshot_chord: bool,
+    /// Windows and macOS: Ctrl+Shift+S (⌃⇧S) takes a screenshot while a game
+    /// Irori started runs, with or without the overlay.
+    pub screenshot_key: bool,
     /// Guide + Up/Down change the system's volume.
     pub volume_chords: bool,
     /// Guide + Y (Triangle) marks the moment: a screenshot and a journal
@@ -1499,6 +1513,7 @@ impl Default for OverlayPrefs {
             enabled: false,
             side: OverlaySide::Center,
             screenshot_chord: true,
+            screenshot_key: true,
             volume_chords: true,
             moment_chord: true,
             volume_step: 5,
@@ -1860,7 +1875,14 @@ impl AppSettings {
     /// store is (`Epic Games`, `GOG`). Stores whose games Irori doesn't
     /// install, and added games, keep `defaultInstallPath`.
     pub fn install_folder(&self, runner: Runner) -> String {
-        let base = self.default_install_path.as_str();
+        self.install_folder_in(&self.default_install_path, runner)
+    }
+
+    /// The folder new installs of a store's games go to inside the library
+    /// folder `base`: `base` itself, or with `iroriInstallPerStore` the
+    /// store's own folder inside it, as [`Self::install_folder`] does for the
+    /// default one.
+    pub fn install_folder_in(&self, base: &str, runner: Runner) -> String {
         if !self.install_per_store || base.trim().is_empty() || !installs_per_store(runner) {
             return base.to_string();
         }
@@ -1872,6 +1894,81 @@ impl AppSettings {
         let base = base.trim_end_matches(['/', '\\']);
         format!("{base}{separator}{}", runner.store_name())
     }
+
+    /// Every library folder: the default install folder first (unnamed),
+    /// then the user's named ones with a folder, each folder once.
+    pub fn library_folders(&self) -> Vec<LibraryFolder> {
+        let mut out = vec![LibraryFolder {
+            name: String::new(),
+            path: self.default_install_path.clone(),
+        }];
+        for folder in &self.library_folders {
+            if folder.path.trim().is_empty()
+                || out.iter().any(|f| same_folder(&f.path, &folder.path))
+            {
+                continue;
+            }
+            let mut folder = folder.clone();
+            if folder.name.trim().is_empty() {
+                // An unnamed folder would read as the default one.
+                folder.name = folder_name(&folder.path);
+            }
+            out.push(folder);
+        }
+        out
+    }
+}
+
+/// A named folder games can be installed into (`iroriLibraryFolders`)
+/// beside the default install folder: another drive, an SD card.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LibraryFolder {
+    /// What the user calls it; empty only for the default install folder.
+    pub name: String,
+    /// As the user chose it (`~` unexpanded).
+    pub path: String,
+}
+
+impl LibraryFolder {
+    /// Whether this is the default install folder (`defaultInstallPath`).
+    pub fn is_default(&self) -> bool {
+        self.name.is_empty()
+    }
+}
+
+/// Whether two folders as the user wrote them are one folder.
+pub fn same_folder(a: &str, b: &str) -> bool {
+    let normal = |p: &str| {
+        crate::paths::expand_home(p.trim())
+            .components()
+            .collect::<PathBuf>()
+    };
+    normal(a) == normal(b)
+}
+
+/// A folder's own name (`SD card` for `/run/media/me/SD card`), for a
+/// library folder the user gave no name.
+pub fn folder_name(path: &str) -> String {
+    let path = path.trim().trim_end_matches(['/', '\\']);
+    path.rsplit(['/', '\\'])
+        .next()
+        .filter(|n| !n.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+/// The library folder holding `install` (an installed game's folder): the
+/// one whose folder is the longest start of it.
+pub fn library_folder_of(folders: &[LibraryFolder], install: &std::path::Path) -> Option<usize> {
+    folders
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| !f.path.trim().is_empty())
+        .map(|(i, f)| (i, crate::paths::expand_home(f.path.trim())))
+        .filter(|(_, root)| install.starts_with(root))
+        .max_by_key(|(_, root)| root.components().count())
+        .map(|(i, _)| i)
 }
 
 /// Whether a store's games get a folder of the store's own with
@@ -2083,6 +2180,52 @@ mod tests {
             serde_json::from_str(r#"{"emberItchIo": true, "emberEngine": "mgba"}"#).unwrap();
         assert!(app.itch_io);
         assert_eq!(serde_json::to_value(&app).unwrap()["iroriEngine"], "mgba");
+    }
+
+    #[test]
+    fn library_folders_list_the_default_first_and_each_folder_once() {
+        let mut app: AppSettings = serde_json::from_str(
+            r#"{"defaultInstallPath": "/games", "iroriLibraryFolders": [
+                {"name": "SD card", "path": "/run/media/me/SD"},
+                {"name": "Again", "path": "/games/"},
+                {"name": "", "path": "/mnt/Big Disk/"},
+                {"name": "Nowhere", "path": " "}
+            ]}"#,
+        )
+        .unwrap();
+        let folders = app.library_folders();
+        let names: Vec<&str> = folders.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["", "SD card", "Big Disk"]);
+        assert!(folders[0].is_default() && !folders[2].is_default());
+        assert_eq!(folders[0].path, "/games");
+
+        // A game belongs to the deepest folder holding it.
+        app.library_folders.push(LibraryFolder {
+            name: "Inner".into(),
+            path: "/games/inner".into(),
+        });
+        let folders = app.library_folders();
+        let of = |p: &str| library_folder_of(&folders, std::path::Path::new(p));
+        assert_eq!(of("/games/Hades"), Some(0));
+        assert_eq!(of("/games/inner/GOG/Hades"), Some(3));
+        assert_eq!(of("/run/media/me/SD/Celeste"), Some(1));
+        assert_eq!(of("/elsewhere/Celeste"), None);
+        // `/games2` is not inside `/games`.
+        assert_eq!(of("/games2/Hades"), None);
+
+        // Each folder gets the stores' own folders like the default one.
+        app.install_per_store = true;
+        assert_eq!(
+            app.install_folder_in("/run/media/me/SD", Runner::Gog),
+            "/run/media/me/SD/GOG"
+        );
+        assert_eq!(
+            app.install_folder_in("/run/media/me/SD", Runner::Sideload),
+            "/run/media/me/SD"
+        );
+        // Older settings without the list read as before.
+        let old: AppSettings = serde_json::from_str(r#"{"defaultInstallPath": "/g"}"#).unwrap();
+        assert_eq!(old.library_folders().len(), 1);
     }
 
     #[test]

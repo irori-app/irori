@@ -251,6 +251,33 @@ AnyPS5's own system libraries. Its `kind` is `relinker`.
   game. No experimental engine is offered for a system an established engine covers.
 - Nothing here changes the conclusions of section 11.
 
+### 3.2.4 Dreamcast, PS Vita and Switch
+
+| Engine | Systems | Managed download | Detected | Launch | Licence |
+| --- | --- | --- | --- | --- | --- |
+| Flycast | Dreamcast | GitHub releases (Linux x64 AppImage, macOS universal zip, Windows zip) | Flatpak `org.flycast.Flycast`, `PATH`, `Flycast.app` | `[-config window:fullscreen=yes] <rom>` | GPL-2.0-only |
+| Flycast core | Dreamcast (second recommendation) | the libretro buildbot, like every core | with RetroArch | RetroArch | GPL-2.0 |
+| Vita3K *(experimental)* | PS Vita | GitHub's rolling `continuous` release (AppImage for x64 and arm64, macOS dmg per architecture, Windows zip); its version is the asset's date | `PATH`, `Vita3K.app` | `[--fullscreen] --installed-path <title id>` | GPL-2.0-or-later |
+| Ryujinx *(experimental)* | Switch | none | Flatpak `io.github.ryubing.Ryujinx` and the older `org.ryujinx.Ryujinx`, `PATH`, `Ryujinx.app` | `[--fullscreen] <rom>` | MIT |
+
+- **Dreamcast** games are `.gdi`, `.cdi`, `.chd`, `.cue` and `.m3u` files in a
+  `dreamcast` folder (or by extension where it is the Dreamcast's alone). A `.gdi` owns
+  the track files it lists, as a `.cue` owns its `.bin` tracks. Flycast boots games with
+  its own BIOS replacement, so no BIOS is asked for.
+- **PS Vita** games are folders holding `eboot.bin`, titled from `sce_sys/param.sfo`.
+  Vita3K runs a game it installed, by its title id, so the folder to add is Vita3K's own
+  `ux0/app` (a `ux0` or `psvita` folder counts as the system's); the game folder's name is
+  the title id (`{rom_dir_name}` in the template). Passing the folder instead would make
+  Vita3K install the game again at every start. Vita3K needs the console's firmware,
+  which the user installs in Vita3K from Sony's update file.
+- **Switch** games are `.nsp` and `.xci` files. The original Ryujinx project ended in 2024
+  and publishes nothing; its continuation is hosted on its own forge. Given Nintendo's
+  actions against Switch emulators, Irori downloads none: it finds a Ryujinx the user
+  installed and launches games with it. Ryujinx needs the console's keys and firmware,
+  which the user dumps from their own console and sets up in Ryujinx.
+- As for every engine, Irori never downloads, links or names a source for BIOS files,
+  keys or firmware.
+
 ### 3.3 Installations and versions
 
 - Discovery (`discovery.rs`) only looks at the filesystem: managed versions recorded in

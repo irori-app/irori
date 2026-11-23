@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Anulează",
   "ui.rosetta.installing": "Se instalează Rosetta",
   "ui.rosetta.installing_detail": "Actualizarea software de la Apple instalează Rosetta 2. Jocul pornește când se termină.",
-  "ui.rosetta.install_failed": "Rosetta nu a putut fi instalat"
+  "ui.rosetta.install_failed": "Rosetta nu a putut fi instalat",
+  "ui.library_folders.default": "Implicit",
+  "ui.library_folders.move_title_one": "Muți {count} joc în „{folder}”?",
+  "ui.library_folders.move_title_other": "Muți {count} jocuri în „{folder}”?",
+  "ui.library_folders.move_description": "Dosarul fiecărui joc se mută în {path}, un joc după altul. Jocurile care rulează sau sunt ocupate rămân unde sunt.",
+  "ui.library_folders.move_confirm": "Mută",
+  "ui.library_folders.cancel": "Anulează",
+  "ui.library_folders.move_failed": "Unele jocuri nu au putut fi mutate",
+  "ui.library_folders.nothing_to_move": "Niciunul dintre aceste jocuri nu poate fi mutat acolo",
+  "ui.library_folders.moved_one": "{count} joc mutat în „{folder}”",
+  "ui.library_folders.moved_other": "{count} jocuri mutate în „{folder}”"
 }

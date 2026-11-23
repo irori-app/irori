@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Cancel",
   "ui.rosetta.installing": "Installing Rosetta",
   "ui.rosetta.installing_detail": "Apple’s Software Update is installing Rosetta 2. The game starts when it’s done.",
-  "ui.rosetta.install_failed": "Couldn’t install Rosetta"
+  "ui.rosetta.install_failed": "Couldn’t install Rosetta",
+  "ui.library_folders.default": "Default",
+  "ui.library_folders.move_title_one": "Move {count} game to “{folder}”?",
+  "ui.library_folders.move_title_other": "Move {count} games to “{folder}”?",
+  "ui.library_folders.move_description": "Each game’s folder moves into {path}, one game at a time. Games that are running or busy stay where they are.",
+  "ui.library_folders.move_confirm": "Move",
+  "ui.library_folders.cancel": "Cancel",
+  "ui.library_folders.move_failed": "Some games couldn’t be moved",
+  "ui.library_folders.nothing_to_move": "None of these games can be moved there",
+  "ui.library_folders.moved_one": "Moved {count} game to “{folder}”",
+  "ui.library_folders.moved_other": "Moved {count} games to “{folder}”"
 }

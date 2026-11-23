@@ -316,6 +316,7 @@
   "game.install.password_failed": "Dal parolası kaydedilemedi",
   "game.install.password_placeholder": "Özel dal parolası",
   "game.install.path_placeholder": "Oyun için klasör",
+  "game.install.library_folder": "Kitaplık klasörü",
   "game.install.pin": "Oyunu belirli bir sürümde tut",
   "game.install.package": "Paket",
   "game.install.pin_failed": "Sürüm sabitlemesi değiştirilemedi",

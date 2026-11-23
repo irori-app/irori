@@ -37,6 +37,7 @@ mod igdb;
 mod launch_presets;
 mod launch_programs;
 mod launchbox;
+mod library_folders;
 mod logs;
 mod overlay;
 mod quick_launch;

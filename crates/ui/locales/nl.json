@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Annuleren",
   "ui.rosetta.installing": "Rosetta installeren",
   "ui.rosetta.installing_detail": "Software-update van Apple installeert Rosetta 2. Het spel start zodra dat klaar is.",
-  "ui.rosetta.install_failed": "Kan Rosetta niet installeren"
+  "ui.rosetta.install_failed": "Kan Rosetta niet installeren",
+  "ui.library_folders.default": "Standaard",
+  "ui.library_folders.move_title_one": "{count} spel naar ‘{folder}’ verplaatsen?",
+  "ui.library_folders.move_title_other": "{count} spellen naar ‘{folder}’ verplaatsen?",
+  "ui.library_folders.move_description": "De map van elk spel wordt naar {path} verplaatst, één spel tegelijk. Spellen die draaien of bezig zijn, blijven waar ze zijn.",
+  "ui.library_folders.move_confirm": "Verplaatsen",
+  "ui.library_folders.cancel": "Annuleren",
+  "ui.library_folders.move_failed": "Sommige spellen konden niet worden verplaatst",
+  "ui.library_folders.nothing_to_move": "Geen van deze spellen kan daarheen worden verplaatst",
+  "ui.library_folders.moved_one": "{count} spel verplaatst naar ‘{folder}’",
+  "ui.library_folders.moved_other": "{count} spellen verplaatst naar ‘{folder}’"
 }

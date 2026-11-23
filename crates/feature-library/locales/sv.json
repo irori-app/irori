@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Välj de andra kopiorna av ”{title}” och sedan Slå ihop till ett spel.",
   "library.bulk.combine": "Slå ihop till ett spel",
   "library.bulk.combine_tooltip": "Visa de valda spelen som kopior av ett spel, från sina butiker",
+  "library.bulk.move": "Flytta till",
+  "library.bulk.move_tooltip": "Flytta de valda installerade spelen till en biblioteksmapp",
   "library.bulk.details.failed_one": "{count} spel kunde inte läsas.",
   "library.bulk.details.failed_other": "{count} spel kunde inte läsas.",
   "library.bulk.details.link_failed": "Kunde inte söka på Steam",

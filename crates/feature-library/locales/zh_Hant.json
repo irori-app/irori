@@ -1040,6 +1040,8 @@
   "library.combine.hint": "選擇「{title}」的其他副本，然後選擇「合併為一個遊戲」。",
   "library.bulk.combine": "合併為一個遊戲",
   "library.bulk.combine_tooltip": "將所選遊戲顯示為同一遊戲在各商店的副本",
+  "library.bulk.move": "移到",
+  "library.bulk.move_tooltip": "將選取的已安裝遊戲移到收藏庫資料夾",
   "library.bulk.details.failed_one": "有 {count} 款遊戲無法讀取。",
   "library.bulk.details.failed_other": "有 {count} 款遊戲無法讀取。",
   "library.bulk.details.link_failed": "無法搜尋 Steam",

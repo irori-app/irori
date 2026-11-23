@@ -46,6 +46,7 @@ pub fn command(
     let vars = Vars {
         rom: String::new(),
         rom_dir: String::new(),
+        rom_dir_name: String::new(),
         home: dirs::home_dir().unwrap_or_default().display().to_string(),
         engine_home: home.display().to_string(),
         engine_dir: engine_dir.display().to_string(),

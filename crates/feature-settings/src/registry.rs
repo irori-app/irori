@@ -280,6 +280,8 @@ pub enum PanelKind {
     ButtonMap,
     /// The quick launcher's shortcut: its keys, or the lines to bind.
     QuickLaunch,
+    /// Named folders games install into, and moving their games.
+    LibraryFolders,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -571,6 +573,7 @@ impl FieldSpec {
             "iroriWindowsGpu" | "iroriHideGpu" | "iroriOverlay.backStart" => {
                 return host == HostPlatform::Windows;
             }
+            "iroriOverlay.screenshotKey" => return host != HostPlatform::Linux,
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -629,6 +632,7 @@ impl FieldSpec {
                     | "iroriShaderCacheSize"
                     | "iroriSandbox.noNetwork"
                     | "iroriSandbox.noHome"
+                    | "iroriSteamOverlay"
             )
         {
             return false;
@@ -1579,6 +1583,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.install_per_store.help")
     .keywords(&["path", "directory", "folder", "store", "install"]),
     app(
+        "panel.libraryFolders",
+        "settings.field.panel_library_folders.label",
+        General,
+        "settings.group.folders",
+        Panel(PanelKind::LibraryFolders),
+    )
+    .help("settings.field.panel_library_folders.help")
+    .keywords(&["library", "folders", "drive", "sd card", "move", "install"]),
+    app(
         "defaultWinePrefixDir",
         "settings.field.default_wine_prefix_dir.label",
         General,
@@ -2430,6 +2443,17 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.overlay_screenshot_chord.help")
     .keywords(&["overlay", "guide", "rb", "r1", "screenshot", "shortcut"])
     .requires(NEEDS_OVERLAY),
+    // Its own key, so it needs no overlay: Windows and macOS (Linux binds
+    // `irori --screenshot` through the replay buffer's shortcuts).
+    app(
+        "iroriOverlay.screenshotKey",
+        "settings.field.overlay_screenshot_key.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_screenshot_key.help")
+    .keywords(&["screenshot", "shortcut", "hotkey", "key", "capture"]),
     app(
         "iroriOverlay.volumeChords",
         "settings.field.overlay_volume_chords.label",
@@ -4169,6 +4193,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.discord_presence.help")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
+    game_only(
+        "iroriSteamOverlay",
+        "settings.field.steam_overlay.label",
+        Launch,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.steam_overlay.help")
+    .keywords(&["steam", "overlay", "shortcut", "non-steam", "game mode"]),
     game(
         "steamRuntime",
         "settings.field.steam_runtime.label",

@@ -118,7 +118,8 @@ Both binaries are required, so a package never silently omits store sign-in.
   sign-in. `packaging/install.sh` retains the per-user Linux installation flow.
   `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` (`-aarch64` on arm64) and its `.zsync` (see
   [AppImage](#appimage)). It needs [appimagetool](https://github.com/AppImage/appimagetool)
-  (`IRORI_APPIMAGETOOL`, else on `PATH`) and `zsyncmake`; `IRORI_APPIMAGE_RUNTIME`
+  (`IRORI_APPIMAGETOOL`, else on `PATH`), `zsyncmake` and patchelf (`IRORI_PATCHELF`,
+  else on `PATH`); `IRORI_APPIMAGE_RUNTIME`
   names the AppImage runtime to use instead of the one appimagetool downloads.
 - macOS needs Xcode Command Line Tools. The package includes an `.app` with the
   helper and `irori://` URL declaration. XZ support links statically; packaging rejects
@@ -807,7 +808,8 @@ Per system (`irori_bigpicture::overlay::support` holds the same table):
 | Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no, but the overlay takes the foreground |
 | System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
 | Game volume | its streams | not available | its audio sessions (Core Audio) |
-| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
+| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | Desktop Duplication of the game's monitor (HDR tone mapped to SDR), else a GDI copy |
+| Screenshot key | `irori --screenshot` bound in the desktop (see "Clip and screenshot keys") | ⌃⇧S while a game runs | Ctrl+Shift+S while a game runs |
 
 On macOS the overlay is GPUI's pop-up window: a non-activating `NSPanel` at the pop-up
 menu level that joins every Space and may sit over fullscreen apps, so it shows over a
@@ -847,9 +849,21 @@ regardless still do. Volumes
 are Core Audio's: the system volume is the default output's endpoint volume, and the
 game's are its audio sessions (as in the volume mixer) on every active output, matched to
 the process Irori started and its descendants started since the session began (Windows
-reuses process ids and has no process groups). Screenshots copy the monitor of the
-foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
-the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
+reuses process ids and has no process groups). Screenshots read the monitor of the
+foreground window through DXGI Desktop Duplication into `Videos\Captures`, next to the
+Game Bar's: what the compositor shows, flip-model and most fullscreen games included. On
+an HDR display the picture is asked for in half floats (scRGB) and tone mapped to SDR at
+the display's SDR content brightness (`DISPLAYCONFIG_SDR_WHITE_LEVEL`): up to 80 % of
+SDR white nothing changes, brighter highlights roll off so the brightest lands on white
+(`irori_services::capture::tone_map_scrgb`, pure and tested). Where duplication isn't
+available (a remote session, a rotated display, a driver that refuses) GDI copies the
+desktop instead, and a game in exclusive fullscreen may come out black there.
+
+The screenshot key, Ctrl+Shift+S on Windows and ⌃⇧S on macOS
+(`iroriOverlay.screenshotKey`, on by default), is registered like the overlay's
+shortcut, only while a game Irori started runs, and works with the overlay off; it
+takes the same screenshot as the overlay's row and Guide + RB. Linux binds
+`irori --screenshot` in the desktop instead.
 
 ### Frame rate limit and MangoHud
 
@@ -1087,13 +1101,25 @@ program called `portable`.
 ### AppImage
 
 `Irori-X.Y.Z-x86_64.AppImage` (and `Irori-X.Y.Z-aarch64.AppImage` for arm64) holds `irori`, `irori-sign-in`, the desktop entry, the icon
-and the AppStream metainfo, and nothing else: no libraries. It is built on Ubuntu 22.04
-from the same binaries as the tarball and the `.deb`, so it runs where they run (glibc
-2.35 or newer) and uses the system's graphics, Vulkan, Wayland, X11 and font libraries.
-Bundling none keeps the download small (about 32 MB for Irori 0.3.0, against 34 MB for
-the tarball) and keeps `LD_LIBRARY_PATH` out of the Wine, Proton and native games Irori
-starts. It is compressed with zstd in 128 KiB blocks, appimagetool's default: its xz
-setting came out larger (34 MB), and larger blocks start slower.
+and the AppStream metainfo. It is built on Ubuntu 22.04 from the same binaries as the
+tarball and the `.deb`, so it runs where they run (glibc 2.35 or newer) and uses the
+system's graphics, Vulkan, Wayland, X11 and font libraries. It sets no `LD_LIBRARY_PATH`,
+so nothing of it reaches the Wine, Proton and native games Irori starts. It is compressed
+with zstd in 128 KiB blocks, appimagetool's default: its xz setting came out larger
+(34 MB), and larger blocks start slower.
+
+- **Libraries.** `irori` links a few libraries that AppImage's
+  [excludelist](https://github.com/AppImageCommunity/pkg2appimage/blob/master/excludelist)
+  doesn't expect on every system: libxkbcommon, libxkbcommon-x11 (and its libxcb-xkb)
+  and libudev. A minimal system without one (a Wayland-only install, a container, an
+  immutable image) would stop Irori in the dynamic loader, before it can say anything, so
+  the AppImage carries those in `usr/lib` and finds them through `irori`'s `RUNPATH`
+  (`$ORIGIN/../lib`, set with patchelf), which the programs Irori starts don't inherit.
+  `package.py` follows what `irori` and those libraries link and fails the build on a
+  library on neither list (`APPIMAGE_BUNDLED`, `APPIMAGE_EXCLUDED`), so a new native
+  dependency is a decision. The release's container test runs the AppImage with only the
+  excludelist's libraries installed. Building it needs `patchelf` (`IRORI_PATCHELF`, else
+  on `PATH`).
 
 - **Sign-in.** `irori-sign-in` uses the system's WebKitGTK 4.1 and GTK 3. Where they are
   missing the window can't start, and Irori opens the store's page in the browser instead
@@ -1271,6 +1297,19 @@ drives them through its virtual controller, and arrow, Enter and Escape key
 presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
+
+**Steam's overlay** (per game, "Steam overlay from Steam shortcuts",
+`iroriSteamOverlay`, off by default, Linux only). A Steam shortcut runs
+`irori --launch <game> --wait`, which hands the game to the running Irori, so
+the game isn't Steam's child and would miss the overlay Steam preloads into the
+shortcut. With the setting on, the waiting invocation passes on what Steam set
+for it: the `gameoverlayrenderer.so` entries of its `LD_PRELOAD` (absolute paths
+only, nothing else preloaded) and `SteamOverlayGameId`; the game gets Steam's
+libraries before any `LD_PRELOAD` of the user's. Irori never looks for the
+overlay itself, so the overlay comes only from Steam's own launch of the
+shortcut, while that Steam runs; started from Irori, the game runs without it.
+Games in gamescope (whose nested session hides it) or the sandbox (which keeps
+the game from Steam) and Steam's own games don't get it.
 
 ### Sound output (Big Picture)
 

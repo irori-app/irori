@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Anuluj",
   "ui.rosetta.installing": "Instalowanie Rosetty",
   "ui.rosetta.installing_detail": "Uaktualnienia oprogramowania Apple instalują Rosettę 2. Gra uruchomi się po zakończeniu.",
-  "ui.rosetta.install_failed": "Nie udało się zainstalować Rosetty"
+  "ui.rosetta.install_failed": "Nie udało się zainstalować Rosetty",
+  "ui.library_folders.default": "Domyślny",
+  "ui.library_folders.move_title_one": "Przenieść {count} grę do „{folder}”?",
+  "ui.library_folders.move_title_other": "Przenieść gry ({count}) do „{folder}”?",
+  "ui.library_folders.move_description": "Folder każdej gry zostanie przeniesiony do {path}, jedna gra po drugiej. Gry uruchomione lub zajęte zostaną na miejscu.",
+  "ui.library_folders.move_confirm": "Przenieś",
+  "ui.library_folders.cancel": "Anuluj",
+  "ui.library_folders.move_failed": "Nie udało się przenieść niektórych gier",
+  "ui.library_folders.nothing_to_move": "Żadnej z tych gier nie można tam przenieść",
+  "ui.library_folders.moved_one": "Przeniesiono {count} grę do „{folder}”",
+  "ui.library_folders.moved_other": "Przeniesiono gry ({count}) do „{folder}”"
 }

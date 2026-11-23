@@ -165,8 +165,15 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         // are the button held to open Big Picture and how long, hiding the
         // pointer, the button map, Big Picture's sounds and idle screen, and
         // the overlay's own rows (all but Back + Start, which is Windows only),
-        // Guide + Y's moment among them.
-        let overlay_rows = if cfg!(windows) { 8 } else { 7 };
+        // Guide + Y's moment among them, and the screenshot key on Windows and
+        // macOS.
+        let overlay_rows = if cfg!(windows) {
+            9
+        } else if cfg!(target_os = "macos") {
+            8
+        } else {
+            7
+        };
         assert_eq!(app_form.read(cx).visible_count(), 14 + overlay_rows);
         assert!(general > 20);
     });

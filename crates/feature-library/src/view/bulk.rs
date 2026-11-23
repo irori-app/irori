@@ -605,6 +605,42 @@ impl LibraryView {
                     this.confirm_uninstall(games.to_vec(), window, cx)
                 }))
         };
+        // Into another library folder (`iroriLibraryFolders`), when there is
+        // one besides the default.
+        let folders: Vec<_> = irori_ui::library_folders::all(cx)
+            .into_iter()
+            .filter(|f| !f.path.trim().is_empty())
+            .collect();
+        let move_to = (folders.len() > 1).then(|| {
+            let games = removable.clone();
+            Button::new("bulk-move")
+                .small()
+                .outline()
+                .icon(IconName::FolderInput)
+                .label(t("library.bulk.move"))
+                .tooltip(t("library.bulk.move_tooltip"))
+                .disabled(removable.is_empty())
+                .dropdown_menu(move |mut menu, _, _| {
+                    for folder in &folders {
+                        let (games, folder) = (games.clone(), folder.clone());
+                        menu = menu.item(
+                            PopupMenuItem::new(irori_ui::library_folders::label(&folder)).on_click(
+                                move |_, window, cx| {
+                                    let ids =
+                                        irori_ui::library_folders::movable(&games, &folder, cx);
+                                    irori_ui::library_folders::confirm_move(
+                                        ids,
+                                        folder.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                },
+                            ),
+                        );
+                    }
+                    menu
+                })
+        });
         let remove = {
             let plan = to_remove.clone();
             Button::new("bulk-remove")
@@ -835,6 +871,7 @@ impl LibraryView {
                         .when(!nothing, |bar| {
                             bar.child(install)
                                 .child(uninstall)
+                                .children(move_to)
                                 .child(remove)
                                 .child(steam)
                                 .child(steam_remove)

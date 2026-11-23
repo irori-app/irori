@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "İptal",
   "ui.rosetta.installing": "Rosetta yükleniyor",
   "ui.rosetta.installing_detail": "Apple’ın Yazılım Güncelleme’si Rosetta 2’yi yüklüyor. Bitince oyun başlar.",
-  "ui.rosetta.install_failed": "Rosetta yüklenemedi"
+  "ui.rosetta.install_failed": "Rosetta yüklenemedi",
+  "ui.library_folders.default": "Varsayılan",
+  "ui.library_folders.move_title_one": "{count} oyun “{folder}” klasörüne taşınsın mı?",
+  "ui.library_folders.move_title_other": "{count} oyun “{folder}” klasörüne taşınsın mı?",
+  "ui.library_folders.move_description": "Her oyunun klasörü sırayla {path} içine taşınır. Çalışan veya meşgul oyunlar oldukları yerde kalır.",
+  "ui.library_folders.move_confirm": "Taşı",
+  "ui.library_folders.cancel": "İptal",
+  "ui.library_folders.move_failed": "Bazı oyunlar taşınamadı",
+  "ui.library_folders.nothing_to_move": "Bu oyunların hiçbiri oraya taşınamaz",
+  "ui.library_folders.moved_one": "{count} oyun “{folder}” klasörüne taşındı",
+  "ui.library_folders.moved_other": "{count} oyun “{folder}” klasörüne taşındı"
 }

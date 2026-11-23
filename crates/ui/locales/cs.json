@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Zrušit",
   "ui.rosetta.installing": "Instaluje se Rosetta",
   "ui.rosetta.installing_detail": "Aktualizace softwaru od Applu instaluje Rosettu 2. Hra se spustí, až bude hotovo.",
-  "ui.rosetta.install_failed": "Rosettu se nepodařilo nainstalovat"
+  "ui.rosetta.install_failed": "Rosettu se nepodařilo nainstalovat",
+  "ui.library_folders.default": "Výchozí",
+  "ui.library_folders.move_title_one": "Přesunout {count} hru do „{folder}“?",
+  "ui.library_folders.move_title_other": "Přesunout her ({count}) do „{folder}“?",
+  "ui.library_folders.move_description": "Složka každé hry se přesune do {path}, jedna hra po druhé. Hry, které běží nebo jsou zaneprázdněné, zůstanou, kde jsou.",
+  "ui.library_folders.move_confirm": "Přesunout",
+  "ui.library_folders.cancel": "Zrušit",
+  "ui.library_folders.move_failed": "Některé hry nešlo přesunout",
+  "ui.library_folders.nothing_to_move": "Žádnou z těchto her tam nelze přesunout",
+  "ui.library_folders.moved_one": "Přesunuta {count} hra do „{folder}“",
+  "ui.library_folders.moved_other": "Přesunuto her: {count} do „{folder}“"
 }

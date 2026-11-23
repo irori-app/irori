@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Alege celelalte copii ale „{title}”, apoi Combină într-un singur joc.",
   "library.bulk.combine": "Combină într-un singur joc",
   "library.bulk.combine_tooltip": "Afișează jocurile alese drept copii ale aceluiași joc, din magazinele lor",
+  "library.bulk.move": "Mută în",
+  "library.bulk.move_tooltip": "Mută jocurile instalate alese într-un dosar al bibliotecii",
   "library.bulk.details.failed_one": "{count} joc nu a putut fi citit.",
   "library.bulk.details.failed_other": "{count} jocuri nu au putut fi citite.",
   "library.bulk.details.link_failed": "Nu s-a putut căuta pe Steam",

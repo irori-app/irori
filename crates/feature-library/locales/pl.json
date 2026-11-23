@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Wybierz pozostałe kopie gry „{title}”, a potem Połącz w jedną grę.",
   "library.bulk.combine": "Połącz w jedną grę",
   "library.bulk.combine_tooltip": "Pokazuj wybrane gry jako kopie jednej gry z ich sklepów",
+  "library.bulk.move": "Przenieś do",
+  "library.bulk.move_tooltip": "Przenieś wybrane zainstalowane gry do folderu biblioteki",
   "library.bulk.details.failed_one": "Nie udało się odczytać {count} gry.",
   "library.bulk.details.failed_other": "Nie udało się odczytać gier: {count}.",
   "library.bulk.details.link_failed": "Nie udało się przeszukać Steam",

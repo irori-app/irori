@@ -1,0 +1,67 @@
+{
+  "id": "flycast",
+  "name": "Flycast",
+  "license": "GPL-2.0-only",
+  "homepage": "https://github.com/flyinghead/flycast",
+  "kind": "standalone",
+  "systems": [
+    "dreamcast"
+  ],
+  "sources": [
+    {
+      "type": "github",
+      "repo": "flyinghead/flycast",
+      "assets": {
+        "linux-x86_64": "^flycast-x86_64(-[\\w.]+)?\\.AppImage$",
+        "macos-aarch64": "^flycast-macOS-[\\w.]+\\.zip$",
+        "macos-x86_64": "^flycast-macOS-[\\w.]+\\.zip$",
+        "windows-x86_64": "^flycast-win64-[\\w.]+\\.zip$"
+      }
+    },
+    {
+      "type": "flatpak",
+      "id": "org.flycast.Flycast"
+    },
+    {
+      "type": "path",
+      "names": [
+        "flycast"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "Flycast.app"
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "flycast-x86_64*.AppImage"
+    ],
+    "macos": [
+      "Flycast.app"
+    ],
+    "windows": [
+      "flycast.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "-config",
+          "window:fullscreen=yes"
+        ]
+      },
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    }
+  ],
+  "exitHotkey": "Esc"
+}

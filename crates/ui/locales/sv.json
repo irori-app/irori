@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Avbryt",
   "ui.rosetta.installing": "Installerar Rosetta",
   "ui.rosetta.installing_detail": "Apples Programuppdatering installerar Rosetta 2. Spelet startar när det är klart.",
-  "ui.rosetta.install_failed": "Det gick inte att installera Rosetta"
+  "ui.rosetta.install_failed": "Det gick inte att installera Rosetta",
+  "ui.library_folders.default": "Standard",
+  "ui.library_folders.move_title_one": "Flytta {count} spel till ”{folder}”?",
+  "ui.library_folders.move_title_other": "Flytta {count} spel till ”{folder}”?",
+  "ui.library_folders.move_description": "Varje spels mapp flyttas till {path}, ett spel i taget. Spel som körs eller är upptagna stannar där de är.",
+  "ui.library_folders.move_confirm": "Flytta",
+  "ui.library_folders.cancel": "Avbryt",
+  "ui.library_folders.move_failed": "Vissa spel kunde inte flyttas",
+  "ui.library_folders.nothing_to_move": "Inget av de här spelen kan flyttas dit",
+  "ui.library_folders.moved_one": "{count} spel flyttat till ”{folder}”",
+  "ui.library_folders.moved_other": "{count} spel flyttade till ”{folder}”"
 }

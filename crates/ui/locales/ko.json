@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "취소",
   "ui.rosetta.installing": "Rosetta 설치 중",
   "ui.rosetta.installing_detail": "Apple 소프트웨어 업데이트가 Rosetta 2를 설치하고 있습니다. 끝나면 게임이 시작됩니다.",
-  "ui.rosetta.install_failed": "Rosetta를 설치할 수 없습니다"
+  "ui.rosetta.install_failed": "Rosetta를 설치할 수 없습니다",
+  "ui.library_folders.default": "기본",
+  "ui.library_folders.move_title_one": "게임 {count}개를 “{folder}”(으)로 옮길까요?",
+  "ui.library_folders.move_title_other": "게임 {count}개를 “{folder}”(으)로 옮길까요?",
+  "ui.library_folders.move_description": "각 게임의 폴더를 한 번에 하나씩 {path}(으)로 옮깁니다. 실행 중이거나 작업 중인 게임은 그대로 둡니다.",
+  "ui.library_folders.move_confirm": "옮기기",
+  "ui.library_folders.cancel": "취소",
+  "ui.library_folders.move_failed": "일부 게임을 옮기지 못했습니다",
+  "ui.library_folders.nothing_to_move": "이 게임들은 그곳으로 옮길 수 없습니다",
+  "ui.library_folders.moved_one": "게임 {count}개를 “{folder}”(으)로 옮겼습니다",
+  "ui.library_folders.moved_other": "게임 {count}개를 “{folder}”(으)로 옮겼습니다"
 }

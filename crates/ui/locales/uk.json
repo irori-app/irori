@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "Скасувати",
   "ui.rosetta.installing": "Встановлення Rosetta",
   "ui.rosetta.installing_detail": "«Оновлення ПЗ» Apple встановлює Rosetta 2. Гра запуститься, коли встановлення завершиться.",
-  "ui.rosetta.install_failed": "Не вдалося встановити Rosetta"
+  "ui.rosetta.install_failed": "Не вдалося встановити Rosetta",
+  "ui.library_folders.default": "Типова",
+  "ui.library_folders.move_title_one": "Перемістити {count} гру до «{folder}»?",
+  "ui.library_folders.move_title_other": "Перемістити ігри ({count}) до «{folder}»?",
+  "ui.library_folders.move_description": "Тека кожної гри переміщується до {path}, по одній грі за раз. Запущені або зайняті ігри лишаються на місці.",
+  "ui.library_folders.move_confirm": "Перемістити",
+  "ui.library_folders.cancel": "Скасувати",
+  "ui.library_folders.move_failed": "Деякі ігри не вдалося перемістити",
+  "ui.library_folders.nothing_to_move": "Жодну з цих ігор не можна туди перемістити",
+  "ui.library_folders.moved_one": "{count} гру переміщено до «{folder}»",
+  "ui.library_folders.moved_other": "Ігри ({count}) переміщено до «{folder}»"
 }

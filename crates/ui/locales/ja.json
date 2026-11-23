@@ -357,5 +357,15 @@
   "ui.rosetta.cancel": "キャンセル",
   "ui.rosetta.installing": "Rosetta をインストール中",
   "ui.rosetta.installing_detail": "Apple のソフトウェアアップデートが Rosetta 2 をインストールしています。完了するとゲームが起動します。",
-  "ui.rosetta.install_failed": "Rosetta をインストールできませんでした"
+  "ui.rosetta.install_failed": "Rosetta をインストールできませんでした",
+  "ui.library_folders.default": "既定",
+  "ui.library_folders.move_title_one": "{count} 本のゲームを「{folder}」に移動しますか？",
+  "ui.library_folders.move_title_other": "{count} 本のゲームを「{folder}」に移動しますか？",
+  "ui.library_folders.move_description": "各ゲームのフォルダーを 1 本ずつ {path} に移動します。実行中または処理中のゲームはそのままです。",
+  "ui.library_folders.move_confirm": "移動",
+  "ui.library_folders.cancel": "キャンセル",
+  "ui.library_folders.move_failed": "一部のゲームを移動できませんでした",
+  "ui.library_folders.nothing_to_move": "これらのゲームはどれもそこへ移動できません",
+  "ui.library_folders.moved_one": "{count} 本のゲームを「{folder}」に移動しました",
+  "ui.library_folders.moved_other": "{count} 本のゲームを「{folder}」に移動しました"
 }

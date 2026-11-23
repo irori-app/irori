@@ -316,6 +316,7 @@
   "game.install.password_failed": "Nie udało się zapisać hasła gałęzi",
   "game.install.password_placeholder": "Hasło gałęzi prywatnej",
   "game.install.path_placeholder": "Folder na grę",
+  "game.install.library_folder": "Folder biblioteki",
   "game.install.pin": "Zachowaj określoną wersję gry",
   "game.install.package": "Pakiet",
   "game.install.pin_failed": "Nie udało się zmienić przypięcia wersji",

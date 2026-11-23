@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Wähle die anderen Kopien von „{title}“ und dann „Als ein Spiel zusammenfassen“.",
   "library.bulk.combine": "Als ein Spiel zusammenfassen",
   "library.bulk.combine_tooltip": "Die ausgewählten Spiele als Kopien eines Spiels aus ihren Stores anzeigen",
+  "library.bulk.move": "Verschieben nach",
+  "library.bulk.move_tooltip": "Die ausgewählten installierten Spiele in einen Bibliotheksordner verschieben",
   "library.bulk.details.failed_one": "{count} Spiel konnte nicht gelesen werden.",
   "library.bulk.details.failed_other": "{count} Spiele konnten nicht gelesen werden.",
   "library.bulk.details.link_failed": "Steam konnte nicht durchsucht werden",

@@ -316,6 +316,7 @@
   "game.install.password_failed": "无法保存分支密码",
   "game.install.password_placeholder": "私有分支密码",
   "game.install.path_placeholder": "游戏安装文件夹",
+  "game.install.library_folder": "库文件夹",
   "game.install.pin": "将游戏保持在特定版本",
   "game.install.package": "安装包",
   "game.install.pin_failed": "无法更改版本固定",
