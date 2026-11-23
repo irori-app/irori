@@ -102,6 +102,54 @@ fn dedup(mut dirs: Vec<PathBuf>) -> Vec<PathBuf> {
     dirs
 }
 
+/// The Steam installs whose builds are offered: the one Irori uses, then on
+/// Linux every other native, Flatpak or Snap Steam under `home` that lists
+/// its libraries. A Valve Proton installed by a Steam that isn't the chosen
+/// one (the Flatpak, while the setting still names the native folder) is
+/// still on disk and still runs games.
+fn steam_installs(steam: &Path, home: &Path) -> Vec<PathBuf> {
+    let mut installs = vec![steam.to_path_buf()];
+    if cfg!(target_os = "linux") {
+        installs.extend(
+            irori_core::platform::linux_steam_dirs(home)
+                .into_iter()
+                .filter(|d| d.join("steamapps/libraryfolders.vdf").is_file()),
+        );
+    }
+    let mut seen = std::collections::HashSet::new();
+    installs.retain(|d| seen.insert(locations::canonical(d)));
+    installs
+}
+
+/// Folders of compatibility tools outside Steam's libraries: each known
+/// Steam's `compatibilitytools.d`, the folders `STEAM_EXTRA_COMPAT_TOOLS_PATHS`
+/// names (colon-separated, as Steam reads it; NixOS and other distributions
+/// put packaged Protons there), and the system's.
+pub fn steam_compat_dirs(steam: &Path, home: &Path, extra: Option<&str>) -> Vec<PathBuf> {
+    let flatpak = home.join(".var/app/com.valvesoftware.Steam");
+    let mut dirs = vec![
+        steam.join("compatibilitytools.d"),
+        home.join(".steam/root/compatibilitytools.d"),
+        home.join(".local/share/Steam/compatibilitytools.d"),
+        flatpak.join("data/Steam/compatibilitytools.d"),
+        flatpak.join(".local/share/Steam/compatibilitytools.d"),
+        home.join("snap/steam/common/.local/share/Steam/compatibilitytools.d"),
+    ];
+    dirs.extend(
+        extra
+            .unwrap_or_default()
+            .split(':')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(irori_core::paths::expand_home),
+    );
+    dirs.push(PathBuf::from("/usr/share/steam/compatibilitytools.d"));
+    dirs.push(PathBuf::from("/usr/local/share/steam/compatibilitytools.d"));
+    let mut seen = std::collections::HashSet::new();
+    dirs.retain(|d| seen.insert(d.clone()));
+    dirs
+}
+
 impl ScanRoots {
     /// The real locations on this system for `app`'s settings.
     pub fn for_settings(app: &AppSettings) -> Self {
@@ -121,14 +169,17 @@ impl ScanRoots {
             ]),
             heroic_wine: heroic.iter().map(|d| d.join("wine")).collect(),
             heroic_proton: heroic.iter().map(|d| d.join("proton")).collect(),
-            steam_libraries: crate::vdf::steam_libraries(&steam),
-            steam_compat_dirs: vec![
-                steam.join("compatibilitytools.d"),
-                home.join(".steam/root/compatibilitytools.d"),
-                home.join(".local/share/Steam/compatibilitytools.d"),
-                home.join(".var/app/com.valvesoftware.Steam/data/Steam/compatibilitytools.d"),
-                PathBuf::from("/usr/share/steam/compatibilitytools.d"),
-            ],
+            steam_libraries: steam_installs(&steam, &home)
+                .iter()
+                .flat_map(|install| crate::vdf::steam_libraries(install))
+                .collect(),
+            steam_compat_dirs: steam_compat_dirs(
+                &steam,
+                &home,
+                std::env::var("STEAM_EXTRA_COMPAT_TOOLS_PATHS")
+                    .ok()
+                    .as_deref(),
+            ),
             show_valve_proton: app.show_valve_proton,
             lutris: vec![
                 dirs::data_dir()
@@ -539,7 +590,20 @@ pub fn scan(roots: &ScanRoots) -> Vec<DiscoveredWine> {
         );
     }
     for d in &roots.steam_compat_dirs {
-        scan_proton_dir(d, WineSource::Steam, &mut out);
+        // `STEAM_EXTRA_COMPAT_TOOLS_PATHS` may name a build itself rather
+        // than a folder of them.
+        if d.join("proton").is_file() {
+            let name = d
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            out.push(DiscoveredWine {
+                installation: proton_build(d, &name),
+                source: WineSource::Steam,
+            });
+        } else {
+            scan_proton_dir(d, WineSource::Steam, &mut out);
+        }
     }
     for d in &roots.irori_wine {
         scan_wine_dir(d, WineSource::Irori, &mut out);
@@ -777,6 +841,61 @@ mod tests {
         assert!(list.iter().any(|w| w.installation.name == "Proton 9.0"));
         let installs: Vec<WineInstallation> = list.into_iter().map(|w| w.installation).collect();
         assert_eq!(recommended(&installs).unwrap().name, "GE-Proton10-2");
+    }
+
+    /// Heroic #5988: builds Steam itself would find through
+    /// `STEAM_EXTRA_COMPAT_TOOLS_PATHS` (a folder of tools, or one tool).
+    #[test]
+    fn extra_compat_tool_paths_are_scanned() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let home = root.join("home");
+        touch(&root.join("nix/tools/GE-Proton10-1/proton"));
+        touch(&root.join("nix/proton-cachyos/proton"));
+        let extra = format!(
+            "{}::{} ",
+            root.join("nix/tools").display(),
+            root.join("nix/proton-cachyos").display()
+        );
+        let dirs = steam_compat_dirs(&home.join(".steam/steam"), &home, Some(&extra));
+        assert!(dirs.contains(&root.join("nix/tools")));
+        assert!(dirs.contains(&root.join("nix/proton-cachyos")));
+        assert!(
+            dirs.contains(&home.join("snap/steam/common/.local/share/Steam/compatibilitytools.d"))
+        );
+        assert_eq!(
+            dirs.last(),
+            Some(&PathBuf::from(
+                "/usr/local/share/steam/compatibilitytools.d"
+            ))
+        );
+        let roots = ScanRoots {
+            steam_compat_dirs: dirs,
+            ..Default::default()
+        };
+        let names: Vec<String> = finalize(scan(&roots))
+            .into_iter()
+            .map(|w| w.installation.name)
+            .collect();
+        assert!(names.contains(&"GE-Proton10-1".to_string()));
+        assert!(names.contains(&"proton-cachyos".to_string()));
+        assert!(steam_compat_dirs(Path::new("/s"), Path::new("/h"), None).len() >= 8);
+    }
+
+    /// Heroic #5953: Valve's Proton from a Flatpak Steam is offered while
+    /// the setting still names the native Steam's folder.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn every_steam_install_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let native = home.join(".steam/steam");
+        std::fs::create_dir_all(native.join("steamapps")).unwrap();
+        let flatpak = home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam");
+        touch(&flatpak.join("steamapps/libraryfolders.vdf"));
+        let installs = steam_installs(&native, home);
+        assert_eq!(installs, vec![native.clone(), flatpak]);
+        assert_eq!(steam_installs(&native, home).len(), 2, "listed once");
     }
 
     #[test]
