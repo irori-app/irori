@@ -899,6 +899,8 @@
   "library.folder.found_other": "{count} jogos encontrados em {folder}.",
   "library.folder.select_all": "Selecionar tudo",
   "library.folder.select_none": "Desmarcar tudo",
+  "library.folder.rename": "Renomear",
+  "library.folder.choose_program": "Iniciar com outro programa",
   "library.folder.find_art": "Buscar capas online (PCGamingWiki e Steam)",
   "library.folder.skipped_hint": "Instaladores, desinstaladores, redistribuíveis e gerenciadores de falhas não são listados. Você pode mudar o programa de um jogo depois em Editar.",
   "library.folder.add_one": "Adicionar 1 jogo",

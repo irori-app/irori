@@ -899,6 +899,8 @@
   "library.folder.found_other": "Znalezione gry w {folder}: {count}",
   "library.folder.select_all": "Zaznacz wszystko",
   "library.folder.select_none": "Odznacz wszystko",
+  "library.folder.rename": "Zmień nazwę",
+  "library.folder.choose_program": "Uruchamiaj innym programem",
   "library.folder.find_art": "Szukaj okładek online (PCGamingWiki i Steam)",
   "library.folder.skipped_hint": "Instalatory, deinstalatory, pakiety redystrybucyjne i programy obsługi awarii nie są wyświetlane. Program gry możesz później zmienić w Edytuj.",
   "library.folder.add_one": "Dodaj 1 grę",

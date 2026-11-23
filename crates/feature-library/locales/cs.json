@@ -899,6 +899,8 @@
   "library.folder.found_other": "Nalezené hry ve složce {folder}: {count}",
   "library.folder.select_all": "Vybrat vše",
   "library.folder.select_none": "Zrušit výběr",
+  "library.folder.rename": "Přejmenovat",
+  "library.folder.choose_program": "Spouštět jiným programem",
   "library.folder.find_art": "Najít obal online (PCGamingWiki a Steam)",
   "library.folder.skipped_hint": "Instalátory, odinstalátory, redistribuovatelné balíčky a obsluhy pádů se nezobrazují. Program hry můžete později změnit přes Upravit.",
   "library.folder.add_one": "Přidat 1 hru",

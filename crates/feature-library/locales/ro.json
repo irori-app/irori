@@ -899,6 +899,8 @@
   "library.folder.found_other": "Jocuri găsite în {folder}: {count}",
   "library.folder.select_all": "Selectează tot",
   "library.folder.select_none": "Deselectează tot",
+  "library.folder.rename": "Redenumește",
+  "library.folder.choose_program": "Pornește cu alt program",
   "library.folder.find_art": "Caută coperte online (PCGamingWiki și Steam)",
   "library.folder.skipped_hint": "Programele de instalare și dezinstalare, pachetele redistribuibile și gestionarele de erori nu sunt afișate. Poți schimba ulterior programul unui joc din Editează.",
   "library.folder.add_one": "Adaugă 1 joc",

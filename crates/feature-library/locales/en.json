@@ -899,6 +899,8 @@
   "library.folder.found_other": "{count} games were found in {folder}.",
   "library.folder.select_all": "Select all",
   "library.folder.select_none": "Select none",
+  "library.folder.rename": "Rename",
+  "library.folder.choose_program": "Start with another program",
   "library.folder.find_art": "Find cover art online (PCGamingWiki and Steam)",
   "library.folder.skipped_hint": "Installers, uninstallers, redistributables and crash handlers aren’t listed. You can change a game’s program later with Edit.",
   "library.folder.add_one": "Add 1 game",
