@@ -203,15 +203,18 @@ mod tests {
         // Windows runs Windows programs itself.
         let native = plan(&action("/opt/tool", "a 'b c'", true), HostPlatform::Windows).unwrap();
         assert!(matches!(native, ActionRun::Program(_)));
+        // An absolute path on this system: `/opt/…` isn't one on Windows.
+        let dir = std::env::temp_dir().join("r2");
+        let program = dir.join("r2modman");
         let ActionRun::Program(spec) = plan(
-            &action("/opt/r2/r2modman", "--game ror2", false),
+            &action(&program.to_string_lossy(), "--game ror2", false),
             HostPlatform::Linux,
         )
         .unwrap() else {
             panic!("a program")
         };
-        assert_eq!(spec.program, std::path::PathBuf::from("/opt/r2/r2modman"));
-        assert_eq!(spec.cwd.as_deref(), Some(Path::new("/opt/r2")));
+        assert_eq!(spec.program, program);
+        assert_eq!(spec.cwd.as_deref(), Some(dir.as_path()));
         assert!(plan(&action(" ", "", false), HostPlatform::Linux).is_err());
     }
 }

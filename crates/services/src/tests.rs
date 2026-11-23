@@ -1310,6 +1310,7 @@ fn a_linked_steam_app_lends_its_screenshots() {
     b.set_steam_link_endpoints(irori_steam_api::Endpoints {
         api: server.base(),
         store: server.base(),
+        login: server.base(),
         assets: server.base(),
     });
     b.rebuild_library();
@@ -1380,6 +1381,7 @@ fn games_link_to_steam_by_exact_title_or_the_users_choice() {
     b.set_steam_link_endpoints(Endpoints {
         api: server.base(),
         store: server.base(),
+        login: server.base(),
         assets: server.base(),
     });
     b.rebuild_library();

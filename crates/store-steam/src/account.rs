@@ -1,10 +1,15 @@
-//! The Steam account signed in to Irori, which is optional: installed games
-//! need none. Signing in adds every game the account owns and the games its
-//! Steam Family shares, with Steam's playtime for each.
+//! The Steam account connected to Irori, which is optional: installed games
+//! need none. Connecting adds owned games, playtime, friends, and achievements
+//! using either:
 //!
-//! The account's tokens are kept in `session.json` in Steam's config folder
-//! (through `irori_secrets`); the games in `library.json` in its cache,
-//! so the library shows offline and before the first refresh.
+//! * a browser web session obtained from `store.steampowered.com/login/`
+//!   (supports private profiles and Steam Family), or
+//! * a personal Steam Web API key (no login session, never expires, requires a
+//!   public Game Details privacy setting, and does not include Steam Family).
+//!
+//! Credentials are kept in `session.json` in Steam's config folder (through
+//! `irori_secrets`); the games in `library.json` in its cache, so the library
+//! shows offline and before the first refresh.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -13,7 +18,7 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use irori_core::{Runner, SessionExpired, json_store};
-use irori_steam_api::{Client, OwnedGame, SharedApp, SteamError, TokenClaims, Tokens};
+use irori_steam_api::{Client, OwnedGame, SharedApp, SteamAuth, SteamError, TokenClaims};
 use serde::{Deserialize, Serialize};
 
 /// Renew the access token when it has less than this left.
@@ -26,18 +31,57 @@ pub(crate) const NOT_GAMES: [u32; 3] = [
     1070560, // Steam Linux Runtime
 ];
 
-/// A signed-in Steam account.
+/// How a connected Steam account authenticates with Steam's Web API.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum SessionAuth {
+    /// Web session cookies captured from Steam's official web sign-in page.
+    WebSession {
+        #[serde(rename = "accessToken")]
+        access_token: String,
+        #[serde(default, rename = "refreshCookie")]
+        refresh_cookie: Option<String>,
+    },
+    /// Personal Steam Web API key from `steamcommunity.com/dev/apikey`.
+    ApiKey {
+        #[serde(rename = "apiKey")]
+        api_key: String,
+    },
+    /// Saved by an older Irori build that used `IAuthenticationService`
+    /// tokens. Kept only so `init()` still shows the cached library until the
+    /// next refresh asks the user to reconnect cleanly.
+    Legacy,
+}
+
+impl SessionAuth {
+    fn legacy() -> Self {
+        Self::Legacy
+    }
+}
+
+impl fmt::Debug for SessionAuth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::WebSession { refresh_cookie, .. } => f
+                .debug_struct("WebSession")
+                .field("has_refresh_cookie", &refresh_cookie.is_some())
+                .finish_non_exhaustive(),
+            Self::ApiKey { .. } => f.debug_struct("ApiKey").finish_non_exhaustive(),
+            Self::Legacy => f.write_str("Legacy"),
+        }
+    }
+}
+
+/// A connected Steam account.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Session {
+    #[serde(default)]
     pub account_name: String,
     /// SteamID64, as text so JSON readers keep every digit.
     pub steamid: String,
-    pub refresh_token: String,
-    pub access_token: String,
-    /// Steam's remembered Steam Guard approval of this device.
-    #[serde(default)]
-    pub guard_data: Option<String>,
+    #[serde(default = "SessionAuth::legacy")]
+    pub auth: SessionAuth,
 }
 
 impl fmt::Debug for Session {
@@ -45,19 +89,8 @@ impl fmt::Debug for Session {
         f.debug_struct("Session")
             .field("account_name", &self.account_name)
             .field("steamid", &self.steamid)
-            .finish_non_exhaustive()
-    }
-}
-
-impl From<Tokens> for Session {
-    fn from(t: Tokens) -> Self {
-        Self {
-            account_name: t.account_name,
-            steamid: t.steamid.to_string(),
-            refresh_token: t.refresh_token,
-            access_token: t.access_token,
-            guard_data: t.guard_data,
-        }
+            .field("auth", &self.auth)
+            .finish()
     }
 }
 
@@ -67,21 +100,97 @@ impl Session {
             .parse()
             .context("The saved Steam account is damaged. Sign in again.")
     }
+
+    pub fn auth(&self) -> Option<SteamAuth<'_>> {
+        match &self.auth {
+            SessionAuth::WebSession { access_token, .. } => {
+                Some(SteamAuth::WebSession(access_token.as_str()))
+            }
+            SessionAuth::ApiKey { api_key } => Some(SteamAuth::ApiKey(api_key.as_str())),
+            SessionAuth::Legacy => None,
+        }
+    }
 }
 
-/// What the sign-in dialog hands to [`irori_core::Store::login`].
-pub fn login_input(tokens: Tokens) -> String {
-    serde_json::to_string(&Session::from(tokens)).unwrap_or_default()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebViewPayload {
+    steamid: String,
+    access_token: String,
+    #[serde(default)]
+    refresh_cookie: Option<String>,
 }
 
-/// Parse what [`login_input`] produced.
+/// Convert the JSON emitted by `irori-sign-in --steam-account` into the input
+/// accepted by [`irori_core::Store::login`].
+pub fn web_login_input(webview_payload_json: &str) -> Result<String> {
+    let payload: WebViewPayload = serde_json::from_str(webview_payload_json.trim())
+        .context("Steam didn't finish signing in. Try again.")?;
+    let steamid: u64 = payload
+        .steamid
+        .trim()
+        .parse()
+        .ok()
+        .filter(|&id| id > 0)
+        .context("Steam didn't return a valid account ID. Try again.")?;
+    let access_token = payload.access_token.trim().to_string();
+    anyhow::ensure!(
+        !access_token.is_empty(),
+        "Steam didn't finish signing in. Try again."
+    );
+    let refresh_cookie = payload
+        .refresh_cookie
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty());
+    let session = Session {
+        account_name: String::new(),
+        steamid: steamid.to_string(),
+        auth: SessionAuth::WebSession {
+            access_token,
+            refresh_cookie,
+        },
+    };
+    Ok(serde_json::to_string(&session).unwrap_or_default())
+}
+
+/// Build the input accepted by [`irori_core::Store::login`] for a personal
+/// Steam Web API key connection.
+pub fn api_key_login_input(steamid: u64, api_key: &str) -> String {
+    let session = Session {
+        account_name: String::new(),
+        steamid: steamid.to_string(),
+        auth: SessionAuth::ApiKey {
+            api_key: api_key.trim().to_string(),
+        },
+    };
+    serde_json::to_string(&session).unwrap_or_default()
+}
+
+/// Parse what [`web_login_input`] or [`api_key_login_input`] produced.
 pub(crate) fn parse_login_input(input: &str) -> Result<Session> {
     let session: Session = serde_json::from_str(input.trim())
-        .context("Sign in to Steam with the Steam sign-in in Irori")?;
+        .context("Connect to Steam using the Steam dialog in Irori")?;
     anyhow::ensure!(
-        !session.refresh_token.is_empty() && session.steamid().is_ok(),
+        session.steamid().is_ok(),
         "Steam didn't complete the sign-in. Try again."
     );
+    match &session.auth {
+        SessionAuth::WebSession { access_token, .. } => {
+            anyhow::ensure!(
+                !access_token.trim().is_empty(),
+                "Steam didn't complete the sign-in. Try again."
+            );
+        }
+        SessionAuth::ApiKey { api_key } => {
+            anyhow::ensure!(
+                !api_key.trim().is_empty(),
+                "Enter your Steam Web API key and try again."
+            );
+        }
+        SessionAuth::Legacy => {
+            anyhow::bail!("Connect to Steam using the Steam dialog in Irori");
+        }
+    }
     Ok(session)
 }
 
@@ -131,7 +240,6 @@ pub(crate) struct LibraryCache {
 pub(crate) struct AccountFiles {
     pub session: PathBuf,
     pub library: PathBuf,
-    pub device: PathBuf,
 }
 
 impl AccountFiles {
@@ -139,7 +247,6 @@ impl AccountFiles {
         Self {
             session: config.join("session.json"),
             library: cache.join("library.json"),
-            device: config.join("device.json"),
         }
     }
 
@@ -169,32 +276,57 @@ impl AccountFiles {
     }
 }
 
-/// The session with an access token valid for a while yet, renewed with
-/// the refresh token when needed. A refused refresh means the user has to
-/// sign in again.
-pub(crate) async fn fresh(client: &Client, session: &Session) -> Result<Option<Session>> {
-    let now = irori_core::util::unix_now();
-    let valid = TokenClaims::parse(&session.access_token)
-        .is_ok_and(|c| !c.is_expiring(now, RENEW_MARGIN.as_secs()));
-    if valid {
-        return Ok(None);
-    }
-    renew(client, session).await.map(Some)
+fn expired_error(message: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(SessionExpired::new(Runner::Steam, message.into()))
 }
 
-/// The session with a new access token (and the refresh token Steam
-/// replaced the old one with, if it did). Only this, the token service
-/// refusing the refresh token, means the user has to sign in again.
+/// Ensure the session has a usable credential.
+///
+/// * `ApiKey`: never expires by time, so returns `Ok(None)`.
+/// * `WebSession`: renews the access token via Steam's browser refresh
+///   redirect chain when `TokenClaims::is_expiring` is true.
+/// * `Legacy`: asks the user to sign in again cleanly via [`SessionExpired`].
+pub(crate) async fn fresh(client: &Client, session: &Session) -> Result<Option<Session>> {
+    match &session.auth {
+        SessionAuth::ApiKey { .. } => Ok(None),
+        SessionAuth::Legacy => Err(expired_error(
+            "Steam sign-in changed. Sign in to Steam again.",
+        )),
+        SessionAuth::WebSession { access_token, .. } => {
+            let now = irori_core::util::unix_now();
+            let valid = TokenClaims::parse(access_token)
+                .is_ok_and(|c| !c.is_expiring(now, RENEW_MARGIN.as_secs()));
+            if valid {
+                return Ok(None);
+            }
+            renew(client, session).await.map(Some)
+        }
+    }
+}
+
+/// Renew a web session using its `steamRefresh_steam` cookie. When there is no
+/// refresh cookie or Steam refuses it, returns [`SessionExpired`].
 pub(crate) async fn renew(client: &Client, session: &Session) -> Result<Session> {
-    match client
-        .renew_tokens(&session.refresh_token, session.steamid()?)
-        .await
-    {
+    let SessionAuth::WebSession { refresh_cookie, .. } = &session.auth else {
+        return Err(expired_error(
+            "Steam no longer accepts the saved sign-in. Sign in to Steam again.",
+        ));
+    };
+    let Some(refresh_cookie) = refresh_cookie.as_deref() else {
+        return Err(expired_error(
+            "Your Steam web session expired. Sign in to Steam again.",
+        ));
+    };
+    match client.refresh_web_session(refresh_cookie).await {
         Ok(renewed) => Ok(Session {
-            access_token: renewed.access_token,
-            refresh_token: renewed
-                .refresh_token
-                .unwrap_or_else(|| session.refresh_token.clone()),
+            auth: SessionAuth::WebSession {
+                access_token: renewed.access_token,
+                refresh_cookie: Some(
+                    renewed
+                        .refresh_cookie
+                        .unwrap_or_else(|| refresh_cookie.to_string()),
+                ),
+            },
             ..session.clone()
         }),
         Err(e) => Err(map_rejection(e)),
@@ -212,23 +344,33 @@ pub(crate) fn map_rejection(e: anyhow::Error) -> anyhow::Error {
     }
 }
 
-/// [`fetch_library`] with an access token that still works: when the Web
-/// API refuses the access token (it can be revoked or expire before its
-/// claims say), the token is renewed once with the refresh token and the
-/// library asked again. A Web API refusal alone never signs the user out;
-/// only the token service refusing the refresh token does. Returns the
-/// renewed session, which the caller must keep.
+/// [`fetch_library`] with recovery when a web access token is refused early:
+///
+/// * `WebSession`: if the Web API returns 401/403 (even when JWT claims still
+///   look valid, issue #165), renews the session once with
+///   `refresh_web_session` and retries. Only a refused refresh ends the
+///   session.
+/// * `ApiKey`: a 401/403 means the API key is invalid or revoked, so maps
+///   directly to [`SessionExpired`].
 pub(crate) async fn fetch_library_renewing(
     client: &Client,
     session: &Session,
 ) -> Result<(Vec<LibraryGame>, Option<Session>)> {
     match fetch_library(client, session).await {
-        Err(e) if is_refused(&e) => {
-            tracing::info!("Steam refused the access token; renewing it");
-            let renewed = renew(client, session).await?;
-            let games = fetch_library(client, &renewed).await?;
-            Ok((games, Some(renewed)))
-        }
+        Err(e) if is_refused(&e) => match &session.auth {
+            SessionAuth::WebSession { .. } => {
+                tracing::info!("Steam refused the web access token; renewing it");
+                let renewed = renew(client, session).await?;
+                let games = fetch_library(client, &renewed).await?;
+                Ok((games, Some(renewed)))
+            }
+            SessionAuth::ApiKey { .. } => Err(expired_error(
+                "Steam rejected your Web API key. Check the key or reconnect.",
+            )),
+            SessionAuth::Legacy => Err(expired_error(
+                "Steam sign-in changed. Sign in to Steam again.",
+            )),
+        },
         other => other.map(|games| (games, None)),
     }
 }
@@ -240,28 +382,35 @@ fn is_refused(e: &anyhow::Error) -> bool {
     )
 }
 
-/// Fetch the games the account owns and those its family shares.
+/// Fetch the games the account owns and, for web sessions, those its Steam
+/// Family shares.
 pub(crate) async fn fetch_library(client: &Client, session: &Session) -> Result<Vec<LibraryGame>> {
     let steamid = session.steamid()?;
-    let token = &session.access_token;
+    let auth = session
+        .auth()
+        .ok_or_else(|| expired_error("Steam sign-in changed. Sign in to Steam again."))?;
     let owned = client
-        .owned_games(token, steamid)
+        .owned_games(auth, steamid)
         .await
         .context("Couldn't read your Steam library")?;
-    // A family is optional; failing to read it keeps the owned games.
-    let shared = match client.family_group(token, steamid).await {
-        Ok(Some(group)) => client
-            .family_shared_apps(token, group, steamid)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::warn!("reading the Steam Family library: {e:#}");
+    // Steam Family APIs require an OAuth/web access token; API keys cannot
+    // read family groups.
+    let shared = match auth {
+        SteamAuth::WebSession(token) => match client.family_group(token, steamid).await {
+            Ok(Some(group)) => client
+                .family_shared_apps(token, group, steamid)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("reading the Steam Family library: {e:#}");
+                    Vec::new()
+                }),
+            Ok(None) => Vec::new(),
+            Err(e) => {
+                tracing::warn!("reading the Steam Family: {e:#}");
                 Vec::new()
-            }),
-        Ok(None) => Vec::new(),
-        Err(e) => {
-            tracing::warn!("reading the Steam Family: {e:#}");
-            Vec::new()
-        }
+            }
+        },
+        SteamAuth::ApiKey(_) => Vec::new(),
     };
     Ok(merge(owned, shared, steamid))
 }
@@ -305,55 +454,6 @@ fn merge(owned: Vec<OwnedGame>, shared: Vec<SharedApp>, steamid: u64) -> Vec<Lib
     games
 }
 
-/// This computer as Steam's device list shows it, with an identity kept in
-/// `device.json` so Steam sees the same device at every sign-in.
-pub(crate) fn device(files: &AccountFiles) -> irori_steam_api::DeviceInfo {
-    #[derive(Serialize, Deserialize)]
-    struct Device {
-        seed: String,
-    }
-    let seed = match json_store::read::<Device>(&files.device).ok().flatten() {
-        Some(d) => d.seed,
-        None => {
-            let seed = uuid::Uuid::new_v4().to_string();
-            if let Err(e) = json_store::write(&files.device, &Device { seed: seed.clone() }) {
-                tracing::warn!("saving the Steam device identity: {e:#}");
-            }
-            seed
-        }
-    };
-    let host = sysinfo::System::host_name().unwrap_or_default();
-    let friendly_name = if host.trim().is_empty() {
-        "Irori".to_string()
-    } else {
-        format!("Irori on {}", host.trim())
-    };
-    irori_steam_api::DeviceInfo {
-        friendly_name,
-        machine_id: machine_id(&seed),
-    }
-}
-
-/// The machine ID the Steam client sends: a binary KeyValues object of three
-/// hex digests. Derived from `seed`, so it is stable and reveals nothing
-/// about the computer.
-fn machine_id(seed: &str) -> Vec<u8> {
-    use sha1::{Digest as _, Sha1};
-    let mut out = Vec::new();
-    out.push(0x00);
-    out.extend_from_slice(b"MessageObject\0");
-    for key in ["BB3", "FF2", "3B3"] {
-        let digest = Sha1::digest(format!("{seed}{key}").as_bytes());
-        out.push(0x01);
-        out.extend_from_slice(key.as_bytes());
-        out.push(0x00);
-        out.extend_from_slice(hex::encode(digest).as_bytes());
-        out.push(0x00);
-    }
-    out.extend_from_slice(&[0x08, 0x08]);
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,20 +492,41 @@ mod tests {
     }
 
     #[test]
-    fn login_input_round_trips_without_leaking_in_debug() {
-        let tokens = Tokens {
-            account_name: "player".into(),
-            steamid: 76561197960265729,
-            refresh_token: "refresh-secret".into(),
-            access_token: "access-secret".into(),
-            guard_data: None,
-        };
-        let session = parse_login_input(&login_input(tokens)).unwrap();
-        assert_eq!(session.steamid().unwrap(), 76561197960265729);
-        assert_eq!(session.refresh_token, "refresh-secret");
-        let debug = format!("{session:?}");
-        assert!(!debug.contains("secret"), "{debug}");
+    fn web_and_api_key_inputs_round_trip_without_leaking_in_debug() {
+        let web_raw = r#"{"steamid":"76561197960265729","accessToken":"access-secret","refreshCookie":"76561197960265729%7C%7Crefresh-secret"}"#;
+        let web_input = web_login_input(web_raw).unwrap();
+        let web_session = parse_login_input(&web_input).unwrap();
+        assert_eq!(web_session.steamid().unwrap(), 76561197960265729);
+        assert_eq!(
+            web_session.auth(),
+            Some(SteamAuth::WebSession("access-secret"))
+        );
+        let web_debug = format!("{web_session:?}");
+        assert!(!web_debug.contains("secret"), "{web_debug}");
+
+        let key_input = api_key_login_input(76561197960265729, "0123456789ABCDEF0123456789ABCDEF");
+        let key_session = parse_login_input(&key_input).unwrap();
+        assert_eq!(key_session.steamid().unwrap(), 76561197960265729);
+        assert_eq!(
+            key_session.auth(),
+            Some(SteamAuth::ApiKey("0123456789ABCDEF0123456789ABCDEF"))
+        );
+        let key_debug = format!("{key_session:?}");
+        assert!(!key_debug.contains("0123456789"), "{key_debug}");
+
         assert!(parse_login_input("some pasted code").is_err());
+    }
+
+    #[test]
+    fn legacy_session_loads_as_legacy_and_cannot_be_used_as_login_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = AccountFiles::new(dir.path(), dir.path());
+        let legacy_json = r#"{"accountName":"olduser","steamid":"76561197960265729","refreshToken":"r","accessToken":"x"}"#;
+        std::fs::write(&files.session, legacy_json).unwrap();
+        let loaded = files.read_session().unwrap();
+        assert_eq!(loaded.account_name, "olduser");
+        assert!(loaded.auth().is_none());
+        assert!(parse_login_input(legacy_json).is_err());
     }
 
     #[test]
@@ -413,10 +534,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let files = AccountFiles::new(dir.path(), dir.path());
         assert!(files.read_session().is_none());
-        let session = parse_login_input(
-            r#"{"accountName":"a","steamid":"1","refreshToken":"r","accessToken":"x"}"#,
-        )
-        .unwrap();
+        let input = api_key_login_input(1, "0123456789abcdef0123456789abcdef");
+        let mut session = parse_login_input(&input).unwrap();
+        session.account_name = "a".into();
         files.write_session(&session).unwrap();
         assert_eq!(files.read_session().unwrap().account_name, "a");
         #[cfg(unix)]
@@ -431,17 +551,5 @@ mod tests {
         files.remove_session().unwrap();
         files.remove_session().unwrap();
         assert!(files.read_session().is_none());
-    }
-
-    #[test]
-    fn device_identity_is_stable() {
-        let dir = tempfile::tempdir().unwrap();
-        let files = AccountFiles::new(dir.path(), dir.path());
-        let first = device(&files);
-        let second = device(&files);
-        assert_eq!(first.machine_id, second.machine_id);
-        assert!(first.friendly_name.starts_with("Irori"));
-        assert!(first.machine_id.starts_with(b"\0MessageObject\0\x01BB3\0"));
-        assert!(first.machine_id.ends_with(&[0x08, 0x08]));
     }
 }
