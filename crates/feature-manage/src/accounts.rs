@@ -43,20 +43,24 @@ pub(crate) const ACCOUNT_STORES: [Runner; 7] = [
 /// Narrowest an account card gets before the grid drops a column, in rem.
 const MIN_CARD_REM: f32 = 20.;
 
-/// Icon used for a store across the management screens.
-pub(crate) fn store_icon(runner: Runner) -> IconName {
-    match runner {
-        Runner::Legendary => IconName::Gamepad2,
-        Runner::Gog => IconName::Store,
-        Runner::Nile => IconName::ShoppingBag,
-        Runner::Zoom => IconName::Package,
-        Runner::Itch => IconName::Gem,
-        Runner::Xbox => IconName::GamepadDirectional,
-        Runner::Steam => IconName::Joystick,
-        Runner::Sideload => IconName::FolderOpen,
-        Runner::Emulation => IconName::Gamepad,
-        Runner::Launchers => IconName::Rocket,
-    }
+/// Icon used for a store across the management screens: its mark where
+/// Irori has one (`irori_ui::components::StoreLogo`), else a generic icon.
+pub(crate) fn store_icon(runner: Runner) -> Icon {
+    irori_ui::components::runner_icon(
+        runner,
+        match runner {
+            Runner::Legendary => IconName::Gamepad2,
+            Runner::Gog => IconName::Store,
+            Runner::Nile => IconName::ShoppingBag,
+            Runner::Zoom => IconName::Package,
+            Runner::Itch => IconName::Gem,
+            Runner::Xbox => IconName::GamepadDirectional,
+            Runner::Steam => IconName::Joystick,
+            Runner::Sideload => IconName::FolderOpen,
+            Runner::Emulation => IconName::Gamepad,
+            Runner::Launchers => IconName::Rocket,
+        },
+    )
 }
 
 /// Whether an opt-in store is turned on (stores without a switch always are).
@@ -653,7 +657,7 @@ impl AccountsView {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(Icon::new(store_icon(runner)).text_color(theme.muted_foreground))
+                    .child(store_icon(runner).text_color(theme.muted_foreground))
                     .child(
                         div()
                             .flex_1()

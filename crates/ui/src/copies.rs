@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use gpui_kit::{App, Global};
+use gpui_kit::{App, Global, SharedString};
 use irori_core::{GameId, GameInfo, Runner};
 
 use crate::components::BadgeMark;
@@ -35,29 +35,51 @@ pub fn of(id: &GameId, cx: &App) -> Vec<Arc<GameInfo>> {
 
 /// What the badges on `game`'s cover name: each store its entry has a copy
 /// on, the default copy's first, with a ROM named by its emulator (else its
-/// system) instead of "Emulated".
+/// system) instead of "Emulated", and a third-party launcher's game by its
+/// launcher instead of "Launchers".
 pub fn badge_marks(game: &Arc<GameInfo>, cx: &App) -> Vec<BadgeMark> {
     let id = game.id();
-    let stores = stores(&id, cx);
-    if !stores.contains(&Runner::Emulation) {
-        return stores.into_iter().map(BadgeMark::Store).collect();
-    }
-    let copies = of(&id, cx);
-    let rom = copies
-        .iter()
-        .find(|c| c.runner() == Runner::Emulation)
-        .unwrap_or(game);
-    let emulator = engine_name(rom, cx).or_else(|| {
-        let system = irori_engines::systems::get(rom.system.as_deref()?)?;
-        Some(system.short.clone())
+    let copies = models(cx).library.read(cx).snapshot.copies_of(&id).to_vec();
+    let stores = stores_of(&id, &copies);
+    let launcher = stores.contains(&Runner::Launchers).then(|| {
+        let app = copies
+            .iter()
+            .find(|c| c.runner == Runner::Launchers)
+            .unwrap_or(&id);
+        SharedString::from(launcher_id(&app.app_name).to_string())
+    });
+    let emulator = stores.contains(&Runner::Emulation).then(|| {
+        let copies = of(&id, cx);
+        let rom = copies
+            .iter()
+            .find(|c| c.runner() == Runner::Emulation)
+            .unwrap_or(game);
+        let engine = engine_choice(rom, cx);
+        let name = engine_name(rom, cx).or_else(|| {
+            let system = irori_engines::systems::get(rom.system.as_deref()?)?;
+            Some(system.short.clone())
+        });
+        (name, engine.map(|e| SharedString::from(e.engine)))
     });
     stores
         .into_iter()
-        .map(|runner| match (&emulator, runner) {
-            (Some(name), Runner::Emulation) => BadgeMark::Emulator(name.clone().into()),
+        .map(|runner| match (runner, &launcher, &emulator) {
+            (Runner::Launchers, Some(id), _) => BadgeMark::Launcher(id.clone()),
+            (Runner::Emulation, _, Some((Some(name), engine))) => BadgeMark::Emulator {
+                name: name.clone().into(),
+                engine: engine.clone(),
+            },
             _ => BadgeMark::Store(runner),
         })
         .collect()
+}
+
+/// The launcher a third-party launcher's game belongs to, from its app name
+/// (`<launcher>:<id>`).
+fn launcher_id(app_name: &str) -> &str {
+    app_name
+        .split_once(':')
+        .map_or("", |(launcher, _)| launcher)
 }
 
 /// The stores `id`'s entry has a copy on, the default copy's first; just
@@ -149,6 +171,18 @@ fn file_name(copy: &GameInfo) -> Option<String> {
 /// the user set. `None` for other games and when neither says, so a label
 /// never waits on the disk.
 pub fn engine_name(copy: &GameInfo, cx: &App) -> Option<String> {
+    let choice = engine_choice(copy, cx)?;
+    let manifest = irori_engines::engine(&choice.engine)?;
+    Some(
+        match choice.core.as_deref().and_then(|core| manifest.core(core)) {
+            Some(core) => format!("{} · {}", manifest.name, core.name),
+            None => manifest.name.clone(),
+        },
+    )
+}
+
+/// The emulator (and core) that plays a ROM, as [`engine_name`] finds it.
+fn engine_choice(copy: &GameInfo, cx: &App) -> Option<irori_engines::EngineRef> {
     if copy.runner() != Runner::Emulation {
         return None;
     }
@@ -163,14 +197,7 @@ pub fn engine_name(copy: &GameInfo, cx: &App) -> Option<String> {
             let system = copy.system.as_deref()?;
             app.system_engines.get(system).cloned()
         })?;
-    let choice = irori_engines::EngineRef::parse(&chosen)?;
-    let manifest = irori_engines::engine(&choice.engine)?;
-    Some(
-        match choice.core.as_deref().and_then(|core| manifest.core(core)) {
-            Some(core) => format!("{} · {}", manifest.name, core.name),
-            None => manifest.name.clone(),
-        },
-    )
+    irori_engines::EngineRef::parse(&chosen)
 }
 
 /// Every copy of `id`'s entry with its label, the default one first; empty
@@ -494,5 +521,15 @@ mod tests {
             GameId::new(Runner::Steam, "2"),
         ];
         assert_eq!(stores_of(&id, &copies), vec![Runner::Steam, Runner::Gog]);
+    }
+
+    #[test]
+    fn launcher_games_are_badged_by_their_launcher() {
+        assert_eq!(launcher_id("battlenet:wow"), "battlenet");
+        assert_eq!(
+            launcher_id("xbox:Microsoft.Minesweeper_8wekyb3d8bbwe"),
+            "xbox"
+        );
+        assert_eq!(launcher_id("plain"), "");
     }
 }

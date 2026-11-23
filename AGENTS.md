@@ -1335,7 +1335,11 @@ cx.spawn_in(window, async move |this, cx| {
 - The available backdrops differ per platform; see the table in `docs/PLATFORMS.md`.
 
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
-`SectionTitle`, `ProgressSummary`, `StoreBadge`. Style helpers are in `style.rs`
+`SectionTitle`, `ProgressSummary`, `StoreBadge`, `StoreLogo`. Stores, launchers and
+emulators with a mark in `assets/brand/stores` (Simple Icons, CC0; sources and the
+rule for adding one in its `NOTICE.md`) are drawn with it, whole and in the text
+colour (`StoreLogo::icon`), in badges, store and account cards and the launcher cards;
+the rest keep their name in text. Style helpers are in `style.rs`
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
 in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
 (through `components::cover_radius`), `coverCaption` (full, title only or nothing; the

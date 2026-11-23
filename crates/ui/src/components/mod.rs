@@ -8,6 +8,7 @@ mod empty;
 mod page;
 mod status;
 mod store_badge;
+mod store_logo;
 
 pub use backdrop::{
     ArtBackdrop, BackdropInk, library_backdrop, library_backdrop_url, strongest_legible_weight,
@@ -22,3 +23,4 @@ pub use empty::EmptyState;
 pub use page::{PageHeader, SectionTitle};
 pub use status::{ProgressSummary, progress_text};
 pub use store_badge::{BadgeMark, BadgeRow, MAX_BADGES, StoreBadge, badge_row};
+pub use store_logo::{StoreLogo, runner_icon};

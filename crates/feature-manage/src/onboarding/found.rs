@@ -143,7 +143,7 @@ impl FoundSourcesView {
     fn row(
         &self,
         id: &'static str,
-        icon: IconName,
+        icon: impl Into<Icon>,
         title: SharedString,
         detail: SharedString,
         action: Option<AnyElement>,
@@ -154,7 +154,7 @@ impl FoundSourcesView {
             .id(id)
             .gap_3()
             .py_2()
-            .child(Icon::new(icon).text_color(muted))
+            .child(icon.into().text_color(muted))
             .child(
                 v_flex()
                     .flex_1()
@@ -328,9 +328,7 @@ impl FoundSourcesView {
                     .child(
                         h_flex()
                             .gap_3()
-                            .child(
-                                Icon::new(IconName::Import).text_color(cx.theme().muted_foreground),
-                            )
+                            .child(launcher.icon().text_color(cx.theme().muted_foreground))
                             .child(
                                 v_flex()
                                     .flex_1()

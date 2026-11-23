@@ -825,6 +825,10 @@ impl LaunchersSection {
             .child(
                 h_flex()
                     .gap_2()
+                    .children(
+                        irori_ui::components::StoreLogo::of_launcher(launcher.id())
+                            .map(|logo| logo.icon().text_color(muted)),
+                    )
                     .child(
                         div()
                             .flex_1()
