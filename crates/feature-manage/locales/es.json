@@ -454,6 +454,7 @@
   "manage.hub.tips.status": "Asigna a los juegos un estado, como jugando o terminado, para seguir tu lista pendiente.",
   "manage.hub.tips.journal": "Escribe notas sobre un juego en su página; aparecen en su cronología.",
   "manage.hub.tips.stats": "Estadísticas muestra en qué se fue tu tiempo, con un resumen del año.",
+  "manage.hub.tour": "Hazme un recorrido",
   "manage.onboarding.done.getting_started": "Abrir Primeros pasos",
   "manage.downloads.files.title": "Archivos",
   "manage.downloads.files.queued": "En espera",

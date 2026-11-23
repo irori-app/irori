@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Meegeleverde thema’s",
   "settings.about.tagline": "Een gamelauncher voor Linux. Gelicentieerd onder de MIT-licentie.",
   "settings.about.third_party": "Software van derden",
+  "settings.about.tour_help": "Een korte rondleiding door het hoofdvenster: waar alles staat en de sneltoets naar alles.",
+  "settings.about.tour": "Rondleiding",
   "settings.about.feedback.title": "Hulp en feedback",
   "settings.about.feedback.report": "Een probleem melden",
   "settings.about.feedback.report_help": "Opent een nieuwe melding op GitHub met de versie van Irori, je systeem en je grafische kaart al ingevuld. Er wordt niets verstuurd tot je hem daar indient.",

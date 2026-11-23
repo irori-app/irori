@@ -112,6 +112,7 @@
   "shell.palette.save_backups": "Копии сохранений {title}",
   "shell.palette.troubleshoot": "Устранить проблемы запуска {title}",
   "shell.palette.troubleshoot_keywords": "устранение проблема вылет ошибка исправить dll wine proton winetricks troubleshoot",
+  "shell.palette.tour": "Показать, что где",
   "shell.palette.graphics_mods": "ReShade и RenoDX для {title}",
   "shell.palette.graphics_mods_keywords": "reshade renodx hdr шейдеры графика моды фильтры",
   "shell.duration.minutes": "{minutes} мин",

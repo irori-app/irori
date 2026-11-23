@@ -83,6 +83,8 @@ pub(crate) enum PaletteTarget {
     Duplicates,
     /// The Getting started checklist.
     GettingStarted,
+    /// The guided tour of the main window.
+    Tour,
     /// Save the categories of both kinds to a file.
     ExportCategories,
     /// Merge the categories of a file.
@@ -437,6 +439,14 @@ impl Palette {
                 .keywords([t("shell.palette.getting_started_keywords")])
                 .icon(IconName::Sparkles),
             PaletteTarget::GettingStarted,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.tour"))
+                .keywords([t("shell.palette.getting_started_keywords")])
+                .icon(IconName::Compass),
+            PaletteTarget::Tour,
             targets,
         );
         push(
@@ -1067,6 +1077,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
+        PaletteTarget::Tour => irori_ui::tour::start(window, cx),
         PaletteTarget::ExportCategories => irori_library::export_categories(window, cx),
         PaletteTarget::ImportCategories => irori_library::import_categories(window, cx),
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),

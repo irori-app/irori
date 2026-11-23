@@ -492,7 +492,23 @@ impl GettingStarted {
         ];
         v_flex()
             .gap_2()
-            .child(div().font_semibold().child(t("manage.hub.tips.title")))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .justify_between()
+                    .child(div().font_semibold().child(t("manage.hub.tips.title")))
+                    .child(
+                        Button::new("hub-tour")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Compass)
+                            .label(t("manage.hub.tour"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                irori_ui::tour::start(window, cx);
+                            }),
+                    ),
+            )
             .children(tips.into_iter().map(|(icon, text)| {
                 h_flex()
                     .gap_3()

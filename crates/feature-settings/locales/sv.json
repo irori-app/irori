@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Medföljande teman",
   "settings.about.tagline": "En spelstartare för Linux. Licensierad under MIT-licensen.",
   "settings.about.third_party": "Programvara från tredje part",
+  "settings.about.tour_help": "En kort rundtur i huvudfönstret: var saker finns och kortkommandot till allt.",
+  "settings.about.tour": "Visa mig runt",
   "settings.about.feedback.title": "Hjälp och feedback",
   "settings.about.feedback.report": "Rapportera ett problem",
   "settings.about.feedback.report_help": "Öppnar ett nytt ärende på GitHub med Iroris version, ditt system och din grafik ifyllda. Inget skickas förrän du skickar in det där.",

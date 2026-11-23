@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "內建主題",
   "settings.about.tagline": "適用於 Linux 的遊戲啟動器。依 MIT 授權條款釋出。",
   "settings.about.third_party": "第三方軟體",
+  "settings.about.tour_help": "主視窗簡短導覽：各部分的位置，以及通往一切的快捷鍵。",
+  "settings.about.tour": "帶我看看",
   "settings.about.feedback.title": "說明與意見回饋",
   "settings.about.feedback.report": "回報問題",
   "settings.about.feedback.report_help": "在 GitHub 上開啟新問題，已填入 Irori 版本、系統與顯示卡資訊。在那裡送出之前不會傳送任何內容。",

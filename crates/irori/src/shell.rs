@@ -595,6 +595,7 @@ impl AppShell {
                     .gap_1()
                     .when(collapsed, |d| d.flex_col())
                     .child(sidebar::big_picture_button(collapsed, cx))
+                    .child(irori_ui::tour::mark(irori_ui::tour::anchors::BIG_PICTURE))
                     .child(
                         Button::new("toggle-sidebar")
                             .ghost()
@@ -609,6 +610,7 @@ impl AppShell {
                             ),
                     ),
             )
+            .child(irori_ui::tour::mark(irori_ui::tour::anchors::SIDEBAR))
     }
 }
 
@@ -675,19 +677,24 @@ fn title_bar_content(
                 ),
         )
         .child(
-            h_flex().flex_1().min_w_0().justify_center().child(
-                Button::new("open-palette")
-                    .debug_selector(|| "open-palette".into())
-                    .outline()
-                    .small()
-                    .w(rems(22.))
-                    .min_w_0()
-                    .flex_shrink(1.)
-                    .icon(IconName::Search)
-                    .label(t("shell.search.placeholder"))
-                    .tooltip("Ctrl+K")
-                    .on_click(open_palette),
-            ),
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .justify_center()
+                .child(
+                    Button::new("open-palette")
+                        .debug_selector(|| "open-palette".into())
+                        .outline()
+                        .small()
+                        .w(rems(22.))
+                        .min_w_0()
+                        .flex_shrink(1.)
+                        .icon(IconName::Search)
+                        .label(t("shell.search.placeholder"))
+                        .tooltip("Ctrl+K")
+                        .on_click(open_palette),
+                )
+                .child(irori_ui::tour::mark(irori_ui::tour::anchors::PALETTE)),
         )
         .child(
             h_flex()
@@ -847,6 +854,9 @@ impl Render for AppShell {
             })
             .child(self.hold_hint.clone())
             .child(self.middle_scroll.element(middle_scroll))
+            .when(irori_ui::tour::running(cx), |this| {
+                this.child(irori_ui::tour::tour(cx))
+            })
     }
 }
 

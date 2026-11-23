@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Birlikte gelen temalar",
   "settings.about.tagline": "Linux için bir oyun başlatıcı. MIT lisansıyla dağıtılır.",
   "settings.about.third_party": "Üçüncü taraf yazılımlar",
+  "settings.about.tour_help": "Ana pencerede kısa bir tur: neyin nerede olduğu ve her şeye giden kısayol.",
+  "settings.about.tour": "Bana etrafı göster",
   "settings.about.feedback.title": "Yardım ve geri bildirim",
   "settings.about.feedback.report": "Sorun bildir",
   "settings.about.feedback.report_help": "GitHub’da Irori sürümü, sisteminiz ve ekran kartınız doldurulmuş yeni bir kayıt açar. Orada göndermediğiniz sürece hiçbir şey gönderilmez.",

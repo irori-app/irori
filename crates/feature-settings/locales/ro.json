@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Teme incluse",
   "settings.about.tagline": "Un lansator de jocuri pentru Linux. Licențiat sub licența MIT.",
   "settings.about.third_party": "Software terț",
+  "settings.about.tour_help": "Un scurt tur al ferestrei principale: unde se află lucrurile și scurtătura către orice.",
+  "settings.about.tour": "Arată-mi aplicația",
   "settings.about.feedback.title": "Ajutor și feedback",
   "settings.about.feedback.report": "Raportează o problemă",
   "settings.about.feedback.report_help": "Deschide o problemă nouă pe GitHub cu versiunea Irori, sistemul și placa grafică deja completate. Nu se trimite nimic până nu o trimiți acolo.",

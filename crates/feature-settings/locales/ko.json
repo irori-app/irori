@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "기본 제공 테마",
   "settings.about.tagline": "Linux용 게임 런처입니다. MIT 라이선스가 적용됩니다.",
   "settings.about.third_party": "타사 소프트웨어",
+  "settings.about.tour_help": "기본 창 둘러보기: 무엇이 어디에 있는지와 모든 것을 위한 단축키.",
+  "settings.about.tour": "둘러보기",
   "settings.about.feedback.title": "도움말 및 피드백",
   "settings.about.feedback.report": "문제 신고",
   "settings.about.feedback.report_help": "Irori 버전, 시스템, 그래픽 정보가 채워진 새 이슈를 GitHub에서 엽니다. 그곳에서 제출하기 전에는 아무것도 전송되지 않습니다.",

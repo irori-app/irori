@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Mitgelieferte Designs",
   "settings.about.tagline": "Ein Spiele-Launcher für Linux. Lizenziert unter der MIT-Lizenz.",
   "settings.about.third_party": "Software von Drittanbietern",
+  "settings.about.tour_help": "Ein kurzer Rundgang durchs Hauptfenster: wo was ist und das Kürzel zu allem.",
+  "settings.about.tour": "Rundgang starten",
   "settings.about.feedback.title": "Hilfe und Feedback",
   "settings.about.feedback.report": "Problem melden",
   "settings.about.feedback.report_help": "Öffnet ein neues Issue auf GitHub, in dem Irori-Version, System und Grafik schon eingetragen sind. Gesendet wird erst, wenn du es dort abschickst.",

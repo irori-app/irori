@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Přibalené motivy",
   "settings.about.tagline": "Spouštěč her pro Linux. Licencováno pod licencí MIT.",
   "settings.about.third_party": "Software třetích stran",
+  "settings.about.tour_help": "Krátká prohlídka hlavního okna: kde co je a zkratka ke všemu.",
+  "settings.about.tour": "Provést po aplikaci",
   "settings.about.feedback.title": "Nápověda a zpětná vazba",
   "settings.about.feedback.report": "Nahlásit problém",
   "settings.about.feedback.report_help": "Otevře nové hlášení na GitHubu s vyplněnou verzí Irori, systémem a grafikou. Nic se neodešle, dokud ho tam neodešlete.",

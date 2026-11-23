@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Bundled themes",
   "settings.about.tagline": "A game launcher for Linux. Licensed under the MIT License.",
   "settings.about.third_party": "Third-party software",
+  "settings.about.tour_help": "A short tour of the main window: where things are and the shortcut to everything.",
+  "settings.about.tour": "Show me around",
   "settings.about.feedback.title": "Help and feedback",
   "settings.about.feedback.report": "Report a problem",
   "settings.about.feedback.report_help": "Opens a new issue on GitHub with Irori’s version, your system and graphics filled in. Nothing is sent until you submit it there.",

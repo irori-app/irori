@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Встроенные темы",
   "settings.about.tagline": "Лаунчер игр для Linux. Распространяется по лицензии MIT.",
   "settings.about.third_party": "Стороннее ПО",
+  "settings.about.tour_help": "Краткий обзор главного окна: что где находится и сочетание клавиш для всего.",
+  "settings.about.tour": "Показать, что где",
   "settings.about.feedback.title": "Помощь и отзывы",
   "settings.about.feedback.report": "Сообщить о проблеме",
   "settings.about.feedback.report_help": "Открывает новую задачу на GitHub с уже указанными версией Irori, системой и видеокартой. Ничего не отправляется, пока вы не отправите её там.",
