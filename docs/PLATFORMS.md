@@ -1094,6 +1094,15 @@ mounted) fails the backup instead of being created. `state/backups.json` keeps t
 result and the version that ran last. Store sign-ins never go in, nor do the backup and
 sync settings, which belong to each computer.
 
+A backup records where the computer that made it kept its home folder and Irori's
+folders, and where store games were installed. Restored on another computer, another
+user, another system, or between the Flatpak (`~/.var/app/…`) and a native install, its
+paths are moved to this computer's; a path that can only belong to another system (a drive
+letter on Linux and macOS, `/home/…` on Windows) is left out so the default applies. The
+restore panel checks install folders, prefixes and Wine builds here first and lets the user
+locate a moved folder, which moves everything beside it too; installed games found again
+are attached to their stores.
+
 Sync shares favourites, hidden games, ratings, play statuses, categories, custom titles
 and web art, yearly goals, playtime and the play history between computers. Each
 computer writes one file, `Irori sync/<device id>.json`, into a folder another program
