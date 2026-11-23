@@ -275,6 +275,33 @@ pub fn open_install_folder(id: &GameId, window: &mut Window, cx: &mut App) {
     }
 }
 
+/// Open the folder holding most of the game's screenshots and clips; says
+/// so when none were taken yet. Finding it lists the screenshot folders,
+/// so it runs off the UI thread.
+pub fn open_captures_folder(id: &GameId, window: &mut Window, cx: &mut App) {
+    let (b, game) = (backend(cx), id.clone());
+    let title = title_of(id, cx);
+    run_reporting(
+        window,
+        cx,
+        t("game.ops.open_failed"),
+        async move {
+            let finder = b.clone();
+            b.spawn_blocking(move || finder.captures_folder(&game))
+                .await
+                .map_err(anyhow::Error::from)
+        },
+        move |folder, window, cx| match folder {
+            Some(folder) => open_path(folder, window, cx),
+            None => window.push_notification(
+                Notification::info(t_args("game.ops.no_captures", &[("title", &title)])),
+                cx,
+            ),
+        },
+    )
+    .detach();
+}
+
 /// Open the Wine prefix of a game in the file manager.
 pub fn open_prefix_folder(id: &GameId, window: &mut Window, cx: &mut App) {
     let b = backend(cx);

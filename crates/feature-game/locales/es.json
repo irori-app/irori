@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Partidas en la nube",
   "game.hero.save_backups": "Copias de partidas",
   "game.menu.links": "Enlaces…",
+  "game.menu.captures_folder": "Abrir la carpeta de capturas",
+  "game.ops.no_captures": "Aún no hay capturas ni clips de «{title}». Las que hagas mientras juegas se encuentran en las carpetas de Steam, del escritorio y del búfer de repetición.",
   "game.menu.steam_link": "Vincular con una app de Steam…",
   "game.menu.sync_saves": "Sincronizar partidas ahora",
   "game.menu.back_up_saves": "Hacer copia de las partidas ahora",

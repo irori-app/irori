@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Sauvegardes cloud",
   "game.hero.save_backups": "Copies des sauvegardes",
   "game.menu.links": "Liens…",
+  "game.menu.captures_folder": "Ouvrir le dossier des captures",
+  "game.ops.no_captures": "Aucune capture ni aucun clip de « {title} » pour l’instant. Ceux que vous prenez en jouant sont trouvés dans les dossiers de Steam, du bureau et de la mémoire de relecture.",
   "game.menu.steam_link": "Lier à une app Steam…",
   "game.menu.sync_saves": "Synchroniser les sauvegardes",
   "game.menu.back_up_saves": "Copier les sauvegardes maintenant",

@@ -955,7 +955,9 @@ commands without a window.
   session in `sessions.jsonl` it was taken in, by the time in its name or else its
   modified time. Folder listings are cached in `<cache>/screenshots.json` by the
   folder's modified time; matching is redone each build. The stats page's Album tab
-  and its insight card show them, and journal notes link them. Video files (mp4, mkv,
+  and its insight card show them, and journal notes link them; "Open screenshots
+  folder" (game menu, palette) opens the folder holding most of a game's captures
+  (`ScreenshotIndex::folder_of`, `Backend::captures_folder`). Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
   read the same way. A clip's `file://` address in the art store is its poster
   (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one

@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "ligações web página site wiki url adicionar",
   "shell.palette.detail_rows": "Escolher as linhas dos detalhes das páginas de jogo",
   "shell.palette.detail_rows_keywords": "detalhes linhas campos ocultar mostrar informação painel",
+  "shell.palette.captures_folder": "Abrir a pasta de capturas de {title}",
+  "shell.palette.captures_folder_keywords": "capturas clipes imagens pasta álbum",
   "shell.palette.link_picked": "Encontrar {count} jogos escolhidos na Steam pelo título",
   "shell.palette.refresh_picked": "Obter de novo os detalhes de {count} jogos escolhidos",
   "shell.palette.refresh_picked_keywords": "detalhes metadados atualizar obter igdb wiki",

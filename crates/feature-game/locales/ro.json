@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Salvări în cloud",
   "game.hero.save_backups": "Copiile salvărilor",
   "game.menu.links": "Linkuri…",
+  "game.menu.captures_folder": "Deschide dosarul cu capturi",
+  "game.ops.no_captures": "Încă nu există capturi sau clipuri din „{title}”. Cele făcute în timp ce joci sunt găsite în dosarele Steam, ale desktopului și ale bufferului de reluare.",
   "game.menu.steam_link": "Leagă de o aplicație Steam…",
   "game.menu.sync_saves": "Sincronizează salvările acum",
   "game.menu.back_up_saves": "Fă copie salvărilor acum",

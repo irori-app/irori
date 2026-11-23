@@ -285,6 +285,18 @@ impl Backend {
         crate::screenshots::build(&folders, &sessions, &Paths::get().screenshot_index_file())
     }
 
+    /// The folder holding most of the screenshots and clips of `id`'s
+    /// entry (any of its copies); `None` before any was taken. Lists the
+    /// folders; call off the UI thread.
+    pub fn captures_folder(&self, id: &GameId) -> Option<std::path::PathBuf> {
+        let library = self.library();
+        let mut keys: Vec<String> = library.copies_of(id).iter().map(GameId::key).collect();
+        if keys.is_empty() {
+            keys.push(id.key());
+        }
+        self.screenshots().folder_of(&keys)
+    }
+
     /// Refuse to touch the files of a game another launcher manages (Steam),
     /// before anything moves or is deleted.
     fn ensure_managed(id: &GameId) -> Result<()> {

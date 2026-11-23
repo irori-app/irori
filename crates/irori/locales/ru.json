@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "ссылки веб страница сайт вики url добавить",
   "shell.palette.detail_rows": "Выбрать строки в подробностях страниц игр",
   "shell.palette.detail_rows_keywords": "подробности строки поля скрыть показать информация панель",
+  "shell.palette.captures_folder": "Открыть папку со скриншотами {title}",
+  "shell.palette.captures_folder_keywords": "скриншоты снимки клипы изображения папка альбом",
   "shell.palette.link_picked": "Найти выбранные игры в Steam по названию ({count})",
   "shell.palette.refresh_picked": "Загрузить заново сведения выбранных игр ({count})",
   "shell.palette.refresh_picked_keywords": "сведения метаданные обновить загрузить igdb вики",

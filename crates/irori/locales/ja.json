@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "リンク web ページ サイト wiki url 追加",
   "shell.palette.detail_rows": "ゲームページの詳細に表示する行を選ぶ",
   "shell.palette.detail_rows_keywords": "詳細 行 項目 非表示 表示 情報 パネル",
+  "shell.palette.captures_folder": "{title} のスクリーンショットのフォルダーを開く",
+  "shell.palette.captures_folder_keywords": "スクリーンショット キャプチャ クリップ 画像 フォルダー アルバム",
   "shell.palette.link_picked": "選択した {count} 本のゲームをタイトルで Steam から探す",
   "shell.palette.refresh_picked": "選択した {count} 本のゲームの詳細を再取得",
   "shell.palette.refresh_picked_keywords": "詳細 メタデータ 更新 取得 igdb wiki",

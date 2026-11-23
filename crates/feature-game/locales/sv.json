@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Molnsparningar",
   "game.hero.save_backups": "Säkerhetskopior av sparfiler",
   "game.menu.links": "Länkar…",
+  "game.menu.captures_folder": "Öppna mappen med skärmbilder",
+  "game.ops.no_captures": "Inga skärmbilder eller klipp från ”{title}” ännu. De du tar medan du spelar hittas i Steams, skrivbordets och reprisbuffertens mappar.",
   "game.menu.steam_link": "Länka till Steam-app…",
   "game.menu.sync_saves": "Synka sparfiler nu",
   "game.menu.back_up_saves": "Säkerhetskopiera sparfiler nu",

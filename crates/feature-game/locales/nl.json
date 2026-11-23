@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Cloudopslag",
   "game.hero.save_backups": "Save-back-ups",
   "game.menu.links": "Links…",
+  "game.menu.captures_folder": "Map met schermafbeeldingen openen",
+  "game.ops.no_captures": "Nog geen schermafbeeldingen of clips van ‘{title}’. Wat je tijdens het spelen vastlegt, wordt gevonden in de mappen van Steam, het bureaublad en de replaybuffer.",
   "game.menu.steam_link": "Koppelen aan Steam-app…",
   "game.menu.sync_saves": "Opslagbestanden nu synchroniseren",
   "game.menu.back_up_saves": "Nu back-up van saves maken",

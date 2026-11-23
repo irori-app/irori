@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "odkazy web stránka wiki url přidat",
   "shell.palette.detail_rows": "Zvolit řádky v podrobnostech stránek her",
   "shell.palette.detail_rows_keywords": "podrobnosti řádky pole skrýt zobrazit informace panel",
+  "shell.palette.captures_folder": "Otevřít složku se snímky obrazovky hry {title}",
+  "shell.palette.captures_folder_keywords": "snímky obrazovky záznamy klipy obrázky složka album",
   "shell.palette.link_picked": "Najít vybrané hry na Steamu podle názvu ({count})",
   "shell.palette.refresh_picked": "Znovu načíst údaje vybraných her ({count})",
   "shell.palette.refresh_picked_keywords": "údaje metadata obnovit načíst igdb wiki znovu",

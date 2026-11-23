@@ -294,6 +294,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
     }
     push(
         Entry::new()
+            .label(t_args("shell.palette.captures_folder", &[("title", title)]))
+            .keywords([t("shell.palette.captures_folder_keywords")])
+            .icon(IconName::Images),
+        PaletteTarget::CapturesFolder(id.clone()),
+    );
+    push(
+        Entry::new()
             .label(t(if facts.hidden {
                 "shell.palette.unhide_game"
             } else {

@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Uložené hry v cloudu",
   "game.hero.save_backups": "Zálohy uložených pozic",
   "game.menu.links": "Odkazy…",
+  "game.menu.captures_folder": "Otevřít složku se snímky obrazovky",
+  "game.ops.no_captures": "Zatím žádné snímky ani klipy ze hry „{title}“. Ty, které pořídíte při hraní, se najdou ve složkách Steamu, plochy a záznamu opakování.",
   "game.menu.steam_link": "Propojit s aplikací Steam…",
   "game.menu.sync_saves": "Synchronizovat uložené pozice",
   "game.menu.back_up_saves": "Zálohovat uložené pozice teď",

@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Cloud-Spielstände",
   "game.hero.save_backups": "Spielstand-Sicherungen",
   "game.menu.links": "Links…",
+  "game.menu.captures_folder": "Screenshot-Ordner öffnen",
+  "game.ops.no_captures": "Noch keine Screenshots oder Clips von „{title}“. Was Sie beim Spielen aufnehmen, wird in den Ordnern von Steam, des Desktops und des Wiederholungspuffers gefunden.",
   "game.menu.steam_link": "Mit Steam-App verknüpfen…",
   "game.menu.sync_saves": "Spielstände jetzt synchronisieren",
   "game.menu.back_up_saves": "Spielstände jetzt sichern",

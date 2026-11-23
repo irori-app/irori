@@ -403,6 +403,11 @@ pub(super) fn build_menu(
         item("game.menu.links", IconName::ExternalLink)
             .on_click(move |_, window, cx| crate::links::open_links_dialog(i.clone(), window, cx)),
     );
+    let i = id.clone();
+    menu = menu.item(
+        item("game.menu.captures_folder", IconName::Images)
+            .on_click(move |_, window, cx| ops::open_captures_folder(&i, window, cx)),
+    );
     menu = menu.item(
         item("game.menu.detail_rows", IconName::Settings2)
             .on_click(|_, window, cx| crate::detail_rows::open_detail_rows_dialog(window, cx)),

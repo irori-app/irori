@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Облачные сохранения",
   "game.hero.save_backups": "Копии сохранений",
   "game.menu.links": "Ссылки…",
+  "game.menu.captures_folder": "Открыть папку со скриншотами",
+  "game.ops.no_captures": "Скриншотов и клипов «{title}» пока нет. Сделанные во время игры находятся в папках Steam, рабочего стола и буфера повтора.",
   "game.menu.steam_link": "Связать с приложением Steam…",
   "game.menu.sync_saves": "Синхронизировать сохранения",
   "game.menu.back_up_saves": "Скопировать сохранения сейчас",

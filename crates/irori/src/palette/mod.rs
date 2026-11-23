@@ -60,6 +60,8 @@ pub(crate) enum PaletteTarget {
     Hide(GameId, bool),
     /// Open a game's install folder in the file manager.
     OpenFolder(GameId),
+    /// Open the folder of a game's screenshots and clips.
+    CapturesFolder(GameId),
     Route(Route),
     Refresh,
     /// Choose which games to pick a random one from (a palette level).
@@ -936,6 +938,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Favourite(id, on) => irori_game::ops::set_favourite(&id, on, cx),
         PaletteTarget::Hide(id, on) => irori_game::ops::set_hidden(&id, on, cx),
         PaletteTarget::OpenFolder(id) => irori_game::ops::open_install_folder(&id, window, cx),
+        PaletteTarget::CapturesFolder(id) => irori_game::ops::open_captures_folder(&id, window, cx),
         // The palette's own levels; its view handles them.
         PaletteTarget::GameActions(_) | PaletteTarget::Back | PaletteTarget::RandomFrom(_) => {}
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),

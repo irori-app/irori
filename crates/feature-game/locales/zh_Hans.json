@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "云存档",
   "game.hero.save_backups": "存档备份",
   "game.menu.links": "链接…",
+  "game.menu.captures_folder": "打开截图文件夹",
+  "game.ops.no_captures": "“{title}”还没有截图或片段。游玩时拍摄的内容会在 Steam、桌面和回放缓冲的文件夹中找到。",
   "game.menu.steam_link": "关联到 Steam 应用…",
   "game.menu.sync_saves": "立即同步存档",
   "game.menu.back_up_saves": "立即备份存档",

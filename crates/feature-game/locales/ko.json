@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "클라우드 저장",
   "game.hero.save_backups": "세이브 백업",
   "game.menu.links": "링크…",
+  "game.menu.captures_folder": "스크린샷 폴더 열기",
+  "game.ops.no_captures": "“{title}”의 스크린샷이나 클립이 아직 없습니다. 플레이 중에 찍은 것은 Steam, 데스크톱, 리플레이 버퍼 폴더에서 찾습니다.",
   "game.menu.steam_link": "Steam 앱에 연결…",
   "game.menu.sync_saves": "지금 저장 파일 동기화",
   "game.menu.back_up_saves": "지금 세이브 백업",

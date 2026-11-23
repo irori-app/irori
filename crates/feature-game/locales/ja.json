@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "クラウドセーブ",
   "game.hero.save_backups": "セーブデータのバックアップ",
   "game.menu.links": "リンク…",
+  "game.menu.captures_folder": "スクリーンショットのフォルダーを開く",
+  "game.ops.no_captures": "「{title}」のスクリーンショットやクリップはまだありません。プレイ中に撮ったものは、Steam、デスクトップ、リプレイバッファーのフォルダーから見つかります。",
   "game.menu.steam_link": "Steam のアプリにリンク…",
   "game.menu.sync_saves": "セーブデータを今すぐ同期",
   "game.menu.back_up_saves": "今すぐセーブデータをバックアップ",

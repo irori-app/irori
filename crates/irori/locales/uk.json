@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "посилання веб сторінка сайт вікі url додати",
   "shell.palette.detail_rows": "Вибрати рядки в подробицях сторінок ігор",
   "shell.palette.detail_rows_keywords": "подробиці рядки поля сховати показати інформація панель",
+  "shell.palette.captures_folder": "Відкрити теку зі знімками екрана {title}",
+  "shell.palette.captures_folder_keywords": "знімки екрана кліпи зображення тека альбом",
   "shell.palette.link_picked": "Знайти вибрані ігри в Steam за назвою ({count})",
   "shell.palette.refresh_picked": "Завантажити знову відомості вибраних ігор ({count})",
   "shell.palette.refresh_picked_keywords": "відомості метадані оновити завантажити igdb вікі",

@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Хмарні збереження",
   "game.hero.save_backups": "Копії збережень",
   "game.menu.links": "Посилання…",
+  "game.menu.captures_folder": "Відкрити теку зі знімками екрана",
+  "game.ops.no_captures": "Знімків екрана й кліпів «{title}» ще немає. Зроблені під час гри знаходяться в теках Steam, робочого столу та буфера повтору.",
   "game.menu.steam_link": "Пов’язати з застосунком Steam…",
   "game.menu.sync_saves": "Синхронізувати збереження",
   "game.menu.back_up_saves": "Скопіювати збереження зараз",

@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "雲端存檔",
   "game.hero.save_backups": "存檔備份",
   "game.menu.links": "連結…",
+  "game.menu.captures_folder": "開啟螢幕截圖資料夾",
+  "game.ops.no_captures": "「{title}」還沒有螢幕截圖或片段。遊玩時拍攝的內容會在 Steam、桌面與重播緩衝的資料夾中找到。",
   "game.menu.steam_link": "連結到 Steam 應用程式…",
   "game.menu.sync_saves": "立即同步存檔",
   "game.menu.back_up_saves": "立即備份存檔",

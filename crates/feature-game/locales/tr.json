@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Bulut kayıtları",
   "game.hero.save_backups": "Kayıt yedekleri",
   "game.menu.links": "Bağlantılar…",
+  "game.menu.captures_folder": "Ekran görüntüsü klasörünü aç",
+  "game.ops.no_captures": "“{title}” için henüz ekran görüntüsü veya klip yok. Oynarken aldıklarınız Steam’in, masaüstünün ve tekrar arabelleğinin klasörlerinde bulunur.",
   "game.menu.steam_link": "Steam uygulamasına bağla…",
   "game.menu.sync_saves": "Kayıtları şimdi eşitle",
   "game.menu.back_up_saves": "Kayıtları şimdi yedekle",

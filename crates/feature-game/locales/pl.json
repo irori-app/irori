@@ -171,6 +171,8 @@
   "game.hero.cloud_saves": "Zapisy w chmurze",
   "game.hero.save_backups": "Kopie zapisów",
   "game.menu.links": "Linki…",
+  "game.menu.captures_folder": "Otwórz folder zrzutów ekranu",
+  "game.ops.no_captures": "Brak jeszcze zrzutów ekranu i klipów z „{title}”. Te zrobione podczas gry znajdują się w folderach Steama, pulpitu i bufora powtórek.",
   "game.menu.steam_link": "Połącz z aplikacją Steam…",
   "game.menu.sync_saves": "Synchronizuj zapisy teraz",
   "game.menu.back_up_saves": "Skopiuj zapisy teraz",

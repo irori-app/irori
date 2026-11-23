@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "bağlantılar web sayfa site wiki url ekle",
   "shell.palette.detail_rows": "Oyun sayfalarının Ayrıntılar satırlarını seç",
   "shell.palette.detail_rows_keywords": "ayrıntılar satırlar alanlar gizle göster bilgi panel",
+  "shell.palette.captures_folder": "{title} için ekran görüntüsü klasörünü aç",
+  "shell.palette.captures_folder_keywords": "ekran görüntüleri kayıtlar klipler resimler klasör albüm",
   "shell.palette.link_picked": "Seçili {count} oyunu Steam’de adıyla bul",
   "shell.palette.refresh_picked": "Seçili {count} oyunun ayrıntılarını yeniden getir",
   "shell.palette.refresh_picked_keywords": "ayrıntılar meta veri yenile getir igdb wiki",

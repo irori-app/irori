@@ -21,6 +21,8 @@
   "shell.palette.game_links_keywords": "連結 網頁 網站 wiki url 新增",
   "shell.palette.detail_rows": "選擇遊戲頁面詳細資訊中顯示的列",
   "shell.palette.detail_rows_keywords": "詳細資訊 列 欄位 隱藏 顯示 資訊 面板",
+  "shell.palette.captures_folder": "開啟 {title} 的螢幕截圖資料夾",
+  "shell.palette.captures_folder_keywords": "螢幕截圖 擷取 片段 圖片 資料夾 相簿",
   "shell.palette.link_picked": "依標題在 Steam 上尋找所選 {count} 款遊戲",
   "shell.palette.refresh_picked": "重新取得所選 {count} 款遊戲的詳細資料",
   "shell.palette.refresh_picked_keywords": "詳細資料 中繼資料 重新整理 取得 igdb wiki",
