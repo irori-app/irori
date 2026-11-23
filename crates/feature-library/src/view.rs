@@ -1033,6 +1033,9 @@ impl LibraryView {
                 dialogs::categories::open_new_category_dialog(id, window, cx)
             }
             GameCommand::Edit => dialogs::edit_game::open_edit_game_dialog(&id, window, cx),
+            GameCommand::EditMetadata => {
+                dialogs::metadata::open_metadata_dialog(vec![id], window, cx)
+            }
             GameCommand::RemoveFromRecent => {
                 irori_ui::state::run_infallible(cx, async move { b.userdata.remove_recent(&id) })
                     .detach();

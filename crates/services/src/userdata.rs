@@ -995,15 +995,33 @@ impl UserDataService {
 
     /// Replace a game's title, art and game modes. How it joins other
     /// stores' copies stays: [`UserDataService::combine_copies`] and its
-    /// siblings change that.
+    /// siblings change that; so do its links and details
+    /// ([`UserDataService::set_metadata`]).
     pub fn set_overrides(&self, id: &GameId, mut o: GameOverrides) {
         self.update(Some(id), |d| {
             if let Some(old) = d.overrides.get(&id.key()) {
                 o.copy_of = old.copy_of.clone();
                 o.default_copy = old.default_copy;
                 o.links = old.links.clone();
+                o.developer = old.developer.clone();
+                o.publisher = old.publisher.clone();
+                o.genres = old.genres.clone();
             }
             put_overrides(d, &id.key(), o);
+        });
+    }
+
+    /// Change the developer, publisher or genres of several games at once
+    /// ("Edit details…"); what `edit` leaves out stays.
+    pub fn set_metadata(&self, ids: &[GameId], edit: &irori_core::MetadataEdit) {
+        if ids.is_empty() || edit.is_empty() {
+            return;
+        }
+        // A game's event, so the library is rebuilt with the new details.
+        self.update(ids.first(), |d| {
+            for id in ids {
+                edit_overrides(d, &id.key(), |o| edit.apply(o));
+            }
         });
     }
 

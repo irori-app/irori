@@ -551,6 +551,33 @@ fn combined_and_separated_copies_travel_with_the_custom_title() {
 }
 
 #[test]
+fn edited_details_travel_with_the_custom_title() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "gog:1".into(),
+        GameOverrides {
+            developer: Some("Supergiant Games".into()),
+            genres: Some(vec!["Roguelike".into()]),
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(0));
+    let at_b = &b.data.overrides["gog:1"];
+    assert_eq!(at_b.developer.as_deref(), Some("Supergiant Games"));
+    assert_eq!(at_b.genres, Some(vec!["Roguelike".to_string()]));
+    // b gives the developer back to the store; a hears of it.
+    b.data.overrides.get_mut("gog:1").unwrap().developer = None;
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(a.data.overrides["gog:1"].developer, None);
+    assert_eq!(
+        a.data.overrides["gog:1"].genres,
+        Some(vec!["Roguelike".to_string()])
+    );
+}
+
+#[test]
 fn game_modes_the_user_set_travel_with_the_custom_title() {
     use irori_core::GameMode;
     let mut a = Device::new("a");

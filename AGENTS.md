@@ -780,6 +780,14 @@ commands without a window.
   section per game by `filter::mode_section`) and searches (`mode:coop`,
   `search::ParsedQuery`) by them; the game page shows them as chips that open the
   library filtered by one mode (`GamePageEvent::ShowGameMode`).
+- **Details the user sets** (`GameOverrides::developer`, `publisher`, `genres`;
+  `MetadataEdit`, `UserDataService::set_metadata`): "Developer, publisher and genres…"
+  (`irori_library::open_metadata_dialog`: the library's game menu, the bulk bar's Details
+  menu, the palette for one game or the picked ones) sets them for one game or many at
+  once; they win over the stores', the wikis' and IGDB's at the library rebuild, the game
+  page shows the user's genres over the store page's, the Modify dialog keeps them, and
+  they travel with sync in the overrides register. Emptying one gives it back to the
+  stores.
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is

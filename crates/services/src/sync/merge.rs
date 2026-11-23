@@ -913,6 +913,9 @@ pub fn shared_overrides(o: &GameOverrides) -> Option<GameOverrides> {
         default_copy: o.default_copy,
         // A register of their own.
         links: Vec::new(),
+        developer: o.developer.clone(),
+        publisher: o.publisher.clone(),
+        genres: o.genres.clone(),
     };
     (!shared.is_empty()).then_some(shared)
 }
@@ -934,6 +937,9 @@ fn with_local_art(shared: GameOverrides, local: &GameOverrides) -> GameOverrides
         copy_of: shared.copy_of,
         default_copy: shared.default_copy,
         links: Vec::new(),
+        developer: shared.developer,
+        publisher: shared.publisher,
+        genres: shared.genres,
     }
 }
 

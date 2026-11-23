@@ -199,7 +199,7 @@ impl GamePage {
         let hidden = crate::detail_rows::hidden(cx);
         let shows = |row: DetailRow| row.shown_in(&hidden);
         let credits = self.credit_rows(game, muted, &shows);
-        let tags = self.tag_rows(game, muted, &shows);
+        let tags = self.tag_rows(game, self.shown_genres(game, cx), muted, &shows);
         let steam_tags = if shows(DetailRow::SteamTags) {
             self.steam_tag_rows(game, muted, cx)
         } else {
@@ -356,16 +356,11 @@ impl GamePage {
     fn tag_rows(
         &self,
         game: &GameInfo,
+        genres: Vec<String>,
         muted: Hsla,
         shows: &dyn Fn(DetailRow) -> bool,
     ) -> Vec<AnyElement> {
         let mut rows = Vec::new();
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
         if !genres.is_empty() && shows(DetailRow::Genres) {
             rows.push(row(t("game.details.genres"), chips(genres), muted));
         }
@@ -387,12 +382,7 @@ impl GamePage {
     /// The game's Steam tags as chips, each showing the library's games with
     /// that tag; the strongest first, the rest behind "+N".
     fn steam_tag_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
+        let genres = self.shown_genres(game, cx);
         let tags = tag_chips(&game.store_tags, &genres, &game.game_modes);
         if tags.is_empty() {
             return Vec::new();
@@ -512,6 +502,26 @@ impl GamePage {
                 .children(buttons),
             muted,
         )]
+    }
+
+    /// The genres the page shows: the user's own, else the store page's,
+    /// else the library's.
+    pub(super) fn shown_genres(&self, game: &GameInfo, cx: &App) -> Vec<String> {
+        let own = models(cx)
+            .library
+            .read(cx)
+            .user
+            .overrides
+            .get(&self.id.key())
+            .is_some_and(|o| o.genres.is_some());
+        if own {
+            return game.genres.clone();
+        }
+        self.extra
+            .ready()
+            .map(|e| e.genres.clone())
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| game.genres.clone())
     }
 
     /// The release date in the interface language, or as the store wrote it

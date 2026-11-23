@@ -1,5 +1,6 @@
 //! Metadata actions on the picked games, from the bulk bar's Details menu
-//! and the command palette: "Fetch details again" (the wikis', IGDB's and
+//! and the command palette: "Edit details…" (their developer, publisher and
+//! genres, `dialogs::metadata`), "Fetch details again" (the wikis', IGDB's and
 //! the stores' answers read anew, `Backend::refresh_details`) and "Find on
 //! Steam by title" (each game linked to the Steam app of its exact title,
 //! `Backend::link_by_title`). Both run in the background and say how they
@@ -48,6 +49,15 @@ pub fn refresh_picked_details(window: &mut Window, cx: &mut App) {
             let ids = picked_ids(this);
             this.refresh_details_of(ids, window, cx)
         });
+    }
+}
+
+/// Edit the developer, publisher and genres of the picked games (the
+/// palette's command).
+pub fn edit_picked_metadata(window: &mut Window, cx: &mut App) {
+    if let Some(view) = active_library(cx) {
+        let ids = picked_ids(view.read(cx));
+        crate::dialogs::metadata::open_metadata_dialog(ids, window, cx);
     }
 }
 
@@ -165,8 +175,19 @@ impl LibraryView {
             .disabled(ids.is_empty())
             .dropdown_menu(move |menu, _, _| {
                 let (refresh, link) = (view.clone(), view.clone());
-                let (refresh_ids, link_ids) = (ids.clone(), ids.clone());
+                let (refresh_ids, link_ids, edit_ids) = (ids.clone(), ids.clone(), ids.clone());
                 menu.item(
+                    PopupMenuItem::new(t("library.bulk.details.edit"))
+                        .icon(IconName::Tags)
+                        .on_click(move |_, window, cx| {
+                            crate::dialogs::metadata::open_metadata_dialog(
+                                edit_ids.to_vec(),
+                                window,
+                                cx,
+                            )
+                        }),
+                )
+                .item(
                     PopupMenuItem::new(t("library.bulk.details.refresh"))
                         .icon(IconName::RefreshCw)
                         .on_click(move |_, window, cx| {

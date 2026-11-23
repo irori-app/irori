@@ -480,6 +480,8 @@ impl Backend {
                     }
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
+                    // After what was learned elsewhere: the user's details win.
+                    o.apply_metadata(&mut g);
                     let app = self.steam_links.linked(&g).app_id();
                     self.steam_tags
                         .complete(&mut g, tag_language, app, tag_limit);

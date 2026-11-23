@@ -131,6 +131,10 @@ pub(crate) enum PaletteTarget {
     RemovePicked,
     /// Read the picked games' details again.
     RefreshPicked,
+    /// Edit the developer, publisher and genres of the picked games.
+    EditPickedMetadata,
+    /// Edit the developer, publisher and genres of one game.
+    EditMetadata(GameId),
     /// Link the picked games to Steam by their titles.
     LinkPickedToSteam,
     /// Back up a game's saves with Ludusavi now.
@@ -844,6 +848,16 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         targets.push(PaletteTarget::RefreshPicked);
         items.push(
             Entry::new()
+                .label(t_args(
+                    "shell.palette.edit_picked_metadata",
+                    &[("count", &count)],
+                ))
+                .keywords([t("shell.palette.edit_metadata_keywords")])
+                .icon(IconName::Tags),
+        );
+        targets.push(PaletteTarget::EditPickedMetadata);
+        items.push(
+            Entry::new()
                 .label(t_args("shell.palette.link_picked", &[("count", &count)]))
                 .keywords([t("shell.palette.steam_link_keywords")])
                 .icon(IconName::Link),
@@ -958,6 +972,11 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         // After the palette's own dialog has closed.
         PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::RefreshPicked => irori_library::refresh_picked_details(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::EditPickedMetadata => window.defer(cx, irori_library::edit_picked_metadata),
+        PaletteTarget::EditMetadata(id) => window.defer(cx, move |window, cx| {
+            irori_library::open_metadata_dialog(vec![id], window, cx)
+        }),
         PaletteTarget::LinkPickedToSteam => irori_library::link_picked_to_steam(window, cx),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {

@@ -55,6 +55,7 @@ pub use dialogs::categories::open_categories_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::folder::open_add_folder_dialog;
 pub use dialogs::lutris::open_lutris_installer;
+pub use dialogs::metadata::open_metadata_dialog;
 pub use dialogs::sideload::open_add_game_dialog;
 pub use dialogs::sideload::open_play_as_pc_game_dialog;
 pub use dialogs::smart::open_smart_category_editor;
@@ -70,7 +71,9 @@ pub use random::{
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
-pub use view::details::{link_picked_to_steam, picked_count, refresh_picked_details};
+pub use view::details::{
+    edit_picked_metadata, link_picked_to_steam, picked_count, refresh_picked_details,
+};
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
