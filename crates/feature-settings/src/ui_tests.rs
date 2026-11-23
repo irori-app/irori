@@ -376,9 +376,9 @@ fn steam_game_settings_show_only_what_applies(cx: &mut TestAppContext) {
         GameSettingsView::new(id, "".into(), window, cx)
     });
     // Steam Play needs the Steam store (Linux); here no handle is installed,
-    // so the first section shown is Linux's Performance (the replay buffer)
-    // or Launch elsewhere.
-    let first = if cfg!(target_os = "linux") {
+    // so the first section shown is Performance (the replay buffer and the
+    // in-game stats on Linux and macOS) or Launch elsewhere.
+    let first = if cfg!(any(target_os = "linux", target_os = "macos")) {
         GameSection::Performance
     } else {
         GameSection::Launch
