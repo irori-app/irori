@@ -438,6 +438,17 @@ and `launch.rs` before changing anything below the UI.
 - Use `irori_core::http::client()`: shared, rustls, `Irori/<version>` user agent,
   10 s connect and 60 s total timeout. It must run inside the Tokio runtime.
 - Large downloads use `download_client()` (no total timeout) or `irori-depot`.
+- Both follow the network policy (`irori_core::net`, set from `iroriNetworkMode` and
+  `iroriNetworkTimeout` by the app's `SettingsService`, never by tests' backends):
+  the user's timeout replaces the 60 s ones, and while working offline their resolver
+  (`net::OfflineAwareResolver`) refuses every host but this computer with the typed
+  `net::WorkingOffline`. A new client of your own takes `.dns_resolver(net::resolver())`
+  and `net::request_timeout()`; protocol crates can't, so services gate their calls
+  (`Backend::working_offline`, `is_online`), and store crates check
+  `net::working_offline()` before their network parts (Steam's account, the Xbox
+  account). Working offline, `refresh_all` refreshes only Steam, launchers, ROMs and
+  added games, the download queue holds, WebDAV and rclone sync wait, and Epic's client
+  takes the timeout too.
 
 **Host programs** (`host.rs`): inside Irori's Flatpak the host's `/usr`, processes
 and other apps' `~/.var/app` folders are hidden. A program the user installed on the

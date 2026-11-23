@@ -129,6 +129,26 @@ pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdat
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 
+/// Whether a store's library refresh reads only this computer while Irori
+/// works offline: these stores read local files and leave their network
+/// parts (Steam's account, the Xbox account) out while working offline.
+fn refreshes_offline(runner: Runner) -> bool {
+    matches!(
+        runner,
+        Runner::Steam | Runner::Launchers | Runner::Emulation | Runner::Sideload
+    )
+}
+
+/// Whether the network mode settles being online without a probe: working
+/// offline never is, "always online" always is; `None` probes.
+fn decided_online(mode: irori_core::net::NetworkMode) -> Option<bool> {
+    match mode {
+        irori_core::net::NetworkMode::Offline => Some(false),
+        irori_core::net::NetworkMode::Online => Some(true),
+        irori_core::net::NetworkMode::Auto => None,
+    }
+}
+
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -259,6 +279,9 @@ impl Backend {
         let _guard = rt.enter();
         let bus = EventBus::new();
         let settings = Arc::new(SettingsService::load(bus.clone()));
+        if !isolated {
+            settings.drive_network_policy();
+        }
         let settings_fn: irori_core::SettingsFn = {
             let settings = settings.clone();
             Arc::new(move || settings.app())
@@ -351,7 +374,50 @@ impl Backend {
         self.stores.values()
     }
 
+    /// Whether Irori may use the network now: the connection works and the
+    /// user hasn't asked Irori to work offline (`iroriNetworkMode`).
     pub fn is_online(&self) -> bool {
+        self.online.load(Ordering::Relaxed) && !self.working_offline()
+    }
+
+    /// Whether the user asked Irori to work offline.
+    pub fn working_offline(&self) -> bool {
+        self.settings.app().network_mode == irori_core::net::NetworkMode::Offline
+    }
+
+    /// Fails with [`irori_core::net::WorkingOffline`] while working offline.
+    fn ensure_online(&self) -> anyhow::Result<()> {
+        if self.working_offline() {
+            return Err(irori_core::net::WorkingOffline.into());
+        }
+        Ok(())
+    }
+
+    /// Work offline, or follow the connection again (`iroriNetworkMode`
+    /// back to automatic), from the palette and the title bar.
+    pub fn set_working_offline(&self, offline: bool) {
+        self.settings.update_app(|s| {
+            s.network_mode = if offline {
+                irori_core::net::NetworkMode::Offline
+            } else {
+                irori_core::net::NetworkMode::Auto
+            };
+        });
+    }
+
+    /// Follow a changed `iroriNetworkMode` at once: probe (or not), pause
+    /// downloads going offline and take them up again coming back.
+    async fn follow_network_mode(&self) {
+        let was_online = self.is_online_now();
+        let online = self.check_connectivity().await;
+        self.pause_downloads_while_offline(was_online, online);
+        if online && !was_online {
+            self.downloads_wake.notify_one();
+        }
+    }
+
+    /// The connection as last probed, whatever the network mode.
+    fn is_online_now(&self) -> bool {
         self.online.load(Ordering::Relaxed)
     }
 
@@ -447,6 +513,7 @@ impl Backend {
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
             let mut tag_limit = b.settings.app().steam_tag_limit;
+            let mut network_mode = b.settings.app().network_mode;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -463,6 +530,12 @@ impl Backend {
                     }
                     Ok(Event::SettingsChanged) => {
                         let app = b.settings.app();
+                        if app.network_mode != network_mode {
+                            network_mode = app.network_mode;
+                            let b = b.clone();
+                            b.clone()
+                                .spawn(async move { b.follow_network_mode().await });
+                        }
                         let now = switches(&app);
                         for (runner, (was, is)) in [Runner::Zoom, Runner::Itch]
                             .into_iter()
@@ -539,7 +612,7 @@ impl Backend {
             tokio::time::sleep(CONNECTIVITY_INTERVAL).await;
             since_refresh += CONNECTIVITY_INTERVAL;
             since_launchers += CONNECTIVITY_INTERVAL;
-            let was_online = self.is_online();
+            let was_online = self.is_online_now();
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
@@ -609,6 +682,9 @@ impl Backend {
     /// Update the anticheat and known-fixes databases when their published
     /// checksums change.
     pub async fn refresh_compat_data(&self) {
+        if self.working_offline() {
+            return;
+        }
         match irori_extras::releases::fetch().await {
             Ok(info) => {
                 if let Err(e) =
@@ -633,30 +709,42 @@ impl Backend {
         {
             self.auto_paused.store(true, Ordering::Relaxed);
             self.pause_downloads();
-            self.bus.notice(
+            let notice = if self.working_offline() {
+                irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
+                    .message(
+                        "Irori is working offline. Downloads resume when you work online again.",
+                    )
+                    .keys(
+                        "shell.notice.downloads_paused",
+                        Some("shell.notice.downloads_paused_working_offline"),
+                        &[],
+                    )
+            } else {
                 irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
                     .message("You're offline. Downloads resume when the connection is back.")
                     .keys(
                         "shell.notice.downloads_paused",
                         Some("shell.notice.downloads_paused_message"),
                         &[],
-                    ),
-            );
+                    )
+            };
+            self.bus.notice(notice);
         } else if online && !was_online && self.auto_paused.swap(false, Ordering::Relaxed) {
             self.resume_downloads();
         }
     }
 
     pub async fn check_connectivity(&self) -> bool {
-        if self.isolated {
-            return self.is_online();
-        }
-        let ok = irori_core::http::client()
-            .head("https://www.gstatic.com/generate_204")
-            .timeout(Duration::from_secs(5))
-            .send()
-            .await
-            .is_ok();
+        let ok = match decided_online(self.settings.app().network_mode) {
+            Some(ok) => ok,
+            None if self.isolated => return self.is_online_now(),
+            None => irori_core::http::client()
+                .head("https://www.gstatic.com/generate_204")
+                .timeout(Duration::from_secs(5))
+                .send()
+                .await
+                .is_ok(),
+        };
         if self.online.swap(ok, Ordering::Relaxed) != ok {
             self.bus.emit(Event::Connectivity(ok));
         }
@@ -696,11 +784,13 @@ impl Backend {
 
     pub async fn refresh_all(&self, full: bool) {
         let shown = self.settings.app().ui.stores;
+        let offline = self.working_offline();
         let jobs = self
             .stores
             .values()
             .filter(|s| s.is_logged_in() || s.runner() == Runner::Sideload)
             .filter(|s| shown.shows(s.runner()))
+            .filter(|s| !offline || refreshes_offline(s.runner()))
             .map(|s| {
                 let s = s.clone();
                 let b = self.clone();
@@ -713,6 +803,11 @@ impl Backend {
                 }
             });
         futures::future::join_all(jobs).await;
+        if offline {
+            // Store playtime and updates are asked of the stores' servers.
+            self.rebuild_library();
+            return;
+        }
         self.sync_store_playtime().await;
         self.rebuild_library();
         self.refresh_updates().await;
@@ -804,6 +899,9 @@ impl Backend {
         let store = self
             .store(runner)
             .ok_or_else(|| anyhow::anyhow!("{runner} is not available"))?;
+        if !refreshes_offline(runner) {
+            self.ensure_online()?;
+        }
         let result = store.refresh(full).await;
         self.note_login(runner, result.as_ref().err());
         result?;
@@ -821,6 +919,7 @@ impl Backend {
         let store = self
             .store(runner)
             .ok_or_else(|| anyhow::anyhow!("{runner} is not available"))?;
+        self.ensure_online()?;
         let result = store.refresh_account(slot, full).await;
         self.note_login(runner, result.as_ref().err());
         result?;

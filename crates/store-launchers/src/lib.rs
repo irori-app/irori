@@ -1158,6 +1158,9 @@ impl Store for LaunchersStore {
     /// refused Xbox sign-in is announced by the store itself.
     async fn refresh(&self, full: bool) -> Result<()> {
         self.rescan().await;
+        if irori_core::net::working_offline() {
+            return Ok(());
+        }
         if let Err(e) = self.refresh_xbox(full).await {
             tracing::warn!("Xbox titles: {e:#}");
         }

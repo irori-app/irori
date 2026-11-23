@@ -894,6 +894,14 @@ pub struct AppSettings {
     /// are neither shown nor asked for. Irori-only.
     #[serde(rename = "iroriDeals")]
     pub deals: bool,
+    /// Whether Irori probes the connection, takes it as working, or works
+    /// offline and never reaches the internet. Irori-only.
+    #[serde(rename = "iroriNetworkMode")]
+    pub network_mode: crate::net::NetworkMode,
+    /// Seconds a network request may take (10–600), for slow or unreliable
+    /// connections; 0 keeps Irori's own timeouts. Irori-only.
+    #[serde(rename = "iroriNetworkTimeout")]
+    pub network_timeout: u32,
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
@@ -995,6 +1003,8 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             deals: true,
+            network_mode: crate::net::NetworkMode::Auto,
+            network_timeout: 0,
             show_log_on_launch: false,
             achievement_notices: false,
             achievement_toast: AchievementToastPrefs::default(),
@@ -2088,6 +2098,18 @@ mod tests {
         let app: AppSettings =
             serde_json::from_str(r#"{"iroriCheckForAppUpdates": false}"#).unwrap();
         assert!(!app.check_for_app_updates);
+    }
+
+    #[test]
+    fn network_policy_reads_and_defaults() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.network_mode, crate::net::NetworkMode::Auto);
+        assert_eq!(app.network_timeout, 0);
+        let app: AppSettings =
+            serde_json::from_str(r#"{"iroriNetworkMode": "offline", "iroriNetworkTimeout": 180}"#)
+                .unwrap();
+        assert_eq!(app.network_mode, crate::net::NetworkMode::Offline);
+        assert_eq!(app.network_timeout, 180);
     }
 
     #[test]

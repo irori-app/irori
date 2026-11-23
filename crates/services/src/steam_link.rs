@@ -143,6 +143,7 @@ impl SteamLinkService {
     }
 
     fn client(&self) -> Result<Client> {
+        irori_core::net::ensure_online()?;
         Client::with_endpoints(self.endpoints.lock().clone())
     }
 

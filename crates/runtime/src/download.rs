@@ -12,7 +12,6 @@ use irori_core::InstallProgress;
 use irori_core::archive_guard;
 use irori_core::install::ProgressSink;
 use irori_core::process::CancellationToken;
-use once_cell::sync::Lazy;
 use sha2::{Digest, Sha256, Sha512};
 use tokio::io::AsyncWriteExt;
 
@@ -35,29 +34,21 @@ pub fn is_cancelled(err: &anyhow::Error) -> bool {
 
 /// Client for large transfers: no overall timeout (Proton builds are hundreds
 /// of MiB), but stalled connections fail after 60 s without data.
-static DOWNLOAD_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
-    reqwest::Client::builder()
-        .user_agent(irori_core::http::USER_AGENT)
-        .connect_timeout(Duration::from_secs(15))
-        .read_timeout(Duration::from_secs(60))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-});
+fn download_client() -> &'static reqwest::Client {
+    irori_core::http::download_client()
+}
 
-/// Client for small API requests, with a short overall timeout.
-static API_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
-    reqwest::Client::builder()
-        .user_agent(irori_core::http::USER_AGENT)
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(20))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
-});
+/// How long a small API request may take: 20 s, or the user's longer
+/// `iroriNetworkTimeout`.
+fn api_timeout() -> Duration {
+    irori_core::net::timeout_or(Duration::from_secs(20))
+}
 
 /// GET a JSON document with a short timeout.
 pub async fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
-    API_CLIENT
+    irori_core::http::client()
         .get(url)
+        .timeout(api_timeout())
         .header("Accept", "application/json")
         .send()
         .await
@@ -72,8 +63,9 @@ pub async fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
 /// GET an API address with a short timeout, leaving the status and headers
 /// to the caller (rate limits are read from them).
 pub async fn api_get(url: &str) -> Result<reqwest::Response> {
-    API_CLIENT
+    irori_core::http::client()
         .get(url)
+        .timeout(api_timeout())
         .header("Accept", "application/json")
         .send()
         .await
@@ -82,8 +74,9 @@ pub async fn api_get(url: &str) -> Result<reqwest::Response> {
 
 /// GET a small text document with a short timeout.
 pub async fn get_text(url: &str) -> Result<String> {
-    API_CLIENT
+    irori_core::http::client()
         .get(url)
+        .timeout(api_timeout())
         .send()
         .await
         .with_context(|| format!("could not reach {}", host_of(url)))?
@@ -226,7 +219,7 @@ async fn download_inner(
     cancel: &CancellationToken,
     kind: DigestKind,
 ) -> Result<(u64, String)> {
-    let request = DOWNLOAD_CLIENT.get(url).send();
+    let request = download_client().get(url).send();
     let response = tokio::select! {
         r = request => r.with_context(|| format!("could not reach {}", host_of(url)))?,
         _ = cancel.cancelled() => return Err(Cancelled.into()),

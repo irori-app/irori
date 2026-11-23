@@ -765,6 +765,21 @@ const TOP_SECTION: &[ChoiceOption] = &[
     ),
 ];
 
+const NETWORK_MODE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.network_mode.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("online"),
+        Key("settings.option.network_mode.online"),
+    ),
+    opt(
+        ChoiceValue::Str("offline"),
+        Key("settings.option.network_mode.offline"),
+    ),
+];
+
 const THEME_MODE: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("system"),
@@ -1583,6 +1598,31 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.crossover_bottles_path.help")
     .placeholder(Verbatim("~/Library/Application Support/CrossOver/Bottles"))
     .keywords(&["crossover", "bottle", "bottles", "path", "mac"]),
+    app(
+        "iroriNetworkMode",
+        "settings.field.network_mode.label",
+        General,
+        "settings.group.network",
+        Choice(NETWORK_MODE),
+    )
+    .help("settings.field.network_mode.help")
+    .keywords(&[
+        "offline",
+        "online",
+        "network",
+        "internet",
+        "connection",
+        "airplane",
+    ]),
+    app(
+        "iroriNetworkTimeout",
+        "settings.field.network_timeout.label",
+        General,
+        "settings.group.network",
+        Text(TextKind::Number { min: 0, max: 600 }),
+    )
+    .help("settings.field.network_timeout.help")
+    .keywords(&["timeout", "slow", "network", "connection", "seconds"]),
     app(
         "iroriCheckForAppUpdates",
         "settings.field.check_for_app_updates.label",

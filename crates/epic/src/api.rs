@@ -226,6 +226,12 @@ fn parse_time(s: &str) -> Option<u64> {
 #[error("{0}")]
 pub struct SignInRejected(pub String);
 
+/// How long connecting may take for a request `timeout`: 15 s, or a
+/// quarter of a longer timeout, so a raised one helps slow handshakes too.
+fn connect_timeout(timeout: Duration) -> Duration {
+    (timeout / 4).max(Duration::from_secs(15))
+}
+
 /// The message of an Epic error body.
 fn epic_error(v: &Value) -> Option<String> {
     let msg = v.get("errorMessage").and_then(Value::as_str);
@@ -245,7 +251,12 @@ pub struct Client {
     /// `en-US` style locale for catalog data.
     pub language: String,
     pub country: String,
+    /// How long a request may take, and a transfer may wait between reads.
+    timeout: Duration,
 }
+
+/// Epic's request timeout unless the caller asks for another.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl Client {
     pub fn new(identity: Identity) -> Result<Self> {
@@ -253,19 +264,38 @@ impl Client {
     }
 
     pub fn with_endpoints(identity: Identity, endpoints: Endpoints) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .user_agent(identity.user_agent.clone())
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(60))
-            .pool_max_idle_per_host(16)
-            .build()?;
         Ok(Self {
-            http,
+            http: Self::api_http(&identity, DEFAULT_TIMEOUT)?,
             endpoints,
             identity,
             language: "en".into(),
             country: "US".into(),
+            timeout: DEFAULT_TIMEOUT,
         })
+    }
+
+    /// The same client with requests allowed `timeout` (and transfers that
+    /// long between reads), for slow connections.
+    pub fn with_timeout(mut self, timeout: Duration) -> Result<Self> {
+        if timeout != self.timeout {
+            self.http = Self::api_http(&self.identity, timeout)?;
+            self.timeout = timeout;
+        }
+        Ok(self)
+    }
+
+    /// The timeout requests are allowed.
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    fn api_http(identity: &Identity, timeout: Duration) -> Result<reqwest::Client> {
+        Ok(reqwest::Client::builder()
+            .user_agent(identity.user_agent.clone())
+            .connect_timeout(connect_timeout(timeout))
+            .timeout(timeout)
+            .pool_max_idle_per_host(16)
+            .build()?)
     }
 
     pub fn identity(&self) -> &Identity {
@@ -276,8 +306,8 @@ impl Client {
     pub fn download_client(&self) -> Result<reqwest::Client> {
         Ok(reqwest::Client::builder()
             .user_agent(self.identity.user_agent.clone())
-            .connect_timeout(Duration::from_secs(15))
-            .read_timeout(Duration::from_secs(60))
+            .connect_timeout(connect_timeout(self.timeout))
+            .read_timeout(self.timeout)
             .pool_max_idle_per_host(32)
             .build()?)
     }
@@ -974,6 +1004,16 @@ pub(crate) mod tests {
     use irori_depot::test_server::{Resp, TestServer};
 
     use super::*;
+
+    #[test]
+    fn timeout_follows_the_caller() {
+        let client = Client::new(Identity::default()).unwrap();
+        assert_eq!(client.timeout(), DEFAULT_TIMEOUT);
+        let slow = client.with_timeout(Duration::from_secs(300)).unwrap();
+        assert_eq!(slow.timeout(), Duration::from_secs(300));
+        assert_eq!(connect_timeout(slow.timeout()), Duration::from_secs(75));
+        assert_eq!(connect_timeout(DEFAULT_TIMEOUT), Duration::from_secs(15));
+    }
 
     pub(crate) fn endpoints(server: &TestServer) -> Endpoints {
         let b = server.base();

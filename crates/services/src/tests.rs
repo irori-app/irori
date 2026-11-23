@@ -117,6 +117,38 @@ impl Store for LoginStore {
 }
 
 #[test]
+fn working_offline_refreshes_only_stores_that_read_this_computer() {
+    use irori_core::net::NetworkMode;
+    assert_eq!(crate::decided_online(NetworkMode::Offline), Some(false));
+    assert_eq!(crate::decided_online(NetworkMode::Online), Some(true));
+    assert_eq!(crate::decided_online(NetworkMode::Auto), None);
+    for runner in [
+        Runner::Steam,
+        Runner::Launchers,
+        Runner::Emulation,
+        Runner::Sideload,
+    ] {
+        assert!(crate::refreshes_offline(runner), "{runner}");
+    }
+    for runner in [
+        Runner::Legendary,
+        Runner::Gog,
+        Runner::Nile,
+        Runner::Zoom,
+        Runner::Itch,
+        Runner::Xbox,
+    ] {
+        assert!(!crate::refreshes_offline(runner), "{runner}");
+    }
+    use irori_core::SyncMode;
+    assert!(crate::sync::syncs_now(SyncMode::Folder, true));
+    assert!(!crate::sync::syncs_now(SyncMode::Webdav, true));
+    assert!(!crate::sync::syncs_now(SyncMode::Rclone, true));
+    assert!(crate::sync::syncs_now(SyncMode::Rclone, false));
+    assert!(!crate::sync::syncs_now(SyncMode::Off, false));
+}
+
+#[test]
 fn canceling_a_stopped_install_deletes_what_it_downloaded() {
     isolate_paths();
     let store = Arc::new(LoginStore::default());

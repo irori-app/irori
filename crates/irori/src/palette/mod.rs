@@ -81,6 +81,8 @@ pub(crate) enum PaletteTarget {
     SteamFriends,
     XboxOfflinePlay,
     XboxFriends,
+    /// Work offline (`true`) or follow the connection again.
+    WorkOffline(bool),
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -916,6 +918,24 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::XboxOfflinePlay);
     }
+    {
+        let offline = irori_ui::models::working_offline(cx);
+        items.push(
+            Entry::new()
+                .label(t(if offline {
+                    "shell.palette.work_online"
+                } else {
+                    "shell.palette.work_offline"
+                }))
+                .keywords([t("shell.palette.work_offline_keywords")])
+                .icon(if offline {
+                    IconName::Wifi
+                } else {
+                    IconName::WifiOff
+                }),
+        );
+        targets.push(PaletteTarget::WorkOffline(!offline));
+    }
     for (label, icon, command) in irori_manage::download_commands(cx) {
         items.push(
             Entry::new()
@@ -945,6 +965,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
+        PaletteTarget::WorkOffline(offline) => irori_ui::models::set_working_offline(offline, cx),
         PaletteTarget::XboxFriends => {
             irori_manage::open_friends_dialog(irori_manage::FriendsSource::Xbox, window, cx)
         }
