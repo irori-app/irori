@@ -192,6 +192,11 @@ pub struct InstalledInfo {
     pub pinned_version: bool,
     pub is_dosbox: bool,
     pub sdl: Vec<String>,
+    /// The Wine prefix another launcher installed the game in (a game
+    /// imported from the Epic Games Launcher's prefix), where its saves and
+    /// configuration are. The game's default prefix; a prefix the user chose
+    /// wins.
+    pub store_prefix: Option<String>,
 }
 
 /// A DLC entry of a base game.

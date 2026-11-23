@@ -257,6 +257,10 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// A Steam game's launch options in Steam itself.
+    SteamLaunchOptions,
+    /// One game's umu id: the one used, its source, a database search.
+    Umu,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -567,6 +571,7 @@ impl FieldSpec {
                 self.path,
                 "useGameMode"
                     | "showMangohud"
+                    | "iroriMangohudFpsLimit"
                     | "nvidiaPrime"
                     | "enableFsync"
                     | "iroriNtsync"
@@ -574,9 +579,12 @@ impl FieldSpec {
                     | "enableWineWayland"
                     | "enableHDR"
                     | "enableWoW64"
+                    | "iroriProtonPreferSdl"
                     | "eacRuntime"
                     | "battlEyeRuntime"
                     | "disableUMU"
+                    | "iroriUmuId"
+                    | "panel.umu"
                     | "steamRuntime"
                     | "preferSystemLibs"
                     | "autoInstallDxvk"
@@ -625,6 +633,7 @@ impl FieldSpec {
                     | "iroriLudusaviInterval"
                     | "panel.save-backups"
                     | "panel.artwork"
+                    | "panel.steamLaunchOptions"
             )
     }
 
@@ -985,6 +994,60 @@ const LUDUSAVI_INTERVAL: &[ChoiceOption] = &[
     ),
 ];
 
+const LUDUSAVI_FULL_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.ludusavi_limit.ludusavi"),
+    ),
+    opt(ChoiceValue::Num(1), Verbatim("1")),
+    opt(ChoiceValue::Num(2), Verbatim("2")),
+    opt(ChoiceValue::Num(3), Verbatim("3")),
+    opt(ChoiceValue::Num(5), Verbatim("5")),
+    opt(ChoiceValue::Num(10), Verbatim("10")),
+];
+
+const LUDUSAVI_DIFFERENTIAL_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.ludusavi_limit.ludusavi"),
+    ),
+    opt(
+        ChoiceValue::Str("0"),
+        Key("settings.option.ludusavi_limit.none"),
+    ),
+    opt(ChoiceValue::Str("1"), Verbatim("1")),
+    opt(ChoiceValue::Str("3"), Verbatim("3")),
+    opt(ChoiceValue::Str("5"), Verbatim("5")),
+    opt(ChoiceValue::Str("10"), Verbatim("10")),
+];
+
+const ART_CACHE_LIMIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Num(0),
+        Key("settings.option.art_cache_limit.0"),
+    ),
+    opt(
+        ChoiceValue::Num(512),
+        Key("settings.option.art_cache_limit.512"),
+    ),
+    opt(
+        ChoiceValue::Num(1024),
+        Key("settings.option.art_cache_limit.1024"),
+    ),
+    opt(
+        ChoiceValue::Num(2048),
+        Key("settings.option.art_cache_limit.2048"),
+    ),
+    opt(
+        ChoiceValue::Num(5120),
+        Key("settings.option.art_cache_limit.5120"),
+    ),
+    opt(
+        ChoiceValue::Num(10240),
+        Key("settings.option.art_cache_limit.10240"),
+    ),
+];
+
 const REPLAY_SECONDS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Num(15),
@@ -1082,6 +1145,7 @@ const NEEDS_FPS_LIMIT: &[Condition] = &[when(
     true,
     "settings.requires.fps_limit",
 )];
+const NEEDS_MANGOHUD: &[Condition] = &[when("showMangohud", true, "settings.requires.mangohud")];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
     true,
@@ -1628,6 +1692,25 @@ pub static FIELDS: &[FieldSpec] = &[
     .keywords(&["sunshine", "moonlight", "big picture", "couch"])
     .requires(NEEDS_SUNSHINE),
     app(
+        "iroriSunshine.address",
+        "settings.field.sunshine_address.label",
+        General,
+        "settings.group.integrations",
+        Text(TextKind::Plain),
+    )
+    .help("settings.field.sunshine_address.help")
+    .placeholder(Key("settings.field.sunshine_address.placeholder"))
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "address",
+        "another computer",
+        "remote",
+        "certificate",
+        "fingerprint",
+    ])
+    .requires(NEEDS_SUNSHINE),
+    app(
         "iroriSunshine.matchClient",
         "settings.field.sunshine_match_client.label",
         General,
@@ -1652,7 +1735,14 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Panel(PanelKind::Sunshine),
     )
-    .keywords(&["sunshine", "moonlight", "stream", "password", "login"]),
+    .keywords(&[
+        "sunshine",
+        "moonlight",
+        "stream",
+        "password",
+        "login",
+        "certificate",
+    ]),
     app(
         "disablePlaytimeSync",
         "settings.field.disable_playtime_sync.label",
@@ -2157,6 +2247,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
     app(
+        "iroriArtCacheLimit",
+        "settings.field.art_cache_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Choice(ART_CACHE_LIMIT),
+    )
+    .help("settings.field.art_cache_limit.help")
+    .keywords(&[
+        "art",
+        "image",
+        "cache",
+        "disk",
+        "space",
+        "size",
+        "limit",
+        "thumbnail",
+    ]),
+    app(
         "iroriIgdb",
         "settings.field.igdb.label",
         Advanced,
@@ -2370,6 +2478,42 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
     .keywords(&["umu", "proton"]),
+    game_only(
+        "iroriUmuId",
+        "settings.field.umu_id.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Text(TextKind::Plain),
+    )
+    .tag(Verbatim("umu"))
+    .help("settings.field.umu_id.help")
+    .placeholder(Verbatim("umu-1091500"))
+    .keywords(&["umu", "gameid", "protonfixes", "proton", "fixes"]),
+    game_only(
+        "panel.umu",
+        "settings.field.panel_umu.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Panel(PanelKind::Umu),
+    )
+    .keywords(&["umu", "gameid", "protonfixes", "database"]),
+    game(
+        "iroriProtonPreferSdl",
+        "settings.field.proton_prefer_sdl.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .tag(Verbatim("Proton"))
+    .help("settings.field.proton_prefer_sdl.help")
+    .keywords(&[
+        "sdl",
+        "controller",
+        "gamepad",
+        "joystick",
+        "hidraw",
+        "proton_prefer_sdl",
+    ]),
     game(
         "iroriDllOverrides",
         "settings.field.dll_overrides.label",
@@ -2587,6 +2731,17 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_mangohud.help")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
+    game(
+        "iroriMangohudFpsLimit",
+        "settings.field.mangohud_fps_limit.label",
+        Performance,
+        "settings.group.system",
+        Text(TextKind::Digits { max_len: 4 }),
+    )
+    .help("settings.field.mangohud_fps_limit.help")
+    .placeholder(Verbatim("60"))
+    .keywords(&["mangohud", "fps", "limit", "cap", "frame rate", "fps_limit"])
+    .requires(NEEDS_MANGOHUD),
     game(
         "showFps",
         "settings.field.show_fps.label",
@@ -3043,6 +3198,21 @@ pub static FIELDS: &[FieldSpec] = &[
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
     game_only(
+        "panel.steamLaunchOptions",
+        "settings.field.panel_steam_launch.label",
+        Launch,
+        "settings.group.command",
+        Panel(PanelKind::SteamLaunchOptions),
+    )
+    .keywords(&[
+        "steam",
+        "launch options",
+        "%command%",
+        "arguments",
+        "variables",
+        "properties",
+    ]),
+    game_only(
         "targetExe",
         "settings.field.target_exe.label",
         Launch,
@@ -3375,6 +3545,31 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ludusavi_backup_path.help")
     .placeholder(Key("settings.field.ludusavi_backup_path.placeholder"))
     .keywords(&["ludusavi", "backup", "folder", "path"]),
+    app(
+        "iroriLudusaviFullLimit",
+        "settings.field.ludusavi_full_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_FULL_LIMIT),
+    )
+    .help("settings.field.ludusavi_full_limit.help")
+    .keywords(&["ludusavi", "backup", "retention", "keep", "full", "limit"]),
+    app(
+        "iroriLudusaviDifferentialLimit",
+        "settings.field.ludusavi_differential_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_DIFFERENTIAL_LIMIT),
+    )
+    .help("settings.field.ludusavi_differential_limit.help")
+    .keywords(&[
+        "ludusavi",
+        "backup",
+        "retention",
+        "keep",
+        "differential",
+        "limit",
+    ]),
 ];
 
 /// The field with this path.

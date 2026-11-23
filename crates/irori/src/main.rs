@@ -34,6 +34,7 @@ use anyhow::Result;
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui_kit::component::WindowExt as _;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{Root, TitleBar};
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Focusable as _, QuitMode, WindowDecorations,
@@ -205,12 +206,15 @@ fn main() -> Result<()> {
             );
         }
 
-        // Steam's Game Mode has no tray to come back from.
-        let start_hidden = (cli.minimized || backend.settings.app().start_in_tray)
-            && !irori_core::platform::in_steam_gamepad_ui()
-            && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
-                || app.lock().tray.is_some())
-            && !cli.has_request();
+        // Steam's Game Mode has no tray to come back from. A game launched
+        // with no window asked for none: the game is what shows, and
+        // starting Irori again brings the window.
+        let start_hidden = cli.launch_without_window()
+            || ((cli.minimized || backend.settings.app().start_in_tray)
+                && !irori_core::platform::in_steam_gamepad_ui()
+                && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
+                    || app.lock().tray.is_some())
+                && !cli.has_request());
         if !start_hidden {
             open_main_window(&app, cx);
             let app_settings = backend.settings.app();
@@ -392,6 +396,18 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             });
         }
     }
+    if let Some(link) = &cli.thunderstore {
+        open_main_window(app, cx);
+        let window = app.lock().window;
+        if let Some(handle) = window {
+            let link = link.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    irori_game::open_thunderstore_link_dialog(&link, window, cx)
+                })
+            });
+        }
+    }
     if let Some(file) = &cli.windows_file {
         open_main_window(app, cx);
         let window = app.lock().window;
@@ -492,15 +508,48 @@ fn launch_from_outside(id: GameId, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
         }
         _ => {
             let b = irori_ui::backend(cx);
-            let task = irori_ui::run(cx, async move { b.launch(&id, None, Vec::new()).await });
-            cx.spawn(async move |_| {
+            let launch_id = id.clone();
+            let task = irori_ui::run(
+                cx,
+                async move { b.launch(&launch_id, None, Vec::new()).await },
+            );
+            let app = app.clone();
+            cx.spawn(async move |cx| {
                 if let Err(e) = task.await {
                     tracing::error!("launch failed: {e:#}");
+                    // Nothing else would tell the user: no window shows.
+                    cx.update(|cx| show_launch_error(id, e, &app, cx));
                 }
             })
             .detach();
         }
     }
+}
+
+/// Bring the window up to explain a launch that failed while it was hidden,
+/// with the same fixes the game page offers.
+fn show_launch_error(id: GameId, e: anyhow::Error, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
+    open_main_window(app, cx);
+    let window = app.lock().window;
+    let Some(handle) = window else {
+        return;
+    };
+    let _ = handle.update(cx, |_, window, cx| {
+        window.defer(cx, move |window, cx| {
+            if !irori_ui::save_conflict::resolve_launch_error(
+                &id,
+                Default::default(),
+                &e,
+                window,
+                cx,
+            ) {
+                window.push_notification(
+                    Notification::error(format!("{e:#}")).title(t("shell.launch_failed")),
+                    cx,
+                );
+            }
+        })
+    });
 }
 
 /// Show a game that isn't installed with its install options: its commands

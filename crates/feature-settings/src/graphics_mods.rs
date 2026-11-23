@@ -34,9 +34,13 @@ pub(crate) fn error_text(e: &anyhow::Error, kind: GraphicsMod) -> SharedString {
             match kind {
                 GraphicsMod::Reshade => "settings.reshade.error.dll_taken",
                 GraphicsMod::Renodx => "settings.renodx.error.file_taken",
+                GraphicsMod::Optiscaler => "settings.optiscaler.error.dll_taken",
             },
             &[("file", name)],
         ),
+        Some(ReshadeError::ManualInstall { name }) => {
+            t_args("settings.reshade.error.manual", &[("file", name)])
+        }
         Some(ReshadeError::OutsideGame) => t("settings.reshade.error.outside"),
         Some(ReshadeError::NotAddon) => t("settings.renodx.error.not_addon"),
         Some(ReshadeError::AddonArch) => t("settings.renodx.error.arch"),
@@ -56,6 +60,9 @@ pub(crate) fn step_text(step: Step) -> SharedString {
         Step::DownloadingShaders => "settings.reshade.step.shaders",
         Step::DownloadingCompiler => "settings.reshade.step.compiler",
         Step::DownloadingAddon => "settings.renodx.step.mod",
+        Step::DownloadingOptiscaler => "settings.optiscaler.step.downloading",
+        Step::DownloadingFakenvapi => "settings.optiscaler.step.fakenvapi",
+        Step::DownloadingOptipatcher => "settings.optiscaler.step.optipatcher",
         Step::Writing => "settings.reshade.step.writing",
     })
 }

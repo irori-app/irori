@@ -322,3 +322,53 @@ fn names_of(apps: &[Value]) -> Vec<String> {
         .map(|a| a["name"].as_str().unwrap().to_string())
         .collect()
 }
+
+#[test]
+fn a_remote_certificate_is_trusted_once_and_a_change_waits_for_the_user() {
+    let htpc = remote::parse_address("htpc.local").unwrap().unwrap();
+    let mut state = SunshineState::default();
+    // Not reached: nothing is learned.
+    state.note_certificate(&htpc, Ok(None));
+    assert!(state.pins.is_empty());
+    // The first certificate met is trusted.
+    state.note_certificate(&htpc, Ok(Some("AA".into())));
+    state.note_certificate(&htpc, Ok(Some("BB".into())));
+    assert_eq!(
+        state.pins.get("htpc.local:47990").map(String::as_str),
+        Some("AA")
+    );
+    // A different one waits until the user accepts it.
+    state.note_certificate(&htpc, Err("BB".into()));
+    assert_eq!(
+        state
+            .changed_certificate
+            .as_ref()
+            .map(|c| c.fingerprint.as_str()),
+        Some("BB")
+    );
+    let other = remote::parse_address("other:47990").unwrap().unwrap();
+    assert!(!state.accept_certificate(&other));
+    assert!(state.changed_certificate.is_some());
+    assert!(state.accept_certificate(&htpc));
+    assert_eq!(
+        state.pins.get("htpc.local:47990").map(String::as_str),
+        Some("BB")
+    );
+    assert!(state.changed_certificate.is_none());
+    assert!(!state.accept_certificate(&htpc));
+}
+
+#[test]
+fn games_on_another_computer_start_its_own_irori() {
+    assert_eq!(program(true).as_deref(), Some("irori"));
+    let mut prefs = irori_core::SunshinePrefs::default();
+    assert!(!is_remote(&prefs));
+    prefs.address = "localhost:48000".into();
+    assert!(!is_remote(&prefs));
+    assert_eq!(port(&prefs, None), 48000);
+    prefs.address = "192.168.1.20".into();
+    assert!(is_remote(&prefs));
+    assert_eq!(port(&prefs, None), 47990);
+    prefs.address = "http://192.168.1.20".into();
+    assert!(!is_remote(&prefs));
+}

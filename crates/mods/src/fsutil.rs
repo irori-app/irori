@@ -3,6 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 
@@ -144,20 +145,83 @@ fn list_names(dir: &Path) -> Option<Names> {
     Some(names)
 }
 
+/// Suffix of a copy being written, renamed into place once complete.
+pub(crate) const PARTIAL_SUFFIX: &str = ".irori-partial";
+
+/// How long a file in use may keep Irori waiting.
+pub(crate) const LOCK_BUDGET: Duration = Duration::from_secs(5);
+
+/// Whether `e` says another program has the file open: Windows' sharing
+/// and lock violations (a game that hasn't quite exited, an antivirus
+/// scan, an indexer), or a busy file elsewhere. Worth waiting for, unlike
+/// a missing file or a permission.
+pub(crate) fn is_locked(e: &std::io::Error) -> bool {
+    match e.raw_os_error() {
+        // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION.
+        Some(32 | 33) if cfg!(windows) => true,
+        // EBUSY, ETXTBSY.
+        Some(16 | 26) if cfg!(unix) => true,
+        _ => false,
+    }
+}
+
+/// Run `op` again while it fails because the file is in use, waiting a
+/// little longer each time, until `budget` is spent.
+pub(crate) fn retry_locked<T>(
+    budget: Duration,
+    mut op: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let start = Instant::now();
+    let mut wait = Duration::from_millis(50);
+    loop {
+        match op() {
+            Err(e) if is_locked(&e) && start.elapsed() + wait <= budget => {
+                std::thread::sleep(wait);
+                wait = (wait * 2).min(Duration::from_secs(1));
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Copy `from` to `to` so that `to` is either the whole file or untouched:
+/// the copy goes to a `.irori-partial` sibling first and is renamed into
+/// place, so a copy cut short (a full disk, a crash) never leaves half a
+/// file where a whole one is expected.
+pub(crate) fn copy_whole(from: &Path, to: &Path) -> Result<()> {
+    let mut name = to.file_name().unwrap_or_default().to_os_string();
+    name.push(PARTIAL_SUFFIX);
+    let partial = to.with_file_name(name);
+    let copied = retry_locked(LOCK_BUDGET, || std::fs::copy(from, &partial))
+        .with_context(|| format!("copying {} to {}", from.display(), to.display()))
+        .and_then(|_| {
+            retry_locked(LOCK_BUDGET, || std::fs::rename(&partial, to))
+                .with_context(|| format!("putting {} in place", to.display()))
+        });
+    if copied.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    copied
+}
+
 /// Move the file `from` to `to`, creating `to`'s folder and replacing a file
-/// there. Renames when both are on one file system, else copies and removes
-/// the source.
+/// there. Renames when both are on one file system, else copies (whole, see
+/// [`copy_whole`]) and removes the source. Waits a while for files in use.
 pub(crate) fn move_file(from: &Path, to: &Path) -> Result<()> {
     if let Some(parent) = to.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    if std::fs::rename(from, to).is_ok() {
-        return Ok(());
+    match retry_locked(LOCK_BUDGET, || std::fs::rename(from, to)) {
+        Ok(()) => return Ok(()),
+        Err(e) if is_locked(&e) => {
+            return Err(e).with_context(|| format!("{} is in use", from.display()));
+        }
+        Err(_) => {}
     }
-    std::fs::copy(from, to)
-        .with_context(|| format!("copying {} to {}", from.display(), to.display()))?;
-    std::fs::remove_file(from).with_context(|| format!("removing {}", from.display()))
+    copy_whole(from, to)?;
+    retry_locked(LOCK_BUDGET, || std::fs::remove_file(from))
+        .with_context(|| format!("removing {}", from.display()))
 }
 
 /// Nanoseconds since the epoch of `path`'s last change, when known.

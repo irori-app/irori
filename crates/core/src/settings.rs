@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 
 use crate::Runner;
 use crate::game::{CloudSaveLocation, LaunchOption};
+use crate::merged_lists;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -159,6 +160,11 @@ pub struct GameSettings {
     pub enable_hdr: bool,
     #[serde(rename = "enableWoW64")]
     pub enable_wow64: bool,
+    /// Proton reads controllers through SDL instead of hidraw and evdev
+    /// (`PROTON_PREFER_SDL`), for controllers it otherwise misreads or
+    /// misses. Linux only; Irori-only.
+    #[serde(rename = "iroriProtonPreferSdl")]
+    pub proton_prefer_sdl: bool,
     pub gamescope: GamescopeSettings,
     #[serde(rename = "enviromentOptions")]
     pub environment_options: Vec<EnvVar>,
@@ -185,6 +191,11 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
+    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
+    /// games of every kind while MangoHud is on; empty for none. Linux only;
+    /// Irori-only.
+    #[serde(rename = "iroriMangohudFpsLimit")]
+    pub mangohud_fps_limit: String,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -332,6 +343,12 @@ pub struct GameSettings {
     /// variables. Per game only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
+    /// The umu database id (`GAMEID`) the game runs with under umu, when the
+    /// user chose one (`umu-1091500`, or a bare Steam app id); empty finds
+    /// it from the store, the Steam app id or the title. Per game only.
+    /// Irori-only.
+    #[serde(rename = "iroriUmuId")]
+    pub umu_id: String,
     /// Keep the last moments of play ready to save as a clip. Linux only;
     /// Irori-only.
     #[serde(rename = "iroriReplay")]
@@ -490,6 +507,7 @@ impl Default for GameSettings {
             enable_wine_wayland: false,
             enable_hdr: false,
             enable_wow64: false,
+            proton_prefer_sdl: false,
             gamescope: GamescopeSettings::default(),
             environment_options: Vec::new(),
             dll_overrides: Vec::new(),
@@ -505,6 +523,7 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
+            mangohud_fps_limit: String::new(),
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
@@ -548,6 +567,7 @@ impl Default for GameSettings {
             hltb_id: String::new(),
             igdb_id: String::new(),
             steam_app_id: String::new(),
+            umu_id: String::new(),
             replay: ReplaySettings::default(),
         }
     }
@@ -621,13 +641,21 @@ impl GameSettingsOverrides {
                     }
                     continue;
                 }
+                // Variables, wrappers and programs hold the game's own
+                // entries, laid over the defaults' (`merged_lists`).
+                if let Some(field) = merged_lists::key_field(k) {
+                    let merged = merged_lists::merge(map.get(k), v, field);
+                    map.insert(k.clone(), merged);
+                    continue;
+                }
                 map.insert(k.clone(), v.clone());
             }
         }
         serde_json::from_value(base).unwrap_or_else(|_| defaults.clone())
     }
 
-    /// Overrides that turn `defaults` into `effective`: every key whose value differs.
+    /// Overrides that turn `defaults` into `effective`: every key whose value
+    /// differs, lists that merge by key as the game's own entries.
     pub fn diff(defaults: &GameSettings, effective: &GameSettings) -> Self {
         let (Value::Object(d), Value::Object(e)) = (
             serde_json::to_value(defaults).expect("settings serialize"),
@@ -635,7 +663,24 @@ impl GameSettingsOverrides {
         ) else {
             return Self::default();
         };
-        Self(e.into_iter().filter(|(k, v)| d.get(k) != Some(v)).collect())
+        Self(
+            e.into_iter()
+                .filter_map(|(k, v)| {
+                    let value = override_of(&d, &k, v)?;
+                    Some((k, value))
+                })
+                .collect(),
+        )
+    }
+
+    /// What to store for `key` so the game reads `value` over `defaults`:
+    /// `None` when that is the default, the game's own entries for a list
+    /// that merges by key, else `value` itself.
+    pub fn override_value(defaults: &GameSettings, key: &str, value: Value) -> Option<Value> {
+        let Value::Object(d) = serde_json::to_value(defaults).expect("settings serialize") else {
+            return Some(value);
+        };
+        override_of(&d, key, value)
     }
 
     pub fn is_overridden(&self, key: &str) -> bool {
@@ -648,6 +693,13 @@ impl GameSettingsOverrides {
 
     pub fn reset(&mut self, key: &str) {
         self.0.remove(key);
+    }
+}
+
+fn override_of(defaults: &Map<String, Value>, key: &str, value: Value) -> Option<Value> {
+    match merged_lists::key_field(key) {
+        Some(field) => merged_lists::own_entries(defaults.get(key), &value, field),
+        None => (defaults.get(key) != Some(&value)).then_some(value),
     }
 }
 
@@ -827,6 +879,19 @@ pub struct AppSettings {
     /// own backup folder. Irori-only.
     #[serde(rename = "iroriLudusaviBackupPath")]
     pub ludusavi_backup_path: String,
+    /// Full backups Ludusavi keeps of each game when Irori backs it up
+    /// (1–255); 0 keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviFullLimit")]
+    pub ludusavi_full_limit: u32,
+    /// Differential backups Ludusavi keeps per full one ("0"–"255"); empty
+    /// keeps Ludusavi's own setting. Irori-only.
+    #[serde(rename = "iroriLudusaviDifferentialLimit")]
+    pub ludusavi_differential_limit: String,
+    /// Largest size of the art cache on disk in MiB (downloaded art and the
+    /// thumbnails cut from it); the least recently used art goes first.
+    /// 0 = no cap. Irori-only.
+    #[serde(rename = "iroriArtCacheLimit")]
+    pub art_cache_limit: u32,
     /// Scheduled backups. Irori-only; stays on this computer (backups and
     /// restores leave it alone).
     #[serde(rename = "iroriBackups")]
@@ -872,6 +937,9 @@ impl Default for AppSettings {
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
+            art_cache_limit: DEFAULT_ART_CACHE_LIMIT,
+            ludusavi_full_limit: 0,
+            ludusavi_differential_limit: String::new(),
             backups: BackupPrefs::default(),
             sync: SyncPrefs::default(),
             sunshine: SunshinePrefs::default(),
@@ -1026,6 +1094,9 @@ impl Density {
     }
 }
 
+/// The art cache's default cap in MiB.
+pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1095,6 +1166,9 @@ pub enum SyncMode {
     Folder,
     /// A WebDAV server; the login is kept with `irori_secrets`.
     Webdav,
+    /// A remote of the user's own rclone (`rcloneRemote`); rclone keeps the
+    /// account.
+    Rclone,
 }
 
 /// Library sync between computers.
@@ -1107,6 +1181,40 @@ pub struct SyncPrefs {
     pub webdav_url: String,
     /// What other computers call this one ("" = its host name).
     pub device_name: String,
+    /// The rclone remote, with an optional folder (`gdrive:Games`).
+    pub rclone_remote: String,
+    /// The rclone program; empty finds it on `PATH`.
+    pub rclone_path: String,
+    /// Cloud copies of backups, Ludusavi's saves and screenshots at the
+    /// sync target.
+    pub copies: CopyPrefs,
+    /// Exchange only playtime and sessions: this computer's favourites,
+    /// categories and statuses stay here, and the others' don't change it.
+    pub playtime_only: bool,
+}
+
+/// When a kind of cloud copy is sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyMode {
+    #[default]
+    Off,
+    /// Only when the user asks ("Send now").
+    Manual,
+    /// On its own, every so often, never while a game runs.
+    Automatic,
+}
+
+/// What goes to the sync target besides the library.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CopyPrefs {
+    /// Irori's scheduled backups (never the store sign-ins).
+    pub backups: CopyMode,
+    /// Ludusavi's backup folder.
+    pub saves: CopyMode,
+    /// The screenshots Irori finds (not clips).
+    pub screenshots: CopyMode,
 }
 
 /// Which of Irori's games Sunshine lists.
@@ -1140,6 +1248,9 @@ pub struct SunshinePrefs {
     pub big_picture: bool,
     /// Sunshine's web UI port; 0 reads it from Sunshine's configuration.
     pub port: u16,
+    /// Sunshine on another computer: its web UI's address (`htpc.local`,
+    /// `192.168.1.20:47990`); empty for this computer.
+    pub address: String,
     /// Games in gamescope take the Moonlight client's resolution, frame rate
     /// and HDR when a stream starts them, unless the game sets its own.
     pub match_client: bool,
@@ -1152,6 +1263,7 @@ impl Default for SunshinePrefs {
             games: SunshineGames::Installed,
             big_picture: true,
             port: 0,
+            address: String::new(),
             match_client: true,
         }
     }
@@ -1686,6 +1798,60 @@ mod tests {
         assert_eq!(o.0.len(), 2);
         assert!(o.is_overridden("showFps"));
         assert_eq!(o.apply(&defaults), changed);
+    }
+
+    #[test]
+    fn game_variables_merge_over_the_defaults() {
+        let var = |k: &str, v: &str| EnvVar {
+            key: k.into(),
+            value: v.into(),
+        };
+        let mut defaults = GameSettings {
+            environment_options: vec![var("FOO", "1"), var("BAR", "2")],
+            ..Default::default()
+        };
+        let mut game = GameSettingsOverrides::default();
+        game.set(
+            "enviromentOptions",
+            serde_json::json!([{"key": "PROTON_USE_XALIA", "value": "0"}]),
+        );
+        assert_eq!(
+            game.apply(&defaults).environment_options,
+            vec![
+                var("FOO", "1"),
+                var("BAR", "2"),
+                var("PROTON_USE_XALIA", "0")
+            ]
+        );
+
+        // A game that copied the whole list before reads the same, and a
+        // variable added to the defaults since reaches it too.
+        game.set(
+            "enviromentOptions",
+            serde_json::json!([
+                {"key": "FOO", "value": "1"},
+                {"key": "BAR", "value": "9"},
+            ]),
+        );
+        defaults.environment_options.push(var("NEW", "x"));
+        assert_eq!(
+            game.apply(&defaults).environment_options,
+            vec![var("FOO", "1"), var("BAR", "9"), var("NEW", "x")]
+        );
+
+        // Taking a default variable out for one game stores a removal.
+        let mut wanted = defaults.clone();
+        wanted.environment_options = vec![var("BAR", "2"), var("OWN", "y")];
+        let o = GameSettingsOverrides::diff(&defaults, &wanted);
+        assert_eq!(
+            o.0["enviromentOptions"],
+            serde_json::json!([
+                {"key": "FOO", "iroriRemoved": true},
+                {"key": "NEW", "iroriRemoved": true},
+                {"key": "OWN", "value": "y"},
+            ])
+        );
+        assert_eq!(o.apply(&defaults), wanted);
     }
 
     #[test]

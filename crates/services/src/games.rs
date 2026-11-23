@@ -19,6 +19,14 @@ use serde_json::Value;
 use crate::Backend;
 use crate::inhibit::Inhibitor;
 
+/// A Wine prefix a game could play in ([`Backend::prefix_choices`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrefixChoice {
+    pub path: PathBuf,
+    /// Titles of the installed games playing in it, sorted.
+    pub games: Vec<String>,
+}
+
 /// One-off launch choices.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchParams {
@@ -55,6 +63,23 @@ pub struct RunningGame {
     /// What the started program leaves running when it hands over to the
     /// game and exits; stopping ends that too.
     pub(crate) handoff: Option<Arc<crate::follow::Handoff>>,
+}
+
+/// What [`Backend::finish_session`] needs of a session that ended.
+pub(crate) struct SessionEnd {
+    pub id: GameId,
+    /// `None` when the game left the library while it ran.
+    pub game: Option<Arc<GameInfo>>,
+    pub settings: irori_core::GameSettings,
+    pub started: Instant,
+    /// When it started, as the session history records it.
+    pub started_at: String,
+    /// How the started program exited; `None` for a session followed again
+    /// after a restart, whose exit nobody saw.
+    pub exit: Option<Option<std::process::ExitStatus>>,
+    /// Mods were applied for it and are taken out after.
+    pub mods: bool,
+    pub log_file: PathBuf,
 }
 
 /// Whether a session counts as a failed start: the game exited with an error
@@ -109,7 +134,83 @@ async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool)
 /// Sessions shorter than this that end in an error count as failed starts.
 const FAILED_START_SECONDS: u64 = 10;
 
+/// The user cancelled a launch while it was being prepared
+/// ([`Backend::cancel_launch`]). Found anywhere in an `anyhow` chain; it is
+/// the user's own doing, so screens show no error for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchCancelled;
+
+impl LaunchCancelled {
+    /// Whether `error` is a cancelled launch.
+    pub fn of(error: &anyhow::Error) -> bool {
+        error.chain().any(|e| e.is::<LaunchCancelled>())
+    }
+}
+
+impl std::fmt::Display for LaunchCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The launch was cancelled")
+    }
+}
+
+impl std::error::Error for LaunchCancelled {}
+
+/// How long a launch step that misses the cancel (a request with no
+/// timeout, a store that never checks the token) may go on before it is
+/// dropped. Processes it started end with the token on their own.
+const LAUNCH_CANCEL_GRACE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Refuse to go on with a cancelled launch.
+fn check_launch(cancel: &CancellationToken) -> Result<()> {
+    if cancel.is_cancelled() {
+        return Err(LaunchCancelled.into());
+    }
+    Ok(())
+}
+
+/// Run one step of a launch's preparation. A cancelled launch starts no
+/// step, and a step that was under way when the launch was cancelled ends
+/// it, whatever the step itself answered.
+async fn launch_step<T>(
+    cancel: &CancellationToken,
+    step: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    check_launch(cancel)?;
+    match crate::downloads::stop_within(step, cancel, LAUNCH_CANCEL_GRACE).await {
+        Some(result) if !cancel.is_cancelled() => result,
+        _ => Err(LaunchCancelled.into()),
+    }
+}
+
 impl Backend {
+    /// Cancel the launch of `id` while it is being prepared (saves syncing,
+    /// Wine or Proton being set up, the before-launch script). What the
+    /// launch started stops with it; nothing else on the system is touched.
+    /// Whether a launch was being prepared.
+    pub fn cancel_launch(&self, id: &GameId) -> bool {
+        self.statuses.cancel_launch(id)
+    }
+
+    /// End a launch cancelled after its store began: undo what it set up
+    /// for the session. The error to return.
+    async fn abandon_launch(
+        &self,
+        id: &GameId,
+        store: &irori_core::DynStore,
+        title: &str,
+        log_file: &Path,
+        mods: bool,
+    ) -> anyhow::Error {
+        if mods {
+            self.restore_mods(id, title).await;
+        }
+        if let Err(e) = store.after_exit(&id.app_name, 0).await {
+            tracing::warn!("after a cancelled launch of {id}: {e:#}");
+        }
+        append_log(log_file, "\nThe launch was cancelled.\n");
+        LaunchCancelled.into()
+    }
+
     pub fn is_running(&self, id: &GameId) -> bool {
         self.running.lock().contains_key(id)
     }
@@ -238,6 +339,67 @@ impl Backend {
         )
     }
 
+    /// The Wine prefixes `id` could use instead of its own: those in the
+    /// prefixes folder, and those other installed games play in, each with
+    /// the titles of the games using it. Only prefixes that exist are
+    /// listed. Reads folders; call off the UI thread.
+    pub fn prefix_choices(&self, id: &GameId) -> Vec<PrefixChoice> {
+        let app = self.settings.app();
+        let mut choices: Vec<PrefixChoice> =
+            irori_runtime::prefixes_in(&irori_runtime::prefixes_root(&app))
+                .into_iter()
+                .map(|path| PrefixChoice {
+                    path,
+                    games: Vec::new(),
+                })
+                .collect();
+        let library = self.library();
+        for game in library.all_games() {
+            if game.is_dlc
+                || !game.is_installed
+                || game.id() == *id
+                || !Self::target_platform(game).needs_wine()
+            {
+                continue;
+            }
+            let prefix = irori_runtime::prefix_path(&app, &self.settings.game(&game.id()), game);
+            match choices.iter_mut().find(|c| c.path == prefix) {
+                Some(choice) => choice.games.push(game.title.clone()),
+                None if irori_runtime::is_prefix(&prefix) => choices.push(PrefixChoice {
+                    path: prefix,
+                    games: vec![game.title.clone()],
+                }),
+                None => {}
+            }
+        }
+        for choice in &mut choices {
+            choice.games.sort_by_key(|t| t.to_lowercase());
+            choice.games.dedup();
+        }
+        choices.sort_by_key(|c| c.path.to_string_lossy().to_lowercase());
+        choices
+    }
+
+    /// The umu database id `id` runs with when umu starts it, and where it
+    /// came from; `None` when it has none (umu then runs it as `umu-0`).
+    pub async fn umu_id(&self, id: &GameId) -> Option<irori_runtime::umu::UmuMatch> {
+        let game = self.game(id)?;
+        let settings = self.settings.game(id);
+        irori_runtime::umu::resolve(id, &game.title, &settings).await
+    }
+
+    /// Titles of the umu database matching `query`, one per id.
+    pub async fn umu_suggestions(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Vec<irori_runtime::umu::UmuEntry> {
+        match irori_runtime::umu::database().await {
+            Some(entries) => irori_runtime::umu::suggestions(&entries, query, limit),
+            None => Vec::new(),
+        }
+    }
+
     /// Launch a game and track it until it exits.
     pub async fn launch(
         &self,
@@ -277,16 +439,21 @@ impl Backend {
         let store = self
             .store(id.runner)
             .with_context(|| format!("{} is not available", id.runner))?;
-        let guard = self.statuses.guard(id, StatusKind::Launching);
+        // Cancelling fires `cancel`: the steps below pass it on to what they
+        // start, and none starts once it fired.
+        let (guard, cancel) = self.statuses.launch_guard(id);
 
-        if game.browser_url.is_none() && !store.is_available(&id.app_name).await {
-            bail!(
-                "The game files of {} were not found{}",
-                game.title,
-                game.install_path()
-                    .map(|p| format!(" at {}", p.display()))
-                    .unwrap_or_default()
-            );
+        if game.browser_url.is_none()
+            && !launch_step(&cancel, async {
+                Ok(store.is_available(&id.app_name).await)
+            })
+            .await?
+        {
+            return Err(irori_core::GameFilesMissing {
+                title: game.title.clone(),
+                path: game.install_path(),
+            }
+            .into());
         }
 
         let app = self.settings.app();
@@ -310,7 +477,7 @@ impl Backend {
         if let Some(client) = &stream {
             client.apply(&mut settings, app.sunshine.match_client);
         }
-        let ctx = self.op_context(id, CancellationToken::new());
+        let ctx = self.op_context(id, cancel.clone());
         let target = Target {
             id,
             game: &game,
@@ -324,15 +491,24 @@ impl Backend {
             && self.is_online()
         {
             ctx.step.as_ref()("Syncing saves");
-            match self.save_locations(id).await {
+            match launch_step(&cancel, async { Ok(self.save_locations(id).await) }).await? {
                 // A save folder Irori can't work out is the game's setup,
                 // not the cloud's; the game page's cloud saves say so.
                 Err(e) => tracing::warn!("pre-launch save sync of {id}: {e:#}"),
                 Ok(saves) => {
-                    if let Err(e) = self
-                        .sync_saves_limited(id, &store, SyncDirection::Download, &saves)
-                        .await
-                    {
+                    let synced = launch_step(&cancel, async {
+                        Ok(self
+                            .sync_saves_limited(
+                                id,
+                                &store,
+                                SyncDirection::Download,
+                                &saves,
+                                &cancel,
+                            )
+                            .await)
+                    })
+                    .await?;
+                    if let Err(e) = synced {
                         // Playing on would build on saves the next upload
                         // overwrites, or that overwrite the cloud's; the
                         // caller asks the user.
@@ -353,14 +529,23 @@ impl Backend {
         // Another launcher starts its games with its own settings; Irori's
         // Wine, wrappers and variables would only apply to the opener.
         let mut environment = if id.runner.manages_installs() {
-            irori_runtime::prepare_launch(&app, &settings, target, &ctx).await?
+            launch_step(
+                &cancel,
+                irori_runtime::prepare_launch(&app, &settings, target, &ctx),
+            )
+            .await?
         } else {
             Default::default()
         };
+        // A store's update may have deleted ReShade from the game folder.
+        self.restore_graphics_mods(id).await;
         // Wine loads its own DLL unless told to prefer the game folder's.
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;
+            self.mods_launch_env(id, &game, &mut environment.env).await;
+            self.optiscaler_launch_env(id, &mut environment.env).await;
         }
+        check_launch(&cancel)?;
         // prepare_launch refuses rather than leaving the sandbox out, so a
         // game set to run sandboxed that got this far is in one.
         let sandbox = (settings.sandbox.is_enabled()
@@ -388,7 +573,16 @@ impl Backend {
                     &log_file,
                 ));
             } else {
-                run_script(&settings.before_launch_script_path, &game, &log_file).await?;
+                launch_step(
+                    &cancel,
+                    run_script(
+                        &settings.before_launch_script_path,
+                        &game,
+                        &log_file,
+                        Some(&cancel),
+                    ),
+                )
+                .await?;
             }
         }
 
@@ -403,7 +597,34 @@ impl Backend {
             environment,
             settings: settings.clone(),
         };
-        let plan = store.launch(&id.app_name, &request, ctx).await?;
+        check_launch(&cancel)?;
+        // What the store set up for this session (GOG's Galaxy service, an
+        // Xbox launch view) ends with `after_exit`, also when the launch is
+        // cancelled once the store began.
+        // Mods go in before the store builds the launch: a program a mod
+        // brings (a script extender's loader as the game's program) must be
+        // there when the store checks it.
+        let mods = self.apply_mods(id, &game, &log_file).await?;
+        let plan = match crate::downloads::stop_within(
+            store.launch(&id.app_name, &request, ctx),
+            &cancel,
+            LAUNCH_CANCEL_GRACE,
+        )
+        .await
+        {
+            Some(Ok(plan)) if !cancel.is_cancelled() => plan,
+            Some(Err(e)) if !cancel.is_cancelled() => {
+                if mods {
+                    self.restore_mods(id, &game.title).await;
+                }
+                return Err(e);
+            }
+            _ => {
+                return Err(self
+                    .abandon_launch(id, &store, &game.title, &log_file, mods)
+                    .await);
+            }
+        };
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
         if id.runner.manages_installs()
@@ -426,7 +647,13 @@ impl Backend {
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
         let header = std::fs::metadata(&log_file).map(|m| m.len()).unwrap_or(0);
-        let mods = self.apply_mods(id, &game, &log_file).await?;
+        // The last moment a cancel counts: from here on the game runs, and
+        // stopping it is Stop.
+        if cancel.is_cancelled() {
+            return Err(self
+                .abandon_launch(id, &store, &game.title, &log_file, mods)
+                .await);
+        }
         let spawned = process::spawn(&plan.command, Some(&log_file))
             .and_then(|child| Ok((child.id().context("game exited immediately")?, child)));
         let (pid, mut child) = match spawned {
@@ -469,7 +696,30 @@ impl Backend {
                 handoff: handoff.clone(),
             },
         );
+        // The game runs: no launch is left to cancel.
         drop(guard);
+        // Kept on disk, so an Irori that closes or crashes before the game
+        // ends follows it again when it starts. A game another program owns
+        // is that program's to follow, and a browser is no game's.
+        if plan.watch.is_none() && target.platform != InstallPlatform::Browser {
+            let process_start = self
+                .spawn_blocking(move || crate::running::process_start(pid))
+                .await
+                .ok()
+                .flatten();
+            let folder = (id.runner == irori_core::Runner::Launchers)
+                .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
+                .flatten()
+                .filter(|p| !p.is_empty());
+            crate::running::remember(crate::running::Record {
+                game: id.key(),
+                pid,
+                started_at: started_at.clone(),
+                process_start,
+                folder,
+                mods,
+            });
+        }
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
         self.start_replay(id, &game.title, &settings.replay);
@@ -596,60 +846,96 @@ impl Backend {
                 stop.cancel();
                 let _ = task.await;
             }
-            let seconds = started.elapsed().as_secs();
-            let stopped = b.running.lock().remove(&id).is_some_and(|r| r.stopping);
-            let crashed = failed_start(status, seconds, stopped);
-            let exit_code = status.and_then(|s| s.code());
-            b.troubleshoot
-                .record_exit(&id, exit_code.filter(|_| crashed));
-            b.statuses.clear(&id);
-            {
-                // Sync sees both or neither.
-                let _playtime = b.sync.playtime_guard();
-                b.userdata.record_session(&id, seconds);
-                let session = crate::sessions::Session {
-                    game: id.key(),
-                    started: started_at,
-                    seconds,
-                    crashed,
-                    exit_code: exit_code.filter(|_| crashed),
-                };
-                if let Err(e) = crate::sessions::append(&session) {
-                    tracing::warn!("recording the session of {id}: {e:#}");
-                }
-            }
-            if let Some(store) = b.store(id.runner)
-                && let Err(e) = store.after_exit(&id.app_name, seconds).await
-            {
-                tracing::warn!("after-exit hook of {id}: {e:#}");
-            }
-            if !settings.after_launch_script_path.is_empty() {
-                let _ = run_script(&settings.after_launch_script_path, &game, &log_file).await;
-            }
-            if settings.auto_sync_saves && b.is_online() {
-                b.upload_after_session(&id, &game).await;
-            }
-            // After the cloud upload, so Ludusavi copies the saves the
-            // cloud now holds too.
-            if settings.ludusavi_auto_backup {
-                b.back_up_after_session(&id, &game.title).await;
-            }
-            // After the saves synced, which may live among the mods' files.
-            if mods {
-                b.restore_mods(&id, &game.title).await;
-            }
-            if b.is_online() {
-                let (b, id, title) = (b.clone(), id.clone(), game.title.clone());
-                tokio::spawn(async move { b.after_session_achievements(&id, &title).await });
-            }
-            b.bus.emit(Event::GameExited {
+            b.finish_session(SessionEnd {
                 id,
-                seconds,
-                crashed,
-                exit_code,
-            });
+                game: Some(game),
+                settings,
+                started,
+                started_at,
+                exit: Some(status),
+                mods,
+                log_file,
+            })
+            .await;
         });
         Ok(())
+    }
+
+    /// Everything after a session ended: record it and its playtime, the
+    /// store's after-exit hook, the after-launch script, the saves' upload
+    /// and backup, taking the mods out, then [`Event::GameExited`].
+    pub(crate) async fn finish_session(&self, end: SessionEnd) {
+        let SessionEnd {
+            id,
+            game,
+            settings,
+            started,
+            started_at,
+            exit,
+            mods,
+            log_file,
+        } = end;
+        crate::running::forget(&id);
+        let seconds = started.elapsed().as_secs();
+        let stopped = self.running.lock().remove(&id).is_some_and(|r| r.stopping);
+        // A session followed again after a restart has no exit status to
+        // judge, and has run for longer than a failed start anyway.
+        let status = exit.flatten();
+        let crashed = exit.is_some() && failed_start(status, seconds, stopped);
+        let exit_code = status.and_then(|s| s.code());
+        self.troubleshoot
+            .record_exit(&id, exit_code.filter(|_| crashed));
+        self.statuses.clear(&id);
+        {
+            // Sync sees both or neither.
+            let _playtime = self.sync.playtime_guard();
+            self.userdata.record_session(&id, seconds);
+            let session = crate::sessions::Session {
+                game: id.key(),
+                started: started_at,
+                seconds,
+                crashed,
+                exit_code: exit_code.filter(|_| crashed),
+            };
+            if let Err(e) = crate::sessions::append(&session) {
+                tracing::warn!("recording the session of {id}: {e:#}");
+            }
+        }
+        if let Some(store) = self.store(id.runner)
+            && let Err(e) = store.after_exit(&id.app_name, seconds).await
+        {
+            tracing::warn!("after-exit hook of {id}: {e:#}");
+        }
+        let title = game
+            .as_ref()
+            .map_or_else(|| id.app_name.to_string(), |g| g.title.clone());
+        if let Some(game) = &game {
+            if !settings.after_launch_script_path.is_empty() {
+                let _ = run_script(&settings.after_launch_script_path, game, &log_file, None).await;
+            }
+            if settings.auto_sync_saves && self.is_online() {
+                self.upload_after_session(&id, game).await;
+            }
+        }
+        // After the cloud upload, so Ludusavi copies the saves the
+        // cloud now holds too.
+        if settings.ludusavi_auto_backup {
+            self.back_up_after_session(&id, &title).await;
+        }
+        // After the saves synced, which may live among the mods' files.
+        if mods {
+            self.restore_mods(&id, &title).await;
+        }
+        if self.is_online() {
+            let (b, id, title) = (self.clone(), id.clone(), title.clone());
+            tokio::spawn(async move { b.after_session_achievements(&id, &title).await });
+        }
+        self.bus.emit(Event::GameExited {
+            id,
+            seconds,
+            crashed,
+            exit_code,
+        });
     }
 
     /// Start the game's programs alongside, if it has any. Steam games reach
@@ -809,29 +1095,32 @@ impl Backend {
                 "This CrossOver bottle may be shared by other games. Keep the prefix when uninstalling, and manage bottles in CrossOver."
             );
             anyhow::ensure!(
-                !irori_runtime::prefix_is_shared(&app, &prefix),
+                !irori_runtime::prefix_is_shared(&app, &game, &prefix),
                 "{} is shared by other games. Keep the prefix when uninstalling.",
                 prefix.display()
             );
         }
         store.uninstall(&id.app_name, args).await?;
+        // The game is gone from its store now. Each clean-up step runs on its
+        // own: a prefix that can't be deleted must not leave the shortcuts,
+        // settings and library data of a game that no longer exists.
+        let mut problems = Vec::new();
         if args.remove_prefix && Self::target_platform(&game).needs_wine() {
             let prefix = irori_runtime::prefix_path(&app, &settings, &game);
-            remove_prefix_dir(&prefix, &app).await?;
+            match remove_prefix_dir(&prefix, &app).await {
+                Ok(()) => self.settings.forget_prefix(id),
+                Err(e) => problems.push(format!("{e:#}")),
+            }
         }
-        let _ = irori_extras::shortcuts::remove(&game, &app).await;
+        if let Err(e) = irori_extras::shortcuts::remove(&game, &app).await {
+            problems.push(format!("{e:#}"));
+        }
         if args.remove_settings {
             self.settings.remove_game(id);
         }
         self.userdata.forget(id);
         self.bus.emit(Event::LibraryChanged(id.runner));
-        self.bus.notice(
-            Notice::new(NoticeLevel::Success, format!("{} uninstalled", game.title)).keys(
-                "shell.notice.uninstalled",
-                None,
-                &[("title", &game.title)],
-            ),
-        );
+        self.bus.notice(uninstalled_notice(&game.title, &problems));
         Ok(())
     }
 
@@ -948,15 +1237,37 @@ impl Backend {
         store.sync_saves(&id.app_name, direction, &saves, ctx).await
     }
 
+    /// Whether a forced upload of `id`'s saves would delete cloud saves: a
+    /// save folder holds no files, and Epic and GOG then take the cloud
+    /// copy away instead of replacing it. For the confirmation, which must
+    /// say so. Resolves the default save folder like a sync.
+    pub async fn forced_upload_deletes_cloud_saves(&self, id: &GameId) -> Result<bool> {
+        self.save_locations(id).await?;
+        let settings = self.settings.game(id);
+        let dirs: Vec<PathBuf> = if settings.gog_saves.is_empty() {
+            vec![irori_core::paths::expand_home(settings.saves_path.trim())]
+        } else {
+            settings
+                .gog_saves
+                .iter()
+                .map(|l| irori_core::paths::expand_home(l.location.trim()))
+                .collect()
+        };
+        Ok(tokio::task::spawn_blocking(move || dirs.iter().any(|d| !holds_files(d))).await?)
+    }
+
     /// Sync like [`Self::sync_saves`], given up after [`SAVE_SYNC_TIMEOUT`].
+    /// `stop` (a cancelled launch) stops it too.
     async fn sync_saves_limited(
         &self,
         id: &GameId,
         store: &irori_core::DynStore,
         direction: SyncDirection,
         saves: &str,
+        stop: &CancellationToken,
     ) -> Result<String> {
-        let cancel = CancellationToken::new();
+        // A child, so giving up here never cancels the launch that waits.
+        let cancel = stop.child_token();
         let ctx = self.op_context(id, cancel.clone());
         let sync = store.sync_saves(&id.app_name, direction, saves, ctx);
         match tokio::time::timeout(SAVE_SYNC_TIMEOUT, sync).await {
@@ -990,7 +1301,13 @@ impl Backend {
             }
         };
         let Err(e) = self
-            .sync_saves_limited(id, &store, SyncDirection::Upload, &saves)
+            .sync_saves_limited(
+                id,
+                &store,
+                SyncDirection::Upload,
+                &saves,
+                &CancellationToken::new(),
+            )
             .await
         else {
             return;
@@ -1169,6 +1486,33 @@ impl Backend {
         Ok(())
     }
 
+    /// Whether a game whose files are missing can be forgotten as installed
+    /// ([`Backend::forget_install`]): store games Irori installs. An added
+    /// game or a ROM has no install apart from its files; it is located again
+    /// or removed from the library instead.
+    pub fn can_forget_install(id: &GameId) -> bool {
+        id.runner.manages_installs() && !matches!(id.runner, Runner::Sideload | Runner::Emulation)
+    }
+
+    /// Forget that a game is installed without touching any file, for an
+    /// install whose files are gone. Its settings, prefix and library data
+    /// stay, so installing it again picks them up.
+    pub async fn forget_install(&self, id: &GameId) -> Result<()> {
+        anyhow::ensure!(
+            Self::can_forget_install(id),
+            "Irori can only forget the installs of store games"
+        );
+        let game = self.installed_game(id)?;
+        if self.is_running(id) {
+            bail!("{} is running", game.title);
+        }
+        let store = self.store(id.runner).context("store not available")?;
+        let _guard = self.statuses.guard(id, StatusKind::Uninstalling);
+        store.forget_install(&id.app_name).await?;
+        self.bus.emit(Event::LibraryChanged(id.runner));
+        Ok(())
+    }
+
     /// Path of the last session log of a game.
     pub fn game_log(&self, id: &GameId) -> PathBuf {
         Paths::get().game_log_file(id)
@@ -1249,14 +1593,50 @@ pub(crate) fn append_log(path: &Path, text: &str) {
     }
 }
 
-async fn run_script(script: &str, game: &GameInfo, log_file: &Path) -> Result<()> {
+/// Run a before- or after-launch script and wait for it; `cancel` ends it
+/// (with everything in its process group).
+async fn run_script(
+    script: &str,
+    game: &GameInfo,
+    log_file: &Path,
+    cancel: Option<&CancellationToken>,
+) -> Result<()> {
     let spec =
         process::program_command(Path::new(script)).envs(crate::programs::identity_env(game));
-    let res = process::run(&spec, RunOptions::default().log_file(log_file)).await?;
+    let mut options = RunOptions::default().log_file(log_file);
+    if let Some(cancel) = cancel {
+        options = options.cancel(cancel.clone());
+    }
+    let res = process::run(&spec, options).await?;
     if !res.success() {
         tracing::warn!("script {script} exited with {:?}", res.code);
     }
     Ok(())
+}
+
+/// The notice after an uninstall: success, or a warning listing every
+/// clean-up step that failed after the store removed the game.
+fn uninstalled_notice(title: &str, problems: &[String]) -> Notice {
+    if problems.is_empty() {
+        return Notice::new(NoticeLevel::Success, format!("{title} uninstalled")).keys(
+            "shell.notice.uninstalled",
+            None,
+            &[("title", title)],
+        );
+    }
+    for problem in problems {
+        tracing::warn!("cleaning up after uninstalling {title}: {problem}");
+    }
+    Notice::new(
+        NoticeLevel::Warning,
+        format!("{title} uninstalled, but not everything was cleaned up"),
+    )
+    .message(problems.join("\n"))
+    .keys(
+        "shell.notice.uninstalled_with_problems",
+        None,
+        &[("title", title)],
+    )
 }
 
 /// Delete a prefix after sanity checks: never the shared prefix root, a
@@ -1391,9 +1771,32 @@ fn copy_tree(src: &Path, dst: &Path, on_bytes: &mut dyn FnMut(u64)) -> Result<()
     Ok(())
 }
 
+/// Whether `dir` (a save folder) holds a file anywhere below it. A missing
+/// folder holds none. Blocking.
+fn holds_files(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| match e.file_type() {
+        Ok(t) if t.is_dir() => holds_files(&e.path()),
+        Ok(_) => true,
+        Err(_) => false,
+    })
+}
+
 #[cfg(test)]
 mod platform_tests {
     use super::*;
+
+    #[test]
+    fn knows_save_folders_without_files() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!holds_files(&dir.path().join("missing")));
+        std::fs::create_dir_all(dir.path().join("slot/empty")).unwrap();
+        assert!(!holds_files(dir.path()), "folders alone are no saves");
+        std::fs::write(dir.path().join("slot/1.sav"), "x").unwrap();
+        assert!(holds_files(dir.path()));
+    }
 
     #[test]
     fn moves_by_renaming_on_the_same_filesystem() {

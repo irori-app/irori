@@ -27,6 +27,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::graphics_mods::GraphicsModsChanged;
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
+use crate::optiscaler::OptiscalerPanel;
 use crate::registry::FieldSection;
 use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
@@ -82,7 +83,7 @@ impl GameSection {
             "art" | "artwork" | "metadata" => GameSection::Artwork,
             "launch" | "advanced" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
+            "tools" | "reshade" | "renodx" | "hdr" | "optiscaler" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -151,6 +152,7 @@ pub struct GameSettingsView {
     winetricks: Entity<WinetricksPanel>,
     reshade: Entity<ReshadePanel>,
     renodx: Entity<RenodxPanel>,
+    optiscaler: Entity<OptiscalerPanel>,
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
@@ -198,20 +200,26 @@ impl GameSettingsView {
         };
         let reshade = {
             let id = id.clone();
-            cx.new(|_| ReshadePanel::new(id))
+            cx.new(|cx| ReshadePanel::new(id, cx))
         };
         let renodx = {
             let id = id.clone();
             cx.new(|cx| RenodxPanel::new(id, window, cx))
         };
-        // RenoDX installs ReShade's build with add-on support, and removing
-        // ReShade removes RenoDX: each panel reads the other's change.
+        let optiscaler = {
+            let id = id.clone();
+            cx.new(|cx| OptiscalerPanel::new(id, window, cx))
+        };
+        // RenoDX installs ReShade's build with add-on support, removing ReShade
+        // removes RenoDX, and graphics mods may share or release proxy DLL slots:
+        // each panel reads the others' changes.
         let mods_changed = [
             cx.subscribe_in(
                 &reshade,
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.renodx.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
                 },
             ),
             cx.subscribe_in(
@@ -219,6 +227,15 @@ impl GameSettingsView {
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
+                },
+            ),
+            cx.subscribe_in(
+                &optiscaler,
+                window,
+                |this, _, _: &GraphicsModsChanged, window, cx| {
+                    this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.renodx.update(cx, |r, cx| r.refresh(window, cx));
                 },
             ),
         ];
@@ -242,6 +259,7 @@ impl GameSettingsView {
             winetricks,
             reshade,
             renodx,
+            optiscaler,
             steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
@@ -295,20 +313,25 @@ impl GameSettingsView {
 
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
-    /// log; Wine & Proton becomes its Steam Play choice (Linux), and
-    /// Performance keeps only the replay buffer (Linux).
-    fn sections(&self) -> Vec<GameSection> {
+    /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
+    /// keeps only the replay buffer (Linux), and Tools is shown for a Windows
+    /// build (ReShade, RenoDX, OptiScaler).
+    fn sections(&self, cx: &Context<Self>) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
         }
         let linux = cfg!(target_os = "linux");
+        let graphics_mods = backend(cx)
+            .game(&self.id)
+            .is_some_and(|g| irori_services::supports_reshade(&g));
         GameSection::ALL
             .into_iter()
             .filter(|s| match s {
                 GameSection::Wine => self.steam_compat.is_some(),
                 GameSection::Performance => linux,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
-                GameSection::Gpu | GameSection::Tools | GameSection::Log => false,
+                GameSection::Tools => graphics_mods,
+                GameSection::Gpu | GameSection::Log => false,
             })
             .collect()
     }
@@ -323,7 +346,7 @@ impl GameSettingsView {
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
         if self.id.runner == Runner::Steam {
-            return self.sections()[0];
+            return self.sections(cx)[0];
         }
         if self.uses_wine(cx) {
             GameSection::Wine
@@ -338,7 +361,7 @@ impl GameSettingsView {
     }
 
     fn open(&mut self, section: GameSection, window: &mut Window, cx: &mut Context<Self>) {
-        let section = if self.sections().contains(&section) {
+        let section = if self.sections(cx).contains(&section) {
             section
         } else {
             self.default_section(cx)
@@ -354,12 +377,13 @@ impl GameSettingsView {
         if section == GameSection::Log {
             self.log.update(cx, |l, cx| l.start(window, cx));
         }
-        if section == GameSection::Tools && self.uses_wine(cx) {
+        if section == GameSection::Tools && self.id.runner != Runner::Steam && self.uses_wine(cx) {
             self.winetricks.update(cx, |w, cx| w.activate(window, cx));
         }
         if section == GameSection::Tools {
             self.reshade.update(cx, |r, cx| r.activate(window, cx));
             self.renodx.update(cx, |r, cx| r.activate(window, cx));
+            self.optiscaler.update(cx, |o, cx| o.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -512,6 +536,27 @@ impl GameSettingsView {
     }
 
     fn render_tools(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.id.runner == Runner::Steam {
+            // Steam runs the game, so only what goes into its folder applies.
+            return v_flex()
+                .w_full()
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.reshade"),
+                    cx,
+                ))
+                .child(self.reshade.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.renodx"),
+                    cx,
+                ))
+                .child(self.renodx.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.optiscaler"),
+                    cx,
+                ))
+                .child(self.optiscaler.clone())
+                .into_any_element();
+        }
         let enabled = self.uses_wine(cx);
         let reason = (!enabled).then(|| t("settings.tools.windows_only"));
         let tools = [
@@ -611,6 +656,11 @@ impl GameSettingsView {
             ))
             .child(self.renodx.clone())
             .child(crate::widgets::group_heading(
+                t("settings.tools.group.optiscaler"),
+                cx,
+            ))
+            .child(self.optiscaler.clone())
+            .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,
             ))
@@ -654,7 +704,7 @@ impl Render for GameSettingsView {
                     .cleanable(true)
                     .mb_2(),
             )
-            .children(self.sections().into_iter().map(|s| {
+            .children(self.sections(cx).into_iter().map(|s| {
                 nav_button(
                     ElementId::Name(format!("game-settings-nav-{}", s.id()).into()),
                     s.icon(),

@@ -116,6 +116,8 @@ impl GameAchievement {
 #[serde(default)]
 pub struct UserAchievement {
     pub internal_key: u32,
+    /// API name when unlocks come from `ISteamUserStats/GetPlayerAchievements`.
+    pub internal_name: String,
     pub unlocked: bool,
     /// Unix time of the unlock, 0 when unknown.
     pub unlock_time: u64,
@@ -194,11 +196,11 @@ pub fn steam_language(ui: &str) -> &'static str {
 
 impl Client {
     /// The achievements `appid` offers, in Steam's `language` (`english`,
-    /// `german`…). Public; an access token is sent when there is one.
+    /// `german`...). Public; credentials are sent when available.
     /// Empty for a game without any.
     pub async fn game_achievements(
         &self,
-        access_token: Option<&str>,
+        auth: Option<crate::auth::SteamAuth<'_>>,
         appid: u32,
         language: &str,
     ) -> Result<AchievementSchema> {
@@ -210,8 +212,8 @@ impl Client {
             ("appid", appid.to_string()),
             ("language", language.to_string()),
         ];
-        if let Some(token) = access_token {
-            query.push(("access_token", token.to_string()));
+        if let Some(auth) = auth {
+            query.push(auth.query_param());
         }
         let answer: Value = self
             .get_json(url, &query, "the game's achievements")
@@ -223,23 +225,78 @@ impl Client {
     /// `None` when Steam shares none (it answers `{"response": {}}`).
     pub async fn user_achievements(
         &self,
-        access_token: &str,
+        auth: crate::auth::SteamAuth<'_>,
         steamid: u64,
         appid: u32,
     ) -> Result<Option<UserAchievements>> {
-        let url = format!(
-            "{}/IPlayerService/GetUserAchievements/v1/",
-            self.endpoints().api
-        );
-        let query = [
-            ("access_token", access_token.to_string()),
-            ("steamid", steamid.to_string()),
-            ("appid", appid.to_string()),
-        ];
-        let answer: Option<Value> = self
-            .get_json_allowing(url, &query, "your achievements", &[400, 404])
-            .await?;
-        Ok(answer.as_ref().and_then(parse_user))
+        match auth {
+            crate::auth::SteamAuth::WebSession(access_token) => {
+                let url = format!(
+                    "{}/IPlayerService/GetUserAchievements/v1/",
+                    self.endpoints().api
+                );
+                let query = [
+                    ("access_token", access_token.to_string()),
+                    ("steamid", steamid.to_string()),
+                    ("appid", appid.to_string()),
+                ];
+                let answer: Option<Value> = self
+                    .get_json_allowing(url, &query, "your achievements", &[400, 404])
+                    .await?;
+                Ok(answer.as_ref().and_then(parse_user))
+            }
+            crate::auth::SteamAuth::ApiKey(api_key) => {
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct Answer {
+                    playerstats: PlayerStats,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct PlayerStats {
+                    success: bool,
+                    achievements: Vec<ApiAchievement>,
+                }
+                #[derive(Deserialize, Default)]
+                #[serde(default)]
+                struct ApiAchievement {
+                    apiname: String,
+                    achieved: u8,
+                    unlocktime: u64,
+                }
+                let url = format!(
+                    "{}/ISteamUserStats/GetPlayerAchievements/v1/",
+                    self.endpoints().api
+                );
+                let query = [
+                    ("key", api_key.to_string()),
+                    ("steamid", steamid.to_string()),
+                    ("appid", appid.to_string()),
+                ];
+                let answer: Option<Answer> = self
+                    .get_json_allowing(url, &query, "your achievements", &[400, 404])
+                    .await?;
+                let Some(stats) = answer.map(|a| a.playerstats).filter(|s| s.success) else {
+                    return Ok(None);
+                };
+                Ok(Some(UserAchievements {
+                    achievements: stats
+                        .achievements
+                        .into_iter()
+                        .filter(|a| !a.apiname.is_empty())
+                        .map(|a| UserAchievement {
+                            internal_key: 0,
+                            internal_name: a.apiname,
+                            unlocked: a.achieved != 0,
+                            unlock_time: a.unlocktime,
+                            progress_int: 0.0,
+                            progress_float: 0.0,
+                        })
+                        .collect(),
+                    groups: Vec::new(),
+                }))
+            }
+        }
     }
 }
 
@@ -279,6 +336,7 @@ mod tests {
         Client::with_endpoints(Endpoints {
             api: server.base(),
             store: server.base(),
+            login: server.base(),
             assets: server.base(),
         })
         .unwrap()
@@ -286,6 +344,8 @@ mod tests {
 
     #[tokio::test]
     async fn reads_definitions_and_unlocks() {
+        use crate::auth::SteamAuth;
+
         let server = TestServer::start(|req| {
             let p = req.path.as_str();
             if p.starts_with("/IPlayerService/GetGameAchievements/v1/?")
@@ -314,6 +374,14 @@ mod tests {
                     {"internal_key": 1, "unlocked": true, "unlock_time": 1700000000},
                     {"internal_key": 2, "unlocked": false, "progress_int": 20}
                 ]}}))
+            } else if p.starts_with("/ISteamUserStats/GetPlayerAchievements/v1/?") {
+                Resp::json(json!({"playerstats": {
+                    "success": true,
+                    "achievements": [
+                        {"apiname": "ACH.WAKE_UP", "achieved": 1, "unlocktime": 1700000000},
+                        {"apiname": "ACH.COLLECT", "achieved": 0, "unlocktime": 0}
+                    ]
+                }}))
             } else {
                 Resp::status(404)
             }
@@ -326,19 +394,41 @@ mod tests {
         assert_eq!(defs[0].localized_name, "Weckruf");
         assert!((defs[0].player_percent_unlocked - 71.2).abs() < 0.01);
         assert!(defs[1].hidden);
-        let mine = c.user_achievements("token", 1, 620).await.unwrap().unwrap();
+        let mine = c
+            .user_achievements(SteamAuth::WebSession("token"), 1, 620)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(mine.groups.is_empty());
         let mine = mine.achievements;
         assert!(mine[0].unlocked && !mine[1].unlocked);
         assert_eq!(mine[0].unlock_time, 1_700_000_000);
         assert_eq!(defs[1].progress(&mine[1]), Some(0.4));
         assert_eq!(defs[0].progress(&mine[0]), None);
-        assert!(c.user_achievements("token", 1, 10).await.unwrap().is_none());
-        let e = c.user_achievements("revoked", 1, 620).await.unwrap_err();
+        assert!(
+            c.user_achievements(SteamAuth::WebSession("token"), 1, 10)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let e = c
+            .user_achievements(SteamAuth::WebSession("revoked"), 1, 620)
+            .await
+            .unwrap_err();
         assert_eq!(
             e.downcast_ref::<SteamError>(),
             Some(&SteamError::SessionRejected)
         );
+        let via_key = c
+            .user_achievements(SteamAuth::ApiKey("mykey"), 1, 620)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(via_key.achievements.len(), 2);
+        assert_eq!(via_key.achievements[0].internal_name, "ACH.WAKE_UP");
+        assert!(via_key.achievements[0].unlocked);
+        assert_eq!(via_key.achievements[0].unlock_time, 1_700_000_000);
+        assert!(!via_key.achievements[1].unlocked);
         assert_eq!(icon_url(620, "a.jpg"), format!("{ICON_BASE}/620/a.jpg"));
     }
 

@@ -380,6 +380,16 @@ pub(super) fn build_menu(
                 let _ = p.update(cx, |_, cx| cx.emit(GamePageEvent::RequestEdit(i.clone())));
             }),
         );
+        if id.runner == Runner::Emulation {
+            let (i, p) = (id.clone(), page.clone());
+            menu = menu.item(
+                item("game.menu.play_as_pc_game", IconName::Monitor).on_click(move |_, _, cx| {
+                    let _ = p.update(cx, |_, cx| {
+                        cx.emit(GamePageEvent::RequestPlayAsPcGame(i.clone()))
+                    });
+                }),
+            );
+        }
         menu = menu.item(
             item("game.menu.categories", IconName::Tags).on_click(move |_, _, cx| {
                 let _ = page.update(cx, |_, cx| cx.emit(GamePageEvent::RequestCategories));

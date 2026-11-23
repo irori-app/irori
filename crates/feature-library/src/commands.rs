@@ -39,6 +39,9 @@ pub enum GameCommand {
     /// Choose where an added game's program went (owned by the game
     /// feature).
     Locate,
+    /// Turn a ROM library entry into an added PC game, keeping what the
+    /// user keeps about it.
+    PlayAsPcGame,
 }
 
 /// Facts about a game that decide which commands apply.
@@ -49,11 +52,13 @@ pub struct GameState {
     pub sideload: bool,
     /// A web app: no settings, logs or files.
     pub browser: bool,
-    /// Another launcher (Steam) installs and runs it: Play, page, library
-    /// and folder commands only.
+    /// Another launcher installs and runs it: Play, page, library and folder
+    /// commands only (plus settings, verify and uninstall when [`Self::client`]
+    /// is set).
     pub external: bool,
     /// That launcher's client takes install, verify and uninstall requests
-    /// (Steam), so those commands are handed to it.
+    /// (Steam) and has Irori game settings (Steam Play, launch options,
+    /// backups and art).
     pub client: bool,
     pub status: Option<StatusKind>,
     pub has_update: bool,
@@ -68,6 +73,8 @@ pub struct GameState {
     pub shortcut: Option<bool>,
     /// Installed, but its files were not found.
     pub unavailable: bool,
+    /// An entry of the ROM library.
+    pub rom: bool,
 }
 
 impl GameState {
@@ -126,13 +133,21 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if state.is_queued() {
         main.push(RemoveFromQueue);
     }
+    let managed = !state.external || state.client;
     main.push(OpenPage);
-    if state.installed && !state.browser && !state.external {
-        main.push(Settings);
-        main.push(Logs);
+    if state.installed && !state.browser {
+        if managed {
+            main.push(Settings);
+        }
+        if !state.external {
+            main.push(Logs);
+        }
     }
 
     let mut library = vec![ToggleFavourite, ToggleHidden, Edit];
+    if state.rom && !busy && !playing {
+        library.push(PlayAsPcGame);
+    }
     if state.in_recent {
         library.push(RemoveFromRecent);
     }
@@ -151,7 +166,6 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if state.installed && state.has_install_path && !state.browser {
         files.push(OpenFolder);
     }
-    let managed = !state.external || state.client;
     if state.installed && !state.sideload && managed && !busy && !playing {
         files.push(Verify);
     }
@@ -200,6 +214,7 @@ impl GameCommand {
             Uninstall if state.sideload => "library.command.remove_app",
             Uninstall => "library.command.uninstall",
             Locate => "library.command.locate_program",
+            PlayAsPcGame => "library.command.play_as_pc_game",
         };
         t(key).to_string()
     }
@@ -231,6 +246,7 @@ impl GameCommand {
             Verify => IconName::ShieldCheck,
             Uninstall => IconName::Trash,
             Locate => IconName::FolderSearch,
+            PlayAsPcGame => IconName::Monitor,
         }
     }
 }
@@ -333,11 +349,12 @@ mod tests {
             assert!(!steam.contains(&gone), "{gone:?}");
         }
         assert!(steam.contains(&OpenFolder));
-        // Steam itself verifies and removes its games.
+        // Steam itself verifies and removes its games, and Irori applies game
+        // settings (Steam Play, launch options, save backups and art) to them.
         s.client = true;
         let steam = flat(&s);
-        assert!(steam.contains(&Verify) && steam.contains(&Uninstall));
-        assert!(!steam.contains(&Settings) && !steam.contains(&AddToSteam));
+        assert!(steam.contains(&Settings) && steam.contains(&Verify) && steam.contains(&Uninstall));
+        assert!(!steam.contains(&Logs) && !steam.contains(&AddToSteam));
         s.client = false;
         s.status = Some(StatusKind::Playing);
         s.status = Some(StatusKind::Repairing);
@@ -345,6 +362,25 @@ mod tests {
         s.status = Some(StatusKind::Queued);
         assert!(flat(&s).contains(&RemoveFromQueue));
         assert!(!flat(&s).contains(&Update));
+    }
+
+    #[test]
+    fn roms_can_be_played_as_pc_games() {
+        crate::i18n::register();
+        let mut s = GameState {
+            installed: true,
+            rom: true,
+            ..Default::default()
+        };
+        assert!(flat(&s).contains(&PlayAsPcGame));
+        assert_eq!(PlayAsPcGame.label(&s), "Play as a PC game…");
+        s.status = Some(StatusKind::Playing);
+        assert!(!flat(&s).contains(&PlayAsPcGame));
+        let pc = GameState {
+            installed: true,
+            ..Default::default()
+        };
+        assert!(!flat(&pc).contains(&PlayAsPcGame));
     }
 
     #[test]

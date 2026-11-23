@@ -198,6 +198,7 @@ impl Backend {
                     &game,
                     None,
                     true,
+                    false,
                     step.clone(),
                     progress.clone(),
                     cancel.clone(),
@@ -299,6 +300,7 @@ mod tests {
                 id: id.into(),
                 title: "Game".into(),
             }),
+            optiscaler: None,
         }
     }
 

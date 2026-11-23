@@ -24,6 +24,8 @@ pub enum GraphicsMod {
     Reshade,
     /// A RenoDX HDR add-on, loaded by ReShade's build with add-on support.
     Renodx,
+    /// OptiScaler upscaling and frame generation layer.
+    Optiscaler,
 }
 
 impl GraphicsMod {
@@ -32,6 +34,7 @@ impl GraphicsMod {
         match self {
             GraphicsMod::Reshade => "ReShade",
             GraphicsMod::Renodx => "RenoDX",
+            GraphicsMod::Optiscaler => "OptiScaler",
         }
     }
 
@@ -48,6 +51,7 @@ impl GraphicsMod {
         match self {
             GraphicsMod::Reshade => base.join(id.runner.id()).join(file),
             GraphicsMod::Renodx => base.join("renodx").join(id.runner.id()).join(file),
+            GraphicsMod::Optiscaler => base.join("optiscaler").join(id.runner.id()).join(file),
         }
     }
 
@@ -57,6 +61,7 @@ impl GraphicsMod {
         match self {
             GraphicsMod::Reshade => base,
             GraphicsMod::Renodx => base.join("renodx"),
+            GraphicsMod::Optiscaler => base.join("optiscaler"),
         }
     }
 }
@@ -70,6 +75,7 @@ mod tests {
         assert_eq!(GraphicsMod::default(), GraphicsMod::Reshade);
         assert_eq!(GraphicsMod::Reshade.name(), "ReShade");
         assert_eq!(GraphicsMod::Renodx.name(), "RenoDX");
+        assert_eq!(GraphicsMod::Optiscaler.name(), "OptiScaler");
         assert_eq!(
             serde_json::to_string(&GraphicsMod::Reshade).unwrap(),
             "\"reshade\""
@@ -78,5 +84,22 @@ mod tests {
             serde_json::from_str::<GraphicsMod>("\"renodx\"").unwrap(),
             GraphicsMod::Renodx
         );
+        assert_eq!(
+            serde_json::to_string(&GraphicsMod::Optiscaler).unwrap(),
+            "\"optiscaler\""
+        );
+        assert_eq!(
+            serde_json::from_str::<GraphicsMod>("\"optiscaler\"").unwrap(),
+            GraphicsMod::Optiscaler
+        );
+    }
+
+    #[test]
+    fn optiscaler_paths_sit_under_reshade_roots() {
+        let id = GameId::new(irori_core::Runner::Legendary, "MyGame");
+        let journal = GraphicsMod::Optiscaler.journal_path(&id);
+        assert!(journal.ends_with("reshade/optiscaler/legendary/MyGame.json"));
+        let cache = GraphicsMod::Optiscaler.cache_dir();
+        assert!(cache.ends_with("reshade/optiscaler"));
     }
 }
