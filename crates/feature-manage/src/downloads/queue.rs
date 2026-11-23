@@ -44,6 +44,51 @@ impl HistoryRow {
             DownloadState::Failed | DownloadState::Canceled
         )
     }
+
+    /// A finished download whose game is installed now can be played from
+    /// its row. The library's entry decides, so a game uninstalled since
+    /// offers no Play.
+    pub fn is_playable(&self) -> bool {
+        self.item.state == DownloadState::Done && self.game.is_installed
+    }
+}
+
+/// Which finished downloads the history shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum HistoryFilter {
+    #[default]
+    All,
+    /// Downloads that finished.
+    Done,
+    /// Downloads that failed or were canceled.
+    Unfinished,
+}
+
+impl HistoryFilter {
+    /// Every choice, in the order the page offers them.
+    pub const ALL: [HistoryFilter; 3] = [
+        HistoryFilter::All,
+        HistoryFilter::Done,
+        HistoryFilter::Unfinished,
+    ];
+
+    pub fn matches(self, state: DownloadState) -> bool {
+        match self {
+            HistoryFilter::All => true,
+            HistoryFilter::Done => state == DownloadState::Done,
+            HistoryFilter::Unfinished => {
+                matches!(state, DownloadState::Failed | DownloadState::Canceled)
+            }
+        }
+    }
+
+    pub fn label(self) -> SharedString {
+        t(match self {
+            HistoryFilter::All => "manage.downloads.history.filter.all",
+            HistoryFilter::Done => "manage.downloads.history.filter.done",
+            HistoryFilter::Unfinished => "manage.downloads.history.filter.unfinished",
+        })
+    }
 }
 
 /// Everything the downloads page renders about the queue.
@@ -120,6 +165,13 @@ impl QueuePresentation {
 
     pub fn is_empty(&self) -> bool {
         self.current.is_none() && self.waiting.is_empty() && self.history.is_empty()
+    }
+
+    /// The history rows `filter` keeps, most recent first.
+    pub fn history_in(&self, filter: HistoryFilter) -> impl Iterator<Item = &HistoryRow> {
+        self.history
+            .iter()
+            .filter(move |r| filter.matches(r.item.state))
     }
 
     pub fn has_active(&self) -> bool {
@@ -337,5 +389,43 @@ pub(crate) mod tests {
         assert_eq!(kind_label(&p.history[1].item.kind), "Update");
         assert_eq!(store_label(Runner::Sideload), "Other");
         assert_eq!(store_label(Runner::Nile), "Amazon Games");
+    }
+
+    #[test]
+    fn history_filter_and_play() {
+        let installed = |id: &GameId| {
+            Some(Arc::new(GameInfo {
+                runner: Some(id.runner),
+                app_name: id.app_name.to_string(),
+                is_installed: id.app_name.as_ref() != "gone",
+                ..Default::default()
+            }))
+        };
+        let snap = DownloadQueueSnapshot {
+            finished: vec![
+                item(Runner::Gog, "done", DownloadState::Done),
+                item(Runner::Gog, "failed", DownloadState::Failed),
+                item(Runner::Gog, "gone", DownloadState::Done),
+                item(Runner::Gog, "canceled", DownloadState::Canceled),
+            ],
+            ..Default::default()
+        };
+        let p = QueuePresentation::build(&snap, installed);
+        let apps = |filter| {
+            p.history_in(filter)
+                .map(|r| r.item.id.app_name.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(apps(HistoryFilter::All).len(), 4);
+        assert_eq!(apps(HistoryFilter::Done), ["done", "gone"]);
+        assert_eq!(apps(HistoryFilter::Unfinished), ["failed", "canceled"]);
+        let playable: Vec<_> = p
+            .history
+            .iter()
+            .filter(|r| r.is_playable())
+            .map(|r| r.item.id.app_name.to_string())
+            .collect();
+        // A failed download and a game uninstalled since offer no Play.
+        assert_eq!(playable, ["done"]);
     }
 }

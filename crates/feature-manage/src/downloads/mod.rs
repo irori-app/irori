@@ -4,14 +4,14 @@ mod queue;
 mod speed;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::chart::AreaChart;
 use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -21,7 +21,7 @@ use gpui_kit::{
 };
 use irori_core::util::unix_now;
 use irori_core::{GameId, GameStatus, StatusKind};
-use irori_services::{DownloadKind, DownloadState, FileState};
+use irori_services::{DownloadKind, DownloadState, FileState, LaunchParams};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::{EmptyState, GameCover, PageHeader, ProgressSummary, SectionTitle};
 use irori_ui::i18n::{t, t_args};
@@ -29,7 +29,7 @@ use irori_ui::{Route, backend, models, navigate};
 
 use crate::common::{backend_op, card, notify_error};
 use crate::format;
-pub(crate) use queue::{QueuePresentation, Step};
+pub(crate) use queue::{HistoryFilter, QueuePresentation, Step};
 use speed::{SPEED_SAMPLES, SpeedHistory};
 
 /// History rows rendered per "Show more" step.
@@ -47,6 +47,8 @@ pub struct DownloadsView {
     pending_updates: usize,
     queuing_updates: bool,
     history_shown: usize,
+    /// Which finished downloads the history lists.
+    history_filter: HistoryFilter,
     images: Entity<LruImageCache>,
     _subscriptions: Vec<Subscription>,
 }
@@ -65,11 +67,11 @@ impl DownloadsView {
                 cx.notify();
             }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
+            // Progress while downloading, and the history's Play following a
+            // launch; statuses change only while something happens.
             cx.observe(&m.statuses, |this, _, cx| {
-                let changed = this.sample_speed(cx);
-                if changed || this.queue.current.is_some() {
-                    cx.notify();
-                }
+                this.sample_speed(cx);
+                cx.notify();
             }),
         ];
         let mut view = Self {
@@ -78,6 +80,7 @@ impl DownloadsView {
             pending_updates: 0,
             queuing_updates: false,
             history_shown: HISTORY_PAGE,
+            history_filter: HistoryFilter::All,
             images: LruImageCache::new(48, cx),
             _subscriptions: subscriptions,
         };
@@ -219,6 +222,47 @@ impl DownloadsView {
                 DownloadKind::Update(req) => b.enqueue_update(item.id, item.title, req),
             }
         });
+    }
+
+    /// Play a game whose download finished. Its status (Launching, then
+    /// Playing) shows on the row; a failure is told with what fixes it.
+    fn play(&mut self, id: &GameId, title: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let launch_id = id.clone();
+        let task = irori_ui::run(cx, async move {
+            b.launch_with(&launch_id, LaunchParams::default()).await
+        });
+        let (id, failure) = (
+            id.clone(),
+            t_args("manage.downloads.history.play_failed", &[("title", title)]),
+        );
+        cx.spawn_in(window, async move |_, cx| {
+            if let Err(e) = task.await {
+                cx.update(|window, cx| {
+                    // Saves that changed in both places, a missing BIOS or
+                    // emulator: the fix is offered instead of the error.
+                    if !irori_ui::save_conflict::resolve_launch_error(
+                        &id,
+                        LaunchParams::default(),
+                        &e,
+                        window,
+                        cx,
+                    ) {
+                        notify_error(failure, &e, window, cx);
+                    }
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
+    fn set_history_filter(&mut self, filter: HistoryFilter, cx: &mut Context<Self>) {
+        if self.history_filter != filter {
+            self.history_filter = filter;
+            self.history_shown = HISTORY_PAGE;
+            cx.notify();
+        }
     }
 
     fn confirm_cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -761,13 +805,23 @@ impl DownloadsView {
 
     fn render_history(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let now = unix_now();
-        let total = self.queue.history.len();
-        let rows = self
-            .queue
-            .history
-            .iter()
-            .take(self.history_shown)
-            .map(|row| {
+        let filter = self.history_filter;
+        let total = self.queue.history_in(filter).count();
+        let shown: Vec<_> = {
+            let statuses = models(cx).statuses.read(cx);
+            self.queue
+                .history_in(filter)
+                .take(self.history_shown)
+                .map(|row| (row, statuses.get(&row.item.id).map(|s| s.kind)))
+                .collect()
+        };
+        let rows = shown
+            .into_iter()
+            .map(|(row, status)| {
+                // Launching or already running: Play waits, or is not offered.
+                let launching = status == Some(StatusKind::Launching);
+                let playable = row.is_playable()
+                    && !status.is_some_and(|k| k.is_busy() && k != StatusKind::Launching);
                 let theme = cx.theme();
                 let id = row.item.id.clone();
                 let key = format!("{}-{}", id.key(), row.item.finished_at.unwrap_or(0));
@@ -803,7 +857,9 @@ impl DownloadsView {
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
                 .join(" · ");
-                let (retry_id, remove_id, page_id) = (id.clone(), id.clone(), id.clone());
+                let (retry_id, remove_id, page_id, play_id) =
+                    (id.clone(), id.clone(), id.clone(), id.clone());
+                let play_title = row.item.title.clone();
                 let retryable = row.is_retryable();
                 let is_done = row.item.state == DownloadState::Done;
                 h_flex()
@@ -852,6 +908,21 @@ impl DownloadsView {
                                         })),
                                 )
                             })
+                            .when(playable, |this| {
+                                this.child(
+                                    Button::new("play")
+                                        .small()
+                                        .primary()
+                                        .icon(IconName::Play)
+                                        .label(t("manage.downloads.history.play"))
+                                        .loading(launching)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            if !launching {
+                                                this.play(&play_id, &play_title, window, cx)
+                                            }
+                                        })),
+                                )
+                            })
                             .when(is_done, |this| {
                                 this.child(
                                     Button::new("open")
@@ -876,17 +947,44 @@ impl DownloadsView {
                             ),
                     )
             });
+        let filters = ButtonGroup::new("history-filter")
+            .small()
+            .outline()
+            .children(
+                HistoryFilter::ALL.iter().enumerate().map(|(ix, f)| {
+                    Button::new(ElementId::Name(format!("history-filter-{ix}").into()))
+                        .label(f.label())
+                        .selected(*f == filter)
+                }),
+            )
+            .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
+                if let Some(f) = clicked.first().and_then(|ix| HistoryFilter::ALL.get(*ix)) {
+                    this.set_history_filter(*f, cx);
+                }
+            }));
         v_flex()
             .gap_2()
             .child(
                 SectionTitle::new(t("manage.downloads.history.title")).trailing(
-                    Button::new("clear-history")
-                        .ghost()
-                        .small()
-                        .label(t("manage.downloads.history.clear"))
-                        .on_click(|_, _, cx| backend_op(cx, |b| b.clear_finished_downloads())),
+                    h_flex().gap_2().child(filters).child(
+                        Button::new("clear-history")
+                            .ghost()
+                            .small()
+                            .label(t("manage.downloads.history.clear"))
+                            .on_click(|_, _, cx| backend_op(cx, |b| b.clear_finished_downloads())),
+                    ),
                 ),
             )
+            .when(total == 0, |this| {
+                this.child(
+                    div()
+                        .px_3()
+                        .py_2()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(t("manage.downloads.history.filter.none")),
+                )
+            })
             .child(v_flex().gap_1().children(rows))
             .when(total > self.history_shown, |this| {
                 this.child(
