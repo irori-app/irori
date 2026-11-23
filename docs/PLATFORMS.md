@@ -92,6 +92,13 @@ Native `.app` launches read `CFBundleExecutable` from XML or binary Info.plist
 and spawn that executable with the game's arguments and environment. This keeps
 the process attached for exit status, logs, cancellation, and playtime.
 
+ZOOM Platform's Mac builds install on a Mac: a disk image is mounted read-only
+with `hdiutil attach -nobrowse -readonly -noautoopen` (a disk image that asks to
+accept a licence isn't agreed to, so it fails), its apps (else its visible
+folders) are copied out with `ditto`, and it is always detached again; zips and
+tarballs are extracted. Installer packages (`.pkg`) are refused. The game is the
+shallowest `.app` that isn't an installer, the one named like the game first.
+
 ## Build and package
 
 Use Rust 1.95 or newer and Python 3.11+ for packaging; CI uses current stable Rust. Build on the target operating
