@@ -19,4 +19,4 @@ pub use cover::{
 pub use empty::EmptyState;
 pub use page::{PageHeader, SectionTitle};
 pub use status::{ProgressSummary, progress_text};
-pub use store_badge::StoreBadge;
+pub use store_badge::{BadgeMark, BadgeRow, MAX_BADGES, StoreBadge, badge_row};

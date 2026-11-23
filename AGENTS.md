@@ -473,7 +473,9 @@ commands without a window.
   `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
   counts, storage, backups and stats). Every per-game operation keeps the copy's own
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
-  `irori_ui::copies`.
+  `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
+  own title when the copies' folded titles differ, else a ROM's file or, for two copies
+  on one store, its folder.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
@@ -595,9 +597,12 @@ commands without a window.
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
   genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
-  art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
-  asked while the setting is off; the Modify dialog's title and art overrides win
-  over everything.
+  art picker offers IGDB's covers and artworks (no square art or logos). With a
+  SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
+  game named like the search, `pick_game`) and pills filter by source; every picture
+  shows its size, SteamGridDB's from its API, the others' read from their first bytes
+  (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
+  off; the Modify dialog's title and art overrides win over everything.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -1054,6 +1059,12 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- `art::aspect(url)` gives a picture's height over width once a thumbnail of it is
+  ready (its header read once, off the UI thread). With `iroriUi.coverFit` `whole` the
+  library's grid draws each cover uncut in its own shape, standing on its 2:3 cell's
+  foot, and the tall boxes of a row share one height (`grid::whole_sizes`, pure and
+  tested); rows keep their fixed height, so the virtual list and keyboard moves don't
+  change.
 - The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
   `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
   original with its thumbnails) go least recently used first. Art the store hands out
@@ -1344,6 +1355,12 @@ Microsoft's approval page (`irori_manage::login`).
   end (`layout::end_scroll`).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
+- The art picker (a game's settings → Artwork → find online, also inside Big Picture)
+  answers a controller through its keys (`irori-library`'s `ART_PICKER_CONTEXT`): the
+  directions move a cursor through the pictures by rows (`step_cursor`; up from the
+  first row and down from the search field cross between them), A uses the picture, X
+  (Ctrl+Enter) goes to the search field, where the system's keyboard opens, and the
+  shoulders (Page Up/Down) switch the source shown.
 - **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
   game Irori started runs opens a panel above the game (`overlay::open`) instead of
   toggling Big Picture, and every controller input goes to it while it is open. It is

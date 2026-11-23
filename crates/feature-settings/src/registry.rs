@@ -874,6 +874,17 @@ const COVER_CORNERS: &[ChoiceOption] = &[
     ),
 ];
 
+const COVER_FIT: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("crop"),
+        Key("settings.option.cover_fit.crop"),
+    ),
+    opt(
+        ChoiceValue::Str("whole"),
+        Key("settings.option.cover_fit.whole"),
+    ),
+];
+
 const COVER_CAPTION: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("full"),
@@ -1265,6 +1276,11 @@ const REPLAY_CAPTURE: &[ChoiceOption] = &[
     ),
 ];
 
+const NEEDS_STORE_BADGES: &[Condition] = &[when(
+    "iroriUi.showStoreBadges",
+    true,
+    "settings.requires.store_badges",
+)];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -2518,6 +2534,26 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["badge", "store", "label"]),
     app(
+        "iroriUi.storeBadgesAlways",
+        "settings.field.ui_store_badges_always.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_always.help")
+    .keywords(&["badge", "store", "logo", "always", "cover", "emulator"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.storeBadgesOneStore",
+        "settings.field.ui_store_badges_one_store.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_one_store.help")
+    .keywords(&["badge", "store", "filter", "one store"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
         "iroriUi.groupCopies",
         "settings.field.ui_group_copies.label",
         Appearance,
@@ -2543,6 +2579,17 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(COVER_CORNERS),
     )
     .keywords(&["cover", "corner", "round", "square", "radius"]),
+    app(
+        "iroriUi.coverFit",
+        "settings.field.ui_cover_fit.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_FIT),
+    )
+    .help("settings.field.ui_cover_fit.help")
+    .keywords(&[
+        "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
+    ]),
     app(
         "iroriUi.coverCaption",
         "settings.field.ui_cover_caption.label",
