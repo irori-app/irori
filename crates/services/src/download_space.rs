@@ -77,8 +77,7 @@ pub(crate) fn per_disk(
 ) -> Vec<QueueDisk> {
     let mut disks: Vec<(String, QueueDisk)> = Vec::new();
     for (folder, bytes) in needs {
-        let (key, free) =
-            disk_of(&folder).unwrap_or_else(|| (folder.display().to_string(), None));
+        let (key, free) = disk_of(&folder).unwrap_or_else(|| (folder.display().to_string(), None));
         match disks.iter_mut().find(|(k, _)| *k == key) {
             Some((_, disk)) => disk.needed = disk.needed.saturating_add(bytes),
             None => disks.push((
@@ -114,12 +113,9 @@ fn disk_key(existing: &Path) -> Option<String> {
 fn disk_key(existing: &Path) -> Option<String> {
     use std::path::Component;
     match existing.components().next()? {
-        Component::Prefix(prefix) => Some(
-            prefix
-                .as_os_str()
-                .to_string_lossy()
-                .to_ascii_uppercase(),
-        ),
+        Component::Prefix(prefix) => {
+            Some(prefix.as_os_str().to_string_lossy().to_ascii_uppercase())
+        }
         _ => Some(existing.display().to_string()),
     }
 }
@@ -178,9 +174,7 @@ mod tests {
             update,
             offline,
         ];
-        let needs = queue_needs(&active, |id| {
-            (id.app_name.as_ref() == "a").then_some(25.0)
-        });
+        let needs = queue_needs(&active, |id| (id.app_name.as_ref() == "a").then_some(25.0));
         assert_eq!(
             needs,
             vec![
