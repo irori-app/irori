@@ -1,6 +1,7 @@
 //! The downloads page ([`Route::Downloads`](irori_ui::Route::Downloads)).
 
 mod queue;
+mod space;
 mod speed;
 
 use gpui_kit::assets::IconName;
@@ -51,6 +52,10 @@ pub struct DownloadsView {
     history_filter: HistoryFilter,
     /// When the queue's downloads start and finish.
     estimates: Estimates,
+    /// The queue the disks were last read for.
+    space_key: space::SpaceKey,
+    /// What the queue still downloads to each disk, and what is free there.
+    disks: Vec<irori_services::QueueDisk>,
     images: Entity<LruImageCache>,
     _subscriptions: Vec<Subscription>,
 }
@@ -84,6 +89,8 @@ impl DownloadsView {
             history_shown: HISTORY_PAGE,
             history_filter: HistoryFilter::All,
             estimates: Estimates::default(),
+            space_key: space::SpaceKey::new(),
+            disks: Vec::new(),
             images: LruImageCache::new(48, cx),
             _subscriptions: subscriptions,
         };
@@ -105,7 +112,30 @@ impl DownloadsView {
             .iter()
             .filter(|id| !downloads.active.iter().any(|i| &i.id == *id))
             .count();
+        let space_key = space::key_of(downloads);
+        if space_key != self.space_key {
+            self.space_key = space_key;
+            self.read_disks(cx);
+        }
         self.sample_speed(cx);
+    }
+
+    /// Read the queue's disks again, off the UI thread.
+    fn read_disks(&mut self, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            Ok(tokio::task::spawn_blocking(move || b.download_disks()).await?)
+        });
+        cx.spawn(async move |this, cx| {
+            // Unreadable disks leave the line out; the queue still runs.
+            if let Ok(disks) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.disks = disks;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
     }
 
     fn sample_speed(&mut self, cx: &mut Context<Self>) -> bool {
@@ -1061,7 +1091,12 @@ impl Render for DownloadsView {
         } else {
             v_flex()
                 .gap_6()
-                .child(self.render_current(window, cx))
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(self.render_current(window, cx))
+                        .children(space::render(&self.disks, cx)),
+                )
                 .when(!self.queue.waiting.is_empty(), |this| {
                     this.child(self.render_queue(cx))
                 })
