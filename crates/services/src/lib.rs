@@ -13,6 +13,8 @@ pub mod app_update;
 pub mod art_cache;
 pub mod audio;
 pub mod backup;
+pub mod backup_paths;
+mod backup_restore;
 pub mod backup_schedule;
 pub mod bluetooth;
 pub mod capture;
@@ -90,7 +92,11 @@ pub use achievements::{
 };
 pub use app_update::{AppUpdateStatus, InstallKind, Release};
 pub use audio::{GameAudio, Volume, VolumeTarget};
-pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
+pub use backup::{
+    Backup, BackupParts, ExportFormat, InstallRecord, PathCheck, PathKind, RestoreSummary,
+};
+pub use backup_paths::Remap;
+pub use backup_restore::remap_from_located;
 pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use download_power::{DOWNLOADS_FINISHED_NOTICE, POWER_COUNTDOWN, PowerCountdown};
 pub use download_space::QueueDisk;

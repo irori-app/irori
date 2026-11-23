@@ -908,7 +908,17 @@ commands without a window.
   settings, per-game settings, library data and playtime; restoring replaces settings
   and merges the rest. Scheduled backups (`iroriBackups`) run from the periodic tick and
   before a new version first runs, and prune only their own files. Store sign-ins and the
-  `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in.
+  `iroriBackups`/`iroriSync`/`iroriSunshine` settings never go in. A backup also holds
+  where store games were installed (`installs`, not Steam's, the launchers', ROMs or
+  added games) and where the computer that made it kept its home and Irori folders
+  (`origin`). Every restore rewrites the settings' paths from those roots to this
+  computer's (`backup_paths.rs`: another user, system, or Flatpak ↔ native) and leaves
+  out paths of another system so the defaults apply; Settings → Backup's restore
+  (`restore_backup_with`, `backup_restore.rs`) also checks install folders, prefixes and
+  Wine builds here (`plan_restore`), takes folders the user locates
+  (`remap_from_located`: the shared tail of the old and found path is the same folder,
+  so what is before it moved), swaps a missing Wine build for an installed one of its
+  name and attaches the installs it finds through `Backend::import`.
 - **Sync** (`sync/`): each computer writes `Irori sync/<device id>.json` to a folder or
   WebDAV or an rclone remote (`sync/target.rs`; `sync/rclone.rs` runs the user's own
   rclone, found on `PATH` or on the host from the Flatpak, never bundled or downloaded:

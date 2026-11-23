@@ -1303,6 +1303,8 @@ pub struct BackupPrefs {
     pub game_settings: bool,
     pub library: bool,
     pub playtime: bool,
+    /// Where store games are installed, so a restore attaches them again.
+    pub installs: bool,
     /// Copy the downloaded game art too (large; it can be downloaded again).
     pub art: bool,
 }
@@ -1318,6 +1320,7 @@ impl Default for BackupPrefs {
             game_settings: true,
             library: true,
             playtime: true,
+            installs: true,
             art: false,
         }
     }

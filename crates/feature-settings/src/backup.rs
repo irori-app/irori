@@ -25,6 +25,7 @@ use irori_services::{Backend, Backup, BackupEntry, BackupKind, BackupParts, Expo
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
+use crate::restore_paths::RestorePaths;
 use crate::sync::SyncPanel;
 use crate::widgets::{group_heading, muted, panel};
 
@@ -43,6 +44,10 @@ pub struct BackupPanel {
     /// A backup chosen for restoring, and the parts to restore from it.
     chosen: Option<(PathBuf, Backup)>,
     restore_parts: BackupParts,
+    /// The chosen backup's paths, as found on this computer.
+    pub(crate) paths: RestorePaths,
+    /// A restore is running.
+    restoring: bool,
     /// The backups in the backup folder, newest first.
     listed: Vec<BackupEntry>,
     /// The backup folder is there (read with the list).
@@ -59,6 +64,8 @@ impl BackupPanel {
             parts: BackupParts::ALL,
             chosen: None,
             restore_parts: BackupParts::ALL,
+            paths: RestorePaths::default(),
+            restoring: false,
             listed: Vec::new(),
             folder_exists: false,
             backing_up: false,
@@ -191,32 +198,80 @@ impl BackupPanel {
             .detach();
     }
 
+    /// Check the chosen backup's paths on this computer, with the folders
+    /// the user found.
+    pub(crate) fn plan_paths(&mut self, cx: &mut Context<Self>) {
+        let Some((_, backup)) = self.chosen.clone() else {
+            return;
+        };
+        let parts = self.restore_parts;
+        let remaps = self.paths.remaps.clone();
+        self.paths.automatic = backup.automatic_remaps();
+        self.paths.checks = None;
+        cx.notify();
+        let b = backend(cx);
+        let task = irori_ui::state::run_infallible(cx, async move {
+            b.plan_restore(&backup, parts, &remaps).await
+        });
+        cx.spawn(async move |this, cx| {
+            let Some(checks) = task.await else { return };
+            let _ = this.update(cx, |this, cx| {
+                this.paths.checks = Some(checks);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     /// Restore the chosen parts of the chosen backup.
     fn restore(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((path, backup)) = self.chosen.clone() else {
             return;
         };
+        if self.restoring {
+            return;
+        }
+        self.restoring = true;
+        cx.notify();
         let parts = self.restore_parts;
+        let remaps = self.paths.remaps.clone();
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            let summary = b.restore_backup_with(&backup, parts, &remaps).await?;
+            // Art saved beside an automatic backup comes back too.
+            let art = b.clone();
+            let _ = b
+                .spawn_blocking(move || {
+                    if let Err(e) = art.restore_backup_art(&path) {
+                        tracing::warn!("restoring backed-up art: {e:#}");
+                    }
+                })
+                .await;
+            Ok(summary)
+        });
         let view = cx.entity().downgrade();
         window
             .spawn(cx, async move |cx| {
-                let result = run_backend(cx, move |b| {
-                    let summary = b.restore_backup(&backup, parts)?;
-                    // Art saved beside an automatic backup comes back too.
-                    if let Err(e) = b.restore_backup_art(&path) {
-                        tracing::warn!("restoring backed-up art: {e:#}");
+                let result = task.await;
+                let _ = view.update(cx, |this, cx| {
+                    this.restoring = false;
+                    cx.notify();
+                });
+                match result {
+                    Ok(summary) => {
+                        clear_choice(&view, cx);
+                        let details = crate::restore_paths::restored_details(&summary);
+                        let _ = cx.update(|window, cx| {
+                            let note = match details {
+                                Some(details) => Notification::success(details)
+                                    .title(t("settings.backup.restored")),
+                                None => Notification::success(t("settings.backup.restored")),
+                            };
+                            window.push_notification(note, cx);
+                        });
                     }
-                    Ok(summary)
-                })
-                .await;
-                if result.is_ok() {
-                    clear_choice(&view, cx);
+                    Err(e) => report::<SharedString>(cx, Err(e), "settings.backup.restore_failed"),
                 }
-                report(
-                    cx,
-                    result.map(|_| t("settings.backup.restored")),
-                    "settings.backup.restore_failed",
-                );
             })
             .detach();
     }
@@ -298,8 +353,12 @@ impl Render for BackupPanel {
                         self.restore_parts,
                         Some(available),
                         cx,
-                        |this, parts, _| this.restore_parts = parts,
+                        |this, parts, cx| {
+                            this.restore_parts = parts;
+                            this.plan_paths(cx);
+                        },
                     ))
+                    .children(self.paths.render(cx))
                     .child(muted(t("settings.backup.restore_note"), cx))
                     .child(
                         h_flex()
@@ -309,7 +368,8 @@ impl Render for BackupPanel {
                                     .primary()
                                     .icon(IconName::ArchiveRestore)
                                     .label(t("settings.backup.restore"))
-                                    .disabled(!self.restore_parts.any())
+                                    .loading(self.restoring)
+                                    .disabled(!self.restore_parts.any() || self.restoring)
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.restore(window, cx)),
                                     ),
@@ -382,7 +442,7 @@ fn part_checkboxes(
     set: fn(&mut BackupPanel, BackupParts, &mut Context<BackupPanel>),
 ) -> impl IntoElement {
     let has = available.unwrap_or(BackupParts::ALL);
-    let entries: [PartEntry; 4] = [
+    let entries: [PartEntry; 5] = [
         (
             "settings.backup.part_settings",
             parts.settings,
@@ -406,6 +466,12 @@ fn part_checkboxes(
             parts.playtime,
             has.playtime,
             |p, v| p.playtime = v,
+        ),
+        (
+            "settings.backup.part_installs",
+            parts.installs,
+            has.installs,
+            |p, v| p.installs = v,
         ),
     ];
     v_flex()
@@ -438,6 +504,7 @@ fn schedule_parts(prefs: &BackupPrefs) -> BackupParts {
         game_settings: prefs.game_settings,
         library: prefs.library,
         playtime: prefs.playtime,
+        installs: prefs.installs,
     }
 }
 
@@ -450,7 +517,8 @@ async fn load(view: WeakEntity<BackupPanel>, path: PathBuf, cx: &mut AsyncWindow
             let _ = view.update(cx, |this, cx| {
                 this.restore_parts = backup.parts();
                 this.chosen = Some((path, backup));
-                cx.notify();
+                this.paths = RestorePaths::default();
+                this.plan_paths(cx);
             });
         }
         Err(e) => report::<SharedString>(cx, Err(e), "settings.backup.read_failed"),
@@ -601,6 +669,7 @@ impl BackupPanel {
                         p.game_settings = parts.game_settings;
                         p.library = parts.library;
                         p.playtime = parts.playtime;
+                        p.installs = parts.installs;
                     })
                 },
             ))

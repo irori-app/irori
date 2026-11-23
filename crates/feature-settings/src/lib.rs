@@ -44,6 +44,7 @@ pub mod registry;
 mod renodx;
 mod replay;
 mod reshade;
+mod restore_paths;
 mod saves;
 mod setup_card;
 mod steam_compat;

@@ -1924,3 +1924,181 @@ fn unlocks_follow_the_stores_files_while_playing() {
     assert_eq!(live, ["b"]);
     stop.cancel();
 }
+
+/// A ZOOM-like store listing one game that isn't installed, and taking an
+/// import of it.
+struct ImportStore {
+    game: Arc<GameInfo>,
+    imported: parking_lot::Mutex<Vec<(String, std::path::PathBuf)>>,
+}
+
+#[async_trait]
+impl Store for ImportStore {
+    fn runner(&self) -> Runner {
+        Runner::Zoom
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        Some(UserInfo::default())
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        vec![self.game.clone()]
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        (app == self.game.app_name).then(|| self.game.clone())
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        Ok(())
+    }
+    async fn import(&self, app: &str, path: &Path, _: InstallPlatform) -> Result<()> {
+        self.imported
+            .lock()
+            .push((app.to_string(), path.to_path_buf()));
+        Ok(())
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+}
+
+/// A backup made by another user on Linux, restored here: its game's install
+/// folder is found where the user located it and attached again, a Windows
+/// path is left out, and what is still missing is reported.
+#[cfg(unix)]
+#[test]
+fn a_backup_from_another_computer_finds_its_installs_again() {
+    use crate::backup::{Backup, BackupParts, InstallRecord, PathKind};
+    use crate::backup_paths::{BackupOrigin, Remap};
+
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Zoom),
+            app_name: "restore-attach".into(),
+            title: "Restore Attach".into(),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store = Arc::new(ImportStore {
+        game,
+        imported: Default::default(),
+    });
+    let dyn_store: irori_core::DynStore = store.clone();
+    let b = Backend::start_headless(move |_, _| vec![dyn_store]).unwrap();
+    assert!(eventually(|| b.game(&id).is_some()));
+
+    let old_home = "/home/someone-else";
+    let backup = Backup {
+        format: "irori-backup".into(),
+        version: 1,
+        origin: Some(BackupOrigin {
+            os: "linux".into(),
+            home: old_home.into(),
+            ..Default::default()
+        }),
+        installs: vec![InstallRecord {
+            game: id.key(),
+            title: "Restore Attach".into(),
+            path: format!("{old_home}/Games/Restore Attach"),
+            platform: InstallPlatform::Windows,
+        }],
+        game_settings: [(
+            id.key(),
+            serde_json::json!({
+                "winePrefix": format!("{old_home}/Prefixes/Restore Attach"),
+                "targetExe": r"C:\Games\restore.exe",
+                "launcherArgs": "-windowed",
+            }),
+        )]
+        .into(),
+        ..Default::default()
+    };
+    // The user located the old home folder's games here.
+    let here = dir.path().join("home");
+    std::fs::create_dir_all(here.join("Games/Restore Attach")).unwrap();
+    let remaps = [Remap::new(old_home, here.to_string_lossy())];
+    let parts = BackupParts {
+        settings: false,
+        library: false,
+        playtime: false,
+        ..BackupParts::ALL
+    };
+
+    let plan = b
+        .runtime()
+        .block_on(b.plan_restore(&backup, parts, &remaps));
+    let found = |kind: PathKind| plan.iter().find(|c| c.kind == kind).map(|c| c.found);
+    assert_eq!(found(PathKind::Install), Some(true));
+    assert_eq!(found(PathKind::Prefix), Some(false));
+
+    let summary = b
+        .runtime()
+        .block_on(b.restore_backup_with(&backup, parts, &remaps))
+        .unwrap();
+    assert_eq!(summary.installs_attached, 1);
+    assert_eq!(
+        *store.imported.lock(),
+        [(
+            "restore-attach".to_string(),
+            here.join("Games/Restore Attach")
+        )]
+    );
+    assert_eq!(summary.paths_dropped, 1, "the Windows program path");
+    assert_eq!(
+        summary.missing.iter().map(|c| c.kind).collect::<Vec<_>>(),
+        [PathKind::Prefix]
+    );
+    let restored = b.settings.overrides(&id);
+    assert_eq!(
+        restored.0.get("winePrefix").and_then(|v| v.as_str()),
+        Some(here.join("Prefixes/Restore Attach").to_str().unwrap())
+    );
+    assert!(restored.0.get("targetExe").is_none());
+    assert_eq!(
+        restored.0.get("launcherArgs").and_then(|v| v.as_str()),
+        Some("-windowed")
+    );
+}
