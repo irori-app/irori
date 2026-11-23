@@ -203,6 +203,8 @@
   "shell.palette.save_view": "라이브러리의 현재 보기 저장…",
   "shell.palette.add_folder": "폴더에서 게임 추가…",
   "shell.palette.add_folder_keywords": "폴더 검색 가져오기 추가 프로그램",
+  "shell.palette.manage_fields": "장르와 회사 관리",
+  "shell.palette.manage_fields_keywords": "장르 회사 개발사 배급사 이름 바꾸기 합치기 제거 중복 항목",
   "shell.palette.steam_play": "{title}의 Steam Play 도구",
   "shell.palette.steam_play_keywords": "proton 호환성 도구 steam play ge-proton",
   "shell.palette.add_to_steam": "{title}을(를) Steam에 추가",

@@ -6,6 +6,7 @@
 
 pub mod categories;
 pub mod edit_game;
+pub mod fields;
 pub mod folder;
 pub mod lutris;
 pub mod metadata;

@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Huidige weergave van de bibliotheek opslaan…",
   "shell.palette.add_folder": "Games uit een map toevoegen…",
   "shell.palette.add_folder_keywords": "map scannen importeren toevoegen programma’s",
+  "shell.palette.manage_fields": "Genres en bedrijven beheren",
+  "shell.palette.manage_fields_keywords": "genres bedrijven ontwikkelaars uitgevers hernoemen samenvoegen verwijderen dubbele velden",
   "shell.palette.steam_play": "Steam Play-tool voor {title}",
   "shell.palette.steam_play_keywords": "proton compatibiliteitstool steam play ge-proton",
   "shell.palette.add_to_steam": "{title} toevoegen aan Steam",

@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Kütüphanenin geçerli görünümünü kaydet…",
   "shell.palette.add_folder": "Klasörden oyun ekle…",
   "shell.palette.add_folder_keywords": "klasör tara içe aktar ekle programlar",
+  "shell.palette.manage_fields": "Türleri ve şirketleri yönet",
+  "shell.palette.manage_fields_keywords": "türler şirketler geliştiriciler yayıncılar yeniden adlandır birleştir kaldır kopyalar alanlar",
   "shell.palette.steam_play": "{title} için Steam Play aracı",
   "shell.palette.steam_play_keywords": "proton uyumluluk aracı steam play ge-proton",
   "shell.palette.add_to_steam": "{title} oyununu Steam'e ekle",

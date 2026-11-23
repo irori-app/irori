@@ -788,6 +788,14 @@ commands without a window.
   page shows the user's genres over the store page's, the Modify dialog keeps them, and
   they travel with sync in the overrides register. Emptying one gives it back to the
   stores.
+- **Field rules** (`field_rules.rs`, `UserData::field_rules`, "Manage genres and
+  companies…": `irori_library::open_fields_dialog`, the bulk bar's Details menu, the
+  palette): a genre, developer or publisher renamed, merged into another (renamed to its
+  name) or removed across the library, matched without case or spacing, laid over every
+  game at the library rebuild before the per-game details above. The manager lists the
+  values as the stores give them (`Backend::field_values`, off the UI thread, virtual
+  list) and suggests merging spellings that fold alike (`field_rules::duplicates`). Each
+  rule is a sync register (`<field>:<value>`).
 - **Saved views and the persisted library view** keep criteria a newer Irori wrote
   (`ViewFilter::unknown`, a flattened map), so rewriting the file never drops them. A
   new facet only needs a `#[serde(default)]` field; one an older Irori doesn't know is

@@ -203,6 +203,8 @@
   "shell.palette.save_view": "儲存遊戲庫目前檢視…",
   "shell.palette.add_folder": "從資料夾新增遊戲…",
   "shell.palette.add_folder_keywords": "資料夾 掃描 匯入 新增 程式",
+  "shell.palette.manage_fields": "管理類型與公司",
+  "shell.palette.manage_fields_keywords": "類型 公司 開發商 發行商 重新命名 合併 移除 重複 欄位",
   "shell.palette.steam_play": "{title} 的 Steam Play 工具",
   "shell.palette.steam_play_keywords": "proton 相容性工具 steam play ge-proton",
   "shell.palette.add_to_steam": "將 {title} 加入 Steam",

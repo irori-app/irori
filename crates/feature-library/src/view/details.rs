@@ -177,6 +177,13 @@ impl LibraryView {
                 let (refresh, link) = (view.clone(), view.clone());
                 let (refresh_ids, link_ids, edit_ids) = (ids.clone(), ids.clone(), ids.clone());
                 menu.item(
+                    PopupMenuItem::new(t("library.bulk.details.fields"))
+                        .icon(IconName::ListFilter)
+                        .on_click(|_, window, cx| {
+                            crate::dialogs::fields::open_fields_dialog(window, cx)
+                        }),
+                )
+                .item(
                     PopupMenuItem::new(t("library.bulk.details.edit"))
                         .icon(IconName::Tags)
                         .on_click(move |_, window, cx| {

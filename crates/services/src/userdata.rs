@@ -87,6 +87,13 @@ pub struct UserData {
     /// edit is never counted twice.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub playtime_adjust: BTreeMap<String, i64>,
+    /// Genres and companies renamed, merged or removed across the library
+    /// ("Manage genres and companies…").
+    #[serde(
+        default,
+        skip_serializing_if = "crate::field_rules::FieldRules::is_empty"
+    )]
+    pub field_rules: crate::field_rules::FieldRules,
 }
 
 /// A playtime record's length in seconds.
@@ -1022,6 +1029,16 @@ impl UserDataService {
             for id in ids {
                 edit_overrides(d, &id.key(), |o| edit.apply(o));
             }
+        });
+    }
+
+    /// Make `value` of `field` show as `to` across the library (empty
+    /// removes it), or with `None` as itself again.
+    pub fn set_field_rule(&self, field: crate::field_rules::Field, value: &str, to: Option<&str>) {
+        self.update_if(None, |d| {
+            let before = d.field_rules.clone();
+            d.field_rules.set(field, value, to);
+            d.field_rules != before
         });
     }
 

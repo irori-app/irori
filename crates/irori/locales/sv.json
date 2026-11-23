@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Spara bibliotekets aktuella vy…",
   "shell.palette.add_folder": "Lägg till spel från en mapp…",
   "shell.palette.add_folder_keywords": "mapp sök importera lägg till program",
+  "shell.palette.manage_fields": "Hantera genrer och företag",
+  "shell.palette.manage_fields_keywords": "genrer företag utvecklare utgivare byt namn slå ihop ta bort dubbletter fält",
   "shell.palette.steam_play": "Steam Play-verktyg för {title}",
   "shell.palette.steam_play_keywords": "proton kompatibilitetsverktyg steam play ge-proton",
   "shell.palette.add_to_steam": "Lägg till {title} i Steam",

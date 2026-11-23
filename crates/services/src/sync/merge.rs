@@ -152,6 +152,10 @@ pub struct Registers {
     /// key.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub playtime_adjust: Lww<String, Option<i64>>,
+    /// The library's field rules, by `<field>:<value>`; the replacement,
+    /// empty for "remove".
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub field_rules: Lww<String, Option<String>>,
 }
 
 /// A journal note with the game and day it belongs to.
@@ -194,6 +198,7 @@ impl Registers {
             max(&self.journal),
             max(&self.left_off),
             max(&self.playtime_adjust),
+            max(&self.field_rules),
         ]
         .into_iter()
         .max()
@@ -410,6 +415,7 @@ pub fn record(
         |v: &Option<LeftOff>| dating.at(v.as_ref().map(|l| l.updated.as_str())),
     );
     changed += note(&mut regs.playtime_adjust, &adjust_view(data), me, |_| plain);
+    changed += note(&mut regs.field_rules, &rules_view(data), me, |_| plain);
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -474,6 +480,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(links, ConflictField::Custom);
     take_all!(left_off, ConflictField::Journal);
     take_all!(playtime_adjust, ConflictField::Playtime);
+    take_all!(field_rules, ConflictField::Custom);
     for remote in remotes {
         take(
             &mut regs.smart_categories,
@@ -550,6 +557,9 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
         .map(|r| crate::play_status::merge_history(&mut data.status_history, &r.status_history))
         .sum();
     data.playtime_adjust = adjust;
+    let rules = rules_from(&regs.field_rules);
+    let rules_changed = usize::from(rules != local.data.field_rules);
+    data.field_rules = rules;
 
     // A value the data can't hold as merged (a category kept for a game
     // added to it after it was deleted, a rating out of range) is recorded
@@ -576,7 +586,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
         playtime: shares,
         sessions,
         sessions_added,
-        changed: changed + playtime_changed + history_added,
+        changed: changed + playtime_changed + history_added + rules_changed,
         conflicts,
         clock,
     }
@@ -984,6 +994,38 @@ fn seconds_by_game(sessions: &[Session]) -> BTreeMap<&str, u64> {
         *out.entry(s.game.as_str()).or_default() += s.seconds;
     }
     out
+}
+
+/// The field rules in `data`, as the registers hold them.
+fn rules_view(data: &UserData) -> BTreeMap<String, Option<String>> {
+    use crate::field_rules::Field;
+    [Field::Genre, Field::Company]
+        .into_iter()
+        .flat_map(|field| {
+            data.field_rules
+                .of(field)
+                .iter()
+                .map(move |(from, to)| (format!("{}:{from}", field.id()), Some(to.clone())))
+        })
+        .collect()
+}
+
+/// The field rules the registers hold. A rule of a field this version
+/// doesn't know stays in the registers only.
+fn rules_from(regs: &Lww<String, Option<String>>) -> crate::field_rules::FieldRules {
+    let mut rules = crate::field_rules::FieldRules::default();
+    for (key, reg) in regs {
+        let (Some(to), Some((field, from))) = (&reg.value, key.split_once(':')) else {
+            continue;
+        };
+        let map = match field {
+            "genre" => &mut rules.genres,
+            "company" => &mut rules.companies,
+            _ => continue,
+        };
+        map.insert(from.to_string(), to.clone());
+    }
+    rules
 }
 
 /// The user's playtime edits in `data`, as the register holds them.

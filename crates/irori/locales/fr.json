@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Enregistrer la vue actuelle de la bibliothèque…",
   "shell.palette.add_folder": "Ajouter les jeux d’un dossier…",
   "shell.palette.add_folder_keywords": "dossier analyser importer ajouter programmes",
+  "shell.palette.manage_fields": "Gérer les genres et les sociétés",
+  "shell.palette.manage_fields_keywords": "genres sociétés développeurs éditeurs renommer fusionner retirer doublons champs",
   "shell.palette.steam_play": "Outil Steam Play pour {title}",
   "shell.palette.steam_play_keywords": "proton outil compatibilité steam play ge-proton",
   "shell.palette.add_to_steam": "Ajouter {title} à Steam",

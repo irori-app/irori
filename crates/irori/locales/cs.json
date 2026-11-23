@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Uložit aktuální zobrazení knihovny…",
   "shell.palette.add_folder": "Přidat hry ze složky…",
   "shell.palette.add_folder_keywords": "složka prohledat import přidat programy",
+  "shell.palette.manage_fields": "Spravovat žánry a společnosti",
+  "shell.palette.manage_fields_keywords": "žánry společnosti vývojáři vydavatelé přejmenovat sloučit odebrat duplicity pole",
   "shell.palette.steam_play": "Nástroj Steam Play pro {title}",
   "shell.palette.steam_play_keywords": "proton nástroj kompatibility steam play ge-proton",
   "shell.palette.add_to_steam": "Přidat {title} do Steamu",

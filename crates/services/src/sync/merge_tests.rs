@@ -578,6 +578,34 @@ fn edited_details_travel_with_the_custom_title() {
 }
 
 #[test]
+fn field_rules_travel_and_their_removal_too() {
+    use crate::field_rules::Field;
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data
+        .field_rules
+        .set(Field::Genre, "Role-playing (RPG)", Some("RPG"));
+    a.data.field_rules.set(Field::Company, "Unknown", Some(""));
+    round(&mut a, &mut b, t(0));
+    assert_eq!(
+        b.data.field_rules.rule(Field::Genre, "role-playing (rpg)"),
+        Some("RPG")
+    );
+    assert_eq!(b.data.field_rules.rule(Field::Company, "Unknown"), Some(""));
+    // b takes the genre rule back; a hears of it and keeps the other.
+    b.data
+        .field_rules
+        .set(Field::Genre, "Role-playing (RPG)", None);
+    b.tick(t(5));
+    round(&mut b, &mut a, t(10));
+    assert_eq!(
+        a.data.field_rules.rule(Field::Genre, "Role-playing (RPG)"),
+        None
+    );
+    assert_eq!(a.data.field_rules.rule(Field::Company, "unknown"), Some(""));
+}
+
+#[test]
 fn game_modes_the_user_set_travel_with_the_custom_title() {
     use irori_core::GameMode;
     let mut a = Device::new("a");

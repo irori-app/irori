@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Salvează vizualizarea curentă a bibliotecii…",
   "shell.palette.add_folder": "Adaugă jocuri dintr-un dosar…",
   "shell.palette.add_folder_keywords": "dosar scanare import adaugă programe",
+  "shell.palette.manage_fields": "Gestionează genurile și companiile",
+  "shell.palette.manage_fields_keywords": "genuri companii dezvoltatori editori redenumește unește elimină duplicate câmpuri",
   "shell.palette.steam_play": "Instrumentul Steam Play pentru {title}",
   "shell.palette.steam_play_keywords": "proton instrument compatibilitate steam play ge-proton",
   "shell.palette.add_to_steam": "Adaugă {title} în Steam",

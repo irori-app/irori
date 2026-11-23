@@ -121,6 +121,8 @@ pub(crate) enum PaletteTarget {
     SaveView,
     /// Pick a folder and add the games in it.
     AddFolder,
+    /// Rename, merge or remove genres and companies across the library.
+    ManageFields,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
     /// Sync a game's cloud saves now.
@@ -449,6 +451,14 @@ impl Palette {
                 .keywords([t("shell.palette.add_folder_keywords")])
                 .icon(IconName::FolderPlus),
             PaletteTarget::AddFolder,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.manage_fields"))
+                .keywords([t("shell.palette.manage_fields_keywords")])
+                .icon(IconName::ListFilter),
+            PaletteTarget::ManageFields,
             targets,
         );
         push(
@@ -962,6 +972,8 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::ManageFields => window.defer(cx, irori_library::open_fields_dialog),
         PaletteTarget::SaveView => {
             irori_ui::navigate(Route::Library, cx);
             // After the palette's own dialog has closed.

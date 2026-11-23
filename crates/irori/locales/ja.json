@@ -203,6 +203,8 @@
   "shell.palette.save_view": "ライブラリの現在のビューを保存…",
   "shell.palette.add_folder": "フォルダーからゲームを追加…",
   "shell.palette.add_folder_keywords": "フォルダー スキャン インポート 追加 プログラム",
+  "shell.palette.manage_fields": "ジャンルと会社を管理",
+  "shell.palette.manage_fields_keywords": "ジャンル 会社 開発元 販売元 名前変更 統合 削除 重複 項目",
   "shell.palette.steam_play": "{title} の Steam Play ツール",
   "shell.palette.steam_play_keywords": "proton 互換性ツール steam play ge-proton",
   "shell.palette.add_to_steam": "{title} を Steam に追加",

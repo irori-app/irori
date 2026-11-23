@@ -203,6 +203,8 @@
   "shell.palette.save_view": "Зберегти поточний вигляд бібліотеки…",
   "shell.palette.add_folder": "Додати ігри з теки…",
   "shell.palette.add_folder_keywords": "тека пошук імпорт додати програми",
+  "shell.palette.manage_fields": "Керувати жанрами й компаніями",
+  "shell.palette.manage_fields_keywords": "жанри компанії розробники видавці перейменувати об’єднати прибрати дублікати поля",
   "shell.palette.steam_play": "Інструмент Steam Play для {title}",
   "shell.palette.steam_play_keywords": "proton інструмент сумісності steam play ge-proton",
   "shell.palette.add_to_steam": "Додати {title} до Steam",
