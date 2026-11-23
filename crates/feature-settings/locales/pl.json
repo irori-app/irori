@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Pokazuje FPS, temperatury i użycie sprzętu na ekranie gry, przez Metal HUD.",
   "settings.group.performance_hud": "Statystyki w grze",
   "settings.field.panel_performance_hud.label": "Statystyki w grze",
-  "settings.hud.global_stores_notice": "Działa automatycznie w grach i zewnętrznych launcherach uruchamianych przez Irori. W przypadku gier Steam skopiuj opcje uruchamiania w ustawieniach statystyk w grze.",
+  "settings.hud.global_stores_notice": "Działa automatycznie w grach i zewnętrznych launcherach uruchamianych przez Irori. W grach Steam wklej opcje uruchamiania w Steamie. Dla profilu konkretnej gry otwórz Ustawienia gry > Wydajność > Statystyki w grze.",
   "settings.hud.launcher_restart_notice": "Nakładka jest stosowana przy uruchomieniu tego launchera przez Irori. Jeśli działa już w tle, zamknij go i otwórz ponownie, aby zastosować zmiany trybu."
 }

@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Mostra FPS, temperature e uso dell'hardware sopra i tuoi giochi, tramite Metal HUD.",
   "settings.group.performance_hud": "Statistiche in gioco",
   "settings.field.panel_performance_hud.label": "Statistiche in gioco",
-  "settings.hud.global_stores_notice": "Si applica automaticamente ai giochi e ai launcher di terze parti avviati da Irori. Per i giochi Steam, copia le opzioni di avvio nelle impostazioni delle statistiche in gioco.",
+  "settings.hud.global_stores_notice": "Si applica automaticamente ai giochi e ai launcher di terze parti avviati da Irori. Per i giochi Steam, incolla le opzioni di avvio in Steam. Per profili per singolo gioco, apri Impostazioni gioco > Prestazioni > Statistiche in gioco.",
   "settings.hud.launcher_restart_notice": "L'overlay viene applicato quando Irori avvia questo launcher. Se è già in esecuzione in background, chiudilo e riaprilo per rendere effettivi i cambi di modalità."
 }

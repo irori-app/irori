@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Visar FPS, temperaturer och hårdvaruanvändning ovanpå dina spel, via Metal HUD.",
   "settings.group.performance_hud": "Statistik i spelet",
   "settings.field.panel_performance_hud.label": "Statistik i spelet",
-  "settings.hud.global_stores_notice": "Tillämpas automatiskt på spel och tredjepartsstartare som startas av Irori. För Steam-spel kopierar du startalternativen i spelets inställningar för statistik i spelet.",
+  "settings.hud.global_stores_notice": "Tillämpas automatiskt på spel och tredjepartsstartare som startas av Irori. För Steam-spel klistrar du in startalternativen i Steam. För profiler per spel öppnar du Spelinställningar > Prestanda > Statistik i spelet.",
   "settings.hud.launcher_restart_notice": "Överlägget tillämpas när Irori startar den här startaren. Om den redan körs i bakgrunden stänger du den och öppnar den igen för att lägesändringar ska gälla."
 }

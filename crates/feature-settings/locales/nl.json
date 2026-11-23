@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Toont FPS, temperaturen en hardwaregebruik boven op je games, via Metal HUD.",
   "settings.group.performance_hud": "Statistieken in het spel",
   "settings.field.panel_performance_hud.label": "Statistieken in het spel",
-  "settings.hud.global_stores_notice": "Wordt automatisch toegepast op games en externe launchers die door Irori worden gestart. Kopieer voor Steam-games de startopties in de spelinstellingen voor statistieken in de game.",
+  "settings.hud.global_stores_notice": "Wordt automatisch toegepast op games en externe launchers die door Irori worden gestart. Plak voor Steam-games de startopties in Steam. Open voor profielen per game Spelinstellingen > Prestaties > Statistieken in het spel.",
   "settings.hud.launcher_restart_notice": "De overlay wordt toegepast wanneer Irori deze launcher start. Als hij al op de achtergrond draait, sluit hem en open hem opnieuw zodat moduswijzigingen ingaan."
 }

@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Zeigt FPS, Temperaturen und Hardwareauslastung über deinen Spielen an, über Metal HUD.",
   "settings.group.performance_hud": "Statistiken im Spiel",
   "settings.field.panel_performance_hud.label": "Statistiken im Spiel",
-  "settings.hud.global_stores_notice": "Gilt automatisch für Spiele und Drittanbieter-Launcher, die Irori startet. Für Steam-Spiele kopiere die Startoptionen in den Spiel-Einstellungen unter Statistiken im Spiel.",
+  "settings.hud.global_stores_notice": "Gilt automatisch für Spiele und Drittanbieter-Launcher, die Irori startet. Für Steam-Spiele füge die Startoptionen in Steam ein. Für Spielprofile öffne Spieleinstellungen > Leistung > Statistiken im Spiel.",
   "settings.hud.launcher_restart_notice": "Das Overlay wird angewendet, wenn Irori diesen Launcher startet. Läuft er bereits im Hintergrund, schließe und öffne ihn erneut, damit Modusänderungen wirksam werden."
 }

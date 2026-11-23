@@ -16,6 +16,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
@@ -23,8 +24,8 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, ClipboardItem, Context, Entity, Focusable as _, Hsla,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
-    Subscription, Task, Window, div, px, rems, rgb,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, px, rems, rgb,
 };
 use irori_core::hud::{resolve_effective_hud, sanitize_hex6, sanitize_hud_label};
 use irori_core::{
@@ -1473,12 +1474,80 @@ impl HudPanel {
         )
     }
 
-    fn render_scope_notice(&self) -> Option<AnyElement> {
+    fn copy_steam_button(
+        &self,
+        id: &'static str,
+        snippet: SharedString,
+        cx: &mut Context<Self>,
+    ) -> Button {
+        let copied_msg = self.labels.steam_copied.clone();
+        Button::new(id)
+            .outline()
+            .small()
+            .icon(IconName::Copy)
+            .label(self.labels.steam_copy.clone())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.sync_live_mangohud_config(cx);
+                cx.write_to_clipboard(ClipboardItem::new_string(snippet.to_string()));
+                window.push_notification(Notification::success(copied_msg.clone()), cx);
+            }))
+    }
+
+    fn render_scope_notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (id, text) = self.scope_notice()?;
+        let alert = Alert::info(id, text.clone());
+        let snippet_row = if matches!(self.scope, HudPanelScope::Global) {
+            self.display.steam_snippet.clone().map(|snippet| {
+                let (radius, muted_bg, border_color, mono_font) = {
+                    let theme = cx.theme();
+                    (
+                        theme.radius,
+                        theme.muted,
+                        theme.border,
+                        theme.mono_font_family.clone(),
+                    )
+                };
+                h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .rounded(radius)
+                    .bg(muted_bg)
+                    .border_1()
+                    .border_color(border_color)
+                    .child(
+                        div()
+                            .id("hud-global-steam-snippet")
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .text_xs()
+                            .font_family(mono_font)
+                            .tooltip({
+                                let full = snippet.clone();
+                                move |window, cx| Tooltip::new(full.clone()).build(window, cx)
+                            })
+                            .child(snippet.clone()),
+                    )
+                    .child(self.copy_steam_button("hud-global-steam-copy", snippet, cx))
+                    .into_any_element()
+            })
+        } else {
+            None
+        };
         Some(
-            div()
+            v_flex()
+                .w_full()
+                .gap_2()
                 .pb_1()
-                .child(Alert::info(id, text.clone()))
+                .child(alert)
+                .children(snippet_row)
                 .into_any_element(),
         )
     }
@@ -1487,31 +1556,29 @@ impl HudPanel {
         if !self.is_steam() {
             return None;
         }
-        let theme = cx.theme();
-        let snippet_card = match &self.display.steam_snippet {
+        let snippet_card = match self.display.steam_snippet.clone() {
             Some(snippet) => {
-                let text = snippet.clone();
-                let copied_msg = self.labels.steam_copied.clone();
+                let (radius, muted_bg, border_color, mono_font) = {
+                    let theme = cx.theme();
+                    (
+                        theme.radius,
+                        theme.muted,
+                        theme.border,
+                        theme.mono_font_family.clone(),
+                    )
+                };
                 let code_box = div()
                     .w_full()
                     .min_w_0()
                     .p_3()
-                    .rounded(theme.radius)
-                    .bg(theme.muted)
+                    .rounded(radius)
+                    .bg(muted_bg)
                     .border_1()
-                    .border_color(theme.border)
+                    .border_color(border_color)
                     .text_xs()
-                    .font_family(theme.mono_font_family.clone())
+                    .font_family(mono_font)
                     .child(snippet.clone());
-                let copy_btn = Button::new("hud-steam-copy")
-                    .outline()
-                    .small()
-                    .icon(IconName::Copy)
-                    .label(self.labels.steam_copy.clone())
-                    .on_click(move |_, window, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-                        window.push_notification(Notification::success(copied_msg.clone()), cx);
-                    });
+                let copy_btn = self.copy_steam_button("hud-steam-copy", snippet, cx);
                 v_flex()
                     .w_full()
                     .gap_2()
@@ -2905,7 +2972,7 @@ impl Render for HudPanel {
                 .w_full()
                 .gap_2()
                 .children(self.render_missing_mangohud())
-                .children(self.render_scope_notice())
+                .children(self.render_scope_notice(cx))
                 .children(self.render_steam_section(cx))
                 .when(!editing, |v| {
                     v.child(self.render_mode_section(cx))
@@ -2932,7 +2999,7 @@ impl Render for HudPanel {
             HudBackend::MetalHud => v_flex()
                 .w_full()
                 .gap_2()
-                .children(self.render_scope_notice())
+                .children(self.render_scope_notice(cx))
                 .children(self.render_steam_section(cx))
                 .child(self.render_mode_section(cx))
                 .child(self.render_metal_section(cx))
@@ -3335,7 +3402,10 @@ fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> CachedDisplay {
         &[("mode", global_mode_label)],
     );
 
-    let steam_snippet = if matches!(scope, HudPanelScope::PerGame { is_steam: true, .. }) {
+    let steam_snippet = if matches!(
+        scope,
+        HudPanelScope::Global | HudPanelScope::PerGame { is_steam: true, .. }
+    ) {
         let resolved = resolve_hud_for_scope(scope, hud_backend, global, game, cx);
         let conf_path = steam_conf_path(scope, game);
         steam_launch_snippet(hud_backend, &resolved, &conf_path).map(SharedString::from)
@@ -3682,5 +3752,47 @@ mod tests {
             })
             .unwrap();
         }
+    }
+
+    #[gpui_kit::test]
+    fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
+        let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+        cx.update_window(handle, |_, window, cx| {
+            panel.update(cx, |p, cx| {
+                p.set_global_mode(GlobalHudMode::Off, window, cx);
+                assert!(p.display.steam_snippet.is_none());
+
+                p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+                let snippet = p
+                    .display
+                    .steam_snippet
+                    .as_deref()
+                    .expect("global MangoHud On provides a Steam launch options snippet");
+                assert!(snippet.contains("MANGOHUD=1 MANGOHUD_CONFIGFILE="));
+                assert!(snippet.contains("global.conf"));
+                assert!(snippet.ends_with("%command%"));
+            });
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+
+        let (m_handle, m_panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MetalHud));
+        cx.update_window(m_handle, |_, window, cx| {
+            m_panel.update(cx, |p, cx| {
+                p.set_global_mode(GlobalHudMode::Off, window, cx);
+                assert!(p.display.steam_snippet.is_none());
+
+                p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+                let snippet = p
+                    .display
+                    .steam_snippet
+                    .as_deref()
+                    .expect("global Metal HUD On provides a Steam launch options snippet");
+                assert!(snippet.contains("MTL_HUD_ENABLED=1 MTL_HUD_ALIGNMENT="));
+                assert!(snippet.ends_with("%command%"));
+            });
+            let _ = window.draw(cx);
+        })
+        .unwrap();
     }
 }

@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Affiche les FPS, les températures et l'utilisation du matériel par-dessus vos jeux, via Metal HUD.",
   "settings.group.performance_hud": "Statistiques en jeu",
   "settings.field.panel_performance_hud.label": "Statistiques en jeu",
-  "settings.hud.global_stores_notice": "S'applique automatiquement aux jeux et lanceurs tiers démarrés par Irori. Pour les jeux Steam, copiez les options de lancement dans les paramètres des statistiques en jeu de chaque jeu.",
+  "settings.hud.global_stores_notice": "S'applique automatiquement aux jeux et lanceurs tiers démarrés par Irori. Pour les jeux Steam, collez les options de lancement dans Steam. Pour un profil par jeu, ouvrez Paramètres du jeu > Performances > Statistiques en jeu.",
   "settings.hud.launcher_restart_notice": "La superposition est appliquée lorsque Irori démarre ce lanceur. S'il tourne déjà en arrière-plan, fermez-le puis rouvrez-le pour appliquer les changements de mode."
 }

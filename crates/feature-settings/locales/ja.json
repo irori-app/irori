@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Metal HUD を使って、ゲーム画面の上に FPS、温度、ハードウェア使用率を表示します。",
   "settings.group.performance_hud": "ゲーム内統計",
   "settings.field.panel_performance_hud.label": "ゲーム内統計",
-  "settings.hud.global_stores_notice": "Irori が起動するゲームおよびサードパーティ製ランチャーに自動で適用されます。Steam ゲームの場合は、各ゲームの「ゲーム内統計」設定から起動オプションをコピーしてください。",
+  "settings.hud.global_stores_notice": "Irori が起動するゲームおよびサードパーティ製ランチャーに自動で適用されます。Steam ゲームでは起動オプションを Steam に貼り付けてください。ゲーム別の設定は「ゲーム設定 > パフォーマンス > ゲーム内統計」から行えます。",
   "settings.hud.launcher_restart_notice": "オーバーレイは Irori がこのランチャーを起動するときに適用されます。すでにバックグラウンドで実行中の場合は、モード変更を反映するために一度閉じて開き直してください。"
 }

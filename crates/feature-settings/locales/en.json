@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Shows FPS, temperatures and hardware usage on top of your games, via Metal HUD.",
   "settings.group.performance_hud": "In-game stats",
   "settings.field.panel_performance_hud.label": "In-game stats",
-  "settings.hud.global_stores_notice": "Applies automatically to games and third-party launchers started by Irori. For Steam games, copy the launch options in each game's In-game stats settings.",
+  "settings.hud.global_stores_notice": "Applies automatically to games and third-party launchers started by Irori. For Steam games, paste the launch options into Steam. For per-game profiles, open Game Settings > Performance > In-game stats.",
   "settings.hud.launcher_restart_notice": "The overlay is applied when Irori starts this launcher. If it is already running in the background, close and reopen it so mode changes take effect."
 }

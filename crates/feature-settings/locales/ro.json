@@ -1455,6 +1455,6 @@
   "settings.page.performance_hud_description_metal": "Afișează FPS, temperaturile și utilizarea hardware peste jocurile tale, prin Metal HUD.",
   "settings.group.performance_hud": "Statistici în joc",
   "settings.field.panel_performance_hud.label": "Statistici în joc",
-  "settings.hud.global_stores_notice": "Se aplică automat jocurilor și lansatoarelor terțe pornite de Irori. Pentru jocurile Steam, copiază opțiunile de lansare din setările statisticilor în joc.",
+  "settings.hud.global_stores_notice": "Se aplică automat jocurilor și lansatoarelor terțe pornite de Irori. Pentru jocurile Steam, lipește opțiunile de lansare în Steam. Pentru profiluri pe joc, deschide Setările jocului > Performanță > Statistici în joc.",
   "settings.hud.launcher_restart_notice": "Suprapunerea este aplicată când Irori pornește acest lansator. Dacă rulează deja în fundal, închide-l și redeschide-l pentru ca schimbările de mod să se aplice."
 }
