@@ -4229,7 +4229,12 @@ mod tests {
             fps.contains(&"gamescope.fpsLimiter"),
             cfg!(target_os = "linux")
         );
-        assert!(!fps.contains(&"enableDXVKFpsLimit"));
+        // On Linux the frame limit goes through gamescope too, which its
+        // help says.
+        assert_eq!(
+            fps.contains(&"enableDXVKFpsLimit"),
+            cfg!(target_os = "linux")
+        );
         assert!(paths("   ").is_empty());
         assert!(paths("no such setting").is_empty());
     }
