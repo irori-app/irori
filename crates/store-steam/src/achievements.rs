@@ -36,7 +36,15 @@ pub(crate) fn merge(
         .map(|u| u.achievements.as_slice())
         .unwrap_or_default()
         .iter()
+        .filter(|u| u.internal_key != 0)
         .map(|u| (u.internal_key, u))
+        .collect();
+    let by_name: HashMap<&str, &UserAchievement> = unlocks
+        .map(|u| u.achievements.as_slice())
+        .unwrap_or_default()
+        .iter()
+        .filter(|u| !u.internal_name.is_empty())
+        .map(|u| (u.internal_name.as_str(), u))
         .collect();
     schema
         .achievements
@@ -66,7 +74,11 @@ pub(crate) fn merge(
                 }),
                 ..Default::default()
             };
-            match (unlocks, by_key.get(&d.internal_key)) {
+            let matched = by_key
+                .get(&d.internal_key)
+                .copied()
+                .or_else(|| by_name.get(d.internal_name.as_str()).copied());
+            match (unlocks, matched) {
                 (Some(_), Some(u)) => {
                     if u.unlocked {
                         a.unlocked_at = Some(
@@ -119,8 +131,8 @@ impl SteamStore {
         .unwrap_or_default();
 
         let client = self.client()?;
-        let token = session.as_ref().map(|s| s.access_token.as_str());
-        let schema = match client.game_achievements(token, appid, steam_language).await {
+        let auth = session.as_ref().and_then(|s| s.auth());
+        let schema = match client.game_achievements(auth, appid, steam_language).await {
             Ok(schema) => schema,
             Err(e) => {
                 tracing::debug!("Steam achievements of {app_name}: {e:#}");
@@ -137,18 +149,17 @@ impl SteamStore {
             // Steam's web schema lags behind some games; its files may not.
             return Ok(local);
         }
-        let unlocks = match &session {
-            Some(s) => match client
-                .user_achievements(&s.access_token, s.steamid()?, appid)
-                .await
-            {
-                Ok(u) => u,
-                Err(e) => {
-                    tracing::debug!("Steam unlocks of {app_name}: {e:#}");
-                    None
+        let unlocks = match (&session, auth) {
+            (Some(s), Some(auth)) => {
+                match client.user_achievements(auth, s.steamid()?, appid).await {
+                    Ok(u) => u,
+                    Err(e) => {
+                        tracing::debug!("Steam unlocks of {app_name}: {e:#}");
+                        None
+                    }
                 }
-            },
-            None => None,
+            }
+            _ => None,
         };
         let local_unlocks: HashMap<String, Option<String>> = local
             .iter()
@@ -208,6 +219,21 @@ mod tests {
         let list = merge(620, &defs, None, &local);
         assert!(list[0].unlocked_at.is_none());
         assert_eq!(list[1].unlocked_at.as_deref(), Some(""));
+
+        // API key unlocks match by internal_name when internal_key is 0.
+        let by_name = UserAchievements {
+            achievements: vec![UserAchievement {
+                internal_key: 0,
+                internal_name: "B".into(),
+                unlocked: true,
+                unlock_time: 1_700_000_000,
+                ..Default::default()
+            }],
+            groups: Vec::new(),
+        };
+        let list = merge(620, &defs, Some(&by_name), &HashMap::new());
+        assert!(list[0].unlocked_at.is_none());
+        assert_eq!(list[1].unlocked_at.as_deref(), Some("2023-11-14T22:13:20Z"));
     }
 
     #[test]

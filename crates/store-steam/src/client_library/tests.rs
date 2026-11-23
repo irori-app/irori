@@ -169,6 +169,7 @@ fn store(steam: &Path) -> Arc<SteamStore> {
         Endpoints {
             api: dead.clone(),
             store: dead.clone(),
+            login: dead.clone(),
             assets: dead,
         },
     )
@@ -302,9 +303,10 @@ async fn lists_what_was_read_until_an_account_signs_in() {
 
     // A signed-in account's library wins.
     *s.session.write() = Some(
-        crate::account::parse_login_input(
-            r#"{"accountName":"a","steamid":"1","refreshToken":"r","accessToken":"x"}"#,
-        )
+        crate::account::parse_login_input(&crate::account::api_key_login_input(
+            1,
+            "0123456789abcdef0123456789abcdef",
+        ))
         .unwrap(),
     );
     s.scan().await.unwrap();

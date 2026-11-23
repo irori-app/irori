@@ -273,6 +273,39 @@ pub(crate) fn persona_name(steam_dir: &Path, steamid: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// SteamID64 of the account Steam remembers most recently on this computer
+/// (`config/loginusers.vdf`), or the sole account when only one is listed.
+pub(crate) fn most_recent_steamid(steam_dir: &Path) -> Option<String> {
+    const MIN_STEAMID64: u64 = 76_561_197_960_265_728;
+    let text = std::fs::read_to_string(steam_dir.join("config").join("loginusers.vdf")).ok()?;
+    let doc = vdf::parse(&text);
+    let users = doc.get("users")?.entries();
+    let valid_id = |raw: &str| {
+        let trimmed = raw.trim();
+        trimmed
+            .parse::<u64>()
+            .ok()
+            .filter(|&id| id >= MIN_STEAMID64)
+            .map(|_| trimmed.to_string())
+    };
+    if let Some(id) = users.iter().find_map(|(steamid, user)| {
+        let recent = user
+            .get("MostRecent")
+            .and_then(vdf::Vdf::as_str)
+            .is_some_and(|v| v.trim() == "1");
+        recent.then(|| valid_id(steamid)).flatten()
+    }) {
+        return Some(id);
+    }
+    let valid: Vec<String> = users
+        .iter()
+        .filter_map(|(steamid, _)| valid_id(steamid))
+        .collect();
+    (valid.len() == 1)
+        .then(|| valid.into_iter().next())
+        .flatten()
+}
+
 /// Art the Steam client keeps for an app in `appcache/librarycache/<id>`:
 /// directly in that folder for older apps, in hashed subfolders (one per
 /// version of the image) for newer ones. Paths of existing files only.
