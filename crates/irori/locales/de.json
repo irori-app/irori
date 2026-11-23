@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} für {title}",
   "shell.palette.user_action_keywords": "aktion werkzeug programm link mod-manager editor",
   "shell.palette.category_keywords": "Kategorie intelligent Schlagwort Gruppe Sammlung",
-  "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter"
+  "shell.palette.genre_keywords": "genre action abenteuer strategie rätsel rollenspiel shooter",
+  "shell.palette.state_playing": "Läuft",
+  "shell.palette.state_launching": "Wird gestartet",
+  "shell.palette.state_installed": "Installiert",
+  "shell.palette.state_not_installed": "Nicht installiert",
+  "shell.palette.preview_playtime": "{time} gespielt",
+  "shell.palette.preview_never_played": "Nie gespielt",
+  "shell.palette.preview_last_played": "Zuletzt gespielt: {when}",
+  "shell.palette.preview_shortcut": "Tastenkürzel",
+  "shell.palette.preview_run": "Eingabe führt diesen Befehl aus",
+  "shell.palette.preview_enter_open": "Eingabe öffnet die Seite des Spiels"
 }

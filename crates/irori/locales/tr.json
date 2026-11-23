@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{title} için {action}",
   "shell.palette.user_action_keywords": "eylem araç program bağlantı mod yöneticisi düzenleyici",
   "shell.palette.category_keywords": "kategori akıllı etiket grup koleksiyon",
-  "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı"
+  "shell.palette.genre_keywords": "tür aksiyon macera strateji bulmaca rpg nişancı",
+  "shell.palette.state_playing": "Oynanıyor",
+  "shell.palette.state_launching": "Başlatılıyor",
+  "shell.palette.state_installed": "Yüklü",
+  "shell.palette.state_not_installed": "Yüklü değil",
+  "shell.palette.preview_playtime": "{time} oynandı",
+  "shell.palette.preview_never_played": "Hiç oynanmadı",
+  "shell.palette.preview_last_played": "Son oynama: {when}",
+  "shell.palette.preview_shortcut": "Kısayol",
+  "shell.palette.preview_run": "Enter bu komutu çalıştırır",
+  "shell.palette.preview_enter_open": "Enter oyunun sayfasını açar"
 }

@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} para {title}",
   "shell.palette.user_action_keywords": "ação ferramenta programa ligação gestor de mods editor",
   "shell.palette.category_keywords": "categoria inteligente etiqueta grupo coleção",
-  "shell.palette.genre_keywords": "género ação aventura estratégia quebra-cabeças rpg tiros"
+  "shell.palette.genre_keywords": "género ação aventura estratégia quebra-cabeças rpg tiros",
+  "shell.palette.state_playing": "A jogar",
+  "shell.palette.state_launching": "A iniciar",
+  "shell.palette.state_installed": "Instalado",
+  "shell.palette.state_not_installed": "Não instalado",
+  "shell.palette.preview_playtime": "{time} jogado",
+  "shell.palette.preview_never_played": "Nunca jogado",
+  "shell.palette.preview_last_played": "Última sessão: {when}",
+  "shell.palette.preview_shortcut": "Atalho",
+  "shell.palette.preview_run": "Enter executa este comando",
+  "shell.palette.preview_enter_open": "Enter abre a página do jogo"
 }

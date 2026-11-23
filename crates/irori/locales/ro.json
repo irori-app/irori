@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} pentru {title}",
   "shell.palette.user_action_keywords": "acțiune unealtă program link manager moduri editor",
   "shell.palette.category_keywords": "categorie inteligentă etichetă grup colecție",
-  "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter"
+  "shell.palette.genre_keywords": "gen acțiune aventură strategie puzzle rpg shooter",
+  "shell.palette.state_playing": "Rulează",
+  "shell.palette.state_launching": "Se pornește",
+  "shell.palette.state_installed": "Instalat",
+  "shell.palette.state_not_installed": "Neinstalat",
+  "shell.palette.preview_playtime": "{time} jucat",
+  "shell.palette.preview_never_played": "Niciodată jucat",
+  "shell.palette.preview_last_played": "Ultima dată jucat: {when}",
+  "shell.palette.preview_shortcut": "Scurtătură",
+  "shell.palette.preview_run": "Enter rulează această comandă",
+  "shell.palette.preview_enter_open": "Enter deschide pagina jocului"
 }

@@ -159,7 +159,7 @@ impl AppShell {
         cx.set_reduce_motion(reduce);
         Self {
             focus: cx.focus_handle(),
-            palette: Palette::new(window, cx),
+            palette: Palette::default(),
             pages: Pages::default(),
             sidebar_collapsed: collapsed,
             narrow_expanded: false,
@@ -897,7 +897,7 @@ mod start_tests {
 /// The title bar row laid out in a real window, so a change to the flex tracks
 /// is measured where it ships.
 #[cfg(test)]
-mod title_bar_tests {
+pub(crate) mod title_bar_tests {
     use std::sync::{Arc, Mutex, Once};
     use std::time::{Duration, Instant};
 
@@ -946,7 +946,7 @@ mod title_bar_tests {
     }
 
     /// A real backend over a shelf with one manually added (browser) app.
-    fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
+    pub(crate) fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
         isolate_paths();
         cx.executor().allow_parking();
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
@@ -972,7 +972,11 @@ mod title_bar_tests {
     }
 
     /// Add the game whose title the pill shows, and wait for the library model.
-    fn add_game(cx: &mut TestAppContext, backend: &Backend, store: &SideloadStore) -> GameId {
+    pub(crate) fn add_game(
+        cx: &mut TestAppContext,
+        backend: &Backend,
+        store: &SideloadStore,
+    ) -> GameId {
         let id = backend
             .runtime()
             .block_on(store.add_app(SideloadApp {
@@ -997,7 +1001,7 @@ mod title_bar_tests {
     }
 
     /// Wait until the status model shows (or stops showing) `id` as playing.
-    fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
+    pub(crate) fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             cx.run_until_parked();

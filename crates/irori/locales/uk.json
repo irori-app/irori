@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} для {title}",
   "shell.palette.user_action_keywords": "дія інструмент програма посилання менеджер модів редактор",
   "shell.palette.category_keywords": "категорія розумна мітка група колекція",
-  "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер"
+  "shell.palette.genre_keywords": "жанр екшн пригоди стратегія головоломка rpg шутер",
+  "shell.palette.state_playing": "Запущена",
+  "shell.palette.state_launching": "Запускається",
+  "shell.palette.state_installed": "Встановлена",
+  "shell.palette.state_not_installed": "Не встановлена",
+  "shell.palette.preview_playtime": "Зіграно: {time}",
+  "shell.palette.preview_never_played": "Ще не запускалася",
+  "shell.palette.preview_last_played": "Останній запуск: {when}",
+  "shell.palette.preview_shortcut": "Сполучення клавіш",
+  "shell.palette.preview_run": "Enter виконує цю команду",
+  "shell.palette.preview_enter_open": "Enter відкриває сторінку гри"
 }

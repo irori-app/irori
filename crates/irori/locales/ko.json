@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{title}의 {action}",
   "shell.palette.user_action_keywords": "동작 도구 프로그램 링크 모드 관리자 편집기",
   "shell.palette.category_keywords": "범주 스마트 태그 그룹 컬렉션",
-  "shell.palette.genre_keywords": "장르 액션 어드벤처 전략 퍼즐 RPG 슈팅"
+  "shell.palette.genre_keywords": "장르 액션 어드벤처 전략 퍼즐 RPG 슈팅",
+  "shell.palette.state_playing": "플레이 중",
+  "shell.palette.state_launching": "시작 중",
+  "shell.palette.state_installed": "설치됨",
+  "shell.palette.state_not_installed": "설치 안 됨",
+  "shell.palette.preview_playtime": "플레이 시간 {time}",
+  "shell.palette.preview_never_played": "플레이한 적 없음",
+  "shell.palette.preview_last_played": "마지막 플레이: {when}",
+  "shell.palette.preview_shortcut": "단축키",
+  "shell.palette.preview_run": "Enter 키로 이 명령 실행",
+  "shell.palette.preview_enter_open": "Enter 키로 게임 페이지 열기"
 }

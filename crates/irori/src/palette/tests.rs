@@ -16,7 +16,6 @@ fn targets(install: Option<InstallFilter>, favourites: Option<bool>, quick: bool
         hidden_pin: None,
     };
     Palette::items(
-        &[],
         None,
         None,
         library,
@@ -67,7 +66,6 @@ fn every_category_of_both_kinds_is_offered() {
         hidden_pin: None,
     };
     Palette::items(
-        &[],
         None,
         None,
         library,
@@ -109,7 +107,6 @@ fn the_hidden_games_pin_is_offered_only_while_unlocked() {
             hidden_pin,
         };
         Palette::items(
-            &[],
             None,
             None,
             library,
@@ -191,4 +188,57 @@ fn installed_windows_games_offer_reshade_and_renodx() {
     assert!(offers(game(true, irori_core::InstallPlatform::Windows)));
     assert!(!offers(game(true, irori_core::InstallPlatform::Linux)));
     assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
+}
+
+/// The palette drawn over a real backend, typed into as a user would.
+mod ui {
+    use super::*;
+    use crate::shell::title_bar_tests::{add_game, start, wait_for_status};
+    use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+    use irori_core::StatusKind;
+
+    /// What the game rows the palette lists now do, in order.
+    fn shown(view: &Entity<PaletteView>, cx: &mut VisualTestContext) -> Vec<String> {
+        cx.read(|cx| {
+            view.read(cx)
+                .shown_rows()
+                .iter()
+                .filter_map(|row| match (&row.target, &row.game) {
+                    (PaletteTarget::Open(id), Some(_)) => Some(format!("game {}", id.key())),
+                    (PaletteTarget::Play(id), _) => Some(format!("play {}", id.key())),
+                    (PaletteTarget::BackToGame(id), _) => Some(format!("back {}", id.key())),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
+    #[gpui_kit::test]
+    fn finds_games_by_search_and_follows_the_running_ones(cx: &mut TestAppContext) {
+        let (backend, store) = start(cx);
+        let id = add_game(cx, &backend, &store);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| PaletteView::new(Host::Dialog, window, cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| PaletteView::focus(&view, window, cx));
+        // A typo still finds it, as the library's search does.
+        cx.simulate_input("deliberatly");
+        let key = id.key();
+        assert_eq!(
+            shown(&view, cx),
+            [format!("play {key}"), format!("game {key}")],
+            "an installed game is offered to play, then as a game row"
+        );
+
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        assert_eq!(
+            shown(&view, cx).first(),
+            Some(&format!("back {key}")),
+            "a game that starts while the palette is open comes first"
+        );
+        backend.statuses.clear(&id);
+        wait_for_status(cx, &id, false);
+        assert!(!shown(&view, cx).iter().any(|s| s.starts_with("back")));
+    }
 }

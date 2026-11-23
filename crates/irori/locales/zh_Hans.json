@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{title} 的 {action}",
   "shell.palette.user_action_keywords": "操作 工具 程序 链接 模组管理器 编辑器",
   "shell.palette.category_keywords": "分类 智能 标签 分组 收藏",
-  "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击"
+  "shell.palette.genre_keywords": "类型 动作 冒险 策略 解谜 角色扮演 射击",
+  "shell.palette.state_playing": "正在游玩",
+  "shell.palette.state_launching": "正在启动",
+  "shell.palette.state_installed": "已安装",
+  "shell.palette.state_not_installed": "未安装",
+  "shell.palette.preview_playtime": "已玩 {time}",
+  "shell.palette.preview_never_played": "从未玩过",
+  "shell.palette.preview_last_played": "上次游玩：{when}",
+  "shell.palette.preview_shortcut": "快捷键",
+  "shell.palette.preview_run": "按 Enter 运行此命令",
+  "shell.palette.preview_enter_open": "按 Enter 打开游戏页面"
 }

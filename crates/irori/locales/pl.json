@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} dla {title}",
   "shell.palette.user_action_keywords": "akcja narzędzie program link menedżer modów edytor",
   "shell.palette.category_keywords": "kategoria inteligentna etykieta grupa kolekcja",
-  "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka"
+  "shell.palette.genre_keywords": "gatunek akcja przygodowa strategia logiczna rpg strzelanka",
+  "shell.palette.state_playing": "Uruchomiona",
+  "shell.palette.state_launching": "Uruchamianie",
+  "shell.palette.state_installed": "Zainstalowana",
+  "shell.palette.state_not_installed": "Niezainstalowana",
+  "shell.palette.preview_playtime": "Czas gry: {time}",
+  "shell.palette.preview_never_played": "Nigdy nie grano",
+  "shell.palette.preview_last_played": "Ostatnio grano: {when}",
+  "shell.palette.preview_shortcut": "Skrót",
+  "shell.palette.preview_run": "Enter uruchamia to polecenie",
+  "shell.palette.preview_enter_open": "Enter otwiera stronę gry"
 }

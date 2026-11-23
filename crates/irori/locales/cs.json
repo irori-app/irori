@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} pro {title}",
   "shell.palette.user_action_keywords": "akce nástroj program odkaz správce módů editor",
   "shell.palette.category_keywords": "kategorie chytrá štítek skupina sbírka",
-  "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka"
+  "shell.palette.genre_keywords": "žánr akční adventura strategie logická rpg střílečka",
+  "shell.palette.state_playing": "Hraje se",
+  "shell.palette.state_launching": "Spouští se",
+  "shell.palette.state_installed": "Nainstalováno",
+  "shell.palette.state_not_installed": "Nenainstalováno",
+  "shell.palette.preview_playtime": "Odehráno {time}",
+  "shell.palette.preview_never_played": "Nikdy nehráno",
+  "shell.palette.preview_last_played": "Naposledy hráno: {when}",
+  "shell.palette.preview_shortcut": "Zkratka",
+  "shell.palette.preview_run": "Enter tento příkaz spustí",
+  "shell.palette.preview_enter_open": "Enter otevře stránku hry"
 }

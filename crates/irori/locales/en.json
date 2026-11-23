@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} for {title}",
   "shell.palette.user_action_keywords": "action tool program link mod manager editor",
   "shell.palette.category_keywords": "category smart tag group collection",
-  "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter"
+  "shell.palette.genre_keywords": "genre action adventure strategy puzzle rpg shooter",
+  "shell.palette.state_playing": "Playing",
+  "shell.palette.state_launching": "Starting",
+  "shell.palette.state_installed": "Installed",
+  "shell.palette.state_not_installed": "Not installed",
+  "shell.palette.preview_playtime": "{time} played",
+  "shell.palette.preview_never_played": "Never played",
+  "shell.palette.preview_last_played": "Last played: {when}",
+  "shell.palette.preview_shortcut": "Shortcut",
+  "shell.palette.preview_run": "Enter runs this command",
+  "shell.palette.preview_enter_open": "Enter opens the game’s page"
 }

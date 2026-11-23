@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} per {title}",
   "shell.palette.user_action_keywords": "azione strumento programma link gestore mod editor",
   "shell.palette.category_keywords": "categoria intelligente etichetta gruppo raccolta",
-  "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto"
+  "shell.palette.genre_keywords": "genere azione avventura strategia rompicapo gdr sparatutto",
+  "shell.palette.state_playing": "In gioco",
+  "shell.palette.state_launching": "Avvio in corso",
+  "shell.palette.state_installed": "Installato",
+  "shell.palette.state_not_installed": "Non installato",
+  "shell.palette.preview_playtime": "{time} di gioco",
+  "shell.palette.preview_never_played": "Mai giocato",
+  "shell.palette.preview_last_played": "Ultima partita: {when}",
+  "shell.palette.preview_shortcut": "Scorciatoia",
+  "shell.palette.preview_run": "Invio esegue questo comando",
+  "shell.palette.preview_enter_open": "Invio apre la pagina del gioco"
 }

@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{title} の {action}",
   "shell.palette.user_action_keywords": "アクション ツール プログラム リンク Mod マネージャー エディター",
   "shell.palette.category_keywords": "カテゴリー スマート タグ グループ コレクション",
-  "shell.palette.genre_keywords": "ジャンル アクション アドベンチャー ストラテジー パズル RPG シューティング"
+  "shell.palette.genre_keywords": "ジャンル アクション アドベンチャー ストラテジー パズル RPG シューティング",
+  "shell.palette.state_playing": "プレイ中",
+  "shell.palette.state_launching": "起動中",
+  "shell.palette.state_installed": "インストール済み",
+  "shell.palette.state_not_installed": "未インストール",
+  "shell.palette.preview_playtime": "プレイ時間 {time}",
+  "shell.palette.preview_never_played": "未プレイ",
+  "shell.palette.preview_last_played": "最終プレイ: {when}",
+  "shell.palette.preview_shortcut": "ショートカット",
+  "shell.palette.preview_run": "Enter でこのコマンドを実行",
+  "shell.palette.preview_enter_open": "Enter でゲームのページを開く"
 }

@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} para {title}",
   "shell.palette.user_action_keywords": "acción herramienta programa enlace gestor de mods editor",
   "shell.palette.category_keywords": "categoría inteligente etiqueta grupo colección",
-  "shell.palette.genre_keywords": "género acción aventura estrategia puzle rol disparos"
+  "shell.palette.genre_keywords": "género acción aventura estrategia puzle rol disparos",
+  "shell.palette.state_playing": "Jugando",
+  "shell.palette.state_launching": "Iniciando",
+  "shell.palette.state_installed": "Instalado",
+  "shell.palette.state_not_installed": "No instalado",
+  "shell.palette.preview_playtime": "{time} jugado",
+  "shell.palette.preview_never_played": "Nunca jugado",
+  "shell.palette.preview_last_played": "Última partida: {when}",
+  "shell.palette.preview_shortcut": "Atajo",
+  "shell.palette.preview_run": "Intro ejecuta este comando",
+  "shell.palette.preview_enter_open": "Intro abre la página del juego"
 }

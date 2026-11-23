@@ -1161,7 +1161,12 @@ Other parts:
   tested; Wayland keeps only size and display).
 - `actions.rs` binds global shortcuts. `ctrl-` becomes `cmd-` on macOS, which also
   gets a native menu.
-- `palette.rs` is the Ctrl/Cmd+K command palette.
+- `palette/` is the Ctrl/Cmd+K command palette (`view.rs`). It filters rows
+  itself: games come from the library's `SearchIndex` (at most
+  `search::MAX_GAMES` rows, each with its cover, since the palette measures
+  every row it holds; the recently played without a query), and a preview
+  pane beside the list (`preview.rs`, left out in a narrow window) shows the
+  highlighted game or command. Rows for running games follow `StatusModel`.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362

@@ -28,7 +28,7 @@ mod commands;
 mod dialogs;
 mod filter;
 mod filters_panel;
-mod format;
+pub mod format;
 mod grid;
 mod i18n;
 mod launch;

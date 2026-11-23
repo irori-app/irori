@@ -191,5 +191,15 @@
   "shell.palette.user_action": "{action} för {title}",
   "shell.palette.user_action_keywords": "åtgärd verktyg program länk modhanterare redigerare",
   "shell.palette.category_keywords": "kategori smart tagg grupp samling",
-  "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel"
+  "shell.palette.genre_keywords": "genre action äventyr strategi pussel rollspel skjutspel",
+  "shell.palette.state_playing": "Spelas",
+  "shell.palette.state_launching": "Startar",
+  "shell.palette.state_installed": "Installerat",
+  "shell.palette.state_not_installed": "Inte installerat",
+  "shell.palette.preview_playtime": "{time} spelat",
+  "shell.palette.preview_never_played": "Aldrig spelat",
+  "shell.palette.preview_last_played": "Senast spelat: {when}",
+  "shell.palette.preview_shortcut": "Kortkommando",
+  "shell.palette.preview_run": "Retur kör det här kommandot",
+  "shell.palette.preview_enter_open": "Retur öppnar spelets sida"
 }

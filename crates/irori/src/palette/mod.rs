@@ -1,20 +1,21 @@
-//! Command palette (Ctrl+K): jump to any game, play installed games, cancel
-//! a launch being prepared, pick a random one, set the play status of the game whose page is open, group the
-//! library by play status, show only installed games or favourites, turn the
-//! library header's quick controls on or off, show or save a library view, switch its view
-//! (grid, list, Focus), back up, sync, save a clip while the replay buffer
-//! records, and run window commands, all from the keyboard.
+//! Command palette (Ctrl+K): find any game (with its cover, and a preview of
+//! the highlighted row beside the list), play installed games, go back to a
+//! running one, cancel a launch being prepared, pick a random one, set the
+//! play status of the game whose page is open, group the library by play
+//! status, show only installed games or favourites, turn the library
+//! header's quick controls on or off, show or save a library view, switch
+//! its view (grid, list, Focus), back up, sync, save a clip while the replay
+//! buffer records, and run window commands, all from the keyboard.
 
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::command::{Command, CommandItem, CommandState};
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _};
 use gpui_kit::{
-    App, AppContext as _, Entity, ParentElement as _, SharedString, Styled as _, Window, px,
+    App, AppContext as _, ParentElement as _, SharedString, Styled as _, WeakEntity, Window,
 };
 use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, Runner};
@@ -23,6 +24,9 @@ use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
+
+use entry::Entry;
+use view::{Host, PaletteView, Row};
 
 /// The game whose page is open: the game, its play status and its own
 /// actions with their place.
@@ -152,31 +156,22 @@ struct LibraryCommands<'a> {
     hidden_pin: Option<bool>,
 }
 
-/// Retained palette state, owned by the shell.
+/// The palette the shell owns, shown as a dialog of the main window.
+#[derive(Default)]
 pub struct Palette {
-    state: Entity<CommandState>,
-    targets: Rc<std::cell::RefCell<Vec<PaletteTarget>>>,
     open: Rc<Cell<bool>>,
+    view: Option<WeakEntity<PaletteView>>,
 }
 
 impl Palette {
-    pub fn new(window: &mut Window, cx: &mut App) -> Self {
-        Self {
-            state: cx.new(|cx| CommandState::new(window, cx)),
-            targets: Rc::default(),
-            open: Rc::default(),
-        }
-    }
-
-    /// Rows for `games`. `replay` is the game the replay buffer records:
+    /// The command rows (games get rows of their own per query, see
+    /// [`view`]). `replay` is the game the replay buffer records:
     /// saving a clip comes first. `open` is the game whose page is shown,
     /// with its play status: its status commands come next. `library` is
     /// what the library commands change. `sync` is whether library sync is
     /// on. `stores` have a store window. `friends`: a Steam and an Xbox
     /// account can show their friends.
-    #[allow(clippy::too_many_arguments)] // One row source per argument, all needed.
     fn items(
-        games: &[Arc<GameInfo>],
         replay: Option<&str>,
         open: Option<OpenGame>,
         library: LibraryCommands<'_>,
@@ -184,7 +179,7 @@ impl Palette {
         stores: &[Runner],
         friends: (bool, bool),
         targets: &mut Vec<PaletteTarget>,
-    ) -> Vec<CommandItem> {
+    ) -> Vec<Entry> {
         let LibraryCommands {
             grouped,
             grouped_by_mode,
@@ -198,15 +193,14 @@ impl Palette {
             quick_controls,
             hidden_pin,
         } = library;
-        let mut items = Vec::with_capacity(games.len() * 2 + 16);
-        let mut push =
-            |item: CommandItem, target: PaletteTarget, targets: &mut Vec<PaletteTarget>| {
-                items.push(item);
-                targets.push(target);
-            };
+        let mut items = Vec::with_capacity(64);
+        let mut push = |item: Entry, target: PaletteTarget, targets: &mut Vec<PaletteTarget>| {
+            items.push(item);
+            targets.push(target);
+        };
         if let Some(title) = replay {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args("shell.palette.save_clip", &[("title", title)]))
                     .keywords([t("shell.palette.save_clip_keywords")])
                     .icon(IconName::Clapperboard),
@@ -251,7 +245,7 @@ impl Palette {
                 continue;
             }
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args("shell.palette.go_to", &[("place", &t(label))]))
                     .keywords([t(label)])
                     .icon(icon),
@@ -260,7 +254,7 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.year_in_review"))
                 .keywords([
                     t("shell.palette.year_in_review_keywords"),
@@ -288,7 +282,7 @@ impl Palette {
             ),
         ] {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([t("shell.palette.interface_size_keywords")])
                     .icon(icon),
@@ -298,7 +292,7 @@ impl Palette {
         }
         for way in irori_settings::feedback::Feedback::ALL {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(way.label_key()))
                     .keywords([t("shell.palette.feedback_keywords")])
                     .icon(way.icon()),
@@ -307,7 +301,7 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.storage"))
                 .keywords([t("shell.palette.storage_keywords")])
                 .icon(IconName::HardDrive),
@@ -316,7 +310,7 @@ impl Palette {
         );
         for &runner in stores {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args(
                         "shell.palette.open_store",
                         &[("store", runner.store_name())],
@@ -330,7 +324,7 @@ impl Palette {
         let (steam_friends, xbox_friends) = friends;
         if steam_friends {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.steam_friends"))
                     .keywords([t("shell.palette.steam_friends_keywords")])
                     .icon(IconName::Users),
@@ -340,7 +334,7 @@ impl Palette {
         }
         if xbox_friends {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.xbox_friends"))
                     .keywords([t("shell.palette.xbox_friends_keywords")])
                     .icon(IconName::Users),
@@ -349,7 +343,7 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.set_up_emulation"))
                 .keywords([t("shell.palette.set_up_emulation_keywords")])
                 .icon(IconName::Joystick),
@@ -357,7 +351,7 @@ impl Palette {
             targets,
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.add_emulator"))
                 .keywords([t("shell.palette.add_emulator_keywords")])
                 .icon(IconName::Plus),
@@ -365,7 +359,7 @@ impl Palette {
             targets,
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.add_folder"))
                 .keywords([t("shell.palette.add_folder_keywords")])
                 .icon(IconName::FolderPlus),
@@ -373,7 +367,7 @@ impl Palette {
             targets,
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.lutris_script"))
                 .keywords([t("shell.palette.lutris_script_keywords")])
                 .icon(IconName::ScrollText),
@@ -387,7 +381,7 @@ impl Palette {
                 "shell.palette.group_by_status"
             };
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([irori_ui::play_status::title()])
                     .icon(IconName::Rows3),
@@ -404,7 +398,7 @@ impl Palette {
                     continue;
                 }
                 push(
-                    CommandItem::new()
+                    Entry::new()
                         .label(t(label))
                         .keywords([t("shell.palette.filter_keywords")])
                         .icon(IconName::HardDrive),
@@ -420,7 +414,7 @@ impl Palette {
                 "shell.palette.show_favourites"
             };
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([t("shell.palette.filter_keywords")])
                     .icon(IconName::Star),
@@ -429,7 +423,7 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t(if quick_controls {
                     "shell.palette.hide_quick_controls"
                 } else {
@@ -443,7 +437,7 @@ impl Palette {
         if let Some(pin_set) = hidden_pin {
             if pin_set {
                 push(
-                    CommandItem::new()
+                    Entry::new()
                         .label(t("shell.palette.lock_hidden"))
                         .keywords([t("shell.palette.hidden_keywords")])
                         .icon(IconName::Lock),
@@ -452,7 +446,7 @@ impl Palette {
                 );
             }
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.hidden_pin"))
                     .keywords([t("shell.palette.hidden_keywords")])
                     .icon(IconName::Lock),
@@ -467,7 +461,7 @@ impl Palette {
                 "shell.palette.group_by_mode"
             };
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([
                         irori_ui::game_mode::title(),
@@ -485,7 +479,7 @@ impl Palette {
                 "shell.palette.group_by_genre"
             };
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([t("shell.palette.genre_keywords")])
                     .icon(IconName::Tag),
@@ -500,7 +494,7 @@ impl Palette {
                 "shell.palette.group_by_category"
             };
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([t("shell.palette.category_keywords")])
                     .icon(IconName::Tags),
@@ -510,7 +504,7 @@ impl Palette {
         }
         if grouped_by_category.is_some() {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.new_smart_category"))
                     .keywords([t("shell.palette.category_keywords")])
                     .icon(IconName::Sparkles),
@@ -520,7 +514,7 @@ impl Palette {
         }
         for entry in categories {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args(
                         "shell.palette.show_category",
                         &[("name", &entry.name)],
@@ -533,7 +527,7 @@ impl Palette {
         }
         for (id, name) in views {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args("shell.palette.show_view", &[("name", name)]))
                     .keywords([t("shell.palette.views_keywords")])
                     .icon(IconName::Bookmark),
@@ -543,7 +537,7 @@ impl Palette {
         }
         if grouped.is_some() {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.save_view"))
                     .keywords([t("shell.palette.views_keywords")])
                     .icon(IconName::BookmarkPlus),
@@ -572,7 +566,7 @@ impl Palette {
                 continue;
             }
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t(label))
                     .keywords([t("shell.palette.layout_keywords")])
                     .icon(icon),
@@ -581,14 +575,14 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.refresh"))
                 .icon(IconName::RefreshCw),
             PaletteTarget::Refresh,
             targets,
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.back_up"))
                 .keywords([t("shell.palette.back_up_keywords")])
                 .icon(IconName::Save),
@@ -597,7 +591,7 @@ impl Palette {
         );
         if sync {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t("shell.palette.sync"))
                     .keywords([t("shell.palette.sync_keywords")])
                     .icon(IconName::RefreshCw),
@@ -606,249 +600,146 @@ impl Palette {
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t("shell.palette.random"))
                 .keywords([t("shell.palette.random_keywords")])
                 .icon(IconName::Dices),
             PaletteTarget::Random,
             targets,
         );
-        for g in games.iter().filter(|g| g.is_installed) {
-            push(
-                CommandItem::new()
-                    .label(t_args("shell.palette.play", &[("title", &g.title)]))
-                    .icon(IconName::Play)
-                    .keywords([g.runner().short_name()]),
-                PaletteTarget::Play(g.id()),
-                targets,
-            );
-        }
-        for g in games {
-            push(
-                CommandItem::new()
-                    .label(g.title.clone())
-                    .icon(IconName::Gamepad2)
-                    .keywords([g.runner().short_name(), g.runner().store_name()]),
-                PaletteTarget::Open(g.id()),
-                targets,
-            );
-        }
         items
     }
 
-    /// Open the palette as a dialog in `window`.
-    pub fn open(&self, window: &mut Window, cx: &mut App) {
-        if self.open.get() {
-            self.state.update(cx, |s, cx| s.focus(window, cx));
+    /// Open the palette as a dialog in `window`, or put the keyboard back
+    /// in it when it is open.
+    pub fn open(&mut self, window: &mut Window, cx: &mut App) {
+        if self.open.get()
+            && let Some(view) = self.view.as_ref().and_then(|v| v.upgrade())
+        {
+            PaletteView::focus(&view, window, cx);
             return;
         }
         self.open.set(true);
-        let (games, open) = {
-            let library = models(cx).library.read(cx);
-            let open = match irori_ui::nav::navigator(cx).read(cx).current() {
-                Route::Game(id) => library
-                    .snapshot
-                    .get(id)
-                    .map(|g| (g.clone(), library.user.play_status(&id.key()))),
-                _ => None,
-            };
-            // Hidden games behind the PIN aren't found here either.
-            let games = if library.snapshot.hidden_locked {
-                library
-                    .snapshot
-                    .games
-                    .iter()
-                    .filter(|g| !library.user.hidden.contains(&g.id().key()))
-                    .cloned()
-                    .collect()
-            } else {
-                library.snapshot.games.clone()
-            };
-            (games, open)
-        };
-        let open = open.map(|(game, status)| {
-            let actions = irori_ui::user_actions::list(&game.id(), cx);
-            (game, status, actions)
-        });
-        let mut targets = Vec::new();
-        let grouped = irori_library::groups_by_status(cx);
-        let grouped_by_mode = irori_library::groups_by_mode(cx);
-        let grouped_by_genre = irori_library::groups_by_genre(cx);
-        let grouped_by_category = irori_library::groups_by_category(cx);
-        let categories = irori_library::category_list(cx);
-        let views = irori_library::saved_view_list(cx);
-        let layout = irori_library::library_layout(cx);
-        let install = irori_library::install_filter(cx);
-        let favourites = irori_library::favourites_only(cx);
-        let quick_controls = irori_library::quick_controls(cx);
-        let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
-        let replay = irori_ui::backend(cx).replay().map(|r| r.title);
-        let hidden_pin =
-            (!irori_ui::hidden_lock::locked(cx)).then(|| irori_ui::hidden_lock::pin_set(cx));
-        let library = LibraryCommands {
-            grouped,
-            grouped_by_mode,
-            grouped_by_genre,
-            grouped_by_category,
-            categories: &categories,
-            views: &views,
-            layout,
-            install,
-            favourites,
-            quick_controls,
-            hidden_pin,
-        };
-        // The shown game's cloud saves, when its store keeps them.
-        let syncable = open
-            .as_ref()
-            .map(|(game, _, _)| game.clone())
-            .filter(|game| irori_game::offers_sync(game, cx));
-        let mut items = Self::items(
-            &games,
-            replay.as_deref(),
-            open,
-            library,
-            sync,
-            &irori_manage::store_window_stores(cx),
-            (
-                irori_manage::steam_friends_available(cx),
-                irori_manage::xbox_friends_available(cx),
-            ),
-            &mut targets,
-        );
-        if let Some(game) = syncable {
-            items.push(
-                CommandItem::new()
-                    .label(t_args(
-                        "shell.palette.sync_saves",
-                        &[("title", &game.title)],
-                    ))
-                    .keywords([t("shell.palette.sync_saves_keywords")])
-                    .icon(IconName::RefreshCw),
-            );
-            targets.push(PaletteTarget::SyncSaves(game.id()));
-        }
-        if let Some(count) = irori_library::removable_picks(cx) {
-            items.push(
-                CommandItem::new()
-                    .label(t_args(
-                        "shell.palette.remove_picked",
-                        &[("count", &count.to_string())],
-                    ))
-                    .keywords([t("shell.palette.remove_picked_keywords")])
-                    .icon(IconName::ListX),
-            );
-            targets.push(PaletteTarget::RemovePicked);
-        }
-        if irori_manage::steam_client_library_state(cx)
-            .is_some_and(|s| s.steam_found && !s.signed_in)
-        {
-            items.push(
-                CommandItem::new()
-                    .label(t("shell.palette.steam_client_library"))
-                    .keywords([t("shell.palette.steam_client_library_keywords")])
-                    .icon(IconName::LibraryBig),
-            );
-            targets.push(PaletteTarget::SteamClientLibrary);
-        }
-        if irori_manage::xbox_offline_available(cx) {
-            items.push(
-                CommandItem::new()
-                    .label(t("shell.palette.xbox_offline_play"))
-                    .keywords([t("shell.palette.xbox_offline_play_keywords")])
-                    .icon(IconName::HardDrive),
-            );
-            targets.push(PaletteTarget::XboxOfflinePlay);
-        }
-        // A launch being prepared comes first: it is what the user waits on.
-        let b = irori_ui::backend(cx);
-        let launching: Vec<GameId> = models(cx)
-            .statuses
-            .read(cx)
-            .all()
-            .filter(|s| s.kind == irori_core::StatusKind::Launching && !b.concealed(&s.id))
-            .map(|s| s.id.clone())
-            .collect();
-        for id in launching {
-            let title = b
-                .game(&id)
-                .map(|g| g.title.clone())
-                .unwrap_or_else(|| id.app_name.to_string());
-            items.insert(
-                0,
-                CommandItem::new()
-                    .label(t_args("shell.palette.cancel_launch", &[("title", &title)]))
-                    .keywords([t("shell.palette.cancel_launch_keywords")])
-                    .icon(IconName::X),
-            );
-            targets.insert(0, PaletteTarget::CancelLaunch(id));
-        }
-        // The games running, to go back to.
-        let playing: Vec<GameId> = models(cx)
-            .statuses
-            .read(cx)
-            .playing()
-            .filter(|id| !b.concealed(id))
-            .cloned()
-            .collect();
-        for id in playing {
-            let title = b
-                .game(&id)
-                .map(|g| g.title.clone())
-                .unwrap_or_else(|| id.app_name.to_string());
-            items.insert(
-                0,
-                CommandItem::new()
-                    .label(t_args("shell.palette.back_to_game", &[("title", &title)]))
-                    .keywords([t("shell.palette.back_to_game_keywords")])
-                    .icon(IconName::AppWindow),
-            );
-            targets.insert(0, PaletteTarget::BackToGame(id));
-        }
-        let items = Rc::new(items);
-        *self.targets.borrow_mut() = targets;
-        self.state.update(cx, |s, cx| s.set_query("", window, cx));
-
-        let state = self.state.clone();
-        let targets = self.targets.clone();
+        let view = cx.new(|cx| PaletteView::new(Host::Dialog, window, cx));
+        self.view = Some(view.downgrade());
         let open = self.open.clone();
-        let focus_on_mount = Rc::new(Cell::new(true));
-        window.open_dialog(cx, move |dialog, _, _| {
-            let state = state.clone();
-            let targets = targets.clone();
-            let items = items.clone();
+        {
+            let view = view.clone();
+            window.defer(cx, move |window, cx| PaletteView::focus(&view, window, cx));
+        }
+        window.open_dialog(cx, move |dialog, window, _| {
             let open = open.clone();
-            let focus_on_mount = focus_on_mount.clone();
+            let view = view.clone();
             dialog
                 .close_button(false)
                 .p_0()
+                .w(view::width(window))
                 .on_close(move |_, _, _| open.set(false))
-                .content(move |content, window, cx| {
-                    if focus_on_mount.replace(false) {
-                        let state = state.clone();
-                        window.defer(cx, move |window, cx| {
-                            state.update(cx, |s, cx| s.focus(window, cx))
-                        });
-                    }
-                    let targets = targets.clone();
-                    content.child(
-                        Command::new(&state)
-                            .bordered(false)
-                            .rounded(cx.theme().radius_lg)
-                            .placeholder(t("shell.search.placeholder"))
-                            .max_h(px(440.))
-                            .items(items.iter().cloned())
-                            .on_confirm(move |ix: IndexPath, window, cx| {
-                                let target = targets.borrow().get(ix.row).cloned();
-                                window.close_dialog(cx);
-                                if let Some(t) = target {
-                                    run_target(t, window, cx);
-                                }
-                            }),
-                    )
-                })
+                .content(move |content, _, _| content.child(view.clone()))
         });
     }
+}
+
+/// The command rows, for the palette opening now: the open game's, then the
+/// pages and the commands the library and the accounts offer.
+fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
+    let open = {
+        let library = models(cx).library.read(cx);
+        match irori_ui::nav::navigator(cx).read(cx).current() {
+            Route::Game(id) => library
+                .snapshot
+                .get(id)
+                .map(|g| (g.clone(), library.user.play_status(&id.key()))),
+            _ => None,
+        }
+    };
+    let open = open.map(|(game, status)| {
+        let actions = irori_ui::user_actions::list(&game.id(), cx);
+        (game, status, actions)
+    });
+    let categories = irori_library::category_list(cx);
+    let views = irori_library::saved_view_list(cx);
+    let library = LibraryCommands {
+        grouped: irori_library::groups_by_status(cx),
+        grouped_by_mode: irori_library::groups_by_mode(cx),
+        grouped_by_genre: irori_library::groups_by_genre(cx),
+        grouped_by_category: irori_library::groups_by_category(cx),
+        categories: &categories,
+        views: &views,
+        layout: irori_library::library_layout(cx),
+        install: irori_library::install_filter(cx),
+        favourites: irori_library::favourites_only(cx),
+        quick_controls: irori_library::quick_controls(cx),
+        hidden_pin: (!irori_ui::hidden_lock::locked(cx))
+            .then(|| irori_ui::hidden_lock::pin_set(cx)),
+    };
+    let sync = models(cx).settings.read(cx).app.sync.mode != irori_core::SyncMode::Off;
+    let replay = irori_ui::backend(cx).replay().map(|r| r.title);
+    // The shown game's cloud saves, when its store keeps them.
+    let syncable = open
+        .as_ref()
+        .map(|(game, _, _)| game.clone())
+        .filter(|game| irori_game::offers_sync(game, cx));
+    let mut targets = Vec::new();
+    let mut items = Palette::items(
+        replay.as_deref(),
+        open,
+        library,
+        sync,
+        &irori_manage::store_window_stores(cx),
+        (
+            irori_manage::steam_friends_available(cx),
+            irori_manage::xbox_friends_available(cx),
+        ),
+        &mut targets,
+    );
+    if let Some(game) = syncable {
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.sync_saves",
+                    &[("title", &game.title)],
+                ))
+                .keywords([t("shell.palette.sync_saves_keywords")])
+                .icon(IconName::RefreshCw),
+        );
+        targets.push(PaletteTarget::SyncSaves(game.id()));
+    }
+    if let Some(count) = irori_library::removable_picks(cx) {
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.remove_picked",
+                    &[("count", &count.to_string())],
+                ))
+                .keywords([t("shell.palette.remove_picked_keywords")])
+                .icon(IconName::ListX),
+        );
+        targets.push(PaletteTarget::RemovePicked);
+    }
+    if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
+        items.push(
+            Entry::new()
+                .label(t("shell.palette.steam_client_library"))
+                .keywords([t("shell.palette.steam_client_library_keywords")])
+                .icon(IconName::LibraryBig),
+        );
+        targets.push(PaletteTarget::SteamClientLibrary);
+    }
+    if irori_manage::xbox_offline_available(cx) {
+        items.push(
+            Entry::new()
+                .label(t("shell.palette.xbox_offline_play"))
+                .keywords([t("shell.palette.xbox_offline_play_keywords")])
+                .icon(IconName::HardDrive),
+        );
+        targets.push(PaletteTarget::XboxOfflinePlay);
+    }
+    items
+        .into_iter()
+        .zip(targets)
+        .map(|(entry, target)| Row::command(entry, target))
+        .collect()
 }
 
 fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
@@ -1019,6 +910,10 @@ fn report(
         .detach();
 }
 
+mod entry;
 mod game;
+mod preview;
+mod search;
 #[cfg(test)]
 mod tests;
+mod view;

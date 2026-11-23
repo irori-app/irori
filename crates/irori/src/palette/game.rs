@@ -2,9 +2,9 @@
 //! status, the user's own actions, troubleshooting, Steam Play, playing a
 //! ROM as a PC game, ReShade and RenoDX, Steam shortcuts and save backups.
 
+use super::entry::Entry;
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::command::CommandItem;
 use irori_core::{GameInfo, Runner, UserAction};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
@@ -18,13 +18,13 @@ pub(super) fn rows(
     game: &GameInfo,
     current: Option<PlayStatus>,
     actions: &[(usize, UserAction)],
-) -> Vec<(CommandItem, PaletteTarget)> {
+) -> Vec<(Entry, PaletteTarget)> {
     let mut rows = Vec::new();
-    let mut push = |item: CommandItem, target: PaletteTarget| rows.push((item, target));
+    let mut push = |item: Entry, target: PaletteTarget| rows.push((item, target));
     if game.is_installed {
         for (index, action) in actions {
             push(
-                CommandItem::new()
+                Entry::new()
                     .label(t_args(
                         "shell.palette.user_action",
                         &[("action", &action.label()), ("title", &game.title)],
@@ -35,7 +35,7 @@ pub(super) fn rows(
             );
         }
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.edit_actions",
                     &[("title", &game.title)],
@@ -55,7 +55,7 @@ pub(super) fn rows(
             ],
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(label)
                 .keywords(keywords.clone())
                 .icon(irori_ui::play_status::icon(status)),
@@ -64,7 +64,7 @@ pub(super) fn rows(
     }
     if current.is_some() {
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.clear_play_status",
                     &[("title", &game.title)],
@@ -76,7 +76,7 @@ pub(super) fn rows(
     }
     if game.is_installed && game.runner().manages_installs() {
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.troubleshoot",
                     &[("title", &game.title)],
@@ -88,7 +88,7 @@ pub(super) fn rows(
     }
     if irori_game::ops::offers_steam_play(&game.id()) {
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.steam_play",
                     &[("title", &game.title)],
@@ -100,7 +100,7 @@ pub(super) fn rows(
     }
     if game.runner() == Runner::Emulation {
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.play_as_pc_game",
                     &[("title", &game.title)],
@@ -112,7 +112,7 @@ pub(super) fn rows(
     }
     if irori_services::supports_reshade(game) {
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.graphics_mods",
                     &[("title", &game.title)],
@@ -125,7 +125,7 @@ pub(super) fn rows(
     if game.runner() != Runner::Steam && (game.is_installed || game.installable) {
         let keywords = [t("shell.palette.steam_shortcut_keywords")];
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.add_to_steam",
                     &[("title", &game.title)],
@@ -135,7 +135,7 @@ pub(super) fn rows(
             PaletteTarget::AddToSteam(game.id()),
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.remove_from_steam",
                     &[("title", &game.title)],
@@ -148,7 +148,7 @@ pub(super) fn rows(
     if irori_ui::save_backups::offers_backups(game) {
         let keywords = [SharedString::new_static("Ludusavi")];
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.back_up_saves",
                     &[("title", &game.title)],
@@ -158,7 +158,7 @@ pub(super) fn rows(
             PaletteTarget::BackUpSaves(game.id()),
         );
         push(
-            CommandItem::new()
+            Entry::new()
                 .label(t_args(
                     "shell.palette.save_backups",
                     &[("title", &game.title)],
