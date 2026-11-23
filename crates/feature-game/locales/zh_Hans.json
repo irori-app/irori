@@ -112,6 +112,8 @@
   "game.details.hltb_main": "主线剧情",
   "game.details.hltb_you": "你：{duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "此游戏用来游玩和安装的副本",
+  "game.copies.total": "所有副本",
   "game.details.measured_size": "磁盘上 {size}",
   "game.details.edit_rows": "编辑行…",
   "game.details.edit_rows_title": "详细信息中的行",

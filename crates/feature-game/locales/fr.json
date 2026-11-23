@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Histoire principale",
   "game.details.hltb_you": "Vous : {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "La copie avec laquelle ce jeu se lance et s’installe",
+  "game.copies.total": "Toutes les copies",
   "game.details.measured_size": "{size} sur le disque",
   "game.details.edit_rows": "Modifier les lignes…",
   "game.details.edit_rows_title": "Lignes des détails",

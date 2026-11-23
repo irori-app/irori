@@ -112,6 +112,8 @@
   "game.details.hltb_main": "메인 스토리",
   "game.details.hltb_you": "나: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "이 게임을 플레이하고 설치하는 사본",
+  "game.copies.total": "모든 사본",
   "game.details.measured_size": "디스크에서 {size}",
   "game.details.edit_rows": "행 편집…",
   "game.details.edit_rows_title": "세부 정보의 행",

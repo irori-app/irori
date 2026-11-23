@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Główna fabuła",
   "game.details.hltb_you": "Ty: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "Kopia, przez którą ta gra jest uruchamiana i instalowana",
+  "game.copies.total": "Wszystkie kopie",
   "game.details.measured_size": "{size} na dysku",
   "game.details.edit_rows": "Edytuj wiersze…",
   "game.details.edit_rows_title": "Wiersze w szczegółach",

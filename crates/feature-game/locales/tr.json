@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Ana hikâye",
   "game.details.hltb_you": "Siz: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "Bu oyunun oynandığı ve yüklendiği kopya",
+  "game.copies.total": "Tüm kopyalar",
   "game.details.measured_size": "Diskte {size}",
   "game.details.edit_rows": "Satırları düzenle…",
   "game.details.edit_rows_title": "Ayrıntılardaki satırlar",

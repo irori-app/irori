@@ -12,6 +12,7 @@
 mod achievements;
 mod age_rating;
 mod compat;
+mod copies;
 mod details;
 mod drawer;
 mod extras;

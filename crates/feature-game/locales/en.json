@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Main story",
   "game.details.hltb_you": "You: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "The copy this game plays and installs",
+  "game.copies.total": "All copies",
   "game.details.measured_size": "{size} on disk",
   "game.details.edit_rows": "Edit rows…",
   "game.details.edit_rows_title": "Rows in Details",

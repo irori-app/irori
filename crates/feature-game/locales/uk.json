@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Основний сюжет",
   "game.details.hltb_you": "Ви: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "Копія, через яку гра запускається й установлюється",
+  "game.copies.total": "Усі копії",
   "game.details.measured_size": "{size} на диску",
   "game.details.edit_rows": "Змінити рядки…",
   "game.details.edit_rows_title": "Рядки в подробицях",

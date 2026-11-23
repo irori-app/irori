@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Huvudhistoria",
   "game.details.hltb_you": "Du: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "Kopian som spelet startas och installeras med",
+  "game.copies.total": "Alla kopior",
   "game.details.measured_size": "{size} på disken",
   "game.details.edit_rows": "Redigera rader…",
   "game.details.edit_rows_title": "Rader i Detaljer",

@@ -224,6 +224,16 @@ fn warm(copies: &[Arc<GameInfo>], cx: &mut App) {
     .detach();
 }
 
+/// "Copies", the heading of a game's copies.
+pub fn title_label() -> gpui_kit::SharedString {
+    t("ui.copies.title")
+}
+
+/// "Make this the default copy", for menus and tooltips.
+pub fn make_default_label() -> gpui_kit::SharedString {
+    t("ui.copies.make_default")
+}
+
 /// "Open the Steam copy", for menus and tooltips.
 pub fn open_label(store: &str) -> gpui_kit::SharedString {
     t_args("ui.copies.open", &[("store", store)])

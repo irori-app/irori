@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Hoofdverhaal",
   "game.details.hltb_you": "Jij: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "De kopie waarmee deze game start en wordt geïnstalleerd",
+  "game.copies.total": "Alle kopieën",
   "game.details.measured_size": "{size} op schijf",
   "game.details.edit_rows": "Rijen bewerken…",
   "game.details.edit_rows_title": "Rijen in Details",

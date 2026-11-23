@@ -112,6 +112,8 @@
   "game.details.hltb_main": "Hlavní příběh",
   "game.details.hltb_you": "Vy: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "Kopie, kterou tato hra spouští a instaluje",
+  "game.copies.total": "Všechny kopie",
   "game.details.measured_size": "{size} na disku",
   "game.details.edit_rows": "Upravit řádky…",
   "game.details.edit_rows_title": "Řádky v podrobnostech",

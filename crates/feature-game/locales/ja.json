@@ -112,6 +112,8 @@
   "game.details.hltb_main": "メインストーリー",
   "game.details.hltb_you": "あなた: {duration}",
   "game.details.more": "+{count}",
+  "game.copies.is_default": "このゲームのプレイとインストールに使うコピー",
+  "game.copies.total": "すべてのコピー",
   "game.details.measured_size": "ディスク上 {size}",
   "game.details.edit_rows": "行を編集…",
   "game.details.edit_rows_title": "詳細に表示する行",

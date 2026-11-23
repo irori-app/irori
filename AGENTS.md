@@ -494,7 +494,9 @@ commands without a window.
   own title when the copies' folded titles differ, else a ROM's file or, for two copies
   on one store, its folder. Each other copy can be played or installed right from the
   copies menu and the palette ("Play with Steam", `copies::copy_action`; through
-  `irori_ui::hooks::play_game`/`install_game`, the game page's own flows).
+  `irori_ui::hooks::play_game`/`install_game`, the game page's own flows). The game
+  page's Copies card lists every copy with its own time played, Play or Install, the
+  default star, and the copies' time added up (`irori_game` `page/copies.rs`).
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
