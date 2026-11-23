@@ -83,11 +83,11 @@ impl HistoryFilter {
     }
 
     pub fn label(self) -> SharedString {
-        t(match self {
-            HistoryFilter::All => "manage.downloads.history.filter.all",
-            HistoryFilter::Done => "manage.downloads.history.filter.done",
-            HistoryFilter::Unfinished => "manage.downloads.history.filter.unfinished",
-        })
+        match self {
+            HistoryFilter::All => t("manage.downloads.history.filter.all"),
+            HistoryFilter::Done => t("manage.downloads.history.filter.done"),
+            HistoryFilter::Unfinished => t("manage.downloads.history.filter.unfinished"),
+        }
     }
 }
 
