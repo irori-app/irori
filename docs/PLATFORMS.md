@@ -225,7 +225,9 @@ doesn't hide a Flatpak Steam. Adding games to Steam looks for `userdata` the sam
 The Wine manager installs the Wine and Proton builds it downloads into `<data>/tools/wine`
 and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder set in
 `iroriCompatToolsPath`; "Install Proton downloads into Steam" still sends Proton to Steam's
-`compatibilitytools.d`. Builds stay where they were installed when the folder changes,
+`compatibilitytools.d`. For `-latest` Proton builds, Irori rewrites `compatibilitytool.vdf`
+to keep the stable `<type>-latest` name so Steam games pinned to it keep their selection
+across updates and rollbacks. Builds stay where they were installed when the folder changes,
 and Irori reads both places.
 
 With that setting on, builds already in Irori's own folder are registered with Steam too:

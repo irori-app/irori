@@ -40,6 +40,8 @@ mod launch_programs;
 mod launchbox;
 mod library_folders;
 mod logs;
+mod optiscaler;
+mod optiscaler_key;
 mod overlay;
 mod quick_launch;
 pub mod registry;

@@ -633,6 +633,7 @@ impl Backend {
         if environment.wine.is_some() {
             self.reshade_launch_env(id, &mut environment.env).await;
             self.mods_launch_env(id, &game, &mut environment.env).await;
+            self.optiscaler_launch_env(id, &mut environment.env).await;
         }
         check_launch(&cancel)?;
         // prepare_launch refuses rather than leaving the sandbox out, so a
