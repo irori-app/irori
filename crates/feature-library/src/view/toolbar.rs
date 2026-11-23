@@ -587,6 +587,11 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
             ui.cover_categories,
             |u| u.cover_categories = !u.cover_categories,
         ))
+        .item(set(
+            t("library.look.open_details"),
+            ui.library_open_details_on_select,
+            |u| u.library_open_details_on_select = !u.library_open_details_on_select,
+        ))
         .separator()
         .item(
             PopupMenuItem::new(t("library.look.more")).on_click(|_, _, cx| {

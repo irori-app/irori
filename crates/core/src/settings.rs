@@ -1613,6 +1613,10 @@ pub struct UiPrefs {
     /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
     /// 1 to 3); 0 fits as many as the window allows.
     pub library_focus_columns: u32,
+    /// A click on a cover in the grid opens the drawer about the game
+    /// (`libraryOpenDetailsOnSelect`, on unless turned off); off, it only
+    /// selects it, and `I`, Enter or a double click go further.
+    pub library_open_details_on_select: bool,
     /// Store badges stay on every cover (`storeBadgesAlways`); off, they
     /// show on the cover pointed at or focused.
     pub store_badges_always: bool,
@@ -1822,6 +1826,7 @@ impl Default for UiPrefs {
             cover_fit: CoverFit::Crop,
             cover_favourite: true,
             library_focus_columns: 0,
+            library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
         }
@@ -2034,6 +2039,13 @@ mod tests {
         assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
         let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
         assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn a_click_opens_the_drawer_unless_turned_off() {
+        assert!(UiPrefs::default().library_open_details_on_select);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryOpenDetailsOnSelect":false}"#).unwrap();
+        assert!(!ui.library_open_details_on_select);
     }
 
     #[test]

@@ -609,6 +609,7 @@
   "library.look.badges": "Значки крамниць",
   "library.look.badges_always": "Значки крамниць на всіх обкладинках",
   "library.look.categories": "Категорії на обкладинках",
+  "library.look.open_details": "Відкривати подробиці клацанням",
   "library.look.more": "Інші налаштування вигляду…",
   "library.focus.empty": "Виберіть гру, щоб побачити її тут",
   "library.toolbar.group_by": "Групувати за",

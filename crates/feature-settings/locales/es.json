@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Portadas por fila en la vista de enfoque",
   "settings.field.ui_focus_columns.help": "Menos si la ventana es demasiado estrecha para la página del juego a su lado. También puedes arrastrar el borde de la columna.",
   "settings.option.focus_columns.auto": "Las que quepan",
+  "settings.field.ui_open_details_on_select.label": "Abrir detalles al hacer clic en una portada",
+  "settings.field.ui_open_details_on_select.help": "En la cuadrícula. Desactivado, un clic solo selecciona el juego: I abre sus detalles junto a la cuadrícula; Intro o un doble clic, su página.",
   "settings.field.ui_cover_favourite.label": "Estrella en las portadas de favoritos",
   "settings.field.ui_group_copies.label": "Mostrar las copias de varias tiendas como un solo juego",
   "settings.field.ui_group_copies.help": "Un juego que tienes en Steam, Epic Games y GOG aparece una vez y abre la copia instalada. En su página puedes cambiar entre las copias; cada una conserva su tiempo de juego y sus logros.",

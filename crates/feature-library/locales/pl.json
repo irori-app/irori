@@ -609,6 +609,7 @@
   "library.look.badges": "Plakietki sklepów",
   "library.look.badges_always": "Plakietki sklepów na każdej okładce",
   "library.look.categories": "Kategorie na okładkach",
+  "library.look.open_details": "Otwieraj szczegóły po kliknięciu",
   "library.look.more": "Więcej ustawień wyglądu…",
   "library.focus.empty": "Wybierz grę, aby zobaczyć ją tutaj",
   "library.toolbar.group_by": "Grupuj według",

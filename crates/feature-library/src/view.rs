@@ -458,6 +458,14 @@ impl LibraryView {
         cx.notify();
     }
 
+    /// Turn opening the drawer on a click on or off without saving it
+    /// (tests share one settings file).
+    #[cfg(test)]
+    pub(crate) fn set_open_details_for_test(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.ui_prefs.library_open_details_on_select = on;
+        cx.notify();
+    }
+
     /// The view shown, whether the drawer is open, and its width in rem.
     #[cfg(test)]
     pub(crate) fn view_state(&self, window: &Window) -> (LibraryLayout, bool, f32) {

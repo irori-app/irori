@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "フォーカス表示の 1 列のカバー数",
   "settings.field.ui_focus_columns.help": "ウィンドウが狭く隣のゲームページが収まらないときは少なくなります。列の端をドラッグしても変えられます。",
   "settings.option.focus_columns.auto": "収まるだけ",
+  "settings.field.ui_open_details_on_select.label": "カバーをクリックしたら詳細を開く",
+  "settings.field.ui_open_details_on_select.help": "グリッドで使います。オフのときはクリックで選ぶだけで、I でグリッドの横に詳細を、Enter かダブルクリックでページを開きます。",
   "settings.field.ui_cover_favourite.label": "お気に入りのカバーに星を表示",
   "settings.field.ui_group_copies.label": "複数のストアのコピーを 1 つのゲームとして表示",
   "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。",

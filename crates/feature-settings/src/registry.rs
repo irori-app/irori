@@ -2654,6 +2654,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_focus_columns.help")
     .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
     app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
+    app(
         "iroriUi.coverFavourite",
         "settings.field.ui_cover_favourite.label",
         Appearance,

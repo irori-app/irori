@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Copertine per riga nella vista Focus",
   "settings.field.ui_focus_columns.help": "Meno se la finestra è troppo stretta per la pagina del gioco accanto. Puoi anche trascinare il bordo della colonna.",
   "settings.option.focus_columns.auto": "Quante ne entrano",
+  "settings.field.ui_open_details_on_select.label": "Apri i dettagli quando si fa clic su una copertina",
+  "settings.field.ui_open_details_on_select.help": "Nella griglia. Se disattivato, un clic seleziona solo il gioco: I apre i dettagli accanto alla griglia, Invio o un doppio clic la sua pagina.",
   "settings.field.ui_cover_favourite.label": "Stella sulle copertine dei preferiti",
   "settings.field.ui_group_copies.label": "Mostra le copie di più negozi come un solo gioco",
   "settings.field.ui_group_copies.help": "Un gioco posseduto su Steam, Epic Games e GOG compare una volta sola e avvia la copia installata. La sua pagina passa da una copia all’altra; ognuna conserva il proprio tempo di gioco e i propri obiettivi.",

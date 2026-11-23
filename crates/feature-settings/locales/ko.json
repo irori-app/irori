@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "포커스 보기의 한 줄 커버 수",
   "settings.field.ui_focus_columns.help": "창이 좁아 옆의 게임 페이지가 들어가지 않으면 줄어듭니다. 열의 가장자리를 끌어서 바꿀 수도 있습니다.",
   "settings.option.focus_columns.auto": "들어가는 만큼",
+  "settings.field.ui_open_details_on_select.label": "표지를 클릭하면 세부 정보 열기",
+  "settings.field.ui_open_details_on_select.help": "그리드에 적용됩니다. 끄면 클릭은 게임을 선택만 하며, I는 그리드 옆에 세부 정보를, Enter나 더블 클릭은 게임 페이지를 엽니다.",
   "settings.field.ui_cover_favourite.label": "즐겨찾기 커버에 별 표시",
   "settings.field.ui_group_copies.label": "여러 스토어의 사본을 하나의 게임으로 표시",
   "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다.",

@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Omslag per rad i fokusvyn",
   "settings.field.ui_focus_columns.help": "Färre när fönstret är för smalt för spelsidan bredvid. Du kan också dra i kolumnens kant.",
   "settings.option.focus_columns.auto": "Så många som får plats",
+  "settings.field.ui_open_details_on_select.label": "Öppna detaljer när ett omslag klickas",
+  "settings.field.ui_open_details_on_select.help": "I rutnätet. Av markerar ett klick bara spelet: I öppnar detaljerna bredvid rutnätet, Retur eller ett dubbelklick sidan.",
   "settings.field.ui_cover_favourite.label": "Stjärna på favoriternas omslag",
   "settings.field.ui_group_copies.label": "Visa kopior från flera butiker som ett spel",
   "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer.",

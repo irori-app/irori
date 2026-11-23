@@ -609,6 +609,7 @@
   "library.look.badges": "Store badges",
   "library.look.badges_always": "Store badges on every cover",
   "library.look.categories": "Categories on covers",
+  "library.look.open_details": "Open details on click",
   "library.look.more": "More appearance settings…",
   "library.focus.empty": "Select a game to see it here",
   "library.toolbar.group_by": "Group by",

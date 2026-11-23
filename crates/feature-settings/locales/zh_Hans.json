@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "聚焦视图每行封面数",
   "settings.field.ui_focus_columns.help": "窗口太窄、放不下旁边的游戏页面时会减少。也可以拖动该列的边缘。",
   "settings.option.focus_columns.auto": "尽量多",
+  "settings.field.ui_open_details_on_select.label": "单击封面时打开详情",
+  "settings.field.ui_open_details_on_select.help": "用于网格。关闭时单击只会选中游戏：按 I 在网格旁打开详情，按 Enter 或双击打开其页面。",
   "settings.field.ui_cover_favourite.label": "在收藏游戏的封面上显示星标",
   "settings.field.ui_group_copies.label": "将多个商店的副本显示为一个游戏",
   "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都拥有的游戏只显示一次，并启动已安装的副本。其页面可在各副本之间切换；每个副本保留各自的游戏时间和成就。",

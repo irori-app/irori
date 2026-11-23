@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Covers to a row in Focus view",
   "settings.field.ui_focus_columns.help": "Fewer when the window is too narrow for the game page beside them. You can also drag the column’s edge.",
   "settings.option.focus_columns.auto": "As many as fit",
+  "settings.field.ui_open_details_on_select.label": "Open details when a cover is clicked",
+  "settings.field.ui_open_details_on_select.help": "In the grid. Off, a click only selects the game: I opens its details beside the grid, Enter or a double click its page.",
   "settings.field.ui_cover_favourite.label": "Star favourites’ covers",
   "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
   "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements.",

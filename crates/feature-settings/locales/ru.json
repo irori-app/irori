@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Обложек в ряду в режиме фокуса",
   "settings.field.ui_focus_columns.help": "Меньше, если окно слишком узкое для страницы игры рядом. Можно также перетащить край колонки.",
   "settings.option.focus_columns.auto": "Сколько поместится",
+  "settings.field.ui_open_details_on_select.label": "Открывать подробности по щелчку на обложке",
+  "settings.field.ui_open_details_on_select.help": "В сетке. Если выключено, щелчок только выбирает игру: I открывает подробности рядом с сеткой, Enter или двойной щелчок — её страницу.",
   "settings.field.ui_cover_favourite.label": "Звёздочка на обложках избранного",
   "settings.field.ui_group_copies.label": "Показывать копии из нескольких магазинов как одну игру",
   "settings.field.ui_group_copies.help": "Игра, купленная в Steam, Epic Games и GOG, показывается один раз и запускает установленную копию. На её странице можно переключаться между копиями; у каждой своё время в игре и свои достижения.",

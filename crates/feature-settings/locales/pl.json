@@ -1547,6 +1547,8 @@
   "settings.field.ui_focus_columns.label": "Okładek w rzędzie w widoku skupienia",
   "settings.field.ui_focus_columns.help": "Mniej, gdy okno jest za wąskie na stronę gry obok. Możesz też przeciągnąć krawędź kolumny.",
   "settings.option.focus_columns.auto": "Ile się zmieści",
+  "settings.field.ui_open_details_on_select.label": "Otwieraj szczegóły po kliknięciu okładki",
+  "settings.field.ui_open_details_on_select.help": "W siatce. Po wyłączeniu kliknięcie tylko zaznacza grę: I otwiera jej szczegóły obok siatki, Enter lub dwuklik jej stronę.",
   "settings.field.ui_cover_favourite.label": "Gwiazdka na okładkach ulubionych",
   "settings.field.ui_group_copies.label": "Pokazuj kopie z kilku sklepów jako jedną grę",
   "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia.",

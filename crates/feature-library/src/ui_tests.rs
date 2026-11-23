@@ -616,6 +616,22 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     draw(cx);
     assert!(!state(cx).1);
 
+    // With details on click off, a click only selects; I still opens the
+    // drawer, which then follows the clicks.
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(false, cx)));
+    click(cx, "1", 1);
+    assert_eq!(focused(cx), Some(game("1")));
+    assert!(!state(cx).1);
+    cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    click(cx, "3", 1);
+    assert!(state(cx).1);
+    assert_eq!(focused(cx), Some(game("3")));
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(true, cx)));
+    cx.simulate_keystrokes(window, "escape");
+    draw(cx);
+    assert!(!state(cx).1);
+
     // Focus keeps the selected game and shows it beside the covers; the
     // arrow keys step through the column.
     cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));

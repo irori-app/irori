@@ -609,6 +609,7 @@
   "library.look.badges": "스토어 배지",
   "library.look.badges_always": "모든 커버에 스토어 배지",
   "library.look.categories": "커버에 카테고리",
+  "library.look.open_details": "클릭하면 세부 정보 열기",
   "library.look.more": "더 많은 모양 설정…",
   "library.focus.empty": "게임을 선택하면 여기에 표시됩니다",
   "library.toolbar.group_by": "그룹 기준",
