@@ -554,6 +554,7 @@ pub async fn install(
         created_dirs: Vec::new(),
         addon: false,
         source,
+        optiscaler: None,
     };
     let journal = req.journal.clone();
     tokio::task::spawn_blocking(move || {

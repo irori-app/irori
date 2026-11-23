@@ -21,6 +21,10 @@
 //! - [`renodx`] adds RenoDX's HDR add-ons beside ReShade's build with
 //!   add-on support: its official catalog and builds, checked against the
 //!   digests its release lists, through the same journal.
+//! - [`optiscaler`] manages OptiScaler (with optional FakeNVAPI and
+//!   OptiPatcher) from official GitHub releases with ETag/TTL caching,
+//!   mandatory SHA-256 verification, surgical INI patching, and the shared
+//!   journal.
 //! - [`fetch`] holds the download helpers the mods share.
 
 #![forbid(unsafe_code)]
@@ -32,6 +36,8 @@ pub mod fetch;
 pub mod install;
 pub mod journal;
 pub mod layer;
+pub mod optiscaler;
+pub mod optiscaler_keys;
 pub mod pe;
 pub mod renodx;
 
@@ -43,8 +49,12 @@ use serde::{Deserialize, Serialize};
 pub use compat::{CompatEntry, CompatList};
 pub use detect::Detection;
 pub use install::{InstallRequest, Step, install};
-pub use journal::{FileRecord, Manifest, ModSource, RemoveReport};
+pub use journal::{FileRecord, FileSource, Manifest, ModSource, RemoveReport, StagedFile};
 pub use layer::GraphicsMod;
+pub use optiscaler::{
+    GpuDriverMode, OptiscalerCatalog, OptiscalerChannel, OptiscalerConfig, OptiscalerEndpoints,
+    OptiscalerInstallRequest, OptiscalerInstallResult, OptiscalerRelease, ProxyDll,
+};
 pub use pe::{Machine, PeInfo};
 
 /// A render API, as ReShade's installer tells them apart.

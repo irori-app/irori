@@ -52,10 +52,11 @@ fn version_key(v: &str) -> Vec<u32> {
     v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
 }
 
-/// Whether Irori can put ReShade into the game: an installed Windows build
-/// whose files Irori manages.
+/// Whether Irori can put ReShade or OptiScaler into the game: an installed
+/// Windows build whose files Irori manages, or an installed Steam Windows build
+/// (loaded via Proton's native overrides and `[Software\\Wine\\DllOverrides]`).
 pub fn supports_reshade(game: &GameInfo) -> bool {
-    game.runner().manages_installs()
+    (game.runner().manages_installs() || game.runner() == Runner::Steam)
         && game.is_installed
         && game.installed_platform() == Some(InstallPlatform::Windows)
         && game.install_path().is_some()
@@ -105,12 +106,51 @@ pub(crate) async fn load(kind: GraphicsMod, id: &GameId) -> Result<Option<Manife
 }
 
 impl Backend {
-    pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+    pub(crate) fn graphics_mod_game(
+        &self,
+        id: &GameId,
+        kind: GraphicsMod,
+    ) -> Result<Arc<GameInfo>> {
         let game = self.installed_game(id)?;
         if !supports_reshade(&game) {
-            bail!("ReShade can only be installed into Windows games Irori installed");
+            bail!(
+                "{} can only be installed into Windows games Irori installed",
+                kind.name()
+            );
         }
         Ok(game)
+    }
+
+    /// For Steam Windows games on Linux, surgically synchronize DLL overrides in
+    /// the game's Proton prefix (`compatdata/<appid>/pfx/user.reg`) so alternative
+    /// proxy DLLs (such as `version.dll` or `winmm.dll`) load automatically
+    /// without editing Steam Launch Options.
+    pub(crate) async fn sync_steam_user_reg(&self, id: &GameId, add: &[String], remove: &[String]) {
+        if !cfg!(target_os = "linux") || id.runner != Runner::Steam {
+            return;
+        }
+        let Some(install_path) = self.game(id).and_then(|g| g.install_path()) else {
+            return;
+        };
+        let Some(pfx) = irori_runtime::protontricks::prefix_of(&install_path, &id.app_name) else {
+            return;
+        };
+        let user_reg = pfx.join("user.reg");
+        let add_owned: Vec<String> = add.to_vec();
+        let remove_owned: Vec<String> = remove.to_vec();
+        let res = tokio::task::spawn_blocking(move || {
+            let add_refs: Vec<&str> = add_owned.iter().map(String::as_str).collect();
+            let rem_refs: Vec<&str> = remove_owned.iter().map(String::as_str).collect();
+            irori_reshade::optiscaler::sync_wine_user_reg_overrides(&user_reg, &add_refs, &rem_refs)
+        })
+        .await;
+        if let Ok(Err(e)) = res {
+            tracing::warn!("syncing Proton user.reg overrides for {id}: {e:#}");
+        }
+    }
+
+    pub(crate) fn reshade_game(&self, id: &GameId) -> Result<Arc<GameInfo>> {
+        self.graphics_mod_game(id, GraphicsMod::Reshade)
     }
 
     pub(crate) fn graphics_mod_ready(&self, id: &GameId, kind: GraphicsMod) -> Result<Busy> {
@@ -209,6 +249,7 @@ impl Backend {
             addon,
         };
         let manifest = irori_reshade::install(request, step, progress, cancel).await?;
+        self.sync_steam_user_reg(id, &manifest.overrides, &[]).await;
         tracing::info!(
             "installed ReShade {} for {id} as {} in {}",
             manifest.version,
@@ -246,14 +287,21 @@ impl Backend {
         kind: GraphicsMod,
         enabled: bool,
     ) -> Result<()> {
-        self.reshade_game(id)?;
+        self.graphics_mod_game(id, kind)?;
         let _busy = self.graphics_mod_ready(id, kind)?;
         let mut manifest = load(kind, id)
             .await?
             .with_context(|| format!("{} is not installed", kind.name()))?;
+        let overrides = manifest.overrides.clone();
         let journal = kind.journal_path(id);
         tokio::task::spawn_blocking(move || journal::set_enabled(&journal, &mut manifest, enabled))
-            .await?
+            .await??;
+        if enabled {
+            self.sync_steam_user_reg(id, &overrides, &[]).await;
+        } else {
+            self.sync_steam_user_reg(id, &[], &overrides).await;
+        }
+        Ok(())
     }
 
     /// Remove ReShade: the files Irori wrote and nobody changed since.
@@ -272,6 +320,7 @@ impl Backend {
         let manifest = load(kind, id)
             .await?
             .with_context(|| format!("{} is not installed", kind.name()))?;
+        let removed_overrides = manifest.overrides.clone();
         let mut report = RemoveReport::default();
         // An add-on can't load without ReShade, so it goes first.
         if kind == GraphicsMod::Reshade
@@ -282,6 +331,7 @@ impl Backend {
                 .await?;
         }
         let own = self.remove_files(&kind.journal_path(id), manifest).await?;
+        self.sync_steam_user_reg(id, &[], &removed_overrides).await;
         report.removed += own.removed;
         report.kept.extend(own.kept);
         tracing::info!(
@@ -360,6 +410,7 @@ mod tests {
             created_dirs: Vec::new(),
             addon: false,
             source: None,
+            optiscaler: None,
         }
     }
 
