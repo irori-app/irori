@@ -1412,9 +1412,18 @@ fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
     let captions: Vec<String> = captions.iter().map(|c| c.to_string()).collect();
     assert_eq!(captions, ["Europe", "North America"]);
 
-    // Without the game list yet, it offers to download it.
+    // Without the game list yet, it offers to download it, and its button
+    // turns LaunchBox box art on (this store has nowhere to download from).
     let picker = open(make("cache-empty"), cx);
     let (captions, offers) = wait(&picker, cx);
     assert!(captions.is_empty());
     assert!(offers);
+    assert!(!backend.settings.app().launchbox);
+    cx.update(|cx| picker.update(cx, |p, cx| p.download_launchbox(cx)));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !backend.settings.app().launchbox {
+        assert!(Instant::now() < deadline, "the setting never turned on");
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

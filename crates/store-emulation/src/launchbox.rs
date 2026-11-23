@@ -7,9 +7,10 @@
 //! have keeps libretro's thumbnail; a cover the user chose wins over both,
 //! since the library lays the user's art over the store's.
 //!
-//! The database is downloaded on request ([`Covers::refresh`] with `force`),
-//! or on its own while the library has games and the index is due
-//! (once a week). Only what the store was built with downloads: the test
+//! The database is downloaded on request ([`Covers::refresh`] with `force`,
+//! which the UI does after turning `iroriLaunchBox` on), or on its own while
+//! that setting is on, the library has games and the index is due (once a
+//! week). Only what the store was built with downloads: the test
 //! constructors have no address, so tests never reach LaunchBox.
 
 use std::collections::HashMap;
@@ -224,6 +225,20 @@ impl Covers {
                 .index
                 .state()
                 .is_due(&launchbox::table_key(&platforms()), launchbox::now())
+    }
+
+    /// The bytes the index takes, if there is one. Blocking.
+    pub(crate) fn stored(&self) -> Option<u64> {
+        Some(self.index.size()).filter(|n| *n > 0)
+    }
+
+    /// Delete the index, after `fs_guard` vetted its folder.
+    pub(crate) async fn remove(&self, app: &irori_core::AppSettings) -> Result<()> {
+        let dir = self.index.dir().to_path_buf();
+        if dir.exists() {
+            irori_core::fs_guard::ensure_deletable(&dir, app)?;
+        }
+        self.index.remove().await
     }
 
     /// The games of `system` whose names hold `query`. Blocking.

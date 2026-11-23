@@ -36,6 +36,7 @@ mod i18n;
 mod igdb;
 mod launch_presets;
 mod launch_programs;
+mod launchbox;
 mod logs;
 mod overlay;
 mod quick_launch;
@@ -64,7 +65,7 @@ pub use game_view::{GameSection, GameSettingsView};
 pub use i18n::CATALOGS;
 pub use logs::LogViewer;
 pub use setup_card::setup_card;
-pub use stores::install_store_handles;
+pub use stores::{install_emulation_store, install_store_handles};
 pub use view::{SettingsSection, SettingsView};
 
 /// Register the settings feature's translations with `irori_ui::i18n`.

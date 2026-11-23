@@ -323,6 +323,56 @@ impl Index {
         Ok(Refreshed::Updated { games })
     }
 
+    /// The folder holding the index.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// The bytes the index takes on disk. Blocking.
+    pub fn size(&self) -> u64 {
+        fn walk(dir: &Path) -> u64 {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return 0;
+            };
+            entries
+                .flatten()
+                .map(|e| match e.file_type() {
+                    Ok(t) if t.is_dir() => walk(&e.path()),
+                    Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
+                    _ => 0,
+                })
+                .sum()
+        }
+        walk(&self.dir)
+    }
+
+    /// Delete the index (and a download left behind), waiting for a
+    /// download that runs. The caller vets the folder with `fs_guard`.
+    pub async fn remove(&self) -> Result<()> {
+        let _one = self.lock.lock().await;
+        let dir = self.dir.clone();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let systems = dir.join("systems");
+            if systems.exists() {
+                std::fs::remove_dir_all(&systems)
+                    .with_context(|| format!("Could not delete {}", systems.display()))?;
+            }
+            for name in ["state.json", "Metadata.zip", "Metadata.zip.part"] {
+                let path = dir.join(name);
+                match std::fs::remove_file(&path) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                        return Err(e)
+                            .with_context(|| format!("Could not delete {}", path.display()));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(())
+        })
+        .await
+        .context("deleting LaunchBox's index stopped")?
+    }
+
     async fn save_state(&self, state: &IndexState) -> Result<()> {
         let (path, state) = (self.state_file(), state.clone());
         tokio::task::spawn_blocking(move || json_store::write(&path, &state))
@@ -454,6 +504,7 @@ mod tests {
         );
         assert_eq!(hits.load(Ordering::SeqCst), 2);
         assert_eq!(index.load("nes"), Some(nes));
+        assert!(index.size() > 0);
 
         // A new platform table builds the files again, without the ETag.
         let mut more = platforms.clone();
@@ -463,6 +514,13 @@ mod tests {
                 .state()
                 .is_due(&table_key(&more), now() + RETRY_AFTER.as_secs())
         );
+
+        // Removed, nothing is left and the next refresh is due.
+        index.remove().await.unwrap();
+        assert_eq!(index.size(), 0);
+        assert!(!index.state().has_index());
+        assert!(index.load("nes").is_none());
+        index.remove().await.unwrap();
     }
 
     #[tokio::test]

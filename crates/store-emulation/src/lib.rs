@@ -365,10 +365,11 @@ impl EmulationStore {
         }
     }
 
-    /// Download LaunchBox's database in the background when the library
-    /// has games and the index is due (weekly); never otherwise.
+    /// Download LaunchBox's database in the background when the user turned
+    /// it on (`iroriLaunchBox`), the library has games and the index is due
+    /// (weekly); never otherwise.
     fn launchbox_when_due(&self) {
-        if self.state.read().games.is_empty() {
+        if !(self.settings)().launchbox || self.state.read().games.is_empty() {
             return;
         }
         let Some(runtime) = self.runtime.lock().clone() else {
@@ -406,6 +407,24 @@ impl EmulationStore {
     /// the library's games up in it.
     pub async fn download_launchbox(&self) -> Result<()> {
         self.launchbox.refresh(true).await?;
+        self.update_covers().await;
+        Ok(())
+    }
+
+    /// The bytes LaunchBox's stored game list takes, if there is one.
+    pub async fn launchbox_stored(&self) -> Option<u64> {
+        let me = self.me.upgrade()?;
+        tokio::task::spawn_blocking(move || me.launchbox.stored())
+            .await
+            .ok()
+            .flatten()
+    }
+
+    /// Delete LaunchBox's stored game list; covers go back to libretro's
+    /// thumbnails.
+    pub async fn remove_launchbox(&self) -> Result<()> {
+        let app = (self.settings)();
+        self.launchbox.remove(&app).await?;
         self.update_covers().await;
         Ok(())
     }

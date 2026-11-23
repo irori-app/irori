@@ -1542,9 +1542,12 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   `irori-emulation::launchbox` matches). LaunchBox offers other programs its whole
   database as one file, `gamesdb.launchbox-app.com/Metadata.zip`, and serves images by
   file name from `images.launchbox-app.com`; Irori uses only those, never its pages.
-  The file (about 110 MB) downloads at most weekly, `If-None-Match`, only while the ROM
-  library has games or when the user asks (the art picker, the palette), never from
-  `init` or the test constructors (`EmulationStore::with_dirs` has no address). It is
+  The file (about 110 MB) downloads only when the user asks (the art picker's button,
+  the palette, which ask first and turn `iroriLaunchBox` on), then at most weekly,
+  `If-None-Match`, while that setting is on and the ROM library has games; never from
+  `init` or the test constructors (`EmulationStore::with_dirs` has no address).
+  Settings → Advanced → Artwork turns it off and, while off, removes the stored list
+  (confirmed with its size, `fs_guard` first). It is
   read as a stream (quick-xml over the zip entry; capped fields, lists and text runs),
   kept as one `<cache>/stores/emulation/launchbox/systems/<system>.json` per system
   (front boxes with their regions), then deleted. Games match by system

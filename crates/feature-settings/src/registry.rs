@@ -266,6 +266,8 @@ pub enum PanelKind {
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
     Igdb,
+    /// LaunchBox's stored game list: its size, and removing it while off.
+    LaunchBox,
     /// A Steam game's launch options in Steam itself.
     SteamLaunchOptions,
     /// One game's umu id: the one used, its source, a database search.
@@ -2819,6 +2821,31 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::Igdb),
     )
     .keywords(&["igdb", "twitch", "client id", "client secret"]),
+    app(
+        "iroriLaunchBox",
+        "settings.field.launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.launchbox.help")
+    .keywords(&[
+        "launchbox",
+        "box art",
+        "cover",
+        "rom",
+        "emulation",
+        "region",
+        "download",
+    ]),
+    app(
+        "panel.launchbox",
+        "settings.field.panel_launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::LaunchBox),
+    )
+    .keywords(&["launchbox", "game list", "remove", "disk", "space"]),
     app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",

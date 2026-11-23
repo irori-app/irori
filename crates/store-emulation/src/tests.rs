@@ -282,6 +282,7 @@ async fn covers_are_launchboxs_box_of_the_games_region() {
     });
     let app = Arc::new(AppSettings {
         rom_folders: vec![roms.display().to_string()],
+        launchbox: true,
         ..Default::default()
     });
     let make = || {
@@ -347,6 +348,66 @@ async fn covers_are_launchboxs_box_of_the_games_region() {
     )
     .await;
     assert_eq!(server.requests().len(), 1);
+
+    // Removed, the covers go back to libretro's and nothing is stored.
+    assert!(again.launchbox_stored().await.is_some());
+    again.remove_launchbox().await.unwrap();
+    assert!(again.launchbox_stored().await.is_none());
+    assert_eq!(again.launchbox_status(), LaunchBoxStatus::Missing);
+    let mario = again
+        .games()
+        .into_iter()
+        .find(|g| g.title == "Super Mario Bros. 3")
+        .unwrap();
+    assert!(
+        mario
+            .art_cover
+            .as_deref()
+            .unwrap()
+            .starts_with("https://thumbnails.libretro.com/")
+    );
+}
+
+#[tokio::test]
+async fn launchbox_off_never_downloads_on_its_own() {
+    use irori_depot::test_server::{Resp, TestServer};
+    let dir = test_dir("launchbox-off");
+    let roms = dir.join("roms");
+    touch(
+        &roms.join("NES/Super Mario Bros. 3 (Europe).nes"),
+        b"NES\x1a",
+    );
+    let body = launchbox_archive(LAUNCHBOX_XML);
+    let server = TestServer::start(move |_| Resp {
+        status: 200,
+        body: body.clone(),
+        ..Default::default()
+    });
+    let app = Arc::new(AppSettings {
+        rom_folders: vec![roms.display().to_string()],
+        launchbox: false,
+        ..Default::default()
+    });
+    let s = EmulationStore::with_parts(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        dir.join("config"),
+        dir.join("cache"),
+        Some(server.url("/Metadata.zip")),
+    );
+    s.init().await.unwrap();
+    s.refresh(false).await.unwrap();
+    let rom = dir.join("roms/Other (USA).nes");
+    touch(&rom, b"NES\x1a");
+    s.add_game(&rom, None, None).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(server.requests().is_empty());
+    assert_eq!(s.launchbox_status(), LaunchBoxStatus::Missing);
+
+    // Asked for, it downloads all the same.
+    s.download_launchbox().await.unwrap();
+    assert_eq!(server.requests().len(), 1);
+    assert_eq!(s.launchbox_status(), LaunchBoxStatus::Ready);
 }
 
 #[tokio::test]

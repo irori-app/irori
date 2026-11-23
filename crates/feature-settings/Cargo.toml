@@ -16,6 +16,7 @@ irori-reshade.workspace = true
 irori-extras.workspace = true
 irori-epic.workspace = true
 irori-steam.workspace = true
+irori-emulation.workspace = true
 irori-bigpicture.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true

@@ -17,7 +17,8 @@
 //! the game the ROM library matched, its own region first, each labelled
 //! with its region; other searches look through the system's LaunchBox
 //! games, and "All sources" puts its boxes first. Without LaunchBox's game
-//! list yet, it offers to download it.
+//! list yet, it offers to download it, which turns `iroriLaunchBox` on (its
+//! text says so).
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -876,14 +877,15 @@ impl ArtPicker {
         }));
     }
 
-    /// Download LaunchBox's game list (the user asked), then show the boxes.
-    fn download_launchbox(&mut self, cx: &mut Context<Self>) {
-        let Some(store) = crate::emulation_store(cx) else {
+    /// Download LaunchBox's game list (the user asked, which turns
+    /// `iroriLaunchBox` on, as the text above the button says), then show
+    /// the boxes.
+    pub(crate) fn download_launchbox(&mut self, cx: &mut Context<Self>) {
+        let Some(task) = crate::launchbox::turn_on_and_download(cx) else {
             return;
         };
         self.phase = Phase::Downloading;
         cx.notify();
-        let task = irori_ui::run(cx, async move { store.download_launchbox().await });
         self._task = Some(cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
