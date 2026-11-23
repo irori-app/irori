@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Irori가 Sunshine에 게임을 추가하는 동안 이 게임을 Sunshine 애플리케이션 목록에 표시합니다.",
   "settings.field.discord_presence.label": "Discord에 표시",
   "settings.field.discord_presence.help": "Irori 설정에서 Discord Rich Presence가 켜져 있으면 이 게임이 실행되는 동안 Discord에 표시합니다.",
+  "settings.field.steam_overlay.label": "Steam 바로 가기에서 Steam 오버레이",
+  "settings.field.steam_overlay.help": "Steam이 비 Steam 게임 바로 가기(Steam에 추가)로 이 게임을 시작하면 게임 안에 Steam 오버레이를 표시합니다. gamescope나 샌드박스에서는 표시되지 않습니다.",
   "settings.sunshine.found_apollo": "이 컴퓨터에 Apollo가 설정되어 있습니다. 웹 UI 포트 {port}",
   "settings.sunshine.apollo_works": "가상 디스플레이를 지원하는 Sunshine 파생판 Apollo도 같은 방식으로 작동합니다.",
   "settings.sunshine.apollo_session": "Apollo는 한 번에 하나의 로그인만 유지합니다. Irori가 로그인하면 브라우저의 웹 UI가 다시 로그인하라고 합니다. Irori는 동기화 사이에 로그인을 유지하므로 드물게 일어납니다.",

@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Zeigt dieses Spiel unter den Anwendungen von Sunshine, solange Irori Spiele zu Sunshine hinzufügt.",
   "settings.field.discord_presence.label": "Auf Discord anzeigen",
   "settings.field.discord_presence.help": "Zeigt dieses Spiel auf Discord, während es läuft, wenn Discord Rich Presence in Iroris Einstellungen an ist.",
+  "settings.field.steam_overlay.label": "Steam-Overlay aus Steam-Verknüpfungen",
+  "settings.field.steam_overlay.help": "Wenn Steam dieses Spiel über seine Nicht-Steam-Verknüpfung startet (Zu Steam hinzufügen), zeigt es darin das Steam-Overlay. Nicht mit gamescope oder in der Sandbox.",
   "settings.sunshine.found_apollo": "Apollo ist hier eingerichtet, die Weboberfläche auf Port {port}",
   "settings.sunshine.apollo_works": "Apollo, der Sunshine-Ableger mit virtuellen Bildschirmen, funktioniert genauso.",
   "settings.sunshine.apollo_session": "Apollo erlaubt nur eine Anmeldung gleichzeitig: Meldet sich Irori an, fragt die Weboberfläche in deinem Browser erneut nach der Anmeldung. Irori behält seine Anmeldung zwischen Abgleichen, daher passiert das selten.",

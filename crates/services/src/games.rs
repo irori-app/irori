@@ -38,6 +38,9 @@ pub struct LaunchParams {
     pub verbose: bool,
     /// The streaming client the session is for (Sunshine's Moonlight).
     pub stream: Option<crate::sunshine::StreamClient>,
+    /// What Steam set when it started the game through its non-Steam
+    /// shortcut, for its overlay (`iroriSteamOverlay`).
+    pub steam: Option<crate::steam_overlay::SteamLaunch>,
     /// Play without the cloud-save download first: the user chose to play
     /// on this device's saves after it failed ([`SaveDownloadFailed`]).
     pub skip_save_download: bool,
@@ -473,6 +476,7 @@ impl Backend {
             skip_version_check,
             verbose,
             stream,
+            steam,
             skip_save_download,
         } = params;
         if self.is_running(id) {
@@ -522,6 +526,13 @@ impl Backend {
         }
         if let Some(client) = &stream {
             client.apply(&mut settings, app.sunshine.match_client);
+        }
+        // After the stream, which may turn gamescope on.
+        if let Some(steam) = &steam
+            && let Err(skipped) = steam.apply(id.runner, &mut settings)
+            && skipped != crate::steam_overlay::Skipped::Off
+        {
+            tracing::info!("{id} starts without Steam's overlay: {skipped:?}");
         }
         let ctx = self.op_context(id, cancel.clone());
         let target = Target {

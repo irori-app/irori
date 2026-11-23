@@ -181,6 +181,11 @@ pub struct GameSettings {
     /// Irori-only; set per game.
     #[serde(rename = "iroriDiscordPresence")]
     pub discord_presence: bool,
+    /// Linux: when Steam starts the game through its non-Steam shortcut,
+    /// pass Steam's overlay on to the game (off under gamescope and the
+    /// sandbox). Irori-only; set per game.
+    #[serde(rename = "iroriSteamOverlay")]
+    pub steam_overlay: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -545,6 +550,7 @@ impl Default for GameSettings {
             dll_overrides: Vec::new(),
             in_sunshine: true,
             discord_presence: true,
+            steam_overlay: false,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),

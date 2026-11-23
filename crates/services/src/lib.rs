@@ -60,6 +60,7 @@ mod settings_migration;
 pub mod smart_categories;
 pub mod status;
 pub mod steam_link;
+pub mod steam_overlay;
 mod steam_tags;
 pub mod storage;
 mod store_facts;
@@ -119,6 +120,7 @@ pub use smart_categories::{
 };
 pub use status::StatusRegistry;
 pub use steam_link::{STEAM_NONE, SteamLink, TitleLinkReport};
+pub use steam_overlay::SteamLaunch;
 pub use storage::{CleanupKind, StorageReport};
 pub use store_facts::DetailsReport;
 pub use sunshine::{

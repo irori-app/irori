@@ -619,6 +619,7 @@ impl FieldSpec {
                     | "iroriShaderCacheSize"
                     | "iroriSandbox.noNetwork"
                     | "iroriSandbox.noHome"
+                    | "iroriSteamOverlay"
             )
         {
             return false;
@@ -4076,6 +4077,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.discord_presence.help")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
+    game_only(
+        "iroriSteamOverlay",
+        "settings.field.steam_overlay.label",
+        Launch,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.steam_overlay.help")
+    .keywords(&["steam", "overlay", "shortcut", "non-steam", "game mode"]),
     game_only(
         "steamRuntime",
         "settings.field.steam_runtime.label",

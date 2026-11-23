@@ -975,6 +975,13 @@ commands without a window.
   adds or updates every installed game (not Steam's own, DLCs, or hidden games while
   locked) and removes Irori's entries of games that left the library, except games of a
   signed-out store; with games named, only those; `--remove` takes them out.
+  Steam's overlay (`steam_overlay.rs`, per game `iroriSteamOverlay`, Linux, off by
+  default): the waiting invocation a shortcut runs reads what Steam set for it
+  (`SteamLaunch::from_env`: only `gameoverlayrenderer.so` entries of `LD_PRELOAD`,
+  absolute, and a numeric `SteamOverlayGameId`) and passes it through the instance
+  channel (`instance::Caller`) to `LaunchParams::steam`; the game gets it unless it runs
+  in gamescope or the sandbox or is Steam's. Irori never finds or preloads the overlay
+  by itself.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of

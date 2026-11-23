@@ -1170,6 +1170,19 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+**Steam's overlay** (per game, "Steam overlay from Steam shortcuts",
+`iroriSteamOverlay`, off by default, Linux only). A Steam shortcut runs
+`irori --launch <game> --wait`, which hands the game to the running Irori, so
+the game isn't Steam's child and would miss the overlay Steam preloads into the
+shortcut. With the setting on, the waiting invocation passes on what Steam set
+for it: the `gameoverlayrenderer.so` entries of its `LD_PRELOAD` (absolute paths
+only, nothing else preloaded) and `SteamOverlayGameId`; the game gets Steam's
+libraries before any `LD_PRELOAD` of the user's. Irori never looks for the
+overlay itself, so the overlay comes only from Steam's own launch of the
+shortcut, while that Steam runs; started from Irori, the game runs without it.
+Games in gamescope (whose nested session hides it) or the sandbox (which keeps
+the game from Steam) and Steam's own games don't get it.
+
 ### Sound output (Big Picture)
 
 Outside a game, Big Picture switches the sound output too: the quick menu's

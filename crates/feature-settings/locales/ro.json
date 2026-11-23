@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Arată acest joc printre aplicațiile Sunshine cât timp Irori adaugă jocuri în Sunshine.",
   "settings.field.discord_presence.label": "Arată pe Discord",
   "settings.field.discord_presence.help": "Arată acest joc pe Discord cât timp rulează, dacă Discord Rich Presence este activat în setările Irori.",
+  "settings.field.steam_overlay.label": "Suprapunerea Steam din scurtăturile Steam",
+  "settings.field.steam_overlay.help": "Când Steam pornește acest joc prin scurtătura sa de joc non-Steam (Adaugă în Steam), afișează în el suprapunerea Steam. Nu cu gamescope sau în sandbox.",
   "settings.sunshine.found_apollo": "Apollo e configurat aici, cu interfața web pe portul {port}",
   "settings.sunshine.apollo_works": "Apollo, varianta Sunshine cu ecrane virtuale, merge la fel.",
   "settings.sunshine.apollo_session": "Apollo păstrează o singură autentificare odată: când se conectează Irori, interfața web din browser îți cere să te conectezi din nou. Irori își păstrează autentificarea între sincronizări, așa că se întâmplă rar.",

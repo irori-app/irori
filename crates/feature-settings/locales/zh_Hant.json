@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "在 Irori 將遊戲加入 Sunshine 時，把此遊戲顯示在 Sunshine 的應用程式清單中。",
   "settings.field.discord_presence.label": "在 Discord 上顯示",
   "settings.field.discord_presence.help": "在 Irori 設定中開啟 Discord Rich Presence 時，於此遊戲執行期間在 Discord 上顯示它。",
+  "settings.field.steam_overlay.label": "從 Steam 捷徑啟用 Steam 遊戲內覆蓋",
+  "settings.field.steam_overlay.help": "當 Steam 透過此遊戲的非 Steam 遊戲捷徑（加入 Steam）啟動它時，在遊戲中顯示 Steam 遊戲內覆蓋。使用 gamescope 或沙盒時無法使用。",
   "settings.sunshine.found_apollo": "這部電腦已設定 Apollo，網頁介面連接埠為 {port}",
   "settings.sunshine.apollo_works": "支援虛擬顯示器的 Sunshine 分支 Apollo 也同樣適用。",
   "settings.sunshine.apollo_session": "Apollo 同一時間只保留一個登入：Irori 登入時，瀏覽器中的網頁介面會要求你重新登入。Irori 會在多次同步之間保留登入，所以這種情況很少見。",

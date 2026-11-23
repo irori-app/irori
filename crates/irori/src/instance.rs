@@ -14,7 +14,7 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use irori_services::StreamClient;
+use irori_services::{SteamLaunch, StreamClient};
 
 pub struct Instance {
     listener: TcpListener,
@@ -36,6 +36,18 @@ struct Invocation {
     /// The streaming client a waiting sender was started for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stream: Option<StreamClient>,
+    /// What Steam set for a waiting sender it started (its overlay).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    steam: Option<SteamLaunch>,
+}
+
+/// Who started a waiting invocation, as far as the game cares: the
+/// streaming client Sunshine started it for, and what Steam set when one of
+/// its shortcuts started it.
+#[derive(Debug, Clone, Default)]
+pub struct Caller {
+    pub stream: Option<StreamClient>,
+    pub steam: Option<SteamLaunch>,
 }
 
 /// What a second instance's arguments reached.
@@ -49,7 +61,7 @@ pub enum Forwarded {
 /// The connection of a waiting second instance, held by the running one.
 pub struct Waiter {
     stream: TcpStream,
-    client: Option<StreamClient>,
+    caller: Caller,
 }
 
 impl std::fmt::Debug for Waiter {
@@ -61,7 +73,12 @@ impl std::fmt::Debug for Waiter {
 impl Waiter {
     /// The streaming client the waiting instance was started for.
     pub fn client(&self) -> Option<&StreamClient> {
-        self.client.as_ref()
+        self.caller.stream.as_ref()
+    }
+
+    /// What Steam set when it started the waiting instance.
+    pub fn steam(&self) -> Option<&SteamLaunch> {
+        self.caller.steam.as_ref()
     }
 
     /// Block until the waiting instance goes away or closes its side.
@@ -107,15 +124,15 @@ pub fn acquire(args: &[String]) -> Result<Option<Instance>> {
     })
 }
 
-/// Hand `args` (and the streaming `client` the caller was started for) to
-/// the running instance and stay connected, or become the running instance
-/// when there is none.
+/// Hand `args` (and who the caller was started for) to the running
+/// instance and stay connected, or become the running instance when there is
+/// none.
 pub fn acquire_waiting(
     args: &[String],
-    client: Option<StreamClient>,
+    caller: Caller,
 ) -> Result<std::result::Result<TcpStream, Instance>> {
     let dir = &irori_core::Paths::get().config;
-    Ok(match acquire_in(dir, args, Some(client))? {
+    Ok(match acquire_in(dir, args, Some(caller))? {
         Acquired::Primary(instance) => Err(instance),
         Acquired::Forwarded(Forwarded::Waiting(stream)) => Ok(stream),
         Acquired::Forwarded(Forwarded::Sent) => {
@@ -149,12 +166,8 @@ enum Acquired {
     Forwarded(Forwarded),
 }
 
-/// `waiting` is `Some` for a waiting instance, with its streaming client.
-fn acquire_in(
-    dir: &Path,
-    args: &[String],
-    waiting: Option<Option<StreamClient>>,
-) -> Result<Acquired> {
+/// `waiting` is `Some` for a waiting instance, with who started it.
+fn acquire_in(dir: &Path, args: &[String], waiting: Option<Caller>) -> Result<Acquired> {
     let wait = waiting.is_some();
     std::fs::create_dir_all(dir)?;
     let mut options = OpenOptions::new();
@@ -206,7 +219,8 @@ fn acquire_in(
                             token: endpoint.token,
                             args: args.to_vec(),
                             wait,
-                            stream: waiting.clone().flatten(),
+                            stream: waiting.as_ref().and_then(|c| c.stream.clone()),
+                            steam: waiting.as_ref().and_then(|c| c.steam.clone()),
                         };
                         stream.write_all(&serde_json::to_vec(&invocation)?)?;
                         if wait {
@@ -266,7 +280,10 @@ fn receive(mut stream: TcpStream, token: &str) -> Option<(Vec<String>, Option<Wa
     stream.write_all(&[1]).ok()?;
     let waiter = invocation.wait.then(|| Waiter {
         stream,
-        client: invocation.stream,
+        caller: Caller {
+            stream: invocation.stream,
+            steam: invocation.steam,
+        },
     });
     Some((invocation.args, waiter))
 }
@@ -328,6 +345,13 @@ mod tests {
         }
     }
 
+    fn overlay() -> SteamLaunch {
+        SteamLaunch {
+            preload: vec!["/home/me/.steam/root/ubuntu12_64/gameoverlayrenderer.so".into()],
+            overlay_game_id: Some("13853614418917539840".into()),
+        }
+    }
+
     fn primary(dir: &Path) -> Instance {
         match acquire_in(dir, &[], None).unwrap() {
             Acquired::Primary(instance) => instance,
@@ -345,13 +369,20 @@ mod tests {
             let (args, waiter) = receive(stream, &primary.token).unwrap();
             let waiter = waiter.unwrap();
             assert_eq!(waiter.client(), Some(&deck()));
+            assert_eq!(waiter.steam(), Some(&overlay()));
             waiter.finish(Some("Hades isn't installed"));
             args
         });
         let args = vec!["--launch".into(), "gog/1".into(), "--wait".into()];
-        let Acquired::Forwarded(Forwarded::Waiting(stream)) =
-            acquire_in(dir.path(), &args, Some(Some(deck()))).unwrap()
-        else {
+        let Acquired::Forwarded(Forwarded::Waiting(stream)) = acquire_in(
+            dir.path(),
+            &args,
+            Some(Caller {
+                stream: Some(deck()),
+                steam: Some(overlay()),
+            }),
+        )
+        .unwrap() else {
             panic!("the waiting instance should stay connected");
         };
         assert_eq!(read_outcome(stream), Err("Hades isn't installed".into()));
@@ -369,9 +400,12 @@ mod tests {
             // Returns once the waiter is gone; a hang here fails the test.
             waiter.unwrap().wait_for_hangup();
         });
-        let Acquired::Forwarded(Forwarded::Waiting(stream)) =
-            acquire_in(dir.path(), &["--big-picture".into()], Some(None)).unwrap()
-        else {
+        let Acquired::Forwarded(Forwarded::Waiting(stream)) = acquire_in(
+            dir.path(),
+            &["--big-picture".into()],
+            Some(Caller::default()),
+        )
+        .unwrap() else {
             panic!("the waiting instance should stay connected");
         };
         drop(stream);

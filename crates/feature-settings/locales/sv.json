@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Visar spelet bland Sunshines appar medan Irori lägger till spel i Sunshine.",
   "settings.field.discord_presence.label": "Visa på Discord",
   "settings.field.discord_presence.help": "Visar spelet på Discord medan det körs, när Discord Rich Presence är på i Iroris inställningar.",
+  "settings.field.steam_overlay.label": "Steam-överlägg från Steam-genvägar",
+  "settings.field.steam_overlay.help": "När Steam startar spelet via dess genväg som icke-Steam-spel (Lägg till i Steam) visas Steams överlägg i det. Inte med gamescope eller i sandlådan.",
   "settings.sunshine.found_apollo": "Apollo är konfigurerat här, webbgränssnittet på port {port}",
   "settings.sunshine.apollo_works": "Apollo, Sunshines avknoppning med virtuella skärmar, fungerar likadant.",
   "settings.sunshine.apollo_session": "Apollo har bara en inloggning åt gången: när Irori loggar in ber webbgränssnittet i webbläsaren dig logga in igen. Irori behåller sin inloggning mellan synkningar, så det händer sällan.",

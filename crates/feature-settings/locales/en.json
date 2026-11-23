@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Show this game among Sunshine’s applications while Irori adds games to Sunshine.",
   "settings.field.discord_presence.label": "Show on Discord",
   "settings.field.discord_presence.help": "Show this game on Discord while it runs, when Discord Rich Presence is on in Irori’s settings.",
+  "settings.field.steam_overlay.label": "Steam overlay from Steam shortcuts",
+  "settings.field.steam_overlay.help": "When Steam starts this game through its non-Steam shortcut (Add to Steam), show Steam’s overlay in it. Not with gamescope or the sandbox.",
   "settings.sunshine.found_apollo": "Apollo is set up here, its web UI on port {port}",
   "settings.sunshine.apollo_works": "Apollo, Sunshine’s fork with virtual displays, works the same way.",
   "settings.sunshine.apollo_session": "Apollo keeps one sign-in at a time: when Irori signs in, its web UI in your browser asks you to sign in again. Irori keeps its sign-in between syncs, so this is rare.",

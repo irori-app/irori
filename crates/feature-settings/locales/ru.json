@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Показывает эту игру среди приложений Sunshine, пока Irori добавляет игры в Sunshine.",
   "settings.field.discord_presence.label": "Показывать в Discord",
   "settings.field.discord_presence.help": "Показывает эту игру в Discord, пока она запущена, если в настройках Irori включён Discord Rich Presence.",
+  "settings.field.steam_overlay.label": "Оверлей Steam из ярлыков Steam",
+  "settings.field.steam_overlay.help": "Когда Steam запускает эту игру через её ярлык сторонней игры (Добавить в Steam), показывать в ней оверлей Steam. Не работает с gamescope и в песочнице.",
   "settings.sunshine.found_apollo": "Apollo настроен на этом компьютере, веб-интерфейс на порту {port}",
   "settings.sunshine.apollo_works": "Apollo, ответвление Sunshine с виртуальными дисплеями, работает так же.",
   "settings.sunshine.apollo_session": "Apollo хранит только один вход за раз: когда входит Irori, веб-интерфейс в браузере попросит войти снова. Irori сохраняет вход между синхронизациями, так что это бывает редко.",

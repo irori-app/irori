@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Показує цю гру серед застосунків Sunshine, поки Irori додає ігри до Sunshine.",
   "settings.field.discord_presence.label": "Показувати в Discord",
   "settings.field.discord_presence.help": "Показує цю гру в Discord, поки вона запущена, якщо в налаштуваннях Irori увімкнено Discord Rich Presence.",
+  "settings.field.steam_overlay.label": "Оверлей Steam із ярликів Steam",
+  "settings.field.steam_overlay.help": "Коли Steam запускає цю гру через її ярлик сторонньої гри (Додати до Steam), показувати в ній оверлей Steam. Не з gamescope і не в пісочниці.",
   "settings.sunshine.found_apollo": "Apollo налаштовано на цьому комп’ютері, вебінтерфейс на порту {port}",
   "settings.sunshine.apollo_works": "Apollo, відгалуження Sunshine з віртуальними дисплеями, працює так само.",
   "settings.sunshine.apollo_session": "Apollo тримає лише один вхід водночас: коли входить Irori, вебінтерфейс у браузері попросить увійти знову. Irori зберігає вхід між синхронізаціями, тож це трапляється рідко.",

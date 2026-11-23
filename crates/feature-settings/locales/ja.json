@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Irori がゲームを Sunshine に追加している間、このゲームを Sunshine のアプリケーションに表示します。",
   "settings.field.discord_presence.label": "Discord に表示",
   "settings.field.discord_presence.help": "Irori の設定で Discord Rich Presence がオンのとき、このゲームの実行中に Discord に表示します。",
+  "settings.field.steam_overlay.label": "Steam ショートカットからの Steam オーバーレイ",
+  "settings.field.steam_overlay.help": "Steam がこのゲームを非 Steam ゲームのショートカット（Steam に追加）から起動したとき、ゲーム内に Steam オーバーレイを表示します。gamescope やサンドボックスでは使えません。",
   "settings.sunshine.found_apollo": "Apollo はこのコンピューターで設定済みです（Web UI はポート {port}）",
   "settings.sunshine.apollo_works": "仮想ディスプレイ対応の Sunshine 派生版 Apollo も同じように使えます。",
   "settings.sunshine.apollo_session": "Apollo は一度に 1 つのログインしか保持しません。Irori がログインすると、ブラウザーの Web UI で再ログインを求められます。Irori は同期の間ログインを保持するので、めったに起きません。",

@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Irori oyunları Sunshine’a eklerken bu oyunu Sunshine’ın uygulamaları arasında gösterir.",
   "settings.field.discord_presence.label": "Discord’da göster",
   "settings.field.discord_presence.help": "Irori ayarlarında Discord Rich Presence açıksa bu oyunu çalışırken Discord’da gösterir.",
+  "settings.field.steam_overlay.label": "Steam kısayollarından Steam arayüzü",
+  "settings.field.steam_overlay.help": "Steam bu oyunu Steam dışı oyun kısayoluyla (Steam’e ekle) başlattığında, içinde Steam arayüzünü göster. gamescope ile veya korumalı alanda olmaz.",
   "settings.sunshine.found_apollo": "Apollo burada kurulu, web arayüzü {port} numaralı bağlantı noktasında",
   "settings.sunshine.apollo_works": "Sunshine’ın sanal ekranlı çatalı Apollo da aynı şekilde çalışır.",
   "settings.sunshine.apollo_session": "Apollo aynı anda tek bir oturum tutar: Irori giriş yaptığında tarayıcındaki web arayüzü yeniden giriş yapmanı ister. Irori oturumunu eşitlemeler arasında korur, bu yüzden nadiren olur.",

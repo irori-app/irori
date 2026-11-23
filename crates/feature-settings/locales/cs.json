@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Zobrazí tuto hru mezi aplikacemi Sunshine, dokud Irori přidává hry do Sunshine.",
   "settings.field.discord_presence.label": "Zobrazit na Discordu",
   "settings.field.discord_presence.help": "Zobrazí tuto hru na Discordu, když běží a v nastavení Irori je zapnutý Discord Rich Presence.",
+  "settings.field.steam_overlay.label": "Překryv Steamu ze zástupců Steamu",
+  "settings.field.steam_overlay.help": "Když Steam spustí tuto hru přes její zástupce hry mimo Steam (Přidat do Steamu), zobrazí v ní svůj překryv. Ne s gamescope ani v sandboxu.",
   "settings.sunshine.found_apollo": "Apollo je zde nastavené, webové rozhraní na portu {port}",
   "settings.sunshine.apollo_works": "Apollo, odnož Sunshine s virtuálními displeji, funguje stejně.",
   "settings.sunshine.apollo_session": "Apollo drží vždy jen jedno přihlášení: když se přihlásí Irori, webové rozhraní v prohlížeči vás požádá o nové přihlášení. Irori si přihlášení mezi synchronizacemi pamatuje, takže se to stává zřídka.",

@@ -417,6 +417,8 @@
   "settings.field.in_sunshine.help": "Mostra este jogo entre os aplicativos do Sunshine enquanto o Irori adiciona jogos ao Sunshine.",
   "settings.field.discord_presence.label": "Mostrar no Discord",
   "settings.field.discord_presence.help": "Mostra este jogo no Discord enquanto ele está rodando, se o Discord Rich Presence estiver ativado nas configurações do Irori.",
+  "settings.field.steam_overlay.label": "Sobreposição da Steam a partir de atalhos da Steam",
+  "settings.field.steam_overlay.help": "Quando a Steam inicia este jogo pelo atalho de jogo fora da Steam (Adicionar à Steam), mostra nele a sobreposição da Steam. Não com o gamescope nem no sandbox.",
   "settings.sunshine.found_apollo": "O Apollo está configurado aqui, com a interface web na porta {port}",
   "settings.sunshine.apollo_works": "O Apollo, a variante do Sunshine com telas virtuais, funciona do mesmo jeito.",
   "settings.sunshine.apollo_session": "O Apollo mantém um login por vez: quando o Irori entra, a interface web no seu navegador pede para entrar de novo. O Irori mantém o login entre sincronizações, então isso é raro.",
