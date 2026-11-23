@@ -577,11 +577,18 @@ commands without a window.
   HowLongToBeat pages the sources found, and the user's links, each opened through
   `irori_ui::web_url`; "Links…" (`irori_game::open_links_dialog`: the row, the game
   menu, the palette) adds and removes them.
-- **Journal** (`journal.rs`): one note per game per local calendar day (optional
-  title, text, paths of that day's screenshots), written with
-  `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
-  notes, and a restore keeps the later-written note of each day. Screens edit them
-  through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
+- **Journal** (`journal.rs`): notes per game and local calendar day, several a day,
+  each with an id, an optional time of day (none: about the whole day), title, text,
+  the capture it is about and that day's screenshots it links; a moment marked in
+  game (`marked`) waits for words. Written with `UserDataService::set_journal_entry`
+  (removed with `remove_journal_entry`); an empty note is removed. They live under
+  `journal_notes` in `library.json`: the one-note-a-day `journal` of older files is
+  read and migrated on load (`UserData::migrate`, ids `day-<date>`), so an older
+  Irori still reads the rest of the file. Backups carry the notes (old backups'
+  day notes restore the same way) and a restore keeps the later-written version of
+  each note; sync has a register per note (`<game>#<id>`). Screens edit them through
+  `irori_ui::journal::open_editor` (the game page's timeline, with search and "Only
+  days with notes"; the stats page's Journal tab, with search; the overlay's
   Journal tab).
 - **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
   store details (a store page's gaps: screenshots, trailers, description, genres, date;

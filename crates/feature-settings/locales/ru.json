@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (своё название или изображение): оставлено изменение с {device} от {time}",
   "settings.sync.conflict.goal": "Цель на {year}: оставлено изменение с {device} от {time}",
   "settings.sync.conflict.playtime": "{game} (время в игре): оставлено изменение с {device} от {time}",
+  "settings.sync.conflict.journal": "{game} (запись в дневнике): сохранено изменение с {device} в {time}",
   "settings.clear_caches.confirm": "Очистить кэш",
   "settings.clear_caches.description": "Обложки и данные магазинов будут скачаны заново. Учётные записи, установленные игры и настройки сохранятся.",
   "settings.clear_caches.done": "Кэш очищен",

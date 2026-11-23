@@ -337,14 +337,14 @@ pub struct ReplayInfo {
     pub settings: ReplaySettings,
 }
 
-/// A clip linked in a journal note: `entry` with `clip` among its pictures,
-/// or `None` when it is there already or the note links all it can.
+/// A clip linked in a journal note: `entry` (the day's whole-day note, or a
+/// new one) with `clip` among its pictures, or `None` when it is there
+/// already or the note links all it can.
 pub fn note_with_clip(
-    entry: Option<crate::journal::JournalEntry>,
+    mut entry: crate::journal::JournalEntry,
     clip: &str,
 ) -> Option<crate::journal::JournalEntry> {
-    let mut entry = entry.unwrap_or_default();
-    if entry.screenshots.iter().any(|p| p == clip)
+    if entry.pictures().any(|p| p == clip)
         || entry.screenshots.len() >= crate::journal::MAX_LINKED_SCREENSHOTS
     {
         return None;
@@ -595,13 +595,10 @@ impl Backend {
         let shown = path.display().to_string();
         if journal {
             let day = at.date();
-            let note = self
-                .userdata
-                .snapshot()
-                .journal_entry(&id.key(), day)
-                .cloned();
+            let note =
+                crate::journal::day_note(self.userdata.snapshot().journal_day(&id.key(), day));
             if let Some(note) = note_with_clip(note, &shown) {
-                self.userdata.set_journal_entry(id, day, Some(note));
+                self.userdata.set_journal_entry(id, day, note);
             }
         }
         self.bus.notice(
@@ -766,9 +763,9 @@ mod tests {
 
     #[test]
     fn a_clip_is_linked_once_in_the_days_note() {
-        let note = note_with_clip(None, "/v/Hades/a.mp4").unwrap();
+        let note = note_with_clip(Default::default(), "/v/Hades/a.mp4").unwrap();
         assert_eq!(note.screenshots, ["/v/Hades/a.mp4"]);
-        assert!(note_with_clip(Some(note.clone()), "/v/Hades/a.mp4").is_none());
+        assert!(note_with_clip(note.clone(), "/v/Hades/a.mp4").is_none());
         let full = crate::journal::JournalEntry {
             text: "Beat the boss".into(),
             screenshots: (0..crate::journal::MAX_LINKED_SCREENSHOTS)
@@ -776,7 +773,7 @@ mod tests {
                 .collect(),
             ..Default::default()
         };
-        assert!(note_with_clip(Some(full), "/v/b.mp4").is_none());
+        assert!(note_with_clip(full, "/v/b.mp4").is_none());
     }
 
     #[test]

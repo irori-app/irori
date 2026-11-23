@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (custom title or art): kept the change made on {device} at {time}",
   "settings.sync.conflict.goal": "Goal for {year}: kept the change made on {device} at {time}",
   "settings.sync.conflict.playtime": "{game} (playtime): kept the change made on {device} at {time}",
+  "settings.sync.conflict.journal": "{game} (journal note): kept the change made on {device} at {time}",
   "settings.clear_caches.confirm": "Clear caches",
   "settings.clear_caches.description": "Artwork and store data are downloaded again. Accounts, installed games and settings are kept.",
   "settings.clear_caches.done": "Caches cleared",

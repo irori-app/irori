@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (egen titel eller bild): ändringen från {device} kl. {time} behölls",
   "settings.sync.conflict.goal": "Mål för {year}: ändringen från {device} kl. {time} behölls",
   "settings.sync.conflict.playtime": "{game} (speltid): ändringen från {device} kl. {time} behölls",
+  "settings.sync.conflict.journal": "{game} (dagboksanteckning): ändringen från {device} kl. {time} behölls",
   "settings.clear_caches.confirm": "Rensa cache",
   "settings.clear_caches.description": "Omslagsbilder och butiksdata laddas ned igen. Konton, installerade spel och inställningar behålls.",
   "settings.clear_caches.done": "Cachen har rensats",

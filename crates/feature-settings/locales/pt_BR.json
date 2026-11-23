@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (título ou imagem personalizados): mantida a alteração de {device} às {time}",
   "settings.sync.conflict.goal": "Meta para {year}: mantida a alteração de {device} às {time}",
   "settings.sync.conflict.playtime": "{game} (tempo de jogo): mantida a alteração de {device} às {time}",
+  "settings.sync.conflict.journal": "{game} (nota do diário): mantida a alteração feita em {device} às {time}",
   "settings.clear_caches.confirm": "Limpar caches",
   "settings.clear_caches.description": "As artes e os dados das lojas serão baixados novamente. Contas, jogos instalados e configurações são mantidos.",
   "settings.clear_caches.done": "Caches limpos",

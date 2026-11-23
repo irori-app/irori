@@ -1,13 +1,15 @@
-//! The journal note editor, shared by the game page's timeline and the
-//! stats page's Journal tab: a title, the note itself and the screenshots
-//! taken that day to link to it. Saving writes the library file, so it runs
-//! off the UI thread; deleting a note asks first.
+//! The journal note editor, shared by the game page's timeline, the stats
+//! page's Journal tab and the in-game overlay: one note of a day, with its
+//! time (empty for a note about the whole day), a title, the note itself,
+//! the capture it is about and the screenshots taken that day to link to it.
+//! Saving writes the library file, so it runs off the UI thread; deleting a
+//! note asks first.
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use chrono::{Local, NaiveDate, TimeZone as _};
+use chrono::{Local, NaiveDate, NaiveTime, TimeZone as _, Timelike as _};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
@@ -32,18 +34,51 @@ use crate::{backend, models};
 
 /// Width of a screenshot in the picker, in rem.
 const SHOT_REM: f32 = 8.;
+/// Width of the capture a note is about, in rem.
+const CAPTURE_REM: f32 = 16.;
 
 /// A screenshot as the art store addresses it.
 pub fn shot_url(path: &str) -> String {
     format!("file://{path}")
 }
 
+/// A note's time as the journal shows it ("21:40"); nothing for a note
+/// about the whole day.
+pub fn time_label(time: Option<NaiveTime>) -> Option<SharedString> {
+    time.map(|t| t.format("%H:%M").to_string().into())
+}
+
+/// The time of day typed in the editor: `HH:MM` (or `H:MM`, `HH.MM`); empty
+/// is a note about the whole day, and anything else isn't a time.
+fn parse_time(text: &str) -> Result<Option<NaiveTime>, ()> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let text = text.replace('.', ":");
+    NaiveTime::parse_from_str(&text, "%H:%M")
+        .map(Some)
+        .map_err(|_| ())
+}
+
+/// The time a new note of `day` gets: now (to the minute) when it is today,
+/// else none: a note written later about another day is about all of it.
+fn new_note_time(day: NaiveDate, now: chrono::NaiveDateTime) -> Option<NaiveTime> {
+    (day == now.date())
+        .then(|| NaiveTime::from_hms_opt(now.hour(), now.minute(), 0).unwrap_or_default())
+}
+
 struct JournalEditor {
     id: GameId,
     day: NaiveDate,
+    /// The note as it was opened; a new note has no id yet.
+    note: JournalEntry,
     /// The game and day, for the delete question.
     label: SharedString,
     existed: bool,
+    time: Entity<InputState>,
+    /// The time typed can't be read.
+    bad_time: bool,
     title: Entity<InputState>,
     text: Entity<TextareaState>,
     /// The day's screenshots of the game and those the note already links,
@@ -56,18 +91,26 @@ impl JournalEditor {
     fn new(
         id: GameId,
         day: NaiveDate,
+        note: Option<String>,
         label: SharedString,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let entry = models(cx)
-            .library
-            .read(cx)
-            .user
-            .journal_entry(&id.key(), day)
-            .cloned();
-        let existed = entry.is_some();
-        let entry = entry.unwrap_or_default();
+        let user = models(cx).library.read(cx).user.clone();
+        let existing = note
+            .as_deref()
+            .and_then(|n| user.journal_note(&id.key(), n))
+            .map(|(_, e)| e.clone());
+        let existed = existing.is_some();
+        let entry = existing.unwrap_or_else(|| JournalEntry {
+            time: new_note_time(day, Local::now().naive_local()),
+            ..Default::default()
+        });
+        let time = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t("ui.journal.whole_day"))
+                .default_value(time_label(entry.time).unwrap_or_default())
+        });
         let title = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t("ui.journal.title_placeholder"))
@@ -79,15 +122,19 @@ impl JournalEditor {
                 .placeholder(t("ui.journal.text_placeholder"))
                 .default_value(entry.text.clone())
         });
+        let linked = entry.screenshots.clone();
         let mut editor = Self {
             id,
             day,
+            note: entry,
             label,
             existed,
+            time,
+            bad_time: false,
             title,
             text,
             shots: None,
-            linked: entry.screenshots,
+            linked,
         };
         editor.load_shots(cx);
         editor
@@ -114,7 +161,10 @@ impl JournalEditor {
         cx.spawn(async move |this, cx| {
             let found = task.await.flatten().unwrap_or_default();
             let _ = this.update(cx, |this, cx| {
-                this.shots = Some(candidates(found, &this.linked));
+                let capture = this.note.capture.clone();
+                let mut list = candidates(found, &this.linked);
+                list.retain(|p| Some(p) != capture.as_ref());
+                this.shots = Some(list);
                 cx.notify();
             });
         })
@@ -130,27 +180,34 @@ impl JournalEditor {
         cx.notify();
     }
 
-    fn entry(&self, cx: &App) -> JournalEntry {
+    fn entry(&self, time: Option<NaiveTime>, cx: &App) -> JournalEntry {
         JournalEntry {
+            time,
             title: self.title.read(cx).value().to_string(),
             text: self.text.read(cx).value().to_string(),
             screenshots: self.linked.clone(),
             updated: String::new(),
+            ..self.note.clone()
         }
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        write(self.id.clone(), self.day, Some(self.entry(cx)), cx);
+        let Ok(time) = parse_time(&self.time.read(cx).value()) else {
+            self.bad_time = true;
+            cx.notify();
+            return;
+        };
+        write(self.id.clone(), self.day, self.entry(time, cx), cx);
         window.close_dialog(cx);
     }
 
     fn delete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (id, day) = (self.id.clone(), self.day);
+        let (id, note) = (self.id.clone(), self.note.id.clone());
         let question = t_args("ui.journal.delete_title", &[("day", &self.label)]);
         window.close_dialog(cx);
         window.defer(cx, move |window, cx| {
             window.open_alert_dialog(cx, move |alert, _, _| {
-                let id = id.clone();
+                let (id, note) = (id.clone(), note.clone());
                 alert
                     .title(question.clone())
                     .description(t("ui.journal.delete_description"))
@@ -158,7 +215,12 @@ impl JournalEditor {
                     .ok_text(t("ui.journal.delete"))
                     .ok_variant(ButtonVariant::Danger)
                     .on_ok(move |_, _, cx| {
-                        write(id.clone(), day, None, cx);
+                        let (id, note) = (id.clone(), note.clone());
+                        let b = backend(cx);
+                        crate::state::run_infallible(cx, async move {
+                            b.userdata.remove_journal_entry(&id, &note)
+                        })
+                        .detach();
                         true
                     })
             });
@@ -188,28 +250,55 @@ fn local_day(unix: i64) -> Option<NaiveDate> {
         .map(|t| t.date_naive())
 }
 
-/// Write (or remove) a note, off the UI thread.
-fn write(id: GameId, day: NaiveDate, entry: Option<JournalEntry>, cx: &mut App) {
+/// Write a note, off the UI thread.
+fn write(id: GameId, day: NaiveDate, entry: JournalEntry, cx: &mut App) {
     let b = backend(cx);
-    crate::state::run_infallible(
-        cx,
-        async move { b.userdata.set_journal_entry(&id, day, entry) },
-    )
+    crate::state::run_infallible(cx, async move {
+        b.userdata.set_journal_entry(&id, day, entry);
+    })
     .detach();
+}
+
+/// A picture of a note, cut to 16:9.
+fn picture(path: &str, width_rem: f32, window: &Window, cx: &mut App) -> gpui_kit::Div {
+    let width = physical_width(rems(width_rem), window);
+    let image = art_img(&shot_url(path), width, false, cx);
+    let theme = cx.theme();
+    div()
+        .relative()
+        .w(rems(width_rem))
+        .h(rems(width_rem * 9. / 16.))
+        .flex_shrink_0()
+        .rounded(theme.radius)
+        .overflow_hidden()
+        .bg(theme.muted)
+        .map(|d| match image {
+            Some(img) => d.child(img.size_full().object_fit(ObjectFit::Cover)),
+            None => d.child(
+                div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(theme.muted_foreground)
+                    .child(Icon::new(IconName::Image)),
+            ),
+        })
+        .when(is_clip(Path::new(path)), |d| {
+            d.child(clip_mark(Path::new(path), cx))
+        })
 }
 
 impl Render for JournalEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let (muted, border, primary, primary_fg, fill, radius) = (
+        let (muted, border, primary, primary_fg, danger) = (
             theme.muted_foreground,
             theme.border,
             theme.primary,
             theme.primary_foreground,
-            theme.muted,
-            theme.radius,
+            theme.danger,
         );
-        let width = physical_width(rems(SHOT_REM), window);
         let shots = match &self.shots {
             None => div()
                 .py_2()
@@ -225,35 +314,13 @@ impl Render for JournalEditor {
                 .gap_2()
                 .children(list.iter().enumerate().map(|(ix, path)| {
                     let selected = self.linked.contains(path);
-                    let image = art_img(&shot_url(path), width, false, cx);
                     let p = path.clone();
-                    div()
+                    picture(path, SHOT_REM, window, cx)
                         .id(ElementId::Name(format!("journal-shot-{ix}").into()))
                         .keyboard_focusable(cx)
-                        .relative()
-                        .w(rems(SHOT_REM))
-                        .h(rems(SHOT_REM * 9. / 16.))
-                        .rounded(radius)
-                        .overflow_hidden()
                         .cursor_pointer()
-                        .bg(fill)
                         .border_2()
                         .border_color(if selected { primary } else { border })
-                        .map(|d| match image {
-                            Some(img) => d.child(img.size_full().object_fit(ObjectFit::Cover)),
-                            None => d.child(
-                                div()
-                                    .size_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_color(muted)
-                                    .child(Icon::new(IconName::Image)),
-                            ),
-                        })
-                        .when(is_clip(Path::new(path.as_str())), |d| {
-                            d.child(clip_mark(Path::new(path.as_str()), cx))
-                        })
                         .when(selected, |d| {
                             d.child(
                                 div()
@@ -271,10 +338,45 @@ impl Render for JournalEditor {
                 }))
                 .into_any_element(),
         };
+        let capture = self
+            .note
+            .capture
+            .clone()
+            .map(|path| picture(&path, CAPTURE_REM, window, cx));
         v_flex()
             .id("journal-editor")
             .gap_4()
-            .child(Input::new(&self.title))
+            .when_some(capture, |c, capture| {
+                c.child(
+                    v_flex().gap_1().child(capture).child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(t("ui.journal.about_capture")),
+                    ),
+                )
+            })
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_start()
+                    .child(
+                        v_flex()
+                            .w(rems(7.))
+                            .flex_shrink_0()
+                            .gap_1()
+                            .child(Input::new(&self.time).aria_label(t("ui.journal.time")))
+                            .when(self.bad_time, |c| {
+                                c.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(danger)
+                                        .child(t("ui.journal.bad_time")),
+                                )
+                            }),
+                    )
+                    .child(div().flex_1().min_w_0().child(Input::new(&self.title))),
+            )
             .child(Textarea::new(&self.text))
             .child(
                 v_flex()
@@ -327,24 +429,31 @@ impl Render for JournalEditor {
     }
 }
 
-/// Open the note of `id` on `day` to read, write or delete it. `title` is
-/// the game's title and `date` the day as the caller shows it.
+/// Open one note of `id` on `day` to read, write or delete it, or, with
+/// `note` `None`, a new note of that day. `title` is the game's title and
+/// `date` the day as the caller shows it.
 pub fn open_editor(
     id: GameId,
     day: NaiveDate,
+    note: Option<String>,
     title: &str,
     date: &str,
     window: &mut Window,
     cx: &mut App,
 ) {
     let label = t_args("ui.journal.label", &[("title", title), ("date", date)]);
-    let view = cx.new(|cx| JournalEditor::new(id, day, label.clone(), window, cx));
+    let view = cx.new(|cx| JournalEditor::new(id, day, note, label.clone(), window, cx));
     let width = window.rem_size() * 40.;
     let focus = Cell::new(true);
     window.open_dialog(cx, move |dialog, window, cx| {
         if focus.replace(false) {
-            let input = view.read(cx).title.clone();
-            input.focus_handle(cx).focus(window, cx);
+            // A note about a capture starts at its words.
+            let editor = view.read(cx);
+            if editor.note.capture.is_some() || editor.existed {
+                editor.text.focus_handle(cx).focus(window, cx);
+            } else {
+                editor.title.focus_handle(cx).focus(window, cx);
+            }
         }
         dialog.title(label.clone()).w(width).child(view.clone())
     });
@@ -364,5 +473,25 @@ mod tests {
             ["/a.png", "/b.png", "/gone.png"]
         );
         assert!(candidates(Vec::new(), &[]).is_empty());
+    }
+
+    #[test]
+    fn times_are_read_as_typed_and_new_notes_of_today_get_now() {
+        let at = |h, m| NaiveTime::from_hms_opt(h, m, 0);
+        assert_eq!(parse_time(""), Ok(None));
+        assert_eq!(parse_time(" 21:40 "), Ok(at(21, 40)));
+        assert_eq!(parse_time("9:05"), Ok(at(9, 5)));
+        assert_eq!(parse_time("21.40"), Ok(at(21, 40)));
+        assert_eq!(parse_time("late"), Err(()));
+        assert_eq!(parse_time("25:00"), Err(()));
+
+        let now = NaiveDate::from_ymd_opt(2026, 11, 2)
+            .unwrap()
+            .and_hms_opt(21, 40, 31)
+            .unwrap();
+        assert_eq!(new_note_time(now.date(), now), at(21, 40));
+        let yesterday = now.date().pred_opt().unwrap();
+        assert_eq!(new_note_time(yesterday, now), None);
+        assert_eq!(time_label(at(9, 5)).as_deref(), Some("09:05"));
     }
 }

@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game}（カスタムタイトル・画像）：{device} で {time} に行われた変更を残しました",
   "settings.sync.conflict.goal": "{year} 年の目標：{device} で {time} に行われた変更を残しました",
   "settings.sync.conflict.playtime": "{game}（プレイ時間）：{device} で {time} に行われた変更を残しました",
+  "settings.sync.conflict.journal": "{game}（日記のメモ）: {device} で {time} に行った変更を保持しました",
   "settings.clear_caches.confirm": "キャッシュを消去",
   "settings.clear_caches.description": "アートワークとストアデータは再度ダウンロードされます。アカウント、インストール済みのゲーム、設定は保持されます。",
   "settings.clear_caches.done": "キャッシュを消去しました",

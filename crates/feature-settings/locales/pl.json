@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (własny tytuł lub grafika): zachowano zmianę z {device} z {time}",
   "settings.sync.conflict.goal": "Cel na {year}: zachowano zmianę z {device} z {time}",
   "settings.sync.conflict.playtime": "{game} (czas gry): zachowano zmianę z {device} z {time}",
+  "settings.sync.conflict.journal": "{game} (notatka w dzienniku): zachowano zmianę z {device} o {time}",
   "settings.clear_caches.confirm": "Wyczyść pamięć podręczną",
   "settings.clear_caches.description": "Grafiki i dane sklepów zostaną pobrane ponownie. Konta, zainstalowane gry i ustawienia zostaną zachowane.",
   "settings.clear_caches.done": "Wyczyszczono pamięć podręczną",

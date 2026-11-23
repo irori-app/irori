@@ -141,6 +141,8 @@ pub struct GamePage {
     achievement_sort: achievements::AchievementSort,
     /// The achievements list's search.
     achievement_query: Entity<InputState>,
+    /// The journal's search field.
+    journal_query: Entity<InputState>,
     achievement_view: achievements::RowsCache,
     /// Hidden achievements the user chose to see.
     achievement_reveal: achievements::Reveal,
@@ -243,8 +245,15 @@ impl GamePage {
         let launch_select = choice_select(Vec::new(), None, window, cx);
         let achievement_query =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("game.achievements.search")));
+        let journal_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("game.journal.search")));
         let subscriptions = vec![
             cx.subscribe(&achievement_query, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+            cx.subscribe(&journal_query, |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
                 }
@@ -299,6 +308,7 @@ impl GamePage {
             achievement_filter: AchievementFilter::All,
             achievement_sort: achievements::AchievementSort::default(),
             achievement_query,
+            journal_query,
             achievement_view: achievements::RowsCache::default(),
             achievement_reveal: achievements::Reveal::default(),
             launch_options: Vec::new(),

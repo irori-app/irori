@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (titlu sau imagine personalizată): s-a păstrat modificarea de pe {device} de la {time}",
   "settings.sync.conflict.goal": "Obiectivul pentru {year}: s-a păstrat modificarea de pe {device} de la {time}",
   "settings.sync.conflict.playtime": "{game} (timp de joc): s-a păstrat modificarea de pe {device} de la {time}",
+  "settings.sync.conflict.journal": "{game} (notă din jurnal): s-a păstrat modificarea de pe {device} de la {time}",
   "settings.clear_caches.confirm": "Golește memoria cache",
   "settings.clear_caches.description": "Imaginile și datele magazinelor vor fi descărcate din nou. Conturile, jocurile instalate și setările se păstrează.",
   "settings.clear_caches.done": "Memoria cache a fost golită",

@@ -62,7 +62,13 @@ pub struct LibraryBackup {
     pub play_status: BTreeMap<String, PlayStatusRecord>,
     pub backlog_goals: BTreeMap<i32, u32>,
     pub ratings: BTreeMap<String, u8>,
+    /// Journal notes, several a day.
+    #[serde(rename = "journal_notes")]
     pub journal: Journal,
+    /// One note per day, as backups made before several notes a day hold
+    /// them; restored as whole-day notes.
+    #[serde(rename = "journal", skip_serializing_if = "BTreeMap::is_empty")]
+    pub legacy_journal: crate::journal::LegacyJournal,
     /// Categories filled from rules, by id.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub smart_categories: BTreeMap<String, crate::SmartCategory>,
@@ -204,6 +210,7 @@ impl Backend {
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
+                legacy_journal: Default::default(),
                 smart_categories: user.smart_categories.clone(),
                 category_looks: user.category_looks.clone(),
             }),
@@ -382,8 +389,8 @@ impl Backend {
 /// members are added to what is there; custom titles, art and ratings from
 /// the backup replace the current ones of the same game. A play status is
 /// taken when it was set later than the current one, and a goal only for a
-/// year without one. A day's journal note is taken when it was written later
-/// than the current one. Smart categories and the looks of manual ones come
+/// year without one. A journal note is taken when it was written later than
+/// the current one of its id. Smart categories and the looks of manual ones come
 /// back where none of that id or name is left; ones edited since are kept.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
@@ -417,7 +424,9 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .insert(key.clone(), (*stars).min(crate::userdata::MAX_RATING));
         }
     }
-    crate::journal::merge(&mut d.journal, &lib.journal);
+    let mut notes = lib.journal.clone();
+    crate::journal::migrate(&mut notes, lib.legacy_journal.clone());
+    crate::journal::merge(&mut d.journal, &notes);
     for (id, smart) in &lib.smart_categories {
         d.smart_categories
             .entry(id.clone())
@@ -616,11 +625,12 @@ mod tests {
         let mut journal = Journal::new();
         journal.entry("gog:1".into()).or_default().insert(
             day,
-            crate::JournalEntry {
+            vec![crate::JournalEntry {
+                id: "n1".into(),
                 text: "Found the hidden lift".into(),
                 updated: "2026-11-02T20:00:00Z".into(),
                 ..Default::default()
-            },
+            }],
         );
         let backup = Backup {
             library: Some(LibraryBackup {
@@ -637,6 +647,19 @@ mod tests {
         // Backups from before the journal restore without notes.
         let old: LibraryBackup = serde_json::from_str(r#"{"favourites":["gog:1"]}"#).unwrap();
         assert!(old.journal.is_empty());
+        // Backups from before several notes a day restore their day notes.
+        let old: LibraryBackup = serde_json::from_str(
+            r#"{"journal":{"gog:2":{"2026-11-01":{"text":"Old note","updated":"2026-11-01T20:00:00Z"}}}}"#,
+        )
+        .unwrap();
+        merge_library(&mut d, &old);
+        let notes = d.journal_day(
+            "gog:2",
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap(),
+        );
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].text, "Old note");
+        assert_eq!(d.journal["gog:1"], journal["gog:1"]);
     }
 
     #[test]

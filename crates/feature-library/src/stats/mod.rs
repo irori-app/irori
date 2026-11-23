@@ -46,12 +46,13 @@ use std::sync::Arc;
 
 use chrono::{Datelike as _, Local, NaiveDate};
 use gpui_kit::assets::IconName;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{VirtualListScrollHandle, v_flex};
 use gpui_kit::{
-    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
-    Render, Size, Styled as _, Subscription, Window, div, px,
+    AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Render, Size, Styled as _, Subscription, Window, div, px,
 };
 use irori_core::GameId;
 use irori_services::{ScreenshotIndex, UserData};
@@ -105,6 +106,8 @@ pub struct StatsView {
     album_scroll: VirtualListScrollHandle,
     /// The journal tab's notes; `None` until the history is first read.
     journal: Option<Arc<journal::JournalPage>>,
+    /// The journal tab's search field.
+    journal_query: Entity<InputState>,
     journal_sizes: Rc<Vec<Size<Pixels>>>,
     journal_scroll: VirtualListScrollHandle,
     /// Years with play, newest first, for the Year in review.
@@ -125,7 +128,14 @@ impl StatsView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let sessions = models(cx).sessions.clone();
         let library = models(cx).library.clone();
+        let journal_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("library.stats.journal.search")));
         let subscriptions = vec![
+            cx.subscribe(&journal_query, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.derive(cx);
+                }
+            }),
             // A finished session adds to the history.
             cx.observe_in(&sessions, window, |this, _, _, cx| this.reload(cx)),
             // A library refresh (which games count), playtime synced from the
@@ -160,6 +170,7 @@ impl StatsView {
             album_width: px(0.),
             album_scroll: VirtualListScrollHandle::new(),
             journal: None,
+            journal_query,
             journal_sizes: Rc::default(),
             journal_scroll: VirtualListScrollHandle::new(),
             years: Vec::new(),
@@ -247,12 +258,14 @@ impl StatsView {
             |id| snapshot.get(id).is_some(),
             today,
         ));
+        let query = self.journal_query.read(cx).value().to_string();
         self.journal = Some(Arc::new(journal::compute(
             &user.journal,
             &history,
             self.period(),
             |id| snapshot.get(id).is_some(),
             today,
+            &query,
         )));
         let mut years: Vec<i32> = history.sessions.iter().map(|p| p.day.year()).collect();
         years.dedup();

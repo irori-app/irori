@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game}(사용자 지정 제목 또는 이미지): {device}에서 {time}에 한 변경을 유지함",
   "settings.sync.conflict.goal": "{year}년 목표: {device}에서 {time}에 한 변경을 유지함",
   "settings.sync.conflict.playtime": "{game}(플레이 시간): {device}에서 {time}에 한 변경을 유지함",
+  "settings.sync.conflict.journal": "{game}(일지 메모): {device}에서 {time}에 한 변경을 유지했습니다",
   "settings.clear_caches.confirm": "캐시 지우기",
   "settings.clear_caches.description": "아트워크와 스토어 데이터를 다시 다운로드합니다. 계정, 설치된 게임, 설정은 유지됩니다.",
   "settings.clear_caches.done": "캐시를 지웠습니다",

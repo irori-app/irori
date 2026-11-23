@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (vlastní název nebo obrázek): ponechána změna z {device} v {time}",
   "settings.sync.conflict.goal": "Cíl na rok {year}: ponechána změna z {device} v {time}",
   "settings.sync.conflict.playtime": "{game} (herní čas): ponechána změna z {device} v {time}",
+  "settings.sync.conflict.journal": "{game} (poznámka v deníku): ponechána změna z {device} v {time}",
   "settings.clear_caches.confirm": "Vymazat mezipaměti",
   "settings.clear_caches.description": "Obrázky a data obchodů se stáhnou znovu. Účty, nainstalované hry a nastavení zůstanou zachovány.",
   "settings.clear_caches.done": "Mezipaměti vymazány",

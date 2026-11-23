@@ -219,6 +219,7 @@
   "settings.sync.conflict.custom": "{game} (eigener Titel oder Grafik): Änderung von {device} um {time} beibehalten",
   "settings.sync.conflict.goal": "Ziel für {year}: Änderung von {device} um {time} beibehalten",
   "settings.sync.conflict.playtime": "{game} (Spielzeit): Änderung von {device} um {time} beibehalten",
+  "settings.sync.conflict.journal": "{game} (Tagebucheintrag): Änderung von {device} um {time} beibehalten",
   "settings.clear_caches.confirm": "Caches leeren",
   "settings.clear_caches.description": "Artwork und Store-Daten werden erneut heruntergeladen. Konten, installierte Spiele und Einstellungen bleiben erhalten.",
   "settings.clear_caches.done": "Caches geleert",
