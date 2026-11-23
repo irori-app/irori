@@ -71,8 +71,9 @@ pub struct LibraryBackup {
     /// Where the user left off in each game.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub left_off: BTreeMap<String, crate::LeftOff>,
-    /// One note per day, as backups made before several notes a day hold
-    /// them; restored as whole-day notes.
+    /// One note per day: what backups made before several notes a day
+    /// hold, and in newer ones the notes' mirror for an older Irori.
+    /// Restored as `journal::read` reads a library file.
     #[serde(rename = "journal", skip_serializing_if = "BTreeMap::is_empty")]
     pub legacy_journal: crate::journal::LegacyJournal,
     /// Categories filled from rules, by id.
@@ -218,7 +219,7 @@ impl Backend {
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
                 left_off: user.left_off.clone(),
-                legacy_journal: Default::default(),
+                legacy_journal: crate::journal::mirror(&user.journal),
                 smart_categories: user.smart_categories.clone(),
                 category_looks: user.category_looks.clone(),
             }),
@@ -433,8 +434,7 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .insert(key.clone(), (*stars).min(crate::userdata::MAX_RATING));
         }
     }
-    let mut notes = lib.journal.clone();
-    crate::journal::migrate(&mut notes, lib.legacy_journal.clone());
+    let notes = crate::journal::read(lib.journal.clone(), lib.legacy_journal.clone());
     crate::journal::merge(&mut d.journal, &notes);
     for (key, left) in &lib.left_off {
         let newer = d

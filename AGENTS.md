@@ -582,9 +582,12 @@ commands without a window.
   the capture it is about and that day's screenshots it links; a moment marked in
   game (`marked`) waits for words. Written with `UserDataService::set_journal_entry`
   (removed with `remove_journal_entry`); an empty note is removed. They live under
-  `journal_notes` in `library.json`: the one-note-a-day `journal` of older files is
-  read and migrated on load (`UserData::migrate`, ids `day-<date>`), so an older
-  Irori still reads the rest of the file. Backups carry the notes (old backups'
+  `journal_notes` in `library.json`, and the older one-note-a-day `journal` key is
+  still written beside them (`journal::mirror`: each day's notes joined in time
+  order), so an older Irori keeps every note's text. Reading (`journal::read`, on
+  load and restore) migrates `journal` alone into whole-day notes (ids `day-<date>`)
+  and, with both keys, keeps a day an older Irori edited as a whole-day note beside
+  the notes. Backups carry the notes (old backups'
   day notes restore the same way) and a restore keeps the later-written version of
   each note; sync has a register per note (`<game>#<id>`). Screens edit them through
   `irori_ui::journal::open_editor` (the game page's timeline, with search and "Only
