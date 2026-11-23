@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "Нові ігри з {launcher}",
   "shell.notice.launcher_sync_added_message": "Додано до бібліотеки: {count}",
   "shell.palette.launcher_wine": "Налаштування Wine для {launcher}",
-  "shell.palette.launcher_wine_keywords": "wine proton збірка змінні середовище лаунчер"
+  "shell.palette.launcher_wine_keywords": "wine proton збірка змінні середовище лаунчер",
+  "shell.palette.duplicates": "Переглянути дублікати доданих ігор",
+  "shell.palette.duplicates_keywords": "дублікат об’єднати однакові двічі додані lutris імпорт"
 }

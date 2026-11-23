@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam běží. {title} se do Steamu přidá, až se Steam zavře.",
   "library.steam_remove_queued": "Steam běží. {title} se ze Steamu odebere, až se Steam zavře.",
   "library.bulk.steam_queued": "Steam běží. Her přidaných do Steamu po jeho zavření: {count}.",
-  "library.bulk.steam_remove_queued": "Steam běží. Her odebraných ze Steamu po jeho zavření: {count}."
+  "library.bulk.steam_remove_queued": "Steam běží. Her odebraných ze Steamu po jeho zavření: {count}.",
+  "library.duplicates.title": "Duplicitní přidané hry",
+  "library.duplicates.open": "Zkontrolovat duplicity",
+  "library.duplicates.description": "Tyto přidané hry vypadají jako jedna hra dvakrát. Ponechte jednu: převezme herní čas, relace, stav, deník, hodnocení a kategorie té druhé a ta druhá z knihovny zmizí. Žádné soubory se nesmažou.",
+  "library.duplicates.looking": "Hledání duplicit…",
+  "library.duplicates.none": "Žádná přidaná hra nevypadá jako jiná.",
+  "library.duplicates.keep": "Ponechat „{title}“",
+  "library.duplicates.keep_both": "Ponechat obě",
+  "library.duplicates.failed": "Duplicitu se nepodařilo vyřešit",
+  "library.duplicates.reason.program": "Obě spouštějí stejný program",
+  "library.duplicates.reason.folder": "Program jedné je ve složce té druhé",
+  "library.duplicates.reason.prefix": "Obě běží ve stejném prefixu Wine",
+  "library.duplicates.reason.title": "Obě mají stejný název"
 }

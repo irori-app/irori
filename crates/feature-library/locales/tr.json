@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam çalışıyor. {title}, Steam kapanınca Steam'e eklenecek.",
   "library.steam_remove_queued": "Steam çalışıyor. {title}, Steam kapanınca Steam'den kaldırılacak.",
   "library.bulk.steam_queued": "Steam çalışıyor. Steam kapanınca eklenecek oyunlar: {count}.",
-  "library.bulk.steam_remove_queued": "Steam çalışıyor. Steam kapanınca kaldırılacak oyunlar: {count}."
+  "library.bulk.steam_remove_queued": "Steam çalışıyor. Steam kapanınca kaldırılacak oyunlar: {count}.",
+  "library.duplicates.title": "Yinelenen eklenmiş oyunlar",
+  "library.duplicates.open": "Yinelenenleri incele",
+  "library.duplicates.description": "Bu eklenmiş oyunlar aynı oyunun iki kopyası gibi görünüyor. Birini tutun: diğerinin oynama süresini, oturumlarını, durumunu, günlüğünü, puanını ve kategorilerini alır; diğeri kitaplıktan çıkar. Hiçbir dosya silinmez.",
+  "library.duplicates.looking": "Yinelenenler aranıyor…",
+  "library.duplicates.none": "Hiçbir eklenmiş oyun başka birine benzemiyor.",
+  "library.duplicates.keep": "“{title}” kalsın",
+  "library.duplicates.keep_both": "İkisi de kalsın",
+  "library.duplicates.failed": "Yineleme çözülemedi",
+  "library.duplicates.reason.program": "İkisi de aynı programı başlatıyor",
+  "library.duplicates.reason.folder": "Birinin programı diğerinin klasöründe",
+  "library.duplicates.reason.prefix": "İkisi de aynı Wine önekinde çalışıyor",
+  "library.duplicates.reason.title": "İkisinin adı aynı"
 }

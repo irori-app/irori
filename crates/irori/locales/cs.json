@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "Nové hry z {launcher}",
   "shell.notice.launcher_sync_added_message": "Přidáno do knihovny: {count}",
   "shell.palette.launcher_wine": "Nastavení Wine pro {launcher}",
-  "shell.palette.launcher_wine_keywords": "wine proton sestavení proměnné prostředí spouštěč"
+  "shell.palette.launcher_wine_keywords": "wine proton sestavení proměnné prostředí spouštěč",
+  "shell.palette.duplicates": "Zkontrolovat duplicitní přidané hry",
+  "shell.palette.duplicates_keywords": "duplicita sloučit stejné dvakrát přidané lutris import"
 }

@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam is running. {title} is added to Steam when Steam closes.",
   "library.steam_remove_queued": "Steam is running. {title} is removed from Steam when Steam closes.",
   "library.bulk.steam_queued": "Steam is running. Games added to Steam when it closes: {count}.",
-  "library.bulk.steam_remove_queued": "Steam is running. Games removed from Steam when it closes: {count}."
+  "library.bulk.steam_remove_queued": "Steam is running. Games removed from Steam when it closes: {count}.",
+  "library.duplicates.title": "Duplicate added games",
+  "library.duplicates.open": "Review duplicates",
+  "library.duplicates.description": "These added games look like one game twice. Keep one: it takes the other’s playtime, sessions, status, journal, rating and categories, and the other leaves the library. No files are deleted.",
+  "library.duplicates.looking": "Looking for duplicates…",
+  "library.duplicates.none": "No added game looks like another.",
+  "library.duplicates.keep": "Keep “{title}”",
+  "library.duplicates.keep_both": "Keep both",
+  "library.duplicates.failed": "Couldn’t resolve the duplicate",
+  "library.duplicates.reason.program": "Both start the same program",
+  "library.duplicates.reason.folder": "One’s program is in the other’s folder",
+  "library.duplicates.reason.prefix": "Both run in the same Wine prefix",
+  "library.duplicates.reason.title": "Both have the same title"
 }

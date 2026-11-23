@@ -22,6 +22,7 @@ pub mod displays;
 mod download_power;
 mod download_space;
 mod downloads;
+pub mod duplicates;
 mod engines;
 mod facts;
 pub mod field_rules;

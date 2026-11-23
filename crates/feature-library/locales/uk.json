@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam запущено. {title} буде додано до Steam, коли він закриється.",
   "library.steam_remove_queued": "Steam запущено. {title} буде вилучено зі Steam, коли він закриється.",
   "library.bulk.steam_queued": "Steam запущено. Ігор буде додано до Steam, коли він закриється: {count}.",
-  "library.bulk.steam_remove_queued": "Steam запущено. Ігор буде вилучено зі Steam, коли він закриється: {count}."
+  "library.bulk.steam_remove_queued": "Steam запущено. Ігор буде вилучено зі Steam, коли він закриється: {count}.",
+  "library.duplicates.title": "Дублікати доданих ігор",
+  "library.duplicates.open": "Переглянути дублікати",
+  "library.duplicates.description": "Ці додані ігри схожі на одну гру, додану двічі. Залиште одну: їй перейдуть час гри, сеанси, статус, щоденник, оцінка й категорії іншої, а інша зникне з бібліотеки. Файли не видаляються.",
+  "library.duplicates.looking": "Пошук дублікатів…",
+  "library.duplicates.none": "Немає доданих ігор, схожих одна на одну.",
+  "library.duplicates.keep": "Залишити «{title}»",
+  "library.duplicates.keep_both": "Залишити обидві",
+  "library.duplicates.failed": "Не вдалося розв’язати дублікат",
+  "library.duplicates.reason.program": "Обидві запускають ту саму програму",
+  "library.duplicates.reason.folder": "Програма однієї лежить у теці іншої",
+  "library.duplicates.reason.prefix": "Обидві працюють в одному префіксі Wine",
+  "library.duplicates.reason.title": "Обидві мають однакову назву"
 }

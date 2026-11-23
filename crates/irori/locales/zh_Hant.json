@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "來自 {launcher} 的新遊戲",
   "shell.notice.launcher_sync_added_message": "已加入遊戲庫：{count}",
   "shell.palette.launcher_wine": "{launcher} 的 Wine 設定",
-  "shell.palette.launcher_wine_keywords": "wine proton 版本 變數 環境 啟動器"
+  "shell.palette.launcher_wine_keywords": "wine proton 版本 變數 環境 啟動器",
+  "shell.palette.duplicates": "檢查重複的已加入遊戲",
+  "shell.palette.duplicates_keywords": "重複 合併 相同 兩次 已加入 lutris 匯入"
 }

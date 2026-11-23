@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "Jocuri noi din {launcher}",
   "shell.notice.launcher_sync_added_message": "Adăugate în bibliotecă: {count}",
   "shell.palette.launcher_wine": "Setări Wine pentru {launcher}",
-  "shell.palette.launcher_wine_keywords": "wine proton versiune variabile mediu lansator"
+  "shell.palette.launcher_wine_keywords": "wine proton versiune variabile mediu lansator",
+  "shell.palette.duplicates": "Verifică jocurile adăugate duplicate",
+  "shell.palette.duplicates_keywords": "duplicat îmbină același de două ori adăugat lutris import"
 }

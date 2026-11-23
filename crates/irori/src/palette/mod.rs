@@ -79,6 +79,8 @@ pub(crate) enum PaletteTarget {
     LauncherShortcut(irori_launchers::LauncherKind),
     /// A set-up launcher's Wine build and variables.
     LauncherWine(irori_launchers::LauncherKind),
+    /// Review added games that are probably one game twice.
+    Duplicates,
     /// The Getting started checklist.
     GettingStarted,
     /// The usual ROM folders found on this computer, to add.
@@ -915,6 +917,13 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::LauncherShortcut(launcher));
     }
+    items.push(
+        Entry::new()
+            .label(t("shell.palette.duplicates"))
+            .keywords([t("shell.palette.duplicates_keywords")])
+            .icon(IconName::Copy),
+    );
+    targets.push(PaletteTarget::Duplicates);
     if !cfg!(windows) {
         for launcher in irori_manage::wine_launchers(cx) {
             items.push(
@@ -988,6 +997,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::LauncherWine(launcher) => {
             irori_manage::open_launcher_wine_dialog(launcher, window, cx)
         }
+        PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),

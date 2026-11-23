@@ -1168,5 +1168,17 @@
   "library.steam_queued": "O Steam está aberto. {title} será adicionado ao Steam quando ele fechar.",
   "library.steam_remove_queued": "O Steam está aberto. {title} será removido do Steam quando ele fechar.",
   "library.bulk.steam_queued": "O Steam está aberto. Jogos adicionados ao Steam quando ele fechar: {count}.",
-  "library.bulk.steam_remove_queued": "O Steam está aberto. Jogos removidos do Steam quando ele fechar: {count}."
+  "library.bulk.steam_remove_queued": "O Steam está aberto. Jogos removidos do Steam quando ele fechar: {count}.",
+  "library.duplicates.title": "Jogos adicionados duplicados",
+  "library.duplicates.open": "Revisar duplicados",
+  "library.duplicates.description": "Estes jogos adicionados parecem o mesmo jogo duas vezes. Mantenha um: ele fica com o tempo de jogo, as sessões, o status, o diário, a avaliação e as categorias do outro, e o outro sai da biblioteca. Nenhum arquivo é excluído.",
+  "library.duplicates.looking": "Procurando duplicados…",
+  "library.duplicates.none": "Nenhum jogo adicionado se parece com outro.",
+  "library.duplicates.keep": "Manter “{title}”",
+  "library.duplicates.keep_both": "Manter ambos",
+  "library.duplicates.failed": "Não foi possível resolver o duplicado",
+  "library.duplicates.reason.program": "Ambos iniciam o mesmo programa",
+  "library.duplicates.reason.folder": "O programa de um está na pasta do outro",
+  "library.duplicates.reason.prefix": "Ambos rodam no mesmo prefixo do Wine",
+  "library.duplicates.reason.title": "Ambos têm o mesmo título"
 }

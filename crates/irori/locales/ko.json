@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "{launcher}의 새 게임",
   "shell.notice.launcher_sync_added_message": "라이브러리에 추가됨: {count}",
   "shell.palette.launcher_wine": "{launcher}의 Wine 설정",
-  "shell.palette.launcher_wine_keywords": "wine proton 빌드 변수 환경 런처"
+  "shell.palette.launcher_wine_keywords": "wine proton 빌드 변수 환경 런처",
+  "shell.palette.duplicates": "중복된 추가 게임 검토",
+  "shell.palette.duplicates_keywords": "중복 병합 같은 두 번 추가 lutris 가져오기"
 }

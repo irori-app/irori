@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam działa. {title} zostanie dodane do Steama po jego zamknięciu.",
   "library.steam_remove_queued": "Steam działa. {title} zostanie usunięte ze Steama po jego zamknięciu.",
   "library.bulk.steam_queued": "Steam działa. Gry dodane do Steama po jego zamknięciu: {count}.",
-  "library.bulk.steam_remove_queued": "Steam działa. Gry usunięte ze Steama po jego zamknięciu: {count}."
+  "library.bulk.steam_remove_queued": "Steam działa. Gry usunięte ze Steama po jego zamknięciu: {count}.",
+  "library.duplicates.title": "Zduplikowane dodane gry",
+  "library.duplicates.open": "Przejrzyj duplikaty",
+  "library.duplicates.description": "Te dodane gry wyglądają na jedną grę dodaną dwa razy. Zachowaj jedną: przejmie czas gry, sesje, status, dziennik, ocenę i kategorie drugiej, a druga zniknie z biblioteki. Żadne pliki nie zostaną usunięte.",
+  "library.duplicates.looking": "Szukanie duplikatów…",
+  "library.duplicates.none": "Żadna dodana gra nie wygląda jak inna.",
+  "library.duplicates.keep": "Zachowaj „{title}”",
+  "library.duplicates.keep_both": "Zachowaj obie",
+  "library.duplicates.failed": "Nie udało się rozwiązać duplikatu",
+  "library.duplicates.reason.program": "Obie uruchamiają ten sam program",
+  "library.duplicates.reason.folder": "Program jednej jest w folderze drugiej",
+  "library.duplicates.reason.prefix": "Obie działają w tym samym prefiksie Wine",
+  "library.duplicates.reason.title": "Obie mają ten sam tytuł"
 }

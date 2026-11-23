@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam körs. {title} läggs till i Steam när Steam stängs.",
   "library.steam_remove_queued": "Steam körs. {title} tas bort från Steam när Steam stängs.",
   "library.bulk.steam_queued": "Steam körs. Spel som läggs till i Steam när det stängs: {count}.",
-  "library.bulk.steam_remove_queued": "Steam körs. Spel som tas bort från Steam när det stängs: {count}."
+  "library.bulk.steam_remove_queued": "Steam körs. Spel som tas bort från Steam när det stängs: {count}.",
+  "library.duplicates.title": "Dubbla tillagda spel",
+  "library.duplicates.open": "Granska dubbletter",
+  "library.duplicates.description": "De här tillagda spelen ser ut som samma spel två gånger. Behåll ett: det tar över det andras speltid, sessioner, status, dagbok, betyg och kategorier, och det andra lämnar biblioteket. Inga filer tas bort.",
+  "library.duplicates.looking": "Letar efter dubbletter…",
+  "library.duplicates.none": "Inget tillagt spel liknar ett annat.",
+  "library.duplicates.keep": "Behåll ”{title}”",
+  "library.duplicates.keep_both": "Behåll båda",
+  "library.duplicates.failed": "Det gick inte att lösa dubbletten",
+  "library.duplicates.reason.program": "Båda startar samma program",
+  "library.duplicates.reason.folder": "Det ena spelets program ligger i det andras mapp",
+  "library.duplicates.reason.prefix": "Båda körs i samma Wine-prefix",
+  "library.duplicates.reason.title": "Båda har samma titel"
 }

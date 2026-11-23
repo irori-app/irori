@@ -1769,6 +1769,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
+- **Duplicate added games** (`irori-services`' `duplicates.rs`,
+  `irori_library::open_duplicates_dialog`: Add game's "Review duplicates", the palette):
+  pairs of added games that are probably one (same program, a program inside the other's
+  folder, the same prefix setting, the same folded title), each game in one pair at most,
+  the one played longer first. Keeping one moves the other's sessions to it and carries
+  its user data over (`UserData::carry_over`, under `SyncService::playtime_guard`), then
+  takes it out of the library without touching files; "Keep both" is remembered per
+  computer in `state/duplicates.json`.
 - **Play as a PC game.** A ROM entry that is really a program (the game
   menu, the library's context menu, the palette:
   `irori_library::open_play_as_pc_game_dialog`) opens "Add game" filled in from

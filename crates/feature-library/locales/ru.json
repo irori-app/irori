@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam запущен. {title} будет добавлена в Steam, когда он закроется.",
   "library.steam_remove_queued": "Steam запущен. {title} будет удалена из Steam, когда он закроется.",
   "library.bulk.steam_queued": "Steam запущен. Игр будет добавлено в Steam, когда он закроется: {count}.",
-  "library.bulk.steam_remove_queued": "Steam запущен. Игр будет удалено из Steam, когда он закроется: {count}."
+  "library.bulk.steam_remove_queued": "Steam запущен. Игр будет удалено из Steam, когда он закроется: {count}.",
+  "library.duplicates.title": "Повторяющиеся добавленные игры",
+  "library.duplicates.open": "Проверить повторы",
+  "library.duplicates.description": "Эти добавленные игры похожи на одну игру, добавленную дважды. Оставьте одну: ей перейдут время игры, сеансы, статус, дневник, оценка и категории другой, а другая уйдёт из библиотеки. Файлы не удаляются.",
+  "library.duplicates.looking": "Поиск повторов…",
+  "library.duplicates.none": "Нет добавленных игр, похожих друг на друга.",
+  "library.duplicates.keep": "Оставить «{title}»",
+  "library.duplicates.keep_both": "Оставить обе",
+  "library.duplicates.failed": "Не удалось разобраться с повтором",
+  "library.duplicates.reason.program": "Обе запускают одну программу",
+  "library.duplicates.reason.folder": "Программа одной лежит в папке другой",
+  "library.duplicates.reason.prefix": "Обе работают в одном префиксе Wine",
+  "library.duplicates.reason.title": "У обеих одинаковое название"
 }

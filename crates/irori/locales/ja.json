@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "{launcher} の新しいゲーム",
   "shell.notice.launcher_sync_added_message": "ライブラリに追加: {count}",
   "shell.palette.launcher_wine": "{launcher} の Wine の設定",
-  "shell.palette.launcher_wine_keywords": "Wine Proton ビルド 変数 環境 ランチャー"
+  "shell.palette.launcher_wine_keywords": "Wine Proton ビルド 変数 環境 ランチャー",
+  "shell.palette.duplicates": "重複している追加したゲームを確認",
+  "shell.palette.duplicates_keywords": "重複 統合 同じ 2 回 追加 Lutris インポート"
 }

@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam が起動中です。{title} は Steam の終了後に Steam へ追加されます。",
   "library.steam_remove_queued": "Steam が起動中です。{title} は Steam の終了後に Steam から削除されます。",
   "library.bulk.steam_queued": "Steam が起動中です。Steam の終了後に追加されるゲーム: {count}。",
-  "library.bulk.steam_remove_queued": "Steam が起動中です。Steam の終了後に削除されるゲーム: {count}。"
+  "library.bulk.steam_remove_queued": "Steam が起動中です。Steam の終了後に削除されるゲーム: {count}。",
+  "library.duplicates.title": "重複している追加したゲーム",
+  "library.duplicates.open": "重複を確認",
+  "library.duplicates.description": "これらの追加したゲームは、同じゲームが 2 つあるように見えます。1 つを残すと、もう一方のプレイ時間、セッション、ステータス、日記、評価、カテゴリを引き継ぎ、もう一方はライブラリから外れます。ファイルは削除されません。",
+  "library.duplicates.looking": "重複を探しています…",
+  "library.duplicates.none": "ほかと重複している追加したゲームはありません。",
+  "library.duplicates.keep": "「{title}」を残す",
+  "library.duplicates.keep_both": "両方残す",
+  "library.duplicates.failed": "重複を解決できませんでした",
+  "library.duplicates.reason.program": "どちらも同じプログラムを起動します",
+  "library.duplicates.reason.folder": "一方のプログラムがもう一方のフォルダーにあります",
+  "library.duplicates.reason.prefix": "どちらも同じ Wine プレフィックスで動きます",
+  "library.duplicates.reason.title": "どちらも同じタイトルです"
 }

@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam è in esecuzione. {title} verrà aggiunto a Steam alla sua chiusura.",
   "library.steam_remove_queued": "Steam è in esecuzione. {title} verrà rimosso da Steam alla sua chiusura.",
   "library.bulk.steam_queued": "Steam è in esecuzione. Giochi aggiunti a Steam alla sua chiusura: {count}.",
-  "library.bulk.steam_remove_queued": "Steam è in esecuzione. Giochi rimossi da Steam alla sua chiusura: {count}."
+  "library.bulk.steam_remove_queued": "Steam è in esecuzione. Giochi rimossi da Steam alla sua chiusura: {count}.",
+  "library.duplicates.title": "Giochi aggiunti duplicati",
+  "library.duplicates.open": "Controlla i duplicati",
+  "library.duplicates.description": "Questi giochi aggiunti sembrano lo stesso gioco due volte. Tienine uno: prende tempo di gioco, sessioni, stato, diario, valutazione e categorie dell’altro, che lascia la libreria. Nessun file viene eliminato.",
+  "library.duplicates.looking": "Ricerca dei duplicati…",
+  "library.duplicates.none": "Nessun gioco aggiunto somiglia a un altro.",
+  "library.duplicates.keep": "Tieni “{title}”",
+  "library.duplicates.keep_both": "Tienili entrambi",
+  "library.duplicates.failed": "Impossibile risolvere il duplicato",
+  "library.duplicates.reason.program": "Entrambi avviano lo stesso programma",
+  "library.duplicates.reason.folder": "Il programma di uno è nella cartella dell’altro",
+  "library.duplicates.reason.prefix": "Entrambi girano nello stesso prefisso Wine",
+  "library.duplicates.reason.title": "Entrambi hanno lo stesso titolo"
 }

@@ -260,5 +260,7 @@
   "shell.notice.launcher_sync_added": "Nieuwe games uit {launcher}",
   "shell.notice.launcher_sync_added_message": "Aan de bibliotheek toegevoegd: {count}",
   "shell.palette.launcher_wine": "Wine-instellingen van {launcher}",
-  "shell.palette.launcher_wine_keywords": "wine proton versie variabelen omgeving launcher"
+  "shell.palette.launcher_wine_keywords": "wine proton versie variabelen omgeving launcher",
+  "shell.palette.duplicates": "Dubbele toegevoegde games bekijken",
+  "shell.palette.duplicates_keywords": "dubbel samenvoegen zelfde twee keer toegevoegd lutris import"
 }

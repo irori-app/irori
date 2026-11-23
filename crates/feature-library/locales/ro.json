@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam rulează. {title} se adaugă în Steam când acesta se închide.",
   "library.steam_remove_queued": "Steam rulează. {title} se elimină din Steam când acesta se închide.",
   "library.bulk.steam_queued": "Steam rulează. Jocuri adăugate în Steam când acesta se închide: {count}.",
-  "library.bulk.steam_remove_queued": "Steam rulează. Jocuri eliminate din Steam când acesta se închide: {count}."
+  "library.bulk.steam_remove_queued": "Steam rulează. Jocuri eliminate din Steam când acesta se închide: {count}.",
+  "library.duplicates.title": "Jocuri adăugate duplicate",
+  "library.duplicates.open": "Verifică duplicatele",
+  "library.duplicates.description": "Aceste jocuri adăugate par același joc de două ori. Păstrează unul: preia timpul de joc, sesiunile, starea, jurnalul, nota și categoriile celuilalt, iar celălalt iese din bibliotecă. Nu se șterge niciun fișier.",
+  "library.duplicates.looking": "Se caută duplicate…",
+  "library.duplicates.none": "Niciun joc adăugat nu seamănă cu altul.",
+  "library.duplicates.keep": "Păstrează „{title}”",
+  "library.duplicates.keep_both": "Păstrează-le pe amândouă",
+  "library.duplicates.failed": "Duplicatul nu a putut fi rezolvat",
+  "library.duplicates.reason.program": "Amândouă pornesc același program",
+  "library.duplicates.reason.folder": "Programul unuia este în dosarul celuilalt",
+  "library.duplicates.reason.prefix": "Amândouă rulează în același prefix Wine",
+  "library.duplicates.reason.title": "Amândouă au același titlu"
 }

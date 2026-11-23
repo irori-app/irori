@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam läuft. {title} wird zu Steam hinzugefügt, sobald Steam beendet ist.",
   "library.steam_remove_queued": "Steam läuft. {title} wird aus Steam entfernt, sobald Steam beendet ist.",
   "library.bulk.steam_queued": "Steam läuft. Spiele, die nach dem Beenden zu Steam hinzugefügt werden: {count}.",
-  "library.bulk.steam_remove_queued": "Steam läuft. Spiele, die nach dem Beenden aus Steam entfernt werden: {count}."
+  "library.bulk.steam_remove_queued": "Steam läuft. Spiele, die nach dem Beenden aus Steam entfernt werden: {count}.",
+  "library.duplicates.title": "Doppelte hinzugefügte Spiele",
+  "library.duplicates.open": "Doppelte prüfen",
+  "library.duplicates.description": "Diese hinzugefügten Spiele sehen aus wie ein Spiel doppelt. Behalte eines: Es übernimmt Spielzeit, Sitzungen, Status, Journal, Bewertung und Kategorien des anderen, und das andere verlässt die Bibliothek. Es werden keine Dateien gelöscht.",
+  "library.duplicates.looking": "Doppelte werden gesucht…",
+  "library.duplicates.none": "Kein hinzugefügtes Spiel sieht aus wie ein anderes.",
+  "library.duplicates.keep": "„{title}“ behalten",
+  "library.duplicates.keep_both": "Beide behalten",
+  "library.duplicates.failed": "Die Doppelung konnte nicht aufgelöst werden",
+  "library.duplicates.reason.program": "Beide starten dasselbe Programm",
+  "library.duplicates.reason.folder": "Das Programm des einen liegt im Ordner des anderen",
+  "library.duplicates.reason.prefix": "Beide laufen im selben Wine-Präfix",
+  "library.duplicates.reason.title": "Beide haben denselben Titel"
 }

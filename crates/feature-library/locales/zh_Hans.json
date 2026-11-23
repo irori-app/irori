@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam 正在运行。{title} 将在 Steam 关闭后添加到 Steam。",
   "library.steam_remove_queued": "Steam 正在运行。{title} 将在 Steam 关闭后从 Steam 移除。",
   "library.bulk.steam_queued": "Steam 正在运行。将在 Steam 关闭后添加的游戏：{count}。",
-  "library.bulk.steam_remove_queued": "Steam 正在运行。将在 Steam 关闭后移除的游戏：{count}。"
+  "library.bulk.steam_remove_queued": "Steam 正在运行。将在 Steam 关闭后移除的游戏：{count}。",
+  "library.duplicates.title": "重复的已添加游戏",
+  "library.duplicates.open": "检查重复项",
+  "library.duplicates.description": "这些已添加的游戏看起来是同一个游戏的两份。保留其中一个：它会接管另一个的游戏时长、会话、状态、日志、评分和分类，另一个则从游戏库中移出。不会删除任何文件。",
+  "library.duplicates.looking": "正在查找重复项…",
+  "library.duplicates.none": "没有与其他游戏相似的已添加游戏。",
+  "library.duplicates.keep": "保留“{title}”",
+  "library.duplicates.keep_both": "两个都保留",
+  "library.duplicates.failed": "无法处理重复项",
+  "library.duplicates.reason.program": "两者启动同一个程序",
+  "library.duplicates.reason.folder": "其中一个的程序位于另一个的文件夹中",
+  "library.duplicates.reason.prefix": "两者在同一个 Wine 前缀中运行",
+  "library.duplicates.reason.title": "两者标题相同"
 }

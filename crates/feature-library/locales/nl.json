@@ -1168,5 +1168,17 @@
   "library.steam_queued": "Steam draait. {title} wordt aan Steam toegevoegd zodra Steam sluit.",
   "library.steam_remove_queued": "Steam draait. {title} wordt uit Steam verwijderd zodra Steam sluit.",
   "library.bulk.steam_queued": "Steam draait. Games die aan Steam worden toegevoegd zodra het sluit: {count}.",
-  "library.bulk.steam_remove_queued": "Steam draait. Games die uit Steam worden verwijderd zodra het sluit: {count}."
+  "library.bulk.steam_remove_queued": "Steam draait. Games die uit Steam worden verwijderd zodra het sluit: {count}.",
+  "library.duplicates.title": "Dubbele toegevoegde games",
+  "library.duplicates.open": "Dubbele bekijken",
+  "library.duplicates.description": "Deze toegevoegde games lijken één game die er twee keer in staat. Houd er één: die krijgt de speeltijd, sessies, status, het dagboek, de beoordeling en categorieën van de andere, en de andere verdwijnt uit de bibliotheek. Er worden geen bestanden verwijderd.",
+  "library.duplicates.looking": "Dubbele zoeken…",
+  "library.duplicates.none": "Geen enkele toegevoegde game lijkt op een andere.",
+  "library.duplicates.keep": "‘{title}’ houden",
+  "library.duplicates.keep_both": "Beide houden",
+  "library.duplicates.failed": "Kan de dubbele game niet oplossen",
+  "library.duplicates.reason.program": "Beide starten hetzelfde programma",
+  "library.duplicates.reason.folder": "Het programma van de ene staat in de map van de andere",
+  "library.duplicates.reason.prefix": "Beide draaien in hetzelfde Wine-prefix",
+  "library.duplicates.reason.title": "Beide hebben dezelfde titel"
 }
