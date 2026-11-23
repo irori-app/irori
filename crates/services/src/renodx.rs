@@ -299,6 +299,7 @@ mod tests {
                 id: id.into(),
                 title: "Game".into(),
             }),
+            optiscaler: None,
         }
     }
 

@@ -22,6 +22,12 @@ pub enum Step {
     DownloadingCompiler,
     /// Downloading an add-on (a RenoDX mod).
     DownloadingAddon,
+    /// Downloading the OptiScaler archive.
+    DownloadingOptiscaler,
+    /// Downloading FakeNVAPI for non-NVIDIA setups.
+    DownloadingFakenvapi,
+    /// Downloading the OptiPatcher ASI plugin.
+    DownloadingOptipatcher,
     Writing,
 }
 
@@ -139,6 +145,7 @@ pub async fn install(
         created_dirs: Vec::new(),
         addon: req.addon,
         source: None,
+        optiscaler: None,
     };
     if !found.dir.is_dir() {
         bail!(
