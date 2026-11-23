@@ -1,9 +1,14 @@
 //! Lightweight Linux CPU, GPU and MangoHud availability detection without
 //! spawning external processes or loading `pci.ids` into memory.
 
+#[cfg(target_os = "linux")]
 use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::io::BufRead;
+#[cfg(target_os = "linux")]
+use std::io::BufReader;
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use irori_core::{GpuSelection, HardwareVendor};
@@ -45,6 +50,7 @@ pub struct PciLookupTarget {
 static LINUX_HUD_ENV: OnceLock<LinuxHudEnv> = OnceLock::new();
 
 /// Candidate locations for the system PCI ID database.
+#[cfg(target_os = "linux")]
 const PCI_IDS_PATHS: [&str; 4] = [
     "/usr/share/hwdata/pci.ids",
     "/usr/share/misc/pci.ids",
@@ -52,8 +58,11 @@ const PCI_IDS_PATHS: [&str; 4] = [
     "/run/host/usr/share/misc/pci.ids",
 ];
 
+#[cfg(target_os = "linux")]
 const FLATPAK_MANGOHUD_EXT_DIR: &str = "/usr/lib/extensions/vulkan/MangoHud";
+#[cfg(target_os = "linux")]
 const FLATPAK_MANGOHUD_BIN: &str = "/usr/lib/extensions/vulkan/MangoHud/bin/mangohud";
+#[cfg(target_os = "linux")]
 const SYSTEM_VULKAN_IMPLICIT_LAYER_DIR: &str = "/usr/share/vulkan/implicit_layer.d";
 
 /// Detect and cache CPU label, GPUs, MangoHud availability and `vkcube` once.
@@ -231,6 +240,7 @@ fn resolve_cpu_model_with_fallbacks<R: BufRead>(
     resolve_cpu_info_with_fallbacks(cpuinfo, devicetree_model, arch).0
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn resolve_cpu_info_with_fallbacks<R: BufRead>(
     cpuinfo: Option<R>,
     devicetree_model: Option<&str>,
