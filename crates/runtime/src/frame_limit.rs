@@ -4,7 +4,9 @@
 //! limits it: settings imported from Heroic keep their cap. On Linux the
 //! limiter is `iroriFpsLimiter`: gamescope (`-r`), MangoHud (`fps_limit`,
 //! which Irori can change while the game runs, `crate::mangohud`) or DXVK
-//! (`DXVK_FRAME_RATE`, Direct3D games under Wine and Proton only).
+//! (`DXVK_CONFIG`'s `maxFrameRate`, plus `DXVK_FRAME_RATE` for older DXVK and
+//! `VKD3D_FRAME_RATE` for Direct3D 12; `env::apply_fps_limit`, Direct3D games
+//! under Wine and Proton only).
 //! Automatic picks gamescope when the game runs in it, else MangoHud when
 //! it shows, else DXVK for a Windows game, else MangoHud loaded hidden (the
 //! only limiter a native game has). A limiter chosen that can't apply to

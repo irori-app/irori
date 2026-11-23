@@ -78,7 +78,7 @@ pub fn api_from_imports(imports: &[String]) -> Option<Api> {
     }
 }
 
-/// Folders that never hold the game's program.
+/// Folders that never hold the game's program, including heavy asset trees.
 const SKIP_DIRS: &[&str] = &[
     "_commonredist",
     "commonredist",
@@ -99,6 +99,14 @@ const SKIP_DIRS: &[&str] = &[
     "battleye",
     "crashreporter",
     "reshade-shaders",
+    "content",
+    "paks",
+    "pak",
+    "shaders",
+    "movies",
+    "audio",
+    "sound",
+    ".git",
 ];
 
 /// Programs that are not the game.
@@ -110,13 +118,24 @@ static SKIP_EXE: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// How deep the folder search goes, and how much it looks at.
-const MAX_DEPTH: usize = 6;
+/// Depth 4 reaches `<Game>/Binaries/Win64/*-Shipping.exe` (depth 3) and one
+/// wrapper directory above it without traversing deep asset trees.
+const MAX_DEPTH: usize = 4;
 const MAX_ENTRIES: usize = 50_000;
 const MAX_PARSED: usize = 40;
 
 fn is_exe(path: &Path) -> bool {
     path.extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+}
+
+/// Skip Unreal Engine's shared `Engine/Binaries/` directory, which holds
+/// tools and crash reporters rather than the game executable.
+fn is_engine_binaries(parent: &Path, lower_name: &str) -> bool {
+    lower_name == "binaries"
+        && parent
+            .file_name()
+            .is_some_and(|p| p.eq_ignore_ascii_case("engine"))
 }
 
 /// Programs under `root` that might be the game, largest first.
@@ -139,7 +158,10 @@ fn candidates(root: &Path) -> Vec<(PathBuf, u64)> {
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_lowercase();
             if kind.is_dir() {
-                if depth < MAX_DEPTH && !SKIP_DIRS.contains(&name.as_str()) {
+                if depth < MAX_DEPTH
+                    && !SKIP_DIRS.contains(&name.as_str())
+                    && !is_engine_binaries(&dir, &name)
+                {
                     stack.push((path, depth + 1));
                 }
             } else if kind.is_file() && is_exe(&path) && !SKIP_EXE.is_match(&name) {
@@ -410,5 +432,48 @@ mod tests {
         );
         let err = detect(dir.path(), None, None, &CompatList::default()).unwrap_err();
         assert!(matches!(ReshadeError::of(&err), Some(ReshadeError::NoApi)));
+    }
+
+    #[test]
+    fn finds_unreal_shipping_exe_and_skips_heavy_and_engine_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        // Root UE bootstrapper imports no graphics API.
+        let bootstrap = dir.path().join("MyGame.exe");
+        write(&bootstrap, &build_pe(0x8664, &["kernel32.dll"], &[]));
+
+        // Real UE shipping binary under <Game>/Binaries/Win64.
+        let shipping = dir
+            .path()
+            .join("MyGame/Binaries/Win64/MyGame-Win64-Shipping.exe");
+        let mut game_pe = build_pe(0x8664, &["d3d12.dll"], &[]);
+        game_pe.resize(game_pe.len() + 2048, 0);
+        write(&shipping, &game_pe);
+
+        // Larger decoy executables inside Engine/Binaries and heavy asset folders
+        // must all be skipped.
+        let mut huge = build_pe(0x8664, &["d3d11.dll"], &[]);
+        huge.resize(huge.len() + 65536, 0);
+        for ignored in [
+            "Engine/Binaries/Win64/UnrealTool.exe",
+            "MyGame/Content/Paks/Fake.exe",
+            "MyGame/Content/Decoy.exe",
+            "Paks/Decoy.exe",
+            "Pak/Decoy.exe",
+            "Shaders/Decoy.exe",
+            "Movies/Decoy.exe",
+            "Audio/Decoy.exe",
+            "Sound/Decoy.exe",
+            ".git/Decoy.exe",
+            // Deeper than MAX_DEPTH (5 nested directories below root).
+            "a/b/c/d/e/TooDeep.exe",
+        ] {
+            write(&dir.path().join(ignored), &huge);
+        }
+
+        let found = detect(dir.path(), Some(&bootstrap), None, &CompatList::default()).unwrap();
+        assert_eq!(found.exe, std::fs::canonicalize(&shipping).unwrap());
+        assert_eq!(found.machine, Machine::X64);
+        assert_eq!(found.api, Some(Api::Dxgi));
+        assert!(found.searched);
     }
 }
