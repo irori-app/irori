@@ -1242,6 +1242,11 @@ store means:
 4. Its login flow.
 5. Its strings in every locale.
 
+**GOG Galaxy's installs** (Windows, `irori-gog`'s `galaxy.rs`): after each GOG refresh,
+owned games Galaxy lists in `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games` that Irori has no
+install of are imported from their folder through the usual import, once per folder
+(`galaxy-imports.json` in GOG's config folder). Nothing of Galaxy's is written.
+
 ### 4.4 UI (`irori-ui` and the feature crates)
 
 `irori_ui::init(backend, cx)` runs after `gpui_kit::init`. It installs i18n,

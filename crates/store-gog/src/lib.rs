@@ -16,6 +16,7 @@ mod api;
 mod auth;
 mod build;
 mod extra;
+mod galaxy;
 mod heroic_import;
 mod install;
 mod installed;
@@ -521,6 +522,9 @@ impl Store for GogStore {
 
     async fn refresh(&self, full: bool) -> Result<()> {
         self.refresh_library(full).await.map_err(expired_login)?;
+        if cfg!(windows) {
+            self.import_galaxy_installs().await;
+        }
         if let Some(me) = self.arc() {
             tokio::spawn(async move { me.flush_playtime().await });
         }
