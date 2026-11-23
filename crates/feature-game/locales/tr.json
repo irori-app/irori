@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Ana hikâye",
   "game.details.hltb_you": "Siz: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "Diskte {size}",
   "game.details.edit_rows": "Satırları düzenle…",
   "game.details.edit_rows_title": "Ayrıntılardaki satırlar",
   "game.details.edit_rows_help": "Her oyunun sayfası, gösterecek bir şey olduğunda burada işaretli satırları gösterir.",

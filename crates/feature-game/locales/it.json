@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Storia principale",
   "game.details.hltb_you": "Tu: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} su disco",
   "game.details.edit_rows": "Modifica righe…",
   "game.details.edit_rows_title": "Righe dei dettagli",
   "game.details.edit_rows_help": "La pagina di ogni gioco mostra le righe spuntate qui, quando ha qualcosa da mostrare.",

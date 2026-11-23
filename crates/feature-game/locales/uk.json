@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Основний сюжет",
   "game.details.hltb_you": "Ви: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} на диску",
   "game.details.edit_rows": "Змінити рядки…",
   "game.details.edit_rows_title": "Рядки в подробицях",
   "game.details.edit_rows_help": "Сторінка кожної гри показує позначені тут рядки, якщо їй є що в них показати.",

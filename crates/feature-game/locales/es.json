@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Historia principal",
   "game.details.hltb_you": "Tú: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} en disco",
   "game.details.edit_rows": "Editar filas…",
   "game.details.edit_rows_title": "Filas de Detalles",
   "game.details.edit_rows_help": "La página de cada juego muestra las filas marcadas aquí, cuando tiene algo que mostrar en ellas.",

@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Основной сюжет",
   "game.details.hltb_you": "Вы: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} на диске",
   "game.details.edit_rows": "Изменить строки…",
   "game.details.edit_rows_title": "Строки в подробностях",
   "game.details.edit_rows_help": "Страница каждой игры показывает отмеченные здесь строки, если ей есть что в них показать.",

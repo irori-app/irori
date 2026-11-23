@@ -156,6 +156,25 @@ pub(super) fn known_links(
     links
 }
 
+/// The install's size as the store gives it, else as measured on disk
+/// (marked as such), else nothing.
+fn install_size_text(store_bytes: u64, store_text: &str, measured: Option<u64>) -> String {
+    if store_bytes > 0 {
+        return format_bytes(store_bytes);
+    }
+    if !store_text.trim().is_empty() {
+        return store_text.to_string();
+    }
+    match measured.filter(|b| *b > 0) {
+        Some(bytes) => t_args(
+            "game.details.measured_size",
+            &[("size", &format_bytes(bytes))],
+        )
+        .to_string(),
+        None => String::new(),
+    }
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -612,11 +631,11 @@ impl GamePage {
         match &game.install {
             Some(install) if game.is_installed => {
                 if let Some(path) = game.install_path().filter(|_| shows(DetailRow::Location)) {
-                    let size = if install.install_size_bytes > 0 {
-                        format_bytes(install.install_size_bytes)
-                    } else {
-                        install.install_size.clone()
-                    };
+                    let size = install_size_text(
+                        install.install_size_bytes,
+                        &install.install_size,
+                        self.measured_size,
+                    );
                     let id = self.id.clone();
                     rows.push(row(
                         t("game.common.location"),
@@ -979,6 +998,22 @@ mod tests {
             ["SteamDB", "PCGamingWiki", "IGDB"],
             "not a search page"
         );
+    }
+
+    #[test]
+    fn the_measured_size_stands_in_for_the_stores() {
+        crate::i18n::register();
+        use irori_core::util::format_bytes;
+        let gib = 3 * 1024 * 1024 * 1024;
+        assert_eq!(
+            super::install_size_text(gib, "", Some(1)),
+            format_bytes(gib)
+        );
+        assert_eq!(super::install_size_text(0, "2 GB", Some(gib)), "2 GB");
+        let measured = super::install_size_text(0, " ", Some(gib));
+        assert!(measured.contains(&format_bytes(gib)), "{measured}");
+        assert_eq!(super::install_size_text(0, "", None), "");
+        assert_eq!(super::install_size_text(0, "", Some(0)), "");
     }
 
     #[test]

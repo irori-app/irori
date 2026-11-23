@@ -112,6 +112,7 @@
   "game.details.hltb_main": "메인 스토리",
   "game.details.hltb_you": "나: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "디스크에서 {size}",
   "game.details.edit_rows": "행 편집…",
   "game.details.edit_rows_title": "세부 정보의 행",
   "game.details.edit_rows_help": "여기서 선택한 행은 표시할 내용이 있을 때 모든 게임 페이지에 표시됩니다.",

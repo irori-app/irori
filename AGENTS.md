@@ -1007,7 +1007,8 @@ commands without a window.
   (`irori_services::trash`: freedesktop trash, `~/.Trash`, the Recycle Bin) and is only
   deleted where the disk has none. Settings → Storage draws it, with a list of installed
   games by size or last played that opens their folder or uninstalls them
-  (`irori_ui::hooks::uninstall`).
+  (`irori_ui::hooks::uninstall`). A game page whose store gives no install size shows
+  the folder's measured one (`Backend::install_folder_size`, the same cache).
 - **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
   folder, the defaults', the launchers' and the installed games', each with the
   installed games running in it (a launcher's game counts for the prefix holding its

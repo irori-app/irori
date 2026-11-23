@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Povestea principală",
   "game.details.hltb_you": "Tu: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} pe disc",
   "game.details.edit_rows": "Editează rândurile…",
   "game.details.edit_rows_title": "Rândurile din Detalii",
   "game.details.edit_rows_help": "Pagina fiecărui joc arată rândurile bifate aici, când are ceva de arătat în ele.",

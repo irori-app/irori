@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Główna fabuła",
   "game.details.hltb_you": "Ty: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} na dysku",
   "game.details.edit_rows": "Edytuj wiersze…",
   "game.details.edit_rows_title": "Wiersze w szczegółach",
   "game.details.edit_rows_help": "Strona każdej gry pokazuje zaznaczone tu wiersze, gdy ma w nich coś do pokazania.",

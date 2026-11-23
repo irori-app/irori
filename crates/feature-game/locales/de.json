@@ -112,6 +112,7 @@
   "game.details.hltb_main": "Hauptstory",
   "game.details.hltb_you": "Du: {duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "{size} auf dem Datenträger",
   "game.details.edit_rows": "Zeilen bearbeiten…",
   "game.details.edit_rows_title": "Zeilen in den Details",
   "game.details.edit_rows_help": "Die Seite jedes Spiels zeigt die hier angehakten Zeilen, sofern es dazu etwas gibt.",

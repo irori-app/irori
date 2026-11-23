@@ -112,6 +112,7 @@
   "game.details.hltb_main": "主线剧情",
   "game.details.hltb_you": "你：{duration}",
   "game.details.more": "+{count}",
+  "game.details.measured_size": "磁盘上 {size}",
   "game.details.edit_rows": "编辑行…",
   "game.details.edit_rows_title": "详细信息中的行",
   "game.details.edit_rows_help": "每个游戏页面都会显示此处勾选的行（当该行有内容时）。",
