@@ -69,6 +69,8 @@ pub(crate) enum PaletteTarget {
     SetUpEmulation,
     /// Add an emulator of the user's own.
     AddEmulator,
+    /// Start an emulator without a game (its id and name).
+    OpenEngine(String, SharedString),
     /// The Steam friends window.
     SteamFriends,
     XboxOfflinePlay,
@@ -789,6 +791,21 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::LinkPickedToSteam);
     }
+    for engine in irori_manage::openable_engines(cx) {
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.open_engine",
+                    &[("engine", &engine.name)],
+                ))
+                .keywords([
+                    t("shell.palette.open_engine_keywords"),
+                    t("shell.nav.emulators"),
+                ])
+                .icon(IconName::Joystick),
+        );
+        targets.push(PaletteTarget::OpenEngine(engine.id, engine.name));
+    }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
         items.push(
             Entry::new()
@@ -831,6 +848,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::AddEmulator => irori_manage::open_custom_engine_dialog(None, window, cx),
+        PaletteTarget::OpenEngine(id, name) => irori_manage::open_engine(id, name, window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
         PaletteTarget::XboxFriends => {

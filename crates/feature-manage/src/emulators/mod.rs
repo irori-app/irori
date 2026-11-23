@@ -1,11 +1,12 @@
 //! The Emulators page ([`Route::Emulators`](irori_ui::Route::Emulators)):
 //! every emulator Irori knows with the installs found on this computer,
 //! one-click installs and updates of the versions Irori manages, RetroArch
-//! cores, each system's default emulator, and the RetroAchievements account
-//! ([`retro`]).
+//! cores, each system's default emulator, the RetroAchievements account
+//! ([`retro`]), and starting an emulator without a game ([`open`]).
 
 mod configure;
 mod custom;
+mod open;
 mod ops;
 mod retro;
 mod setup;
@@ -48,6 +49,7 @@ use crate::common::{card, notify_error};
 use crate::format;
 pub use configure::open_engine_settings;
 pub use custom::{confirm_remove_custom_engine, open_custom_engine_dialog};
+pub use open::{OpenableEngine, open_engine, openable_engines};
 use ops::{EngineOps, OpLive, cancel_install, core_key, core_name, engine_key, engine_ops};
 pub use ops::{InstallTarget, start_install};
 pub use setup::open_emulation_setup;
@@ -126,6 +128,7 @@ impl EmulatorsView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.emulators.search")));
         let ops = engine_ops(cx);
         let settings = models(cx).settings.clone();
+        let openable = open::openable(cx);
         let subscriptions = vec![
             cx.subscribe(&search, |_, _, event, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -150,6 +153,7 @@ impl EmulatorsView {
                 this.counts = backend(cx).emulated_counts();
                 cx.notify();
             }),
+            cx.observe(&openable, |_, _, cx| cx.notify()),
         ];
         let seen_revision = ops.read(cx).revision;
         let retro = cx.new(|cx| retro::RetroView::new(window, cx));
@@ -190,6 +194,7 @@ impl EmulatorsView {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| {
+                open::remember(&statuses, cx);
                 this.statuses = Some(statuses);
                 this.bios = bios.into_iter().map(|b| (b.system.clone(), b)).collect();
                 this.sync_system_selects(window, cx);
@@ -670,6 +675,7 @@ impl EmulatorsView {
 
     fn render_engine(&self, status: &EngineStatus, cx: &mut Context<Self>) -> AnyElement {
         let m = &status.manifest;
+        let opening = open::openable(cx).read(cx).opening.contains(&m.id);
         let theme = cx.theme();
         let muted = theme.muted_foreground;
         let host = Host::current();
@@ -906,6 +912,26 @@ impl EmulatorsView {
                                 }),
                         )
                     })
+                    .when(
+                        status.is_installed() && irori_engines::open::can_open(m),
+                        |d| {
+                            let (id, name) = (m.id.clone(), SharedString::from(m.name.clone()));
+                            d.child(
+                                Button::new("open-engine")
+                                    .small()
+                                    .icon(IconName::Play)
+                                    .label(t("manage.emulators.open.button"))
+                                    .tooltip(t_args(
+                                        "manage.emulators.open.tooltip",
+                                        &[("engine", &name)],
+                                    ))
+                                    .loading(opening)
+                                    .on_click(move |_, window, cx| {
+                                        open_engine(id.clone(), name.clone(), window, cx)
+                                    }),
+                            )
+                        },
+                    )
                     .when(!m.options.is_empty(), |d| {
                         let id = m.id.clone();
                         d.child(

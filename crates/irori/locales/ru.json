@@ -108,6 +108,8 @@
   "shell.palette.set_up_emulation_keywords": "эмулятор ROM консоль ретро BIOS RetroArch",
   "shell.palette.add_emulator": "Добавить эмулятор",
   "shell.palette.add_emulator_keywords": "свой эмулятор программа сборка",
+  "shell.palette.open_engine": "Открыть {engine}",
+  "shell.palette.open_engine_keywords": "эмулятор запустить без игры меню настройки",
   "shell.palette.steam_friends": "Показать друзей в Steam",
   "shell.palette.steam_friends_keywords": "друзья в сети играет присоединиться пригласить чат",
   "shell.palette.xbox_offline_play": "Игра Xbox офлайн",

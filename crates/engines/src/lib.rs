@@ -14,7 +14,8 @@
 //! - the BIOS index and per-system BIOS status ([`bios`]);
 //! - converting games for engines that turn them into programs of this
 //!   computer ([`relink`]);
-//! - turning a game file into a command ([`launch`]);
+//! - turning a game file into a command ([`launch`]), and starting an
+//!   engine on its own, without a game ([`open`]);
 //! - reading the titles PlayStation games give themselves ([`sfo`]), also
 //!   inside disc images ([`iso9660`]).
 //!
@@ -31,6 +32,7 @@ pub mod install;
 pub mod iso9660;
 pub mod launch;
 pub mod manifest;
+pub mod open;
 pub mod releases;
 pub mod relink;
 pub mod retroarch;

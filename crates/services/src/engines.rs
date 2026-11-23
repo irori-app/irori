@@ -1,7 +1,7 @@
 //! Emulators for the UI: the engines Irori knows, their installations,
 //! downloadable versions, installs, updates and removals, RetroArch cores,
-//! each system's default emulator and BIOS status. Every change emits
-//! [`Event::EnginesChanged`].
+//! each system's default emulator and BIOS status, and starting one
+//! without a game. Every change emits [`Event::EnginesChanged`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,6 +15,10 @@ use irori_engines::state::{CoreInstall, ManagedInstall};
 use irori_engines::{EngineManifest, EngineRef, Installation, discovery, install, retroarch};
 
 use crate::Backend;
+
+/// How long an emulator opened on its own has to fail at start for the
+/// failure to reach the user (a missing library, a bad program).
+const OPEN_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// One engine with what this computer has of it.
 #[derive(Debug, Clone)]
@@ -188,6 +192,58 @@ impl Backend {
                 .retain(|_, choice| EngineRef::parse(choice).is_none_or(|c| c.engine != id));
         });
         self.bus.emit(Event::EnginesChanged);
+        Ok(())
+    }
+
+    /// Start `engine` without a game (its default installation, with the
+    /// settings the global defaults give games). Its output goes to
+    /// `engine-<id>.log`; one that ends with an error within a few seconds
+    /// fails here, so the user hears why.
+    pub async fn open_engine(&self, engine: &str) -> Result<()> {
+        let manifest = irori_engines::engine(engine).context("unknown emulator")?;
+        let app = self.settings.app();
+        let defaults = &app.game;
+        let values_set: serde_json::Map<String, serde_json::Value> = defaults
+            .engine_options
+            .get(&manifest.id)
+            .cloned()
+            .unwrap_or_default();
+        let own_settings = defaults.engine_own_settings;
+        let m = manifest.clone();
+        let spec = self
+            .spawn_blocking(move || -> Result<_> {
+                let state = irori_engines::state::load();
+                let installs = discovery::find(&m, &state);
+                let installation = irori_engines::launch::resolve(
+                    &m,
+                    &installs,
+                    None,
+                    state.preferred.get(&m.id).map(String::as_str),
+                )?;
+                let values = m.option_values(&values_set.into_iter().collect());
+                irori_engines::open::command(&m, installation, &values, own_settings)
+            })
+            .await
+            .context("starting the emulator stopped")??;
+        let log = irori_core::Paths::get()
+            .logs_dir()
+            .join(format!("engine-{}.log", manifest.id));
+        let mut child = irori_core::process::spawn(&spec, Some(&log))
+            .with_context(|| format!("starting {}", manifest.name))?;
+        match tokio::time::timeout(OPEN_GRACE, child.wait()).await {
+            Ok(Ok(status)) if !status.success() => anyhow::bail!(
+                "{} stopped at once ({status}); its log is {}",
+                manifest.name,
+                log.display()
+            ),
+            Ok(_) => {}
+            // Still running, as it should: reap it whenever it ends.
+            Err(_) => {
+                self.spawn(async move {
+                    let _ = child.wait().await;
+                });
+            }
+        }
         Ok(())
     }
 

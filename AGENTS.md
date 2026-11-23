@@ -1565,6 +1565,13 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   default installation per engine. Installing never changes what games use; Update does,
   and a game pinned with `iroriEngineVersion` keeps its version. Flatpak and system
   installs are detected and labelled, never installed or removed.
+- **Open without a game** (`irori_engines::open`, `Backend::open_engine`; the
+  Emulators page's Open and the palette's "Open <emulator>", both
+  `irori_manage::open_engine`): the default installation starts with the settings games
+  get (RetroArch's managed configuration, a managed version's portable marker) but
+  without the launch template. Its output goes to `engine-<id>.log`, and one that fails
+  within 3 s says why. Converting engines (AnyPS5) have nothing to open. The palette's
+  list is kept in memory and read again in the background once older than a minute.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.

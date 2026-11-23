@@ -108,6 +108,8 @@
   "shell.palette.set_up_emulation_keywords": "模擬器 ROM 主機 復古 BIOS RetroArch",
   "shell.palette.add_emulator": "新增模擬器",
   "shell.palette.add_emulator_keywords": "自訂 模擬器 程式 建置",
+  "shell.palette.open_engine": "開啟 {engine}",
+  "shell.palette.open_engine_keywords": "模擬器 啟動 不帶遊戲 選單 設定",
   "shell.palette.steam_friends": "顯示 Steam 好友",
   "shell.palette.steam_friends_keywords": "好友 上線 正在玩 加入 邀請 聊天",
   "shell.palette.xbox_offline_play": "Xbox 離線遊玩",

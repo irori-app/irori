@@ -108,6 +108,8 @@
   "shell.palette.set_up_emulation_keywords": "emulator ROM konsol retro BIOS RetroArch",
   "shell.palette.add_emulator": "Lägg till en emulator",
   "shell.palette.add_emulator_keywords": "egen emulator program bygge",
+  "shell.palette.open_engine": "Öppna {engine}",
+  "shell.palette.open_engine_keywords": "emulator starta utan spel meny inställningar",
   "shell.palette.steam_friends": "Visa Steam-vänner",
   "shell.palette.steam_friends_keywords": "vänner online spelar gå med bjud in chatt",
   "shell.palette.xbox_offline_play": "Spela Xbox offline",
