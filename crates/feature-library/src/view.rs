@@ -1,6 +1,7 @@
 //! The library screen view.
 
 mod bulk;
+pub(crate) mod details;
 mod panel;
 mod quick;
 pub(crate) mod remove;

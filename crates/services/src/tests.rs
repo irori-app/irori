@@ -1127,10 +1127,15 @@ fn third_party_launchers_are_rescanned_on_their_own_timer() {
     );
 }
 
+/// Held by tests that turn `iroriIgdb` on: the settings file is shared, so
+/// a backend started meanwhile would read it on.
+static IGDB_SETTING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 #[test]
 fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     use irori_core::GameId;
     use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
     isolate_paths();
     let b = Backend::start_headless(|_, _| {
         vec![ListStore::store(
@@ -1331,6 +1336,74 @@ fn games_link_to_steam_by_exact_title_or_the_users_choice() {
     // A pasted id or store address names its app.
     let found = rt.block_on(b.search_steam("steam://store/620")).unwrap();
     assert_eq!((found[0].id, found[0].name.as_str()), (620, "Portal 2"));
+}
+
+#[test]
+fn fetching_details_again_forgets_what_was_kept() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
+    isolate_paths();
+    // ROMs skip the PC wikis, so nothing here reaches the network.
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Emulation,
+            &[
+                ("refetch-a", "Refetch Found"),
+                ("refetch-b", "Refetch Missing"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| match req.path.as_str() {
+        "/token" => Resp::json(serde_json::json!({"access_token": "t", "expires_in": 3600})),
+        "/v4/games" => {
+            let body = String::from_utf8_lossy(&req.body).to_string();
+            if body.contains("Refetch Found") {
+                Resp::json(serde_json::json!([{"id": 3, "name": "Refetch Found"}]))
+            } else {
+                Resp::json(serde_json::json!([]))
+            }
+        }
+        _ => Resp::status(404),
+    });
+    b.set_igdb_endpoints(irori_extras::igdb::Endpoints {
+        token: server.url("/token"),
+        api: server.url("/v4"),
+    });
+    b.rebuild_library();
+    let rt = b.runtime();
+    let creds = irori_extras::igdb::Credentials::new("client", "secret").unwrap();
+    rt.block_on(b.set_igdb_credentials(Some(creds))).unwrap();
+    b.settings.update_app(|s| s.igdb = true);
+    let ids = [
+        GameId::new(Runner::Emulation, "refetch-a"),
+        GameId::new(Runner::Emulation, "refetch-b"),
+        GameId::new(Runner::Emulation, "gone"),
+    ];
+    let searches = || {
+        server
+            .requests()
+            .iter()
+            .filter(|r| r.path == "/v4/games")
+            .count()
+    };
+    let report = rt.block_on(b.refresh_details(&ids));
+    assert_eq!(
+        (report.refreshed, report.failed, report.not_on_igdb),
+        (2, 1, 1)
+    );
+    let asked = searches();
+    assert!(asked >= 2);
+    // A page opened now reads the kept answers…
+    rt.block_on(b.extra_info(&ids[0])).unwrap();
+    assert_eq!(searches(), asked);
+    // …and fetching again asks IGDB again.
+    rt.block_on(b.refresh_details(&ids[..1]));
+    assert!(searches() > asked);
+    rt.block_on(b.set_igdb_credentials(None)).unwrap();
+    b.settings.update_app(|s| s.igdb = false);
 }
 
 #[cfg(unix)]

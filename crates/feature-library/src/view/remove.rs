@@ -101,6 +101,11 @@ pub(crate) async fn remove_games(
 struct ActiveLibrary(WeakEntity<LibraryView>);
 impl Global for ActiveLibrary {}
 
+/// The library view the palette's library commands act on, while it exists.
+pub(super) fn active_library(cx: &App) -> Option<gpui_kit::Entity<LibraryView>> {
+    cx.try_global::<ActiveLibrary>()?.0.upgrade()
+}
+
 /// Make `view` the one the palette's library commands act on.
 pub(crate) fn set_active_library(view: WeakEntity<LibraryView>, cx: &mut App) {
     cx.set_global(ActiveLibrary(view));

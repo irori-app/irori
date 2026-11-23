@@ -116,6 +116,10 @@ pub(crate) enum PaletteTarget {
     Trailer(GameId),
     /// Remove the games picked in the library from it, after asking.
     RemovePicked,
+    /// Read the picked games' details again.
+    RefreshPicked,
+    /// Link the picked games to Steam by their titles.
+    LinkPickedToSteam,
     /// Back up a game's saves with Ludusavi now.
     BackUpSaves(GameId),
     /// Show a game's Ludusavi backups.
@@ -766,6 +770,23 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::RemovePicked);
     }
+    if let Some(count) = irori_library::picked_count(cx) {
+        let count = count.to_string();
+        items.push(
+            Entry::new()
+                .label(t_args("shell.palette.refresh_picked", &[("count", &count)]))
+                .keywords([t("shell.palette.refresh_picked_keywords")])
+                .icon(IconName::RefreshCw),
+        );
+        targets.push(PaletteTarget::RefreshPicked);
+        items.push(
+            Entry::new()
+                .label(t_args("shell.palette.link_picked", &[("count", &count)]))
+                .keywords([t("shell.palette.steam_link_keywords")])
+                .icon(IconName::Link),
+        );
+        targets.push(PaletteTarget::LinkPickedToSteam);
+    }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
         items.push(
             Entry::new()
@@ -835,6 +856,8 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Trailer(id) => irori_ui::trailer::toggle_trailer(&id, cx),
         // After the palette's own dialog has closed.
         PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
+        PaletteTarget::RefreshPicked => irori_library::refresh_picked_details(window, cx),
+        PaletteTarget::LinkPickedToSteam => irori_library::link_picked_to_steam(window, cx),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
             irori_ui::save_backups::open_save_backups_sheet(id, window, cx)

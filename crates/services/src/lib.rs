@@ -114,6 +114,7 @@ pub use smart_categories::{
 pub use status::StatusRegistry;
 pub use steam_link::{STEAM_NONE, SteamLink, TitleLinkReport};
 pub use storage::{CleanupKind, StorageReport};
+pub use store_facts::DetailsReport;
 pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };

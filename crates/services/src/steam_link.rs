@@ -745,6 +745,25 @@ impl Backend {
         }
     }
 
+    /// Forget the store page kept for `game`'s Steam app, so it is read
+    /// again ("Fetch details again").
+    pub(crate) async fn forget_steam_page(&self, game: &GameInfo) {
+        if game.runner() == Runner::Steam {
+            return;
+        }
+        let Some(app) = self.steam_links.linked(game).app_id() else {
+            return;
+        };
+        let language =
+            irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
+        match tokio::fs::remove_file(details_file(app, language)).await {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                tracing::warn!("forgetting Steam details: {e}");
+            }
+            _ => {}
+        }
+    }
+
     /// The parts of app `app`'s store page a linked game uses, cached a week.
     async fn steam_page(&self, app: u32, language: &str) -> Result<Option<SteamPage>> {
         let path = details_file(app, language);

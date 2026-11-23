@@ -591,7 +591,8 @@ commands without a window.
   game menu, the details panel's Steam row and the palette,
   `irori_game::open_steam_link_dialog`, which searches the store or takes a pasted id or
   store address); the app GamesDB or PCGamingWiki name (learned in
-  `Backend::wiki_info`); with `iroriSteamTitleMatch` (off by default), the app of
+  `Backend::wiki_info`); with `iroriSteamTitleMatch` (off by default) or the bulk bar's
+  Details → "Find on Steam by title" (`Backend::link_by_title`), the app of
   the game's exact title (`title_candidates`:
   edition names aside, never a similar title; a known release year within one), asked
   25 games a round, 1.5 s apart, kept a month (a week when nothing matched).
@@ -627,6 +628,12 @@ commands without a window.
   when a result's folded name is the title (`best_match`). The user's choice
   ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
   no match) and part of the wiki cache's file name.
+- **Fetch details again** (`Backend::refresh_details`; the bulk bar's Details menu,
+  `irori-library`'s `view/details.rs`, and the palette while games are picked): for
+  each picked game, one at a time 500 ms apart, forgets the wiki answer
+  (`wiki::forget`), IGDB's record while it is on (`igdb::forget`) and its Steam app's
+  page, then reads the store page and the wikis again (ROMs skip the PC wikis). The
+  report counts games read, failed and not on IGDB, so those can get a match by hand.
 - **PC facts** (`irori-extras::wiki::pcgamingwiki::pc_facts`): only bare facts from a
   page (its text is CC BY-NC-SA): `{{Video}}`'s ultra-wide, 4K, HDR and 120+ FPS
   ratings and `{{Input}}`'s controller support (`Support`: full, limited, with a fix;
