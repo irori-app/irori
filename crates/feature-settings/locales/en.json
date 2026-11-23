@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "Upgrade DLSS",
   "settings.field.download_no_https.help": "Useful with a caching proxy such as LanCache.",
   "settings.field.download_no_https.label": "Download without HTTPS",
+  "settings.field.download_proton_to_steam.help": "New Proton downloads go into Steam’s compatibilitytools.d, and builds already in Irori’s folder are listed there too, so Steam games can use them once Steam restarts. Turning it off takes Irori’s listings out of Steam. Steam installed as a Flatpak or Snap can’t reach Irori’s folder.",
   "settings.field.download_proton_to_steam.label": "Install Proton downloads into Steam",
   "settings.field.proton_cpu_level.label": "Processor level of Proton builds",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS and Proton-Wineland publish a build for newer processors (x86-64-v3, with AVX2) beside the one for any x86-64 processor. Automatic installs the newer build when this processor runs it. Applies to builds installed or updated from now on.",

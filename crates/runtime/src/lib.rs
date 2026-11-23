@@ -21,6 +21,7 @@ pub mod protontricks;
 pub mod release_checks;
 pub mod runtimes;
 pub mod sandbox;
+pub mod steam_tools;
 pub mod sysinfo;
 pub mod tools;
 pub mod umu;

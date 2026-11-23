@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "Uppgradera DLSS",
   "settings.field.download_no_https.help": "Användbart med en cachande proxy som LanCache.",
   "settings.field.download_no_https.label": "Ladda ned utan HTTPS",
+  "settings.field.download_proton_to_steam.help": "Nya Proton-nedladdningar hamnar i Steams compatibilitytools.d, och versioner som redan finns i Iroris mapp listas där också, så att Steam-spel kan använda dem när Steam har startats om. Stänger du av det tas Iroris poster bort från Steam. Steam installerat som Flatpak eller Snap kommer inte åt Iroris mapp.",
   "settings.field.download_proton_to_steam.label": "Installera nedladdade Proton-versioner i Steam",
   "settings.field.proton_cpu_level.label": "Processornivå för Proton-versioner",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS och Proton-Wineland ger ut en version för nyare processorer (x86-64-v3, med AVX2) bredvid den för alla x86-64-processorer. Automatiskt installerar den nyare versionen när den här processorn kan köra den. Gäller versioner som installeras eller uppdateras från och med nu.",

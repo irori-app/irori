@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "Actualizează DLSS",
   "settings.field.download_no_https.help": "Util cu un proxy de cache precum LanCache.",
   "settings.field.download_no_https.label": "Descarcă fără HTTPS",
+  "settings.field.download_proton_to_steam.help": "Descărcările noi de Proton ajung în dosarul compatibilitytools.d al Steam, iar versiunile aflate deja în dosarul Irori sunt înregistrate și ele acolo, ca jocurile din Steam să le poată folosi după repornirea Steam. Dezactivarea scoate înregistrările Irori din Steam. Un Steam instalat ca Flatpak sau Snap nu poate ajunge la dosarul Irori.",
   "settings.field.download_proton_to_steam.label": "Instalează versiunile Proton descărcate în Steam",
   "settings.field.proton_cpu_level.label": "Nivelul de procesor al versiunilor Proton",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS și Proton-Wineland publică, pe lângă versiunea pentru orice procesor x86-64, una pentru procesoare mai noi (x86-64-v3, cu AVX2). Automat instalează versiunea mai nouă când acest procesor o poate rula. Se aplică versiunilor instalate sau actualizate de acum înainte.",

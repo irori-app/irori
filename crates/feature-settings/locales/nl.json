@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "DLSS upgraden",
   "settings.field.download_no_https.help": "Handig met een cachingproxy zoals LanCache.",
   "settings.field.download_no_https.label": "Downloaden zonder HTTPS",
+  "settings.field.download_proton_to_steam.help": "Nieuwe Proton-downloads komen in de map compatibilitytools.d van Steam, en versies die al in de map van Irori staan worden daar ook vermeld, zodat Steam-games ze na een herstart van Steam kunnen gebruiken. Uitzetten haalt de vermeldingen van Irori weer uit Steam. Steam als Flatpak of Snap kan de map van Irori niet bereiken.",
   "settings.field.download_proton_to_steam.label": "Proton-downloads in Steam installeren",
   "settings.field.proton_cpu_level.label": "Processorniveau van Proton-versies",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS en Proton-Wineland brengen naast de versie voor elke x86-64-processor een versie uit voor nieuwere processors (x86-64-v3, met AVX2). Automatisch installeert de nieuwere versie als deze processor die kan uitvoeren. Geldt voor versies die vanaf nu worden geïnstalleerd of bijgewerkt.",

@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "Обновлять DLSS",
   "settings.field.download_no_https.help": "Полезно с кэширующим прокси, например LanCache.",
   "settings.field.download_no_https.label": "Скачивать без HTTPS",
+  "settings.field.download_proton_to_steam.help": "Новые загрузки Proton попадают в папку compatibilitytools.d Steam, а сборки, уже лежащие в папке Irori, тоже регистрируются там, чтобы игры Steam могли использовать их после перезапуска Steam. При выключении Irori убирает свои записи из Steam. Steam, установленный как Flatpak или Snap, не видит папку Irori.",
   "settings.field.download_proton_to_steam.label": "Устанавливать скачанный Proton в Steam",
   "settings.field.proton_cpu_level.label": "Уровень процессора для сборок Proton",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS и Proton-Wineland выпускают, помимо сборки для любого процессора x86-64, сборку для более новых процессоров (x86-64-v3, с AVX2). «Автоматически» устанавливает более новую сборку, если этот процессор её поддерживает. Действует для сборок, устанавливаемых или обновляемых с этого момента.",

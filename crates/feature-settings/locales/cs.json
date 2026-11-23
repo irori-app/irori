@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "Aktualizovat DLSS",
   "settings.field.download_no_https.help": "Užitečné s mezipaměťovou proxy, například LanCache.",
   "settings.field.download_no_https.label": "Stahovat bez HTTPS",
+  "settings.field.download_proton_to_steam.help": "Nově stažený Proton se ukládá do složky compatibilitytools.d Steamu a sestavení, která už jsou ve složce Irori, se tam také zapíší, takže je hry ze Steamu mohou po restartu Steamu používat. Vypnutím se záznamy Irori ze Steamu odeberou. Steam nainstalovaný jako Flatpak nebo Snap na složku Irori nedosáhne.",
   "settings.field.download_proton_to_steam.label": "Instalovat stažené verze Protonu do Steamu",
   "settings.field.proton_cpu_level.label": "Úroveň procesoru sestavení Protonu",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS a Proton-Wineland vydávají vedle sestavení pro jakýkoli procesor x86-64 i sestavení pro novější procesory (x86-64-v3, s AVX2). Automaticky se novější sestavení nainstaluje, když ho tento procesor zvládne. Platí pro sestavení instalovaná nebo aktualizovaná od teď.",

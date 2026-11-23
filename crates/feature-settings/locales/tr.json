@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "DLSS’i yükselt",
   "settings.field.download_no_https.help": "LanCache gibi bir önbellek proxy'siyle kullanışlıdır.",
   "settings.field.download_no_https.label": "HTTPS olmadan indir",
+  "settings.field.download_proton_to_steam.help": "Yeni Proton indirmeleri Steam’in compatibilitytools.d klasörüne gider; Irori’nin klasöründeki sürümler de oraya kaydedilir, böylece Steam yeniden başlatıldığında Steam oyunları bunları kullanabilir. Kapatmak, Irori’nin kayıtlarını Steam’den kaldırır. Flatpak veya Snap olarak kurulu Steam, Irori’nin klasörüne erişemez.",
   "settings.field.download_proton_to_steam.label": "İndirilen Proton sürümlerini Steam'e kur",
   "settings.field.proton_cpu_level.label": "Proton sürümlerinin işlemci düzeyi",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS ve Proton-Wineland, her x86-64 işlemci için olan sürümün yanında daha yeni işlemciler için bir sürüm (x86-64-v3, AVX2 ile) yayımlar. Otomatik, bu işlemci çalıştırabiliyorsa daha yeni sürümü kurar. Bundan sonra kurulan veya güncellenen sürümlere uygulanır.",

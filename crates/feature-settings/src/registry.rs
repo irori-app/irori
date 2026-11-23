@@ -3078,6 +3078,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.wine",
         Toggle,
     )
+    .help("settings.field.download_proton_to_steam.help")
     .keywords(&["proton", "steam", "compatibilitytools"]),
     app(
         "iroriProtonCpuLevel",

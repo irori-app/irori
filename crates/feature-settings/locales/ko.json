@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "DLSS 업그레이드",
   "settings.field.download_no_https.help": "LanCache 같은 캐싱 프록시와 함께 사용할 때 유용합니다.",
   "settings.field.download_no_https.label": "HTTPS 없이 다운로드",
+  "settings.field.download_proton_to_steam.help": "새로 내려받은 Proton은 Steam의 compatibilitytools.d에 들어가고, Irori 폴더에 이미 있는 빌드도 그곳에 등록되어 Steam을 다시 시작하면 Steam 게임에서 쓸 수 있습니다. 끄면 Irori의 등록을 Steam에서 뺍니다. Flatpak이나 Snap으로 설치한 Steam은 Irori 폴더에 접근할 수 없습니다.",
   "settings.field.download_proton_to_steam.label": "다운로드한 Proton을 Steam에 설치",
   "settings.field.proton_cpu_level.label": "Proton 빌드의 프로세서 수준",
   "settings.field.proton_cpu_level.help": "Proton-CachyOS와 Proton-Wineland는 모든 x86-64 프로세서용 빌드 외에 최신 프로세서용 빌드(x86-64-v3, AVX2 지원)도 배포합니다. 자동은 이 프로세서가 실행할 수 있으면 최신 빌드를 설치합니다. 지금부터 설치하거나 업데이트하는 빌드에 적용됩니다.",

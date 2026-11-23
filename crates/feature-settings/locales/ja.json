@@ -434,6 +434,7 @@
   "settings.field.dlss_upgrade.label": "DLSS をアップグレード",
   "settings.field.download_no_https.help": "LanCacheなどのキャッシュプロキシを使う場合に便利です。",
   "settings.field.download_no_https.label": "HTTPSを使わずにダウンロード",
+  "settings.field.download_proton_to_steam.help": "新しくダウンロードしたProtonはSteamのcompatibilitytools.dに入り、Iroriのフォルダーにあるビルドもそこに登録されるため、Steamを再起動するとSteamのゲームで使えます。オフにするとIroriの登録をSteamから取り除きます。FlatpakまたはSnapでインストールしたSteamはIroriのフォルダーにアクセスできません。",
   "settings.field.download_proton_to_steam.label": "ダウンロードしたProtonをSteamにインストール",
   "settings.field.proton_cpu_level.label": "Protonビルドのプロセッサーレベル",
   "settings.field.proton_cpu_level.help": "Proton-CachyOSとProton-Winelandは、すべてのx86-64プロセッサー向けのビルドに加えて、新しいプロセッサー向け（x86-64-v3、AVX2対応）のビルドも公開しています。「自動」では、このプロセッサーが実行できる場合に新しいビルドをインストールします。今後インストールまたは更新するビルドに適用されます。",
