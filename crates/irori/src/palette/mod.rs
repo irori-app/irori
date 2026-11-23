@@ -83,6 +83,8 @@ pub(crate) enum PaletteTarget {
     Duplicates,
     /// The Getting started checklist.
     GettingStarted,
+    /// Show (`true`) or hide the Stores page's deals.
+    Deals(bool),
     /// The guided tour of the main window.
     Tour,
     /// Save the categories of both kinds to a file.
@@ -903,6 +905,22 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::Trailer(game.id()));
     }
+    let deals = models(cx).settings.read(cx).app.deals;
+    items.push(
+        Entry::new()
+            .label(t(if deals {
+                "shell.palette.hide_deals"
+            } else {
+                "shell.palette.show_deals"
+            }))
+            .keywords([t("shell.palette.deals_keywords"), t("shell.nav.stores")])
+            .icon(if deals {
+                IconName::EyeOff
+            } else {
+                IconName::Eye
+            }),
+    );
+    targets.push(PaletteTarget::Deals(!deals));
     if let Some(count) = irori_library::removable_picks(cx) {
         items.push(
             Entry::new()
@@ -1077,6 +1095,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
+        PaletteTarget::Deals(shown) => irori_manage::set_deals_shown(shown, window, cx),
         PaletteTarget::Tour => irori_ui::tour::start(window, cx),
         PaletteTarget::ExportCategories => irori_library::export_categories(window, cx),
         PaletteTarget::ImportCategories => irori_library::import_categories(window, cx),

@@ -45,6 +45,7 @@ mod xbox {
 }
 
 pub use accounts::AccountsView;
+pub use deals::set_deals_shown;
 pub use downloads::{
     DownloadCommand, DownloadsBadge, DownloadsPanel, DownloadsPill, DownloadsView,
     download_command_keywords, download_commands, keep_on, run_download_command,
