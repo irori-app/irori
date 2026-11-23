@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Högerkanten",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB tar en skärmbild",
   "settings.field.overlay_screenshot_chord.help": "Fungerar medan spelet har fönstret, utan att öppna överlägget.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y markerar ögonblicket",
+  "settings.field.overlay_moment_chord.help": "Tar en skärmbild och lägger en anteckning att skriva senare i spelets dagbok, utan att öppna överlägget.",
   "settings.field.overlay_volume_chords.label": "Guide + upp eller ned ändrar volymen",
   "settings.field.overlay_volume_chords.help": "Ändrar systemets volym medan spelet har fönstret, utan att öppna överlägget.",
   "settings.field.overlay_volume_step.label": "Volymsteg (%)",

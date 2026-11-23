@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Sağ kenar",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB ekran görüntüsü alır",
   "settings.field.overlay_screenshot_chord.help": "Katmanı açmadan, pencere oyundayken çalışır.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y anı işaretler",
+  "settings.field.overlay_moment_chord.help": "Kaplamayı açmadan ekran görüntüsü alır ve oyunun günlüğüne sonra yazmak için bir not ekler.",
   "settings.field.overlay_volume_chords.label": "Guide + yukarı veya aşağı sesi değiştirir",
   "settings.field.overlay_volume_chords.help": "Katmanı açmadan, pencere oyundayken sistem sesini değiştirir.",
   "settings.field.overlay_volume_step.label": "Ses adımı (%)",

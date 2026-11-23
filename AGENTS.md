@@ -1478,9 +1478,13 @@ Microsoft's approval page (`irori_manage::login`).
   `set_audio_output`, screenshots `Backend::take_screenshot`
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
-  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
-  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot,
+  Up/Down change the system volume and Y marks the moment, each switchable
+  (`iroriOverlay.screenshotChord`, `volumeChords`, `momentChord`, `gamepad::Chords`),
+  by `volumeStep`. Marking a moment (also Home's "Mark this moment",
+  `overlay::mark_moment`, `Backend::mark_moment`) takes a screenshot and adds a
+  journal note at that time about it, `marked` and waiting for words (kept without a
+  screenshot when none can be taken); `side` places the panel
   (`window::placement`). What differs per system is one table,
   `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
   reads too; macOS and Windows use GPUI's pop-up window (a non-activating

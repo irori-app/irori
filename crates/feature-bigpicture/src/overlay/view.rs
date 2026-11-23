@@ -45,7 +45,7 @@ const SHOT_REM: f32 = 15.;
 /// Achievement icon size, in rem.
 const ICON_REM: f32 = 3.;
 /// Time for the overlay's surface to leave the screen before a screenshot.
-const SCREENSHOT_DELAY: Duration = Duration::from_millis(300);
+pub(super) const SCREENSHOT_DELAY: Duration = Duration::from_millis(300);
 /// Rows of the Journal tab before today's notes: write a note, where I
 /// left off.
 const JOURNAL_ACTIONS: usize = 2;
@@ -406,6 +406,11 @@ impl OverlayView {
                 Some(HomeRow::SaveReplay) => {
                     super::close(cx);
                     irori_ui::backend(cx).save_clip();
+                }
+                Some(HomeRow::MarkMoment) => {
+                    let id = self.game.clone();
+                    super::close(cx);
+                    super::mark_moment(id, true, cx);
                 }
                 Some(HomeRow::PlayStatus) => self.step_status(1, cx),
                 Some(HomeRow::MangoHud) => self.toggle_mangohud(window, cx),

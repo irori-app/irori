@@ -70,6 +70,7 @@ impl SharedConfig {
         Chords {
             screenshot: bits & 1 != 0,
             volume: bits & 2 != 0,
+            moment: bits & 4 != 0,
         }
     }
 
@@ -109,7 +110,7 @@ impl SharedConfig {
 
 /// [`Chords`] as the bits [`SharedConfig`] keeps.
 fn pack(chords: Chords) -> u8 {
-    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1)
+    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1) | (u8::from(chords.moment) << 2)
 }
 
 /// What the reader reports to the GPUI side.

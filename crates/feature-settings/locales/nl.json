@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Rechterrand",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB maakt een screenshot",
   "settings.field.overlay_screenshot_chord.help": "Werkt terwijl de game het venster heeft, zonder de overlay te openen.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y markeert het moment",
+  "settings.field.overlay_moment_chord.help": "Maakt een schermafbeelding en zet een notitie voor later in het dagboek van de game, zonder de overlay te openen.",
   "settings.field.overlay_volume_chords.label": "Guide + omhoog of omlaag past het volume aan",
   "settings.field.overlay_volume_chords.help": "Past het systeemvolume aan terwijl de game het venster heeft, zonder de overlay te openen.",
   "settings.field.overlay_volume_step.label": "Volumestap (%)",

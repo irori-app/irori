@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Marginea dreaptă",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB face o captură de ecran",
   "settings.field.overlay_screenshot_chord.help": "Funcționează cât timp jocul are fereastra, fără a deschide suprapunerea.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y marchează momentul",
+  "settings.field.overlay_moment_chord.help": "Face o captură de ecran și adaugă în jurnalul jocului o notă de scris mai târziu, fără a deschide suprapunerea.",
   "settings.field.overlay_volume_chords.label": "Guide + sus sau jos schimbă volumul",
   "settings.field.overlay_volume_chords.help": "Schimbă volumul sistemului cât timp jocul are fereastra, fără a deschide suprapunerea.",
   "settings.field.overlay_volume_step.label": "Pasul volumului (%)",

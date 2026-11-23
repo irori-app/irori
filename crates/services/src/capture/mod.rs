@@ -94,21 +94,71 @@ pub fn screenshot_name(title: &str, at: chrono::NaiveDateTime) -> String {
     crate::replay::clip_name(title, at, "png")
 }
 
+/// A moment marked in game: the journal note waiting for words and the
+/// screenshot it is about.
+#[derive(Debug, Clone)]
+pub struct MarkedMoment {
+    pub note: String,
+    pub title: String,
+    /// The screenshot, or why none was taken (the note is kept anyway).
+    pub capture: Result<PathBuf, String>,
+}
+
+/// The note a moment marked at `at` starts as: at its time of day, about
+/// `capture`, waiting for words.
+pub fn moment_note(at: chrono::NaiveDateTime, capture: Option<&Path>) -> crate::JournalEntry {
+    use chrono::Timelike as _;
+    crate::JournalEntry {
+        time: chrono::NaiveTime::from_hms_opt(at.hour(), at.minute(), 0),
+        capture: capture.map(|p| p.display().to_string()),
+        marked: true,
+        ..Default::default()
+    }
+}
+
 impl Backend {
+    /// The title screenshots of `id` are named after.
+    fn capture_title(&self, id: Option<&GameId>) -> String {
+        id.and_then(|id| self.game(id))
+            .map(|g| g.title.clone())
+            .unwrap_or_else(|| "Irori".to_string())
+    }
+
+    /// Take a screenshot into the screenshots folder, named after `title`
+    /// and `at`.
+    async fn capture_now(title: &str, at: chrono::NaiveDateTime) -> anyhow::Result<PathBuf> {
+        let dir = crate::screenshots::save_folder();
+        let target = crate::replay::free_path(&dir, &screenshot_name(title, at));
+        platform::capture(&target).await
+    }
+
+    /// Mark this moment of the running game `id`: a screenshot and a
+    /// journal note at this time about it, waiting for words. A screenshot
+    /// that can't be taken leaves the note without one.
+    pub async fn mark_moment(&self, id: &GameId) -> MarkedMoment {
+        let title = self.capture_title(Some(id));
+        let at = chrono::Local::now().naive_local();
+        let capture = Self::capture_now(&title, at).await.map_err(|e| {
+            tracing::warn!("taking the screenshot of a marked moment: {e:#}");
+            format!("{e:#}")
+        });
+        let entry = moment_note(at, capture.as_ref().ok().map(PathBuf::as_path));
+        let note = self.userdata.set_journal_entry(id, at.date(), entry);
+        MarkedMoment {
+            note,
+            title,
+            capture,
+        }
+    }
+
     /// Take a screenshot of what is on screen for the running game `id`
     /// (or the screen, without one) and announce where it went.
     pub fn take_screenshot(&self, id: Option<GameId>) {
         let b = self.clone();
         self.spawn(async move {
-            let title = id
-                .as_ref()
-                .and_then(|id| b.game(id))
-                .map(|g| g.title.clone())
-                .unwrap_or_else(|| "Irori".to_string());
+            let title = b.capture_title(id.as_ref());
             let at = chrono::Local::now().naive_local();
-            let dir = crate::screenshots::save_folder();
-            let target = crate::replay::free_path(&dir, &screenshot_name(&title, at));
-            match platform::capture(&target).await {
+            match Self::capture_now(&title, at).await {
                 Ok(path) => {
                     tracing::info!("screenshot saved to {}", path.display());
                     let mut notice =
@@ -161,6 +211,21 @@ fn settle(from: &Path, target: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_marked_moment_is_a_timed_note_about_its_capture() {
+        let at = chrono::NaiveDate::from_ymd_opt(2026, 11, 2)
+            .unwrap()
+            .and_hms_opt(21, 40, 31)
+            .unwrap();
+        let note = moment_note(at, Some(Path::new("/p/Hades.png")));
+        assert_eq!(note.time, chrono::NaiveTime::from_hms_opt(21, 40, 0));
+        assert_eq!(note.capture.as_deref(), Some("/p/Hades.png"));
+        assert!(note.is_waiting() && !note.is_empty());
+        // Without a screenshot the moment is still kept.
+        assert!(!moment_note(at, None).is_empty());
+    }
+
     use super::*;
 
     #[test]

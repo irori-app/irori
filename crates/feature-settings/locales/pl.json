@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Prawa krawędź",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB robi zrzut ekranu",
   "settings.field.overlay_screenshot_chord.help": "Działa, gdy okno ma gra, bez otwierania nakładki.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y zaznacza chwilę",
+  "settings.field.overlay_moment_chord.help": "Robi zrzut ekranu i dodaje do dziennika gry notatkę do uzupełnienia później, bez otwierania nakładki.",
   "settings.field.overlay_volume_chords.label": "Guide + góra lub dół zmienia głośność",
   "settings.field.overlay_volume_chords.help": "Zmienia głośność systemu, gdy okno ma gra, bez otwierania nakładki.",
   "settings.field.overlay_volume_step.label": "Krok głośności (%)",

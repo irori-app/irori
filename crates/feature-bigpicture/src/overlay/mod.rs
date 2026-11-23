@@ -216,6 +216,40 @@ pub fn close(cx: &mut App) {
 }
 
 /// Close the overlay and show Irori's window.
+/// Mark this moment of `game`: after the panel closed (`delay`, so the
+/// screenshot shows the game), a screenshot and a journal note to write
+/// later, then a notice saying so.
+pub(crate) fn mark_moment(game: irori_core::GameId, delay: bool, cx: &App) {
+    use irori_core::{Notice, NoticeLevel};
+    let backend = irori_ui::backend(cx);
+    let b = backend.clone();
+    backend.spawn(async move {
+        if delay {
+            tokio::time::sleep(view::SCREENSHOT_DELAY).await;
+        }
+        let marked = b.mark_moment(&game).await;
+        let title = marked.title.as_str();
+        let notice = match &marked.capture {
+            Ok(_) => Notice::new(NoticeLevel::Success, format!("Moment of {title} marked")).keys(
+                "bigpicture.overlay.moment_marked",
+                Some("bigpicture.overlay.moment_marked_message"),
+                &[("title", title)],
+            ),
+            Err(e) => Notice::new(
+                NoticeLevel::Warning,
+                format!("Moment of {title} marked without a screenshot"),
+            )
+            .message(e.clone())
+            .keys(
+                "bigpicture.overlay.moment_no_screenshot",
+                None,
+                &[("title", title)],
+            ),
+        };
+        b.bus.notice(notice.game(game));
+    });
+}
+
 pub(crate) fn back_to_irori(cx: &mut App) {
     close(cx);
     let show = state(cx).show_irori.clone();

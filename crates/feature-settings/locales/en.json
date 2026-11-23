@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "Right edge",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB takes a screenshot",
   "settings.field.overlay_screenshot_chord.help": "Works while the game has the window, without opening the overlay.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y marks the moment",
+  "settings.field.overlay_moment_chord.help": "Takes a screenshot and adds a note to the game’s journal to write later, without opening the overlay.",
   "settings.field.overlay_volume_chords.label": "Guide + Up or Down changes the volume",
   "settings.field.overlay_volume_chords.help": "Changes the system’s volume while the game has the window, without opening the overlay.",
   "settings.field.overlay_volume_step.label": "Volume step (%)",

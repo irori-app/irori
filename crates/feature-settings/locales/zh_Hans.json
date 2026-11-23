@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "右侧边缘",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB 截图",
   "settings.field.overlay_screenshot_chord.help": "无需打开叠加层，在游戏窗口中即可使用。",
+  "settings.field.overlay_moment_chord.label": "Guide + Y 标记此刻",
+  "settings.field.overlay_moment_chord.help": "无需打开叠加层即可截图，并在游戏日志中添加一条稍后再写的笔记。",
   "settings.field.overlay_volume_chords.label": "Guide + 上或下调节音量",
   "settings.field.overlay_volume_chords.help": "无需打开叠加层，在游戏窗口中调节系统音量。",
   "settings.field.overlay_volume_step.label": "音量步长（%）",

@@ -486,6 +486,8 @@
   "settings.option.overlay_side.right": "오른쪽 가장자리",
   "settings.field.overlay_screenshot_chord.label": "Guide + RB로 스크린샷 찍기",
   "settings.field.overlay_screenshot_chord.help": "오버레이를 열지 않고 게임 창에서 바로 작동합니다.",
+  "settings.field.overlay_moment_chord.label": "Guide + Y로 순간 표시",
+  "settings.field.overlay_moment_chord.help": "오버레이를 열지 않고 스크린샷을 찍고 나중에 쓸 메모를 게임 일지에 추가합니다.",
   "settings.field.overlay_volume_chords.label": "Guide + 위 또는 아래로 볼륨 조절",
   "settings.field.overlay_volume_chords.help": "오버레이를 열지 않고 게임 창에서 시스템 볼륨을 조절합니다.",
   "settings.field.overlay_volume_step.label": "볼륨 단계(%)",
