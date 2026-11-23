@@ -704,7 +704,8 @@ commands without a window.
   search result whose folded name is the title (the release year decides between
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
-  genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
+  genres, release date, screenshots, age ratings, an edition's from its parent game,
+  kept in `store-facts.json` like the stores'; `ExtraInfo::details_from` names IGDB), and the
   art picker offers IGDB's covers and artworks (no square art or logos). With a
   SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
   game named like the search, `pick_game`) and pills filter by source; every picture
