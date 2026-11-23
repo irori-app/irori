@@ -47,6 +47,7 @@
   "library.bulk.and_more": "și încă {count}",
   "library.bulk.cancel": "Anulează",
   "library.bulk.categories": "Categorii",
+  "library.bulk.category_some": "{name} ({count} din {total})",
   "library.bulk.count_one": "Selectate: 1",
   "library.bulk.count_other": "Selectate: {count}",
   "library.bulk.done": "Gata",

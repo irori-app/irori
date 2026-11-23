@@ -47,6 +47,7 @@
   "library.bulk.and_more": "외 {count}개",
   "library.bulk.cancel": "취소",
   "library.bulk.categories": "카테고리",
+  "library.bulk.category_some": "{name} ({total}개 중 {count}개)",
   "library.bulk.count_one": "1개 선택됨",
   "library.bulk.count_other": "{count}개 선택됨",
   "library.bulk.done": "완료",

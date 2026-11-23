@@ -47,6 +47,7 @@
   "library.bulk.and_more": "en nog {count}",
   "library.bulk.cancel": "Annuleren",
   "library.bulk.categories": "Categorieën",
+  "library.bulk.category_some": "{name} ({count} van {total})",
   "library.bulk.count_one": "1 geselecteerd",
   "library.bulk.count_other": "{count} geselecteerd",
   "library.bulk.done": "Klaar",

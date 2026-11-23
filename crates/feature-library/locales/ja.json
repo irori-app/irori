@@ -47,6 +47,7 @@
   "library.bulk.and_more": "ほか {count} 本",
   "library.bulk.cancel": "キャンセル",
   "library.bulk.categories": "カテゴリ",
+  "library.bulk.category_some": "{name}（{total} 件中 {count} 件）",
   "library.bulk.count_one": "1 件選択中",
   "library.bulk.count_other": "{count} 件選択中",
   "library.bulk.done": "完了",

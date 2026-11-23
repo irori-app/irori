@@ -47,6 +47,7 @@
   "library.bulk.and_more": "och {count} till",
   "library.bulk.cancel": "Avbryt",
   "library.bulk.categories": "Kategorier",
+  "library.bulk.category_some": "{name} ({count} av {total})",
   "library.bulk.count_one": "1 valt",
   "library.bulk.count_other": "{count} valda",
   "library.bulk.done": "Klar",

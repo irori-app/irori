@@ -47,6 +47,7 @@
   "library.bulk.and_more": "і ще {count}",
   "library.bulk.cancel": "Скасувати",
   "library.bulk.categories": "Категорії",
+  "library.bulk.category_some": "{name} ({count} з {total})",
   "library.bulk.count_one": "Вибрано: 1",
   "library.bulk.count_other": "Вибрано: {count}",
   "library.bulk.done": "Готово",

@@ -47,6 +47,7 @@
   "library.bulk.and_more": "y {count} más",
   "library.bulk.cancel": "Cancelar",
   "library.bulk.categories": "Categorías",
+  "library.bulk.category_some": "{name} ({count} de {total})",
   "library.bulk.count_one": "1 seleccionado",
   "library.bulk.count_other": "{count} seleccionados",
   "library.bulk.done": "Listo",

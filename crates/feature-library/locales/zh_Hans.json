@@ -47,6 +47,7 @@
   "library.bulk.and_more": "以及其他 {count} 款",
   "library.bulk.cancel": "取消",
   "library.bulk.categories": "分类",
+  "library.bulk.category_some": "{name}（{total} 个中的 {count} 个）",
   "library.bulk.count_one": "已选择 1 款",
   "library.bulk.count_other": "已选择 {count} 款",
   "library.bulk.done": "完成",

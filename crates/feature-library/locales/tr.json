@@ -47,6 +47,7 @@
   "library.bulk.and_more": "ve {count} tane daha",
   "library.bulk.cancel": "İptal",
   "library.bulk.categories": "Kategoriler",
+  "library.bulk.category_some": "{name} ({total} oyundan {count})",
   "library.bulk.count_one": "1 seçildi",
   "library.bulk.count_other": "{count} seçildi",
   "library.bulk.done": "Bitti",

@@ -47,6 +47,7 @@
   "library.bulk.and_more": "a dalších {count}",
   "library.bulk.cancel": "Zrušit",
   "library.bulk.categories": "Kategorie",
+  "library.bulk.category_some": "{name} ({count} z {total})",
   "library.bulk.count_one": "Vybráno: 1",
   "library.bulk.count_other": "Vybráno: {count}",
   "library.bulk.done": "Hotovo",
