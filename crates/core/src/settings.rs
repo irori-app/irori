@@ -1568,6 +1568,13 @@ pub struct UiPrefs {
     /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
     /// 1 to 3); 0 fits as many as the window allows.
     pub library_focus_columns: u32,
+    /// Store badges stay on every cover (`storeBadgesAlways`); off, they
+    /// show on the cover pointed at or focused.
+    pub store_badges_always: bool,
+    /// Store badges show while the library lists one store too
+    /// (`storeBadgesOneStore`, off unless turned on), where they all say the
+    /// same.
+    pub store_badges_one_store: bool,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1767,6 +1774,8 @@ impl Default for UiPrefs {
             cover_hover: CoverHover::Lift,
             cover_favourite: true,
             library_focus_columns: 0,
+            store_badges_always: false,
+            store_badges_one_store: false,
         }
     }
 }
@@ -1977,6 +1986,16 @@ mod tests {
         assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
         let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
         assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn store_badges_show_on_hover_and_not_for_one_store_by_default() {
+        let ui = UiPrefs::default();
+        assert!(ui.show_store_badges && !ui.store_badges_always && !ui.store_badges_one_store);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"storeBadgesAlways":true,"storeBadgesOneStore":true}"#)
+                .unwrap();
+        assert!(ui.store_badges_always && ui.store_badges_one_store);
     }
 
     #[test]

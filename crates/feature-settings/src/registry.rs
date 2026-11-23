@@ -1265,6 +1265,11 @@ const REPLAY_CAPTURE: &[ChoiceOption] = &[
     ),
 ];
 
+const NEEDS_STORE_BADGES: &[Condition] = &[when(
+    "iroriUi.showStoreBadges",
+    true,
+    "settings.requires.store_badges",
+)];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -2517,6 +2522,26 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["badge", "store", "label"]),
+    app(
+        "iroriUi.storeBadgesAlways",
+        "settings.field.ui_store_badges_always.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_always.help")
+    .keywords(&["badge", "store", "logo", "always", "cover", "emulator"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.storeBadgesOneStore",
+        "settings.field.ui_store_badges_one_store.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_one_store.help")
+    .keywords(&["badge", "store", "filter", "one store"])
+    .requires(NEEDS_STORE_BADGES),
     app(
         "iroriUi.groupCopies",
         "settings.field.ui_group_copies.label",

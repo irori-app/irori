@@ -587,6 +587,7 @@
   "library.look.rise": "ポインターを合わせるとカバーが浮く",
   "library.look.star": "お気に入りに星",
   "library.look.badges": "ストアのバッジ",
+  "library.look.badges_always": "すべてのカバーにストアバッジ",
   "library.look.categories": "カバーにカテゴリー",
   "library.look.more": "その他の外観設定…",
   "library.focus.empty": "ゲームを選ぶとここに表示されます",

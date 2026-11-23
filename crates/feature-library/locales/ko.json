@@ -587,6 +587,7 @@
   "library.look.rise": "포인터를 올리면 커버가 떠오름",
   "library.look.star": "즐겨찾기에 별 표시",
   "library.look.badges": "스토어 배지",
+  "library.look.badges_always": "모든 커버에 스토어 배지",
   "library.look.categories": "커버에 카테고리",
   "library.look.more": "더 많은 모양 설정…",
   "library.focus.empty": "게임을 선택하면 여기에 표시됩니다",

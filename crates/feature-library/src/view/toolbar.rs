@@ -563,6 +563,13 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
         .item(set(t("library.look.badges"), ui.show_store_badges, |u| {
             u.show_store_badges = !u.show_store_badges
         }))
+        .when(ui.show_store_badges, |menu| {
+            menu.item(set(
+                t("library.look.badges_always"),
+                ui.store_badges_always,
+                |u| u.store_badges_always = !u.store_badges_always,
+            ))
+        })
         .item(set(
             t("library.look.categories"),
             ui.cover_categories,

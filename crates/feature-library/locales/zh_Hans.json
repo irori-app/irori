@@ -587,6 +587,7 @@
   "library.look.rise": "指针悬停时封面浮起",
   "library.look.star": "收藏显示星标",
   "library.look.badges": "商店标识",
+  "library.look.badges_always": "每个封面都显示商店标识",
   "library.look.categories": "封面显示分类",
   "library.look.more": "更多外观设置…",
   "library.focus.empty": "选择一款游戏即可在此查看",

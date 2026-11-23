@@ -587,6 +587,7 @@
   "library.look.rise": "Covers rise when pointed at",
   "library.look.star": "Star on favourites",
   "library.look.badges": "Store badges",
+  "library.look.badges_always": "Store badges on every cover",
   "library.look.categories": "Categories on covers",
   "library.look.more": "More appearance settings…",
   "library.focus.empty": "Select a game to see it here",

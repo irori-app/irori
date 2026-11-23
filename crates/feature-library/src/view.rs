@@ -40,10 +40,11 @@ use irori_core::settings::{
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
+use irori_services::StoreFilter;
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
-    ArtBackdrop, ArtImage, EmptyState, GameCover, SectionTitle, StoreBadge, art_image, art_img,
-    art_loading, art_missing, physical_width,
+    ArtBackdrop, ArtImage, EmptyState, GameCover, MAX_BADGES, SectionTitle, StoreBadge, art_image,
+    art_img, art_loading, art_missing, badge_row, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
@@ -135,6 +136,9 @@ struct Frame {
     items: Rc<Vec<Item>>,
     sizes: Rc<Vec<Size<Pixels>>>,
     key: Option<FrameKey>,
+    /// The library lists one store's games, so store badges would all
+    /// say the same.
+    one_store: bool,
     /// The toolbar sits in the list under the top row, not in the header.
     toolbar_in_list: bool,
 }
@@ -152,6 +156,7 @@ impl Default for Frame {
             focus_rem: layouts::focus_column_rem(2),
             items: Rc::default(),
             sizes: Rc::default(),
+            one_store: false,
             key: None,
             toolbar_in_list: false,
         }
@@ -707,6 +712,7 @@ impl LibraryView {
         self.frame.top = top;
         self.frame.toolbar_in_list = toolbar_in_list;
         self.frame.stores = stores;
+        self.frame.one_store = matches!(filter.store, StoreFilter::Store(_));
         self.frame.heading = if filter.has_categories() {
             filter.category_heading(&user).into()
         } else if filter.favourites_only {
@@ -1496,6 +1502,13 @@ fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
 }
 
 /// Persist a UI preference off the UI thread.
+/// Whether covers carry store badges: when they are on, and not while the
+/// library lists one store, where every badge would say the same, unless
+/// the user wants them there too.
+fn store_badges_shown(ui: &UiPrefs, one_store: bool) -> bool {
+    ui.show_store_badges && (!one_store || ui.store_badges_one_store)
+}
+
 fn persist_ui(cx: &App, f: impl FnOnce(&mut irori_core::settings::UiPrefs) + Send + 'static) {
     let b = backend(cx);
     irori_ui::state::run_infallible(cx, async move { b.settings.update_app(|s| f(&mut s.ui)) })
@@ -2316,8 +2329,12 @@ impl LibraryView {
         let status = models(cx).statuses.read(cx).get(&id).cloned();
         let (show_badges, cover_categories) = {
             let ui = &models(cx).settings.read(cx).app.ui;
-            (ui.show_store_badges, ui.cover_categories)
+            (
+                store_badges_shown(ui, self.frame.one_store),
+                ui.cover_categories,
+            )
         };
+        let badges_always = self.ui_prefs.store_badges_always;
         let (corners, caption_kind, hover, favourite_star) = (
             self.ui_prefs.cover_corners,
             self.ui_prefs.cover_caption,
@@ -2511,22 +2528,32 @@ impl LibraryView {
                         .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
-            .when(show_badges && active && !selecting && !focus_view, |el| {
-                // An entry of several stores' copies names every store.
-                let stores = irori_ui::copies::stores(&id, cx);
-                el.child(
-                    h_flex()
-                        .absolute()
-                        .top_2()
-                        .left_2()
-                        .right_2()
-                        .gap_1()
-                        .flex_wrap()
-                        .children(stores.into_iter().map(|runner| {
-                            div().rounded_md().bg(scrim).child(StoreBadge::new(runner))
-                        })),
-                )
-            })
+            .when(
+                show_badges && (active || badges_always) && !selecting && !focus_view,
+                |el| {
+                    // An entry of several stores' copies names every store,
+                    // the first few and a count of the rest.
+                    let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
+                    let badge = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
+                    el.child(
+                        h_flex()
+                            .absolute()
+                            .top_2()
+                            .left_2()
+                            .right_2()
+                            .gap_1()
+                            .flex_wrap()
+                            .children(
+                                row.shown
+                                    .into_iter()
+                                    .map(|mark| badge(StoreBadge::mark(mark))),
+                            )
+                            .when(row.more > 0, |el| {
+                                el.child(badge(StoreBadge::more(row.more)))
+                            }),
+                    )
+                },
+            )
             .child(markers)
             .when(actions.is_none() && status_overlay.is_none(), |el| {
                 el.children(categories.map(|names| {
@@ -3353,6 +3380,17 @@ fn category_chips(
 #[cfg(test)]
 mod type_to_search_tests {
     use super::*;
+
+    #[test]
+    fn store_badges_leave_a_one_store_library_unless_asked() {
+        let mut ui = UiPrefs::default();
+        assert!(store_badges_shown(&ui, false));
+        assert!(!store_badges_shown(&ui, true));
+        ui.store_badges_one_store = true;
+        assert!(store_badges_shown(&ui, true));
+        ui.show_store_badges = false;
+        assert!(!store_badges_shown(&ui, false));
+    }
 
     #[test]
     fn only_plain_printable_keys_start_a_search() {

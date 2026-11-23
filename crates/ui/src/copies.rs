@@ -17,6 +17,7 @@ use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::{App, Global};
 use irori_core::{GameId, GameInfo, Runner};
 
+use crate::components::BadgeMark;
 use crate::i18n::{t, t_args};
 use crate::{Route, backend, models, navigate};
 
@@ -29,6 +30,33 @@ pub fn of(id: &GameId, cx: &App) -> Vec<Arc<GameInfo>> {
         .copies_of(id)
         .iter()
         .filter_map(|copy| snapshot.get(copy).cloned())
+        .collect()
+}
+
+/// What the badges on `game`'s cover name: each store its entry has a copy
+/// on, the default copy's first, with a ROM named by its emulator (else its
+/// system) instead of "Emulated".
+pub fn badge_marks(game: &Arc<GameInfo>, cx: &App) -> Vec<BadgeMark> {
+    let id = game.id();
+    let stores = stores(&id, cx);
+    if !stores.contains(&Runner::Emulation) {
+        return stores.into_iter().map(BadgeMark::Store).collect();
+    }
+    let copies = of(&id, cx);
+    let rom = copies
+        .iter()
+        .find(|c| c.runner() == Runner::Emulation)
+        .unwrap_or(game);
+    let emulator = engine_name(rom, cx).or_else(|| {
+        let system = irori_engines::systems::get(rom.system.as_deref()?)?;
+        Some(system.short.clone())
+    });
+    stores
+        .into_iter()
+        .map(|runner| match (&emulator, runner) {
+            (Some(name), Runner::Emulation) => BadgeMark::Emulator(name.clone().into()),
+            _ => BadgeMark::Store(runner),
+        })
         .collect()
 }
 

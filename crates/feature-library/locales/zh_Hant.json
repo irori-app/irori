@@ -587,6 +587,7 @@
   "library.look.rise": "指標停留時封面浮起",
   "library.look.star": "最愛顯示星號",
   "library.look.badges": "商店標記",
+  "library.look.badges_always": "每個封面都顯示商店標記",
   "library.look.categories": "封面顯示分類",
   "library.look.more": "更多外觀設定…",
   "library.focus.empty": "選擇一款遊戲即可在此檢視",
