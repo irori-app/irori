@@ -307,6 +307,17 @@ impl LibraryFilter {
             if !parsed.modes_match(&g.game_modes) || !parsed.tags_match(&g.store_tags) {
                 continue;
             }
+            // An entry is in a category when any of its copies is.
+            if !parsed.categories.is_empty() {
+                let mut keys: Vec<String> =
+                    library.copies_of(&g.id()).iter().map(GameId::key).collect();
+                if keys.is_empty() {
+                    keys.push(key.clone());
+                }
+                if !parsed.categories_match(user, &keys) {
+                    continue;
+                }
+            }
             let score = match (&query, index) {
                 (Some(q), Some(index)) => match index.score(ix, q, g) {
                     Some(s) => s,
@@ -773,6 +784,39 @@ mod tests {
         assert_eq!(found("mode:local mode:online"), ["Rocket League"]);
         assert_eq!(found("mode:multiplayer").len(), 2);
         assert!(found("mode:mmo").is_empty());
+    }
+
+    #[test]
+    fn category_terms_narrow_a_search_by_any_copy() {
+        let games = vec![
+            game(Runner::Steam, "620", "Portal 2", false),
+            game(Runner::Legendary, "p2", "Portal 2", true),
+            game(Runner::Gog, "1", "Celeste", false),
+            game(Runner::Gog, "2", "Portal", false),
+        ];
+        let mut user = UserData::default();
+        // The Steam copy is in the category; the entry shows the Epic one.
+        user.categories.insert(
+            "Co-op nights".into(),
+            ["steam:620".to_string(), "gog:1".to_string()].into(),
+        );
+        let lib = LibrarySnapshot::new(1, crate::copies::group(games, &user, true), HashMap::new());
+        let none = HashSet::new();
+        let found = |query: &str| -> Vec<String> {
+            let mut titles: Vec<String> = LibraryFilter {
+                query: query.into(),
+                ..Default::default()
+            }
+            .apply(&lib, &user, &none)
+            .iter()
+            .map(|g| g.title.clone())
+            .collect();
+            titles.sort();
+            titles
+        };
+        assert_eq!(found("category:coop-nights"), ["Celeste", "Portal 2"]);
+        assert_eq!(found("portal category:co-op"), ["Portal 2"]);
+        assert!(found("category:solo").is_empty());
     }
 
     #[test]

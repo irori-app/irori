@@ -926,6 +926,17 @@ pub fn apply_in(
                 || smart.iter().any(|s| categories.contains(s, &id))
         });
     }
+    // `smart:` search terms: in one of the categories each names (the index
+    // holds every copy of an entry).
+    let terms = irori_services::search::ParsedQuery::new(&filter.query).smart_ids(user);
+    if !terms.is_empty() {
+        games.retain(|g| {
+            let id = g.id();
+            terms
+                .iter()
+                .all(|any| any.iter().any(|s| categories.contains(s, &id)))
+        });
+    }
     if let Some(account) = &filter.account
         && filter.shown_store(stores) == Some(account.runner)
         && library.owners.keys().any(|id| id.runner == account.runner)

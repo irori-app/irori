@@ -498,6 +498,10 @@ commands without a window.
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
   exact, prefix, word, then fuzzy (a typo or two, letters in order), titles before
   people. `related.rs` finds a game's series, studio and genre neighbours the same way.
+  Besides `mode:` and `tag:`, `ParsedQuery` takes `category:` (manual categories, any
+  copy of an entry) and `smart:` terms (smart categories, through the `CategoryIndex`
+  in `irori-library`'s `apply_in`), names folded like tags, a name's start enough when
+  no name is whole. A smart category's own search rule can't use `smart:` (unknown).
 - **Downloads:** one worker, one download at a time, persisted in
   `state/downloads.json`. Running items resume as Queued after a restart. Pause and
   cancel go through a `CancellationToken`.

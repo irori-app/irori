@@ -419,6 +419,19 @@ fn every_rule_kind_reads_its_part_of_the_game() {
         }),
         ["steam:2"]
     );
+    assert_eq!(
+        one(Rule::Query {
+            query: "category:couch".into()
+        }),
+        ["steam:2"]
+    );
+    // Smart categories can't name each other: unknown, so no games.
+    assert!(
+        one(Rule::Query {
+            query: "smart:test".into()
+        })
+        .is_empty()
+    );
     assert_eq!(one(Rule::Favourite {}), ["steam:2"]);
     assert_eq!(
         one(Rule::Genre {

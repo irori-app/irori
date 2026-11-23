@@ -343,8 +343,14 @@ impl<'a> Test<'a> {
             }
             Test::Query(q) => {
                 let (parsed, text) = &**q;
+                // Smart categories' games aren't known while categories are
+                // worked out (one may name another, or itself).
+                if !parsed.smart.is_empty() {
+                    return Truth::Unknown;
+                }
                 parsed.modes_match(&game.game_modes)
                     && parsed.tags_match(&game.store_tags)
+                    && parsed.categories_match(f.user, &[key()])
                     && text.as_ref().is_none_or(|text| {
                         // The search index holds entries: score the entry.
                         let entry = &f.library.games[ix];

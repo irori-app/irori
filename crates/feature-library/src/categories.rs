@@ -220,6 +220,27 @@ mod tests {
     }
 
     #[test]
+    fn search_terms_name_categories_of_both_kinds() {
+        let lib = library();
+        let user = user();
+        let index = index(&lib, &user);
+        let found = |query: &str| -> Vec<String> {
+            let f = ViewFilter {
+                query: query.into(),
+                ..Default::default()
+            };
+            let none = HashSet::new();
+            let shown = crate::filter::apply_in(&f, &[], &lib, &user, &index, &none, &none);
+            titles(&shown).into_iter().map(str::to_owned).collect()
+        };
+        assert_eq!(found("smart:installed"), ["Witcher 3", "Hades"]);
+        assert_eq!(found("smart:inst category:story"), Vec::<String>::new());
+        assert_eq!(found("category:story"), ["Alan Wake"]);
+        assert_eq!(found("hades smart:installed"), ["Hades"]);
+        assert!(found("smart:nothing-named-so").is_empty());
+    }
+
+    #[test]
     fn a_deleted_smart_category_picks_nothing_and_is_forgotten() {
         let lib = library();
         let mut user = user();
