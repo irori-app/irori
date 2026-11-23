@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Забыть",
   "settings.igdb.off_hint": "IGDB выключен. Включите «Сведения об играх и изображения из IGDB», чтобы пользоваться им.",
   "settings.igdb.looking": "Чтение сохранённого приложения…",
-  "settings.field.steam_runtime.help": "Запускать эту нативную сборку для Linux в контейнере Steam Linux Runtime через umu.",
+  "settings.field.steam_runtime.help": "Запускать нативные сборки для Linux в контейнере Steam Linux Runtime через umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Запускать другой исполняемый файл из папки игры.",
   "settings.field.target_exe.label": "Исполняемый файл",

@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Zapomenout",
   "settings.igdb.off_hint": "IGDB je vypnuto. Chcete-li ho používat, zapněte „Podrobnosti a grafika her z IGDB“.",
   "settings.igdb.looking": "Načítání uložené aplikace…",
-  "settings.field.steam_runtime.help": "Spouštět toto nativní linuxové sestavení v kontejneru Steam Linux Runtime přes umu.",
+  "settings.field.steam_runtime.help": "Spouštět nativní linuxová sestavení v kontejneru Steam Linux Runtime přes umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Spustit jiný spustitelný soubor ze složky hry.",
   "settings.field.target_exe.label": "Spustitelný soubor",

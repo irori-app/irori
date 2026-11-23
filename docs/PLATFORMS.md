@@ -184,6 +184,10 @@ and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder
 and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
 on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
 
+The Steam Linux Runtime (`steamRuntime`, run through umu) can be set in the game defaults
+as well as per game. A default reaches every native Linux build except the ROM library's,
+whose emulators are this computer's programs; a ROM's own choice still applies.
+
 On Linux, games start with room for 10 GiB of shader cache (`iroriShaderCacheSize`, per
 game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE` for
 NVIDIA and `MESA_SHADER_CACHE_MAX_SIZE` for Mesa. A value already set in Irori's own

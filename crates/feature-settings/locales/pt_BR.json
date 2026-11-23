@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Esquecer",
   "settings.igdb.off_hint": "O IGDB está desativado. Ative “Detalhes e imagens de jogos do IGDB” para usá-lo.",
   "settings.igdb.looking": "Lendo o aplicativo salvo…",
-  "settings.field.steam_runtime.help": "Executar esta versão nativa de Linux em um contêiner Steam Linux Runtime, via umu.",
+  "settings.field.steam_runtime.help": "Executar as versões nativas de Linux em um contêiner Steam Linux Runtime, via umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Executar outro executável da pasta do jogo.",
   "settings.field.target_exe.label": "Executável",

@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Vergessen",
   "settings.igdb.off_hint": "IGDB ist aus. Schalte „Spieldetails und Bilder von IGDB“ ein, um es zu nutzen.",
   "settings.igdb.looking": "Gespeicherte Anwendung wird gelesen …",
-  "settings.field.steam_runtime.help": "Diese native Linux-Version über umu in einem Container der Steam Linux Runtime ausführen.",
+  "settings.field.steam_runtime.help": "Native Linux-Versionen über umu in einem Container der Steam Linux Runtime ausführen.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Eine andere ausführbare Datei aus dem Spielordner starten.",
   "settings.field.target_exe.label": "Ausführbare Datei",

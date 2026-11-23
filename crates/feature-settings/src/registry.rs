@@ -428,7 +428,8 @@ pub struct FieldSpec {
     pub requires: &'static [Condition],
     /// What the computer or game must have; checked before `requires`.
     pub needs: &'static [Need],
-    /// Only shown in the settings of a game installed as a native Linux build.
+    /// In a game's settings, only shown when it is installed as a native
+    /// Linux build; the game defaults always show it.
     pub native_only: bool,
 }
 
@@ -4076,7 +4077,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.discord_presence.help")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
-    game_only(
+    game(
         "steamRuntime",
         "settings.field.steam_runtime.label",
         Launch,
@@ -4700,13 +4701,15 @@ mod tests {
     }
 
     #[test]
-    fn steam_runtime_is_a_native_per_game_choice() {
+    fn steam_runtime_is_a_native_choice_with_a_default() {
         let natives: Vec<_> = FIELDS.iter().filter(|f| f.native_only).collect();
         assert_eq!(natives.len(), 1);
         let rt = natives[0];
         assert_eq!(rt.path, "steamRuntime");
         assert!(rt.applies_to_game(true));
-        assert!(!rt.applies_to_game(false));
+        // The game defaults offer it too, so every native build can start
+        // in a runtime without setting each game.
+        assert!(rt.applies_to_game(false));
         assert_ne!(rt.section, FieldSection::Wine);
     }
 

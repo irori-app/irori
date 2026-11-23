@@ -769,7 +769,7 @@
   "settings.igdb.forget": "移除",
   "settings.igdb.off_hint": "IGDB 已关闭。要使用它，请打开“来自 IGDB 的游戏详情和图片”。",
   "settings.igdb.looking": "正在读取已保存的应用程序…",
-  "settings.field.steam_runtime.help": "通过 umu 在 Steam Linux Runtime 容器中运行此原生 Linux 版本。",
+  "settings.field.steam_runtime.help": "通过 umu 在 Steam Linux Runtime 容器中运行原生 Linux 版本。",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "运行游戏文件夹中的其他可执行文件。",
   "settings.field.target_exe.label": "可执行文件",

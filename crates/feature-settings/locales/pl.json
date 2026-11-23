@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Zapomnij",
   "settings.igdb.off_hint": "IGDB jest wyłączone. Włącz „Szczegóły i grafiki gier z IGDB”, aby z niego korzystać.",
   "settings.igdb.looking": "Odczytywanie zapisanej aplikacji…",
-  "settings.field.steam_runtime.help": "Uruchamiaj tę natywną wersję dla Linuksa w kontenerze Steam Linux Runtime, przez umu.",
+  "settings.field.steam_runtime.help": "Uruchamiaj natywne wersje dla Linuksa w kontenerze Steam Linux Runtime, przez umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Uruchom inny plik wykonywalny z folderu gry.",
   "settings.field.target_exe.label": "Plik wykonywalny",

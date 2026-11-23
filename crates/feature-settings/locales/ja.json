@@ -769,7 +769,7 @@
   "settings.igdb.forget": "削除",
   "settings.igdb.off_hint": "IGDB はオフです。使用するには「IGDB のゲーム情報と画像」をオンにしてください。",
   "settings.igdb.looking": "保存したアプリケーションを読み込んでいます…",
-  "settings.field.steam_runtime.help": "このネイティブLinux版を、umu経由でSteam Linux Runtimeコンテナ内で実行します。",
+  "settings.field.steam_runtime.help": "ネイティブLinux版を、umu経由でSteam Linux Runtimeコンテナ内で実行します。",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "ゲームのフォルダーにある別の実行ファイルを実行します。",
   "settings.field.target_exe.label": "実行ファイル",

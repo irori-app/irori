@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Forget",
   "settings.igdb.off_hint": "IGDB is off. Turn on “Game details and art from IGDB” to use it.",
   "settings.igdb.looking": "Reading the saved application…",
-  "settings.field.steam_runtime.help": "Run this native Linux build inside a Steam Linux Runtime container, through umu.",
+  "settings.field.steam_runtime.help": "Run native Linux builds inside a Steam Linux Runtime container, through umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Run a different executable from the game's folder.",
   "settings.field.target_exe.label": "Executable",

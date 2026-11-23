@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Glöm",
   "settings.igdb.off_hint": "IGDB är avstängt. Slå på ”Speldetaljer och bilder från IGDB” för att använda det.",
   "settings.igdb.looking": "Läser den sparade applikationen …",
-  "settings.field.steam_runtime.help": "Kör den här inbyggda Linux-versionen i en Steam Linux Runtime-container via umu.",
+  "settings.field.steam_runtime.help": "Kör inbyggda Linux-versioner i en Steam Linux Runtime-container via umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Kör en annan körbar fil från spelets mapp.",
   "settings.field.target_exe.label": "Körbar fil",

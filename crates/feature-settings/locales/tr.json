@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Unut",
   "settings.igdb.off_hint": "IGDB kapalı. Kullanmak için “IGDB’den oyun ayrıntıları ve görselleri”ni açın.",
   "settings.igdb.looking": "Kayıtlı uygulama okunuyor…",
-  "settings.field.steam_runtime.help": "Bu yerel Linux sürümünü umu aracılığıyla bir Steam Linux Runtime kapsayıcısında çalıştır.",
+  "settings.field.steam_runtime.help": "Yerel Linux sürümlerini umu aracılığıyla bir Steam Linux Runtime kapsayıcısında çalıştır.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Oyun klasöründen farklı bir yürütülebilir dosya çalıştır.",
   "settings.field.target_exe.label": "Yürütülebilir dosya",

@@ -115,6 +115,22 @@ pub(crate) fn launch_sandbox(
     }
 }
 
+/// The Steam Linux Runtime a launch uses. A game's own choice stands; the
+/// game defaults' reaches every native build except the ROM library's, whose
+/// emulators are this computer's programs (often Flatpaks or AppImages) and
+/// would not find their own libraries inside the runtime's container.
+pub(crate) fn launch_steam_runtime(
+    runner: irori_core::Runner,
+    own_choice: bool,
+    runtime: Option<String>,
+) -> Option<String> {
+    if own_choice || runner != irori_core::Runner::Emulation {
+        runtime
+    } else {
+        None
+    }
+}
+
 /// End what a launcher left running. On Unix it is in the launcher's process
 /// group, which stopping already signals; Windows has to find each process.
 async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool) {
@@ -516,6 +532,11 @@ impl Backend {
             Self::target_platform(&game),
             self.settings.overrides(id).is_overridden("iroriSandbox"),
             settings.sandbox,
+        );
+        settings.steam_runtime = launch_steam_runtime(
+            id.runner,
+            self.settings.overrides(id).is_overridden("steamRuntime"),
+            settings.steam_runtime.take(),
         );
         if verbose {
             settings.verbose_logs = true;
@@ -1943,9 +1964,26 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox};
+    use super::{failed_start, launch_sandbox, launch_steam_runtime};
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
+
+    #[test]
+    fn the_default_steam_runtime_leaves_emulators_alone() {
+        let sniper = || Some("umu-sniper".to_string());
+        for runner in [Runner::Gog, Runner::Sideload, Runner::Legendary] {
+            assert_eq!(launch_steam_runtime(runner, false, sniper()), sniper());
+        }
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, false, sniper()),
+            None
+        );
+        // A ROM's own choice is kept as it is.
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, true, sniper()),
+            sniper()
+        );
+    }
 
     #[test]
     fn the_default_sandbox_holds_only_games_it_can() {

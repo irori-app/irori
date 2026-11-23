@@ -590,7 +590,9 @@ impl SettingsForm {
             {
                 return false;
             }
-            if f.native_only && !self.native {
+            // The defaults reach native builds too, so only a game that isn't
+            // one leaves native-only fields out.
+            if f.native_only && matches!(self.target, FormTarget::Game(_)) && !self.native {
                 return false;
             }
             if matches!(&self.target, FormTarget::Game(id) if id.runner == Runner::Steam)

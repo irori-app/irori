@@ -769,7 +769,7 @@
   "settings.igdb.forget": "Uită",
   "settings.igdb.off_hint": "IGDB este dezactivat. Activează „Detalii și imagini ale jocurilor din IGDB” ca să-l folosești.",
   "settings.igdb.looking": "Se citește aplicația salvată…",
-  "settings.field.steam_runtime.help": "Rulează această versiune nativă pentru Linux într-un container Steam Linux Runtime, prin umu.",
+  "settings.field.steam_runtime.help": "Rulează versiunile native pentru Linux într-un container Steam Linux Runtime, prin umu.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "Rulează alt executabil din folderul jocului.",
   "settings.field.target_exe.label": "Executabil",

@@ -769,7 +769,7 @@
   "settings.igdb.forget": "삭제",
   "settings.igdb.off_hint": "IGDB가 꺼져 있습니다. 사용하려면 ‘IGDB의 게임 정보와 이미지’를 켜세요.",
   "settings.igdb.looking": "저장된 애플리케이션을 읽는 중…",
-  "settings.field.steam_runtime.help": "이 네이티브 Linux 빌드를 umu를 통해 Steam Linux Runtime 컨테이너 안에서 실행합니다.",
+  "settings.field.steam_runtime.help": "네이티브 Linux 빌드를 umu를 통해 Steam Linux Runtime 컨테이너 안에서 실행합니다.",
   "settings.field.steam_runtime.label": "Steam Linux Runtime",
   "settings.field.target_exe.help": "게임 폴더에 있는 다른 실행 파일을 실행합니다.",
   "settings.field.target_exe.label": "실행 파일",
