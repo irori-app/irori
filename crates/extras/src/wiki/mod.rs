@@ -180,7 +180,16 @@ pub async fn forget(ids: &StoreIds) {
 pub async fn cached(ids: &StoreIds) -> Option<Arc<WikiInfo>> {
     util::cache_read::<WikiInfo>(&cache_file(ids), WIKI_TTL)
         .await
+        .filter(is_current)
         .map(Arc::new)
+}
+
+/// Whether a cached answer has every field this version reads from the
+/// wiki's page (an older one is asked again).
+fn is_current(info: &WikiInfo) -> bool {
+    info.pcgamingwiki
+        .as_ref()
+        .is_none_or(|p| p.version >= pcgamingwiki::PARSE_VERSION)
 }
 
 /// Look a game up in every source (cached for 30 days). Fails only when
@@ -371,6 +380,19 @@ mod tests {
         assert_eq!(info.found_steam_app_id(), Some("2"));
         info.steam_link = Some(STEAM_NONE.into());
         assert_eq!(info.steam_app_id(), None);
+    }
+
+    #[test]
+    fn answers_read_before_pc_facts_are_asked_again() {
+        let old: WikiInfo =
+            serde_json::from_value(serde_json::json!({"pcgamingwiki": {"page_id": 1}})).unwrap();
+        assert!(!is_current(&old));
+        let new = WikiInfo {
+            pcgamingwiki: Some(pcgamingwiki::parse_wikitext(1, "")),
+            ..Default::default()
+        };
+        assert!(is_current(&new));
+        assert!(is_current(&WikiInfo::default()), "no page at all");
     }
 
     #[test]

@@ -619,6 +619,14 @@ commands without a window.
   when a result's folded name is the title (`best_match`). The user's choice
   ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
   no match) and part of the wiki cache's file name.
+- **PC facts** (`irori-extras::wiki::pcgamingwiki::pc_facts`): only bare facts from a
+  page (its text is CC BY-NC-SA): `{{Video}}`'s ultra-wide, 4K, HDR and 120+ FPS
+  ratings and `{{Input}}`'s controller support (`Support`: full, limited, with a fix;
+  a controller without a full-controller rating is limited), the infobox's engines,
+  `{{Game data/saves}}` folders with `{{p|…}}` tokens spelt out (`%APPDATA%`,
+  `<path-to-game>`) and the `{{Fixbox}}` count. A cached answer from before
+  (`PcGamingWikiInfo::version` below `PARSE_VERSION`) is read again. The compatibility
+  panel shows them with the save folder of the game's platform and a copy button.
 - **IGDB** (`igdb.rs`, client in `irori-extras::igdb`, opt-in `iroriIgdb`): the user's
   own Twitch application (client ID and secret in `<config>/igdb.json` through
   `irori_secrets`, checked with Twitch before it is saved; Settings → Advanced →
