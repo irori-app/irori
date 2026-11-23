@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minuty bez vstupu, než Big Picture ukáže spořič; 0 jej nikdy neukáže. Jakékoli tlačítko, klávesa nebo pohyb myši vrátí Big Picture zpět.",
   "settings.field.idle_screen.label": "Spořič",
   "settings.option.idle_screen.slideshow": "Obrázky vašich her jeden po druhém",
-  "settings.option.idle_screen.dim": "Ztmavený, s hodinami"
+  "settings.option.idle_screen.dim": "Ztmavený, s hodinami",
+  "settings.field.quick_launch_shortcut.label": "Otevírat rychlý spouštěč klávesovou zkratkou",
+  "settings.field.quick_launch_shortcut.help": "Rychlý spouštěč je paleta příkazů v malém vlastním okně: najděte hru a spusťte ji nebo se do ní vraťte, aniž byste Irori přenesli do popředí. Irori požádá desktop o Ctrl+Alt+K; kde to nejde, přiřaďte příkaz níže klávese sami.",
+  "settings.field.panel_quick_launch.label": "Zkratka rychlého spouštěče",
+  "settings.quick_launch.asking": "Žádám desktop o zkratku…",
+  "settings.quick_launch.keys": "{keys} otevře rychlý spouštěč odkudkoli.",
+  "settings.quick_launch.ready": "Zkratku rychlého spouštěče drží desktop; klávesy změníte v jeho nastavení zkratek.",
+  "settings.quick_launch.unassigned": "Desktop zatím pro rychlý spouštěč nemá žádné klávesy; přiřaďte je v jeho nastavení zkratek.",
+  "settings.quick_launch.commands_file": "{desktop} nedovoluje programům naslouchat klávesám stisknutým v jiných oknech. Přidejte toto do {file} a znovu načtěte konfiguraci:",
+  "settings.quick_launch.command": "Přiřaďte tento příkaz klávese v nastavení klávesnice desktopu:",
+  "settings.quick_launch.off": "Rychlý spouštěč otevře i tento příkaz; chcete-li, přiřaďte ho klávese v nastavení klávesnice desktopu:"
 }

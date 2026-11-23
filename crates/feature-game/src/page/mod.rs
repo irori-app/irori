@@ -56,8 +56,8 @@ use crate::hooks::{self, CompatibilityInfo};
 use crate::load::Load;
 use crate::state::{ActionInputs, PrimaryAction};
 use crate::{
-    CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite,
-    TroubleshootLaunch, ops,
+    BackToGame, CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction,
+    ToggleFavourite, TroubleshootLaunch, ops,
 };
 
 pub use achievements::AchievementFilter;
@@ -705,6 +705,12 @@ impl GamePage {
         }
     }
 
+    fn on_back_to_game(&mut self, _: &BackToGame, window: &mut Window, cx: &mut Context<Self>) {
+        if models(cx).statuses.read(cx).is_playing(&self.id) {
+            irori_ui::game_window::back_to_game(self.id.clone(), window, cx);
+        }
+    }
+
     fn on_troubleshoot(
         &mut self,
         _: &TroubleshootLaunch,
@@ -750,6 +756,7 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_open_log))
             .on_action(cx.listener(Self::on_open_settings))
             .on_action(cx.listener(Self::on_troubleshoot))
+            .on_action(cx.listener(Self::on_back_to_game))
             .on_action(cx.listener(Self::on_cancel_launch))
             .size_full()
             .when(self.panel.is_none(), |d| d.bg(cx.theme().background))

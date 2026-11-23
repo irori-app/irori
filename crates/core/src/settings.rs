@@ -1549,6 +1549,10 @@ pub struct UiPrefs {
     /// Open Big Picture when a controller connects while Irori runs, or
     /// is connected when it starts.
     pub big_picture_on_controller: bool,
+    /// Ask the desktop for a shortcut that opens the quick launcher (the
+    /// command palette in a window of its own) from anywhere
+    /// (`quickLaunchShortcut`); off, `irori --quick-launch` still opens it.
+    pub quick_launch_shortcut: bool,
     /// The controller button held to open Big Picture from anywhere in
     /// Irori (`bigPictureHoldButton`).
     pub big_picture_hold_button: HoldButton,
@@ -1772,6 +1776,7 @@ impl Default for UiPrefs {
             big_picture_layout: String::new(),
             big_picture_theme: String::new(),
             big_picture_on_controller: false,
+            quick_launch_shortcut: false,
             big_picture_hold_button: HoldButton::Start,
             big_picture_hold_ms: 1000,
             accent_color: String::new(),

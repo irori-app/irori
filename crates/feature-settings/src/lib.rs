@@ -38,6 +38,7 @@ mod launch_presets;
 mod launch_programs;
 mod logs;
 mod overlay;
+mod quick_launch;
 pub mod registry;
 mod renodx;
 mod replay;

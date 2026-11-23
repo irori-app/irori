@@ -238,7 +238,7 @@ impl Foreground {
 
 /// Have the overlay's window take the foreground (Windows; see
 /// [`Foreground`]).
-pub(super) fn take_foreground(handle: AnyWindowHandle, cx: &mut App) {
+pub fn take_foreground(handle: AnyWindowHandle, cx: &mut App) {
     #[cfg(windows)]
     {
         use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};

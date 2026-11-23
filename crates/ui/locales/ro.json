@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Nu trebuie să te deconectezi din Irori.",
   "ui.xbox.open_wine_manager": "Deschide managerul Wine",
   "ui.xbox.game_settings": "Setări Wine",
-  "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft"
+  "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft",
+  "ui.game_window.no_window": "Jocul nu are încă o fereastră de adus în față",
+  "ui.game_window.unsupported": "Acest desktop nu-i permite lui Irori să aducă fereastra jocului în față; comută la ea din bara de activități",
+  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față"
 }

@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "{count} jeux forment maintenant une seule entrée",
   "library.steam_hint.text": "Seuls les jeux Steam installés ici sont affichés. Irori peut lire toute votre bibliothèque Steam depuis le client Steam, sans connexion.",
   "library.steam_hint.action": "Lire la bibliothèque Steam",
-  "library.steam_hint.dismiss": "Pas maintenant"
+  "library.steam_hint.dismiss": "Pas maintenant",
+  "library.random.pool_shown": "Parmi les jeux affichés",
+  "library.random.pool_installed": "Parmi les jeux installés",
+  "library.random.pool_never_played": "Parmi les jeux jamais joués",
+  "library.random.pool_favourites": "Parmi les favoris",
+  "library.random.pool_all": "Dans toute la bibliothèque",
+  "library.random.pool_category": "Parmi « {name} »",
+  "library.command.back_to_game": "Revenir au jeu"
 }

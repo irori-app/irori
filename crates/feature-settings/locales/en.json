@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minutes without input before Big Picture shows the idle screen; 0 never shows it. Any button, key or mouse movement brings Big Picture back.",
   "settings.field.idle_screen.label": "Idle screen",
   "settings.option.idle_screen.slideshow": "Your games’ art, one after another",
-  "settings.option.idle_screen.dim": "Darkened, with the clock"
+  "settings.option.idle_screen.dim": "Darkened, with the clock",
+  "settings.field.quick_launch_shortcut.label": "Open the quick launcher with a shortcut",
+  "settings.field.quick_launch_shortcut.help": "The quick launcher is the command palette in a small window of its own: find a game and play it, or go back to it, without bringing Irori to the front. Irori asks your desktop for Ctrl+Alt+K; where it can’t, bind the command shown below to a key yourself.",
+  "settings.field.panel_quick_launch.label": "Quick launcher shortcut",
+  "settings.quick_launch.asking": "Asking your desktop for the shortcut…",
+  "settings.quick_launch.keys": "{keys} opens the quick launcher from anywhere.",
+  "settings.quick_launch.ready": "Your desktop holds the quick launcher’s shortcut; change its keys in the desktop’s shortcut settings.",
+  "settings.quick_launch.unassigned": "Your desktop has no keys for the quick launcher yet; give it some in the desktop’s shortcut settings.",
+  "settings.quick_launch.commands_file": "{desktop} doesn’t let programs listen for keys pressed in other windows. Add this to {file}, then reload its configuration:",
+  "settings.quick_launch.command": "Bind this command to a key in your desktop’s keyboard settings:",
+  "settings.quick_launch.off": "This command opens the quick launcher too; bind it to a key in your desktop’s keyboard settings if you like:"
 }

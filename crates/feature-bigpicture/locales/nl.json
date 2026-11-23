@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Keuze van de dag",
   "bigpicture.shelf.stores": "Eén per winkel",
   "bigpicture.hint.undo": "Ongedaan maken",
-  "bigpicture.hint.redo": "Opnieuw"
+  "bigpicture.hint.redo": "Opnieuw",
+  "bigpicture.action.back_to_game": "Terug naar de game"
 }

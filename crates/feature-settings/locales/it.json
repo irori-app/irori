@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minuti senza input prima che Big Picture mostri la schermata di riposo; 0 non la mostra mai. Qualsiasi pulsante, tasto o movimento del mouse riporta Big Picture.",
   "settings.field.idle_screen.label": "Schermata di riposo",
   "settings.option.idle_screen.slideshow": "Le immagini dei tuoi giochi, una dopo l’altra",
-  "settings.option.idle_screen.dim": "Oscurata, con l’orologio"
+  "settings.option.idle_screen.dim": "Oscurata, con l’orologio",
+  "settings.field.quick_launch_shortcut.label": "Apri l’avvio rapido con una scorciatoia",
+  "settings.field.quick_launch_shortcut.help": "L’avvio rapido è la tavolozza dei comandi in una piccola finestra tutta sua: trova un gioco e avvialo, o tornaci, senza portare Irori in primo piano. Irori chiede al desktop Ctrl+Alt+K; dove non è possibile, assegna tu il comando qui sotto a un tasto.",
+  "settings.field.panel_quick_launch.label": "Scorciatoia dell’avvio rapido",
+  "settings.quick_launch.asking": "Richiesta della scorciatoia al desktop…",
+  "settings.quick_launch.keys": "{keys} apre l’avvio rapido da qualsiasi punto.",
+  "settings.quick_launch.ready": "Il desktop gestisce la scorciatoia dell’avvio rapido; cambiane i tasti nelle impostazioni delle scorciatoie del desktop.",
+  "settings.quick_launch.unassigned": "Il desktop non ha ancora tasti per l’avvio rapido; assegnali nelle impostazioni delle scorciatoie del desktop.",
+  "settings.quick_launch.commands_file": "{desktop} non permette ai programmi di ascoltare i tasti premuti in altre finestre. Aggiungi questo a {file}, poi ricarica la configurazione:",
+  "settings.quick_launch.command": "Assegna questo comando a un tasto nelle impostazioni della tastiera del desktop:",
+  "settings.quick_launch.off": "Anche questo comando apre l’avvio rapido; se vuoi, assegnalo a un tasto nelle impostazioni della tastiera del desktop:"
 }

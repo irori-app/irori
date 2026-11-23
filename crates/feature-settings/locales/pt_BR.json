@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minutos sem atividade até o Big Picture mostrar a tela de descanso; 0 nunca a mostra. Qualquer botão, tecla ou movimento do mouse traz o Big Picture de volta.",
   "settings.field.idle_screen.label": "Tela de descanso",
   "settings.option.idle_screen.slideshow": "Artes dos seus jogos, uma após a outra",
-  "settings.option.idle_screen.dim": "Escurecida, com o relógio"
+  "settings.option.idle_screen.dim": "Escurecida, com o relógio",
+  "settings.field.quick_launch_shortcut.label": "Abrir o iniciador rápido com um atalho",
+  "settings.field.quick_launch_shortcut.help": "O iniciador rápido é a paleta de comandos em uma pequena janela própria: encontre um jogo e jogue, ou volte a ele, sem trazer o Irori para a frente. O Irori pede Ctrl+Alt+K ao seu ambiente de trabalho; onde não for possível, associe você mesmo o comando abaixo a uma tecla.",
+  "settings.field.panel_quick_launch.label": "Atalho do iniciador rápido",
+  "settings.quick_launch.asking": "Pedindo o atalho ao seu ambiente de trabalho…",
+  "settings.quick_launch.keys": "{keys} abre o iniciador rápido de qualquer lugar.",
+  "settings.quick_launch.ready": "Seu ambiente de trabalho guarda o atalho do iniciador rápido; mude as teclas nas configurações de atalhos dele.",
+  "settings.quick_launch.unassigned": "Seu ambiente de trabalho ainda não tem teclas para o iniciador rápido; atribua nas configurações de atalhos dele.",
+  "settings.quick_launch.commands_file": "{desktop} não deixa programas ouvirem teclas pressionadas em outras janelas. Adicione isto a {file} e recarregue a configuração:",
+  "settings.quick_launch.command": "Associe este comando a uma tecla nas configurações de teclado do seu ambiente de trabalho:",
+  "settings.quick_launch.off": "Este comando também abre o iniciador rápido; se quiser, associe-o a uma tecla nas configurações de teclado:"
 }

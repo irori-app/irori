@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "今日のおすすめ",
   "bigpicture.shelf.stores": "ストアごと",
   "bigpicture.hint.undo": "元に戻す",
-  "bigpicture.hint.redo": "やり直す"
+  "bigpicture.hint.redo": "やり直す",
+  "bigpicture.action.back_to_game": "ゲームに戻る"
 }

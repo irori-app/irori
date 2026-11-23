@@ -863,5 +863,7 @@
   "game.related.publisher": "{name}에서 퍼블리싱",
   "game.related.genres": "공통 장르: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "게임으로 돌아가기",
+  "game.hero.back_to_game_tooltip": "게임 창을 앞으로 가져오기"
 }

@@ -799,6 +799,9 @@ impl SettingsForm {
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
+            PanelKind::QuickLaunch => {
+                Some(cx.new(crate::quick_launch::QuickLaunchPanel::new).into())
+            }
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
             PanelKind::SteamLaunchOptions => match &self.target {
                 FormTarget::Game(id) if id.runner == Runner::Steam => {

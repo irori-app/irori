@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "{count} 個遊戲現已合併為一項",
   "library.steam_hint.text": "目前只列出本機已安裝的 Steam 遊戲。Irori 不必登入，就能從 Steam 用戶端讀取你的整個 Steam 遊戲庫。",
   "library.steam_hint.action": "讀取 Steam 遊戲庫",
-  "library.steam_hint.dismiss": "暫不"
+  "library.steam_hint.dismiss": "暫不",
+  "library.random.pool_shown": "從顯示的遊戲中",
+  "library.random.pool_installed": "從已安裝的遊戲中",
+  "library.random.pool_never_played": "從從未玩過的遊戲中",
+  "library.random.pool_favourites": "從最愛中",
+  "library.random.pool_all": "從整個遊戲庫中",
+  "library.random.pool_category": "從「{name}」中",
+  "library.command.back_to_game": "返回遊戲"
 }

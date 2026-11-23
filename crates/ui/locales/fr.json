@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Inutile de vous déconnecter d’Irori.",
   "ui.xbox.open_wine_manager": "Ouvrir le gestionnaire Wine",
   "ui.xbox.game_settings": "Réglages Wine",
-  "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft"
+  "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft",
+  "ui.game_window.no_window": "Le jeu n’a pas encore de fenêtre à mettre au premier plan",
+  "ui.game_window.unsupported": "Ce bureau ne permet pas à Irori de mettre la fenêtre du jeu au premier plan ; passez-y depuis la barre des tâches",
+  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan"
 }

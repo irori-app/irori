@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Tipp des Tages",
   "bigpicture.shelf.stores": "Eins pro Store",
   "bigpicture.hint.undo": "Rückgängig",
-  "bigpicture.hint.redo": "Wiederholen"
+  "bigpicture.hint.redo": "Wiederholen",
+  "bigpicture.action.back_to_game": "Zurück zum Spiel"
 }

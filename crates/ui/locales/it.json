@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Non serve uscire da Irori.",
   "ui.xbox.open_wine_manager": "Apri il gestore di Wine",
   "ui.xbox.game_settings": "Impostazioni di Wine",
-  "ui.xbox.open_devices": "Apri la pagina dei dispositivi di Microsoft"
+  "ui.xbox.open_devices": "Apri la pagina dei dispositivi di Microsoft",
+  "ui.game_window.no_window": "Il gioco non ha ancora una finestra da portare in primo piano",
+  "ui.game_window.unsupported": "Questo desktop non consente a Irori di portare in primo piano la finestra del gioco; passaci dalla barra delle applicazioni",
+  "ui.game_window.failed": "Non è stato possibile portare in primo piano la finestra del gioco"
 }

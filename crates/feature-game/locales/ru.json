@@ -863,5 +863,7 @@
   "game.related.publisher": "Тоже издано {name}",
   "game.related.genres": "Общие жанры: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "Вернуться в игру",
+  "game.hero.back_to_game_tooltip": "Вывести окно игры на передний план"
 }

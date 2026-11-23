@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Propozycja dnia",
   "bigpicture.shelf.stores": "Po jednej na sklep",
   "bigpicture.hint.undo": "Cofnij",
-  "bigpicture.hint.redo": "Ponów"
+  "bigpicture.hint.redo": "Ponów",
+  "bigpicture.action.back_to_game": "Wróć do gry"
 }

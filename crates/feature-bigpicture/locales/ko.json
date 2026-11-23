@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "오늘의 추천",
   "bigpicture.shelf.stores": "스토어별",
   "bigpicture.hint.undo": "실행 취소",
-  "bigpicture.hint.redo": "다시 실행"
+  "bigpicture.hint.redo": "다시 실행",
+  "bigpicture.action.back_to_game": "게임으로 돌아가기"
 }

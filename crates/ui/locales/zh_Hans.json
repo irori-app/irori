@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "无需退出 Irori。",
   "ui.xbox.open_wine_manager": "打开 Wine 管理器",
   "ui.xbox.game_settings": "Wine 设置",
-  "ui.xbox.open_devices": "打开 Microsoft 设备页面"
+  "ui.xbox.open_devices": "打开 Microsoft 设备页面",
+  "ui.game_window.no_window": "游戏还没有可置于前台的窗口",
+  "ui.game_window.unsupported": "此桌面不允许 Irori 将游戏窗口置于前台；请从任务栏切换过去",
+  "ui.game_window.failed": "无法将游戏窗口置于前台"
 }

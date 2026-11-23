@@ -94,7 +94,7 @@ irori displays [--json]                          the displays: modes, HDR and VR
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
-  `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+  `--save-clip`, `--screenshot`, `--quick-launch`, `-V/--version` and `-h/--help`.
 - `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
   without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
   fails then brings the window up to say why.
@@ -102,12 +102,24 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
   (`instance::forward`; see `docs/PLATFORMS.md`, "Clip and screenshot keys").
+- `--quick-launch` and `irori://quick-launch` open the quick launcher
+  (`crates/irori/src/quick_launch.rs`: the palette in a window of its own, a layer
+  surface with the keyboard on Wayland, a pop-up on macOS and Windows, a plain window on
+  X11), or close it when it is open; started that way Irori keeps its main window hidden
+  while a tray can bring it back. Enter plays a game (or goes back to it), Shift+Enter
+  shows it in Irori, → lists its actions; Escape, running something or losing the focus
+  closes it, and closing it never quits Irori. With `iroriUi.quickLaunchShortcut` the
+  desktop is asked for Ctrl+Alt+K: on Linux through the replay buffer's shortcut session
+  (portal, X11 grab, else compositor lines; `Backend::quick_launch_shortcut`), on macOS
+  and Windows through the overlay's hot key registration
+  (`irori_bigpicture::overlay::register_quick_launch`). General → Tray and window shows
+  its state and the command to bind.
 - `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
   invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
   the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
   Irori first when none runs, in a process group of its own and, on Windows, outside the
   caller's job, so Irori outlives a stream. Sunshine's applications use it.
-- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture`,
+- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture|quick-launch`,
   `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
@@ -859,7 +871,7 @@ commands without a window.
   what `--info` says (version, codecs, monitors). Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
-  one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
+  one takes a screenshot, a third opens the quick launcher) come from the XDG GlobalShortcuts portal, else on X11 from
   `XGrabKey` (`replay/x11.rs`), else the settings show the lines that bind
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
@@ -1172,7 +1184,19 @@ Other parts:
   tested; Wayland keeps only size and display).
 - `actions.rs` binds global shortcuts. `ctrl-` becomes `cmd-` on macOS, which also
   gets a native menu.
-- `palette.rs` is the Ctrl/Cmd+K command palette.
+- `palette/` is the Ctrl/Cmd+K command palette (`view.rs`). It filters rows
+  itself: games come from the library's `SearchIndex` (at most
+  `search::MAX_GAMES` rows, each with its cover, since the palette measures
+  every row it holds; the recently played without a query), and a preview
+  pane beside the list (`preview.rs`, left out in a narrow window) shows the
+  highlighted game or command. Rows for running games follow `StatusModel`.
+  → on a game row (or the preview's Actions button) lists that game's
+  actions (`game::level_rows`: play, back to it or cancel, its page, store
+  page, favourite, status, folder, hide, Stop last); ←, Escape and Back
+  return. "Pick a random game" asks which games to pick from
+  (`irori_library::random_pools`: shown, installed, never played,
+  favourites, all, any category) and stays on the pick with "Pick another";
+  `random.rs` leaves the run's last five picks out while others remain.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
@@ -1389,7 +1413,9 @@ Microsoft's approval page (`irori_manage::login`).
   turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
   (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
   `overlay/level.rs`, a surface that exists only while it shows. "Back to the game"
-  (overlay row, palette) is `Backend::focus_game_window` (`services/src/game_window/`:
+  (overlay row; the palette, the game page's button and Ctrl+Shift+Enter, the library's
+  game menus and Big Picture's page through `irori_ui::game_window::back_to_game`) is
+  `Backend::focus_game_window` (`services/src/game_window/`:
   Hyprland, sway, X11, Windows, macOS; `Raised::Unsupported` on GNOME/KDE Wayland,
   where nothing is done). Home's rows come from `model::home_rows`. On Windows
   Back + Start opens it while a game runs (`gamepad/xinput.rs`, XInput read only then;

@@ -534,6 +534,17 @@ set up only while the replay buffer is on, so Alt+F10 and Alt+F12 stay free othe
 macOS and Windows have no replay buffer; there the commands still work, and the in-game
 overlay's Ctrl+Shift+O and its screenshot button take screenshots.
 
+The same session asks for a third shortcut, "quick-launch" (Ctrl+Alt+K suggested; the
+X11 grab takes it when it is free, else its command is offered alone), which opens the
+quick launcher: the command palette in a window of its own. General → Tray and window →
+"Open the quick launcher with a shortcut" sets the session up when Irori starts without
+waiting for the replay buffer, and shows its keys, or the line that binds
+`irori --quick-launch` (for example `bindsym Ctrl+Mod1+k exec irori --quick-launch` for
+Sway). On macOS and Windows the setting registers ⌃⌥K / Ctrl+Alt+K itself
+(`RegisterEventHotKey`, `RegisterHotKey`, the in-game overlay's registration with a key
+id of its own), which needs no permission; another program holding the keys leaves the
+command to bind. `irori://quick-launch` opens it as well.
+
 Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
 after its title, which is how the Album finds the game; a folder whose game left the
 library is matched to sessions by time like screenshots.

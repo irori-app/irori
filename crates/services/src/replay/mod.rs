@@ -37,7 +37,7 @@ use parking_lot::Mutex;
 
 use crate::Backend;
 
-pub use shortcut::ShortcutState;
+pub use shortcut::{QuickLaunchShortcut, ShortcutState};
 
 /// The recorder's Flathub id.
 pub const FLATPAK_ID: &str = "com.dec05eba.gpu_screen_recorder";

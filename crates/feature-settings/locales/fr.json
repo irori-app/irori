@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minutes sans action avant que Big Picture affiche l’écran de veille ; 0 ne l’affiche jamais. Un bouton, une touche ou un mouvement de souris ramène Big Picture.",
   "settings.field.idle_screen.label": "Écran de veille",
   "settings.option.idle_screen.slideshow": "Les images de vos jeux, l’une après l’autre",
-  "settings.option.idle_screen.dim": "Assombri, avec l’horloge"
+  "settings.option.idle_screen.dim": "Assombri, avec l’horloge",
+  "settings.field.quick_launch_shortcut.label": "Ouvrir le lanceur rapide avec un raccourci",
+  "settings.field.quick_launch_shortcut.help": "Le lanceur rapide est la palette de commandes dans une petite fenêtre à elle : trouvez un jeu et lancez-le, ou revenez-y, sans mettre Irori au premier plan. Irori demande Ctrl+Alt+K à votre bureau ; là où c’est impossible, associez vous-même la commande ci-dessous à une touche.",
+  "settings.field.panel_quick_launch.label": "Raccourci du lanceur rapide",
+  "settings.quick_launch.asking": "Demande du raccourci à votre bureau…",
+  "settings.quick_launch.keys": "{keys} ouvre le lanceur rapide depuis n’importe où.",
+  "settings.quick_launch.ready": "Votre bureau détient le raccourci du lanceur rapide ; changez ses touches dans les réglages de raccourcis du bureau.",
+  "settings.quick_launch.unassigned": "Votre bureau n’a encore aucune touche pour le lanceur rapide ; attribuez-en dans les réglages de raccourcis du bureau.",
+  "settings.quick_launch.commands_file": "{desktop} ne laisse pas les programmes écouter les touches pressées dans d’autres fenêtres. Ajoutez ceci à {file}, puis rechargez sa configuration :",
+  "settings.quick_launch.command": "Associez cette commande à une touche dans les réglages clavier de votre bureau :",
+  "settings.quick_launch.off": "Cette commande ouvre aussi le lanceur rapide ; associez-la à une touche dans les réglages clavier du bureau si vous le souhaitez :"
 }

@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "{count} oyun artık tek bir giriş",
   "library.steam_hint.text": "Yalnızca burada yüklü Steam oyunları listeleniyor. Irori, oturum açmadan tüm Steam kitaplığınızı Steam istemcisinden okuyabilir.",
   "library.steam_hint.action": "Steam kitaplığını oku",
-  "library.steam_hint.dismiss": "Şimdi değil"
+  "library.steam_hint.dismiss": "Şimdi değil",
+  "library.random.pool_shown": "Gösterilen oyunlardan",
+  "library.random.pool_installed": "Yüklü oyunlardan",
+  "library.random.pool_never_played": "Hiç oynanmamış oyunlardan",
+  "library.random.pool_favourites": "Favorilerden",
+  "library.random.pool_all": "Tüm kütüphaneden",
+  "library.random.pool_category": "“{name}” içinden",
+  "library.command.back_to_game": "Oyuna dön"
 }

@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "게임 {count}개가 이제 하나의 항목입니다",
   "library.steam_hint.text": "이 컴퓨터에 설치된 Steam 게임만 표시됩니다. Irori는 로그인하지 않고도 Steam 클라이언트에서 Steam 라이브러리 전체를 읽을 수 있습니다.",
   "library.steam_hint.action": "Steam 라이브러리 읽기",
-  "library.steam_hint.dismiss": "나중에"
+  "library.steam_hint.dismiss": "나중에",
+  "library.random.pool_shown": "표시된 게임 중에서",
+  "library.random.pool_installed": "설치된 게임 중에서",
+  "library.random.pool_never_played": "플레이한 적 없는 게임 중에서",
+  "library.random.pool_favourites": "즐겨찾기 중에서",
+  "library.random.pool_all": "전체 라이브러리에서",
+  "library.random.pool_category": "‘{name}’에서",
+  "library.command.back_to_game": "게임으로 돌아가기"
 }

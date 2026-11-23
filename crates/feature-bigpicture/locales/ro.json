@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Recomandarea zilei",
   "bigpicture.shelf.stores": "Câte unul pe magazin",
   "bigpicture.hint.undo": "Anulează",
-  "bigpicture.hint.redo": "Refă"
+  "bigpicture.hint.redo": "Refă",
+  "bigpicture.action.back_to_game": "Înapoi la joc"
 }

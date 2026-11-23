@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "Jocuri combinate într-o singură intrare: {count}",
   "library.steam_hint.text": "Sunt afișate doar jocurile Steam instalate aici. Irori poate citi toată biblioteca ta Steam din clientul Steam, fără autentificare.",
   "library.steam_hint.action": "Citește biblioteca Steam",
-  "library.steam_hint.dismiss": "Nu acum"
+  "library.steam_hint.dismiss": "Nu acum",
+  "library.random.pool_shown": "Din jocurile afișate",
+  "library.random.pool_installed": "Din jocurile instalate",
+  "library.random.pool_never_played": "Din jocurile niciodată jucate",
+  "library.random.pool_favourites": "Din favorite",
+  "library.random.pool_all": "Din toată biblioteca",
+  "library.random.pool_category": "Din „{name}”",
+  "library.command.back_to_game": "Înapoi la joc"
 }

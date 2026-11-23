@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Günün seçimi",
   "bigpicture.shelf.stores": "Her mağaza için bir",
   "bigpicture.hint.undo": "Geri al",
-  "bigpicture.hint.redo": "Yinele"
+  "bigpicture.hint.redo": "Yinele",
+  "bigpicture.action.back_to_game": "Oyuna dön"
 }

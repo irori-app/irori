@@ -326,5 +326,6 @@
   "bigpicture.shelf.pick_of_the_day": "Suggestion du jour",
   "bigpicture.shelf.stores": "Une par boutique",
   "bigpicture.hint.undo": "Annuler",
-  "bigpicture.hint.redo": "Rétablir"
+  "bigpicture.hint.redo": "Rétablir",
+  "bigpicture.action.back_to_game": "Revenir au jeu"
 }

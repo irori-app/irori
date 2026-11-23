@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "Игры объединены в одну запись: {count}",
   "library.steam_hint.text": "Показаны только игры Steam, установленные на этом компьютере. Irori может прочитать всю вашу библиотеку Steam из клиента Steam без входа в аккаунт.",
   "library.steam_hint.action": "Прочитать библиотеку Steam",
-  "library.steam_hint.dismiss": "Не сейчас"
+  "library.steam_hint.dismiss": "Не сейчас",
+  "library.random.pool_shown": "Из показанных игр",
+  "library.random.pool_installed": "Из установленных игр",
+  "library.random.pool_never_played": "Из игр, в которые вы не играли",
+  "library.random.pool_favourites": "Из избранного",
+  "library.random.pool_all": "Из всей библиотеки",
+  "library.random.pool_category": "Из «{name}»",
+  "library.command.back_to_game": "Вернуться в игру"
 }

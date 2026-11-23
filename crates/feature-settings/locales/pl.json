@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minuty bez działań, po których Big Picture pokazuje ekran bezczynności; 0 nigdy go nie pokazuje. Dowolny przycisk, klawisz lub ruch myszy przywraca Big Picture.",
   "settings.field.idle_screen.label": "Ekran bezczynności",
   "settings.option.idle_screen.slideshow": "Grafiki twoich gier, jedna po drugiej",
-  "settings.option.idle_screen.dim": "Przyciemniony, z zegarem"
+  "settings.option.idle_screen.dim": "Przyciemniony, z zegarem",
+  "settings.field.quick_launch_shortcut.label": "Otwieraj szybki program uruchamiający skrótem",
+  "settings.field.quick_launch_shortcut.help": "Szybki program uruchamiający to paleta poleceń we własnym małym oknie: znajdź grę i uruchom ją albo do niej wróć, nie wyciągając Irori na wierzch. Irori prosi pulpit o Ctrl+Alt+K; gdzie się nie da, przypisz poniższe polecenie do klawisza samodzielnie.",
+  "settings.field.panel_quick_launch.label": "Skrót szybkiego programu uruchamiającego",
+  "settings.quick_launch.asking": "Proszę pulpit o skrót…",
+  "settings.quick_launch.keys": "{keys} otwiera szybki program uruchamiający z dowolnego miejsca.",
+  "settings.quick_launch.ready": "Skrót szybkiego programu uruchamiającego trzyma pulpit; klawisze zmienisz w jego ustawieniach skrótów.",
+  "settings.quick_launch.unassigned": "Pulpit nie ma jeszcze klawiszy dla szybkiego programu uruchamiającego; przypisz je w jego ustawieniach skrótów.",
+  "settings.quick_launch.commands_file": "{desktop} nie pozwala programom nasłuchiwać klawiszy naciskanych w innych oknach. Dodaj to do {file}, a potem wczytaj ponownie konfigurację:",
+  "settings.quick_launch.command": "Przypisz to polecenie do klawisza w ustawieniach klawiatury pulpitu:",
+  "settings.quick_launch.off": "To polecenie też otwiera szybki program uruchamiający; jeśli chcesz, przypisz je do klawisza w ustawieniach klawiatury pulpitu:"
 }

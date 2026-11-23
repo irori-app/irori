@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Big Picture bekleme ekranını göstermeden önce girişsiz geçen dakika; 0 hiç göstermez. Herhangi bir düğme, tuş veya fare hareketi Big Picture'ı geri getirir.",
   "settings.field.idle_screen.label": "Bekleme ekranı",
   "settings.option.idle_screen.slideshow": "Oyunlarının görselleri, birbiri ardına",
-  "settings.option.idle_screen.dim": "Karartılmış, saatli"
+  "settings.option.idle_screen.dim": "Karartılmış, saatli",
+  "settings.field.quick_launch_shortcut.label": "Hızlı başlatıcıyı bir kısayolla aç",
+  "settings.field.quick_launch_shortcut.help": "Hızlı başlatıcı, kendine ait küçük bir penceredeki komut paletidir: Irori’yi öne getirmeden bir oyun bulup oynayın ya da ona dönün. Irori masaüstünüzden Ctrl+Alt+K ister; olmadığı yerde aşağıdaki komutu bir tuşa kendiniz atayın.",
+  "settings.field.panel_quick_launch.label": "Hızlı başlatıcı kısayolu",
+  "settings.quick_launch.asking": "Masaüstünüzden kısayol isteniyor…",
+  "settings.quick_launch.keys": "{keys} hızlı başlatıcıyı her yerden açar.",
+  "settings.quick_launch.ready": "Hızlı başlatıcının kısayolu masaüstünüzde; tuşlarını masaüstünün kısayol ayarlarından değiştirin.",
+  "settings.quick_launch.unassigned": "Masaüstünüzde hızlı başlatıcı için henüz tuş yok; masaüstünün kısayol ayarlarından atayın.",
+  "settings.quick_launch.commands_file": "{desktop}, programların başka pencerelerde basılan tuşları dinlemesine izin vermez. Bunu {file} dosyasına ekleyin, ardından yapılandırmayı yeniden yükleyin:",
+  "settings.quick_launch.command": "Bu komutu masaüstünüzün klavye ayarlarında bir tuşa atayın:",
+  "settings.quick_launch.off": "Bu komut da hızlı başlatıcıyı açar; isterseniz masaüstünüzün klavye ayarlarında bir tuşa atayın:"
 }

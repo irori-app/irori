@@ -863,5 +863,7 @@
   "game.related.publisher": "Anche pubblicato da {name}",
   "game.related.genres": "Stessi generi: {genres}",
   "game.related.separator": ", ",
-  "game.menu.steam_play": "Steam Play…"
+  "game.menu.steam_play": "Steam Play…",
+  "game.hero.back_to_game": "Torna al gioco",
+  "game.hero.back_to_game_tooltip": "Porta in primo piano la finestra del gioco"
 }

@@ -902,5 +902,12 @@
   "library.bulk.done.combined": "{count} giochi sono ora una sola voce",
   "library.steam_hint.text": "Sono elencati solo i giochi Steam installati qui. Irori può leggere tutta la tua libreria Steam dal client Steam, senza accedere.",
   "library.steam_hint.action": "Leggi libreria Steam",
-  "library.steam_hint.dismiss": "Non ora"
+  "library.steam_hint.dismiss": "Non ora",
+  "library.random.pool_shown": "Tra i giochi mostrati",
+  "library.random.pool_installed": "Tra i giochi installati",
+  "library.random.pool_never_played": "Tra i giochi mai giocati",
+  "library.random.pool_favourites": "Tra i preferiti",
+  "library.random.pool_all": "Da tutta la libreria",
+  "library.random.pool_category": "Da “{name}”",
+  "library.command.back_to_game": "Torna al gioco"
 }

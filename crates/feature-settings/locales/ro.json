@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minute fără activitate până când Big Picture arată ecranul de repaus; 0 nu îl arată niciodată. Orice buton, tastă sau mișcare a mouse-ului readuce Big Picture.",
   "settings.field.idle_screen.label": "Ecran de repaus",
   "settings.option.idle_screen.slideshow": "Imaginile jocurilor tale, una după alta",
-  "settings.option.idle_screen.dim": "Întunecat, cu ceasul"
+  "settings.option.idle_screen.dim": "Întunecat, cu ceasul",
+  "settings.field.quick_launch_shortcut.label": "Deschide lansatorul rapid cu o scurtătură",
+  "settings.field.quick_launch_shortcut.help": "Lansatorul rapid este paleta de comenzi într-o fereastră mică a ei: găsește un joc și joacă-l sau revino la el fără să aduci Irori în față. Irori îi cere desktopului Ctrl+Alt+K; unde nu se poate, atribuie singur comanda de mai jos unei taste.",
+  "settings.field.panel_quick_launch.label": "Scurtătura lansatorului rapid",
+  "settings.quick_launch.asking": "Se cere scurtătura desktopului…",
+  "settings.quick_launch.keys": "{keys} deschide lansatorul rapid de oriunde.",
+  "settings.quick_launch.ready": "Desktopul ține scurtătura lansatorului rapid; schimbă-i tastele în setările de scurtături ale desktopului.",
+  "settings.quick_launch.unassigned": "Desktopul nu are încă taste pentru lansatorul rapid; atribuie-i în setările de scurtături ale desktopului.",
+  "settings.quick_launch.commands_file": "{desktop} nu lasă programele să asculte tastele apăsate în alte ferestre. Adaugă asta în {file}, apoi reîncarcă configurația:",
+  "settings.quick_launch.command": "Atribuie această comandă unei taste în setările de tastatură ale desktopului:",
+  "settings.quick_launch.off": "Și această comandă deschide lansatorul rapid; dacă vrei, atribuie-o unei taste în setările de tastatură ale desktopului:"
 }

@@ -28,7 +28,7 @@ mod commands;
 mod dialogs;
 mod filter;
 mod filters_panel;
-mod format;
+pub mod format;
 mod grid;
 mod i18n;
 mod launch;
@@ -60,7 +60,9 @@ pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
-pub use random::open_random_game;
+pub use random::{
+    Pool as RandomPool, open_random_game, pick_from as pick_random_from, pools as random_pools,
+};
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;

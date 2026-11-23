@@ -107,7 +107,7 @@ pub(crate) fn nav_item(item: NavItem, collapsed: bool, cx: &App) -> AnyElement {
 
 /// Recently played games, newest first: Irori's own history, or the recorded
 /// playtime when that is empty (such as right after importing from Heroic).
-fn recent_games(cx: &App) -> Vec<Arc<GameInfo>> {
+pub(crate) fn recent_games(cx: &App) -> Vec<Arc<GameInfo>> {
     let library = models(cx).library.read(cx);
     let user = &library.user;
     let keys: Vec<String> = if user.recent.is_empty() {

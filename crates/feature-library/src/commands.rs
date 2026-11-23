@@ -12,6 +12,8 @@ use irori_ui::i18n::t;
 pub enum GameCommand {
     Play,
     Stop,
+    /// Bring the running game's window to the front.
+    BackToGame,
     /// Open the install sheet (owned by the game feature).
     Install,
     Update,
@@ -125,6 +127,9 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if let Some(p) = primary(state) {
         main.push(p);
     }
+    if playing {
+        main.push(BackToGame);
+    }
     if state.installed && state.has_update && !busy && !state.is_queued() && !state.sideload {
         main.push(Update);
     }
@@ -185,6 +190,7 @@ impl GameCommand {
             ToggleCategory(name) => return name.clone(),
             Play => "library.command.play",
             Stop => "library.command.stop",
+            BackToGame => "library.command.back_to_game",
             Install => "library.command.install",
             Update => "library.command.update",
             RemoveFromQueue => "library.command.remove_from_queue",
@@ -218,6 +224,7 @@ impl GameCommand {
         match self {
             Play => IconName::Play,
             Stop => IconName::CircleStop,
+            BackToGame => IconName::AppWindow,
             Install => IconName::Download,
             Update => IconName::CircleArrowDown,
             RemoveFromQueue => IconName::X,
@@ -326,7 +333,7 @@ mod tests {
         };
         assert!(!flat(&s).contains(&Uninstall));
         assert!(!flat(&s).contains(&Verify));
-        assert_eq!(flat(&s)[0], Stop);
+        assert_eq!(flat(&s)[..2], [Stop, BackToGame]);
         s.status = None;
         s.external = true;
         s.has_install_path = true;

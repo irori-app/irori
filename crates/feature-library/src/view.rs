@@ -921,6 +921,7 @@ impl LibraryView {
         let title = game.title.clone();
         match command {
             GameCommand::Play => self.play(&game, window, cx),
+            GameCommand::BackToGame => irori_ui::game_window::back_to_game(id, window, cx),
             GameCommand::Stop => {
                 let task = irori_ui::run(cx, async move { b.stop(&id).await });
                 let failed = t_args("library.error.stop", &[("title", &title)]);

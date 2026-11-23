@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "无操作多少分钟后 Big Picture 显示闲置画面；0 表示从不显示。按任意按键或移动鼠标即可返回 Big Picture。",
   "settings.field.idle_screen.label": "闲置画面",
   "settings.option.idle_screen.slideshow": "依次显示游戏图片",
-  "settings.option.idle_screen.dim": "变暗并显示时钟"
+  "settings.option.idle_screen.dim": "变暗并显示时钟",
+  "settings.field.quick_launch_shortcut.label": "使用快捷键打开快速启动器",
+  "settings.field.quick_launch_shortcut.help": "快速启动器是在独立小窗口中打开的命令面板：无需将 Irori 调到前台，即可找到游戏并开始游玩，或返回游戏。Irori 会向桌面申请 Ctrl+Alt+K；无法申请时，请自行将下面的命令绑定到按键。",
+  "settings.field.panel_quick_launch.label": "快速启动器快捷键",
+  "settings.quick_launch.asking": "正在向桌面申请快捷键…",
+  "settings.quick_launch.keys": "在任意位置按 {keys} 即可打开快速启动器。",
+  "settings.quick_launch.ready": "快速启动器的快捷键由桌面管理；可在桌面的快捷键设置中更改按键。",
+  "settings.quick_launch.unassigned": "桌面尚未为快速启动器分配按键；请在桌面的快捷键设置中分配。",
+  "settings.quick_launch.commands_file": "{desktop} 不允许程序监听在其他窗口中按下的按键。请将以下内容添加到 {file}，然后重新载入其配置：",
+  "settings.quick_launch.command": "请在桌面的键盘设置中将此命令绑定到按键：",
+  "settings.quick_launch.off": "此命令也能打开快速启动器；如有需要，可在桌面的键盘设置中将其绑定到按键："
 }

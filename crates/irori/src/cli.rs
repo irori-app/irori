@@ -46,6 +46,9 @@ pub struct Cli {
     /// Ask the running Irori to take a screenshot of the game
     /// (`--screenshot`, for a compositor's key binding). Never starts Irori.
     pub screenshot: bool,
+    /// Open the quick launcher, or close it when it is open
+    /// (`--quick-launch`, `irori://quick-launch`).
+    pub quick_launch: bool,
     pub version: bool,
     pub help: bool,
 }
@@ -64,6 +67,7 @@ impl Cli {
                 "--wait" => cli.wait = true,
                 "--save-clip" => cli.save_clip = true,
                 "--screenshot" => cli.screenshot = true,
+                "--quick-launch" => cli.quick_launch = true,
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
@@ -127,6 +131,7 @@ impl Cli {
             }
             "game" | "open" => self.open = game,
             "bigpicture" | "console" => self.big_picture = true,
+            "quick-launch" => self.quick_launch = true,
             "library" => self.route = Some(Route::Library),
             "downloads" => self.route = Some(Route::Downloads),
             "updates" => self.route = Some(Route::Updates),
@@ -175,7 +180,18 @@ impl Cli {
             || self.windows_file.is_some()
             || self.windows_uri.is_some()
             || self.big_picture
+            || self.quick_launch
             || self.capture()
+    }
+
+    /// Whether this invocation asks for the quick launcher and nothing
+    /// else: the main window then stays as it is (hidden in the tray too).
+    pub fn quick_launch_only(&self) -> bool {
+        let rest = Cli {
+            quick_launch: false,
+            ..self.clone()
+        };
+        self.quick_launch && !rest.has_request()
     }
 
     /// Whether this invocation only plays a game and asks for no window
@@ -290,10 +306,13 @@ Options:
       --save-clip               Ask the running Irori to save a clip of the replay buffer
       --screenshot              Ask the running Irori to take a screenshot of the game
                                 (bind both to keys in your compositor; see Settings)
+      --quick-launch            Open the quick launcher (the command palette in a window
+                                of its own), or close it; bind it to a key
   -V, --version                 Print the version
   -h, --help                    Print this help
 
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
+      irori://quick-launch,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
       irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
       nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads),
@@ -324,6 +343,19 @@ mod tests {
         let none = parse(&["--minimized"]);
         assert!(!none.capture() && !none.has_request());
         assert!(HELP.contains("--save-clip") && HELP.contains("--screenshot"));
+    }
+
+    #[test]
+    fn the_quick_launcher_is_asked_for_by_flag_and_link() {
+        for args in [&["--quick-launch"][..], &["irori://quick-launch"][..]] {
+            let cli = parse(args);
+            assert!(cli.quick_launch && cli.has_request() && cli.quick_launch_only());
+        }
+        // With another request it is no longer the only one.
+        let both = parse(&["--quick-launch", "irori://library"]);
+        assert!(both.quick_launch && !both.quick_launch_only());
+        assert!(!parse(&[]).quick_launch_only());
+        assert!(HELP.contains("--quick-launch"));
     }
 
     #[test]

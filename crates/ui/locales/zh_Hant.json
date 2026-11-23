@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "不必登出 Irori。",
   "ui.xbox.open_wine_manager": "開啟 Wine 管理員",
   "ui.xbox.game_settings": "Wine 設定",
-  "ui.xbox.open_devices": "開啟 Microsoft 裝置頁面"
+  "ui.xbox.open_devices": "開啟 Microsoft 裝置頁面",
+  "ui.game_window.no_window": "遊戲還沒有可置於前景的視窗",
+  "ui.game_window.unsupported": "此桌面不允許 Irori 將遊戲視窗置於前景；請從工作列切換過去",
+  "ui.game_window.failed": "無法將遊戲視窗置於前景"
 }

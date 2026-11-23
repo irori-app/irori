@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Minuter utan inmatning innan Big Picture visar viloskärmen; 0 visar den aldrig. Varje knapp, tangent eller musrörelse tar tillbaka Big Picture.",
   "settings.field.idle_screen.label": "Viloskärm",
   "settings.option.idle_screen.slideshow": "Dina spels bilder, en i taget",
-  "settings.option.idle_screen.dim": "Mörklagd, med klockan"
+  "settings.option.idle_screen.dim": "Mörklagd, med klockan",
+  "settings.field.quick_launch_shortcut.label": "Öppna snabbstartaren med ett kortkommando",
+  "settings.field.quick_launch_shortcut.help": "Snabbstartaren är kommandopaletten i ett eget litet fönster: hitta ett spel och spela det, eller gå tillbaka till det, utan att ta fram Irori. Irori ber skrivbordet om Ctrl+Alt+K; där det inte går binder du kommandot nedan till en tangent själv.",
+  "settings.field.panel_quick_launch.label": "Snabbstartarens kortkommando",
+  "settings.quick_launch.asking": "Ber skrivbordet om kortkommandot …",
+  "settings.quick_launch.keys": "{keys} öppnar snabbstartaren varifrån som helst.",
+  "settings.quick_launch.ready": "Skrivbordet har snabbstartarens kortkommando; ändra tangenterna i skrivbordets kortkommandoinställningar.",
+  "settings.quick_launch.unassigned": "Skrivbordet har ännu inga tangenter för snabbstartaren; ge den några i skrivbordets kortkommandoinställningar.",
+  "settings.quick_launch.commands_file": "{desktop} låter inte program lyssna efter tangenter som trycks i andra fönster. Lägg till detta i {file} och läs sedan in konfigurationen igen:",
+  "settings.quick_launch.command": "Bind det här kommandot till en tangent i skrivbordets tangentbordsinställningar:",
+  "settings.quick_launch.off": "Det här kommandot öppnar också snabbstartaren; bind det till en tangent i skrivbordets tangentbordsinställningar om du vill:"
 }

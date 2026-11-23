@@ -313,5 +313,8 @@
   "ui.xbox.device_limit_hint": "Irori からサインアウトする必要はありません。",
   "ui.xbox.open_wine_manager": "Wine マネージャーを開く",
   "ui.xbox.game_settings": "Wine の設定",
-  "ui.xbox.open_devices": "Microsoft のデバイス ページを開く"
+  "ui.xbox.open_devices": "Microsoft のデバイス ページを開く",
+  "ui.game_window.no_window": "ゲームには、まだ前面に出せるウィンドウがありません",
+  "ui.game_window.unsupported": "このデスクトップでは Irori がゲームのウィンドウを前面に出せません。タスクバーから切り替えてください",
+  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした"
 }

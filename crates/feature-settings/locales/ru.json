@@ -1626,5 +1626,15 @@
   "settings.field.idle_minutes.help": "Минуты без ввода до показа экрана ожидания в Big Picture; 0 — никогда. Любая кнопка, клавиша или движение мыши возвращает Big Picture.",
   "settings.field.idle_screen.label": "Экран ожидания",
   "settings.option.idle_screen.slideshow": "Обложки ваших игр по очереди",
-  "settings.option.idle_screen.dim": "Затемнённый, с часами"
+  "settings.option.idle_screen.dim": "Затемнённый, с часами",
+  "settings.field.quick_launch_shortcut.label": "Открывать быстрый запуск сочетанием клавиш",
+  "settings.field.quick_launch_shortcut.help": "Быстрый запуск — это палитра команд в отдельном маленьком окне: найдите игру и запустите её или вернитесь в неё, не выводя Irori на передний план. Irori просит у рабочего стола Ctrl+Alt+K; где это невозможно, назначьте команду ниже на клавишу сами.",
+  "settings.field.panel_quick_launch.label": "Сочетание для быстрого запуска",
+  "settings.quick_launch.asking": "Запрашиваем сочетание у рабочего стола…",
+  "settings.quick_launch.keys": "{keys} открывает быстрый запуск откуда угодно.",
+  "settings.quick_launch.ready": "Сочетание быстрого запуска хранит рабочий стол; клавиши меняются в его настройках сочетаний.",
+  "settings.quick_launch.unassigned": "У рабочего стола пока нет клавиш для быстрого запуска; назначьте их в его настройках сочетаний.",
+  "settings.quick_launch.commands_file": "{desktop} не даёт программам слушать клавиши, нажатые в других окнах. Добавьте это в {file} и перезагрузите конфигурацию:",
+  "settings.quick_launch.command": "Назначьте эту команду на клавишу в настройках клавиатуры рабочего стола:",
+  "settings.quick_launch.off": "Быстрый запуск открывает и эта команда; при желании назначьте её на клавишу в настройках клавиатуры рабочего стола:"
 }
