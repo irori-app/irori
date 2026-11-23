@@ -939,6 +939,8 @@
   "library.folder.found_other": "In {folder} wurden {count} Spiele gefunden.",
   "library.folder.select_all": "Alle auswählen",
   "library.folder.select_none": "Keine auswählen",
+  "library.folder.rename": "Umbenennen",
+  "library.folder.choose_program": "Mit anderem Programm starten",
   "library.folder.find_art": "Cover online suchen (PCGamingWiki und Steam)",
   "library.folder.skipped_hint": "Installer, Deinstaller, Redistributables und Absturzmelder werden nicht aufgeführt. Das Programm eines Spiels lässt sich später über „Bearbeiten“ ändern.",
   "library.folder.add_one": "1 Spiel hinzufügen",

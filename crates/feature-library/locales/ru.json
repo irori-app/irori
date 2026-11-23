@@ -939,6 +939,8 @@
   "library.folder.found_other": "Найдено игр в {folder}: {count}",
   "library.folder.select_all": "Выбрать все",
   "library.folder.select_none": "Снять выбор",
+  "library.folder.rename": "Переименовать",
+  "library.folder.choose_program": "Запускать другой программой",
   "library.folder.find_art": "Искать обложки в сети (PCGamingWiki и Steam)",
   "library.folder.skipped_hint": "Установщики, деинсталляторы, распространяемые пакеты и обработчики сбоев не показываются. Программу игры можно сменить позже через «Изменить».",
   "library.folder.add_one": "Добавить 1 игру",

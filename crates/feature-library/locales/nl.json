@@ -939,6 +939,8 @@
   "library.folder.found_other": "{count} games gevonden in {folder}.",
   "library.folder.select_all": "Alles selecteren",
   "library.folder.select_none": "Niets selecteren",
+  "library.folder.rename": "Naam wijzigen",
+  "library.folder.choose_program": "Met een ander programma starten",
   "library.folder.find_art": "Covers online zoeken (PCGamingWiki en Steam)",
   "library.folder.skipped_hint": "Installatieprogramma’s, verwijderprogramma’s, redistributables en crashhandlers worden niet getoond. Je kunt het programma van een game later wijzigen met Bewerken.",
   "library.folder.add_one": "1 game toevoegen",

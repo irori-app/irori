@@ -939,6 +939,8 @@
   "library.folder.found_other": "Se encontraron {count} juegos en {folder}.",
   "library.folder.select_all": "Seleccionar todo",
   "library.folder.select_none": "No seleccionar ninguno",
+  "library.folder.rename": "Cambiar nombre",
+  "library.folder.choose_program": "Iniciar con otro programa",
   "library.folder.find_art": "Buscar carátulas en línea (PCGamingWiki y Steam)",
   "library.folder.skipped_hint": "No se muestran instaladores, desinstaladores, redistribuibles ni gestores de fallos. Puedes cambiar el programa de un juego más tarde con Editar.",
   "library.folder.add_one": "Añadir 1 juego",

@@ -939,6 +939,8 @@
   "library.folder.found_other": "{count} jeux trouvés dans {folder}.",
   "library.folder.select_all": "Tout sélectionner",
   "library.folder.select_none": "Ne rien sélectionner",
+  "library.folder.rename": "Renommer",
+  "library.folder.choose_program": "Lancer avec un autre programme",
   "library.folder.find_art": "Chercher les jaquettes en ligne (PCGamingWiki et Steam)",
   "library.folder.skipped_hint": "Les installateurs, désinstallateurs, redistribuables et gestionnaires de plantage ne sont pas listés. Vous pourrez changer le programme d’un jeu plus tard avec Modifier.",
   "library.folder.add_one": "Ajouter 1 jeu",

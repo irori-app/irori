@@ -939,6 +939,8 @@
   "library.folder.found_other": "{count} spel hittades i {folder}.",
   "library.folder.select_all": "Markera alla",
   "library.folder.select_none": "Avmarkera alla",
+  "library.folder.rename": "Byt namn",
+  "library.folder.choose_program": "Starta med ett annat program",
   "library.folder.find_art": "Hitta omslag på nätet (PCGamingWiki och Steam)",
   "library.folder.skipped_hint": "Installerare, avinstallerare, redistributables och kraschhanterare visas inte. Du kan byta ett spels program senare med Redigera.",
   "library.folder.add_one": "Lägg till 1 spel",

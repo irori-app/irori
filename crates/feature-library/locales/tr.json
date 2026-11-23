@@ -939,6 +939,8 @@
   "library.folder.found_other": "{folder} içinde {count} oyun bulundu.",
   "library.folder.select_all": "Tümünü seç",
   "library.folder.select_none": "Hiçbirini seçme",
+  "library.folder.rename": "Yeniden adlandır",
+  "library.folder.choose_program": "Başka bir programla başlat",
   "library.folder.find_art": "Kapak görsellerini çevrimiçi bul (PCGamingWiki ve Steam)",
   "library.folder.skipped_hint": "Kurulum ve kaldırma programları, yeniden dağıtılabilir paketler ve çökme işleyicileri listelenmez. Bir oyunun programını daha sonra Düzenle ile değiştirebilirsiniz.",
   "library.folder.add_one": "1 oyun ekle",

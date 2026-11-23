@@ -1244,6 +1244,17 @@ dragging its edge or with the arrow keys on it.
 - Key contexts are `*_CONTEXT` constants. Actions are declared per crate and bound
   once.
 
+**Onboarding** (`irori-manage` `onboarding/`): the import step lists Heroic and the other
+launchers found off the UI thread (Lutris, Bottles, Faugus Launcher, Playnite;
+`onboarding::launchers`), each imported with its summary. Getting started
+(`onboarding::hub`, `irori_manage::open_getting_started`: onboarding's last page, the
+palette, the empty library) is a checklist of three steps that tick themselves from the
+library and settings (a game; a look other than the defaults; a switch for playing on),
+or that the user marks as fine as they are (`<state>/getting-started.json`), then tips. The empty
+library shows `onboarding::found` through `irori_ui::hooks::found_sources`: Steam with
+its state and the one action it needs, emulators and ROM folders found, the other
+launchers, and the stores to log in to.
+
 ### 4.5 Shell (`crates/irori`)
 
 `main.rs` does these steps in order. Keep them in this order:
@@ -1363,7 +1374,11 @@ Microsoft's approval page (`irori_manage::login`).
   gilrs reads Windows.Gaming.Input through the patched `crates/gilrs-core`, which
   never panics (release builds abort on a panic) and reads controllers whose
   `NonRoamableId` fails. PlayStation and Switch Pro controllers that Steam or an SDL
-  program switched to their full HID report still read nothing there.
+  program switched to their full HID report still read nothing there. On Linux the
+  `xpad` driver reports an Xbox pad's X and Y as `BTN_X`/`BTN_Y`, which the kernel
+  also names `BTN_NORTH`/`BTN_WEST`; SDL's database undoes that, so a pad it doesn't
+  list (gilrs' default mapping) gets its top and left buttons swapped back when its
+  event device's driver is `xpad` (`reader::swaps_north_west`).
 - `input.rs` normalizes input (repeat, dedupe) and is unit-tested.
 - `mod.rs` dispatches `irori_gamepad` actions to the focused element, or synthesizes
   keystrokes (arrows, Enter, Escape, Ctrl+Enter, Ctrl+K, Page Up/Down) when the element
@@ -1582,6 +1597,22 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   default installation per engine. Installing never changes what games use; Update does,
   and a game pinned with `iroriEngineVersion` keeps its version. Flatpak and system
   installs are detected and labelled, never installed or removed.
+- **Open without a game** (`irori_engines::open`, `Backend::open_engine`; the
+  Emulators page's Open and the palette's "Open <emulator>", both
+  `irori_manage::open_engine`): the default installation starts with the settings games
+  get (RetroArch's managed configuration, a managed version's portable marker) but
+  without the launch template. Its output goes to `engine-<id>.log`, and one that fails
+  within 3 s says why. Converting engines (AnyPS5) have nothing to open. The palette's
+  list is kept in memory and read again in the background once older than a minute.
+- **Usual ROM folders** (`irori_engines::rom_sources`, `Backend::rom_sources`,
+  `irori_manage::open_rom_sources_dialog`: the setup guide's first page, the empty
+  library, Getting started, the palette): EmuDeck's `Emulation/roms`, RetroDECK's
+  `retrodeck/roms` and `ROMs` folders at home and at the top of other disks (Linux
+  `/run/media`, `/media`, `/mnt`; macOS `/Volumes`; other Windows drives), read only.
+  A system folder counts once it holds a file its system plays (EmuDeck's notes
+  don't); only systems an installed or downloadable emulator plays are offered, folders
+  the library already scans are left out, and the others are named. Nothing is added
+  until the user picks the systems (`Backend::add_rom_folders`).
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.

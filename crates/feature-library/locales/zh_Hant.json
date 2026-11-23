@@ -939,6 +939,8 @@
   "library.folder.found_other": "在 {folder} 中找到 {count} 款遊戲。",
   "library.folder.select_all": "全選",
   "library.folder.select_none": "全不選",
+  "library.folder.rename": "重新命名",
+  "library.folder.choose_program": "用其他程式啟動",
   "library.folder.find_art": "線上尋找封面（PCGamingWiki 和 Steam）",
   "library.folder.skipped_hint": "不會列出安裝程式、解除安裝程式、執行庫和當機處理程式。之後可以在「編輯」中更改遊戲的程式。",
   "library.folder.add_one": "新增 1 款遊戲",
