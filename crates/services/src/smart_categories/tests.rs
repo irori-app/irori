@@ -548,10 +548,10 @@ fn rules_on_dates_numbers_and_flags_read_their_part() {
         "steam:2".into(),
         [(
             day(2026, 11, 1),
-            crate::journal::JournalEntry {
+            vec![crate::journal::JournalEntry {
                 text: "Wheatley!".into(),
                 ..Default::default()
-            },
+            }],
         )]
         .into(),
     );
