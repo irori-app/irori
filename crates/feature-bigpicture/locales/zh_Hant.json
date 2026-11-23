@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "今天的筆記",
   "bigpicture.overlay.journal_none_today": "今天還沒有筆記。",
   "bigpicture.overlay.journal_marked": "已標記的時刻，稍後再寫",
+  "bigpicture.overlay.left_off": "上次停在哪裡",
   "bigpicture.overlay.journal_keyboard": "輸入需要鍵盤：請先點按覆疊，讓它接收按鍵。",
   "bigpicture.overlay.unlocked": "成就已解鎖",
   "bigpicture.overlay.more_unlocks_one": "還有 1 個",

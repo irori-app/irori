@@ -23,6 +23,9 @@
 //! title and art, so editing one on a computer and the other elsewhere
 //! keeps both.
 //!
+//! Where the user left off in a game is a register per game, dated by when
+//! it was written.
+//!
 //! Every journal note is a register of its own, by its game and id, so notes
 //! written on two computers on the same day are both kept; a note edited on
 //! both keeps the later edit. Notes written before sync was turned on carry
@@ -51,7 +54,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use irori_core::game::{GameLink, GameOverrides, PlaytimeRecord};
 use serde::{Deserialize, Serialize};
 
-use crate::journal::JournalEntry;
+use crate::journal::{JournalEntry, LeftOff};
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::Session;
 use crate::smart_categories::{CategoryLook, SmartCategory};
@@ -136,6 +139,9 @@ pub struct Registers {
     /// Journal notes, by [`note_key`].
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub journal: Lww<String, Option<SharedNote>>,
+    /// Where the user left off, by game key.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: Lww<String, Option<LeftOff>>,
 }
 
 /// A journal note with the game and day it belongs to.
@@ -176,6 +182,7 @@ impl Registers {
             max(&self.category_looks),
             max(&self.links),
             max(&self.journal),
+            max(&self.left_off),
         ]
         .into_iter()
         .max()
@@ -384,6 +391,12 @@ pub fn record(
         me,
         |v: &Option<SharedNote>| dating.at(v.as_ref().map(|n| n.note.updated.as_str())),
     );
+    changed += note(
+        &mut regs.left_off,
+        &view.left_off,
+        me,
+        |v: &Option<LeftOff>| dating.at(v.as_ref().map(|l| l.updated.as_str())),
+    );
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -446,6 +459,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(playtime_removed, ConflictField::Playtime);
     take_all!(category_looks, ConflictField::Category);
     take_all!(links, ConflictField::Custom);
+    take_all!(left_off, ConflictField::Journal);
     for remote in remotes {
         take(
             &mut regs.smart_categories,
@@ -618,6 +632,7 @@ struct View {
     category_looks: BTreeMap<String, Option<CategoryLook>>,
     links: BTreeMap<String, Option<Vec<GameLink>>>,
     journal: BTreeMap<String, Option<SharedNote>>,
+    left_off: BTreeMap<String, Option<LeftOff>>,
 }
 
 fn on(keys: &BTreeSet<String>) -> BTreeMap<String, bool> {
@@ -697,6 +712,11 @@ impl View {
                     })
                 })
                 .collect(),
+            left_off: d
+                .left_off
+                .iter()
+                .map(|(k, l)| (k.clone(), Some(l.clone())))
+                .collect(),
         }
     }
 
@@ -737,6 +757,7 @@ impl View {
             category_looks: values(&regs.category_looks),
             links: values(&regs.links),
             journal: values(&regs.journal),
+            left_off: values(&regs.left_off),
         }
     }
 
@@ -765,6 +786,7 @@ impl View {
             + differing(&self.category_looks, &other.category_looks)
             + differing(&self.links, &other.links)
             + differing(&self.journal, &other.journal)
+            + differing(&self.left_off, &other.left_off)
     }
 
     /// Put these values into `d`, whose values were `before`. Returns how
@@ -821,6 +843,11 @@ impl View {
             .iter()
             .filter(|(name, _)| d.categories.contains_key(*name))
             .filter_map(|(name, look)| Some((name.clone(), look.clone()?)))
+            .collect();
+        d.left_off = self
+            .left_off
+            .iter()
+            .filter_map(|(k, l)| Some((k.clone(), l.clone()?)))
             .collect();
         d.journal = crate::journal::from_notes(
             self.journal

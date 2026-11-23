@@ -589,7 +589,11 @@ commands without a window.
   each note; sync has a register per note (`<game>#<id>`). Screens edit them through
   `irori_ui::journal::open_editor` (the game page's timeline, with search and "Only
   days with notes"; the stats page's Journal tab, with search; the overlay's
-  Journal tab).
+  Journal tab). "Where I left off" (`UserData::left_off`, `LeftOff`, 280 characters)
+  is one short note per game under its status on the game page (and drawer), edited
+  through `irori_ui::journal::open_left_off_editor` there and in the overlay's
+  Journal tab; clearing it offers Undo (`set_left_off` returns what was there). A
+  register per game in sync, the later-written one kept by backups.
 - **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
   store details (a store page's gaps: screenshots, trailers, description, genres, date;
   cached a week in `<cache>/steam-details/`), ProtonDB and the Steam Deck rating follow. It

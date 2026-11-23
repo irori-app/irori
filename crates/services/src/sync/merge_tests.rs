@@ -954,3 +954,19 @@ fn status_changes_from_every_computer_are_kept_once() {
     assert!(deck.data.status_history.is_empty());
     assert!(deck.published.status_history.is_empty());
 }
+
+#[test]
+fn where_i_left_off_travels_and_its_clearing_too() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.left_off.insert(
+        "gog:1".into(),
+        crate::LeftOff::new("Before the bridge", &rfc(t(1))).unwrap(),
+    );
+    round(&mut a, &mut b, t(10));
+    assert_eq!(b.data.left_off["gog:1"].text, "Before the bridge");
+    b.data.left_off.remove("gog:1");
+    b.tick(t(20));
+    round(&mut b, &mut a, t(30));
+    assert!(a.data.left_off.is_empty());
+}

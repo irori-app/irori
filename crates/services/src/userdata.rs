@@ -12,7 +12,7 @@ use irori_core::{Event, EventBus, GameId, GameInfo, Paths, json_store, util};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::journal::{self, Journal, JournalEntry, LegacyJournal};
+use crate::journal::{self, Journal, JournalEntry, LeftOff, LegacyJournal};
 use crate::play_status::{
     self, EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory,
 };
@@ -51,6 +51,9 @@ pub struct UserData {
     /// The user's notes, per game and day, several a day.
     #[serde(default, rename = "journal_notes")]
     pub journal: Journal,
+    /// Where the user left off in each game.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: BTreeMap<String, LeftOff>,
     /// Notes as Irori kept them before several a day (one per game and
     /// day), read from older files and moved into `journal` on load.
     #[serde(
@@ -170,6 +173,7 @@ impl UserData {
             play_status::merge_history(&mut self.status_history, &from_history);
         }
         take(&mut self.ratings, from, to);
+        take(&mut self.left_off, from, to);
         journal::carry_over(&mut self.journal, from, to);
     }
 
@@ -795,6 +799,42 @@ impl UserDataService {
             removed.is_some()
         });
         removed
+    }
+
+    /// Write where the user left off in a game, or clear it with an empty
+    /// text. Returns what was there before, to put back with
+    /// [`Self::restore_left_off`].
+    pub fn set_left_off(&self, id: &GameId, text: &str) -> Option<LeftOff> {
+        let now = util::now_rfc3339();
+        let key = id.key();
+        let mut before = None;
+        self.update_if(Some(id), |d| {
+            before = d.left_off.get(&key).cloned();
+            let next = LeftOff::new(text, &now);
+            if before.as_ref().map(|b| &b.text) == next.as_ref().map(|n| &n.text) {
+                return false;
+            }
+            match next {
+                Some(next) => d.left_off.insert(key.clone(), next),
+                None => d.left_off.remove(&key),
+            };
+            true
+        });
+        before
+    }
+
+    /// Put back where the user left off as [`Self::set_left_off`] found it
+    /// (Undo).
+    pub fn restore_left_off(&self, id: &GameId, before: Option<LeftOff>) {
+        let key = id.key();
+        self.update(Some(id), |d| match before {
+            Some(before) => {
+                d.left_off.insert(key, before);
+            }
+            None => {
+                d.left_off.remove(&key);
+            }
+        });
     }
 
     /// Put back a note [`Self::remove_journal_entry`] took, as it was.

@@ -3,7 +3,8 @@
 //! time (empty for a note about the whole day), a title, the note itself,
 //! the capture it is about and the screenshots taken that day to link to it.
 //! Saving writes the library file, so it runs off the UI thread; deleting a
-//! note asks first.
+//! note asks first. Also the "Where I left off" editor: one short note per
+//! game, whose clearing offers Undo.
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
@@ -13,6 +14,7 @@ use chrono::{Local, NaiveDate, NaiveTime, TimeZone as _, Timelike as _};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{
     ActiveTheme as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
@@ -457,6 +459,120 @@ pub fn open_editor(
         }
         dialog.title(label.clone()).w(width).child(view.clone())
     });
+}
+
+/// The "Where I left off" editor: one short note per game.
+struct LeftOffEditor {
+    id: GameId,
+    text: Entity<TextareaState>,
+}
+
+impl Render for LeftOffEditor {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
+        v_flex()
+            .id("left-off-editor")
+            .gap_4()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(muted)
+                    .child(t("ui.left_off.help")),
+            )
+            .child(Textarea::new(&self.text))
+            .child(
+                h_flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(
+                        Button::new("left-off-cancel")
+                            .ghost()
+                            .label(t("ui.journal.cancel"))
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("left-off-save")
+                            .primary()
+                            .label(t("ui.journal.save"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                let text = this.text.read(cx).value().to_string();
+                                window.close_dialog(cx);
+                                set_left_off(this.id.clone(), text, window, cx);
+                            })),
+                    ),
+            )
+    }
+}
+
+/// Write where the user left off in `id` (`title`), or change it.
+pub fn open_left_off_editor(id: GameId, title: &str, window: &mut Window, cx: &mut App) {
+    let current = models(cx)
+        .library
+        .read(cx)
+        .user
+        .left_off
+        .get(&id.key())
+        .map(|l| l.text.clone())
+        .unwrap_or_default();
+    let text = cx.new(|cx| {
+        TextareaState::new(window, cx)
+            .auto_grow(3, 6)
+            .placeholder(t("ui.left_off.placeholder"))
+            .default_value(current)
+    });
+    let view = cx.new(|_| LeftOffEditor { id, text });
+    let label = t_args("ui.left_off.title", &[("title", title)]);
+    let width = window.rem_size() * 32.;
+    let focus = Cell::new(true);
+    window.open_dialog(cx, move |dialog, window, cx| {
+        if focus.replace(false) {
+            view.read(cx).text.focus_handle(cx).focus(window, cx);
+        }
+        dialog.title(label.clone()).w(width).child(view.clone())
+    });
+}
+
+/// Write (or, with an empty text, clear) where the user left off in `id`
+/// off the UI thread; a clearing offers Undo.
+pub fn set_left_off(id: GameId, text: String, window: &mut Window, cx: &mut App) {
+    let b = backend(cx);
+    let clearing = text.trim().is_empty();
+    let task = crate::state::run_infallible(cx, {
+        let id = id.clone();
+        async move { b.userdata.set_left_off(&id, &text) }
+    });
+    window
+        .spawn(cx, async move |cx| {
+            let Some(before) = task.await else {
+                return;
+            };
+            if !clearing || before.is_none() {
+                return;
+            }
+            let _ = cx.update(|window, cx| {
+                window.push_notification(
+                    Notification::success(t("ui.left_off.cleared"))
+                        .action(move |_, _, cx| {
+                            let note = cx.entity().downgrade();
+                            let (id, before) = (id.clone(), before.clone());
+                            Button::new("left-off-undo")
+                                .label(t("ui.left_off.undo"))
+                                .small()
+                                .on_click(move |_, window, cx| {
+                                    let (b, id, before) = (backend(cx), id.clone(), before.clone());
+                                    crate::state::run_infallible(cx, async move {
+                                        b.userdata.restore_left_off(&id, before)
+                                    })
+                                    .detach();
+                                    let _ = note.update(cx, |n, cx| n.dismiss(window, cx));
+                                })
+                        })
+                        .autohide(true),
+                    cx,
+                );
+            });
+        })
+        .detach();
 }
 
 #[cfg(test)]

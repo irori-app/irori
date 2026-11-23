@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "今天的笔记",
   "bigpicture.overlay.journal_none_today": "今天还没有笔记。",
   "bigpicture.overlay.journal_marked": "已标记的时刻，稍后再写",
+  "bigpicture.overlay.left_off": "上次停在哪里",
   "bigpicture.overlay.journal_keyboard": "输入需要键盘：请先点击叠加层，让它接收按键。",
   "bigpicture.overlay.unlocked": "成就已解锁",
   "bigpicture.overlay.more_unlocks_one": "还有 1 个",

@@ -117,6 +117,32 @@ impl JournalEntry {
     }
 }
 
+/// Most characters a "Where I left off" note keeps.
+pub const MAX_LEFT_OFF: usize = 280;
+
+/// Where the user left off in a game: one short note, shown under its
+/// status, replaced as they go.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LeftOff {
+    pub text: String,
+    /// RFC 3339 time it was written.
+    pub updated: String,
+}
+
+impl LeftOff {
+    /// `text` as it is kept, dated `now`: trimmed and cut to
+    /// [`MAX_LEFT_OFF`] characters; `None` when nothing is left.
+    pub fn new(text: &str, now: &str) -> Option<Self> {
+        let text: String = text.trim().chars().take(MAX_LEFT_OFF).collect();
+        let text = text.trim_end().to_string();
+        (!text.is_empty()).then(|| Self {
+            text,
+            updated: now.to_string(),
+        })
+    }
+}
+
 /// A fresh id for a new note.
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()
@@ -616,6 +642,21 @@ mod tests {
         ];
         assert_eq!(day_note(&notes).id, "d");
         assert_eq!(day_note(&notes[..1]), JournalEntry::default());
+    }
+
+    #[test]
+    fn where_i_left_off_is_trimmed_and_cut() {
+        assert_eq!(LeftOff::new("   ", "t"), None);
+        let kept = LeftOff::new("  Before the bridge  ", "t").unwrap();
+        assert_eq!(
+            (kept.text.as_str(), kept.updated.as_str()),
+            ("Before the bridge", "t")
+        );
+        let long = "é".repeat(400);
+        assert_eq!(
+            LeftOff::new(&long, "t").unwrap().text.chars().count(),
+            MAX_LEFT_OFF
+        );
     }
 
     #[test]

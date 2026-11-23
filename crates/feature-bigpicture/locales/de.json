@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "Notizen von heute",
   "bigpicture.overlay.journal_none_today": "Heute noch keine Notizen.",
   "bigpicture.overlay.journal_marked": "Markierter Moment, später aufschreiben",
+  "bigpicture.overlay.left_off": "Wo ich aufgehört habe",
   "bigpicture.overlay.journal_keyboard": "Zum Schreiben braucht es eine Tastatur: Klicke zuerst auf das Overlay, damit es die Tasten erhält.",
   "bigpicture.overlay.unlocked": "Erfolg freigeschaltet",
   "bigpicture.overlay.more_unlocks_one": "1 weiterer wartet",

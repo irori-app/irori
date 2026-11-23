@@ -95,7 +95,7 @@ pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
 pub use igdb::IgdbStatus;
 pub use irori_steam_api::StoreHit as SteamHit;
-pub use journal::{Journal, JournalEntry};
+pub use journal::{Journal, JournalEntry, LeftOff};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};

@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "Today’s notes",
   "bigpicture.overlay.journal_none_today": "No notes for today yet.",
   "bigpicture.overlay.journal_marked": "Marked moment, to write later",
+  "bigpicture.overlay.left_off": "Where I left off",
   "bigpicture.overlay.journal_keyboard": "Writing needs a keyboard: click the overlay first so it gets the keys.",
   "bigpicture.overlay.unlocked": "Achievement unlocked",
   "bigpicture.overlay.more_unlocks_one": "1 more waiting",

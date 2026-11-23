@@ -46,6 +46,9 @@ const SHOT_REM: f32 = 15.;
 const ICON_REM: f32 = 3.;
 /// Time for the overlay's surface to leave the screen before a screenshot.
 const SCREENSHOT_DELAY: Duration = Duration::from_millis(300);
+/// Rows of the Journal tab before today's notes: write a note, where I
+/// left off.
+const JOURNAL_ACTIONS: usize = 2;
 
 /// Something read in the background: on its way, there, or failed.
 enum Load<T> {
@@ -312,7 +315,7 @@ impl OverlayView {
                 }
                 _ => 0,
             },
-            Tab::Journal => 1 + self.journal_today.len(),
+            Tab::Journal => JOURNAL_ACTIONS + self.journal_today.len(),
         }
     }
 
@@ -419,11 +422,14 @@ impl OverlayView {
             }
             Tab::Achievements => {}
             Tab::Controllers => self.controller_pressed(row, window, cx),
+            Tab::Journal if row == 1 => {
+                irori_ui::journal::open_left_off_editor(self.game.clone(), &self.title, window, cx);
+            }
             Tab::Journal => {
-                // Row 0 writes a new note; the others open today's notes,
-                // newest first.
+                // Row 0 writes a new note; the rows after the actions open
+                // today's notes, newest first.
                 let note = row
-                    .checked_sub(1)
+                    .checked_sub(JOURNAL_ACTIONS)
                     .and_then(|ix| self.journal_today.iter().rev().nth(ix))
                     .map(|n| n.id.clone());
                 let today = chrono::Local::now().date_naive();
@@ -1236,6 +1242,27 @@ impl OverlayView {
             None,
             cx,
         );
+        let left_off = irori_ui::models(cx)
+            .library
+            .read(cx)
+            .user
+            .left_off
+            .get(&self.game.key())
+            .map(|l| {
+                div()
+                    .text_sm()
+                    .line_clamp(1)
+                    .child(l.text.clone())
+                    .into_any_element()
+            });
+        let left_off = self.row(
+            Tab::Journal,
+            1,
+            IconName::Bookmark,
+            t("bigpicture.overlay.left_off"),
+            left_off,
+            cx,
+        );
         let notes: Vec<AnyElement> = self
             .journal_today
             .iter()
@@ -1250,7 +1277,7 @@ impl OverlayView {
                 };
                 let time = irori_ui::journal::time_label(note.time)
                     .map(|t| div().text_sm().child(t).into_any_element());
-                self.row(Tab::Journal, ix + 1, icon, label, time, cx)
+                self.row(Tab::Journal, ix + JOURNAL_ACTIONS, icon, label, time, cx)
             })
             .collect();
         let theme = cx.theme();
@@ -1260,6 +1287,7 @@ impl OverlayView {
             .gap_3()
             .overflow_y_scroll()
             .child(write)
+            .child(left_off)
             .child(
                 div()
                     .text_xs()

@@ -68,6 +68,9 @@ pub struct LibraryBackup {
     /// Journal notes, several a day.
     #[serde(rename = "journal_notes")]
     pub journal: Journal,
+    /// Where the user left off in each game.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: BTreeMap<String, crate::LeftOff>,
     /// One note per day, as backups made before several notes a day hold
     /// them; restored as whole-day notes.
     #[serde(rename = "journal", skip_serializing_if = "BTreeMap::is_empty")]
@@ -214,6 +217,7 @@ impl Backend {
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
+                left_off: user.left_off.clone(),
                 legacy_journal: Default::default(),
                 smart_categories: user.smart_categories.clone(),
                 category_looks: user.category_looks.clone(),
@@ -432,6 +436,15 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     let mut notes = lib.journal.clone();
     crate::journal::migrate(&mut notes, lib.legacy_journal.clone());
     crate::journal::merge(&mut d.journal, &notes);
+    for (key, left) in &lib.left_off {
+        let newer = d
+            .left_off
+            .get(key)
+            .is_none_or(|current| later(&left.updated, &current.updated));
+        if newer && !left.text.trim().is_empty() {
+            d.left_off.insert(key.clone(), left.clone());
+        }
+    }
     for (id, smart) in &lib.smart_categories {
         d.smart_categories
             .entry(id.clone())

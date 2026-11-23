@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "今日のメモ",
   "bigpicture.overlay.journal_none_today": "今日のメモはまだありません。",
   "bigpicture.overlay.journal_marked": "記録した瞬間（あとで書く）",
+  "bigpicture.overlay.left_off": "中断した場所",
   "bigpicture.overlay.journal_keyboard": "入力にはキーボードが必要です。まずオーバーレイをクリックしてキー入力を受け取れるようにしてください。",
   "bigpicture.overlay.unlocked": "実績を解除しました",
   "bigpicture.overlay.more_unlocks_one": "あと 1 件",

@@ -303,6 +303,7 @@
   "bigpicture.overlay.journal_notes_today": "Notes du jour",
   "bigpicture.overlay.journal_none_today": "Pas encore de note aujourd’hui.",
   "bigpicture.overlay.journal_marked": "Moment marqué, à écrire plus tard",
+  "bigpicture.overlay.left_off": "Où j’en suis",
   "bigpicture.overlay.journal_keyboard": "Pour écrire, il faut un clavier : cliquez d’abord sur l’overlay pour qu’il reçoive les touches.",
   "bigpicture.overlay.unlocked": "Succès débloqué",
   "bigpicture.overlay.more_unlocks_one": "Encore 1 en attente",
