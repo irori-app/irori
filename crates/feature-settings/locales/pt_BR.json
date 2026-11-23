@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Mostrar Epic Games",
   "settings.field.show_store_gog.label": "Mostrar GOG",
   "settings.field.show_stores.help": "Uma loja oculta mantém o login e os jogos instalados, mas os jogos, a conta e a página da loja deixam de aparecer.",
+  "settings.field.deals.label": "Mostrar promoções",
+  "settings.field.deals.help": "Mostra descontos da GOG e de outras lojas na página Lojas. Desativado, o Irori não os pede às lojas.",
   "settings.field.show_valve_proton.help": "O Proton da Valve é otimizado para o Steam; o GE-Proton costuma funcionar melhor aqui.",
   "settings.field.show_valve_proton.label": "Mostrar versões do Proton da Valve",
   "settings.field.smooth_motion.help": "O driver adiciona um quadro gerado entre cada dois que o jogo renderiza. Para jogos Vulkan, e jogos DirectX pelo DXVK e pelo VKD3D-Proton, que não tenham DLSS Frame Generation próprio.",

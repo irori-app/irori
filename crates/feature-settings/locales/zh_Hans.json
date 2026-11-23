@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "显示 Epic Games",
   "settings.field.show_store_gog.label": "显示 GOG",
   "settings.field.show_stores.help": "隐藏的商店会保留登录状态和已安装的游戏，但不再显示其游戏、账户和商店页面。",
+  "settings.field.deals.label": "显示优惠",
+  "settings.field.deals.help": "在“商店”页面列出 GOG 和其他商店的折扣。关闭后，Irori 不会向商店请求这些信息。",
   "settings.field.show_valve_proton.help": "Valve 的 Proton 专为 Steam 调校；在这里 GE-Proton 通常效果更好。",
   "settings.field.show_valve_proton.label": "显示 Valve Proton 版本",
   "settings.field.smooth_motion.help": "驱动会在游戏渲染的每两帧之间插入一个生成帧。适用于没有自带 DLSS 帧生成的 Vulkan 游戏，以及通过 DXVK 和 VKD3D-Proton 运行的 DirectX 游戏。",

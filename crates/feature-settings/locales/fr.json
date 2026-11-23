@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Afficher Epic Games",
   "settings.field.show_store_gog.label": "Afficher GOG",
   "settings.field.show_stores.help": "Une boutique masquée garde sa connexion et ses jeux installés, mais ses jeux, son compte et sa page ne sont plus affichés.",
+  "settings.field.deals.label": "Afficher les promotions",
+  "settings.field.deals.help": "Affiche les réductions de GOG et d’autres boutiques sur la page Boutiques. Désactivé, Irori ne les demande pas aux boutiques.",
   "settings.field.show_valve_proton.help": "Le Proton de Valve est optimisé pour Steam ; GE-Proton fonctionne généralement mieux ici.",
   "settings.field.show_valve_proton.label": "Proposer les versions Proton de Valve",
   "settings.field.smooth_motion.help": "Le pilote insère une image générée entre chaque paire d’images rendues par le jeu. Pour les jeux Vulkan, et les jeux DirectX via DXVK et VKD3D-Proton, qui n’ont pas leur propre DLSS Frame Generation.",

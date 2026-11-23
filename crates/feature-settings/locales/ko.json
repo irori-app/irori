@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Epic Games 표시",
   "settings.field.show_store_gog.label": "GOG 표시",
   "settings.field.show_stores.help": "숨긴 스토어는 로그인과 설치된 게임을 유지하지만 해당 게임, 계정, 스토어 페이지는 표시되지 않습니다.",
+  "settings.field.deals.label": "할인 정보 표시",
+  "settings.field.deals.help": "스토어 페이지에 GOG 및 다른 스토어의 할인을 표시합니다. 끄면 Irori가 스토어에 요청하지 않습니다.",
   "settings.field.show_valve_proton.help": "Valve의 Proton은 Steam에 맞게 조정되어 있으며, 여기서는 대개 GE-Proton이 더 잘 작동합니다.",
   "settings.field.show_valve_proton.label": "Valve Proton 빌드도 표시",
   "settings.field.smooth_motion.help": "게임이 렌더링하는 두 프레임마다 그 사이에 드라이버가 생성한 프레임을 하나 넣습니다. 자체 DLSS 프레임 생성이 없는 Vulkan 게임과, DXVK 및 VKD3D-Proton을 거치는 DirectX 게임용입니다.",

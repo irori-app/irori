@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Zobrazovat Epic Games",
   "settings.field.show_store_gog.label": "Zobrazovat GOG",
   "settings.field.show_stores.help": "Skrytý obchod si ponechá přihlášení i nainstalované hry, jeho hry, účet a stránka obchodu se ale nezobrazují.",
+  "settings.field.deals.label": "Zobrazovat slevy",
+  "settings.field.deals.help": "Na stránce Obchody zobrazuje slevy z GOG a dalších obchodů. Když je vypnuto, Irori se na ně obchodů neptá.",
   "settings.field.show_valve_proton.help": "Proton od Valve je vyladěn pro Steam; GE-Proton tu obvykle funguje lépe.",
   "settings.field.show_valve_proton.label": "Nabízet verze Protonu od Valve",
   "settings.field.smooth_motion.help": "Ovladač vloží mezi každé dva snímky, které hra vykreslí, jeden vygenerovaný. Pro hry Vulkan a hry DirectX přes DXVK a VKD3D-Proton, které nemají vlastní DLSS Frame Generation.",

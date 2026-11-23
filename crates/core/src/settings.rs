@@ -890,6 +890,10 @@ pub struct AppSettings {
     /// itself, where `checkForUpdatesOnStartup` is about games.
     #[serde(rename = "iroriCheckForAppUpdates")]
     pub check_for_app_updates: bool,
+    /// Show deals from GOG and other stores on the Stores page; off, they
+    /// are neither shown nor asked for. Irori-only.
+    #[serde(rename = "iroriDeals")]
+    pub deals: bool,
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
@@ -990,6 +994,7 @@ impl Default for AppSettings {
             auto_update_until: String::new(),
             auto_update_unmetered: false,
             check_for_app_updates: true,
+            deals: true,
             show_log_on_launch: false,
             achievement_notices: false,
             achievement_toast: AchievementToastPrefs::default(),
@@ -2083,6 +2088,14 @@ mod tests {
         let app: AppSettings =
             serde_json::from_str(r#"{"iroriCheckForAppUpdates": false}"#).unwrap();
         assert!(!app.check_for_app_updates);
+    }
+
+    #[test]
+    fn deals_show_unless_turned_off() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(app.deals);
+        let app: AppSettings = serde_json::from_str(r#"{"iroriDeals": false}"#).unwrap();
+        assert!(!app.deals);
     }
 
     #[test]

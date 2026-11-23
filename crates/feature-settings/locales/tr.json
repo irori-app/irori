@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Epic Games’i göster",
   "settings.field.show_store_gog.label": "GOG’u göster",
   "settings.field.show_stores.help": "Gizlenen bir mağaza oturumunu ve yüklü oyunlarını korur ancak oyunları, hesabı ve mağaza sayfası gösterilmez.",
+  "settings.field.deals.label": "Fırsatları göster",
+  "settings.field.deals.help": "Mağazalar sayfasında GOG ve diğer mağazaların indirimlerini listeler. Kapalıyken Irori mağazalardan bunları istemez.",
   "settings.field.show_valve_proton.help": "Valve'ın Proton'u Steam için ayarlanmıştır; burada genellikle GE-Proton daha iyi çalışır.",
   "settings.field.show_valve_proton.label": "Valve Proton sürümlerini göster",
   "settings.field.smooth_motion.help": "Sürücü, oyunun oluşturduğu her iki karenin arasına üretilmiş bir kare ekler. Kendi DLSS Frame Generation desteği olmayan Vulkan oyunları ile DXVK ve VKD3D-Proton üzerinden çalışan DirectX oyunları içindir.",

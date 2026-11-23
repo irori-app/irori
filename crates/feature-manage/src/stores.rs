@@ -73,6 +73,11 @@ pub(crate) fn store_site(runner: Runner) -> Option<StoreSite> {
     })
 }
 
+/// Whether the user wants deals on the Stores page (`iroriDeals`).
+fn deals_shown(cx: &gpui_kit::App) -> bool {
+    models(cx).settings.read(cx).app.deals
+}
+
 /// Narrowest a store card gets before the grid drops a column, in rem.
 const MIN_CARD_REM: f32 = 17.;
 
@@ -81,7 +86,9 @@ pub struct StoresView {
     cards: Vec<StoreCard>,
     /// Width of the store cards' grid at the last layout.
     grid_width: Rc<Cell<Pixels>>,
-    deals: Entity<DealsSection>,
+    /// Built only while `iroriDeals` is on, so nothing is asked for while
+    /// the user has turned deals off.
+    deals: Option<Entity<DealsSection>>,
     launchers: Entity<crate::launchers::LaunchersSection>,
     _subscriptions: Vec<Subscription>,
 }
@@ -92,9 +99,12 @@ impl StoresView {
         let m = models(cx).clone();
         let subscriptions = vec![
             cx.observe(&m.accounts, |this, _, cx| this.rebuild(cx)),
-            cx.observe(&m.settings, |this, _, cx| this.rebuild(cx)),
+            cx.observe_in(&m.settings, window, |this, _, window, cx| {
+                this.rebuild(cx);
+                this.show_deals(window, cx);
+            }),
         ];
-        let deals = cx.new(|cx| DealsSection::new(window, cx));
+        let deals = deals_shown(cx).then(|| cx.new(|cx| DealsSection::new(window, cx)));
         let launchers = cx.new(|cx| crate::launchers::LaunchersSection::new(window, cx));
         Self {
             cards: store_cards(cx),
@@ -102,6 +112,21 @@ impl StoresView {
             deals,
             launchers,
             _subscriptions: subscriptions,
+        }
+    }
+
+    /// Builds or drops the deals as `iroriDeals` changes.
+    fn show_deals(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match (deals_shown(cx), self.deals.is_some()) {
+            (true, false) => {
+                self.deals = Some(cx.new(|cx| DealsSection::new(window, cx)));
+                cx.notify();
+            }
+            (false, true) => {
+                self.deals = None;
+                cx.notify();
+            }
+            _ => {}
         }
     }
 
@@ -222,7 +247,7 @@ impl Render for StoresView {
                             .child(card_grid(&self.grid_width, MIN_CARD_REM, cards, window)),
                     )
                     .child(self.launchers.clone())
-                    .child(self.deals.clone()),
+                    .children(self.deals.clone()),
             )
     }
 }

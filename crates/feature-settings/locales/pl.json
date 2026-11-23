@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Pokazuj Epic Games",
   "settings.field.show_store_gog.label": "Pokazuj GOG",
   "settings.field.show_stores.help": "Ukryty sklep zachowuje logowanie i zainstalowane gry, ale jego gry, konto i strona sklepu nie są wyświetlane.",
+  "settings.field.deals.label": "Pokazuj promocje",
+  "settings.field.deals.help": "Pokazuje rabaty z GOG i innych sklepów na stronie Sklepy. Po wyłączeniu Irori nie pyta o nie sklepów.",
   "settings.field.show_valve_proton.help": "Proton od Valve jest dostosowany do Steama; GE-Proton zwykle działa tu lepiej.",
   "settings.field.show_valve_proton.label": "Pokazuj wersje Protona od Valve",
   "settings.field.smooth_motion.help": "Sterownik dodaje wygenerowaną klatkę między każde dwie klatki wyrenderowane przez grę. Dla gier Vulkan oraz gier DirectX przez DXVK i VKD3D-Proton, które nie mają własnego DLSS Frame Generation.",

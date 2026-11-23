@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Show Epic Games",
   "settings.field.show_store_gog.label": "Show GOG",
   "settings.field.show_stores.help": "A hidden store keeps its sign-in and installed games, but its games, account and store page are left out.",
+  "settings.field.deals.label": "Show deals",
+  "settings.field.deals.help": "Lists discounts from GOG and other stores on the Stores page. Turned off, Irori doesn’t ask the stores for them.",
   "settings.field.show_valve_proton.help": "Valve's Proton is tuned for Steam; GE-Proton usually works better here.",
   "settings.field.show_valve_proton.label": "Offer Valve Proton builds",
   "settings.field.smooth_motion.help": "The driver adds a generated frame between every two the game renders. For Vulkan games, and DirectX games through DXVK and VKD3D-Proton, that have no DLSS Frame Generation of their own.",

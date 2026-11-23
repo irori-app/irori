@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Epic Games tonen",
   "settings.field.show_store_gog.label": "GOG tonen",
   "settings.field.show_stores.help": "Een verborgen winkel houdt zijn aanmelding en geïnstalleerde games, maar zijn games, account en winkelpagina worden niet getoond.",
+  "settings.field.deals.label": "Aanbiedingen tonen",
+  "settings.field.deals.help": "Toont kortingen van GOG en andere winkels op de pagina Winkels. Uitgeschakeld vraagt Irori de winkels er niet om.",
   "settings.field.show_valve_proton.help": "Proton van Valve is afgestemd op Steam; GE-Proton werkt hier meestal beter.",
   "settings.field.show_valve_proton.label": "Proton-versies van Valve aanbieden",
   "settings.field.smooth_motion.help": "Het stuurprogramma voegt tussen elke twee frames die de game rendert een gegenereerd frame toe. Voor Vulkan-games, en DirectX-games via DXVK en VKD3D-Proton, die zelf geen DLSS Frame Generation hebben.",

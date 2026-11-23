@@ -1893,6 +1893,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.show_stores.help")
     .keywords(&["store", "hide", "amazon", "prime", "nile"]),
     app(
+        "iroriDeals",
+        "settings.field.deals.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.deals.help")
+    .keywords(&["deals", "sale", "discount", "price", "offers"]),
+    app(
         "maxRecentGames",
         "settings.field.max_recent_games.label",
         General,

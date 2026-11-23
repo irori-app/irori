@@ -729,6 +729,8 @@
   "settings.field.show_store_epic.label": "Показывать Epic Games",
   "settings.field.show_store_gog.label": "Показывать GOG",
   "settings.field.show_stores.help": "Скрытый магазин сохраняет вход и установленные игры, но его игры, аккаунт и страница магазина не показываются.",
+  "settings.field.deals.label": "Показывать скидки",
+  "settings.field.deals.help": "Показывает скидки GOG и других магазинов на странице «Магазины». Когда выключено, Irori не запрашивает их у магазинов.",
   "settings.field.show_valve_proton.help": "Proton от Valve настроен под Steam; GE-Proton здесь обычно работает лучше.",
   "settings.field.show_valve_proton.label": "Предлагать сборки Proton от Valve",
   "settings.field.smooth_motion.help": "Драйвер добавляет сгенерированный кадр между каждыми двумя кадрами игры. Для игр на Vulkan, а также игр на DirectX через DXVK и VKD3D-Proton, в которых нет собственной генерации кадров DLSS.",
